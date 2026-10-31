@@ -1,4 +1,6 @@
 using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Threading;
 using TekstilCAD.Core;
 
@@ -23,6 +25,15 @@ internal static class GroupMoveVerification
             Reset();var before=studio.Document.Clone();var window=new GroupMoveWindow(studio);
             try
             {
+                if(window.ChoicesForVerification.SelectionMode!=SelectionMode.Multiple || window.SelectionCountForVerification!="0 / 2 parça seçildi")
+                    throw new InvalidOperationException("Group move must support modifier-free selection and show the selection count.");
+                window.SelectAllForVerification.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                if(window.ChoicesForVerification.SelectedItems.Count!=2 || window.SelectionCountForVerification!="2 / 2 parça seçildi")
+                    throw new InvalidOperationException("Select all must select and count all pieces.");
+                window.ClearSelectionForVerification.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                if(window.ChoicesForVerification.SelectedItems.Count!=0 || window.SelectionCountForVerification!="0 / 2 parça seçildi")
+                    throw new InvalidOperationException("Clear selection must clear and count all pieces.");
+                checks.Add("Group move uses modifier-free multiple selection with select all and clear actions");
                 window.ChoicesForVerification.SelectedItems.Add(window.ChoicesForVerification.Items[0]);
                 window.XForVerification.Text="1";Wait(window.ApplyForVerification());
                 if(!DocumentSession.ContentEquals(before,studio.Document) || session.UndoCount!=0 || !window.StatusForVerification.Contains("en az iki"))

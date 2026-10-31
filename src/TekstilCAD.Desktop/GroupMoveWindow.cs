@@ -13,7 +13,10 @@ internal sealed class GroupMoveWindow : Window
 {
     private sealed record Choice(Guid Id,string Label) { public override string ToString()=>Label; }
     private readonly MainWindow workspace;
-    private readonly ListBox choices=new() { SelectionMode=SelectionMode.Extended,MinHeight=180,MaxHeight=350 };
+    private readonly ListBox choices=new() { SelectionMode=SelectionMode.Multiple,MinHeight=180,MaxHeight=350 };
+    private readonly TextBlock selectionCount=new() { Margin=new Thickness(0,4,0,4) };
+    private readonly Button selectAll=new() { Content="Tümünü seç",Margin=new Thickness(0,0,8,0) };
+    private readonly Button clearSelection=new() { Content="Seçimi temizle" };
     private readonly TextBox dx=new() { Text="0",Margin=new Thickness(0,4,0,8) };
     private readonly TextBox dy=new() { Text="0",Margin=new Thickness(0,4,0,8) };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
@@ -25,6 +28,9 @@ internal sealed class GroupMoveWindow : Window
     internal Action? BeforeCalculationForVerification { get; set; }
     internal Task? TaskForVerification { get; private set; }
     internal ListBox ChoicesForVerification=>choices;
+    internal Button SelectAllForVerification=>selectAll;
+    internal Button ClearSelectionForVerification=>clearSelection;
+    internal string SelectionCountForVerification=>selectionCount.Text;
     internal TextBox XForVerification=>dx;
     internal TextBox YForVerification=>dy;
     internal string StatusForVerification=>status.Text;
@@ -40,19 +46,24 @@ internal sealed class GroupMoveWindow : Window
         buttons.Children.Add(apply);buttons.Children.Add(stop);
         var close=new Button { Content="Kapat",IsCancel=true,Padding=new Thickness(12,8,12,8) };buttons.Children.Add(close);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);var body=new StackPanel();scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="En az iki parça seçin. Ctrl ile ayrı, Shift ile ardışık parçalar seçebilirsiniz. Parça adı ve kimliği birlikte gösterilir.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="En az iki parça seçin. Bir parçaya tıklayarak seçime ekleyin veya seçimden çıkarın. Parça adı ve kimliği birlikte gösterilir.",TextWrapping=TextWrapping.Wrap });
         choices.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
         VirtualizingPanel.SetIsVirtualizing(choices,true);VirtualizingPanel.SetVirtualizationMode(choices,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(choices,true);
         foreach(var piece in workspace.Document.Pieces)choices.Items.Add(new Choice(piece.Id,$"{SafeName(piece.Name)} · {piece.Id:D}"));
-        AutomationProperties.SetName(choices,"Birlikte taşınacak parçalar");AutomationProperties.SetHelpText(choices,"Birden fazla parça seçmek için Ctrl veya Shift kullanın; kimlikler aynı adlı parçaları ayırır.");
-        body.Children.Add(choices);body.Children.Add(new TextBlock { Text="X yönünde taşıma (mm)" });AutomationProperties.SetName(dx,"X yönünde taşıma milimetre");body.Children.Add(dx);
+        AutomationProperties.SetName(choices,"Birlikte taşınacak parçalar");AutomationProperties.SetHelpText(choices,"Bir parçaya tıklayarak veya boşluk tuşuna basarak seçimini değiştirin; kimlikler aynı adlı parçaları ayırır.");
+        body.Children.Add(choices);
+        AutomationProperties.SetLiveSetting(selectionCount,AutomationLiveSetting.Polite);body.Children.Add(selectionCount);
+        var selectionActions=new WrapPanel { Margin=new Thickness(0,0,0,8) };selectionActions.Children.Add(selectAll);selectionActions.Children.Add(clearSelection);body.Children.Add(selectionActions);
+        selectAll.Click+=(_,_)=>choices.SelectAll();clearSelection.Click+=(_,_)=>choices.UnselectAll();
+        body.Children.Add(new TextBlock { Text="X yönünde taşıma (mm)" });AutomationProperties.SetName(dx,"X yönünde taşıma milimetre");body.Children.Add(dx);
         body.Children.Add(new TextBlock { Text="Y yönünde taşıma (mm)" });AutomationProperties.SetName(dy,"Y yönünde taşıma milimetre");body.Children.Add(dy);
         body.Children.Add(new TextBlock { Text="Seçilen parçalar ve iplik yönleri aynı miktarla taşınır; kaynak serileme kuralları ve geçmiş korunur, ilişkileri kontrol edin. Küçük ayrıntıların ve üretim ölçülerinin korunumu garanti edilmez. Bir parça güvenle taşınamazsa hiçbiri uygulanmaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         AutomationProperties.SetName(status,"Toplu taşıma durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        choices.SelectionChanged+=(_,_)=>revision++;dx.TextChanged+=(_,_)=>revision++;dy.TextChanged+=(_,_)=>revision++;
+        choices.SelectionChanged+=(_,_)=> { revision++;UpdateSelectionCount(); };UpdateSelectionCount();dx.TextChanged+=(_,_)=>revision++;dy.TextChanged+=(_,_)=>revision++;
         apply.Click+=(_,_)=>TaskForVerification=MoveAsync();stop.Click+=(_,_)=> { cancellation?.Cancel();status.Text="İptal isteniyor; proje henüz değiştirilmedi."; };
         close.Click+=(_,_)=>Close();Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
+    private void UpdateSelectionCount()=>selectionCount.Text=$"{choices.SelectedItems.Count} / {choices.Items.Count} parça seçildi";
     private static string SafeName(string? name)
     {
         if(string.IsNullOrEmpty(name))return "(boş)";
@@ -60,7 +71,7 @@ internal sealed class GroupMoveWindow : Window
     }
     private void Busy(bool busy)
     {
-        choices.IsEnabled=dx.IsEnabled=dy.IsEnabled=apply.IsEnabled=!busy;
+        choices.IsEnabled=selectAll.IsEnabled=clearSelection.IsEnabled=dx.IsEnabled=dy.IsEnabled=apply.IsEnabled=!busy;
         stop.Visibility=busy?Visibility.Visible:Visibility.Collapsed;stop.IsEnabled=busy;
     }
     private async Task MoveAsync()
