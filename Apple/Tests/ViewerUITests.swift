@@ -4,7 +4,7 @@ final class ViewerUITests: XCTestCase {
     func testExperimentalPointPreviewSavesSeparateCopy() {
         let fixture = #"{"Name":"Deney","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10}]}],"GradingRules":[]}"#
         let app = XCUIApplication()
-        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-point-save-delay"]
         app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
         app.launch()
         XCTAssertTrue(app.staticTexts["Deney"].waitForExistence(timeout: 15))
@@ -21,11 +21,18 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Önizlemeyi hesapla"].tap()
         XCTAssertTrue(app.staticTexts["Önizleme hazır; kopya henüz kaydedilmedi."].waitForExistence(timeout: 15))
         app.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(app.buttons["Kaydı iptal et"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Yeni kopyayı kaydet"].isEnabled)
+        app.buttons["Kaydı iptal et"].tap()
+        XCTAssertTrue(app.staticTexts["Kayıt iptal edildi; kopya oluşturulmadı."].waitForExistence(timeout: 5))
+        app.buttons["Yeni kopyayı kaydet"].tap()
         XCTAssertTrue(app.staticTexts["Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."].waitForExistence(timeout: 10))
         app.buttons["Kapat"].tap()
         XCTAssertTrue(app.staticTexts["Deney"].exists)
         app.buttons["Modellerim"].tap()
-        XCTAssertTrue(app.buttons["Deney · nokta denemesi"].waitForExistence(timeout: 10))
+        let copies = app.buttons.matching(identifier: "Deney · nokta denemesi")
+        XCTAssertTrue(copies.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(copies.count, 1)
     }
     func testDesktopSavedSyntheticVersionSixFixture() throws {
         // DesktopVerification.VerifyVertexNotches creates and saves this project.

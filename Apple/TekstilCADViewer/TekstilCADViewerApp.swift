@@ -491,6 +491,35 @@ private enum ModelStore {
         try FileManager.default.moveItem(at: staging, to: destination)
     }
 
+    #if DEBUG
+    struct PreparedPointCopy {
+        let staging: URL
+        let destination: URL
+    }
+    static func preparePointCopy(_ data: Data, projectName: String) throws -> PreparedPointCopy {
+        guard data.count <= 8 * 1024 * 1024 else { throw ViewerError.message("Dosya 8 MB sınırını aşıyor.") }
+        let directory = try directory(), id = UUID().uuidString
+        let staging = directory.appendingPathComponent(".\(id).partial", isDirectory: true)
+        let destination = directory.appendingPathComponent("\(id).\(copyExtension)", isDirectory: true)
+        guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        do {
+            try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
+            let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
+            try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
+            return PreparedPointCopy(staging: staging, destination: destination)
+        } catch {
+            try? FileManager.default.removeItem(at: staging)
+            throw error
+        }
+    }
+    static func finishPointCopy(_ prepared: PreparedPointCopy) throws {
+        try FileManager.default.moveItem(at: prepared.staging, to: prepared.destination)
+    }
+    static func discardPointCopy(_ prepared: PreparedPointCopy) {
+        try? FileManager.default.removeItem(at: prepared.staging)
+    }
+    #endif
+
     static func payloadURL(_ url: URL) -> URL {
         url.pathExtension.lowercased() == copyExtension ? url.appendingPathComponent(payloadName) : url
     }
@@ -855,6 +884,8 @@ private struct ExperimentalPointEditor: View {
     @State private var preview: Drawing.Piece?
     @State private var message = ""
     @State private var working = false
+    @State private var saving = false
+    @State private var saveGeneration = UUID()
 
     private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = "" }
     private func updatePoint() {
@@ -894,6 +925,43 @@ private struct ExperimentalPointEditor: View {
             }
         }
     }
+    private func saveCopy() {
+        guard !saving, isCurrent(), let bytes = candidate else {
+            message = "Açık model veya seçim değişti; kopya kaydedilmedi."; return
+        }
+        let request = UUID(); saveGeneration = request; saving = true
+        message = "Kopya hazırlanıyor…"
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try ModelStore.preparePointCopy(bytes, projectName: projectName + " · nokta denemesi") }
+            #if targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-point-save-delay") { Thread.sleep(forTimeInterval: 2) }
+            #endif
+            DispatchQueue.main.async {
+                guard saveGeneration == request, saving, isCurrent(), candidate == bytes else {
+                    if case .success(let prepared) = result {
+                        DispatchQueue.global(qos: .utility).async { ModelStore.discardPointCopy(prepared) }
+                    }
+                    if saveGeneration == request { saving = false; message = "Açık model veya seçim değişti; kopya kaydedilmedi." }
+                    return
+                }
+                saving = false
+                switch result {
+                case .failure(let failure): message = "Kopya kaydedilemedi: \(failure.localizedDescription)"
+                case .success(let prepared):
+                    do {
+                        // Only the final same-directory rename runs on the main
+                        // actor, immediately after the snapshot check.
+                        try ModelStore.finishPointCopy(prepared)
+                        message = "Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."
+                        candidate = nil
+                    } catch {
+                        DispatchQueue.global(qos: .utility).async { ModelStore.discardPointCopy(prepared) }
+                        message = "Kopya kaydedilemedi: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -901,27 +969,30 @@ private struct ExperimentalPointEditor: View {
                 Picker("Nokta", selection: Binding(get: { pointIndex }, set: { pointIndex = $0; updatePoint() })) {
                     ForEach(piece.points.indices, id: \.self) { index in Text("Nokta \(index)").tag(index) }
                 }
+                .disabled(saving)
                 TextField("X · mm", text: Binding(get: { x }, set: { x = $0; invalidate() }))
+                    .disabled(saving)
                 TextField("Y · mm", text: Binding(get: { y }, set: { y = $0; invalidate() }))
-                Button(working ? "Önizleme hazırlanıyor…" : "Önizlemeyi hesapla") { makePreview() }.disabled(working)
+                    .disabled(saving)
+                Button(working ? "Önizleme hazırlanıyor…" : "Önizlemeyi hesapla") { makePreview() }.disabled(working || saving)
+                if saving {
+                    Button("Kaydı iptal et") {
+                        saveGeneration = UUID(); saving = false
+                        message = "Kayıt iptal edildi; kopya oluşturulmadı."
+                    }
+                }
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
                     DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil)
                         .frame(height: 240)
-                    Button("Yeni kopyayı kaydet") {
-                        guard isCurrent(), let candidate else { message = "Açık model veya seçim değişti; kopya kaydedilmedi."; return }
-                        do {
-                            try ModelStore.saveRenamed(candidate, projectName: projectName + " · nokta denemesi")
-                            message = "Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."
-                            self.candidate = nil
-                        } catch { message = "Kopya kaydedilemedi: \(error.localizedDescription)" }
-                    }
-                    .disabled(candidate == nil || working)
+                    Button("Yeni kopyayı kaydet") { saveCopy() }
+                    .disabled(candidate == nil || working || saving)
                 }
             }
             .navigationTitle("Deneysel nokta")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear { updatePoint() }
+            .onDisappear { saveGeneration = UUID(); saving = false }
         }
     }
 }
