@@ -81,7 +81,20 @@ public sealed class GradingRuleSet
         if (!expected.SequenceEqual(edited.Points)) return null;
         var da = Deltas[afterIndex]; var db = Deltas[next];
         var delta = new Point2((da.X + db.X) / 2, (da.Y + db.Y) / 2);
-        if (!delta.IsFinite) return null;
+        if (!da.IsFinite || !db.IsFinite || !delta.IsFinite) return null;
+        // A rounded increment changes the graded edge. Preserve the old rule
+        // for review unless both exact binary64 midpoints are representable.
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits = BitConverter.DoubleToInt64Bits(value);
+            var exponent = (int)((bits >> 52) & 0x7ff);
+            var mantissa = bits & 0x000f_ffff_ffff_ffffL;
+            if (exponent != 0) mantissa |= 1L << 52;
+            var units = new System.Numerics.BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -units : units;
+        }
+        if (2 * Units(delta.X) != Units(da.X) + Units(db.X) ||
+            2 * Units(delta.Y) != Units(da.Y) + Units(db.Y)) return null;
         var result = Clone(); result.SourcePoints = expected; result.Deltas.Insert(afterIndex + 1, delta);
         return result;
     }

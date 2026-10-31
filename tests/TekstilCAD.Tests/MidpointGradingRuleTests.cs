@@ -42,4 +42,21 @@ public class MidpointGradingRuleTests
         piece.Points[1] = new(12, 0);
         Assert.Null(rule.WithEdgeMidpointFor(piece, edited, 0));
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UnrepresentableIncrementMidpointKeepsOriginalRule(bool onY)
+    {
+        var piece = new PatternPiece { Closed = false, Points = [new(0, 0), new(10, 0)] };
+        var one = 1d; var adjacent = double.BitIncrement(one);
+        var rule = new GradingRuleSet { SourcePieceId = piece.Id, SourcePoints = [.. piece.Points],
+            Deltas = onY ? [new(0, one), new(0, adjacent)] : [new(one, 0), new(adjacent, 0)] };
+        var edited = PatternTools.InsertEdgeMidpoint(piece, 0);
+        Assert.Null(rule.WithEdgeMidpointFor(piece, edited, 0));
+        Assert.Equal(piece.Points, rule.SourcePoints);
+        Assert.Equal(2, rule.Deltas.Count);
+        Assert.Equal(onY ? adjacent : 0, rule.Deltas[1].Y);
+        Assert.Equal(onY ? 0 : adjacent, rule.Deltas[1].X);
+    }
 }

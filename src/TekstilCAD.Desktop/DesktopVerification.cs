@@ -1560,7 +1560,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -7398,12 +7398,13 @@ internal static class DesktopVerification
         {
             var task=tools.InsertEdgeMidpointAsync("3");PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             var edited=studio.Document.Pieces.Single();
+            var updatedRule=studio.Document.GradingRules.Single();
             Check(edited.Points.Count==5 && edited.Points[4]==new Point2(0,5) && edited.Metadata?.Quantity==2 &&
-                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
-                "Closing edge midpoint preserves piece metadata and leaves grading rule for review",checks);
+                updatedRule.SourcePoints.SequenceEqual(edited.Points) && updatedRule.Deltas.Count==5 && updatedRule.Deltas[4]==new Point2(0,0) && session.UndoCount==1,
+                "Closing edge midpoint preserves piece metadata and interpolates the grading rule",checks);
             var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
-            Check(status.Text.Contains("serileme kuralı önceki kontura aittir",StringComparison.Ordinal),
-                "Midpoint insertion warns that the grading rule needs review",checks);
+            Check(status.Text.Contains("komşu artışların ortalamasından",StringComparison.Ordinal),
+                "Midpoint insertion identifies the interpolated grading increment",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Midpoint insertion is one undo step",checks);
         }
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
