@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 
@@ -42,11 +43,16 @@ public class HpglLargeJobExportTests
             var text = File.ReadAllText(path);
             Assert.StartsWith("IN;SP1;PA;", text);
             Assert.EndsWith("SP0;\n", text.Replace("\r\n", "\n"));
-            var pd = text.IndexOf(";PD", StringComparison.Ordinal);
-            var end = text.IndexOf(";PU;", pd, StringComparison.Ordinal);
-            Assert.True(pd >= 0 && end > pd);
-            // PD contains n-1 vertices and the explicit return to the first.
-            Assert.Equal(2 * count, text[(pd + 3)..end].Split(',').Length);
+            var commands = text.Split(';').Select(command => command.Trim()).Where(command => command.Length > 0).ToArray();
+            var penDown = commands.Where(command => command.StartsWith("PD", StringComparison.Ordinal)).ToArray();
+            Assert.NotEmpty(penDown);
+            Assert.All(penDown, command => Assert.InRange(command.Length + 1, 1, HpglFormat.MaximumPenDownCommandBytes));
+            // Every PD coordinate, including the return to the start, must survive chunking in order.
+            var actual = penDown.SelectMany(command => command[2..].Split(','))
+                .Select(value => int.Parse(value, CultureInfo.InvariantCulture)).ToArray();
+            var expected = piece.Points.Skip(1).Append(piece.Points[0])
+                .SelectMany(point => new[] { (int)Math.Round(point.X), (int)Math.Round(point.Y) }).ToArray();
+            Assert.Equal(expected, actual);
             Assert.Equal(before, piece.Points);
         }
         finally { if (File.Exists(path)) File.Delete(path); }
