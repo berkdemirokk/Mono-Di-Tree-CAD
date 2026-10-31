@@ -26,6 +26,8 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingNotches = false
+    @State private var selectedNotch: (piece: Int, point: Int)?
     @State private var showingLibrary = false
     @State private var showingExporter = false
     @State private var exportDocument: ProjectExportDocument?
@@ -89,6 +91,20 @@ private struct ContentView: View {
                         .font(.caption).foregroundStyle(.secondary)
                     Text("Sürüm 6 için yalnız UTF-8 ve en fazla 8 MB desteklenir. İşaretler ve konturlar önizlenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
+                        .sheet(isPresented: $showingNotches) {
+                            NotchPicker(pieces: project.pieces) { piece, point in
+                                selectedPiece = piece
+                                selectedNotch = (piece, point)
+                                showingNotches = false
+                            }
+                        }
+                    if let selectedNotch, selectedNotch.piece == selectedPiece {
+                        Text(project.pieces[selectedNotch.piece].hasMinimumContourPoints
+                             ? "Seçili köşe işareti: nokta \(selectedNotch.point). Önizlemede sarı halka ile gösterilir."
+                             : "Seçili köşe işareti: nokta \(selectedNotch.point). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if (selectedPiece.map { project.pieces[$0].notches.count } ?? project.pieces.reduce(0) { $0 + $1.notches.count }) > DrawingView.maximumVisibleNotches {
                         Text("Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -140,7 +156,8 @@ private struct ContentView: View {
                     } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
                         DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
-                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi"
+                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
+                        highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
                         )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
@@ -219,6 +236,7 @@ private struct ContentView: View {
                 try data.write(to: url, options: .atomic)
                 let drawing = try Drawing.load(url)
                 selectedPiece = nil
+                selectedNotch = nil
                 drawingRevision = UUID()
                 project = drawing
                 editedName = drawing.name
@@ -270,6 +288,7 @@ private struct ContentView: View {
                     #endif
                     showingPieces = false
                     selectedPiece = nil
+                    selectedNotch = nil
                     drawingRevision = UUID()
                     project = drawing
                     editedName = drawing.name
@@ -796,6 +815,49 @@ private struct Drawing {
     }
 }
 
+private struct NotchPicker: View {
+    let pieces: [Drawing.Piece]
+    let select: (Int, Int) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    private func matching(_ piece: Drawing.Piece, index: Int) -> [Int] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty || piece.displayName(index: index).localizedCaseInsensitiveContains(query) { return piece.notches }
+        return piece.notches.filter { point in
+            let p = piece.points[point]
+            return "\(point) X \(p.x.formatted()) Y \(p.y.formatted())".localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(pieces.indices, id: \.self) { pieceIndex in
+                    let piece = pieces[pieceIndex]
+                    let indices = matching(piece, index: pieceIndex)
+                    if !indices.isEmpty {
+                        Section(piece.displayName(index: pieceIndex)) {
+                            ForEach(indices, id: \.self) { pointIndex in
+                                let point = piece.points[pointIndex]
+                                Button("Nokta \(pointIndex) · X \(point.x.formatted()) · Y \(point.y.formatted()) mm") {
+                                    select(pieceIndex, pointIndex)
+                                }
+                            }
+                        }
+                    }
+                }
+                if pieces.indices.allSatisfy({ matching(pieces[$0], index: $0).isEmpty }) {
+                    Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
+                }
+            }
+            .searchable(text: $search, prompt: "Parça, nokta veya koordinat ara")
+            .navigationTitle("Köşe işaretleri")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+        }
+    }
+}
+
 private struct PiecePicker: View {
     let pieces: [Drawing.Piece]
     @Binding var selection: Int?
@@ -910,6 +972,7 @@ private struct DrawingView: View {
     static let maximumVisibleNotches = 500
     let pieces: [Drawing.Piece]
     let label: String
+    let highlightedNotch: Int?
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var showGrain = true
@@ -1017,6 +1080,10 @@ private struct DrawingView: View {
                     let mark = Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))
                     context.stroke(mark, with: .color(.pink), lineWidth: 2)
                     remainingNotches -= 1
+                }
+                if let index = highlightedNotch, pieces.count == 1, piece.notches.contains(index) {
+                    let p = position(piece.points[index])
+                    context.stroke(Path(ellipseIn: CGRect(x: p.x - 8, y: p.y - 8, width: 16, height: 16)), with: .color(.yellow), lineWidth: 3)
                 }
                 if showGrain, let grain = piece.grain {
                     let start = position(grain.start), end = position(grain.end)

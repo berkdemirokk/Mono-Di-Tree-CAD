@@ -53,6 +53,12 @@ final class ViewerUITests: XCTestCase {
         app.launch()
         XCTAssertTrue(app.staticTexts["Çok işaret"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin."].exists)
+        app.buttons["Köşe işaretlerini ara ve seç…"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("500")
+        let mark = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 500")).firstMatch
+        XCTAssertTrue(mark.waitForExistence(timeout: 5)); mark.tap()
+        XCTAssertTrue(app.staticTexts["Seçili köşe işareti: nokta 500. Önizlemede sarı halka ile gösterilir."].waitForExistence(timeout: 5))
     }
     func testSameNameCopiesCanBeSearchedAndDeletedByFullIdentity() {
         let fixture = #"{"Name":"Aynı Model","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
