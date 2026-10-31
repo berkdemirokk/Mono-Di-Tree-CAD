@@ -1146,7 +1146,7 @@ private struct NotchPicker: View {
         if query.isEmpty || piece.displayName(index: index).localizedCaseInsensitiveContains(query) { return piece.notches }
         return piece.notches.filter { point in
             let p = piece.points[point]
-            return "\(point) X \(p.x.formatted()) Y \(p.y.formatted())".localizedCaseInsensitiveContains(query)
+            return NotchSearch.matches(query: query, index: point, x: p.x.formatted(), y: p.y.formatted())
         }
     }
 
@@ -1161,7 +1161,7 @@ private struct NotchPicker: View {
                         Section(piece.displayName(index: pieceIndex)) {
                             ForEach(indices, id: \.self) { pointIndex in
                                 let point = piece.points[pointIndex]
-                                Button("Nokta \(pointIndex) · X \(point.x.formatted()) · Y \(point.y.formatted()) mm") {
+                                Button(NotchSearch.label(index: pointIndex, x: point.x.formatted(), y: point.y.formatted())) {
                                     select(pieceIndex, pointIndex)
                                 }
                             }

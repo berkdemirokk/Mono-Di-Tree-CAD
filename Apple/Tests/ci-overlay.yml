@@ -13,6 +13,7 @@
       - path: Tests/Fixtures/desktop-synthetic-notch.tcad
         buildPhase: resources
       - path: Tests/MeasurementDisplayTests.swift
+      - path: Tests/NotchSearchTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:
