@@ -75,6 +75,10 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(details.waitForExistence(timeout: 10))
         XCTAssertTrue(details.label.contains("Pamuk"))
         XCTAssertTrue(details.label.contains("Adet: 2"))
+        let hideGrain = app.buttons["İplik yönlerini gizle"]
+        XCTAssertTrue(hideGrain.waitForExistence(timeout: 10))
+        hideGrain.tap()
+        XCTAssertTrue(app.buttons["İplik yönlerini göster"].exists)
         selected.tap()
         XCTAssertTrue(app.buttons["Tüm parçalar"].waitForExistence(timeout: 10))
         app.buttons["Tüm parçalar"].tap()

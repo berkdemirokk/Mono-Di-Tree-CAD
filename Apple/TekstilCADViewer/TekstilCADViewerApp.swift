@@ -133,6 +133,7 @@ private enum ViewerError: LocalizedError {
 
 private struct Drawing {
     struct Point { let x: Double; let y: Double }
+    struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
         let name: String?
         let points: [Point]
@@ -142,6 +143,7 @@ private struct Drawing {
         let material: String?
         let quantity: Int?
         let grainStatus: String
+        let grain: Grain?
 
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -205,13 +207,16 @@ private struct Drawing {
                 return number.intValue
             }
             let grainStatus: String
+            var parsedGrain: Grain?
             if let grain = raw["Grainline"] as? [String: Any],
                let start = grain["Start"] as? [String: Any], let end = grain["End"] as? [String: Any],
                let sx = jsonNumber(start["X"]), let sy = jsonNumber(start["Y"]),
                let ex = jsonNumber(end["X"]), let ey = jsonNumber(end["Y"]),
                sx.isFinite, sy.isFinite, ex.isFinite, ey.isFinite,
+               [sx, sy, ex, ey].allSatisfy({ abs($0) < 1e100 }),
                (sx != ex || sy != ey), let review = jsonBoolean(grain["NeedsReview"]) {
                 grainStatus = review ? "İplik yönü: Kontrol bekliyor" : "İplik yönü: Kayıtlı"
+                parsedGrain = Grain(start: Point(x: sx, y: sy), end: Point(x: ex, y: ey), needsReview: review)
             } else if raw["Grainline"] == nil || raw["Grainline"] is NSNull {
                 grainStatus = "İplik yönü: Belirtilmemiş"
             } else {
@@ -220,7 +225,7 @@ private struct Drawing {
             pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
-                                grainStatus: grainStatus))
+                                grainStatus: grainStatus, grain: parsedGrain))
         }
         return Drawing(name: name, pieces: pieces)
     }
@@ -321,6 +326,7 @@ private struct DrawingView: View {
     let label: String
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
+    @State private var showGrain = true
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
 
@@ -358,9 +364,11 @@ private struct DrawingView: View {
                         }
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
-                Button("Görünümü sıfırla") {
-                    zoom = 1
-                    offset = .zero
+                VStack(alignment: .trailing, spacing: 8) {
+                    Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
+                    if pieces.contains(where: { $0.grain != nil }) {
+                        Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
+                    }
                 }
                 .font(.caption)
                 .padding(8)
@@ -412,6 +420,21 @@ private struct DrawingView: View {
                 for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
                 context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
+                if showGrain, let grain = piece.grain {
+                    let start = position(grain.start), end = position(grain.end)
+                    let dx = end.x - start.x, dy = end.y - start.y
+                    let length = hypot(dx, dy)
+                    guard length.isFinite && length > 0.1 else { continue }
+                    let ux = dx / length, uy = dy / length
+                    let arrow = min(CGFloat(9), length / 3)
+                    var grainPath = Path()
+                    grainPath.move(to: start); grainPath.addLine(to: end)
+                    grainPath.move(to: CGPoint(x: end.x - ux * arrow - uy * arrow * 0.5, y: end.y - uy * arrow + ux * arrow * 0.5))
+                    grainPath.addLine(to: end)
+                    grainPath.addLine(to: CGPoint(x: end.x - ux * arrow + uy * arrow * 0.5, y: end.y - uy * arrow - ux * arrow * 0.5))
+                    context.stroke(grainPath, with: .color(grain.needsReview ? .orange : .primary),
+                                   style: StrokeStyle(lineWidth: 1.5, dash: grain.needsReview ? [4, 3] : []))
+                }
             }
         }
     }
