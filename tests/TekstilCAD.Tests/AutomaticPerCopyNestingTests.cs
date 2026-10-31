@@ -132,6 +132,53 @@ public sealed class AutomaticPerCopyNestingTests
     }
 
     [Fact]
+    public void ChoosesShorterVerifiedAlternativeEvenWhenFirstLayoutFits()
+    {
+        PatternPiece Rectangle(int width, int height) => new()
+        {
+            Points = [new(0, 0), new(width, 0), new(width, height), new(0, height)],
+            Grainline = new() { Start = new(0, 0), End = new(0, 1) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 }
+        };
+        var a = Rectangle(6, 8); var b = Rectangle(4, 1);
+        var c = Rectangle(6, 7); var d = Rectangle(4, 6);
+        var source = new ProjectDocument { Pieces = [a, b, c, d] };
+        var ids = source.Pieces.Select(p => p.Id).ToArray();
+        var allowed = new Dictionary<Guid, IReadOnlyList<int>>
+            { [a.Id] = [0], [b.Id] = [0], [c.Id] = [0, 90], [d.Id] = [0] };
+        var result = AutomaticPerCopyNesting.Arrange(source, ids, allowed, 10, 0, 100, 0,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.Equal(16, result.Plan.Nesting.UsedLength);
+        Assert.True(PerCopyTraceVerifier.IsValidForAllowedAngles(source, ids, result, allowed,
+            GrainDirectionPolicy.Direction.TwoWay, 90, 10, 0, 0, 100));
+    }
+    [Fact]
+    public void KeepsVerifiedFirstLayoutWhenAlternativeLosesPrecision()
+    {
+        PatternPiece Rectangle(double width, double height) => new()
+        {
+            Points = [new(0, 0), new(width, 0), new(width, height), new(0, height)],
+            Grainline = new() { Start = new(0, 0), End = new(0, 1) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 }
+        };
+        var wide = Rectangle(90_000_000, 300);
+        var narrow = Rectangle(0.0000011, 200);
+        var source = new ProjectDocument { Pieces = [narrow, wide] };
+        var ids = new[] { narrow.Id, wide.Id };
+        var allowed = new Dictionary<Guid, IReadOnlyList<int>> { [wide.Id] = [0], [narrow.Id] = [0, 90] };
+        var firstAngles = new Dictionary<(Guid, int), int> { [(wide.Id, 1)] = 0, [(narrow.Id, 1)] = 90 };
+        var alternateAngles = new Dictionary<(Guid, int), int> { [(wide.Id, 1)] = 0, [(narrow.Id, 1)] = 0 };
+        var error = Assert.Throws<ArgumentException>(() => PerCopyOrthogonalNesting.Arrange(source, ids,
+            alternateAngles, 100_000_000, 0, 1000, 0, GrainDirectionPolicy.Direction.TwoWay, 90));
+        Assert.True(NestingPieceError.TryGet(error, out var failedId, out _));
+        Assert.Equal(narrow.Id, failedId);
+
+        var result = AutomaticPerCopyNesting.Arrange(source, ids, allowed, 100_000_000, 0, 1000, 0,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.True(PerCopyTraceVerifier.IsValidForConstraints(source, ids, result, firstAngles,
+            GrainDirectionPolicy.Direction.TwoWay, 90, 100_000_000, 0, 0, 1000));
+    }
+    [Fact]
     public void ReportsWhenLengthRetryWouldExceedWorkBudget()
     {
         PatternPiece Rectangle(int width, int height, bool detailed)

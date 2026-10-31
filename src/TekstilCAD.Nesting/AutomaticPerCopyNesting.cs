@@ -126,35 +126,56 @@ public static class AutomaticPerCopyNesting
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
+        PerCopyNestingResult? first = null;
+        InvalidOperationException? lengthError = null;
         try
         {
-            return PerCopyOrthogonalNesting.Arrange(snapshot, ids, chosen, fabricWidth, gap, maxLength, edgeMargin,
+            first = PerCopyOrthogonalNesting.Arrange(snapshot, ids, chosen, fabricWidth, gap, maxLength, edgeMargin,
                 direction, toleranceDegrees, cancellationToken);
         }
         catch (InvalidOperationException error) when (NestingEngine.IsLengthExceeded(error))
         {
-            // The estimator uses source order, while the actual shelf engine sorts
-            // by height. Try one deterministic alternative only on length failure.
-            var alternate = new Dictionary<(Guid, int), int>();
-            var alternateUnique = new HashSet<(Guid, int)>();
-            bool differs = false;
-            long extra = 0;
-            foreach (var mapping in expansion.Placements)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var key = (mapping.SourcePieceId, mapping.CopyNumber);
-                int angle = candidates[mapping.SourcePieceId][0].Angle;
-                alternate.Add(key, angle);
-                if (chosen[key] != angle) differs = true;
-                long v = originals[mapping.SourcePieceId].Points.Count;
-                extra += 2L * v * v;
-                if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 2L * v * v;
-            }
-            if (!differs) throw;
-            if (extra > NestingEngine.MaximumValidationWork - work)
-                throw new InvalidOperationException("İlk yerleşim boy sınırını aştı; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", error);
-            return PerCopyOrthogonalNesting.Arrange(snapshot, ids, alternate, fabricWidth, gap, maxLength,
+            lengthError = error;
+        }
+
+        // The estimator uses source order, while the shelf engine sorts by height.
+        // Compare one bounded alternative using the actual verified layout length.
+        var alternate = new Dictionary<(Guid, int), int>();
+        var alternateUnique = new HashSet<(Guid, int)>();
+        bool differs = false;
+        long extra = 0;
+        foreach (var mapping in expansion.Placements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = (mapping.SourcePieceId, mapping.CopyNumber);
+            int angle = candidates[mapping.SourcePieceId][0].Angle;
+            alternate.Add(key, angle);
+            if (chosen[key] != angle) differs = true;
+            long v = originals[mapping.SourcePieceId].Points.Count;
+            extra += 2L * v * v;
+            if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 2L * v * v;
+        }
+        if (!differs) return first ?? throw lengthError!;
+        if (extra > NestingEngine.MaximumValidationWork - work)
+        {
+            if (first is not null) return first;
+            throw new InvalidOperationException("İlk yerleşim boy sınırını aştı; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", lengthError);
+        }
+        try
+        {
+            var second = PerCopyOrthogonalNesting.Arrange(snapshot, ids, alternate, fabricWidth, gap, maxLength,
                 edgeMargin, direction, toleranceDegrees, cancellationToken);
+            return first is null || second.Plan.Nesting.UsedLength < first.Plan.Nesting.UsedLength ? second : first;
+        }
+        catch (ArgumentException error) when (first is not null && NestingPieceError.TryGet(error, out _, out _))
+        {
+            // A candidate-specific geometry or translation failure cannot invalidate
+            // the first layout, which already passed all downstream checks.
+            return first;
+        }
+        catch (InvalidOperationException error) when (first is not null && NestingEngine.IsLengthExceeded(error))
+        {
+            return first;
         }
     }
 }
