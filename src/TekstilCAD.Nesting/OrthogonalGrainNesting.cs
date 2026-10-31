@@ -116,7 +116,8 @@ public static class OrthogonalGrainNesting
             else permitted.Add(id, SnapshotAngles(list, nameof(pieceRotations)));
         }
 
-        // Budget candidate contour validation as well as the engine's two passes per copy.
+        // Each candidate rotation validates its source and result. The engine validates
+        // each placed copy and one transformed source contour per selected source.
         long work = 0, extraPlacementWork = 0, vertices = 0, copies = 0;
         foreach (var piece in matches.Values)
         {
@@ -127,8 +128,8 @@ public static class OrthogonalGrainNesting
                 throw NestingPieceError.Create(piece.Id, "Parça için pozitif adet belirtilmelidir.", nameof(source));
             int count = piece.Points.Count;
             copies += n; vertices += (long)n * count;
-            work += (2L * n + 2L * permitted[piece.Id].Length) * count * count;
-            extraPlacementWork += 2L * n * count * count;
+            work += (n + 1L + 2L * permitted[piece.Id].Length) * count * count;
+            extraPlacementWork += (n + 1L) * count * count;
             if (copies > NestingEngine.MaximumPieces || vertices > NestingEngine.MaximumTotalVertices || work > NestingEngine.MaximumValidationWork)
                 throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı.", nameof(source));
         }

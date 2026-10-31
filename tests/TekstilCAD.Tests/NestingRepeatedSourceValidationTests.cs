@@ -31,6 +31,36 @@ public class NestingRepeatedSourceValidationTests
         Assert.NotEqual(first.Points[0], second.Points[0]);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OrthogonalPlanningSharesValidationForRepeatedCopies(bool perSourceAngles)
+    {
+        var source = Circle(512, 96);
+        source.Grainline = new() { Start = new(0, 0), End = new(0, 1) };
+        var document = new ProjectDocument { Pieces = [source] };
+        var angles = new Dictionary<Guid, IReadOnlyList<int>> { [source.Id] = [0] };
+        var result = perSourceAngles
+            ? OrthogonalGrainNesting.ArrangeWithPieceRotations(document, [source.Id], 2000, 1,
+                double.PositiveInfinity, 0, angles, GrainDirectionPolicy.Direction.OneWay, 0)
+            : OrthogonalGrainNesting.Arrange(document, [source.Id], 2000, 1,
+                double.PositiveInfinity, 0, [0], GrainDirectionPolicy.Direction.OneWay, 0);
+        Assert.Equal(96, result.Plan.Nesting.Layout.Pieces.Count);
+        Assert.Equal(0, result.SourceRotations[source.Id]);
+        Assert.Equal(96, result.Plan.Nesting.Layout.Pieces.Select(p => p.Id).Distinct().Count());
+        ShelfLayoutVerifier.Verify(result.Plan.Nesting);
+    }
+
+    [Fact]
+    public void OrthogonalPlanningStillRejectsExcessivePerCopyValidation()
+    {
+        var source = Circle(1000, 50);
+        source.Grainline = new() { Start = new(0, 0), End = new(0, 1) };
+        var error = Assert.Throws<ArgumentException>(() => OrthogonalGrainNesting.Arrange(
+            new ProjectDocument { Pieces = [source] }, [source.Id], 2000, 1,
+            double.PositiveInfinity, 0, [0], GrainDirectionPolicy.Direction.OneWay, 0));
+        Assert.Contains("sınır", error.Message, StringComparison.OrdinalIgnoreCase);
+    }
     [Fact]
     public void InvalidSourceCannotBeAcceptedThroughSharedValidation()
     {
