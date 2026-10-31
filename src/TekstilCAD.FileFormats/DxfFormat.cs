@@ -757,7 +757,7 @@ public static class DxfFormat
             IEnumerable<int>? childOrdinals=null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if((strictImport || bulgeToleranceMm is not null) && points.Count>=2)
+            if(points.Count>=2)
             {
                 if(doc.Pieces.Count>=ProjectStorage.MaximumPieces || points.Count>ProjectStorage.MaximumTotalPoints-acceptedPoints)
                     throw new InvalidDataException("DXF doğrudan ve yerleştirilmiş geometrinin ortak sınırını aşıyor.");
