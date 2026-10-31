@@ -19,3 +19,9 @@ Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcı
 ## TestFlight hazırlığı (taslak)
 
 TestFlight için macOS üzerinde Xcode ve XcodeGen ile projenin üretilmesi, doğru Apple Developer ekibiyle imzalanması ve App Store Connect'te `com.berkdemirokk.monoditreecad` kimliğiyle eşleşen uygulama kaydı gerekir. Arşivleme, yükleme ve TestFlight süreci gerçek Mac ve Apple hesabında doğrulanmalıdır. Otomasyon ileride kurulursa App Store Connect API anahtarı gibi gizli değerler depoya eklenmemeli, GitHub Secrets gibi bir gizli bilgi deposunda tutulmalıdır. Bu belgede otomatik yayın yapılandırılmamıştır.
+
+## GitHub Actions ile derleme kontrolü
+
+`.github/workflows/apple-ci.yml`, Apple kaynakları değiştiğinde veya Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir ve iOS Simulator ile macOS hedeflerini imzasız derler. İş akışı yalnızca derleme kontrolüdür: uygulamayı çalıştırmaz, gerçek cihazı doğrulamaz ve TestFlight'a yüklemez. Bu yapılandırma henüz GitHub üzerinde çalıştırılarak doğrulanmamıştır. Çalışmanın sonucu ve Xcode sürümü Actions günlüklerinde görülebilir.
+
+TestFlight için ayrıca Apple Developer üyeliği, App Store Connect uygulama kaydı, dağıtım imzası ve arşiv/yükleme gerekir. İmzalama ve yükleme otomasyonu bu iş akışında bulunmaz; kimlik bilgilerini kaynak koduna veya günlüklere koymayın. Başvuru: [GitHub macOS çalıştırıcıları](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/customize-runners), [Apple simülatör hedefleri](https://developer.apple.com/documentation/xcode/building-and-running-an-app), [GitHub imzalama belgeleri](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).

@@ -1,0 +1,43 @@
+name: Apple build
+
+on:
+  push:
+    paths:
+      - 'Apple/**'
+      - '.github/workflows/apple-ci.yml'
+  pull_request:
+    paths:
+      - 'Apple/**'
+      - '.github/workflows/apple-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Apple
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build iOS Simulator
+        run: >-
+          xcodebuild -project TekstilCADViewer.xcodeproj
+          -target TekstilCADViewer_iOS
+          -configuration Debug
+          -destination 'generic/platform=iOS Simulator'
+          CODE_SIGNING_ALLOWED=NO build
+      - name: Build macOS
+        run: >-
+          xcodebuild -project TekstilCADViewer.xcodeproj
+          -target TekstilCADViewer_macOS
+          -configuration Debug
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO build
