@@ -326,6 +326,7 @@ internal static class DesktopVerification
             VerifyMachineHpglReview(studio,work,checks);
             VerifyMachineConfirmationFailure(studio,work,checks);
             VerifyMachineDxfSourceConfirmation(studio,work,checks);
+            VerifyMachineHistoryPaging(studio,work,checks);
             VerifyMachineOpenApprovalState(studio,work,checks);
             VerifyAsyncExportPendingPreviews(studio,work,checks);
             VerifyOptionalGradingMetadata(studio,checks);
@@ -3562,6 +3563,91 @@ internal static class DesktopVerification
         }
     }
 
+    private static void VerifyMachineHistoryPaging(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var spool=Path.Combine(work,"machine-history-pages-"+Guid.NewGuid().ToString("N"));
+        var source=new ProjectDocument { Name="Sayfa sınaması",Pieces=[new PatternPiece { Name="Çizgi",Closed=false,Points=[new(0,0),new(10,0)] }] };
+        studio.LoadDocument(source);studio.Select(studio.Document.Pieces[0].Id);
+        var queue=new SimulationQueue(spool,streamingHistory:true);
+        for(int i=0;i<101;i++)queue.Prepare(source,new MachineProfile("Sayfa profili"),JobFormat.Dxf);
+        Directory.CreateDirectory(Path.Combine(spool,"gecersiz-kayit"));
+        var window=new MachineCenterWindow(studio,queue);
+        try
+        {
+            WaitMachineHistory(window);
+            var grid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(window)!;
+            var status=(TextBlock)typeof(MachineCenterWindow).GetField("historyStatus",PrivateInstance)!.GetValue(window)!;
+            var next=(Button)typeof(MachineCenterWindow).GetField("nextHistory",PrivateInstance)!.GetValue(window)!;
+            var restart=(Button)typeof(MachineCenterWindow).GetField("restartHistory",PrivateInstance)!.GetValue(window)!;
+            var simulate=(Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(window)!;
+            var details=(TextBox)typeof(MachineCenterWindow).GetField("details",PrivateInstance)!.GetValue(window)!;
+            var busy=typeof(MachineCenterWindow).GetField("historyBusy",PrivateInstance)!;
+            var seen=new HashSet<Guid>();var errors=0;
+            void Collect()
+            {
+                foreach(var entry in grid.Items.Cast<SimulationQueue.HistoryEntry>())
+                {
+                    if(entry.Job is { } job)Check(seen.Add(job.Id),"History page contains no duplicate job",checks);
+                    if(entry.Error is not null)errors++;
+                    if(entry.Job is null)
+                    {
+                        grid.SelectedItem=entry;
+                        Check(!simulate.IsEnabled && details.Text.Contains("Kayıt okunamadı") && details.Text.Contains(entry.Path),
+                            "Invalid history row exposes its path and cannot be verified",checks);
+                    }
+                }
+            }
+            Check(grid.Items.Count==100 && next.IsEnabled && status.Text.Contains("sonraki sayfa")
+                && AutomationProperties.GetLiveSetting(status)==AutomationLiveSetting.Polite,
+                "First history page is bounded and announces continuation",checks);
+            var chosen=grid.Items.Cast<SimulationQueue.HistoryEntry>().First(entry=>entry.Job is not null);
+            grid.SelectedItem=chosen;var chosenId=chosen.Job!.Id;
+            simulate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(queue.GetHistoryEntry(chosenId).Job?.Status==JobStatus.Simulated
+                && grid.SelectedItem is SimulationQueue.HistoryEntry { Job.Status:JobStatus.Simulated } current && current.Job!.Id==chosenId,
+                "Selected page entry is verified on disk and remains selected",checks);
+            Collect();
+            while(next.IsEnabled)
+            {
+                next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));PumpUntil(()=>!(bool)busy.GetValue(window)!);
+                Check(grid.Items.Count<=100 && grid.IsEnabled && restart.IsEnabled,"Next history page is bounded and restores controls",checks);
+                Collect();
+            }
+            Check(seen.Count==101 && errors==1 && status.Text.Contains("sonuna ulaşıldı"),
+                "All history pages expose every valid job and the invalid record",checks);
+            restart.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));PumpUntil(()=>!(bool)busy.GetValue(window)!);
+            Check(grid.Items.Count==100 && next.IsEnabled && status.Text.Contains("sonraki sayfa"),
+                "Restart returns to a bounded first page",checks);
+            var selected=grid.Items.Cast<SimulationQueue.HistoryEntry>().First(entry=>entry.Job is not null);
+            grid.SelectedItem=selected;
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+            window.BeforeHistoryReadForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            var task=(Task)typeof(MachineCenterWindow).GetMethod("ReadHistory",PrivateInstance)!.Invoke(window,[false])!;
+            try
+            {
+                PumpUntil(()=>reached.IsSet);
+                var cancel=(Button)typeof(MachineCenterWindow).GetField("cancelHistory",PrivateInstance)!.GetValue(window)!;
+                var prepare=(Button)typeof(MachineCenterWindow).GetField("prepare",PrivateInstance)!.GetValue(window)!;
+                Check(!grid.IsEnabled && !next.IsEnabled && !restart.IsEnabled && !simulate.IsEnabled && !prepare.IsEnabled
+                    && cancel.Visibility==Visibility.Visible && cancel.IsEnabled && status.Text.Contains("taranıyor"),
+                    "History scanning disables competing operations and offers cancellation",checks);
+                cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!cancel.IsEnabled && status.Text.Contains("İptal istendi"),"History cancellation announces the pending request",checks);
+                release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(grid.IsEnabled && restart.IsEnabled && next.IsEnabled && cancel.Visibility==Visibility.Collapsed
+                    && ReferenceEquals(grid.SelectedItem,selected) && simulate.IsEnabled && status.Text.Contains("iptal edildi"),
+                    "Cancelled history scan retains selection and restores controls",checks);
+            }
+            finally { release.Set();PumpUntil(()=>task.IsCompleted);window.BeforeHistoryReadForVerification=null; }
+            next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));PumpUntil(()=>!(bool)busy.GetValue(window)!);
+            Check(grid.Items.Count==2 && status.Text.Contains("sonuna ulaşıldı"),
+                "History resumes after cancellation without losing the remaining page",checks);
+        }
+        finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
     private static void VerifyMachineDxfSourceConfirmation(MainWindow studio,string work,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
@@ -3623,10 +3709,13 @@ internal static class DesktopVerification
             var job=HistoryJobs(queue).Single();
             var grid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(machine)!;
             var result=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(machine)!;
-            Check(job.SourceSnapshotUnconfirmed && grid.Items.Count==1 && grid.SelectedItem is SimulationQueue.HistoryEntry { Job: { } selected } && selected.Id==job.Id
-                && result.Foreground==StudioTheme.Warning && result.Text.Contains("İş listede görünüyor") && result.Text.Contains("diskteki durumu doğrulanamadı") && result.Text.Contains("Kaynak doğrulanmadı")
-                && result.Text.Contains("yeniden hazırlayın"),
-                "Manifest confirmation conflict shows the committed unconfirmed job and warning",checks);
+            var historyStatus=(TextBlock)typeof(MachineCenterWindow).GetField("historyStatus",PrivateInstance)!.GetValue(machine)!;
+            var simulate=(Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(machine)!;
+            Check(job.SourceSnapshotUnconfirmed && grid.Items.Count==0 && grid.SelectedItem is null && !simulate.IsEnabled
+                && result.Foreground==StudioTheme.Warning && result.Text.Contains("durum doğrulanamadı")
+                && result.Text.Contains("geçmişi baştan tarayıp",StringComparison.OrdinalIgnoreCase)
+                && historyStatus.Text.Contains("Geçmişi baştan tarayıp"),
+                "Manifest confirmation conflict clears the uncertain selection and requests a fresh scan",checks);
             Check(alteredManifest is not null && File.ReadAllBytes(job.ManifestPath).SequenceEqual(alteredManifest)
                 && outputBytes is not null && File.ReadAllBytes(job.OutputPath).SequenceEqual(outputBytes)
                 && DocumentSession.ContentEquals(before,studio.Document) && !machine.IsVisible,
@@ -3641,11 +3730,21 @@ internal static class DesktopVerification
             var missingJob=HistoryJobs(missingQueue).Single();
             var missingResult=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(missingMachine)!;
             var missingGrid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(missingMachine)!;
-            Check(!File.Exists(missingJob.OutputPath) && missingGrid.Items.Count==1 && missingResult.Foreground==StudioTheme.Warning
-                && missingResult.Text.Contains("İş listede görünüyor") && missingResult.Text.Contains("çıktı önizlemesi okunamadı")
+            var missingStatus=(TextBlock)typeof(MachineCenterWindow).GetField("historyStatus",PrivateInstance)!.GetValue(missingMachine)!;
+            var missingSimulate=(Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(missingMachine)!;
+            Check(!File.Exists(missingJob.OutputPath) && missingJob.SourceSnapshotUnconfirmed && missingGrid.Items.Count==0
+                && missingGrid.SelectedItem is null && !missingSimulate.IsEnabled && missingResult.Foreground==StudioTheme.Warning
+                && missingResult.Text.Contains("durum doğrulanamadı") && missingStatus.Text.Contains("Geçmişi baştan tarayıp")
                 && missingResult.Text.Contains("Fiziksel makine testi yapılmadı") && DocumentSession.ContentEquals(before,studio.Document),
-                "Missing prepared output remains a warning instead of a successful preview",checks);
-            typeof(MachineCenterWindow).GetMethod("Simulate",PrivateInstance)!.Invoke(missingMachine,null);
+                "Missing prepared output clears the uncertain selection and requests a fresh scan",checks);
+            var rescan=(Task)typeof(MachineCenterWindow).GetMethod("ReadHistory",PrivateInstance)!.Invoke(missingMachine,[true])!;
+            PumpUntil(()=>rescan.IsCompleted);rescan.GetAwaiter().GetResult();
+            var missingEntry=missingGrid.Items.Cast<SimulationQueue.HistoryEntry>().Single();
+            Check(missingEntry.Job?.Id==missingJob.Id && missingEntry.Error is not null && missingEntry.Job.SourceSnapshotUnconfirmed,
+                "Fresh scan exposes the missing-output record with its warning",checks);
+            missingGrid.SelectedItem=missingEntry;
+            Check(missingSimulate.IsEnabled,"A freshly scanned missing-output record can be checked",checks);
+            missingSimulate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(HistoryJobs(missingQueue).Single().Status==JobStatus.Failed && missingResult.Foreground==StudioTheme.Danger
                 && missingResult.Text.Contains("Dosya kontrolü başarısız") && missingResult.Text.Contains("Çıktı önizlemesi okunamadı")
                 && missingResult.Text.Contains("Fiziksel makine testi yapılmadı") && DocumentSession.ContentEquals(before,studio.Document),

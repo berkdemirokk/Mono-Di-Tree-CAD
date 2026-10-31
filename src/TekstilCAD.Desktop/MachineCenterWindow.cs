@@ -38,6 +38,7 @@ public sealed class MachineCenterWindow : Window
     }
     private bool updatingChoices;
     private bool preparing;
+    internal Action? BeforeHistoryReadForVerification;
     private bool historyBusy;
     private bool historyComplete;
     private CancellationTokenSource? historyCancellation;
@@ -381,24 +382,31 @@ public sealed class MachineCenterWindow : Window
             // The prepared file represents the captured document, selection and
             // profile. Pending edits and changed controls matter for DXF too:
             // equal committed geometry alone does not confirm that snapshot.
-            if(ReviewIsCurrent())
+            SimulationQueue.HistoryEntry preparedEntry;
+            try
             {
-                try { job=queue.ConfirmHistoryEntry(queue.GetPreparedHistoryEntry(job)).Job ?? throw new InvalidOperationException("Kaydedilen iş yeniden okunamadı; geçmişi baştan tarayın."); }
-                catch(Exception ex)
-                {
-                    // Preparation has already committed a local file and job. Keep
-                    // its unconfirmed state visible when the separate manifest
-                    // update fails; never silently repeat that write.
-                    Refresh(job.Id);
-                    result.Foreground=StudioTheme.Warning;
-                    result.Text="İş listede görünüyor; kaynak proje doğrulaması kaydedilemedi: "+ex.Message+
-                        " Kayıt ve çıktı dosyasının diskteki durumu doğrulanamadı. Kaynak doğrulanmadı; kuyruğu yeniden açın veya güncel proje için dosyayı yeniden hazırlayın."+
-                        (selectedFileReadError is null ? "" : " Çıktı önizlemesi okunamadı: "+selectedFileReadError)+
-                        " Fiziksel makine testi yapılmadı.";
-                    return;
-                }
+                preparedEntry=queue.GetPreparedHistoryEntry(job);
+                if(preparedEntry.Error is not null)throw new InvalidOperationException(preparedEntry.Error);
+                if(ReviewIsCurrent())preparedEntry=queue.ConfirmHistoryEntry(preparedEntry);
+                if(preparedEntry.Job is not { } verifiedJob || preparedEntry.Error is not null)
+                    throw new InvalidOperationException(preparedEntry.Error ?? "İş kaydı yeniden doğrulanamadı.");
+                job=verifiedJob;
             }
-            Refresh(job.Id);
+            catch(Exception ex)
+            {
+                // A file or manifest was already committed, and the subsequent
+                // check or confirmation may itself have committed. Never adopt a
+                // different on-disk version as the result of this operation.
+                historyScan?.Dispose();historyScan=null;historyComplete=true;
+                jobs.ItemsSource=null;ShowSelection();
+                historyStatus.Text="İşin durumu belirsiz. Geçmişi baştan tarayıp kaydı kontrol edin.";
+                UpdateHistoryControls();
+                result.Foreground=StudioTheme.Warning;
+                result.Text="Dosya veya iş kaydı oluşturulmuş ve doğrulama uygulanmış olabilir; kayıt sonrasında durum doğrulanamadı: "+ex.Message+
+                    " Tekrar hazırlamadan önce geçmişi baştan tarayıp kaydı ve çıktı dosyasını kontrol edin. Fiziksel makine testi yapılmadı.";
+                return;
+            }
+            Refresh(preparedEntry);
             if(selectedFileReadError is { } readError)
             {
                 result.Foreground=StudioTheme.Warning;
@@ -481,11 +489,19 @@ public sealed class MachineCenterWindow : Window
         if(restoreFocus)cancelHistory.Focus();
         jobs.IsEnabled=false;simulate.IsEnabled=false;UpdateAvailability();UpdateHistoryControls();
         historyStatus.Text="İş geçmişi arka planda taranıyor; kuyruk işlemleri bekliyor.";
+        var restartStarted=false;
         try
         {
             var page=await Task.Run(()=>
             {
-                if(restart) { historyScan?.Dispose();historyScan=queue.StartHistoryScan(); }
+                BeforeHistoryReadForVerification?.Invoke();
+                token.ThrowIfCancellationRequested();
+                if(restart)
+                {
+                    var replacement=queue.StartHistoryScan();
+                    var previous=historyScan;historyScan=replacement;restartStarted=true;
+                    previous?.Dispose();
+                }
                 return historyScan!.ReadNextPage(cancellationToken:token);
             });
             historyComplete=page.Complete || page.Error is not null;
@@ -496,7 +512,14 @@ public sealed class MachineCenterWindow : Window
                 : $"Bu sayfada {page.Entries.Count} kayıt var; sonraki sayfa yüklenebilir.";
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested)
-        { historyComplete=false;historyStatus.Text="Tarama iptal edildi; sonraki sayfa ile devam edebilirsiniz."; }
+        {
+            if(!restart || restartStarted)historyComplete=false;
+            historyStatus.Text=historyScan is not null && !historyComplete
+                ? "Tarama iptal edildi; sonraki sayfa ile devam edebilirsiniz."
+                : "Tarama iptal edildi; geçmişi baştan tarayabilirsiniz.";
+            if(restart && restartStarted)
+                historyStatus.Text+=" Ekrandaki eski sayfa önceki taramadandır; devam ettiğinizde kayıtlar tekrarlanabilir.";
+        }
         catch(Exception ex)
         { historyComplete=true;historyStatus.Text="Tarama tamamlanamadı: "+ex.Message+" Geçmişi baştan tarayın."; }
         finally
@@ -507,12 +530,10 @@ public sealed class MachineCenterWindow : Window
             if(returnFocus) { if(trigger.IsEnabled)trigger.Focus();else restartHistory.Focus(); }
         }
     }
-    private void Refresh(Guid? selected)
+    private void Refresh(SimulationQueue.HistoryEntry entry)
     {
-        if(selected is not Guid id)return;
         // A newly prepared job is shown directly; the previous cursor is no
         // longer presented as a complete view after the directory changed.
-        var entry=queue.GetHistoryEntry(id);
         historyScan?.Dispose();historyScan=null;historyComplete=true;
         jobs.ItemsSource=new[] { entry };jobs.SelectedItem=entry;ShowSelection();
         historyStatus.Text="Yeni iş gösteriliyor. Geçmişi görmek için baştan tarayın.";

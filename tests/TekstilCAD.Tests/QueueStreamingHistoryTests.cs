@@ -83,4 +83,31 @@ public sealed class QueueStreamingHistoryTests
         }
         finally { if (Directory.Exists(path)) Directory.Delete(path, true); }
     }
+    [Fact]
+    public void NonCooperatingWriterAfterVersionCheckCanBeOverwritten()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "queue-stream-race-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var queue = new SimulationQueue(path, streamingHistory: true);
+            var job = queue.Prepare(Document(), new MachineProfile("test"), JobFormat.Dxf, sourceSnapshotUnconfirmed: true);
+            var entry = queue.GetPreparedHistoryEntry(job);
+            // This hook runs after the checked hash and before replacement. It
+            // represents a writer that does not acquire the queue lock.
+            var hook = typeof(SimulationQueue).GetProperty("BeforeManifestCommitForVerification", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+            var marker = " ";
+            var externalWriteOccurred = false;
+            hook.SetValue(queue, (Action<string>)(_ =>
+            {
+                File.AppendAllText(job.ManifestPath, marker);
+                Assert.EndsWith(marker, File.ReadAllText(job.ManifestPath));
+                externalWriteOccurred = true;
+            }));
+            var result = queue.ConfirmHistoryEntry(entry);
+            Assert.True(externalWriteOccurred);
+            Assert.False(result.Job!.SourceSnapshotUnconfirmed);
+            Assert.False(File.ReadAllText(job.ManifestPath).EndsWith(marker));
+        }
+        finally { if (Directory.Exists(path)) Directory.Delete(path, true); }
+    }
 }
