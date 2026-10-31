@@ -1205,7 +1205,7 @@ private struct NotchPicker: View {
 
     private func matching(_ piece: Drawing.Piece, index: Int) -> [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty || piece.displayName(index: index).localizedCaseInsensitiveContains(query) { return piece.notches }
+        if query.isEmpty || ModelSearch.matches(piece.displayName(index: index), query: query) { return piece.notches }
         return piece.notches.filter { point in
             let p = piece.points[point]
             return NotchSearch.matches(query: query, index: point, x: p.x.formatted(), y: p.y.formatted())
@@ -1250,8 +1250,8 @@ private struct PiecePicker: View {
     private var matchingIndices: [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return pieces.indices.filter { index in
-            (query.isEmpty || pieces[index].displayName(index: index).localizedCaseInsensitiveContains(query) ||
-                pieces[index].selectionDetails(index: index).localizedCaseInsensitiveContains(query))
+            (query.isEmpty || ModelSearch.matches(pieces[index].displayName(index: index), query: query) ||
+                ModelSearch.matches(pieces[index].selectionDetails(index: index), query: query))
         }
     }
 

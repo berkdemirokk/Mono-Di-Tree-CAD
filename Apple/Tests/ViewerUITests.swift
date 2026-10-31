@@ -1045,4 +1045,30 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
     }
+
+    func testPieceAndNotchSearchAcceptUnaccentedNames() {
+        let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"Ön Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Arka Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":5,"Y":5}]}]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("on beden")
+        XCTAssertTrue(app.buttons["Ön Beden"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["Arka Beden"].exists)
+        app.buttons["Ön Beden"].tap()
+        let notchPicker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(notchPicker.waitForExistence(timeout: 10))
+        notchPicker.tap()
+        let notchSearch = app.searchFields.firstMatch
+        XCTAssertTrue(notchSearch.waitForExistence(timeout: 10))
+        notchSearch.tap()
+        notchSearch.typeText("on beden")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.waitForExistence(timeout: 5))
+    }
 }

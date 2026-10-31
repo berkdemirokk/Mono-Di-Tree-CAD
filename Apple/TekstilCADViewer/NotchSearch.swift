@@ -1,5 +1,12 @@
 import Foundation
 
+/// Use the same forgiving name search as the model library.
+enum ModelSearch {
+    static func matches(_ text: String, query: String) -> Bool {
+        text.localizedStandardContains(query)
+    }
+}
+
 /// Shared by the notch list and its search so visible labels are searchable.
 enum NotchSearch {
     /// Returns the neighboring marked point in file order, without wrapping.

@@ -2,6 +2,12 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testPieceNamesAndDetailsMatchWithoutAccents() {
+        XCTAssertTrue(ModelSearch.matches("Ön Beden", query: "on beden"))
+        XCTAssertTrue(ModelSearch.matches("Ölçü: Çiçek", query: "olcu"))
+        XCTAssertTrue(ModelSearch.matches("Malzeme: Pamuk", query: "pamuk"))
+        XCTAssertFalse(ModelSearch.matches("Arka Beden", query: "on beden"))
+    }
     func testAdjacentNotchNavigationUsesFileOrderWithoutWrapping() {
         let points = [8, 2, 12]
         XCTAssertNil(NotchSearch.adjacent(in: [], current: nil, forward: true))
