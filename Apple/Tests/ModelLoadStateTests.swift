@@ -19,4 +19,19 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertTrue(state.finish(newer))
         XCTAssertFalse(state.isLoading)
     }
+    func testPickerFailureStopsOlderLoad() {
+        var state = ModelLoadState()
+        let older = state.begin()
+        XCTAssertTrue(state.rejectPickerFailure(CocoaError(.fileReadNoPermission)))
+        XCTAssertFalse(state.isLoading)
+        XCTAssertFalse(state.finish(older))
+    }
+
+    func testPickerCancellationKeepsOlderLoad() {
+        var state = ModelLoadState()
+        let older = state.begin()
+        XCTAssertFalse(state.rejectPickerFailure(CocoaError(.userCancelled)))
+        XCTAssertTrue(state.isLoading)
+        XCTAssertTrue(state.finish(older))
+    }
 }

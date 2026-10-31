@@ -238,7 +238,7 @@ private struct ContentView: View {
                 }
                 openModel(url, imported: true)
             } catch {
-                if !isFilePickerCancellation(error) { self.error = error.localizedDescription }
+                if modelLoad.rejectPickerFailure(error) { self.error = error.localizedDescription }
             }
         }
         .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in

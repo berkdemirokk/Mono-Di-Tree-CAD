@@ -17,6 +17,13 @@ struct ModelLoadState {
         isLoading = false
     }
 
+    // A picker failure supersedes an older pending read; cancelling does not.
+    mutating func rejectPickerFailure(_ error: Error) -> Bool {
+        guard !isFilePickerCancellation(error) else { return false }
+        invalidate()
+        return true
+    }
+
     mutating func finish(_ completedRequest: UUID) -> Bool {
         guard request == completedRequest, isLoading else { return false }
         isLoading = false
