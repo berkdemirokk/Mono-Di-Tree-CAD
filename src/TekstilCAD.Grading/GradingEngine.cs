@@ -146,6 +146,10 @@ public static class GradingEngine
             ValidatePoint(point);
             result.Add(point);
         }
+        // A newly coincident endpoint is a collapsed edge, not an explicit
+        // closing vertex from the source contour.
+        if (basePiece.Closed && basePiece.Points[0] != basePiece.Points[^1] && result[0] == result[^1])
+            throw new InvalidDataException("Serileme kapanış kenarını sıfıra indirdi; kuralları kontrol edin.");
         ValidateContour(result, basePiece.Closed, cancellationToken);
         if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points)) != Math.Sign(Geometry.SignedArea(result)))
             throw new InvalidDataException("Serileme kontur yönünü tersine çevirdi; kuralları kontrol edin.");

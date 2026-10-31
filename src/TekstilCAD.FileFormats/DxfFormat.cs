@@ -492,7 +492,10 @@ public static class DxfFormat
             if (i + 1 >= lines.Count || !int.TryParse(lines[i].Trim(), out var code)) throw new InvalidDataException("ASCII DXF grup kodları geçersiz.");
             pairs.Add(new Pair(code, lines[i + 1].Trim(), lines[i + 1]));
         }
-        if (!pairs.Any(p => p.Code == 0 && p.Value == "EOF")) throw new InvalidDataException("DXF EOF kaydı yok.");
+        var eofIndex = pairs.FindIndex(p => p.Code == 0 && p.Value == "EOF");
+        if (eofIndex < 0) throw new InvalidDataException("DXF EOF kaydı yok.");
+        if (eofIndex != pairs.Count - 1)
+            throw new InvalidDataException("DXF EOF kaydından sonra veri var; dosyanın sonu belirsiz.");
         var extendedDataGroups=0; var lineweightGroups=0; var transparencyGroups=0;
         var warnings = new List<string>();
         warnings.Add("ASTM D6673 tarzı alışverişte serileme tablosu ayrı bir ASCII dosyasında olabilir; bu DXF işlemi o dosyayı aramaz veya içe almaz.");
