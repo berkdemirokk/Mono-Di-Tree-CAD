@@ -30,4 +30,32 @@ final class ExperimentalContourValidationTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalContourValidation.validate([p(0, 0), p(1, 0), p(0, e)], closed: true))
         XCTAssertNoThrow(try ExperimentalContourValidation.validate([p(0, 0), p(1, 0), p(0, e * 4)], closed: true))
     }
+
+    // Expected outcomes follow Geometry.HasSelfIntersections/ValidateContour;
+    // these fixtures are not evidence of a completed cross-platform test run.
+    func testDesktopPredicateFixtures() {
+        let cases: [(String, [ExperimentalContourValidation.Point], Bool, Bool)] = [
+            ("adjacent straight continuation", [p(0, 0), p(1, 0), p(2, 0)], false, true),
+            ("adjacent reversal", [p(0, 0), p(2, 0), p(1, 0)], false, false),
+            ("nonadjacent endpoint touch", [p(0, 0), p(2, 0), p(2, 2), p(1, 0)], false, false),
+            ("nonadjacent collinear overlap", [p(0, 0), p(3, 0), p(3, 1), p(1, 0), p(2, 0)], false, false),
+            ("disjoint open path", [p(0, 0), p(2, 0), p(2, 2), p(0, 2)], false, true),
+            ("clockwise polygon", [p(0, 0), p(0, 2), p(2, 2), p(2, 0)], true, true),
+            ("translated explicit closure", [p(99_999_990, 99_999_990), p(99_999_999, 99_999_990), p(99_999_990, 99_999_999), p(99_999_990, 99_999_990)], true, true),
+            ("repeated interior vertex", [p(0, 0), p(2, 0), p(2, 2), p(2, 0), p(0, 2)], true, false),
+            ("zero edge", [p(0, 0), p(0, 0), p(1, 1)], false, false)
+        ]
+        for (name, points, closed, accepted) in cases {
+            if accepted { XCTAssertNoThrow(try ExperimentalContourValidation.validate(points, closed: closed), name) }
+            else { XCTAssertThrowsError(try ExperimentalContourValidation.validate(points, closed: closed), name) }
+        }
+    }
+
+    func testConservativeStoredPointLimit() {
+        // Even an explicit closure at 4097 stored points is intentionally rejected:
+        // desktop point editing delegates that size to its unported large validator.
+        let points = (0..<4096).map { p(Double($0), 0) }
+        XCTAssertNoThrow(try ExperimentalContourValidation.validate(points, closed: false))
+        XCTAssertThrowsError(try ExperimentalContourValidation.validate(points + [p(0, 0)], closed: true))
+    }
 }

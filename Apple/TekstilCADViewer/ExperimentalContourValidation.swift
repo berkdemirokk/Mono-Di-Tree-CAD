@@ -40,7 +40,13 @@ enum ExperimentalContourValidation {
     private static func sub(_ a: Point, _ b: Point) -> Point { Point(x: a.x - b.x, y: a.y - b.y) }
     private static func cross(_ a: Point, _ b: Point) -> Double { a.x * b.y - a.y * b.x }
     private static func dot(_ a: Point, _ b: Point) -> Double { a.x * b.x + a.y * b.y }
-    private static func distance(_ a: Point, _ b: Point) -> Double { hypot(a.x - b.x, a.y - b.y) }
+    // Match Geometry.Distance's operation order at epsilon boundaries.
+    private static func distance(_ a: Point, _ b: Point) -> Double {
+        let dx = abs(a.x - b.x), dy = abs(a.y - b.y)
+        let scale = max(dx, dy)
+        if scale == 0 { return 0 }
+        return scale * sqrt(pow(dx / scale, 2) + pow(dy / scale, 2))
+    }
     private static func orientation(_ a: Point, _ b: Point, _ c: Point) -> Int {
         let value = cross(sub(b, a), sub(c, a)), tolerance = epsilon * max(1, distance(a, b))
         return value > tolerance ? 1 : value < -tolerance ? -1 : 0
