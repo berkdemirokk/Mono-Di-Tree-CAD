@@ -33,6 +33,13 @@ internal sealed class DxfNotchPointReviewWindow : Window
     private readonly Button accept=new() { Content="Eşlemeleri onayla",IsEnabled=false,Padding=new Thickness(12,8,12,8) };
     private readonly Button add=new() { Content="Seçimi doğrula ve ekle",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,4,8,4) };
     private readonly Button remove=new() { Content="Seçili eşlemeyi kaldır",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,4,0,4) };
+    private readonly Button skip=new() { Content="Eşleme yapmadan devam",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0) };
+    private readonly Button cancelWork=new() { Content="Doğrulamayı iptal et",Padding=new Thickness(12,7,12,7),Visibility=Visibility.Collapsed };
+    private CancellationTokenSource? mappingCancellation;
+    private long selectionRevision;
+    private bool closed;
+    internal Action? BeforeMappingForVerification { get; set; }
+    internal Task? MappingTaskForVerification { get; private set; }
     internal IReadOnlyList<DxfNotchPointSelection> Selections { get; private set; }=Array.Empty<DxfNotchPointSelection>();
     internal string? ApprovedLayer { get; private set; }
 
@@ -45,10 +52,11 @@ internal sealed class DxfNotchPointReviewWindow : Window
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Aktarımı iptal et",IsCancel=true,IsDefault=true,Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0) };
-        var skip=new Button { Content="Eşleme yapmadan devam",Padding=new Thickness(12,8,12,8),Margin=new Thickness(0,0,8,0) };
         cancel.Click+=(_,_)=>DialogResult=false;
-        skip.Click+=(_,_)=> { Selections=Array.Empty<DxfNotchPointSelection>();ApprovedLayer=null;DialogResult=true; };
-        accept.Click+=(_,_)=> { if(layer.SelectedItem is not LayerChoice chosen || mappings.Count==0)return;ApprovedLayer=chosen.Name;Selections=Array.AsReadOnly(mappings.Select(m=>m.Selection).ToArray());DialogResult=true; };
+        Closed+=(_,_)=> { closed=true;mappingCancellation?.Cancel(); };
+        cancelWork.Click+=(_,_)=> { mappingCancellation?.Cancel();status.Text="Doğrulama iptal ediliyor; proje değiştirilmedi."; };
+        skip.Click+=(_,_)=> { if(mappingCancellation is not null)return;Selections=Array.Empty<DxfNotchPointSelection>();ApprovedLayer=null;DialogResult=true; };
+        accept.Click+=(_,_)=> { if(mappingCancellation is not null || layer.SelectedItem is not LayerChoice chosen || mappings.Count==0)return;ApprovedLayer=chosen.Name;Selections=Array.AsReadOnly(mappings.Select(m=>m.Selection).ToArray());DialogResult=true; };
         actions.Children.Add(cancel);actions.Children.Add(skip);actions.Children.Add(accept);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto });
         body.Children.Add(new TextBlock { Text="DXF noktalarını köşe işareti olarak incele",FontSize=20,FontWeight=FontWeights.SemiBold });
@@ -69,12 +77,12 @@ internal sealed class DxfNotchPointReviewWindow : Window
         AutomationProperties.SetName(selected,"Onay için seçilen nokta eşlemeleri");AutomationProperties.SetName(status,"Nokta eşleme durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         void Label(string text,UIElement control) { body.Children.Add(new TextBlock { Text=text,FontWeight=FontWeights.SemiBold });body.Children.Add(control); }
         Label("1. Kaynak POINT katmanı",layer);Label("2. Kaynak POINT kaydı ve ham koordinatı",point);Label("3. Hedef kontur",contour);Label("4. Hedef köşe indeksi",vertex);
-        layer.SelectionChanged+=(_,_)=> { mappings.Clear();preview.Clear();accept.IsEnabled=false;point.ItemsSource=layer.SelectedItem is LayerChoice l ? points.Where(p=>string.Equals(p.Layer,l.Name,StringComparison.OrdinalIgnoreCase)).ToArray() : [];status.Text="Katman değişti; eşlemeleri yeniden seçin."; };
-        point.SelectionChanged+=(_,_)=>preview.Clear();
-        vertex.SelectionChanged+=(_,_)=>preview.Clear();
+        layer.SelectionChanged+=(_,_)=> { InvalidateMapping();mappings.Clear();preview.Clear();accept.IsEnabled=false;point.ItemsSource=layer.SelectedItem is LayerChoice l ? points.Where(p=>string.Equals(p.Layer,l.Name,StringComparison.OrdinalIgnoreCase)).ToArray() : [];status.Text="Katman değişti; eşlemeleri yeniden seçin."; };
+        point.SelectionChanged+=(_,_)=> { InvalidateMapping();preview.Clear(); };
+        vertex.SelectionChanged+=(_,_)=> { InvalidateMapping();preview.Clear(); };
         contour.SelectionChanged+=(_,_)=>
         {
-            preview.Clear();
+            InvalidateMapping();preview.Clear();
             if(contour.SelectedItem is PieceChoice p)
             {
                 vertex.ItemsSource=p.Piece.Points.Select((position,index)=>new VertexChoice(index,position)).ToArray();
@@ -83,26 +91,52 @@ internal sealed class DxfNotchPointReviewWindow : Window
         };
         body.Children.Add(new TextBlock { Text="Doğrulanmış seçimden sonra kontur ve işaret önizlemesi gösterilir. Görünüm otomatik sığdırılır, fiziksel ölçek değildir.",TextWrapping=TextWrapping.Wrap });body.Children.Add(preview);
         var buttons=new WrapPanel();
-        add.Click+=(_,_)=>
+        add.Click+=(_,_)=>MappingTaskForVerification=AddMappingAsync();
+        remove.Click+=(_,_)=> { if(mappingCancellation is not null)return;if(selected.SelectedItem is Mapping m)mappings.Remove(m);preview.Clear();accept.IsEnabled=mappings.Count>0;status.Text=$"{mappings.Count} eşleme seçili. Önizleme temizlendi; yeni bir seçim doğrulayın."; };
+        buttons.Children.Add(add);buttons.Children.Add(remove);buttons.Children.Add(cancelWork);body.Children.Add(buttons);selected.ItemsSource=mappings;body.Children.Add(selected);body.Children.Add(status);
+    }
+    private void InvalidateMapping() { selectionRevision++;mappingCancellation?.Cancel(); }
+    private void SetMappingBusy(bool busy)
+    {
+        layer.IsEnabled=point.IsEnabled=contour.IsEnabled=vertex.IsEnabled=selected.IsEnabled=!busy;
+        add.IsEnabled=remove.IsEnabled=skip.IsEnabled=!busy;
+        accept.IsEnabled=!busy && mappings.Count>0;
+        cancelWork.Visibility=busy ? Visibility.Visible : Visibility.Collapsed;
+        cancelWork.IsEnabled=busy;
+    }
+    private async Task AddMappingAsync()
+    {
+        if(closed || mappingCancellation is not null)return;
+        if(layer.SelectedItem is not LayerChoice l || point.SelectedItem is not PointChoice p || contour.SelectedItem is not PieceChoice c ||
+           vertex.SelectedItem is not VertexChoice v)
+        { status.Text="Katman, POINT, kontur ve geçerli köşeyi seçin.";return; }
+        if(mappings.Count>=100) { status.Text="Bir incelemede en fazla 100 eşleme yapılabilir.";return; }
+        var next=new DxfNotchPointSelection(p.Ordinal,c.Piece.Id,v.Index);
+        var proposals=mappings.Select(m=>m.Selection).Append(next).ToArray();
+        var revision=selectionRevision;var before=BeforeMappingForVerification;
+        var cancellation=new CancellationTokenSource();mappingCancellation=cancellation;
+        SetMappingBusy(true);preview.Clear();status.Text="Eşleme arka planda doğrulanıyor; isterseniz iptal edin.";
+        try
         {
-            try
-            {
-                if(layer.SelectedItem is not LayerChoice l || point.SelectedItem is not PointChoice p || contour.SelectedItem is not PieceChoice c ||
-                   vertex.SelectedItem is not VertexChoice v)throw new ArgumentException("Katman, POINT, kontur ve geçerli köşeyi seçin.");
-                if(mappings.Count>=100)throw new ArgumentException("Bir incelemede en fazla 100 eşleme yapılabilir.");
-                var next=new DxfNotchPointSelection(p.Ordinal,c.Piece.Id,v.Index);
-                var proposals=mappings.Select(m=>m.Selection).Append(next).ToArray();
-                var checkedResult=DxfNotchPointMapping.Apply(snapshot,proposals,l.Name,this.fingerprint);
-                var added=checkedResult.Applied[^1];var derived=checkedResult.Project.Pieces.Single(x=>x.Id==added.PieceId);
-                preview.ShowPiece(derived);
-                mappings.Add(new Mapping(next,$"POINT {p.Ordinal} → {Safe(c.Piece.Name)} · {c.Piece.Id:D} · köşe {added.VertexIndex} · X {MeasurementInput.Format(added.Position.X)} Y {MeasurementInput.Format(added.Position.Y)} mm"));
-                status.Text=$"{mappings.Count} eşleme ayrık kopyada doğrulandı. Görsel işaret; üretim onayı değildir.";accept.IsEnabled=true;
-            }
-            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException)
-            { status.Text="Eşleme eklenmedi: "+ex.Message; }
-        };
-        remove.Click+=(_,_)=> { if(selected.SelectedItem is Mapping m)mappings.Remove(m);preview.Clear();accept.IsEnabled=mappings.Count>0;status.Text=$"{mappings.Count} eşleme seçili. Önizleme temizlendi; yeni bir seçim doğrulayın."; };
-        buttons.Children.Add(add);buttons.Children.Add(remove);body.Children.Add(buttons);selected.ItemsSource=mappings;body.Children.Add(selected);body.Children.Add(status);
+            var checkedResult=await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();return DxfNotchPointMapping.Apply(snapshot,proposals,l.Name,fingerprint,cancellation.Token); },cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if(closed || revision!=selectionRevision || !ReferenceEquals(layer.SelectedItem,l) || !ReferenceEquals(point.SelectedItem,p) ||
+               !ReferenceEquals(contour.SelectedItem,c) || !ReferenceEquals(vertex.SelectedItem,v) ||
+               !mappings.Select(m=>m.Selection).SequenceEqual(proposals.Take(proposals.Length-1)))return;
+            var added=checkedResult.Applied[^1];var derived=checkedResult.Project.Pieces.Single(x=>x.Id==added.PieceId);
+            preview.ShowPiece(derived);
+            mappings.Add(new Mapping(next,$"POINT {p.Ordinal} → {Safe(c.Piece.Name)} · {c.Piece.Id:D} · köşe {added.VertexIndex} · X {MeasurementInput.Format(added.Position.X)} Y {MeasurementInput.Format(added.Position.Y)} mm"));
+            status.Text=$"{mappings.Count} eşleme ayrık kopyada doğrulandı. Görsel işaret; üretim onayı değildir.";
+        }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
+        { if(!closed && revision==selectionRevision)status.Text="Doğrulama iptal edildi; eşleme eklenmedi."; }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        { if(!closed && revision==selectionRevision)status.Text="Eşleme eklenmedi: "+ex.Message; }
+        finally
+        {
+            if(ReferenceEquals(mappingCancellation,cancellation))mappingCancellation=null;
+            cancellation.Dispose();if(!closed)SetMappingBusy(false);
+        }
     }
     private static string Safe(string? value)
     {

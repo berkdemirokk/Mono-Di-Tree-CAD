@@ -2028,23 +2028,70 @@ internal static class DesktopVerification
             var remove=(Button)typeof(DxfNotchPointReviewWindow).GetField("remove",PrivateInstance)!.GetValue(dialog)!;
             var preview=typeof(DxfNotchPointReviewWindow).GetField("preview",PrivateInstance)!.GetValue(dialog)!;
             var previewPiece=preview.GetType().GetField("piece",PrivateInstance)!;
+            void AddAndWait()
+            {
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var task=dialog.MappingTaskForVerification ?? throw new InvalidOperationException("Eşleme görevi başlamadı.");
+                PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            }
             Check(layer.SelectedIndex==-1 && point.SelectedIndex==-1 && dialog.Selections.Count==0,
                 "DXF point review starts with no implicit layer or marker approval",checks);
             layer.SelectedIndex=0;point.SelectedIndex=0;contour.SelectedIndex=0;vertex.SelectedIndex=1;
-            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AddAndWait();
             Check(((PatternPiece?)previewPiece.GetValue(preview))?.Notches is { Count:1 } && selected.Items.Count==1,
                 "Validated point review displays the marked detached preview",checks);
             selected.SelectedIndex=0;remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(previewPiece.GetValue(preview) is null && selected.Items.Count==0,
                 "Removing a point mapping clears the old marked preview",checks);
-            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            AddAndWait();
             contour.SelectedIndex=-1;
             Check(previewPiece.GetValue(preview) is null,"Changing contour clears the old marked preview",checks);
             contour.SelectedIndex=0;vertex.SelectedIndex=1;selected.SelectedIndex=0;remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));layer.SelectedIndex=-1;
+            AddAndWait();layer.SelectedIndex=-1;
             Check(previewPiece.GetValue(preview) is null && selected.Items.Count==0,
                 "Changing layer clears mappings and their preview",checks);
-            dialog.Close();
+            layer.SelectedIndex=0;point.SelectedIndex=0;contour.SelectedIndex=0;vertex.SelectedIndex=1;
+            using(var reached=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                dialog.BeforeMappingForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var pending=dialog.MappingTaskForVerification!;
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);
+                    Check(!add.IsEnabled && !layer.IsEnabled,"Point mapping runs in the background and disables conflicting controls",checks);
+                    point.SelectedIndex=-1;release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(selected.Items.Count==0 && previewPiece.GetValue(preview) is null,"Changing a selection rejects an in-flight point result",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);dialog.BeforeMappingForVerification=null; }
+            }
+            point.SelectedIndex=0;
+            using(var reached=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                dialog.BeforeMappingForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var pending=dialog.MappingTaskForVerification!;
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);
+                    var cancelWork=(Button)typeof(DxfNotchPointReviewWindow).GetField("cancelWork",PrivateInstance)!.GetValue(dialog)!;
+                    cancelWork.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(selected.Items.Count==0 && previewPiece.GetValue(preview) is null && add.IsEnabled,"Cancelled point mapping leaves no result and restores controls",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);dialog.BeforeMappingForVerification=null; }
+            }
+            using(var reached=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                dialog.BeforeMappingForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var pending=dialog.MappingTaskForVerification!;
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);dialog.Close();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(selected.Items.Count==0 && previewPiece.GetValue(preview) is null,"Closing point review discards its running result",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);dialog.BeforeMappingForVerification=null; }
+            }
             studio.ConfirmDxfReviewForVerification=_=>true;studio.DxfDiscardDecisionForVerification=()=>(true,false);
             studio.ConfirmDxfNotchReviewForVerification=import=>
                 ("MARK",(IReadOnlyList<DxfNotchPointSelection>)[new(import.SupplementalGeometry!.Records.Single(r=>r.EntityType=="POINT").SourceOrdinal,import.Project.Pieces[0].Id,1)]);
@@ -2052,6 +2099,83 @@ internal static class DesktopVerification
             Check(piece.Notches is { Count:1 } && piece.Notches[0].VertexIndex==1 && piece.Notches[0].Position==piece.Points[1] &&
                 File.ReadAllBytes(path).SequenceEqual(bytes) && studio.Document.ImportProvenance!.Warnings.Any(w=>w.Contains("POINT")),
                 "Approved DXF point mapping imports a visual mark without changing the source",checks);
+            incoming=Prepare();
+            var original=studio.Document;
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                studio.BeforeDxfFinalMappingForVerification=()=> { reached.Set();release.Wait(); };
+                var pending=studio.ReviewPreparedDxfAsync();
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);studio.RequestDxfCancellation();release.Set();
+                    PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(ReferenceEquals(original,studio.Document) && studio.Document.Pieces.Count==0 && !studio.DxfImportRunning,
+                        "Cancelling final DXF mapping preserves the workspace",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeDxfFinalMappingForVerification=null; }
+            }
+            incoming=Prepare();original=studio.Document;
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                studio.BeforeDxfFinalMappingForVerification=()=> { reached.Set();release.Wait(); };
+                var pending=studio.ReviewPreparedDxfAsync();
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);File.AppendAllText(path," ");release.Set();
+                    PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(ReferenceEquals(original,studio.Document) && studio.Document.Pieces.Count==0,
+                        "Source changes during final DXF mapping prevent replacement",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeDxfFinalMappingForVerification=null; }
+            }
+            void CheckFinalMappingStale(string label,Action change,Action verify)
+            {
+                using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+                studio.BeforeDxfFinalMappingForVerification=()=> { reached.Set();release.Wait(); };
+                var pending=studio.ReviewPreparedDxfAsync();
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);change();release.Set();
+                    PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    verify();
+                    Check(!studio.DxfImportRunning,label,checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeDxfFinalMappingForVerification=null; }
+            }
+            incoming=Prepare();ProjectDocument? edited=null;
+            CheckFinalMappingStale("Document edits during final mapping remain in the workspace",
+                ()=> { studio.Commit("Eşleme sırasında düzenleme",()=>studio.Document.Name="Korunacak değişiklik");edited=studio.Document; },
+                ()=>Check(edited is not null && ReferenceEquals(edited,studio.Document) && studio.Document.Name=="Korunacak değişiklik" && studio.Document.Pieces.Count==0,
+                    "Final mapping does not overwrite a newer document edit",checks));
+
+            File.WriteAllBytes(path,bytes);
+            var existingPiece=new PatternPiece { Name="Seçim",Points=[new(0,0),new(10,0),new(0,10)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[existingPiece] });studio.Select(existingPiece.Id);
+            var preparation=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>preparation.IsCompleted);
+            incoming=preparation.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Seçim testi DXF hazırlanamadı.");
+            original=studio.Document;
+            Check(studio.SelectedId==existingPiece.Id,"Selection fixture starts with the source piece selected",checks);
+            CheckFinalMappingStale("Selection change during final mapping is observed",
+                ()=>studio.Select(null),
+                ()=>Check(ReferenceEquals(original,studio.Document) && studio.SelectedId is null && studio.Document.Pieces.Single().Id==existingPiece.Id,
+                    "Final mapping does not overwrite a newer selection",checks));
+
+            File.WriteAllBytes(path,bytes);studio.LoadDocument(new ProjectDocument { Name="Önce" });
+            studio.Commit("Geçmiş",()=>studio.Document.Name="Sonra");
+            var documentSession=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            preparation=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>preparation.IsCompleted);
+            incoming=preparation.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Geçmiş testi DXF hazırlanamadı.");
+            ProjectDocument? afterUndo=null;int redoAfterUndo=0;
+            CheckFinalMappingStale("Undo during final mapping is observed",
+                ()=> { Check(documentSession.Undo(),"Undo is available during the mapping fixture",checks);afterUndo=studio.Document;redoAfterUndo=documentSession.RedoCount; },
+                ()=>Check(afterUndo is not null && ReferenceEquals(afterUndo,studio.Document) && studio.Document.Name=="Önce" && redoAfterUndo>0 && documentSession.RedoCount==redoAfterUndo,
+                    "Final mapping preserves the undo result and redo history",checks));
+
+            incoming=Prepare();original=studio.Document;
+            CheckFinalMappingStale("Close request during final mapping is blocked",
+                ()=> { studio.Close();Check(studio.DxfImportRunning && studio.IsEnabled && !(bool)typeof(MainWindow).GetField("windowClosed",PrivateInstance)!.GetValue(studio)!,
+                    "The window stays available while final mapping is running",checks);studio.RequestDxfCancellation(); },
+                ()=>Check(ReferenceEquals(original,studio.Document),"Close and cancellation preserve the workspace",checks));
             incoming=Prepare();var before=studio.Document.Clone();
             studio.ConfirmDxfNotchReviewForVerification=import=>
             {
@@ -2065,6 +2189,7 @@ internal static class DesktopVerification
         finally
         {
             studio.ConfirmDxfReviewForVerification=null;studio.ConfirmDxfNotchReviewForVerification=null;
+            studio.BeforeDxfFinalMappingForVerification=null;
             studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous);
         }
     }

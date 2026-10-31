@@ -137,6 +137,7 @@ public class MainWindow : Window
     internal Action? BeforeDxfPreparationForVerification { get; set; }
     internal Action? AfterDxfPreparationForVerification { get; set; }
     internal Action? BeforeDxfSourceCheckForVerification { get; set; }
+    internal Action? BeforeDxfFinalMappingForVerification { get; set; }
     internal Action? AfterDxfSourceCheckForVerification { get; set; }
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
@@ -2259,17 +2260,49 @@ public class MainWindow : Window
             if (!PreparedImportMatches()) return;
             // Persist only the verified import snapshot, never an absolute source
             // path. A missing/oversized history fails before replacing the document.
-            var candidate = notchSelections.Count==0 ? importSnapshot.Clone() :
-                DxfNotchPointMapping.Apply(imported with { Project=importSnapshot.Clone() },notchSelections,
-                    notchLayer ?? throw new InvalidOperationException("Nokta işareti katmanı eksik."),
-                    notchFingerprint ?? throw new InvalidOperationException("Nokta işareti inceleme kimliği eksik.")).Project;
-            if(grainSelections.Count>0)
+            var detachedImport=imported with { Project=importSnapshot, Warnings=imported.Warnings.ToList() };
+            var detachedNotches=notchSelections.ToArray();
+            var detachedGrains=grainSelections.ToArray();
+            var beforeMapping=BeforeDxfFinalMappingForVerification;
+            using var mappingCancellation=new CancellationTokenSource();
+            dxfImportCancellation=mappingCancellation;DxfImportRunning=true;
+            dxfCancel.Content="DXF eşlemesini iptal et";
+            System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF eşlemesini iptal et");
+            dxfCancel.IsEnabled=true;dxfCancel.Visibility=Visibility.Visible;dxfReview.Visibility=Visibility.Collapsed;
+            if(dxfImportCommand is not null)dxfImportCommand.IsEnabled=false;if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;if(notchReviewExportCommand is not null)notchReviewExportCommand.IsEnabled=false;
+            dxfNotice.Text="DXF eşlemeleri hazırlanıyor; sonucu bekleyin veya iptal isteyin.";SetStatus(dxfNotice.Text);
+            ProjectDocument candidate;
+            try
             {
-                if(grainFingerprint is null)throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.");
-                var grainInput=imported with { Project=candidate };
-                candidate=DxfTextileGrainlineMapping.Apply(grainInput,grainSelections,
-                    DxfTextileGrainlineMapping.CaptureFingerprint(grainInput)).Project;
+                candidate=await Task.Run(()=> {
+                    beforeMapping?.Invoke();mappingCancellation.Token.ThrowIfCancellationRequested();
+                    var result=detachedNotches.Length==0 ? detachedImport.Project.Clone() :
+                        DxfNotchPointMapping.Apply(detachedImport,detachedNotches,
+                            notchLayer ?? throw new InvalidOperationException("Nokta işareti katmanı eksik."),
+                            notchFingerprint ?? throw new InvalidOperationException("Nokta işareti inceleme kimliği eksik."),mappingCancellation.Token).Project;
+                    if(detachedGrains.Length>0)
+                    {
+                        if(grainFingerprint is null)throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.");
+                        var grainInput=detachedImport with { Project=result };
+                        result=DxfTextileGrainlineMapping.Apply(grainInput,detachedGrains,
+                            DxfTextileGrainlineMapping.CaptureFingerprint(grainInput,mappingCancellation.Token),mappingCancellation.Token).Project;
+                    }
+                    mappingCancellation.Token.ThrowIfCancellationRequested();return result;
+                });
+                mappingCancellation.Token.ThrowIfCancellationRequested();
             }
+            catch(OperationCanceledException) when(mappingCancellation.IsCancellationRequested)
+            { OfferDxfReviewRetry(imported,"DXF eşlemesi iptal edildi; proje değiştirilmedi.");return; }
+            finally
+            {
+                if(ReferenceEquals(dxfImportCancellation,mappingCancellation))dxfImportCancellation=null;
+                DxfImportRunning=false;dxfCancel.Visibility=Visibility.Collapsed;dxfCancel.IsEnabled=false;
+                dxfCancel.Content="DXF okumayı iptal et";System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
+                if(!windowClosed) { if(dxfImportCommand is not null)dxfImportCommand.IsEnabled=true;if(exportCommand is not null)exportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning;if(notchReviewExportCommand is not null)notchReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning; }
+            }
+            if(!IsPreparedDxfRetryCurrent(imported) || !PreparedImportMatches())return;
+            if(!await VerifyDxfSourceBeforeApplyAsync(imported,allowSaved)) { if(dxfSourceCheckCancelled)OfferDxfReviewRetry(imported,"DXF kaynak kontrolü iptal edildi; proje değiştirilmedi.");return; }
+            if(!IsPreparedDxfRetryCurrent(imported) || !PreparedImportMatches())return;
             var historyWarnings = imported.Warnings.ToList();
             if (grainReviewUnavailable)
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
