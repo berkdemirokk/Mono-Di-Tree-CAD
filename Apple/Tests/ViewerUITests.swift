@@ -1,6 +1,22 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testViewerCanScrollToContourOnPhone() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+
+        let preview = app.otherElements["1 parçalı kontur önizlemesi"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 15))
+        let scroll = app.scrollViews.firstMatch
+        XCTAssertTrue(scroll.exists)
+        for _ in 0..<4 where !preview.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(preview.isHittable, "The contour should remain reachable when the content exceeds the screen")
+        XCTAssertGreaterThanOrEqual(preview.frame.height, 300)
+    }
+
     func testLibrarySearchAndSortCanBeUsedToSelectAModel() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()

@@ -64,6 +64,7 @@ private struct ContentView: View {
     @State private var isLoading = false
 
     var body: some View {
+        ScrollView {
         VStack(spacing: 12) {
             HStack {
                 Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
@@ -186,6 +187,7 @@ private struct ContentView: View {
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
                         highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
                         )
+                        .frame(height: 320)
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
                     } else {
@@ -208,6 +210,7 @@ private struct ContentView: View {
             }
         }
         .padding()
+        }
         #if DEBUG
         .onChange(of: selectedPiece) { _ in pieceRenameSnapshot = nil }
         #endif
