@@ -291,6 +291,7 @@ internal static class DesktopVerification
             VerifyNestingErrorNavigation(studio,reportPath,checks);
             VerifyNestingErrorNavigationLarge(studio,reportPath,checks);
             VerifyPointDistance(studio,reportPath,checks);
+            VerifySeamLengthComparison(studio,checks);
             VerifyPointPicker(studio,reportPath,checks);
             VerifyBulkGrading(studio,reportPath,checks);
             VerifyBulkPreviewDirection(checks);
@@ -7432,6 +7433,85 @@ internal static class DesktopVerification
         }
         finally { release.Set();SynchronizationContext.SetSynchronizationContext(prior);cancelWindow.Close(); }
     }
+    private static void VerifySeamLengthComparison(MainWindow studio,List<string> checks)
+    {
+        var a=new PatternPiece { Name="Kapalı kenar",Closed=true,Points=[new(0,0),new(10,0),new(10,5),new(0,5)] };
+        var b=new PatternPiece { Name="Açık kenar",Closed=false,Points=[new(0,0),new(0,7)] };
+        ProjectDocument Fixture()=>new() { Pieces=[a.Clone(),b.Clone()] };
+        studio.LoadDocument(Fixture());studio.Select(a.Id);Guid? source=a.Id;
+        var window=new SeamLengthComparisonWindow(studio,studio,()=>source);
+        object Side(string name)=>typeof(SeamLengthComparisonWindow).GetField(name,PrivateInstance)!.GetValue(window)!;
+        T Control<T>(object side,string name) where T:class => (T)side.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic|BindingFlags.Public)!.GetValue(side)!;
+        var first=Side("first");var second=Side("second");
+        var start=Control<ComboBox>(first,"Start");var end=Control<ComboBox>(first,"End");var direction=Control<ComboBox>(first,"Direction");
+        var otherDirection=Control<ComboBox>(second,"Direction");
+        var preview=Control<FrameworkElement>(first,"Preview");
+        var result=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(window)!;
+        var compare=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(window)!;
+        try
+        {
+            Check(direction.IsEnabled && !otherDirection.IsEnabled && AutomationProperties.GetName(start).Contains("başlangıç")
+                && AutomationProperties.GetName(end).Contains("bitiş") && AutomationProperties.GetName(direction).Contains("yönü")
+                && AutomationProperties.GetName(preview).Contains("önizlemesi") && AutomationProperties.GetLiveSetting(result)==AutomationLiveSetting.Polite,
+                "Seam comparison exposes named controls and enables direction only for closed contours",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("1. yol: 10 mm") && result.Text.Contains("2. yol: 7 mm")
+                && result.Text.Contains("(2 − 1): -3 mm") && result.Text.Contains("Mutlak fark: 3 mm") && result.Text.Contains("üretim kabulü değildir"),
+                "Seam comparison reports both segment lengths and signed second-minus-first difference",checks);
+            direction.SelectedIndex=1;
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Changing direction clears the old result and preview",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var path=(ContourPath)preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview)!;
+            Check(result.Text.Contains("1. yol: 20 mm") && result.Text.Contains("(2 − 1): -13 mm")
+                && path.StartIndex==0 && path.EndIndex==1 && path.Direction==ContourDirection.Backward,
+                "Closed backward path follows the other three edges",checks);
+            // Measure the element without its layout margin and sample around
+            // calculated segment midpoints, allowing for WPF antialiasing.
+            preview.Margin=new Thickness(0);preview.Height=170;
+            preview.Measure(new Size(300,170));preview.Arrange(new Rect(0,0,300,170));preview.UpdateLayout();
+            int width=(int)Math.Ceiling(preview.ActualWidth),height=(int)Math.Ceiling(preview.ActualHeight);
+            var bitmap=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bitmap.Render(preview);
+            var pixels=new byte[width*height*4];bitmap.CopyPixels(pixels,width*4,0);
+            bool RedNear(double x,double y)
+            {
+                for(int py=Math.Max(0,(int)Math.Floor(y)-3);py<=Math.Min(height-1,(int)Math.Ceiling(y)+3);py++)
+                for(int px=Math.Max(0,(int)Math.Floor(x)-3);px<=Math.Min(width-1,(int)Math.Ceiling(x)+3);px++)
+                { var i=(py*width+px)*4;if(pixels[i+2]>150 && pixels[i+2]>pixels[i+1]*2 && pixels[i+2]>pixels[i]*2)return true; }
+                return false;
+            }
+            double scale=Math.Min((preview.ActualWidth-20)/10,(preview.ActualHeight-20)/5);
+            Check(RedNear(10,10+2.5*scale) && RedNear(10+5*scale,10+5*scale) && !RedNear(10+5*scale,10),
+                "Preview draws the actual backward path and uses the main canvas Y direction",checks);
+            end.SelectedIndex=2;
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Changing an endpoint clears the old comparison",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            source=null;typeof(SeamLengthComparisonWindow).GetMethod("CheckCurrent",PrivateInstance)!.Invoke(window,null);
+            Check(!compare.IsEnabled && result.Text.Contains("geçersiz") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Workshop source change invalidates the result and preview",checks);
+        }
+        finally { window.Close(); }
+        foreach(var scenario in new[]{"geometry","selection","draft"})
+        {
+            studio.LoadDocument(Fixture());studio.Select(a.Id);source=a.Id;
+            var staleWindow=new SeamLengthComparisonWindow(studio,studio,()=>source);
+            try
+            {
+                var button=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(staleWindow)!;
+                var text=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(staleWindow)!;
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                if(scenario=="geometry")studio.Document.Pieces[0].Points[1]=new Point2(11,0);
+                else if(scenario=="selection")studio.Select(b.Id);
+                else ((TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!).Text="Bekleyen taslak";
+                typeof(SeamLengthComparisonWindow).GetMethod("CheckCurrent",PrivateInstance)!.Invoke(staleWindow,null);
+                Check(!button.IsEnabled && text.Text.Contains("geçersiz"),$"Seam comparison rejects stale {scenario}",checks);
+            }
+            finally { staleWindow.Close(); }
+        }
+        studio.LoadDocument(Fixture());
+    }
+
     private static void VerifyPointDistance(MainWindow studio,string reportPath,List<string> checks)
     {
         var source=new PatternPiece { Name="Ölçüm",Closed=true,Points=[new(0,0),new(3,4),new(0,0)] };
