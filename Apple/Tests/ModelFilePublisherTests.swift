@@ -2,6 +2,14 @@ import Foundation
 import XCTest
 @testable import TekstilCADViewer_iOS
 
+final class FilePickerCancellationTests: XCTestCase {
+    func testOnlyCocoaUserCancellationIsIgnored() {
+        XCTAssertTrue(isFilePickerCancellation(CocoaError(.userCancelled)))
+        XCTAssertFalse(isFilePickerCancellation(CocoaError(.fileReadNoPermission)))
+        XCTAssertFalse(isFilePickerCancellation(NSError(domain: "Other", code: NSUserCancelledError)))
+    }
+}
+
 final class ModelFilePublisherTests: XCTestCase {
     func testPublishesExactBytesAndRemovesStagingDirectory() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

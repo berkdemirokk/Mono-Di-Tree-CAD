@@ -3,6 +3,11 @@ import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
 
+func isFilePickerCancellation(_ error: Error) -> Bool {
+    let error = error as NSError
+    return error.domain == NSCocoaErrorDomain && error.code == NSUserCancelledError
+}
+
 private struct ProjectExportDocument: FileDocument {
     static var readableContentTypes: [UTType] { [.data] }
     let data: Data
@@ -230,7 +235,9 @@ private struct ContentView: View {
                 let url = try result.get()
                 guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
                 openModel(url, imported: true)
-            } catch { self.error = error.localizedDescription }
+            } catch {
+                if !isFilePickerCancellation(error) { self.error = error.localizedDescription }
+            }
         }
         .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in
             exportDocument = nil
