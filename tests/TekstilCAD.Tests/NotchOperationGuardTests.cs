@@ -21,9 +21,10 @@ public class NotchOperationGuardTests
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
     }
     [Fact]
-    public void OpenPathOperationsRejectMarksFromEitherSource()
+    public void OpenPathOperationsRejectInvalidMarksFromEitherSource()
     {
         var marked=Open();var other=new PatternPiece { Closed=false,Points=[new(10,10),new(15,10)] };
+        marked.Notches![0].Position=new Point2(9,0);
         Assert.Throws<ArgumentException>(()=>OpenPathClosure.Close(marked,20));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(marked,other,0));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(other,marked,0));

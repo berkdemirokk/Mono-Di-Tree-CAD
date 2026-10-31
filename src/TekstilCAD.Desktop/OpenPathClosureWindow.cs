@@ -42,6 +42,7 @@ internal sealed class OpenPathClosureWindow : Window
         body.Children.Add(new TextBlock { Text="Açık parça" });body.Children.Add(source);
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" });body.Children.Add(tolerance);
         body.Children.Add(new TextBlock { Text="Kırmızı çizgi eklenecek kapanış kenarıdır. Sıfır mesafede uçlar zaten aynı yerdedir. Kesişen veya geçersiz kontur reddedilir.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Köşe işaretleri yeni parçaya kopyalanır; iki işaret kapanışta aynı köşeye denk gelirse işlem reddedilir. İşaretler kesim veya makine çıktısı değildir.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(preview);body.Children.Add(message);
         AutomationProperties.SetName(source,"Kapatılacak açık parça");AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre");
         AutomationProperties.SetName(preview,"Kapalı kontur ve kapanış kenarı önizlemesi");AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
@@ -53,7 +54,7 @@ internal sealed class OpenPathClosureWindow : Window
     }
     private void InvalidateProposal()
     {
-        cancellation?.Cancel();proposal=null;before=null;document=null;apply.IsEnabled=false;preview.Points=null;preview.InvalidateVisual();message.Text="Önizleme hesaplanmadı.";
+        cancellation?.Cancel();proposal=null;before=null;document=null;apply.IsEnabled=false;preview.Points=null;preview.Marks=null;preview.InvalidateVisual();message.Text="Önizleme hesaplanmadı.";
     }
     private async Task CalculateAsync()
     {
@@ -74,8 +75,8 @@ internal sealed class OpenPathClosureWindow : Window
             if(closed || tokenSource.IsCancellationRequested)return;
             if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(copy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın.";return; }
-            proposal=result;before=copy;document=currentDocument;preview.Points=result.Piece.Points;preview.InvalidateVisual();
-            message.Text=$"Kapanış kenarı: {MeasurementInput.Format(result.ClosingLength)} mm. Kaynak projede kalır; sonuca kaynak kuralları, üretim bilgileri veya kaynak geçmişi aktarılmaz. Geri al eklenen sonucu kaldırır.";
+            proposal=result;before=copy;document=currentDocument;preview.Points=result.Piece.Points;preview.Marks=result.Piece.Notches;preview.InvalidateVisual();
+            message.Text=$"Kapanış kenarı: {MeasurementInput.Format(result.ClosingLength)} mm. {result.Piece.Notches?.Count ?? 0} köşe işareti mor halkalarla gösterilir. Kaynak projede kalır; sonuca kaynak kuralları, üretim bilgileri veya kaynak geçmişi aktarılmaz. Geri al eklenen sonucu kaldırır.";
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }
@@ -86,7 +87,7 @@ internal sealed class OpenPathClosureWindow : Window
     private bool SameCurrent(PatternPiece original)
     {
         var p=workspace.Document.Pieces.SingleOrDefault(p=>p.Id==original.Id);
-        return p is not null && p.Name==original.Name && p.Closed==original.Closed && p.Metadata is null && p.Grainline is null && p.Points.SequenceEqual(original.Points);
+        return p is not null && DocumentSession.ContentEquals(new ProjectDocument { Pieces=[p] },new ProjectDocument { Pieces=[original] });
     }
     private void Apply()
     {
@@ -106,6 +107,7 @@ internal sealed class OpenPathClosureWindow : Window
     private sealed class ClosurePreview : FrameworkElement
     {
         internal IReadOnlyList<Point2>? Points { get;set; }
+        internal IReadOnlyList<NotchMark>? Marks { get;set; }
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);dc.DrawRectangle(Brushes.WhiteSmoke,null,new Rect(RenderSize));
@@ -118,6 +120,7 @@ internal sealed class OpenPathClosureWindow : Window
             var geometry=new StreamGeometry();using(var context=geometry.Open()) { context.BeginFigure(Map(points[0]),false,false);foreach(var p in points.Skip(1))context.LineTo(Map(p),true,false); }
             geometry.Freeze();dc.DrawGeometry(null,new Pen(Brushes.DarkBlue,1.5),geometry);
             if(points[0]!=points[^1])dc.DrawLine(new Pen(Brushes.Red,3),Map(points[^1]),Map(points[0]));
+            if(Marks is not null)foreach(var mark in Marks)dc.DrawEllipse(null,new Pen(Brushes.Purple,2),Map(mark.Position),5,5);
         }
     }
 }

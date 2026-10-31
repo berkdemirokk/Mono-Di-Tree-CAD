@@ -379,6 +379,7 @@ internal static class DesktopVerification
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
             NotchVertexEditVerification.Run(studio,checks);
+            NotchPathJoinClosureVerification.Run(studio,checks);
             NotchTransformVerification.Run(studio,checks);
             VerifyNotchPropertyTranslation(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);

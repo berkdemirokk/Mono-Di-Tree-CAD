@@ -23,7 +23,6 @@ public static class OpenPathJoin
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(second);
         cancellationToken.ThrowIfCancellationRequested();
-        NotchSafety.RequireNoNotches(first);NotchSafety.RequireNoNotches(second);
         if (!double.IsFinite(tolerance) || tolerance < 0 || tolerance > 100_000)
             throw new ArgumentOutOfRangeException(nameof(tolerance));
         if (first.Id == Guid.Empty || second.Id == Guid.Empty || first.Id == second.Id)
@@ -40,6 +39,7 @@ public static class OpenPathJoin
         if ((long)first.Points.Count + second.Points.Count - 1 > LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Birleşik kontur nokta sınırını aşıyor.");
         var a = first.Points.ToArray(); var b = second.Points.ToArray();
+        var marksA=PathNotchMap.Snapshot(first,a,cancellationToken);var marksB=PathNotchMap.Snapshot(second,b,cancellationToken);
         LargeOpenPathValidator.Validate(a, cancellationToken);
         LargeOpenPathValidator.Validate(b, cancellationToken);
         var candidates = new List<(bool ReverseA, bool ReverseB, double Distance)>();
@@ -65,7 +65,10 @@ public static class OpenPathJoin
         points.AddRange(shared ? b.Skip(1) : b);
         LargeOpenPathValidator.Validate(points, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var piece = new PatternPiece { Name = "Birleştirilmiş kontur", Closed = false, Points = points };
+        var aIndices=marksA.Select(index=>match.ReverseA ? a.Length-1-index : index);
+        var bIndices=marksB.Select(index=>(shared ? a.Length-1 : a.Length)+(match.ReverseB ? b.Length-1-index : index));
+        var notches=PathNotchMap.Build(aIndices.Concat(bIndices),points,cancellationToken);
+        var piece = new PatternPiece { Name = "Birleştirilmiş kontur", Closed = false, Points = points,Notches=notches };
         return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance);
     }
 }
