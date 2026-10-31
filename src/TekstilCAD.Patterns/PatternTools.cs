@@ -349,6 +349,11 @@ public static class PatternTools
             throw new ArgumentException("Kontur 10.000 saklı nokta sınırını aşamaz.", nameof(piece));
         if (piece.Closed && points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1)
             afterIndex = 0;
+        // An implicit closing edge would otherwise become an explicit closure,
+        // making a zero-length insertion appear to have succeeded.
+        if (piece.Closed && afterIndex == points.Count - 1 && points.Count > 1 &&
+            points[0] != points[^1] && point == points[0])
+            throw new ArgumentException("Nokta ekleme kapanış kenarında sıfır uzunluklu bir kenar oluşturuyor.", nameof(point));
         points.Insert(afterIndex + 1, point);
         ValidatePointEdit(piece.Closed, points, cancellationToken);
         return NewPiece(piece, points, "", preserveGrainline:true);
