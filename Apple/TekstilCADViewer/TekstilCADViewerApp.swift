@@ -416,7 +416,7 @@ private struct ContentView: View {
     }
 }
 
-private enum ModelStore {
+enum ModelStore {
     struct Entry: Identifiable {
         let url: URL
         let name: String
@@ -494,7 +494,9 @@ private enum ModelStore {
         guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
-        defer { try? FileManager.default.removeItem(at: staging) }
+        // Do not recursively delete a potentially replaced path. A failed save
+        // may leave its nonempty partial directory for inspection.
+        defer { _ = staging.path.withCString { rmdir($0) } }
         try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
         let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
         try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
@@ -518,7 +520,7 @@ private enum ModelStore {
             try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
             return PreparedPointCopy(staging: staging, destination: destination)
         } catch {
-            try? FileManager.default.removeItem(at: staging)
+            _ = staging.path.withCString { rmdir($0) }
             throw error
         }
     }
@@ -526,7 +528,8 @@ private enum ModelStore {
         try FileManager.default.moveItem(at: prepared.staging, to: prepared.destination)
     }
     static func discardPointCopy(_ prepared: PreparedPointCopy) throws {
-        try FileManager.default.removeItem(at: prepared.staging)
+        // The path may no longer refer to the directory we created. Retain the
+        // unpublished partial rather than delete anyone else's files.
     }
     #endif
 
@@ -543,7 +546,11 @@ private enum ModelStore {
     }
 
     static func models() throws -> [Entry] {
-        try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil,
+        try models(in: directory())
+    }
+
+    static func models(in directory: URL) throws -> [Entry] {
+        try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
                                                     options: [])
             .compactMap { url in
                 let name: String
@@ -1010,12 +1017,12 @@ private struct ExperimentalPointEditor: View {
                                 guard saveActiveID == request else { return }
                                 saveActiveID = nil; saving = false; cancellingSave = false
                                 if case .failure = cleanup { message = "Kopya kaydedilmedi; geçici kayıt temizlenemedi." }
-                                else { message = wasCancelled ? "Kayıt iptal edildi; kopya oluşturulmadı." : "Açık model veya seçim değişti; kopya kaydedilmedi." }
+                                else { message = wasCancelled ? "Kayıt iptal edildi; kopya model listesine kaydedilmedi. Geçici veri cihazda kalabilir." : "Açık model veya seçim değişti; kopya model listesine kaydedilmedi. Geçici veri cihazda kalabilir." }
                             }
                         }
                     } else if saveActiveID == request {
                         saveActiveID = nil; saving = false; cancellingSave = false
-                        message = wasCancelled ? "Kayıt iptal edildi; kopya oluşturulmadı." : "Açık model veya seçim değişti; kopya kaydedilmedi."
+                        message = wasCancelled ? "Kayıt iptal edildi; kopya model listesine kaydedilmedi. Geçici veri cihazda kalabilir." : "Açık model veya seçim değişti; kopya model listesine kaydedilmedi. Geçici veri cihazda kalabilir."
                     }
                     return
                 }

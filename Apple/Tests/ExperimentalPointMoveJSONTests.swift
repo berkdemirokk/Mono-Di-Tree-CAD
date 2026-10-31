@@ -2,6 +2,32 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ExperimentalPointMoveJSONTests: XCTestCase {
+    #if DEBUG
+    func testDiscardRetainsReplacedDirectoryAndPartialIsNotListed() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = root.appendingPathComponent(".\(UUID().uuidString).partial", isDirectory: true)
+        let original = root.appendingPathComponent("displaced", isDirectory: true)
+        let destination = root.appendingPathComponent("result.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        let originalData = Data("prepared".utf8)
+        try originalData.write(to: staging.appendingPathComponent("project.tcad"))
+        let prepared = ModelStore.PreparedPointCopy(staging: staging, destination: destination)
+        try FileManager.default.moveItem(at: staging, to: original)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        let foreign = staging.appendingPathComponent("foreign.tcad")
+        try Data("foreign".utf8).write(to: foreign)
+
+        try ModelStore.discardPointCopy(prepared)
+
+        XCTAssertEqual(try Data(contentsOf: foreign), Data("foreign".utf8))
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("project.tcad")), originalData)
+        XCTAssertTrue(try ModelStore.models(in: root).isEmpty)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+    #endif
+
     private let id = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
     private let input = #"[4, {"GradingRules":[], "Name":"Model", "Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":true,"Points":[{"Y":0,"X":0},{"X":4,"Y":0},{"X":0,"Y":4},{"X":0,"Y":0}]}]}]"#
     func testOnlyCoordinateTokensChangeIncludingExplicitClosure() throws {

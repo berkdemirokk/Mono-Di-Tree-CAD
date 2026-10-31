@@ -16,6 +16,27 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
     }
 
+    func testReplacedStagingDirectoryIsNotRecursivelyDeleted() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = root.appendingPathComponent("staging")
+        let original = root.appendingPathComponent("original")
+        let destination = root.appendingPathComponent("result.tcad")
+        let foreignFile = staging.appendingPathComponent("foreign.tcad")
+        let foreignData = Data("foreign".utf8)
+
+        XCTAssertThrowsError(try ModelFilePublisher.publish(Data("new".utf8), staging: staging, destination: destination) {
+            try FileManager.default.moveItem(at: staging, to: original)
+            try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+            try foreignData.write(to: foreignFile)
+            throw CocoaError(.fileWriteUnknown)
+        })
+        XCTAssertEqual(try Data(contentsOf: foreignFile), foreignData)
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("model.tcad")), Data("new".utf8))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
     func testExistingStagingDirectoryAndItsContentsArePreserved() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -57,6 +78,6 @@ final class ModelFilePublisherTests: XCTestCase {
 
         XCTAssertThrowsError(try ModelFilePublisher.publish(Data("new".utf8), staging: staging, destination: destination))
         XCTAssertEqual(try Data(contentsOf: destination), existing)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertEqual(try Data(contentsOf: staging.appendingPathComponent("model.tcad")), Data("new".utf8))
     }
 }
