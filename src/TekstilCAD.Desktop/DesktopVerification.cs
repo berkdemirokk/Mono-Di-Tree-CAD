@@ -7392,7 +7392,8 @@ internal static class DesktopVerification
         var closedSource=new PatternPiece { Name="Kapalı ölçüm",Closed=true,Points=[new(0,0),new(3,0),new(3,4)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[closedSource] });closedSource=studio.Document.Pieces[0];studio.Select(closedSource.Id);chosen=closedSource.Id;
         var closedWindow=new PointDistanceWindow(studio,studio,closedSource,()=>chosen);closedWindow.EndSelector.SelectedIndex=2;
-        Check(closedWindow.ContourResult.Text.Contains("ileri 7 mm") && closedWindow.ContourResult.Text.Contains("ters 5 mm"),"Closed contour measurement distinguishes both directions",checks);
+        Check(closedWindow.ContourResult.Text.Contains("ileri 7 mm") && closedWindow.ContourResult.Text.Contains("ters 5 mm")
+            && closedWindow.ContourResult.Text.Contains("Toplam kapalı kontur uzunluğu: 12 mm"),"Closed contour measurement distinguishes both directions and reports perimeter",checks);
         closedWindow.EndSelector.SelectedIndex=0;
         Check(closedWindow.ContourResult.Text.Contains("ileri 0 mm") && closedWindow.ContourResult.Text.Contains("ters 0 mm"),"Same contour point produces zero in both directions",checks);
         closedWindow.Close();

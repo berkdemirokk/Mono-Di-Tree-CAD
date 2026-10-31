@@ -17,6 +17,7 @@ internal sealed class PointDistanceWindow : Window
     private readonly Guid sourceId;
     private readonly Func<Guid?> selectedSource;
     private readonly PatternPiece piece;
+    private double? closedPerimeter;
     private readonly DispatcherTimer monitor = new() { Interval=TimeSpan.FromMilliseconds(400) };
     internal ComboBox StartSelector { get; } = Selector();
     internal ComboBox EndSelector { get; } = Selector();
@@ -126,7 +127,8 @@ internal sealed class PointDistanceWindow : Window
             if(piece.Closed)
             {
                 var backward=ContourLength(a.Index,b.Index,-1);
-                SetContourResult($"Kontur boyunca A → B: ileri {MeasurementInput.Format(forward)} mm · ters {MeasurementInput.Format(backward)} mm. İleri yön nokta indekslerini artırır.");
+                var perimeter=closedPerimeter ??= ContourMeasurement.ClosedPerimeter(piece.Points);
+                SetContourResult($"Kontur boyunca A → B: ileri {MeasurementInput.Format(forward)} mm · ters {MeasurementInput.Format(backward)} mm. İleri yön nokta indekslerini artırır.\nToplam kapalı kontur uzunluğu: {MeasurementInput.Format(perimeter)} mm.");
             }
             else
             {
