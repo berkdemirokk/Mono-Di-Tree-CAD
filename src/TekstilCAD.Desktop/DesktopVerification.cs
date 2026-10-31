@@ -208,6 +208,8 @@ internal static class DesktopVerification
             studio.ConfirmHpglReviewForVerification=(_,_)=>true;
             StopTimer(studio);
             checks.Add("MainWindow constructed without Show");
+            _ = new WindowInteropHelper(studio).EnsureHandle();
+            VerifyQuantityChoiceIdentity(studio,reportPath,checks);
             var sample = new ProjectDocument { Name = "Arka plan doğrulaması", Pieces = [new PatternPiece { Name = "100 mm kare", Points = [new(0,0),new(100,0),new(100,100),new(0,100)] }] };
             studio.LoadDocument(sample);
             Check(studio.Document.Pieces.Count == 1, "LoadDocument", checks);
@@ -277,7 +279,6 @@ internal static class DesktopVerification
             VerifyLayeredPointerSelection(studio,checks);
             VerifyPieceSearch(studio,checks);
             VerifyMachineChoiceIdentity(studio,work,reportPath,checks);
-            VerifyQuantityChoiceIdentity(studio,reportPath,checks);
             VerifyNestingCancellation(studio,reportPath,checks);
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
@@ -6639,6 +6640,26 @@ internal static class DesktopVerification
             Check((bool)items[0]!.GetType().GetProperty("IsSelected")!.GetValue(items[0])! && !(bool)items[1]!.GetType().GetProperty("IsSelected")!.GetValue(items[1])! && (int)versionField.GetValue(window)! == beforeFilter+1 && preview.GetType().GetProperty("Drawing")!.GetValue(preview)==null,"Bulk clear preserves hidden selection and invalidates preview once",checks);
             selectShown.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check((bool)items[0]!.GetType().GetProperty("IsSelected")!.GetValue(items[0])! && (bool)items[1]!.GetType().GetProperty("IsSelected")!.GetValue(items[1])! && (int)versionField.GetValue(window)! == beforeFilter+2,"Bulk select restores visible selection without touching hidden selection",checks);
+            var length=(TextBox)typeof(ProductionNestingWindow).GetField("fabricLength",PrivateInstance)!.GetValue(window)!;
+            var policy=(ComboBox)typeof(ProductionNestingWindow).GetField("grainPolicy",PrivateInstance)!.GetValue(window)!;
+            var status=(TextBlock)typeof(ProductionNestingWindow).GetField("status",PrivateInstance)!.GetValue(window)!;
+            var save=(Button)typeof(ProductionNestingWindow).GetField("saveLayout",PrivateInstance)!.GetValue(window)!;
+            length.Text="0";
+            var invalidLength=(Task)typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!.Invoke(window,null)!;
+            PumpUntil(()=>invalidLength.IsCompleted);invalidLength.GetAwaiter().GetResult();
+            Check(status.Text.Contains("Kumaş boyu") && !save.IsEnabled,"Quantity window rejects invalid fabric length",checks);
+            length.Text="10";
+            var tooShort=(Task)typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!.Invoke(window,null)!;
+            PumpUntil(()=>tooShort.IsCompleted);tooShort.GetAwaiter().GetResult();
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview)==null && !save.IsEnabled,"Quantity window rejects a layout exceeding fabric length",checks);
+            length.Clear();policy.SelectedIndex=2;
+            var missingGrain=(Task)typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!.Invoke(window,null)!;
+            PumpUntil(()=>missingGrain.IsCompleted);missingGrain.GetAwaiter().GetResult();
+            Check(status.Text.Contains("İplik yönü",StringComparison.OrdinalIgnoreCase) && !save.IsEnabled,"Quantity window rejects missing grain when grain validation is selected",checks);
+            policy.SelectedIndex=0;
+            var uncheckedGrain=(Task)typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!.Invoke(window,null)!;
+            PumpUntil(()=>uncheckedGrain.IsCompleted);uncheckedGrain.GetAwaiter().GetResult();
+            Check(save.IsEnabled && status.Text.Contains("İplik yönü denetlenmedi"),"Quantity window explicitly labels unchecked grain",checks);
         }
         finally { SynchronizationContext.SetSynchronizationContext(old); }
     }

@@ -58,7 +58,7 @@ internal static class RecoveryArchiveAtomic
         if(!string.Equals(actual,expectedHash,StringComparison.Ordinal))
             throw new IOException("Kurtarma kaydı açıldıktan sonra değişti; daha yeni kayıt korunuyor. Tekrar tarayın.");
         afterLockedAndHashed?.Invoke(source);
-        Rename(handle,targetName);
+        Rename(handle,LongPath(targetName));
     }
 
     /// <summary>Directories are opened parent-first without delete sharing and held through rename.</summary>

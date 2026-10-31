@@ -26,6 +26,21 @@ public sealed class RecoveryArchiveRaceTests
     }
 
     [Fact]
+    public void ArchivePreservesContentsWhenDestinationExceedsLegacyPathLimit()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var directory = Path.Combine(TestDirectory(), new string('a', 100), new string('b', 100));
+        var (reader, recovery, bytes) = Prepare(directory);
+        using (reader)
+        {
+            var archived = reader.ArchiveRecovered(recovery);
+            Assert.True(archived.Length > 260);
+            Assert.False(File.Exists(recovery.SourcePath));
+            Assert.Equal(bytes, File.ReadAllBytes(archived));
+        }
+    }
+
+    [Fact]
     public void LockedSnapshotRejectsConcurrentWriteDeleteAndReplacementBeforeArchive()
     {
         if (!OperatingSystem.IsWindows()) return;
