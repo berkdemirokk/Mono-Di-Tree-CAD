@@ -403,7 +403,10 @@ public sealed class TextileToolsWindow : Window
         {
             if(!double.IsFinite(a)||!double.IsFinite(b))return false;
             var ulp=Math.Max(Math.Abs(Math.BitIncrement(a)-a),Math.Abs(Math.BitIncrement(b)-b));
-            return Math.Abs(a-b)<=Math.Max(1e-10,ulp*4);
+            // A fixed millimetre tolerance can hide an arbitrarily large
+            // deformation of a small piece. Allow only rounding at the scale
+            // of the coordinates being compared.
+            return Math.Abs(a-b)<=ulp*4;
         }
         for(var i=0;i<before.Count;i++)
             if(!Equal(before[i].X+dx,after[i].X)||!Equal(before[i].Y+dy,after[i].Y))return false;

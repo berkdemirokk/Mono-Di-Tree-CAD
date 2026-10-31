@@ -2740,6 +2740,14 @@ internal static class DesktopVerification
             refresh.Invoke(driftTools,[first.Id,true]);
         }
         Check(driftGrid.IsReadOnly,"Accumulated small deformations invalidate the original grading anchor",checks);
+        var tiny=new[] { new Point2(0,0),new Point2(1e-11,0),new Point2(0,1e-11) };
+        var deformed=new[] { tiny[0],new Point2(2e-11,0),tiny[2] };
+        Check(!TextileToolsWindow.IsTranslation(tiny,deformed),
+            "A small piece whose edge doubles is not treated as a translation",checks);
+        var ordinary=new[] { new Point2(0.1,0.2),new Point2(1.1,0.2),new Point2(0.1,1.2) };
+        var moved=ordinary.Select(p=>new Point2(p.X+0.3,p.Y+0.4)).ToArray();
+        Check(TextileToolsWindow.IsTranslation(ordinary,moved),
+            "Fractional translation remains recognised despite floating-point rounding",checks);
     }
     private static void VerifyAsyncQuantityLayoutSave(MainWindow studio,ProductionNestingWindow window,ProjectDocument layout,int version,string sourcePath,byte[] sourceBytes,string work,List<string> checks)
     {
