@@ -13,6 +13,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.berkdemirokk.monoditreecad
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_VERSION: '5.0'
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CODE_SIGN_STYLE: Automatic
         ENABLE_APP_SANDBOX: YES
         INFOPLIST_KEY_CFBundleDisplayName: Mono Di Tree CAD
