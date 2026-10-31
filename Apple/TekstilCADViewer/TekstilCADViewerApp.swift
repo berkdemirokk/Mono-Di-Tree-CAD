@@ -12,6 +12,11 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingLibrary = false
+    @State private var importedData: Data?
+    @State private var importedName = ""
+    @State private var isSaving = false
+    @State private var saveNotice = false
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -23,13 +28,19 @@ private struct ContentView: View {
         VStack(spacing: 12) {
             HStack {
                 Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
-                    .accessibilityHint("Önizlemek için bir proje dosyası seçin")
+                    .accessibilityHint("Önizlemek için bir proje dosyası seçin").disabled(isSaving)
+                Button("Modellerim") { showingLibrary = true }.disabled(isSaving)
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
             Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
+            if saveNotice { Text("Model telefona kaydedildi.").font(.caption).foregroundStyle(.secondary) }
+            if importedData != nil {
+                Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
+                    .disabled(isSaving || isLoading)
+            }
             if let project {
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
@@ -80,32 +91,19 @@ private struct ContentView: View {
             do {
                 let url = try result.get()
                 guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
-                let request = UUID()
-                loadRequest = request
-                isLoading = true
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let access = url.startAccessingSecurityScopedResource()
-                    let loaded = Result { try Drawing.load(url) }
-                    if access { url.stopAccessingSecurityScopedResource() }
-                    DispatchQueue.main.async {
-                        guard loadRequest == request else { return }
-                        isLoading = false
-                        switch loaded {
-                        case .success(let drawing):
-                            showingPieces = false
-                            selectedPiece = nil
-                            drawingRevision = UUID()
-                            project = drawing
-                        case .failure(let error):
-                            self.error = error.localizedDescription
-                        }
-                    }
-                }
+                openModel(url, imported: true)
             } catch { self.error = error.localizedDescription }
+        }
+        .sheet(isPresented: $showingLibrary) {
+            ModelLibrary { url in
+                showingLibrary = false
+                openModel(url, imported: false)
+            }
         }
         #if DEBUG && targetEnvironment(simulator)
         .onAppear {
-            guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
+            guard (ProcessInfo.processInfo.arguments.contains("--ui-test-fixture") ||
+                   ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture")),
                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
                   let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
             let url = FileManager.default.temporaryDirectory
@@ -117,12 +115,163 @@ private struct ContentView: View {
                 selectedPiece = nil
                 drawingRevision = UUID()
                 project = drawing
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
+                    importedData = data
+                    importedName = "Deneme Modeli.tcad"
+                }
             } catch { self.error = error.localizedDescription }
         }
         #endif
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
+    }
+
+    private func openModel(_ url: URL, imported: Bool) {
+        saveNotice = false
+        let request = UUID()
+        loadRequest = request
+        isLoading = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let access = imported && url.startAccessingSecurityScopedResource()
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
+            let loaded = Result { () -> (Drawing, Data) in
+                let data = try Drawing.readData(url)
+                return (try Drawing.load(data), data)
+            }
+            DispatchQueue.main.async {
+                guard loadRequest == request else { return }
+                isLoading = false
+                switch loaded {
+                case .success(let (drawing, data)):
+                    showingPieces = false
+                    selectedPiece = nil
+                    drawingRevision = UUID()
+                    project = drawing
+                    importedData = imported ? data : nil
+                    importedName = url.lastPathComponent
+                case .failure(let failure):
+                    error = failure.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func saveImportedModel() {
+        guard let data = importedData else { return }
+        let name = importedName
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try ModelStore.save(data, name: name) }
+            DispatchQueue.main.async {
+                isSaving = false
+                switch result {
+                case .success: importedData = nil; saveNotice = true
+                case .failure(let failure): error = failure.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+private enum ModelStore {
+    #if DEBUG && targetEnvironment(simulator)
+    private static let testDirectory: URL = {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ui-test-library-fixture", isDirectory: true)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-library-reset") {
+            try? FileManager.default.removeItem(at: url)
+        }
+        return url
+    }()
+    #endif
+
+    static func directory() throws -> URL {
+        #if DEBUG && targetEnvironment(simulator)
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
+            try FileManager.default.createDirectory(at: testDirectory, withIntermediateDirectories: true)
+            return testDirectory
+        }
+        #endif
+        let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                               appropriateFor: nil, create: true)
+        let directory = base.appendingPathComponent("Models", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+    }
+
+    static func save(_ data: Data, name: String) throws {
+        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        let stem = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
+        var safeStem = ""
+        for character in stem.decomposedStringWithCanonicalMapping {
+            let next = safeStem + String(character)
+            if next.utf8.count > 100 { break }
+            safeStem = next
+        }
+        if safeStem.isEmpty { safeStem = "Model" }
+        let directory = try directory()
+        let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).tcad")
+        let staging = directory.appendingPathComponent(".\(UUID().uuidString).partial")
+        defer { try? FileManager.default.removeItem(at: staging) }
+        try data.write(to: staging, options: .withoutOverwriting)
+        try FileManager.default.moveItem(at: staging, to: destination)
+    }
+
+    static func models() throws -> [URL] {
+        try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil,
+                                                    options: [.skipsHiddenFiles])
+            .filter { $0.pathExtension.lowercased() == "tcad" }
+            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    static func displayName(_ url: URL) -> String {
+        let stem = url.deletingPathExtension().lastPathComponent
+        guard let separator = stem.range(of: " - ", options: .backwards),
+              UUID(uuidString: String(stem[separator.upperBound...])) != nil else { return stem }
+        return String(stem[..<separator.lowerBound])
+    }
+}
+
+private struct ModelLibrary: View {
+    let open: (URL) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var models: [URL] = []
+    @State private var search = ""
+    @State private var error: String?
+
+    private var matches: [URL] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return models.filter { query.isEmpty || ModelStore.displayName($0).localizedCaseInsensitiveContains(query) }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if models.isEmpty {
+                    Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
+                        .foregroundStyle(.secondary)
+                } else if matches.isEmpty {
+                    Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
+                }
+                ForEach(matches, id: \.self) { url in
+                    Button { open(url) } label: {
+                        Text(ModelStore.displayName(url))
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                }
+            }
+            .searchable(text: $search, prompt: "Model ara")
+            .navigationTitle("Modellerim")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .onAppear {
+                do { models = try ModelStore.models() }
+                catch { self.error = error.localizedDescription }
+            }
+            .alert("Modeller yüklenemedi", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+                Button("Tamam", role: .cancel) { error = nil }
+            } message: { Text(error ?? "") }
+        }
     }
 }
 
@@ -169,11 +318,24 @@ private struct Drawing {
               CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
     }
-    static func load(_ url: URL) throws -> Drawing {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey])
-        if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        let data = try Data(contentsOf: url)
-        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+    static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
+
+    static func readData(_ url: URL) throws -> Data {
+        let limit = 64 * 1024 * 1024
+        let file = try FileHandle(forReadingFrom: url)
+        defer { try? file.close() }
+        var data = Data()
+        while true {
+            let remaining = limit + 1 - data.count
+            let chunk = try file.read(upToCount: min(64 * 1024, remaining)) ?? Data()
+            if chunk.isEmpty { break }
+            data.append(chunk)
+            guard data.count <= limit else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        }
+        return data
+    }
+
+    static func load(_ data: Data) throws -> Drawing {
         let root = try JSONSerialization.jsonObject(with: data)
         let object: [String: Any]
         if let array = root as? [Any], array.count == 2,

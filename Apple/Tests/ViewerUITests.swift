@@ -45,6 +45,44 @@ final class ViewerUITests: XCTestCase {
             app.terminate()
         }
     }
+    func testSavedModelCanBeFoundAndReopenedAfterRelaunch() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let data = try Data(contentsOf: fixture)
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                                "--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 15))
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 10))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+
+        // Start without the import fixture so reopening must read the saved copy.
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-fixture" || $0 == "--ui-test-library-reset" }
+        app.launchEnvironment.removeValue(forKey: "TCAD_UI_TEST_FIXTURE")
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Önizlemek için bir .tcad dosyası açın."].waitForExistence(timeout: 15))
+        app.buttons["Modellerim"].tap()
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("Deneme")
+        let savedModel = app.buttons.matching(NSPredicate(format: "label == %@", "Deneme Modeli")).firstMatch
+        XCTAssertTrue(savedModel.waitForExistence(timeout: 10))
+        search.typeText("-no-match")
+        XCTAssertTrue(app.staticTexts["Eşleşen model bulunamadı."].waitForExistence(timeout: 5))
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "-no-match".count))
+        XCTAssertTrue(savedModel.waitForExistence(timeout: 5))
+        savedModel.tap()
+        XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
+        XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists)
+    }
     func testSearchAndSelectPiece() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let data = try Data(contentsOf: fixture)
