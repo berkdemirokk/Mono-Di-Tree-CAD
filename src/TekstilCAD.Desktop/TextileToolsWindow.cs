@@ -397,19 +397,22 @@ public sealed class TextileToolsWindow : Window
     internal static bool IsTranslation(IReadOnlyList<Point2> before,IReadOnlyList<Point2> after)
     {
         if(before.Count!=after.Count || before.Count==0)return false;
+        static bool Valid(Point2 p) => p.IsFinite && Math.Abs(p.X)<=Geometry.MaxCoordinate && Math.Abs(p.Y)<=Geometry.MaxCoordinate;
+        if(before.Any(p=>!Valid(p)) || after.Any(p=>!Valid(p)))return false;
         var dx=after[0].X-before[0].X;var dy=after[0].Y-before[0].Y;
         if(!double.IsFinite(dx)||!double.IsFinite(dy))return false;
-        static bool Equal(double a,double b)
+        static bool Equal(double a,double b,double firstBefore,double firstAfter,double currentBefore)
         {
             if(!double.IsFinite(a)||!double.IsFinite(b))return false;
-            var ulp=Math.Max(Math.Abs(Math.BitIncrement(a)-a),Math.Abs(Math.BitIncrement(b)-b));
-            // A fixed millimetre tolerance can hide an arbitrarily large
-            // deformation of a small piece. Allow only rounding at the scale
-            // of the coordinates being compared.
-            return Math.Abs(a-b)<=ulp*4;
+            static double Ulp(double value)=>Math.Abs(Math.BitIncrement(value)-value);
+            // Account for rounding in both the anchor subtraction and point
+            // addition, including cancellation when a point moves near zero.
+            var tolerance=Math.Min(1e-10,4*(Ulp(firstBefore)+Ulp(firstAfter)+Ulp(currentBefore)+Ulp(b)));
+            return Math.Abs(a-b)<=tolerance;
         }
         for(var i=0;i<before.Count;i++)
-            if(!Equal(before[i].X+dx,after[i].X)||!Equal(before[i].Y+dy,after[i].Y))return false;
+            if((dx==0 ? before[i].X!=after[i].X : !Equal(before[i].X+dx,after[i].X,before[0].X,after[0].X,before[i].X))||
+               (dy==0 ? before[i].Y!=after[i].Y : !Equal(before[i].Y+dy,after[i].Y,before[0].Y,after[0].Y,before[i].Y)))return false;
         return true;
     }
     private void ResetRulesForCurrentGeometry()

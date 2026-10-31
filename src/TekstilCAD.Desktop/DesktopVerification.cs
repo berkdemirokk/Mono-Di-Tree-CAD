@@ -2748,6 +2748,15 @@ internal static class DesktopVerification
         var moved=ordinary.Select(p=>new Point2(p.X+0.3,p.Y+0.4)).ToArray();
         Check(TextileToolsWindow.IsTranslation(ordinary,moved),
             "Fractional translation remains recognised despite floating-point rounding",checks);
+        var cancellation=new[] { new Point2(0.4,0),new Point2(0.1,0) };
+        var toZero=cancellation.Select(p=>new Point2(p.X-0.1,p.Y)).ToArray();
+        Check(TextileToolsWindow.IsTranslation(cancellation,toZero),
+            "Fractional translation to zero remains recognised despite cancellation",checks);
+        Check(!TextileToolsWindow.IsTranslation([new Point2(double.MaxValue,0)], [new Point2(double.MaxValue,0)]),
+            "Out-of-range geometry cannot be classified as a grading translation",checks);
+        Check(!TextileToolsWindow.IsTranslation([new Point2(100_000_000,0),new Point2(0,0)],
+            [new Point2(100_000_000,0),new Point2(1e-7,0)]),
+            "A large stationary anchor cannot hide deformation near zero",checks);
     }
     private static void VerifyAsyncQuantityLayoutSave(MainWindow studio,ProductionNestingWindow window,ProjectDocument layout,int version,string sourcePath,byte[] sourceBytes,string work,List<string> checks)
     {
