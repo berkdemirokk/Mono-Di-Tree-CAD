@@ -702,7 +702,13 @@ public sealed class CadCanvas : FrameworkElement
         if(sweep<1e-6)throw new ArgumentException("Yayın başlangıç ve bitiş yönleri farklı olmalıdır.");
         return Enumerable.Range(0,65).Select(i=>new Point2(center.X+radius*Math.Cos(a+sweep*i/64),center.Y+radius*Math.Sin(a+sweep*i/64))).ToList();
     }
-    private void Wheel(object sender,MouseWheelEventArgs e) { var p=e.GetPosition(this);var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,e.Delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();e.Handled=true; }
+    private void Wheel(object sender,MouseWheelEventArgs e) { ZoomAt(e.GetPosition(this),e.Delta);e.Handled=true; }
+    internal void ZoomAt(Point p,int delta)
+    {
+        if(dragId is not null || panStart is not null)
+        { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
+        var w=World(p,false);scale=Math.Clamp(scale*Math.Pow(1.15,delta/120.0),.02,30);offset=new(p.X-w.X*scale,p.Y-w.Y*scale);InvalidateVisual();
+    }
     // Later pieces are drawn unselected, with opaque closed fills and 1.5-DIP
     // strokes. Use that footprint (plus half a DIP for antialiasing) only when
     // deciding whether a visible selected handle is covered. The ordinary

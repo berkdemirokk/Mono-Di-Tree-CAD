@@ -1160,6 +1160,12 @@ internal static class DesktopVerification
             canvas.ZoomView(false);
             Check(Math.Abs((double)scaleField.GetValue(canvas)!-1)<1e-12 && ((Vector)offsetField.GetValue(canvas)!-new Vector(80,65)).Length<1e-8,
                 "Opposite view zoom operations restore the original transform",checks);
+            var pointer=new Point(120,100);
+            canvas.ZoomAt(pointer,120);
+            zoom=(double)scaleField.GetValue(canvas)!;offset=(Vector)offsetField.GetValue(canvas)!;
+            Check(Math.Abs(zoom-1.15)<1e-12 && Math.Abs((pointer.X-offset.X)/zoom-40)<1e-8 && Math.Abs((pointer.Y-offset.Y)/zoom-35)<1e-8,
+                "Mouse wheel zoom keeps the world point beneath the pointer",checks);
+            canvas.ZoomAt(pointer,-120);
             scaleField.SetValue(canvas,30.0);canvas.ZoomView(true);
             Check((double)scaleField.GetValue(canvas)! == 30.0,"View zoom respects maximum scale",checks);
             scaleField.SetValue(canvas,.02);canvas.ZoomView(false);
@@ -1184,7 +1190,7 @@ internal static class DesktopVerification
                 try
                 {
                     var beforeScale=(double)scaleField.GetValue(canvas)!;var beforeOffset=(Vector)offsetField.GetValue(canvas)!;
-                    canvas.ZoomView(true);canvas.PanView(80,0);canvas.Fit();
+                    canvas.ZoomView(true);canvas.ZoomAt(new Point(10,10),120);canvas.PanView(80,0);canvas.Fit();
                     Check((double)scaleField.GetValue(canvas)! == beforeScale && (Vector)offsetField.GetValue(canvas)! == beforeOffset,
                         "View navigation and fit all wait for active "+field.Name,checks);
                 }
