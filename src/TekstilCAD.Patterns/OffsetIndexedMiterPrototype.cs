@@ -15,6 +15,14 @@ internal static class OffsetIndexedMiterPrototype
 {
     internal static bool TryConstruct(IReadOnlyList<GridPoint> input, long delta,
         out GridPoint[] result, CancellationToken token = default)
+        => TryConstructCore(input, delta, false, out result, token);
+
+    internal static bool TryConstructInward(IReadOnlyList<GridPoint> input, long delta,
+        out GridPoint[] result, CancellationToken token = default)
+        => TryConstructCore(input, delta, true, out result, token);
+
+    private static bool TryConstructCore(IReadOnlyList<GridPoint> input, long delta, bool inward,
+        out GridPoint[] result, CancellationToken token)
     {
         result = [];
         if (input.Count < 3 || input.Count > 1024 || delta <= 0) return false;
@@ -28,7 +36,7 @@ internal static class OffsetIndexedMiterPrototype
         for (int i = 0; i < n; i++)
         {
             token.ThrowIfCancellationRequested();
-            if (!TryBound(source[(i+n-1)%n], source[i], source[(i+1)%n], delta, orientation, out var box) ||
+            if (!TryBound(source[(i+n-1)%n], source[i], source[(i+1)%n], delta, inward ? -orientation : orientation, out var box) ||
                 !Round(box.X, out var x) || !Round(box.Y, out var y)) return false;
             candidate[i] = new(x, y);
         }
@@ -83,3 +91,4 @@ internal static class OffsetIndexedMiterPrototype
         return true;
     }
 }
+
