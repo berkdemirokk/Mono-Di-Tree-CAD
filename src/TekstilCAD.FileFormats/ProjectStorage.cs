@@ -552,6 +552,10 @@ public static class ProjectStorage
         Action? afterCommitForVerification = null, bool failIfExists = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        // Validate before creating a directory or staging file. The default
+        // UTF-8 encoder would silently replace isolated UTF-16 surrogates.
+        var utf8 = new UTF8Encoding(false, true);
+        utf8.GetByteCount(text);
         EnsureWritableDestination(target);
         Directory.CreateDirectory(Path.GetDirectoryName(target)!);
         var temp = target + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -562,7 +566,7 @@ public static class ProjectStorage
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
             {
                 if (OperatingSystem.IsWindows()) ownedTemp = FileIdentity.CaptureOwnedFile(stream.SafeFileHandle);
-                using (var writer = new StreamWriter(stream, new System.Text.UTF8Encoding(false), leaveOpen: true)) { writer.Write(text); writer.Flush(); }
+                using (var writer = new StreamWriter(stream, utf8, leaveOpen: true)) { writer.Write(text); writer.Flush(); }
                 stream.Flush(true);
             }
             // The move is the commit point. A cancellation after this check may
