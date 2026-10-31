@@ -3,6 +3,7 @@ import CoreFoundation
 
 /// Replaces only the root project name token, leaving all other bytes untouched.
 enum LosslessProjectName {
+    static let maximumEditBytes = 8 * 1024 * 1024
     enum Failure: LocalizedError {
         case invalid
         var errorDescription: String? { "Proje adı güvenli biçimde değiştirilemedi. En fazla 8 MB boyutunda UTF-8 proje ve en fazla 1024 UTF-16 birimlik bir ad kullanın; UTF-16 ve UTF-32 dosyaları desteklenmez." }
@@ -11,7 +12,7 @@ enum LosslessProjectName {
     static func replacing(in data: Data, with name: String) throws -> Data {
         // Renaming reparses the JSON while the preview is still resident.
         // Keep this lower than the viewer limit until streaming validation is available.
-        let limit = 8 * 1024 * 1024
+        let limit = maximumEditBytes
         guard data.count <= limit, name.utf16.count <= 1024 else { throw Failure.invalid }
         // Release the potentially large Foundation object graph before scanning or copying.
         try autoreleasepool {

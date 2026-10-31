@@ -48,7 +48,11 @@ private struct ContentView: View {
                 Button("Proje adını değiştir ve kopya kaydet") {
                     editedName = project.name
                     showingNameEditor = true
-                }.disabled(isSaving || isLoading || sourceData == nil)
+                }.disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
+                    Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
