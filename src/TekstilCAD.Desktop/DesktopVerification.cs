@@ -379,6 +379,7 @@ internal static class DesktopVerification
             VerifyGrainlineEditing(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
+            VerifyEdgeMidpoint(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
             VerifyNestingErrorNavigationLarge(studio,reportPath,checks);
@@ -6960,6 +6961,26 @@ internal static class DesktopVerification
         }
         canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" });studio.SetTool("Seç");
         SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
+
+    private static void VerifyEdgeMidpoint(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Kenar",Points=[new(0,0),new(10,0),new(10,10),new(0,10)],Metadata=new PieceMetadata { Quantity=2 } };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var task=tools.InsertEdgeMidpointAsync("3");PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            var edited=studio.Document.Pieces.Single();
+            Check(edited.Points.Count==5 && edited.Points[4]==new Point2(0,5) && edited.Metadata?.Quantity==2 &&
+                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
+                "Closing edge midpoint preserves piece metadata and leaves grading rule for review",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Midpoint insertion is one undo step",checks);
+        }
+        finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyNumericVertexInsertDelete(MainWindow studio,List<string> checks)

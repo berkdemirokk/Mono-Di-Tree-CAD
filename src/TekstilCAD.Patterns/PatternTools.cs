@@ -196,6 +196,33 @@ public static class PatternTools
     public static PatternPiece InsertPoint(PatternPiece piece, int afterIndex, Point2 point)
         => InsertPoint(piece, afterIndex, point, CancellationToken.None);
 
+    /// <summary>Splits the edge after the selected vertex at its exact binary64 midpoint.
+    /// Rejects a midpoint that cannot be represented exactly, preserving the original edge.</summary>
+    public static PatternPiece InsertEdgeMidpoint(PatternPiece piece,int afterIndex,CancellationToken cancellationToken = default)
+    {
+        var points=SnapshotPointEdit(piece,cancellationToken);
+        if(afterIndex<0 || afterIndex>=points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
+        if(piece.Closed && points.Count>1 && points[0]==points[^1] && afterIndex==points.Count-1)afterIndex=0;
+        if(!piece.Closed && afterIndex==points.Count-1)throw new ArgumentException("Açık konturun son noktasından sonra kenar yok.");
+        var next=afterIndex+1<points.Count ? afterIndex+1 : 0;
+        var a=points[afterIndex];var b=points[next];
+        var midpoint=new Point2(a.X/2+b.X/2,a.Y/2+b.Y/2);
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits=BitConverter.DoubleToInt64Bits(value);var exponent=(int)((bits>>52)&0x7ff);
+            var fraction=bits&0x000f_ffff_ffff_ffffL;
+            if(exponent==0x7ff)throw new ArgumentOutOfRangeException(nameof(value));
+            var mantissa=exponent==0 ? fraction : fraction|(1L<<52);
+            var result=new System.Numerics.BigInteger(mantissa) << (exponent==0 ? 0 : exponent-1);
+            return bits<0 ? -result : result;
+        }
+        if(2*Units(midpoint.X)!=Units(a.X)+Units(b.X) || 2*Units(midpoint.Y)!=Units(a.Y)+Units(b.Y) || midpoint==a || midpoint==b)
+            throw new ArgumentException("Kenarın orta noktası sayısal hassasiyetle tam temsil edilemiyor; geometri değiştirilmedi.");
+        // InsertPoint snapshots again and applies the normal contour validation and limits.
+        var detached=piece.Clone();detached.Points=points;
+        return InsertPoint(detached,afterIndex,midpoint,cancellationToken);
+    }
+
     /// <summary>Inserts into a detached contour. If the final stored point explicitly
     /// repeats the first point, its index identifies that same first vertex.
     /// Large contours must be processed off the UI thread; cancellation is cooperative.</summary>

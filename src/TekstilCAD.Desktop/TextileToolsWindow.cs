@@ -767,14 +767,17 @@ public sealed class TextileToolsWindow : Window
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
+        Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
+        Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
         Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&p.Points.Count>(p.Closed?3:2));return Scroll(panel);
     }
-    private enum VertexEdit { Move, Insert, Delete }
+    private enum VertexEdit { Move, Insert, Delete, Midpoint }
     internal Task MoveVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Move,indexText,xText,yText);
     internal Task InsertVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Insert,indexText,xText,yText);
     internal Task DeleteVertexAsync(string indexText) => EditVertexAsync(VertexEdit.Delete,indexText,null,null);
+    internal Task InsertEdgeMidpointAsync(string indexText) => EditVertexAsync(VertexEdit.Midpoint,indexText,null,null);
     private async Task EditVertexAsync(VertexEdit operation,string indexText,string? xText,string? yText)
     {
         if(vertexMoveBusy || basicNestingBusy || gradeBusy || offsetBusy || toolReviewRequired)return;
@@ -784,7 +787,7 @@ public sealed class TextileToolsWindow : Window
             if(!CommitGradeEdit())throw new ArgumentException("Serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
-            var position=operation==VertexEdit.Delete ? default : new Point2(Number(xText!),Number(yText!));
+            var position=operation is VertexEdit.Delete or VertexEdit.Midpoint ? default : new Point2(Number(xText!),Number(yText!));
             var selected=Piece();var sourceId=selected.Id;
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
@@ -807,6 +810,7 @@ public sealed class TextileToolsWindow : Window
                     VertexEdit.Move => PatternTools.MovePoint(snapshot,index,position,token),
                     VertexEdit.Insert => PatternTools.InsertPoint(snapshot,index,position,token),
                     VertexEdit.Delete => PatternTools.DeletePoint(snapshot,index,token),
+                    VertexEdit.Midpoint => PatternTools.InsertEdgeMidpoint(snapshot,index,token),
                     _ => throw new InvalidOperationException("Bilinmeyen nokta düzenleme işlemi.")
                 };
                 after?.Invoke();token.ThrowIfCancellationRequested();return value;
