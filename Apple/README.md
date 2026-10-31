@@ -12,7 +12,7 @@ iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı eri
 
 ## Sınırlar
 
-Önceki sürüm GitHub'da iOS simülatörü için imzasız derlendi; bu son değişiklikler ve gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz; yalnızca geometriyi önizler. Parça kimliği ve adı, meta veriler, iplik yönü, serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları görüntülenmez veya işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Seçim filtresi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
+Uygulama GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; iplik çizgisi çizilmez ve üretime uygunluk doğrulanmaz. Serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
 
