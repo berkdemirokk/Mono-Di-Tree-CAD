@@ -675,7 +675,8 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(create,"Yeni parça bilgileri varsayılan olarak otomatik aktarılmaz; isteğe bağlı seçilebilir. Adet hiçbir zaman aktarılmaz; adetli pastal için ayrıca girin.");
         create.ToolTip="İsteğe bağlı beden, rol ve malzeme seçilebilir; adet her zaman ayrıca girilir.";
         create.VerticalAlignment=VerticalAlignment.Bottom;create.Margin=new Thickness(0,0,0,0);create.Padding=new Thickness(12,7,12,7);
-        var batch=Button(lower,"Birden fazla beden oluştur…",()=>
+        var secondaryActions=new WrapPanel();lower.Children.Add(secondaryActions);
+        var batch=Button(secondaryActions,"Birden fazla beden oluştur…",()=>
         {
             if(!CommitGradeEdit())throw new ArgumentException("Serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
@@ -690,9 +691,9 @@ public sealed class TextileToolsWindow : Window
                 SavedRuleMatchesDraft(selected,draft) && rows.Select(r=>(r.Dx,r.Dy)).SequenceEqual(rowText);
             new BulkGradingWindow(workspace,this,piece,increments,CurrentDraft,()=> { RefreshSources(selected);Success("Bedenler projeye eklendi. Temel parça ve artış taslağı korundu; projeyi kaydedin."+(piece.Grainline is null ? "" : " İplik yönleri aktarıldı ve kontrol bekliyor; her bedenin konturuyla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir."));if(piece.Grainline is not null)result.Foreground=StudioTheme.Warning; }).ShowDialog();
         },()=>HasPiece()&&!rulesNeedReset);
-        batch.Margin=new Thickness(0,8,0,0);batch.HorizontalAlignment=HorizontalAlignment.Left;
+        batch.Margin=new Thickness(0,8,8,0);batch.HorizontalAlignment=HorizontalAlignment.Left;
         AutomationProperties.SetHelpText(batch,"Birden fazla beden ve adım girip hepsini inceleyin; onaylanınca tek işlem olarak eklenir.");
-        var rebase=Button(lower,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
+        var rebase=Button(secondaryActions,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
         rebase.Margin=new Thickness(0,8,0,0);rebase.Padding=new Thickness(10,5,10,5);rebase.HorizontalAlignment=HorizontalAlignment.Left;
         AutomationProperties.SetHelpText(rebase,"Yalnızca kayıtlı kural ve kaynak tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
         return layout;
