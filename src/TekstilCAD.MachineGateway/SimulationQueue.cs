@@ -57,7 +57,14 @@ public sealed class SimulationQueue
     private readonly string spoolDirectory;
     // Instance-scoped hook for deterministic temporary-file ownership tests.
     internal Action<string>? BeforeManifestCommitForVerification { get; set; }
-    private const int MaximumRecoveredJobs = 10_000;
+    private const int DefaultHistoryPageSize = 10_000;
+    private string[]? historyDirectories;
+    private int historyPosition;
+    private readonly List<HistoryScanIssue> historyScanIssues = [];
+    public sealed record HistoryScanIssue(string Path, string Error);
+    public IReadOnlyList<HistoryScanIssue> HistoryScanIssues => historyScanIssues.AsReadOnly();
+    public bool HistoryScanComplete { get; private set; }
+    public string? HistoryScanError { get; private set; }
     private const int MaximumManifestBytes = 128 * 1024;
     public IReadOnlyList<SimulationJob> Jobs => jobs.AsReadOnly();
     /// <summary>Read-only startup diagnostics. Recovery never sends, simulates, rewrites or deletes jobs.</summary>
@@ -65,30 +72,60 @@ public sealed class SimulationQueue
     public SimulationQueue(string spoolDirectory)
     {
         this.spoolDirectory = ValidateOutputDirectory(spoolDirectory);
-        RecoverJobs();
+        RestartHistoryScan();
+        LoadNextHistoryPage();
     }
 
-    private void RecoverJobs()
+    /// <summary>Restart to include later additions or retry failed records. Existing jobs remain.
+    /// Queue operations must be serialized by the caller.</summary>
+    public void RestartHistoryScan()
     {
-        // Directory.Exists hides access and I/O errors, making an unavailable
-        // history look like an empty first run. Probe explicitly and distinguish
-        // a genuinely absent directory from an inaccessible or non-directory path.
-        try
+        historyDirectories = null;
+        historyPosition = 0;
+        historyScanIssues.Clear();
+        HistoryScanError = null;
+        HistoryScanComplete = false;
+    }
+
+    /// <summary>Inspect a page of a directory-name snapshot. Cancellation retains the cursor.
+    /// Additions after the snapshot require a restart. Enumeration errors require a restart.</summary>
+    public void LoadNextHistoryPage(int pageSize = DefaultHistoryPageSize, CancellationToken cancellationToken = default)
+    {
+        if (pageSize <= 0) throw new ArgumentOutOfRangeException(nameof(pageSize));
+        cancellationToken.ThrowIfCancellationRequested();
+        if (HistoryScanComplete || HistoryScanError is not null) return;
+        if (historyDirectories is null)
         {
-            if ((File.GetAttributes(spoolDirectory) & FileAttributes.Directory) == 0)
-            { Warn("Kuyruk yolu bir klasör değil; iş geçmişi yüklenemedi."); return; }
-        }
-        catch (FileNotFoundException) { return; }
-        catch (DirectoryNotFoundException) { return; }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        { Warn("Kuyruk klasörüne erişilemedi; iş geçmişi yüklenemedi: " + ex.Message); return; }
-        try
-        {
-            var inspected = 0;
-            foreach (var directory in Directory.EnumerateDirectories(spoolDirectory))
+            try
             {
-                if (++inspected > MaximumRecoveredJobs)
-                { Warn("Kuyruk tarama sınırına ulaşıldı; kalan klasörler yüklenmedi."); break; }
+                try
+                {
+                    if ((File.GetAttributes(spoolDirectory) & FileAttributes.Directory) == 0)
+                        throw new IOException("Kuyruk yolu bir klasör değil; iş geçmişi yüklenemedi.");
+                }
+                catch (FileNotFoundException) { historyDirectories = []; HistoryScanComplete = true; return; }
+                catch (DirectoryNotFoundException) { historyDirectories = []; HistoryScanComplete = true; return; }
+                var directories = new List<string>();
+                foreach (var directory in Directory.EnumerateDirectories(spoolDirectory))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    directories.Add(directory);
+                }
+                directories.Sort(StringComparer.Ordinal);
+                historyDirectories = directories.ToArray();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                HistoryScanError = ex.Message;
+                Warn("Kuyruk klasörüne erişilemedi; iş geçmişi yüklenemedi: " + ex.Message);
+                return;
+            }
+        }
+        int inspected = 0;
+        while (historyPosition < historyDirectories.Length && inspected < pageSize)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var directory = historyDirectories[historyPosition];
                 try
                 {
                     ValidateOutputDirectory(directory);
@@ -116,17 +153,25 @@ public sealed class SimulationQueue
                     if (!File.Exists(job.OutputPath))
                     {
                         job = job with { Status = JobStatus.Failed, Error = "Çıktı dosyası eksik; iş yeniden hazırlanmalı." };
+                        historyScanIssues.Add(new HistoryScanIssue(directory, job.Error!));
                         Warn($"{directoryId:N}: çıktı dosyası eksik; önceki disk kaydı korundu.");
                     }
-                    jobs.Add(job);
-                    manifestHashes.Add(job.Id, manifestHash);
+                    // Preserve loaded jobs and their original concurrency tokens.
+                    if (!manifestHashes.ContainsKey(job.Id))
+                    {
+                        jobs.Add(job);
+                        manifestHashes.Add(job.Id, manifestHash);
+                    }
                 }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or JsonException or InvalidOperationException or NotSupportedException)
-                { Warn($"{Path.GetFileName(directory)}: iş yüklenemedi. {ex.Message}"); }
-            }
+                {
+                    historyScanIssues.Add(new HistoryScanIssue(directory, ex.Message));
+                    Warn($"{Path.GetFileName(directory)}: iş yüklenemedi. {ex.Message}");
+                }
+            historyPosition++;
+            inspected++;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        { Warn("Kuyruk klasörü bütünüyle taranamadı: " + ex.Message); }
+        HistoryScanComplete = historyPosition == historyDirectories.Length;
         jobs.Sort((a, b) => { var date = a.CreatedAt.CompareTo(b.CreatedAt); return date != 0 ? date : a.Id.CompareTo(b.Id); });
     }
 

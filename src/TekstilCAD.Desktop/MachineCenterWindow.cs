@@ -38,6 +38,12 @@ public sealed class MachineCenterWindow : Window
     }
     private bool updatingChoices;
     private bool preparing;
+    private bool historyScanning;
+    private string? historyScanFailure;
+    private readonly Button loadHistory=new() { Content="Geçmiş taramasına devam et" };
+    private readonly Button restartHistory=new() { Content="Geçmişi yeniden tara" };
+    private readonly TextBlock historyStatus=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,6) };
+    private readonly TextBox historyIssues=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=120,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private CancellationTokenSource? prepareCancellation;
     internal Action? BeforePrepareForVerification;
     internal Action? AfterPrepareForVerification;
@@ -172,13 +178,26 @@ public sealed class MachineCenterWindow : Window
         body.Children.Add(Card(settings));
         var queuePanel=new StackPanel();queuePanel.Children.Add(new TextBlock { Text="02  Kayıtlı dosya kuyruğu",FontSize=17,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         queuePanel.Children.Add(new TextBlock { Text="Geçerli işlem kayıtları yeniden açılışta yüklenir. Önceki doğrulama güncel dosya kontrolü değildir; kullanmadan önce yeniden doğrulayın.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) });
+        queuePanel.Children.Add(new TextBlock { Text="Yeniden tarama yeni klasörleri ve yüklenemeyen kayıtları tekrar arar. Daha önce yüklenmiş kayıtlardaki dış değişiklikleri görmek için pencereyi kapatıp yeniden açın.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         jobs.Columns.Add(new DataGridTextColumn { Header="Proje",Binding=new Binding("ProjectName"),Width=new DataGridLength(1,DataGridLengthUnitType.Star) });
         jobs.Columns.Add(new DataGridTextColumn { Header="Biçim",Binding=new Binding("Format"),Width=75 });
         jobs.Columns.Add(new DataGridTextColumn { Header="Durum",Binding=new Binding("Status") { Converter=new StatusLabel() },Width=160 });
         jobs.Columns.Add(new DataGridTextColumn { Header="Parça",Binding=new Binding("PieceCount"),Width=65 });
         jobs.Columns.Add(new DataGridTextColumn { Header="Nokta",Binding=new Binding("PointCount"),Width=70 });
         AutomationProperties.SetName(jobs,"Kayıtlı dosya kuyruğu");
-        queuePanel.Children.Add(jobs);body.Children.Add(Card(queuePanel));
+        queuePanel.Children.Add(jobs);
+        AutomationProperties.SetName(historyStatus,"İş geçmişi tarama durumu");
+        AutomationProperties.SetLiveSetting(historyStatus,AutomationLiveSetting.Polite);
+        AnnounceTextChanges(historyStatus,"İş geçmişi tarama durumu");
+        queuePanel.Children.Add(historyStatus);
+        AutomationProperties.SetName(historyIssues,"İş geçmişi tarama hataları");
+        queuePanel.Children.Add(historyIssues);
+        var historyActions=new WrapPanel { Margin=new Thickness(0,6,0,0) };
+        StyleButton(loadHistory);StyleButton(restartHistory);
+        loadHistory.Click+=async (_,_)=>await ScanHistory(false);
+        restartHistory.Click+=async (_,_)=>await ScanHistory(true);
+        historyActions.Children.Add(loadHistory);historyActions.Children.Add(restartHistory);queuePanel.Children.Add(historyActions);
+        body.Children.Add(Card(queuePanel));
         var preview=new StackPanel();preview.Children.Add(new TextBlock { Text="03  Hazırlanan dosyayı kontrol edin",FontSize=17,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         preview.Children.Add(previewSummary);
         var previewGrid=new Grid { Height=280 };previewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(0.8,GridUnitType.Star) });previewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1.2,GridUnitType.Star) });
@@ -188,8 +207,8 @@ public sealed class MachineCenterWindow : Window
         var tabs=new TabControl();tabs.Items.Add(new TabItem { Header="Çıktı geometrisi",Content=geometryPreview });tabs.Items.Add(new TabItem { Header="Dosya metni",Content=filePreview });Grid.SetColumn(tabs,1);previewGrid.Children.Add(tabs);
         preview.Children.Add(previewGrid);simulate.Margin=new Thickness(0,12,0,0);simulate.HorizontalAlignment=HorizontalAlignment.Left;preview.Children.Add(simulate);body.Children.Add(Card(preview));
         jobs.SelectionChanged+=(_,_)=>ShowSelection();
-        Closing+=(_,e)=> { if(preparing) { e.Cancel=true;result.Foreground=StudioTheme.Warning;result.Text="Dosya hazırlanıyor; işlem bitince pencereyi kapatabilirsiniz."; } };
-        Refresh(null);UpdateAvailability();
+        Closing+=(_,e)=> { if(preparing || historyScanning) { e.Cancel=true;result.Foreground=StudioTheme.Warning;result.Text=historyScanning ? "Geçmiş taranıyor; işlem bitince pencereyi kapatabilirsiniz." : "Dosya hazırlanıyor; işlem bitince pencereyi kapatabilirsiniz."; } };
+        Refresh(null);UpdateAvailability();UpdateHistoryStatus();
     }
     private static bool NeedsSafeChoiceName(string value)
     {
@@ -288,13 +307,13 @@ public sealed class MachineCenterWindow : Window
         if(error is null&&(!TryNumber(scale,out var s)||s<=0||s>1000))error="Ölçek çarpanı 0'dan büyük, en fazla 1000 olmalıdır.";
         if(error is null&&format.SelectedIndex==1&&(!TryNumber(units,out var u)||u<=0||u>10000))error="HPGL birim/mm değeri 0'dan büyük, en fazla 10000 olmalıdır.";
         inputHint.Text=error??((format.SelectedIndex==0?"DXF milimetre biriminde hazırlanır. HPGL kalibrasyonu bu biçimde kullanılmaz.":"HPGL değeri yalnızca dosya dönüşümünü belirler; fiziksel kalibrasyon yerine geçmez.")+" Nokta veya virgül ondalıktır; binlik ayırıcı kullanmayın.");
-        inputHint.Foreground=error is null?StudioTheme.Muted:StudioTheme.Warning;prepare.IsEnabled=!preparing && error is null;
+        inputHint.Foreground=error is null?StudioTheme.Muted:StudioTheme.Warning;prepare.IsEnabled=!preparing && !historyScanning && error is null;
     }
     private void Execute(Action action)
     { try { action(); } catch(Exception ex) { result.Foreground=StudioTheme.Danger;result.Text="İşlem başarısız: "+ex.Message; } }
     private async Task Prepare()
     {
-        if(preparing)return;
+        if(preparing || historyScanning)return;
         try
         {
             var selected=SelectedPieceIds.ToHashSet();
@@ -428,12 +447,13 @@ public sealed class MachineCenterWindow : Window
         choiceList.IsEnabled=!busy;
         choiceSearch.IsEnabled=!busy;clearChoiceSearch.IsEnabled=!busy;
         foreach(var button in choiceActions)button.IsEnabled=!busy;
-        simulate.IsEnabled=!busy && jobs.SelectedItem is SimulationJob;
-        UpdateAvailability();
+        simulate.IsEnabled=!busy && !historyScanning && jobs.SelectedItem is SimulationJob;
+        UpdateAvailability();UpdateHistoryStatus();
         if(moveFromCancel) { if(prepare.IsEnabled)prepare.Focus();else messagesViewer.Focus(); }
     }
     private void Simulate()
     {
+        if(preparing || historyScanning)return;
         if(jobs.SelectedItem is not SimulationJob selected)return;
         var job=queue.Simulate(selected.Id);Refresh(job.Id);
         if(selectedFileReadError is { } readError)
@@ -448,12 +468,50 @@ public sealed class MachineCenterWindow : Window
             job.SourceSnapshotUnconfirmed?"Dosya bütünlüğü doğrulandı; ancak önceki proje kopyasından hazırlanmış olabilir. Güncel proje için dosyayı yeniden hazırlayın. Fiziksel makine testi yapılmadı.":
             "Dosya bütünlüğü doğrulandı. Fiziksel makine testi yapılmadı.";
     }
+    private void UpdateHistoryStatus()
+    {
+        if(historyScanning)
+        {
+            historyStatus.Text="İş geçmişi arka planda taranıyor; kuyruk işlemleri bekliyor.";
+            loadHistory.IsEnabled=false;restartHistory.IsEnabled=false;
+            return;
+        }
+        var issueCount=queue.HistoryScanIssues.Count;
+        var error=historyScanFailure ?? queue.HistoryScanError;
+        historyStatus.Foreground=error is not null || issueCount>0 || !queue.HistoryScanComplete ? StudioTheme.Warning : StudioTheme.Muted;
+        historyStatus.Text=error is not null
+            ? "Geçmiş taraması tamamlanamadı. Hata ayrıntısını kontrol edip yeniden tarayın."
+            : queue.HistoryScanComplete
+                ? "Geçmiş taraması tamamlandı."+(issueCount>0 ? $" {issueCount} kayıt yüklenemedi; ayrıntıları kontrol edin." : "")
+                : "Geçmiş taraması tamamlanmadı; listede henüz görünmeyen işler olabilir. Devam ederek sonraki bölümü yükleyin.";
+        historyIssues.Text=string.Join("\n",queue.HistoryScanIssues.Select(issue=>$"{issue.Path}: {issue.Error}").Prepend(error ?? "").Where(value=>value.Length>0));
+        historyIssues.Visibility=historyIssues.Text.Length==0 ? Visibility.Collapsed : Visibility.Visible;
+        loadHistory.IsEnabled=!preparing && !queue.HistoryScanComplete && error is null;
+        restartHistory.IsEnabled=!preparing;
+    }
+    private async Task ScanHistory(bool restart)
+    {
+        if(preparing || historyScanning)return;
+        var selected=(jobs.SelectedItem as SimulationJob)?.Id;
+        historyScanning=true;historyScanFailure=null;
+        jobs.IsEnabled=false;simulate.IsEnabled=false;UpdateAvailability();UpdateHistoryStatus();
+        try
+        {
+            await Task.Run(()=> { if(restart)queue.RestartHistoryScan();queue.LoadNextHistoryPage(); });
+        }
+        catch(Exception ex) { historyScanFailure=ex.Message; }
+        finally
+        {
+            historyScanning=false;jobs.IsEnabled=true;
+            Refresh(selected);UpdateAvailability();UpdateHistoryStatus();
+        }
+    }
     private void Refresh(Guid? selected)
     { jobs.ItemsSource=null;jobs.ItemsSource=queue.Jobs;jobs.SelectedItem=queue.Jobs.FirstOrDefault(j=>j.Id==selected);ShowSelection(); }
     private void ShowSelection()
     {
         selectedFileReadError=null;
-        simulate.IsEnabled=!preparing && jobs.SelectedItem is SimulationJob;
+        simulate.IsEnabled=!preparing && !historyScanning && jobs.SelectedItem is SimulationJob;
         geometryPreview.Clear();
         if(jobs.SelectedItem is not SimulationJob job) { details.Text="Kuyruktan bir dosya seçin. Profil, ölçü ayarları ve dosya konumu burada görünür.";filePreview.Text="Henüz dosya seçilmedi.";previewSummary.Text="Henüz çıktı seçilmedi. Önizleme, hazırlandıktan sonra gerçek dosyadan okunur.";return; }
         details.Text=$"{job.Profile.Name}\n\nÖlçek: {job.Profile.Scale}\n{(job.Format==JobFormat.Hpgl?$"HPGL birim/mm: {job.Profile.UnitsPerMillimeter}\n":"")}Durum: {StatusLabel.Label(job.Status)}\n\nDosya\n{job.OutputPath}\n\nİşlem kaydı\n{job.ManifestPath}\n\nSHA256\n{job.Sha256}\n{job.Error}";
