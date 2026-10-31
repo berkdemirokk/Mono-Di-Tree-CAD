@@ -7167,7 +7167,7 @@ internal static class DesktopVerification
     private static void VerifyReverseClosedContour(MainWindow studio,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
-        var piece=new PatternPiece { Points=[new(0,0),new(8,0),new(10,2),new(12,0),new(20,0),new(20,10),new(0,10),new(0,0)] };
+        var piece=new PatternPiece { Points=[new(0,0),new(8,0),new(10,2),new(12,0),new(20,0),new(20,10),new(0,10),new(0,0)], Grainline=new Grainline { Start=new(5,3),End=new(5,8),NeedsReview=false } };
         var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],Deltas=[new(0,0),new(1,0),new(2,0),new(3,0),new(4,0),new(5,0),new(6,0),new(0,0)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -7177,7 +7177,7 @@ internal static class DesktopVerification
             var task=tools.ReverseClosedContourAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             var after=studio.Document.Clone();
             Check(after.Pieces[0].Points.SequenceEqual(new[] { piece.Points[0],piece.Points[6],piece.Points[5],piece.Points[4],piece.Points[3],piece.Points[2],piece.Points[1],piece.Points[7] }) &&
-                after.GradingRules[0].SourcePoints.SequenceEqual(after.Pieces[0].Points) && after.GradingRules[0].Deltas[5]==rule.Deltas[2] && session.UndoCount==1,
+                after.GradingRules[0].SourcePoints.SequenceEqual(after.Pieces[0].Points) && after.GradingRules[0].Deltas[5]==rule.Deltas[2] && after.Pieces[0].Grainline is { NeedsReview:false } && session.UndoCount==1,
                 "Closed contour reversal preserves notch and matching grading",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Closed reversal undo restores both",checks);
             Check(session.Redo() && DocumentSession.ContentEquals(after,studio.Document),"Closed reversal redo restores both",checks);
@@ -7188,7 +7188,7 @@ internal static class DesktopVerification
     private static void VerifyReverseOpenPath(MainWindow studio,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
-        var piece=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10)],Metadata=new PieceMetadata { Quantity=2 } };
+        var piece=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10)],Metadata=new PieceMetadata { Quantity=2 },Grainline=new Grainline { Start=new(2,2),End=new(2,5),NeedsReview=true } };
         var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=[new(1,0),new(0,0),new(0,0)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -7196,7 +7196,7 @@ internal static class DesktopVerification
         try
         {
             var task=tools.ReverseOpenPathAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
-            Check(studio.Document.Pieces[0].Points.SequenceEqual(piece.Points.AsEnumerable().Reverse()) && studio.Document.Pieces[0].Metadata?.Quantity==2 &&
+            Check(studio.Document.Pieces[0].Points.SequenceEqual(piece.Points.AsEnumerable().Reverse()) && studio.Document.Pieces[0].Metadata?.Quantity==2 && studio.Document.Pieces[0].Grainline is { NeedsReview:true } &&
                 studio.Document.GradingRules[0].SourcePoints.SequenceEqual(piece.Points.AsEnumerable().Reverse()) &&
                 studio.Document.GradingRules[0].Deltas.SequenceEqual(rule.Deltas.AsEnumerable().Reverse()) && session.UndoCount==1,
                 "Reversing an open path reorders the matching grading rule in the same undo step",checks);

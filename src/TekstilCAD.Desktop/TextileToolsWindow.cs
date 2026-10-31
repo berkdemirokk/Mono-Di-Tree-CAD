@@ -1031,7 +1031,8 @@ public sealed class TextileToolsWindow : Window
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
-        var grainNeedsReview=edited.Grainline is not null && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));
+        // Reversal changes only vertex order, not the grainline's relationship to the contour.
+        var grainNeedsReview=edited.Grainline is not null && !reverseOpenPath && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));
         if(grainNeedsReview)edited.Grainline!.NeedsReview=true;
         var rule=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==previous.Id);
         var hasDraft=gradeDrafts.TryGetValue(previous.Id,out var draft) && HasUnsavedGradeDraft(previous.Id,draft);
