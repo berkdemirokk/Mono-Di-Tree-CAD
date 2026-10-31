@@ -10,24 +10,28 @@ enum ExperimentalPieceRename {
     static func replacing(in data: Data, snapshot: Data, pieceID: UUID, with name: String) throws -> Data {
         guard data == snapshot, data.count <= 8 * 1024 * 1024, name.utf16.count <= 1024,
               String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
-        let root: Any
-        do { root = try JSONSerialization.jsonObject(with: data) } catch { throw Failure.invalid }
-        let project: [String: Any]
-        if let array = root as? [Any], array.count == 2, let version = array[0] as? NSNumber,
-           CFGetTypeID(version) != CFBooleanGetTypeID(), version.doubleValue.rounded() == version.doubleValue,
-           (1...5).contains(version.doubleValue), let body = array[1] as? [String: Any] { project = body }
-        else if let body = root as? [String: Any] { project = body }
-        else { throw Failure.invalid }
-        guard let pieces = project["Pieces"] as? [[String: Any]], pieces.count <= 10_000 else { throw Failure.invalid }
-        var ids = Set<UUID>()
-        var selected: Int?
-        for (index, piece) in pieces.enumerated() {
-            guard let idText = piece["Id"] as? String, let id = UUID(uuidString: idText),
-                  id.uuidString != "00000000-0000-0000-0000-000000000000",
-                  ids.insert(id).inserted, piece["Name"] is String else { throw Failure.invalid }
-            if id == pieceID { selected = index }
+        // Release the parsed object graph before scanning and copying.
+        let selected: Int = try autoreleasepool {
+            let root: Any
+            do { root = try JSONSerialization.jsonObject(with: data) } catch { throw Failure.invalid }
+            let project: [String: Any]
+            if let array = root as? [Any], array.count == 2, let version = array[0] as? NSNumber,
+               CFGetTypeID(version) != CFBooleanGetTypeID(), version.doubleValue.rounded() == version.doubleValue,
+               (1...5).contains(version.doubleValue), let body = array[1] as? [String: Any] { project = body }
+            else if let body = root as? [String: Any] { project = body }
+            else { throw Failure.invalid }
+            guard let pieces = project["Pieces"] as? [[String: Any]], pieces.count <= 10_000 else { throw Failure.invalid }
+            var ids = Set<UUID>()
+            var selected: Int?
+            for (index, piece) in pieces.enumerated() {
+                guard let idText = piece["Id"] as? String, let id = UUID(uuidString: idText),
+                      id.uuidString != "00000000-0000-0000-0000-000000000000",
+                      ids.insert(id).inserted, piece["Name"] is String else { throw Failure.invalid }
+                if id == pieceID { selected = index }
+            }
+            guard let selected else { throw Failure.invalid }
+            return selected
         }
-        guard let selected else { throw Failure.invalid }
         let range: Range<Int> = try data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
@@ -35,6 +39,9 @@ enum ExperimentalPieceRename {
             return try scanner.scan()
         }
         let encoded = try JSONSerialization.data(withJSONObject: [name])
+        // Reject an oversized result before allocating the output buffer.
+        let replacementCount = encoded.count - 2
+        guard data.count - range.count + replacementCount <= 8 * 1024 * 1024 else { throw Failure.invalid }
         var result = Data(data.prefix(range.lowerBound))
         result.append(encoded.dropFirst().dropLast())
         result.append(data.suffix(data.count - range.upperBound))
