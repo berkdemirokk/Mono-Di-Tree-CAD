@@ -47,10 +47,10 @@ internal sealed class BulkGradingWindow : Window
         DockPanel.SetDock(Status,Dock.Bottom);root.Children.Add(Status);
         var panel=new StackPanel();root.Children.Add(new ScrollViewer { Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled });
         panel.Children.Add(new TextBlock { Text="Birden fazla beden oluştur",FontSize=20,FontWeight=FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text="Her satıra beden adı; adım sayısı yazın. Örnek: S; -1 ve L; 1 ayrı satırlarda. Her beden temel kalıptan hesaplanır. Adımlar virgül veya noktayla ondalıklı olabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
-        AutomationProperties.SetName(Entries,"Beden adları ve adımları");AutomationProperties.SetHelpText(Entries,"Her satıra beden adı, noktalı virgül ve temel bedenden adım sayısı girin; örnek S; -1.");panel.Children.Add(Entries);
+        panel.Children.Add(new TextBlock { Text="Her satıra beden adı; adım sayısı; isteğe bağlı kesim adedi yazın. Örnek: S; -1; 12 ve L; 1; 8 ayrı satırlarda. Her beden temel kalıptan hesaplanır. Adımlar virgül veya noktayla ondalıklı olabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
+        AutomationProperties.SetName(Entries,"Beden adları ve adımları");AutomationProperties.SetHelpText(Entries,"Her satıra beden adı, adım sayısı ve isteğe bağlı kesim adedi girin; örnek S; -1; 12.");panel.Children.Add(Entries);
         var options=new WrapPanel();options.Children.Add(IncludeSize);options.Children.Add(CopyRole);panel.Children.Add(options);
-        panel.Children.Add(new TextBlock { Text="Adet hiçbir zaman kopyalanmaz. Sıfır adım veya sıfır artış, temel kalıpla aynı geometriyi oluşturabilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
+        panel.Children.Add(new TextBlock { Text="Adet kaynaktan kopyalanmaz; her beden için üçüncü alana girilebilir. Sıfır adım veya sıfır artış, temel kalıpla aynı geometriyi oluşturabilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
         if(this.source.Grainline is not null)
             panel.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her bedenin konturuyla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         var actions=new WrapPanel();actions.Children.Add(PreviewButton);actions.Children.Add(AddButton);actions.Children.Add(CancelButton);panel.Children.Add(actions);
@@ -116,24 +116,14 @@ internal sealed class BulkGradingWindow : Window
         if(message.Length>0 && UIElementAutomationPeer.CreatePeerForElement(ChangeSummary) is { } peer)
             peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
-    private static List<GradeSize> Parse(string input,PatternPiece source,ProjectDocument snapshot)
+    private static IReadOnlyList<GradeBatchEntry> Parse(string input,PatternPiece source,ProjectDocument snapshot)
     {
-        if(input.Length>1_000_000)throw new ArgumentException("Beden listesi çok uzun; en fazla 1.000.000 karakter girin.");
-        var lines=input.Replace("\r","").Split('\n');var result=new List<GradeSize>();var names=new Dictionary<string,int>(StringComparer.OrdinalIgnoreCase);
+        var entries=GradeBatchInput.Parse(input);
         var existing=new HashSet<string>(snapshot.Pieces.Select(p=>p.Name.Trim()),StringComparer.OrdinalIgnoreCase);
-        for(var lineIndex=0;lineIndex<lines.Length;lineIndex++)
-        {
-            var raw=lines[lineIndex];if(string.IsNullOrWhiteSpace(raw))continue;
-            var line=lineIndex+1;
-            var fields=raw.Split(';');if(fields.Length!=2)throw new ArgumentException($"{line}. satır: Beden adı ve adımı noktalı virgülle ayırın; örnek S; -1.");
-            var name=fields[0].Trim();if(name.Length is <1 or >128)throw new ArgumentException($"{line}. satır: Beden adı 1–128 karakter olmalıdır.");
-            if(names.TryGetValue(name,out var previousLine))throw new ArgumentException($"{line}. satır: Aynı beden adı {previousLine}. satırda da var; farklı bir ad girin.");
-            names.Add(name,line);
-            if(existing.Contains($"{source.Name} · {name}".Trim()))throw new ArgumentException($"{line}. satır: Bu beden projede zaten var; farklı bir ad seçin.");
-            if(!MeasurementInput.TryParseMillimeters(fields[1],out var step))throw new ArgumentException($"{line}. satır: Geçerli bir adım sayısı girin; virgül veya nokta kullanabilirsiniz.");
-            result.Add(new GradeSize(name,step));if(result.Count>1000)throw new ArgumentException("Bir grupta en fazla 1000 beden olabilir.");
-        }
-        if(result.Count==0)throw new ArgumentException("En az bir beden ve adım girin.");return result;
+        foreach(var entry in entries)
+            if(existing.Contains($"{source.Name} · {entry.Size.Name}".Trim()))
+                throw new ArgumentException($"{entry.Size.Name}: Bu beden projede zaten var; farklı bir ad seçin.");
+        return entries;
     }
     internal async Task CalculateAsync()
     {
@@ -142,7 +132,7 @@ internal sealed class BulkGradingWindow : Window
         try
         {
             if(!Current())throw new InvalidOperationException("Proje veya artış taslağı değişti. Pencereyi kapatıp güncel kaynakla tekrar açın.");
-            var text=Entries.Text;var include=IncludeSize.IsChecked==true;var copy=CopyRole.IsChecked==true;var sizes=Parse(text,source,snapshot);
+            var text=Entries.Text;var include=IncludeSize.IsChecked==true;var copy=CopyRole.IsChecked==true;var entries=Parse(text,source,snapshot);var sizes=entries.Select(entry=>entry.Size).ToArray();
             var cts=new CancellationTokenSource();cancellation=cts;Entries.IsEnabled=false;IncludeSize.IsEnabled=false;CopyRole.IsEnabled=false;PreviewButton.IsEnabled=false;CancelButton.IsEnabled=true;
             Status.Foreground=StudioTheme.Muted;Status.Text="Bedenler hesaplanıyor; isterseniz iptal edebilirsiniz.";
             var items=await Task.Run(()=>
@@ -154,8 +144,7 @@ internal sealed class BulkGradingWindow : Window
                 {
                     cts.Token.ThrowIfCancellationRequested();
                     ValidateGrainTransfer(source,generated[i],increments,sizes[i].Steps);
-                    if(include || (copy && (source.Metadata?.Role is not null || source.Metadata?.Material is not null)))
-                        generated[i].Metadata=new PieceMetadata { Size=include?sizes[i].Name:null,Role=copy?source.Metadata?.Role:null,Material=copy?source.Metadata?.Material:null,Quantity=null };
+                    GradeBatchInput.ApplyMetadata(generated[i],source,entries[i],include,copy);
                 }
                 var candidate=snapshot.Clone();candidate.Pieces.AddRange(generated.Select(p=>p.Clone()));MainWindow.Validate(candidate);
                 var labels=new string[generated.Count];
@@ -163,7 +152,7 @@ internal sealed class BulkGradingWindow : Window
                 {
                     cts.Token.ThrowIfCancellationRequested();
                     var item=generated[i];var bounds=Geometry.Bounds(item.Points);var unchanged=item.Points.SequenceEqual(source.Points);
-                    labels[i]=$"{SafeName(item.Name)} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm"+(unchanged?" · temel geometriyle aynı":"");
+                    labels[i]=$"{SafeName(item.Name)} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm"+(unchanged?" · temel geometriyle aynı":"")+(entries[i].Quantity is int quantity?$" · adet {quantity}":" · adet girilmedi");
                 }
                 cts.Token.ThrowIfCancellationRequested();return (Generated:generated,Labels:labels);
             });
@@ -172,7 +161,7 @@ internal sealed class BulkGradingWindow : Window
             ready=items.Generated;readyText=text;readySize=include;readyRole=copy;
             PreviewList.ItemsSource=items.Labels;
             PreviewList.SelectedIndex=0;
-            Status.Foreground=source.Grainline is null ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet aktarılmaz."+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.");AddButton.IsEnabled=true;
+            Status.Foreground=source.Grainline is null ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet yalnız girildiğinde eklenir."+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.");AddButton.IsEnabled=true;
         }
         catch(OperationCanceledException) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Hesap iptal edildi; proje değişmedi."; }
         catch(Exception ex) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Bedenler hazırlanamadı: "+ex.Message; }

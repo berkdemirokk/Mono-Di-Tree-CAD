@@ -8076,14 +8076,23 @@ internal static class DesktopVerification
         studio.LoadDocument(new ProjectDocument { Pieces=[original] });original=studio.Document.Pieces[0];studio.Select(original.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var added=false;var window=new BulkGradingWindow(studio,studio,original,[new(0,0),new(1,0),new(1,1),new(0,1)],()=>true,()=>added=true);
-        Render(window,Path.ChangeExtension(reportPath,".bulk-grading.png"),550,500);
+        Render(window,Path.ChangeExtension(reportPath,".bulk-grading.png"),680,540);
+        var bulkRoot=(FrameworkElement)window.Content;
+        var bulkInstructions=Descendants<TextBlock>(bulkRoot).Single(t=>t.Text.Contains("isteğe bağlı kesim adedi"));
+        var quantityInstructions=Descendants<TextBlock>(bulkRoot).Single(t=>t.Text.Contains("Adet kaynaktan kopyalanmaz"));
+        Check(WarningReachable(bulkInstructions,bulkRoot) && WarningReachable(quantityInstructions,bulkRoot)
+            && WarningReachable(window.Entries,bulkRoot) && AutomationProperties.GetHelpText(window.Entries).Contains("12"),
+            "Bulk grading quantity instructions and input remain reachable at 680 × 540",checks);
         var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
         {
             void Calculate(){var t=window.CalculateAsync();PumpUntil(()=>t.IsCompleted);t.GetAwaiter().GetResult();}
-            window.Entries.Text="S; -1\nM; 0\nL; 1";window.IncludeSize.IsChecked=true;window.CopyRole.IsChecked=true;Calculate();
+            window.Entries.Text="S; -1; 2\nM; 0\nL; 1; 3";window.IncludeSize.IsChecked=true;window.CopyRole.IsChecked=true;Calculate();
             Check(window.Ready?.Count==3 && window.AddButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Bulk grading previews three sizes without changing source project",checks);
-            Check(window.Ready!.Select(p=>p.Id).Distinct().Count()==3 && window.Ready.All(p=>p.Metadata?.Quantity is null && p.Metadata?.Role=="Kesim" && p.Metadata?.Material=="Pamuk") && window.Ready.Select(p=>p.Metadata!.Size).SequenceEqual(new[]{"S","M","L"}),"Bulk grading preserves explicit metadata and never copies quantity",checks);
+            Check(window.Ready!.Select(p=>p.Id).Distinct().Count()==3 && window.Ready.Select(p=>p.Metadata?.Quantity).SequenceEqual(new int?[]{2,null,3}) && window.Ready.All(p=>p.Metadata?.Role=="Kesim" && p.Metadata?.Material=="Pamuk") && window.Ready.Select(p=>p.Metadata!.Size).SequenceEqual(new[]{"S","M","L"}),"Bulk grading previews entered quantities and leaves missing quantity unset",checks);
+            var quantityLabels=window.PreviewList.Items.Cast<string>().ToArray();
+            Check(quantityLabels[0].Contains("adet 2") && quantityLabels[1].Contains("adet girilmedi") && quantityLabels[2].Contains("adet 3"),
+                "Bulk grading preview identifies entered and missing quantities",checks);
             Check(window.GeometryPreview.HasGeometry && window.GeometryPreview.SelectedId==window.Ready![0].Id,"Bulk grading displays first generated contour against the source",checks);
             window.PreviewList.SelectedIndex=1;
             Check(window.ChangeSummary.Text.Contains("aynı geometri") && window.ChangeSummary.Text.Contains("0 mm"),"Unchanged graded geometry reports zero displacement",checks);
@@ -8091,9 +8100,11 @@ internal static class DesktopVerification
             Check(window.GeometryPreview.SelectedId==window.Ready![2].Id && AutomationProperties.GetHelpText(window.GeometryPreview).Contains("aynı koordinat"),"Choosing a size updates the accessible shared-scale geometry preview",checks);
             Check(window.ChangeSummary.Text.Contains("3 / 4") && window.ChangeSummary.Text.Contains(MeasurementInput.Format(Math.Sqrt(2))),"Grading comparison reports changed vertices and maximum displacement",checks);
             Render(window,Path.ChangeExtension(reportPath,".bulk-grade-geometry.png"),720,1000);
-            window.Entries.Text="L; 1\n l ; 2";
+            window.Entries.Text="S; -1; 5\nM; 0\nL; 1; 3";
             Check(!window.GeometryPreview.HasGeometry && window.ChangeSummary.Text=="" && window.Status.Text.Contains("yeniden hesaplayın") && !window.AddButton.IsEnabled,"Editing batch inputs clears the geometry and old ready status",checks);
-            Calculate();
+            window.AddReady();
+            Check(DocumentSession.ContentEquals(before,studio.Document),"Changed batch text cannot apply a stale quantity preview",checks);
+            window.Entries.Text="L; 1\n l ; 2";Calculate();
             Check(window.Ready is null && !window.AddButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Duplicate size names reject entire bulk preview",checks);
             window.Entries.Text="S; -1\n\n l ; 1\nL; 2";Calculate();
             Check(window.Status.Text.Contains("4. satır") && window.Status.Text.Contains("3. satır") && DocumentSession.ContentEquals(before,studio.Document),"Duplicate batch size reports both original line numbers",checks);
@@ -8101,13 +8112,19 @@ internal static class DesktopVerification
             Check(window.Status.Text.Contains("2. satır") && DocumentSession.ContentEquals(before,studio.Document),"Invalid batch step identifies its input line",checks);
             Render(window,Path.ChangeExtension(reportPath,".bulk-grading-error.png"),550,500);
             Check(FullyVisible(window.Status,(FrameworkElement)window.Content),"Bulk grading error remains visible in minimum window",checks);
+            window.Entries.Text="S; -1; 2\nL; 1; 0";Calculate();
+            Check(window.Ready is null && !window.AddButton.IsEnabled && window.Status.Text.Contains("2. satır") && DocumentSession.ContentEquals(before,studio.Document),
+                "Invalid quantity rejects the complete batch and identifies its line",checks);
             window.Entries.Text="S; -1\nL; 1000000000";Calculate();
             Check(window.Ready is null && !window.AddButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"A later invalid size rejects the entire batch without modifying the project",checks);
             window.Entries.Text=new string('x',1_000_001);Calculate();
             Check(window.Ready is null && window.Status.Text.Contains("çok uzun") && DocumentSession.ContentEquals(before,studio.Document),"Oversized batch input is rejected before parsing without modifying the project",checks);
-            window.Entries.Text="S; -1\nM; 0\nL; 1";Calculate();
+            window.Entries.Text="S; -1; 2\nM; 0\nL; 1; 3";Calculate();
             var count=session.UndoCount;window.AddReady();
             Check(added && studio.Document.Pieces.Count==4 && session.UndoCount==count+1,"Bulk grading commits all sizes in one history entry",checks);
+            Check(studio.Document.Pieces.Skip(1).Select(p=>p.Metadata?.Quantity).SequenceEqual(new int?[]{2,null,3})
+                && studio.Document.Pieces[0].Metadata?.Quantity==7,
+                "Bulk grading applies each entered quantity without copying or changing the source",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"One undo removes the complete bulk grading batch",checks);
         }
         finally { SynchronizationContext.SetSynchronizationContext(old); }
@@ -9308,5 +9325,3 @@ internal static class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
-
-
