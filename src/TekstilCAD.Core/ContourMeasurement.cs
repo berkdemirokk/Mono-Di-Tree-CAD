@@ -4,7 +4,7 @@ namespace TekstilCAD.Core;
 public enum ContourDirection { Forward, Backward }
 
 /// <summary>A path between stored vertices. Direction is required only for closed contours.</summary>
-public sealed record ContourPath(IReadOnlyList<Point2> Points, bool Closed, int StartIndex, int EndIndex, ContourDirection? Direction = null);
+public sealed record ContourPath(IReadOnlyList<Point2> Points, bool Closed, int StartIndex, int EndIndex, ContourDirection? Direction = null, bool FullLoop = false);
 
 /// <summary>Lengths in millimetres; SignedDifference is second minus first.</summary>
 public sealed record SeamEdgeComparison(double FirstLength, double SecondLength, double SignedDifference, double AbsoluteDifference);
@@ -41,10 +41,13 @@ public static class ContourMeasurement
         if (path.Closed && count > 1 && points[0] == points[count - 1]) count--;
         int start = path.StartIndex == count ? 0 : path.StartIndex;
         int end = path.EndIndex == count ? 0 : path.EndIndex;
-        if (start == end) return 0;
+        if (path.FullLoop && (!path.Closed || start != end))
+            throw new ArgumentException("Tam tur için kapalı konturda aynı başlangıç ve bitiş noktasını seçin.", nameof(path));
+        if (start == end && !path.FullLoop) return 0;
         int step = path.Closed ? path.Direction == ContourDirection.Forward ? 1 : -1 : end > start ? 1 : -1;
         double sum = 0, correction = 0;
-        for (int current = start; current != end;)
+        int current = start;
+        do
         {
             int next = current + step;
             if (path.Closed) next = (next + count) % count;
@@ -55,7 +58,7 @@ public static class ContourMeasurement
             sum = updated;
             if (!double.IsFinite(sum)) throw new ArgumentOutOfRangeException(nameof(path), "Kontur uzunluğu hesaplanamadı.");
             current = next;
-        }
+        } while (current != end);
         return sum;
     }
 

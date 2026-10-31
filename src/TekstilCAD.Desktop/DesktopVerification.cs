@@ -8178,7 +8178,7 @@ internal static class DesktopVerification
     }
     private static void VerifySeamLengthComparison(MainWindow studio,List<string> checks)
     {
-        var a=new PatternPiece { Name="Kapalı kenar",Closed=true,Points=[new(0,0),new(10,0),new(10,5),new(0,5)] };
+        var a=new PatternPiece { Name="Kapalı kenar",Closed=true,Points=[new(0,0),new(10,0),new(10,5),new(0,5),new(0,0)] };
         var b=new PatternPiece { Name="Açık kenar",Closed=false,Points=[new(0,0),new(0,7)] };
         ProjectDocument Fixture()=>new() { Pieces=[a.Clone(),b.Clone()] };
         studio.LoadDocument(Fixture());studio.Select(a.Id);Guid? source=a.Id;
@@ -8188,6 +8188,7 @@ internal static class DesktopVerification
         var first=Side("first");var second=Side("second");
         var start=Control<ComboBox>(first,"Start");var end=Control<ComboBox>(first,"End");var direction=Control<ComboBox>(first,"Direction");
         var otherDirection=Control<ComboBox>(second,"Direction");
+        var fullLoop=Control<CheckBox>(first,"FullLoop");var otherFullLoop=Control<CheckBox>(second,"FullLoop");
         var preview=Control<FrameworkElement>(first,"Preview");
         var result=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(window)!;
         var compare=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(window)!;
@@ -8254,6 +8255,48 @@ internal static class DesktopVerification
             Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
                 "Changing an endpoint clears the old comparison",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            // Full-loop mode must never silently interpret distinct endpoints as a partial path.
+            fullLoop.IsChecked=true;
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Changing full-loop mode clears the previous result and preview",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Tam tur için") && !result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Full loop rejects distinct endpoints without a misleading partial measurement",checks);
+            end.SelectedIndex=0;
+            foreach(var selectedDirection in new[]{0,1})
+            {
+                direction.SelectedIndex=selectedDirection;
+                compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                path=(ContourPath)preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview)!;
+                Check(result.Text.Contains("1. yol: 30 mm") && path.FullLoop && path.StartIndex==path.EndIndex &&
+                    path.Direction==(selectedDirection==0 ? ContourDirection.Forward : ContourDirection.Backward),
+                    $"Full loop measures the complete contour in direction {selectedDirection}",checks);
+            }
+            end.SelectedIndex=4; // Explicit repeated closing vertex aliases vertex zero.
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            path=(ContourPath)preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview)!;
+            Check(result.Text.Contains("1. yol: 30 mm") && path.FullLoop && path.StartIndex==0 && path.EndIndex==4,
+                "Full loop accepts the repeated closing vertex as the starting vertex",checks);
+            fullLoop.IsChecked=false;
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Turning full-loop mode off clears the previous result and preview",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("1. yol: 0 mm") && !otherFullLoop.IsEnabled,
+                "Repeated endpoints retain zero-length behavior outside full-loop mode and open paths cannot enable it",checks);
+            var root=(FrameworkElement)window.Content;
+            root.Measure(new Size(650,500));root.Arrange(new Rect(0,0,650,500));root.UpdateLayout();
+            var scroller=Descendants<ScrollViewer>(root).Single(v=>v.IsAncestorOf(fullLoop));
+            void ScrollTo(FrameworkElement target)
+            {
+                var content=(FrameworkElement)scroller.Content;
+                var y=target.TransformToAncestor(content).Transform(new Point(0,0)).Y;
+                scroller.ScrollToVerticalOffset(Math.Max(0,y-10));root.UpdateLayout();
+            }
+            ScrollTo(fullLoop);
+            Check(scroller.ScrollableHeight>0 && FullyVisible(fullLoop,root) && FullyVisible(otherFullLoop,root),
+                $"Small comparison window can scroll to both full-loop controls: scroll={scroller.VerticalOffset}/{scroller.ScrollableHeight}, first={BoundsInRoot(fullLoop,root)} visible={VisibleBoundsInRoot(fullLoop,root)}, second={BoundsInRoot(otherFullLoop,root)} visible={VisibleBoundsInRoot(otherFullLoop,root)}",checks);
+            ScrollTo(compare);
+            Check(FullyVisible(compare,root),"Small comparison window can scroll to the comparison action",checks);
             source=null;typeof(SeamLengthComparisonWindow).GetMethod("CheckCurrent",PrivateInstance)!.Invoke(window,null);
             Check(!compare.IsEnabled && result.Text.Contains("geçersiz") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
                 "Workshop source change invalidates the result and preview",checks);
