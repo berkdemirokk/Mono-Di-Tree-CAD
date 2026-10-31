@@ -1060,7 +1060,7 @@ private struct ExperimentalPointEditor: View {
                 if saving {
                     Button("Kaydı iptal et") {
                         saveGeneration = UUID(); cancellingSave = true
-                        message = "Kayıt iptal ediliyor; geçici dosya temizleniyor…"
+                        message = "Kayıt iptal ediliyor; işlem tamamlanıyor…"
                     }
                     .disabled(cancellingSave)
                 }
