@@ -1,0 +1,30 @@
+# Offset: exact input and feature certificate design (experimental)
+
+Status: design prototype only. It is not connected to PatternTools.Offset and does not authorize any result. The failing lobed regression is not fixed by this document. `SmoothAllowanceRegressionTests.Radial` actually uses cos(3a), not two lobes. This worktree is based on 7c28f41; production comparison is 361b7f3.
+
+## Gap
+
+The existing morph diagnostic relates two *grid* contours, not the original binary64 input to the grid contour. A continuous simple morph with unchanged turn signs also does not preserve a notch's dimensions (see its existing depth 30 -> 3 example). The inverse-offset eight-grid sampled check cannot certify a sub-eight-grid feature. Existing selected-notch witness checks only caller-selected mouths and depth, not completeness or nested features.
+
+## Exact input -> grid morph: conservative executable specification
+
+Represent each finite input double exactly as sign * mantissa * 2^exponent by decoding IEEE-754 bits, including subnormals and signed zero. Multiply the integer mantissa by 1,000,000 exactly. Choose a shared positive power-of-two denominator D sufficiently large for all resulting coordinates; express every input coordinate as integer numerator S[i]. Express the *actual production* grid point as T[i] = D * grid[i], where grid[i] is obtained with the production binary64 multiply and round, not an assumed exact rational rounding. Use BigInteger throughout and reject nonfinite values, range failures, excessive input count or work budget. Snapshot once; require identical indexing, including explicit removal of the closing duplicate, and reject input mutation.
+
+Run the existing `OffsetMorphDiagnostic.TryVerify` algorithm generalized to arbitrary BigInteger points S and T (no conversion to long). Its quadratic turn polynomial checks strict sign over all t in [0,1]; its exact strict separation of every pair of nonadjacent swept edge convex hulls guarantees those edges cannot meet. Adjacent edges cannot overlap or collapse because their turn is strictly nonzero for every t. Together, this proves the indexed linear homotopy is a simple contour isotopy with unchanged turn signs, and in particular no local concavity disappears during input quantization. Strict rejection is expected for collinear vertices or conservative hull overlaps; a rejection is inconclusive. This is not a dimensional guarantee, nor a proof that the grid contour equals the true outward offset. Limit exponent/BigInteger work explicitly; allow cancellation. Never substitute rounded input or double arithmetic into these predicates.
+
+For a production implementation, prove and test the exact predicate implementation independently, including ±0, subnormals, halfway cases, nonfinite values, large origins, both winding directions, rotation of start index, one-grid and sub-grid notches, and cancellation/work-budget rejection. At boundaries the production multiply/round can differ from exact rational rounding; compare to its actual path. This check does not imply injectivity of arbitrary points along a segment under independent rounding; it proves the stated linear contour morph only.
+
+## Feature dimension and completeness certificate: sufficient, conservative scope
+
+An index pair a,b selects a nonempty forward chain, and all remaining edges form the complementary contour. Use exact arithmetic for source, grid, and candidate separately. Verify simple contours with equal orientation and the indexed morph condition above at each transition. On each contour require: nonzero chord b-a; every intermediate chain vertex has strictly positive oriented cross product with this chord, monotone chord projection in [0, |b-a|²], and at least one strictly concave turn. This defines one chord-relative recess. For required positive rational width W and depth H, prove
+
+    |b-a|² >= W²
+    max_v cross(b-a, v-a) > 0 and max_v cross(...)² >= H² |b-a|².
+
+Clear positive denominators before comparing BigIntegers. These conditions establish *minimum endpoint chord width and maximum perpendicular depth* only; they do not establish minimum aperture between sides, area, or physical clearance. Apply separate thresholds to input, grid and candidate; arbitrary fixed values have no general justification. To claim retained fraction p/q of the original, compare squared rational dimensions directly: candidateWidth²*q² >= sourceWidth²*p² and candidateDepth²*q² >= sourceDepth²*p², cross-multiplying the respective chord-length denominators, with positive widths/depths and p,q. Do the same for input->grid. A strict positive margin can make boundary behavior easier to interpret; equality is valid only if the desired policy permits it.
+
+Completeness remains indispensable: an independently verified set of indexed feature chains must cover every meaningful feature, including nested and overlapping ones. Fixed turn signs and a global/chosen subset of chord witnesses do not establish that set. One deliberately restrictive workable policy is to reject any contour unless an independently certified feature decomposition enumerates every required chain and nested feature, and each has passed both transition checks. The decomposition and its notion of meaningful feature remain undefined here: therefore no general-purpose acceptance rule or production fix is claimed. An orthogonal notch-specific width requirement may instead use exact minimum distance of its two certified side chains; endpoint chord width alone is insufficient. Offset correspondence and mathematical offset distance/joins also require independent certification.
+
+## Next verification
+
+Implement the BigInteger variant and a separate exact input adapter in a diagnostic-only module; test hand-derived exact rounding cases and independently computed rational witnesses before running the lobed sample in both windings. Investigate the actual rejection reason, then verify candidate forward boundary and all feature dimensions. Do not bypass the existing production guard or relax its tolerance on a passing sample. Root agent runs tests/builds under project coordination.
