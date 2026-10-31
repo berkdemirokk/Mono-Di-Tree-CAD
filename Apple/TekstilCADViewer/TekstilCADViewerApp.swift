@@ -825,7 +825,17 @@ private struct Drawing {
     // JSONSerialization does not promise to preserve a number's spelling.
     // Examine the first array element in the UTF-8 source before interpreting it.
     private static func envelopeVersion(_ data: Data) -> Int? {
-        var bytes = data.makeIterator()
+        // Desktop accepts BOM-marked UTF-8, UTF-16 and UTF-32 project files.
+        // Inspect decoded text only; retain the original bytes for saving.
+        let encoding: String.Encoding
+        if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) { encoding = .utf32LittleEndian }
+        else if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) { encoding = .utf32BigEndian }
+        else if data.starts(with: [0xff, 0xfe]) { encoding = .utf16LittleEndian }
+        else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
+        else { encoding = .utf8 }
+        guard var text = String(data: data, encoding: encoding) else { return nil }
+        if text.first == "\u{FEFF}" { text.removeFirst() }
+        var bytes = text.utf8.makeIterator()
         func nextNonWhitespace() -> UInt8? {
             while let byte = bytes.next() {
                 if byte != 0x20 && byte != 0x09 && byte != 0x0a && byte != 0x0d { return byte }

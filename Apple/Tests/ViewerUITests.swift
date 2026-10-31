@@ -280,6 +280,26 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
     }
 
+    func testDesktopBOMEncodedVersionedProjectsOpen() {
+        let project = #"[1,{"Name":"Kodlama testi","Pieces":[],"GradingRules":[]}]"#
+        let cases: [(String, String.Encoding, [UInt8])] = [
+            ("UTF-8", .utf8, [0xef, 0xbb, 0xbf]),
+            ("UTF-16 LE", .utf16LittleEndian, [0xff, 0xfe]),
+            ("UTF-16 BE", .utf16BigEndian, [0xfe, 0xff]),
+            ("UTF-32 LE", .utf32LittleEndian, [0xff, 0xfe, 0x00, 0x00]),
+            ("UTF-32 BE", .utf32BigEndian, [0x00, 0x00, 0xfe, 0xff])
+        ]
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        for (name, encoding, bom) in cases {
+            var data = Data(bom)
+            data.append(project.data(using: encoding)!)
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.staticTexts["Kodlama testi"].waitForExistence(timeout: 15), "Failed to open \(name)")
+            app.terminate()
+        }
+    }
     func testLargeNotchListDisclosesPreviewLimit() {
         let points = (0..<501).map { #"{"X":\#($0),"Y":0}"# }.joined(separator: ",")
         let marks = (0..<501).map { #"{"VertexIndex":\#($0),"Position":{"X":\#($0),"Y":0}}"# }.joined(separator: ",")
