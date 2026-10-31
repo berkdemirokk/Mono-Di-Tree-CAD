@@ -3287,6 +3287,20 @@ internal static class DesktopVerification
             && !status.Text.Contains("daha küçük bir pay",StringComparison.OrdinalIgnoreCase),
             "Failed asynchronous offset preserves document, reports error and restores controls",checks);
 
+        var pointIndex=(TextBox)typeof(TextileToolsWindow).GetField("vertexIndexInput",PrivateInstance)!.GetValue(tools)!;
+        var pointX=(TextBox)typeof(TextileToolsWindow).GetField("vertexXInput",PrivateInstance)!.GetValue(tools)!;
+        var pointY=(TextBox)typeof(TextileToolsWindow).GetField("vertexYInput",PrivateInstance)!.GetValue(tools)!;
+        var loadPoint=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili noktanın koordinatlarını yükle"));
+        pointIndex.Text="-1";
+        Check(!loadPoint.IsEnabled,"Invalid point index disables coordinate loading",checks);
+        pointIndex.Text="1";pointX.Text="999";pointY.Text="999";
+        var selectedPoint=((PatternPiece)sourceSelector.SelectedItem).Points[1];
+        var beforeLoading=studio.Document.Clone();
+        loadPoint.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(pointX.Text==MeasurementInput.Format(selectedPoint.X) && pointY.Text==MeasurementInput.Format(selectedPoint.Y)
+            && DocumentSession.ContentEquals(studio.Document,beforeLoading) && status.Text.Contains("Parça değiştirilmedi"),
+            "Point coordinate loading after a failed offset updates only the edit inputs",checks);
+
         // Exercise an intentionally long, actionable error at the minimum supported window size.
         status.Text="Dikiş payı uygulanmadı. "+string.Concat(Enumerable.Repeat("Kaynak konturu kontrol edin ve seçilen üretim payını doğrulatın. ",12))+"Son kontrol: kaynak parça korunmuştur.";
         root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();

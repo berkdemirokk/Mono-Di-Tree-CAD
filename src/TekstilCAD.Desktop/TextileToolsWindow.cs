@@ -774,6 +774,20 @@ public sealed class TextileToolsWindow : Window
         },()=>HasPiece());
         vertexIndexInput=index;vertexXInput=px;vertexYInput=py;
         bool ValidIndex()=>source.SelectedItem is PatternPiece p&&int.TryParse(index.Text,out var value)&&value>=0&&value<p.Points.Count;
+        Note(panel,"Mevcut koordinatları yüklemek X/Y girişlerindeki değerleri değiştirir; parçayı değiştirmez.");
+        Button(panel,"Seçili noktanın koordinatlarını yükle",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
+            var selected=Piece();
+            var current=workspace.Document.Pieces.FirstOrDefault(p=>p.Id==selected.Id);
+            if(!ReferenceEquals(current,selected))throw new InvalidOperationException("Kaynak parça değişti; seçimi yenileyin.");
+            if(!int.TryParse(index.Text,out var pointIndex) || pointIndex<0 || pointIndex>=current.Points.Count)
+                throw new ArgumentException("Geçerli bir nokta indeksi seçin.");
+            var point=current.Points[pointIndex];
+            var x=MeasurementInput.Format(point.X);var y=MeasurementInput.Format(point.Y);
+            px.Text=x;py.Text=y;
+            result.Foreground=StudioTheme.Muted;result.Text=$"{pointIndex} numaralı noktanın mevcut koordinatları yüklendi. Parça değiştirilmedi; taşıma için koordinatları düzenleyin.";
+        },()=>ValidIndex());
         AutomationProperties.SetHelpText(index,"Seçili parçanın 0'dan başlayan mevcut nokta indeksini girin; ekleme bu noktadan sonra yapılır.");
         AutomationProperties.SetHelpText(px,"Yeni noktanın X koordinatını milimetre cinsinden girin; ondalık için virgül veya nokta kullanın.");
         AutomationProperties.SetHelpText(py,"Yeni noktanın Y koordinatını milimetre cinsinden girin; ondalık için virgül veya nokta kullanın.");
