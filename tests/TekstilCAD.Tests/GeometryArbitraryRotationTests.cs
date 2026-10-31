@@ -4,6 +4,23 @@ namespace TekstilCAD.Tests;
 
 public sealed class GeometryArbitraryRotationTests
 {
+    [Theory]
+    [InlineData(0.1)]
+    [InlineData(17)]
+    [InlineData(45)]
+    [InlineData(89.999)]
+    [InlineData(-37)]
+    [InlineData(179.5)]
+    public void TypicalGarmentOutlinePreservesEdges(double angle)
+    {
+        var source = new[] { new Point2(12.5, 8.25), new Point2(51.75, 11.5),
+            new Point2(63, 35.25), new Point2(47.5, 89), new Point2(8.75, 82.5) };
+        var result = Geometry.Rotate(source, angle, new Point2(30, 40));
+        Assert.Equal(source.Length, result.Count);
+        for (int i = 0; i < source.Length; i++)
+            Assert.Equal(Geometry.Distance(source[i], source[(i + 1) % source.Length]),
+                Geometry.Distance(result[i], result[(i + 1) % result.Count]), 9);
+    }
     [Fact]
     public void OrdinaryRectangleRotatesAboutPivot()
     {

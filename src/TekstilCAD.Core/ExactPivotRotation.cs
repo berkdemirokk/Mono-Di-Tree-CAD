@@ -102,18 +102,20 @@ internal static class ExactPivotRotation
         BigInteger tx = rx.N << (rx.E - e), ty = ry.N << (ry.E - e);
         var scale = BigInteger.Max(BigInteger.Abs(sx), BigInteger.Abs(sy));
         var error = BigInteger.Max(BigInteger.Abs(tx - sx), BigInteger.Abs(ty - sy));
-        // Check each meaningful component independently, including nonzero
-        // rounded values. Components at coefficient-noise scale are exempt:
-        // near-axis cancellation can create them from the approximated trig
-        // coefficients alone. This threshold is a heuristic, not a proof of
-        // preservation of every shallow feature.
-        const long componentFloor = 1_000_000_000_000_000;
+        // Component-relative error is ill-conditioned near an axis. Bound the
+        // vector's maximum absolute error relative to its largest component.
         const long tolerance = 1_000_000_000;
-        if (BigInteger.Abs(sx) * componentFloor > scale &&
-            BigInteger.Abs(tx - sx) * tolerance > BigInteger.Abs(sx)) return false;
-        if (BigInteger.Abs(sy) * componentFloor > scale &&
-            BigInteger.Abs(ty - sy) * tolerance > BigInteger.Abs(sy)) return false;
-        return error * tolerance <= scale;
+        if (error * tolerance > scale) return false;
+
+        // Coefficient approximation can introduce a tiny spurious component.
+        // Above a 2^-48 coefficient-noise envelope, require its sign to survive.
+        // This guard cannot establish preservation of all shallow features.
+        return PreservesSign(sx, tx, scale) && PreservesSign(sy, ty, scale);
+    }
+
+    private static bool PreservesSign(BigInteger exact, BigInteger rounded, BigInteger scale)
+    {
+        return (BigInteger.Abs(exact) << 48) <= scale || exact.Sign == rounded.Sign;
     }
 }
 
