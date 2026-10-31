@@ -1205,7 +1205,8 @@ private struct NotchPicker: View {
 
     private func matching(_ piece: Drawing.Piece, index: Int) -> [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty || ModelSearch.matches(piece.displayName(index: index), query: query) { return piece.notches }
+        if query.isEmpty || ModelSearch.matches(piece.displayName(index: index), query: query) ||
+            ModelSearch.matches(piece.selectionDetails(index: index), query: query) { return piece.notches }
         return piece.notches.filter { point in
             let p = piece.points[point]
             return NotchSearch.matches(query: query, index: point, x: p.x.formatted(), y: p.y.formatted())
@@ -1220,12 +1221,17 @@ private struct NotchPicker: View {
                     let piece = pieces[pieceIndex]
                     let indices = matchingPoints[pieceIndex]
                     if !indices.isEmpty {
-                        Section(piece.displayName(index: pieceIndex)) {
+                        Section {
                             ForEach(indices, id: \.self) { pointIndex in
                                 let point = piece.points[pointIndex]
                                 Button(NotchSearch.label(index: pointIndex, x: point.x.formatted(), y: point.y.formatted())) {
                                     select(pieceIndex, pointIndex)
                                 }
+                            }
+                        } header: {
+                            VStack(alignment: .leading) {
+                                Text(piece.displayName(index: pieceIndex))
+                                Text(piece.selectionDetails(index: pieceIndex)).font(.caption)
                             }
                         }
                     }
@@ -1234,7 +1240,7 @@ private struct NotchPicker: View {
                     Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
                 }
             }
-            .searchable(text: $search, prompt: "Parça, nokta veya koordinat ara")
+            .searchable(text: $search, prompt: "Parça, beden, nokta veya koordinat ara")
             .navigationTitle("Köşe işaretleri")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }

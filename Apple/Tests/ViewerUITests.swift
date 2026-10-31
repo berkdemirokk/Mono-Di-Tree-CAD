@@ -1046,6 +1046,29 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
     }
 
+    func testNotchSearchDistinguishesSameNamedPiecesBySize() {
+        let fixture = #"[6,{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Metadata":{"Size":"S"},"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Kol","Closed":false,"Points":[{"X":20,"Y":20},{"X":30,"Y":30}],"Metadata":{"Size":"XL"},"Notches":[{"VertexIndex":1,"Position":{"X":30,"Y":30}}]}]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Beden: S")).firstMatch.exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Beden: XL")).firstMatch.exists)
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("XL")
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.exists)
+        let notch = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 1")).firstMatch
+        XCTAssertTrue(notch.waitForExistence(timeout: 5))
+        notch.tap()
+        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nokta 1")).firstMatch.exists)
+    }
+
     func testPieceAndNotchSearchAcceptUnaccentedNames() {
         let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"Ön Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Arka Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":5,"Y":5}]}]}]"#
         let app = XCUIApplication()
