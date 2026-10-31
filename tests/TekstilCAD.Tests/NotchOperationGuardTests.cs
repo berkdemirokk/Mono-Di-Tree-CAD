@@ -16,7 +16,7 @@ public class NotchOperationGuardTests
     public void AllDerivedPatternEditsRejectWithoutChangingSource()
     {
         var p=Closed();var before=p.Clone();
-        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),()=>PatternTools.InsertEdgeMidpoint(p,0)];
+        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1)];
         foreach(var action in operations) { var ex=Assert.Throws<ArgumentException>(action);Assert.Contains("Çentik",ex.Message); }
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
     }
@@ -24,7 +24,6 @@ public class NotchOperationGuardTests
     public void OpenPathOperationsRejectMarksFromEitherSource()
     {
         var marked=Open();var other=new PatternPiece { Closed=false,Points=[new(10,10),new(15,10)] };
-        Assert.Throws<ArgumentException>(()=>PatternTools.ReverseOpenPath(marked));
         Assert.Throws<ArgumentException>(()=>OpenPathClosure.Close(marked,20));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(marked,other,0));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(other,marked,0));

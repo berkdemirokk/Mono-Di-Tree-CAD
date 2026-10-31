@@ -771,9 +771,9 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
         Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
-        Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
+        Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir; mevcut işaretler köşelerini izler. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
         Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
-        Note(panel,"Açık konturun başlangıç ve bitiş yönünü ters çevirebilirsiniz. Noktaların konumu değişmez. Varsa serileme kuralı yeniden gözden geçirilmelidir.");
+        Note(panel,"Açık konturun başlangıç ve bitiş yönünü ters çevirebilirsiniz. Noktaların ve işaretlerin konumu değişmez; indeksleri tersine döner. Varsa serileme kuralı yeniden gözden geçirilmelidir.");
         Button(panel,"Açık kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseOpenPathAsync(),()=>source.SelectedItem is PatternPiece { Closed:false });
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
         Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
@@ -822,8 +822,6 @@ public sealed class TextileToolsWindow : Window
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse ? default : new Point2(Number(xText!),Number(yText!));
             var selected=Piece();var sourceId=selected.Id;
-            if(selected.Notches is not null && operation is (VertexEdit.Midpoint or VertexEdit.Reverse))
-                throw new InvalidOperationException("Bu işlem işaretli konturlarda henüz desteklenmiyor.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");

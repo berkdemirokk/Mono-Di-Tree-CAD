@@ -200,18 +200,22 @@ public static class PatternTools
     /// The input and its point collection remain unchanged.</summary>
     public static PatternPiece ReverseOpenPath(PatternPiece piece,CancellationToken cancellationToken=default)
     {
-        var points=SnapshotPointEdit(piece,cancellationToken);
+        var points=SnapshotPointEdit(piece,cancellationToken,allowNotches:true);
+        var marks=SnapshotNotchIndices(piece,points,cancellationToken);
         if(piece.Closed)throw new ArgumentException("Yalnız açık konturun yönü ters çevrilebilir.");
         ValidatePointEdit(false,points,cancellationToken);
-        points.Reverse();cancellationToken.ThrowIfCancellationRequested();
-        return NewPiece(piece,points,"",preserveGrainline:true);
+        points.Reverse();
+        if(marks is not null)for(var i=0;i<marks.Length;i++)marks[i]=points.Count-1-marks[i];
+        cancellationToken.ThrowIfCancellationRequested();
+        return NewPiece(piece,points,"",preserveGrainline:true,notchIndices:marks);
     }
 
     /// <summary>Splits the edge after the selected vertex at its exact binary64 midpoint.
     /// Rejects a midpoint that cannot be represented exactly, preserving the original edge.</summary>
     public static PatternPiece InsertEdgeMidpoint(PatternPiece piece,int afterIndex,CancellationToken cancellationToken = default)
     {
-        var points=SnapshotPointEdit(piece,cancellationToken);
+        var points=SnapshotPointEdit(piece,cancellationToken,allowNotches:true);
+        _=SnapshotNotchIndices(piece,points,cancellationToken);
         if(afterIndex<0 || afterIndex>=points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
         if(piece.Closed && points.Count>1 && points[0]==points[^1] && afterIndex==points.Count-1)afterIndex=0;
         if(!piece.Closed && afterIndex==points.Count-1)throw new ArgumentException("Açık konturun son noktasından sonra kenar yok.");

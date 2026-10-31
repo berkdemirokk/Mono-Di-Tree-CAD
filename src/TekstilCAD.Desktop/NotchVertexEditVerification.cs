@@ -44,22 +44,43 @@ internal static class NotchVertexEditVerification
                 }
                 finally { tools.Close(); }
             }
+            foreach(var operation in new[] { "midpoint","reverse" })
+            {
+                var selected=piece.Clone();selected.Closed=operation!="reverse";
+                var selectedRule=new GradingRuleSet { SourcePieceId=selected.Id,SourceClosed=selected.Closed,SourcePoints=[..selected.Points],Deltas=[..rule.Deltas] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[selected],GradingRules=[selectedRule] });studio.Select(selected.Id);var before=studio.Document.Clone();
+                var tools=new TextileToolsWindow(studio);
+                try
+                {
+                    Wait(operation=="midpoint" ? tools.InsertEdgeMidpointAsync("0") : tools.ReverseOpenPathAsync());
+                    var current=studio.Document.Pieces.Single();
+                    if(current.Notches!.Single().VertexIndex!=2 || current.Notches[0].Position!=new Point2(10,0) ||
+                       !studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(selectedRule.SourcePoints) || session.UndoCount!=1)
+                        throw new InvalidOperationException("Marked midpoint or reversal lost marker or source rule.");
+                    if(!session.Undo() || !DocumentSession.ContentEquals(before,studio.Document))throw new InvalidOperationException("Marked midpoint or reversal did not undo.");
+                    checks.Add($"Marked {operation} retains marker and source grading rule and undoes");
+                }
+                finally { tools.Close(); }
+            }
+            foreach(var operation in new[] { "move","midpoint","reverse" })
             foreach(var cancel in new[] { false,true })
             {
-                studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+                var selected=piece.Clone();selected.Closed=operation!="reverse";
+                var selectedRule=new GradingRuleSet { SourcePieceId=selected.Id,SourceClosed=selected.Closed,SourcePoints=[..selected.Points],Deltas=[..rule.Deltas] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[selected],GradingRules=[selectedRule] });studio.Select(selected.Id);
                 var tools=new TextileToolsWindow(studio);using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
                 tools.BeforeVertexMoveForVerification=()=> { reached.Set();release.Wait(); };
                 Task? task=null;
                 try
                 {
-                    task=tools.MoveVertexAsync("1","11","0");
+                    task=operation switch { "midpoint"=>tools.InsertEdgeMidpointAsync("0"),"reverse"=>tools.ReverseOpenPathAsync(),_=>tools.MoveVertexAsync("1","11","0") };
                     typeof(DesktopVerification).GetMethod("PumpUntil",BindingFlags.NonPublic|BindingFlags.Static)!.Invoke(null,[new Func<bool>(()=>reached.IsSet)]);
                     if(cancel)((CancellationTokenSource)typeof(TextileToolsWindow).GetField("vertexMoveCancellation",PrivateInstance)!.GetValue(tools)!).Cancel();
                     else studio.Commit("Eşzamanlı değişiklik",()=>studio.Document.Name="Değişti");
                     var expected=studio.Document.Clone();var undo=session.UndoCount;release.Set();Wait(task);
                     if(!DocumentSession.ContentEquals(expected,studio.Document) || session.UndoCount!=undo)
                         throw new InvalidOperationException("Stale or cancelled marked edit changed the project.");
-                    checks.Add(cancel ? "Cancelled marked vertex edit preserves project" : "Stale marked vertex edit does not overwrite project changes");
+                    checks.Add(cancel ? $"Cancelled marked {operation} preserves project" : $"Stale marked {operation} does not overwrite project changes");
                 }
                 finally { release.Set();if(task is not null)Wait(task);tools.Close(); }
             }
