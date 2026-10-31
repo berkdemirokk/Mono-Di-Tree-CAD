@@ -7,6 +7,7 @@
       - path: Tests/ModelLoadStateTests.swift
       - path: Tests/ExperimentalPieceRenameTests.swift
       - path: Tests/ContourMeasureTests.swift
+      - path: Tests/ContourViewportTests.swift
       - path: Tests/ExperimentalContourValidationTests.swift
       - path: Tests/ExperimentalPointMoveJSONTests.swift
       - path: Tests/Fixtures/desktop-synthetic-point.tcad

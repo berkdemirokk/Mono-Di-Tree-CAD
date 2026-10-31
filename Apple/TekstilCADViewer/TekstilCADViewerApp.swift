@@ -1401,19 +1401,8 @@ private struct DrawingView: View {
                     if let grain = piece.grain { points.append(contentsOf: [grain.start, grain.end]) }
                 }
             }
-            guard let first = points.first else { return }
-            var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-            for p in points { minX = min(minX, p.x); maxX = max(maxX, p.x); minY = min(minY, p.y); maxY = max(maxY, p.y) }
-            let width = maxX - minX, height = maxY - minY
-            guard width > 0 || height > 0 else { return }
-            let horizontalScale = width > 0 ? max(Double(size.width) - 32, 1) / max(width, 1e-100) : .infinity
-            let verticalScale = height > 0 ? max(Double(size.height) - 32, 1) / max(height, 1e-100) : .infinity
-            let scale = min(horizontalScale, verticalScale)
-            let offsetX = (Double(size.width) - width * scale) / 2
-            let offsetY = (Double(size.height) - height * scale) / 2
-            func position(_ p: Drawing.Point) -> CGPoint {
-                CGPoint(x: offsetX + (p.x - minX) * scale, y: Double(size.height) - offsetY - (p.y - minY) * scale)
-            }
+            guard let viewport = ContourViewport(points: points, width: Double(size.width), height: Double(size.height)) else { return }
+            func position(_ p: Drawing.Point) -> CGPoint { viewport.position(p) }
             var remainingNotches = Self.maximumVisibleNotches
             for piece in pieces {
                 guard let first = piece.points.first else { continue }

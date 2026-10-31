@@ -1,0 +1,39 @@
+import Foundation
+
+// Fits finite model coordinates without multiplying by an enormous scale.
+struct ContourViewport {
+    let minX: Double
+    let minY: Double
+    let extent: Double
+    let fitted: Double
+    let offsetX: Double
+    let offsetY: Double
+    let height: Double
+
+    init?(points: [ContourMeasure.Point], width: Double, height: Double) {
+        guard let first = points.first, width.isFinite, height.isFinite, width > 0, height > 0 else { return nil }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for p in points {
+            guard p.x.isFinite, p.y.isFinite else { return nil }
+            minX = min(minX, p.x); maxX = max(maxX, p.x)
+            minY = min(minY, p.y); maxY = max(maxY, p.y)
+        }
+        let modelWidth = maxX - minX, modelHeight = maxY - minY
+        let extent = max(modelWidth, modelHeight)
+        guard extent.isFinite, extent > 0 else { return nil }
+        let normalizedWidth = modelWidth / extent, normalizedHeight = modelHeight / extent
+        let availableWidth = max(width - 32, 1), availableHeight = max(height - 32, 1)
+        let fitted = min(normalizedWidth > 0 ? availableWidth / normalizedWidth : .infinity,
+                         normalizedHeight > 0 ? availableHeight / normalizedHeight : .infinity)
+        guard fitted.isFinite else { return nil }
+        self.minX = minX; self.minY = minY; self.extent = extent; self.fitted = fitted
+        self.offsetX = (width - normalizedWidth * fitted) / 2
+        self.offsetY = (height - normalizedHeight * fitted) / 2
+        self.height = height
+    }
+
+    func position(_ point: ContourMeasure.Point) -> CGPoint {
+        CGPoint(x: offsetX + ((point.x - minX) / extent) * fitted,
+                y: height - offsetY - ((point.y - minY) / extent) * fitted)
+    }
+}
