@@ -103,4 +103,19 @@ public class DxfSupplementalGeometryTests
         Assert.Equal(4095,report.Records.Length);
         Assert.DoesNotContain(report.Records,r=>r.EntityType=="POLYLINE");
     }
+    [Fact]
+    public void SourceCountsIncludeRecordsBeyondBoundedSampleAndSeparateSections()
+    {
+        var blocks="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nB\n"+
+            "0\nSPLINE\n70\n8\n0\nPOLYLINE\n70\n2\n0\nVERTEX\n10\n0\n20\n0\n0\nSEQEND\n"+
+            "0\nENDBLK\n0\nENDSEC\n";
+        var many=string.Concat(Enumerable.Repeat("0\nPOINT\n10\n0\n20\n0\n",4097));
+        using var stream=new MemoryStream(Encoding.UTF8.GetBytes(blocks+Drawing(many+"0\nSPLINE\n70\n8\n")));
+        var report=DxfFormat.Import(stream,"inventory").SupplementalGeometry!;
+        Assert.True(report.Truncated);
+        Assert.Contains(report.SourceCounts,c=>c.Section=="BLOCKS" && c.EntityType=="SPLINE" && c.Count==1);
+        Assert.Contains(report.SourceCounts,c=>c.Section=="BLOCKS" && c.EntityType=="POLYLINE" && c.Count==1);
+        Assert.Contains(report.SourceCounts,c=>c.Section=="ENTITIES" && c.EntityType=="POINT" && c.Count==4097);
+        Assert.Contains(report.SourceCounts,c=>c.Section=="ENTITIES" && c.EntityType=="SPLINE" && c.Count==1);
+    }
 }

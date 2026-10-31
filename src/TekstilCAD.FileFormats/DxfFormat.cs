@@ -55,8 +55,12 @@ public sealed record DxfSupplementalGeometryRecord(int SourceOrdinal, string Sec
     public ImmutableArray<DxfSupplementalChildRecord> Children { get; init; } = ImmutableArray<DxfSupplementalChildRecord>.Empty;
 }
 /// <summary>Bounded whole records for selected geometry. Inspection includes unassessed polyline candidates; this is not a complete loss report.</summary>
+/// <summary>Source code-0 record count, not placed instances or textile pieces.</summary>
+public sealed record DxfSupplementalSourceCount(string Section, string EntityType, int Count);
 public sealed record DxfSupplementalGeometryReport(ImmutableArray<DxfSupplementalGeometryRecord> Records, bool Truncated)
 {
+    /// <summary>Full source inventory independent of the bounded sample. Polyline counts include plain and unsupported records; no importability is implied.</summary>
+    public ImmutableArray<DxfSupplementalSourceCount> SourceCounts { get; init; } = ImmutableArray<DxfSupplementalSourceCount>.Empty;
     /// <summary>True only when general import assessed skipped polylines. False does not imply that no unsupported polyline exists.</summary>
     public bool SkippedPolylinesAssessed { get; init; }
     /// <summary>True when the report also includes polyline candidates that have not been evaluated for support.</summary>
@@ -1428,8 +1432,25 @@ public static class DxfFormat
             totalRecords+=recordCount;totalGroups+=groupCount;totalCharacters+=characters;
             ordinal=last;
         }
+        // Count the entire source independently of the bounded sample.
+        var counts=new Dictionary<(string Section,string Type),int>();
+        section="";
+        foreach(var entity in entities)
+        {
+            token.ThrowIfCancellationRequested();
+            if(entity.Type=="SECTION") { section=entity.Text(2);continue; }
+            if(entity.Type=="ENDSEC") { section="";continue; }
+            if(section is not ("ENTITIES" or "BLOCKS") ||
+               entity.Type is not ("POINT" or "ARC" or "CIRCLE" or "ELLIPSE" or "SPLINE" or "POLYLINE" or "LWPOLYLINE"))continue;
+            var key=(section,entity.Type);
+            counts.TryGetValue(key,out var count);
+            counts[key]=count+1;
+        }
+        var sourceCounts=counts.OrderBy(pair=>pair.Key.Section,StringComparer.Ordinal)
+            .ThenBy(pair=>pair.Key.Type,StringComparer.Ordinal)
+            .Select(pair=>new DxfSupplementalSourceCount(pair.Key.Section,pair.Key.Type,pair.Value)).ToImmutableArray();
         return new DxfSupplementalGeometryReport(records.ToImmutable(),truncated || skippedPolylinesTruncated)
-            { SkippedPolylinesAssessed=skippedPolylines is not null, IncludesUnassessedPolylineCandidates=includePolylineCandidates };
+            { SkippedPolylinesAssessed=skippedPolylines is not null, IncludesUnassessedPolylineCandidates=includePolylineCandidates, SourceCounts=sourceCounts };
     }
 
     // Header declarations are hints, not an encoding detector. Only inspect
