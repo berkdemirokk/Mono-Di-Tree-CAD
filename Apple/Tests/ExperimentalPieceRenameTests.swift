@@ -37,4 +37,22 @@ final class ExperimentalPieceRenameTests: XCTestCase {
         let input = Data("{\"Pieces\":[{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"old\"}]}".utf8)
         XCTAssertThrowsError(try ExperimentalPieceRename.replacing(in: input, snapshot: input, pieceID: second, with: String(repeating: "😀", count: 513)))
     }
+    func testLegacySelectionUsesExactSnapshotWithDuplicateNames() throws {
+        let input = Data("{\"Pieces\":[{\"Name\":\"same\"},{\"Name\":\"same\"}]}".utf8)
+        let output = try ExperimentalPieceRename.replacingLegacy(in: input, snapshot: input, pieceIndex: 1, expectedName: "same", with: "changed")
+        XCTAssertEqual(String(data: output, encoding: .utf8), "{\"Pieces\":[{\"Name\":\"same\"},{\"Name\":\"changed\"}]}")
+        let changed = Data("{\"Pieces\":[{\"Name\":\"same\"},{\"Name\":\"same\"},{\"Name\":\"new\"}]}".utf8)
+        XCTAssertThrowsError(try ExperimentalPieceRename.replacingLegacy(in: changed, snapshot: input, pieceIndex: 1, expectedName: "same", with: "changed"))
+        XCTAssertThrowsError(try ExperimentalPieceRename.replacingLegacy(in: input, snapshot: input, pieceIndex: 1, expectedName: "other", with: "changed"))
+    }
+    func testLegacySelectionRejectsIdentifiedPieceAndDuplicateKeys() {
+        let identified = Data("{\"Pieces\":[{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"same\"}]}".utf8)
+        XCTAssertThrowsError(try ExperimentalPieceRename.replacingLegacy(in: identified, snapshot: identified, pieceIndex: 0, expectedName: "same", with: "changed"))
+        let duplicates = Data("{\"Pieces\":[{\"Name\":\"same\",\"Na\\u006de\":\"same\"}]}".utf8)
+        XCTAssertThrowsError(try ExperimentalPieceRename.replacingLegacy(in: duplicates, snapshot: duplicates, pieceIndex: 0, expectedName: "same", with: "changed"))
+    }
+    func testIDSelectionAllowsIDLessNeighbors() throws {
+        let input = "{\"Pieces\":[{\"Name\":\"legacy\"},{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"old\"}]}"
+        XCTAssertEqual(try edit(input), "{\"Pieces\":[{\"Name\":\"legacy\"},{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"Yeni \\\"ad\\\"\"}]}")
+    }
 }

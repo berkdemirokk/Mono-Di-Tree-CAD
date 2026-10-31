@@ -8,6 +8,16 @@ import CoreFoundation
 enum ExperimentalPieceRename {
     enum Failure: Error { case invalid }
     static func replacing(in data: Data, snapshot: Data, pieceID: UUID, with name: String) throws -> Data {
+        try replacing(in: data, snapshot: snapshot, selector: .id(pieceID), with: name)
+    }
+
+    /// The index and expected name must originate from the exact same snapshot.
+    static func replacingLegacy(in data: Data, snapshot: Data, pieceIndex: Int, expectedName: String, with name: String) throws -> Data {
+        try replacing(in: data, snapshot: snapshot, selector: .legacy(pieceIndex, expectedName), with: name)
+    }
+
+    private enum Selector { case id(UUID), legacy(Int, String) }
+    private static func replacing(in data: Data, snapshot: Data, selector: Selector, with name: String) throws -> Data {
         guard data == snapshot, data.count <= 8 * 1024 * 1024, name.utf16.count <= 1024,
               String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
         // Release the parsed object graph before scanning and copying.
@@ -24,10 +34,21 @@ enum ExperimentalPieceRename {
             var ids = Set<UUID>()
             var selected: Int?
             for (index, piece) in pieces.enumerated() {
-                guard let idText = piece["Id"] as? String, let id = UUID(uuidString: idText),
-                      id.uuidString != "00000000-0000-0000-0000-000000000000",
-                      ids.insert(id).inserted, piece["Name"] is String else { throw Failure.invalid }
-                if id == pieceID { selected = index }
+                guard let pieceName = piece["Name"] as? String else { throw Failure.invalid }
+                var id: UUID?
+                if let rawID = piece["Id"] {
+                    guard let idText = rawID as? String, let parsed = UUID(uuidString: idText),
+                          parsed.uuidString != "00000000-0000-0000-0000-000000000000",
+                          ids.insert(parsed).inserted else { throw Failure.invalid }
+                    id = parsed
+                }
+                switch selector {
+                case .id(let wanted) where id == wanted: selected = index
+                case .legacy(let wantedIndex, let expectedName) where index == wantedIndex:
+                    guard id == nil, pieceName == expectedName else { throw Failure.invalid }
+                    selected = index
+                default: break
+                }
             }
             guard let selected else { throw Failure.invalid }
             return selected
