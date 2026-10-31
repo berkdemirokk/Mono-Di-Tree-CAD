@@ -13,10 +13,11 @@ enum ExperimentalPointMoveJSON {
         let root = try JSONSerialization.jsonObject(with: data)
         let project: [String: Any]
         let versioned: Bool
+        let version: Int
         if let array = root as? [Any], array.count == 2, let v = array[0] as? NSNumber,
            CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.rounded() == v.doubleValue,
-           [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true }
-        else if let body = root as? [String: Any] { project = body; versioned = false }
+           [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
+        else if let body = root as? [String: Any] { project = body; versioned = false; version = 0 }
         else { throw Failure.invalid }
         // Restrict to a known schema: unknown fields may describe geometry dependencies.
         guard Set(project.keys).isSubset(of: ["Name", "Pieces", "GradingRules"]), project["Name"] is String,
@@ -28,9 +29,28 @@ enum ExperimentalPointMoveJSON {
         guard let projectName = project["Name"] as? String, projectName.utf16.count <= 1024 else { throw Failure.invalid }
         var ids = Set<UUID>(); var selected: Int?; var total = 0
         for (i, piece) in pieces.enumerated() {
-            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed"]), let name = piece["Name"] as? String, name.utf16.count <= 1024,
+            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata"]), let name = piece["Name"] as? String, name.utf16.count <= 1024,
                   let raw = piece["Id"] as? String, let id = UUID(uuidString: raw),
                   id.uuidString != "00000000-0000-0000-0000-000000000000", ids.insert(id).inserted else { throw Failure.invalid }
+            if let rawMetadata = piece["Metadata"] {
+                guard version >= 2, let metadata = rawMetadata as? [String: Any],
+                      Set(metadata.keys).isSubset(of: ["Role", "Size", "Material", "Quantity"]) else { throw Failure.invalid }
+                var hasValue = false
+                for key in ["Role", "Size", "Material"] {
+                    guard let value = metadata[key], !(value is NSNull) else { continue }
+                    guard let value = value as? String, !value.isEmpty, value.utf16.count <= 128,
+                          value == value.trimmingCharacters(in: .whitespacesAndNewlines),
+                          !value.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) else { throw Failure.invalid }
+                    if key == "Role" && value != "Kesim" && value != "Yardımcı" { throw Failure.invalid }
+                    hasValue = true
+                }
+                if let quantity = metadata["Quantity"], !(quantity is NSNull) {
+                    guard let n = quantity as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
+                          !["f", "d"].contains(String(cString: n.objCType)), n.doubleValue >= 1, n.doubleValue <= 100_000 else { throw Failure.invalid }
+                    hasValue = true
+                }
+                guard hasValue else { throw Failure.invalid }
+            }
             guard let flag = piece["Closed"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(),
                   let otherPoints = piece["Points"] as? [[String: Any]], otherPoints.count >= (flag.boolValue ? 3 : 2), otherPoints.count <= 10_000,
                   otherPoints.allSatisfy({ point in

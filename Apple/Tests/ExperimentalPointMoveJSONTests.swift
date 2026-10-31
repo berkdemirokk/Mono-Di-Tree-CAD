@@ -67,4 +67,20 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         rejects(two.replacingOccurrences(of: #""X":1,"Y":1"#, with: #""X":1e-999,"Y":1"#))
         rejects(two.replacingOccurrences(of: #""X":1,"Y":1"#, with: #""X":100000001,"Y":1"#))
     }
+
+    func testVersionTwoMetadataIsPreservedAndInvalidDependenciesRejected() throws {
+        let metadata = #", "Metadata":{"Role":"Kesim","Size":"M","Material":"Pamuk","Quantity":2}"#
+        let withMetadata = input.replacingOccurrences(of: "[4,", with: "[2,")
+            .replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# + metadata)
+        let data = Data(withMetadata.utf8)
+        let output = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 1, to: .init(x: 5, y: 0))
+        XCTAssertEqual(output, Data(withMetadata.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).utf8))
+        for invalid in [withMetadata.replacingOccurrences(of: "[2,", with: "[1,"),
+                        withMetadata.replacingOccurrences(of: #""Quantity":2"#, with: #""Quantity":0"#),
+                        withMetadata.replacingOccurrences(of: #""Role":"Kesim"#, with: #""Role":"Bilinmiyor"#),
+                        withMetadata.replacingOccurrences(of: metadata, with: #", "Grainline":null"#)] {
+            let bytes = Data(invalid.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
+        }
+    }
 }
