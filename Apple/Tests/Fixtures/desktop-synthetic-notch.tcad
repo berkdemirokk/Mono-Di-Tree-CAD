@@ -1,0 +1,46 @@
+[
+  6,
+  {
+    "Name": "Yeni proje",
+    "Pieces": [
+      {
+        "Id": "c393b219-2be8-41e7-8665-ed900a1cbf5e",
+        "Name": "\u0130\u015Faret testi",
+        "Points": [
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 10,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 10,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Notches": [
+          {
+            "VertexIndex": 0,
+            "Position": {
+              "X": 0,
+              "Y": 0,
+              "IsFinite": true
+            }
+          }
+        ]
+      }
+    ],
+    "GradingRules": []
+  }
+]

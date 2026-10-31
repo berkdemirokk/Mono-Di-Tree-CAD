@@ -1,6 +1,22 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testDesktopSavedSyntheticVersionSixFixture() throws {
+        // DesktopVerification.VerifyVertexNotches creates and saves this project.
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-notch", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Yeni proje"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir."].exists)
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5)); picker.tap()
+        let row = app.buttons["İşaret testi"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("1 köşe işareti"))
+    }
     func testVersionSixNotchPreviewAndInvalidNotches() {
         let project = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0,"IsFinite":true}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()
@@ -16,6 +32,10 @@ final class ViewerUITests: XCTestCase {
         app.terminate()
         for invalid in [project.replacingOccurrences(of: #""X":4,"Y":0,"IsFinite"#, with: #""X":3,"Y":0,"IsFinite"#),
                         project.replacingOccurrences(of: #""VertexIndex":1"#, with: #""VertexIndex":true"#),
+                        project.replacingOccurrences(of: #""VertexIndex":1"#, with: #""VertexIndex":1.0"#),
+                        project.replacingOccurrences(of: #""VertexIndex":1"#, with: #""VertexIndex":1,"\u0056ertexIndex":1"#),
+                        project.replacingOccurrences(of: "[6,", with: "[6.0,"),
+                        project.replacingOccurrences(of: #""IsFinite":true"#, with: #""IsFinite":false"#),
                         project.replacingOccurrences(of: "[6,", with: "[5,")] {
             app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(invalid.utf8).base64EncodedString()
             app.launch()

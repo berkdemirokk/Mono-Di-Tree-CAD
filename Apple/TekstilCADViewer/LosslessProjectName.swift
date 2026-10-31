@@ -12,11 +12,12 @@ enum LosslessProjectName {
     // The viewer already parsed JSON; scan the original UTF-8 bytes for
     // duplicate keys without rewriting or normalizing the project.
     static func validateUniqueKeys(_ data: Data) throws {
-        guard data.count <= 64 * 1024 * 1024, String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
+        // Bound the second scan until a streaming parser is available.
+        guard data.count <= maximumEditBytes, String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
         try data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
-            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0)
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: true)
             _ = try scanner.projectName()
         }
     }
@@ -56,12 +57,15 @@ enum LosslessProjectName {
         let bytes: UnsafeBufferPointer<UInt8>
         var i = 0
         var nameRange: Range<Int>?
+        var strictV6 = false
         mutating func whitespace() { while i < bytes.count && [9, 10, 13, 32].contains(bytes[i]) { i += 1 } }
         mutating func take(_ c: UInt8) throws { whitespace(); guard i < bytes.count, bytes[i] == c else { throw Failure.invalid }; i += 1 }
         mutating func projectName() throws -> Range<Int> {
             whitespace()
             if i < bytes.count && bytes[i] == 91 {
-                try take(91); try value(depth: 0); try take(44); try object(depth: 0, project: true); try take(93)
+                try take(91); whitespace(); let start = i; try value(depth: 0)
+                if strictV6 && String(bytes: bytes[start..<i], encoding: .utf8) != "6" { throw Failure.invalid }
+                try take(44); try object(depth: 0, project: true); try take(93)
             } else { try object(depth: 0, project: true) }
             whitespace()
             guard i == bytes.count, let range = nameRange else { throw Failure.invalid }
@@ -97,7 +101,12 @@ enum LosslessProjectName {
                       keys.insert(key).inserted else { throw Failure.invalid }
                 let isName = project && key == "Name"
                 try take(58); whitespace()
-                if isName {
+                if strictV6 && key == "VertexIndex" {
+                    let start = i; try value(depth: depth + 1)
+                    guard let token = String(bytes: bytes[start..<i], encoding: .utf8),
+                          !token.isEmpty, token.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                          (token == "0" || token.first != "0"), Int32(token) != nil else { throw Failure.invalid }
+                } else if isName {
                     guard nameRange == nil, i < bytes.count, bytes[i] == 34 else { throw Failure.invalid }
                     nameRange = try string()
                 } else { try value(depth: depth + 1) }

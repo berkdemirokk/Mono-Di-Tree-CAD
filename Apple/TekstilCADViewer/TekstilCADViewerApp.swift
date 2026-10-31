@@ -707,6 +707,7 @@ private struct Drawing {
         } else if let body = root as? [String: Any] { object = body; formatVersion = 0 }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
         if formatVersion == 6 {
+            guard data.count <= LosslessProjectName.maximumEditBytes else { throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.") }
             do { try LosslessProjectName.validateUniqueKeys(data) }
             catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları ve UTF-8 kodlamasını kontrol edin.") }
         }
