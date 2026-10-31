@@ -57,12 +57,14 @@ public static class PerCopyOrthogonalNesting
             var mapping = expansion.Placements[i];
             int angle = angles[i];
             long vertices = expansion.Pieces[i].Points.Count;
-            work += 2L * vertices * vertices;
+            work += vertices * vertices;
             if (work > NestingEngine.MaximumValidationWork)
                 throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı.", nameof(source));
             if (unique.Add((mapping.SourcePieceId, angle)))
             {
-                work += 2L * vertices * vertices;
+                // Rotation validates both contours; the engine validates each distinct
+                // transformed contour. Charge conservatively per source and angle.
+                work += 3L * vertices * vertices;
                 if (work > NestingEngine.MaximumValidationWork)
                     throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı.", nameof(source));
             }

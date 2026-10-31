@@ -74,7 +74,7 @@ public static class AutomaticPerCopyNesting
             long v = originals[id].Points.Count;
             long per = 2L * v * v;
             // Charge candidate validation and downstream per-copy validation up front.
-            Charge(per * angles.Length); Charge(per * counts[id]);
+            Charge(per * angles.Length); Charge(v * v * counts[id]);
         }
         var candidates = new Dictionary<Guid, List<Candidate>>();
         double usable = fabricWidth - 2 * edgeMargin;
@@ -122,7 +122,7 @@ public static class AutomaticPerCopyNesting
             if (unique.Add((entry.Key.Item1, entry.Value)))
             {
                 long v = originals[entry.Key.Item1].Points.Count;
-                Charge(2L * v * v);
+                Charge(3L * v * v);
             }
         }
         cancellationToken.ThrowIfCancellationRequested();
@@ -160,8 +160,8 @@ public static class AutomaticPerCopyNesting
             alternate.Add(key, angle);
             if (chosen[key] != angle) differs = true;
             long v = originals[mapping.SourcePieceId].Points.Count;
-            extra += 2L * v * v;
-            if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 2L * v * v;
+            extra += v * v;
+            if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 3L * v * v;
         }
         var narrow = new Dictionary<(Guid, int), int>();
         var narrowUnique = new HashSet<(Guid, int)>();
@@ -173,8 +173,8 @@ public static class AutomaticPerCopyNesting
             var option = candidates[mapping.SourcePieceId].OrderBy(c => c.Width).ThenBy(c => c.Height).First();
             narrow.Add(key, option.Angle);
             long v = originals[mapping.SourcePieceId].Points.Count;
-            narrowWork += 2L * v * v;
-            if (narrowUnique.Add((mapping.SourcePieceId, option.Angle))) narrowWork += 2L * v * v;
+            narrowWork += v * v;
+            if (narrowUnique.Add((mapping.SourcePieceId, option.Angle))) narrowWork += 3L * v * v;
         }
         // Narrow pieces are not always the shortest marker: a wider, shorter
         // orientation can reduce the height of every shelf. Verify that policy
@@ -189,8 +189,8 @@ public static class AutomaticPerCopyNesting
             var option = candidates[mapping.SourcePieceId].OrderBy(c => c.Height).ThenBy(c => c.Width).First();
             shortRows.Add(key, option.Angle);
             long v = originals[mapping.SourcePieceId].Points.Count;
-            shortWork += 2L * v * v;
-            if (shortUnique.Add((mapping.SourcePieceId, option.Angle))) shortWork += 2L * v * v;
+            shortWork += v * v;
+            if (shortUnique.Add((mapping.SourcePieceId, option.Angle))) shortWork += 3L * v * v;
         }
         // A consistent second allowed orientation can pack better than choosing
         // each piece independently by width or height. It remains a bounded
@@ -206,8 +206,8 @@ public static class AutomaticPerCopyNesting
             int angle = options[Math.Min(1, options.Count - 1)].Angle;
             second.Add(key, angle);
             long v = originals[mapping.SourcePieceId].Points.Count;
-            secondWork += 2L * v * v;
-            if (secondUnique.Add((mapping.SourcePieceId, angle))) secondWork += 2L * v * v;
+            secondWork += v * v;
+            if (secondUnique.Add((mapping.SourcePieceId, angle))) secondWork += 3L * v * v;
         }
         foreach (var (angles, cost, needed) in new[]
         {

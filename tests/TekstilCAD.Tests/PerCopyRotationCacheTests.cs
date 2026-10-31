@@ -33,8 +33,8 @@ public sealed class PerCopyRotationCacheTests
     [Fact]
     public void CachedRotationWorkIsCountedOnceButDifferentAnglesCountSeparately()
     {
-        // Engine work is 48 million; one rotation adds 2 million, a second exceeds the limit.
-        const int vertices = 1000, quantity = 24;
+        // Each placement costs one million; each source/angle costs three million.
+        const int vertices = 1000, quantity = 47;
         var piece = new PatternPiece { Points = Enumerable.Range(0, vertices).Select(i =>
             new Point2(Math.Cos(i * 2 * Math.PI / vertices) * 10, Math.Sin(i * 2 * Math.PI / vertices) * 10)).ToList(),
             Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = quantity } };
