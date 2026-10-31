@@ -1488,6 +1488,8 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not {} p) return;
+        if(propertyDrafts.ContainsKey(p.Id))
+        { SetStatus("Parça silinmedi · Önce bu parçanın alan taslağını uygulayın veya taslakları inceleyip kaldırın.");return; }
         var count=Document.GradingRules.Count(r=>r.SourcePieceId==p.Id);
         if(count>0)
         {
@@ -1502,7 +1504,7 @@ public class MainWindow : Window
                 : MessageBox.Show(this,$"‘{shownName}’ parçası ve bu parçaya bağlı {count} serileme kuralı silinecek. Geri alma yalnızca bu oturumdaki işlem geçmişi açıkken mümkündür; uygulama kapandıktan sonra bu geçmiş korunmaz. Devam edilsin mi?",
                     "Serileme kuralları da silinecek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
             if(!confirmed)return;
-            if(!ReferenceEquals(Document,originalDocument) || SelectedId!=p.Id || !DocumentSession.ContentEquals(Document,originalContent))
+            if(!ReferenceEquals(Document,originalDocument) || SelectedId!=p.Id || propertyDrafts.ContainsKey(p.Id) || !DocumentSession.ContentEquals(Document,originalContent))
             { SetStatus("Proje veya seçim değişti · Parça silinmedi. Tekrar kontrol edin.");return; }
         }
         var committed=false;

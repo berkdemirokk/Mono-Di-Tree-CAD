@@ -9158,6 +9158,12 @@ internal static class DesktopVerification
             Check(DocumentSession.ContentEquals(before,studio.Document) && canvas.HasPendingDrawing && status.Text.Contains("silinmedi"),
                 "Toolbar deletion preserves an unfinished drawing and the selected piece",checks);
             canvas.CancelDrawing();studio.SetTool("Seç");
+            var nameField=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+            nameField.Text="Uygulanmamış ad";
+            DeleteKey();
+            Check(DocumentSession.ContentEquals(before,studio.Document) && studio.SelectedId==piece.Id && session.UndoCount==undo && session.RedoCount==redo && nameField.Text=="Uygulanmamış ad" && status.Text.Contains("taslağ"),
+                "Delete preserves the selected piece and its unapplied property draft",checks);
+            nameField.Text=piece.Name;
             var asked=0;var askedCorrectly=false;
             studio.ConfirmDeleteWithGradingForVerification=(candidate,count)=>
             { asked++;askedCorrectly=candidate.Id==piece.Id && count==1;return false; };
@@ -9175,6 +9181,10 @@ internal static class DesktopVerification
             DeleteKey();
             Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Name=="Değişen parça" && studio.Document.GradingRules.Count==1 && status.Text.Contains("silinmedi"),
                 "A project change while confirming prevents deletion",checks);
+            studio.ConfirmDeleteWithGradingForVerification=(_,_)=> { nameField.Text="Onay sırasında taslak";return true; };
+            DeleteKey();
+            Check(studio.Document.Pieces.Count==1 && nameField.Text=="Onay sırasında taslak" && status.Text.Contains("silinmedi"),
+                "A draft entered while confirming prevents deletion and remains available",checks);
             var plain=new PatternPiece { Name="Kuralsız",Points=[new(0,0),new(10,0),new(0,10)] };
             studio.LoadDocument(new ProjectDocument { Pieces=[plain] });studio.Select(plain.Id);
             var unexpectedPrompt=false;
