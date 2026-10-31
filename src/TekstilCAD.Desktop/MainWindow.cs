@@ -362,8 +362,10 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center))));
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X))));
+        selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center)), "Parçayı merkezinden saat yönünün tersine döndür"));
+        selectionCommands.Add(AddButton(transforms, "90° ters döndür", () => Transform((points,center) => Geometry.Rotate(points,-90,center)), "Parçayı merkezinden saat yönünde döndür"));
+        selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X)), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        selectionCommands.Add(AddButton(transforms, "Yatay eksende aynala", () => Transform((points,center) => Geometry.Mirror(points,false,center.Y)), "Parçayı merkezinden geçen yatay eksene göre aynala"));
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);

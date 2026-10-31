@@ -6634,10 +6634,26 @@ internal static class DesktopVerification
             Math.Abs(studio.Document.Pieces[0].Points[i].X+points[i].X)<1e-8 && Math.Abs(studio.Document.Pieces[0].Points[i].Y-points[i].Y)<1e-8),
             "Batch mirroring matches analytic coordinates for 10000 points",checks);
         Invoke(studio,"Undo");Check(studio.Document.Pieces[0].Points.SequenceEqual(points),"Undo restores the pre-mirror contour",checks);
+        var expectedReverse=TekstilCAD.Core.Geometry.Rotate(points,-90,center);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"90° ters döndür")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedReverse),"Reverse rotation applies clockwise coordinates",checks);
+        Invoke(studio,"Undo");
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(points),"Undo restores the contour after reverse rotation",checks);
+        Invoke(studio,"Redo");
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedReverse),"Redo restores reverse rotation",checks);
+        Invoke(studio,"Undo");
+        var expectedHorizontal=TekstilCAD.Core.Geometry.Mirror(points,false,center.Y);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"Yatay eksende aynala")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedHorizontal),"Horizontal-axis mirror applies reflected coordinates",checks);
+        Invoke(studio,"Undo");
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(points),"Undo restores the contour after horizontal-axis mirror",checks);
+        Invoke(studio,"Redo");
+        Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedHorizontal),"Redo restores horizontal-axis mirror",checks);
+        Invoke(studio,"Undo");
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
-        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° döndür")).ToArray();
+        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° döndür")||Equals(b.Content,"90° ters döndür")||Equals(b.Content,"Yatay eksende aynala")).ToArray();
         studio.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
         foreach(var button in transformButtons)button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(canvas.HasPendingDrawing && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
