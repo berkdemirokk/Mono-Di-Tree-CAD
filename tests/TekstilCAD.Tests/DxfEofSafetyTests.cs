@@ -28,4 +28,15 @@ public class DxfEofSafetyTests
         var error = Assert.Throws<InvalidDataException>(() => Import(Drawing + trailingRecords));
         Assert.Contains("EOF", error.Message);
     }
+
+    [Theory]
+    [InlineData("0\nSECTION\nwrong\nENTITIES\n", "3. satır", "grup kodu")]
+    [InlineData("0\r\nSECTION\r\n2", "3. satır", "grup değeri eksik")]
+    [InlineData("0\nEOF\n999\nextra\n", "3. satır", "EOF")]
+    public void MalformedGroupReportsItsSourceLine(string text, string line, string reason)
+    {
+        var error = Assert.Throws<InvalidDataException>(() => Import(text));
+        Assert.Contains(line, error.Message);
+        Assert.Contains(reason, error.Message);
+    }
 }
