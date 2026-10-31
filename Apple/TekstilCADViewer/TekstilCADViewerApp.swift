@@ -19,7 +19,7 @@ private struct ContentView: View {
     @State private var editedName = ""
     @State private var importedName = ""
     @State private var isSaving = false
-    @State private var saveNotice = false
+    @State private var saveNotice: String?
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -39,14 +39,13 @@ private struct ContentView: View {
             Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
-            if saveNotice { Text("Model telefona kaydedildi.").font(.caption).foregroundStyle(.secondary) }
+            if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
                     .disabled(isSaving || isLoading)
             }
             if let project {
                 Button("Proje adını değiştir ve kopya kaydet") {
-                    editedName = project.name
                     showingNameEditor = true
                 }.disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
                 if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
@@ -107,9 +106,10 @@ private struct ContentView: View {
         }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
-            Button("İptal", role: .cancel) {}
+            Button("İptal", role: .cancel) { editedName = project?.name ?? "" }
             Button("Yeni kopyayı kaydet") { saveRenamedCopy() }
-        } message: { Text("Yeni bir model kaydedilir; açık dosya değişmez.") }
+                .disabled(editedName.utf16.count > 1024)
+        } message: { Text("Yeni bir model kaydedilir; açık dosya değişmez. Proje adı en fazla 1024 UTF-16 birimi olabilir.") }
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary { url in
                 showingLibrary = false
@@ -131,6 +131,7 @@ private struct ContentView: View {
                 selectedPiece = nil
                 drawingRevision = UUID()
                 project = drawing
+                editedName = drawing.name
                 sourceData = data
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
                     importedData = data
@@ -139,13 +140,13 @@ private struct ContentView: View {
             } catch { self.error = error.localizedDescription }
         }
         #endif
-        .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+        .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
     }
 
     private func openModel(_ url: URL, imported: Bool) {
-        saveNotice = false
+        saveNotice = nil
         let request = UUID()
         loadRequest = request
         isLoading = true
@@ -165,6 +166,7 @@ private struct ContentView: View {
                     selectedPiece = nil
                     drawingRevision = UUID()
                     project = drawing
+                    editedName = drawing.name
                     sourceData = data
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
@@ -178,6 +180,7 @@ private struct ContentView: View {
     private func saveRenamedCopy() {
         guard let data = sourceData else { return }
         let name = editedName
+        saveNotice = nil
         isSaving = true
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
@@ -187,7 +190,9 @@ private struct ContentView: View {
             DispatchQueue.main.async {
                 isSaving = false
                 switch result {
-                case .success: saveNotice = true
+                case .success:
+                    editedName = project?.name ?? ""
+                    saveNotice = "Yeni kopya Modellerim bölümüne kaydedildi."
                 case .failure(let failure): error = failure.localizedDescription
                 }
             }
@@ -196,13 +201,14 @@ private struct ContentView: View {
     private func saveImportedModel() {
         guard let data = importedData else { return }
         let name = importedName
+        saveNotice = nil
         isSaving = true
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try ModelStore.save(data, name: name) }
             DispatchQueue.main.async {
                 isSaving = false
                 switch result {
-                case .success: importedData = nil; saveNotice = true
+                case .success: importedData = nil; saveNotice = "Model telefona kaydedildi."
                 case .failure(let failure): error = failure.localizedDescription
                 }
             }

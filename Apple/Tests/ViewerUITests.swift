@@ -37,7 +37,7 @@ final class ViewerUITests: XCTestCase {
             app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
             app.launch()
 
-            let alert = app.alerts["Dosya açılamadı"]
+            let alert = app.alerts["İşlem tamamlanamadı"]
             XCTAssertTrue(alert.waitForExistence(timeout: 15))
             XCTAssertTrue(alert.staticTexts[message].exists)
             alert.buttons["Tamam"].tap()
@@ -101,7 +101,11 @@ final class ViewerUITests: XCTestCase {
         let name = String(repeating: "A", count: 105) + "/%Son"
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: oldName.count) + name)
         alert.buttons["Yeni kopyayı kaydet"].tap()
-        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Yeni kopya Modellerim bölümüne kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Proje adını değiştir ve kopya kaydet"].tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Seçim Testi")
+        alert.buttons["İptal"].tap()
         app.terminate()
         app.launchArguments.removeAll { $0 == "--ui-test-fixture" || $0 == "--ui-test-library-reset" }
         app.launchEnvironment.removeValue(forKey: "TCAD_UI_TEST_FIXTURE")
@@ -125,6 +129,37 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         confirmation.buttons["Sil"].tap()
         XCTAssertTrue(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].waitForExistence(timeout: 5))
+    }
+
+    func testFailedRenameKeepsEnteredNameForRetry() {
+        // Preview accepts this JSON, but lossless editing rejects duplicate name keys.
+        let fixture = #"{"Name":"Orijinal","Name":"Orijinal","Pieces":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+
+        let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 15))
+        rename.tap()
+        let editor = app.alerts["Proje adını değiştir"]
+        let field = editor.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let original = field.value as? String ?? ""
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: original.count) + "Yeni ad")
+        editor.buttons["Yeni kopyayı kaydet"].tap()
+
+        let failure = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        failure.buttons["Tamam"].tap()
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Yeni ad")
+        editor.buttons["İptal"].tap()
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Orijinal")
     }
 
     func testHiddenFilenameIsVisibleAndCanBeRemoved() throws {
