@@ -104,9 +104,8 @@ public static class ProductionNestingPlan
             material ??= p.Metadata.Material;
             if (!string.Equals(material, p.Metadata.Material, StringComparison.Ordinal)) throw NestingPieceError.Create(p.Id,"Parçanın malzemesi diğer seçili parçalardan farklı; farklı malzemeler aynı pastalda yerleştirilemez.");
             if (p.Points is null || p.Points.Count > NestingEngine.MaximumVerticesPerPiece) throw NestingPieceError.Create(p.Id,"Parça noktaları eksik veya sınırı aşıyor.");
-            // The engine validates both source and placed contours; reject before
-            // expansion using the same work budget.
-            copies += n; vertices += (long)n * p.Points.Count; validation += 2L * n * p.Points.Count * p.Points.Count;
+            // Each placed copy is checked; identical source snapshots share validation.
+            copies += n; vertices += (long)n * p.Points.Count; validation += (n + 1L) * p.Points.Count * p.Points.Count;
             if (copies > NestingEngine.MaximumPieces || vertices > NestingEngine.MaximumTotalVertices || validation > NestingEngine.MaximumValidationWork)
                 throw new ArgumentException("Adetler pastal kaynak sınırlarını aşıyor.");
         }

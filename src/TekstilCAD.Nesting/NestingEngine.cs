@@ -41,6 +41,19 @@ public static class NestingEngine
     public const int MaximumTotalVertices = 200_000;
     public const long MaximumValidationWork = 50_000_000;
 
+    // Keys are detached snapshots and are never modified during arrangement.
+    private sealed class ContourComparer : IEqualityComparer<List<Point2>>
+    {
+        public bool Equals(List<Point2>? a, List<Point2>? b) =>
+            ReferenceEquals(a, b) || (a is not null && b is not null && a.SequenceEqual(b));
+        public int GetHashCode(List<Point2> points)
+        {
+            var hash = new HashCode();
+            foreach (var point in points) hash.Add(point);
+            return hash.ToHashCode();
+        }
+    }
+
     // Limit relative changes to checked edge and anchor vectors and axis spans.
     // This arithmetic guard cannot prove preservation of every shallow local
     // feature, and is not a manufacturing tolerance or physical accuracy proof.
@@ -180,28 +193,41 @@ public static class NestingEngine
             if(piece is null)throw new ArgumentException("Geçersiz parça.",nameof(pieces));
             if(piece.Id==Guid.Empty || !ids.Add(piece.Id))throw new ArgumentException("Her pastal parçasının kimliği benzersiz olmalıdır.",nameof(pieces));
         }
-        // Preflight the complete batch before any quadratic intersection traversal.
-        long totalVertices = 0, validationWork = 0;
+        // Bound copies before taking detached snapshots. The caller must not mutate
+        // input while it is being copied; all later work uses only snapshots.
+        long totalVertices = 0;
         foreach (var piece in pieces)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (piece is null) throw new ArgumentException("Geçersiz parça.", nameof(pieces));
             if (piece.Points is null) throw NestingPieceError.Create(piece.Id,"Geçersiz parça.",nameof(pieces));
             if (piece.Points.Count > MaximumVerticesPerPiece)
                 throw NestingPieceError.Create(piece.Id,$"Kontur sınırı: {MaximumVerticesPerPiece} nokta.",nameof(pieces));
             totalVertices += piece.Points.Count;
-            // Both the source contour and translated contour undergo a
-            // quadratic self-intersection traversal; budget both up front.
-            validationWork += 2L * piece.Points.Count * piece.Points.Count;
-            if (totalVertices > MaximumTotalVertices || validationWork > MaximumValidationWork)
+            if (totalVertices > MaximumTotalVertices)
+                throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı; daha küçük iş grupları kullanın.", nameof(pieces));
+        }
+        var snapshots = new List<PatternPiece>(pieces.Count);
+        var uniqueContours = new HashSet<List<Point2>>(new ContourComparer());
+        long validationWork = 0;
+        foreach (var piece in pieces)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = piece.Clone();
+            snapshots.Add(snapshot);
+            long cost = (long)snapshot.Points.Count * snapshot.Points.Count;
+            // Every placed copy is checked. Only identical source snapshots share validation.
+            validationWork += cost;
+            if (uniqueContours.Add(snapshot.Points)) validationWork += cost;
+            if (validationWork > MaximumValidationWork)
                 throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı; daha küçük iş grupları kullanın.", nameof(pieces));
         }
         var entries = new List<(PatternPiece Piece, Bounds2 Bounds, double Area, int Index)>();
 
-        for (int index = 0; index < pieces.Count; index++)
+        var validatedContours = new Dictionary<List<Point2>, (Bounds2 Bounds, double Area)>(new ContourComparer());
+        for (int index = 0; index < snapshots.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var piece = pieces[index];
+            var piece = snapshots[index];
             if (piece is null) throw new ArgumentException("Pastal için kapalı, en az üç noktalı konturlar gereklidir.", nameof(pieces));
             if (piece.Points is null || !piece.Closed || piece.Points.Count < 3)
                 throw NestingPieceError.Create(piece.Id,"Pastal için kapalı, en az üç noktalı konturlar gereklidir.",nameof(pieces));
@@ -217,10 +243,16 @@ public static class NestingEngine
                 Math.Abs(grain.Start.X)>MaximumDimension || Math.Abs(grain.Start.Y)>MaximumDimension ||
                 Math.Abs(grain.End.X)>MaximumDimension || Math.Abs(grain.End.Y)>MaximumDimension || grain.Start==grain.End))
                 throw NestingPieceError.Create(piece.Id,"İplik yönü uçları geçersiz veya çalışma sınırı dışında.",nameof(pieces));
-            var bounds = Geometry.Bounds(piece.Points);
-            var area = Math.Abs(Geometry.SignedArea(piece.Points));
-            if (!double.IsFinite(area) || area <= Geometry.Epsilon || Geometry.HasSelfIntersections(piece.Points, true, cancellationToken))
-                throw NestingPieceError.Create(piece.Id,"Kontur kendisiyle kesişmemeli ve sıfırdan büyük alan taşımalıdır.",nameof(pieces));
+            if (!validatedContours.TryGetValue(piece.Points, out var geometry))
+            {
+                var sourceBounds = Geometry.Bounds(piece.Points);
+                var sourceArea = Math.Abs(Geometry.SignedArea(piece.Points));
+                if (!double.IsFinite(sourceArea) || sourceArea <= Geometry.Epsilon || Geometry.HasSelfIntersections(piece.Points, true, cancellationToken))
+                    throw NestingPieceError.Create(piece.Id,"Kontur kendisiyle kesişmemeli ve sıfırdan büyük alan taşımalıdır.",nameof(pieces));
+                geometry = (sourceBounds, sourceArea);
+                validatedContours.Add(piece.Points, geometry);
+            }
+            var (bounds, area) = geometry;
             if (bounds.Width > usableWidth)
                 throw NestingPieceError.Create(piece.Id,"Parça kumaş enine sığmıyor; yönü değiştirilmedi.",nameof(fabricWidth));
             entries.Add((piece, bounds, area, index));
