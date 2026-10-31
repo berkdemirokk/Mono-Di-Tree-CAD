@@ -4357,6 +4357,11 @@ internal static class DesktopVerification
         Check(File.ReadAllBytes(appeared).SequenceEqual(appearedBytes) && File.ReadAllBytes(source).SequenceEqual(sourceBytes)
             && DocumentSession.ContentEquals(before,studio.Document) && name.Text=="Korunan taslak",
             "Save As rejects a file created after capture while preserving the draft",checks);
+        try { studio.SaveNewCopyTo(appeared);throw new InvalidOperationException("New copy overwrote an existing target."); }
+        catch(IOException) { }
+        Check(File.ReadAllBytes(appeared).SequenceEqual(appearedBytes) && File.ReadAllBytes(source).SequenceEqual(sourceBytes)
+            && DocumentSession.ContentEquals(before,studio.Document) && name.Text=="Korunan taslak",
+            "New copy rejects an existing destination and preserves source and draft",checks);
         var same=studio.CaptureSaveAsDestination(source);
         Check(same==ProjectStorage.CaptureVersion(source),"Save As accepts the unchanged currently open path",checks);
         try { studio.CaptureSaveAsDestination(source,true);throw new InvalidOperationException("Compatibility Save As accepted the open path."); }
@@ -4404,6 +4409,11 @@ internal static class DesktopVerification
         studio.SaveAsTo(rescue,rescueVersion);
         Check(ProjectStorage.Load(rescue).Pieces.Single().Name=="Korunan taslak" && !File.Exists(destination),
             "Save As rescues open document to a separate path after its source was removed",checks);
+        var copy=Path.Combine(work,"new-copy-success.tcad");
+        var rescueBytes=File.ReadAllBytes(rescue);
+        studio.SaveNewCopyTo(copy);
+        Check(ProjectStorage.Load(copy).Pieces.Single().Name=="Korunan taslak" && File.ReadAllBytes(rescue).SequenceEqual(rescueBytes),
+            "New copy creates a separate project and preserves the original",checks);
     }
     private static void VerifyDxfPiecePreview(MainWindow studio,string work,string reportPath,List<string> checks)
     {

@@ -244,6 +244,7 @@ public class MainWindow : Window
         projectOpenCancel.Visibility=Visibility.Collapsed;
         var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
+        AddButton(files, "Yeni adla kaydet…", SaveNewCopy, "Yeni bir dosya oluşturarak kaydet", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
@@ -1723,6 +1724,23 @@ public class MainWindow : Window
         {
             throw new InvalidOperationException($"Dosya kaydedildi: {SafePieceName(Path.GetFullPath(path))}. Ancak görünüm veya kurtarma durumu güncellenemedi. Kaydedilen dosya ve çalışma alanını kontrol edin.",ex);
         }
+    }
+    private void SaveNewCopy()
+    {
+        EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
+        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
+        var dlg=new SaveFileDialog { Title="Yeni proje dosyası oluştur", Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+" - kopya.tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory(), OverwritePrompt=false };
+        if(dlg.ShowDialog(this)!=true)return;
+        SaveNewCopyTo(dlg.FileName);
+    }
+    internal void SaveNewCopyTo(string path)
+    {
+        var expected=CaptureSaveAsDestination(path,true);
+        if(expected.Sha256 is not null)
+            throw new IOException("Bu adla bir dosya zaten var; üzerine yazılmadı. Yeni bir ad seçin.");
+        // The missing-version token commits with fail-if-exists, including when
+        // another process creates the destination after this capture.
+        SaveAsTo(path,expected,true);
     }
     private void SaveAs() => SaveAsCore(false);
     private void SaveAsCore(bool compatibilityAcknowledged)
