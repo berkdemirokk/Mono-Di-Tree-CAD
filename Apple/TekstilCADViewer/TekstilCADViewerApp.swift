@@ -84,6 +84,10 @@ private struct ContentView: View {
                     Text("\(project.pieces.filter { !$0.hasMinimumContourPoints }.count) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if project.pieces.contains(where: { !$0.notches.isEmpty }) {
+                    Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if !project.pieces.isEmpty {
                     Button { showingPieces = true } label: {
                         HStack {
@@ -639,6 +643,7 @@ private struct Drawing {
         let quantity: Int?
         let grainStatus: String
         let grain: Grain?
+        let notches: [Int]
         var hasMinimumContourPoints: Bool { points.count >= (closed ? 3 : 2) }
 
         func displayName(index: Int) -> String {
@@ -654,7 +659,7 @@ private struct Drawing {
                 return "\(label): \(value)"
             }
             let warning = hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]
-            return (["Parça \(index + 1)"] + fields + warning).joined(separator: " · ")
+            return (["Parça \(index + 1)"] + fields + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
     }
     let name: String
@@ -695,15 +700,21 @@ private struct Drawing {
     static func load(_ data: Data) throws -> Drawing {
         let root = try JSONSerialization.jsonObject(with: data)
         let object: [String: Any]
+        let formatVersion: Int
         if let array = root as? [Any], array.count == 2,
-           let version = array[0] as? Int, (1...5).contains(version), let body = array[1] as? [String: Any] {
-            object = body
-        } else if let body = root as? [String: Any] { object = body }
+           let version = array[0] as? Int, (1...6).contains(version), let body = array[1] as? [String: Any] {
+            object = body; formatVersion = version
+        } else if let body = root as? [String: Any] { object = body; formatVersion = 0 }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
+        if formatVersion == 6 {
+            do { try LosslessProjectName.validateUniqueKeys(data) }
+            catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları ve UTF-8 kodlamasını kontrol edin.") }
+        }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
         var total = 0
+        var totalNotches = 0
         var pieces: [Piece] = []
         var pieceRenameIdentitiesValid = true
         var pieceIDs = Set<UUID>()
@@ -718,6 +729,24 @@ private struct Drawing {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }
                 return Point(x: x, y: y)
+            }
+            var notchIndices: [Int] = []
+            if let value = raw["Notches"] {
+                guard formatVersion == 6, let marks = value as? [[String: Any]], !marks.isEmpty, marks.count <= 10_000 else { throw ViewerError.message("Köşe işareti listesi veya sürümü geçersiz.") }
+                totalNotches += marks.count
+                guard totalNotches <= 200_000 else { throw ViewerError.message("Köşe işareti sayısı sınırı aşıldı.") }
+                var seen = Set<Int>()
+                for mark in marks {
+                    guard let n = mark["VertexIndex"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
+                          !["f", "d"].contains(String(cString: n.objCType)), n.doubleValue >= 0, n.doubleValue < Double(points.count),
+                          let position = mark["Position"] as? [String: Any], let x = jsonNumber(position["X"]), let y = jsonNumber(position["Y"]),
+                          x.isFinite, y.isFinite, abs(x) <= 100_000_000, abs(y) <= 100_000_000,
+                          (position["IsFinite"] == nil || jsonBoolean(position["IsFinite"]) == true) else { throw ViewerError.message("Köşe işareti konumu veya indeksi geçersiz.") }
+                    let index = n.intValue
+                    guard seen.insert(index).inserted, points[index].x == x, points[index].y == y,
+                          !(closed && points.count > 1 && points.first!.x == points.last!.x && points.first!.y == points.last!.y && index == points.count - 1) else { throw ViewerError.message("Köşe işareti konturla eşleşmiyor veya yinelenmiş.") }
+                    notchIndices.append(index)
+                }
             }
             let metadata = raw["Metadata"] as? [String: Any]
             let quantityNumber = metadata?["Quantity"] as? NSNumber
@@ -753,8 +782,9 @@ private struct Drawing {
                                 contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
-                                grainStatus: grainStatus, grain: parsedGrain))
+                                grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
+        if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid)
     }
 }
@@ -973,6 +1003,11 @@ private struct DrawingView: View {
                 for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
                 context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
+                for index in piece.notches {
+                    let p = position(piece.points[index])
+                    let mark = Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))
+                    context.stroke(mark, with: .color(.pink), lineWidth: 2)
+                }
                 if showGrain, let grain = piece.grain {
                     let start = position(grain.start), end = position(grain.end)
                     let dx = end.x - start.x, dy = end.y - start.y

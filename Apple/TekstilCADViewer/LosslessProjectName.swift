@@ -9,6 +9,18 @@ enum LosslessProjectName {
         var errorDescription: String? { "Proje adı güvenli biçimde değiştirilemedi. En fazla 8 MB boyutunda UTF-8 proje ve en fazla 1024 UTF-16 birimlik bir ad kullanın; UTF-16 ve UTF-32 dosyaları desteklenmez." }
     }
 
+    // The viewer already parsed JSON; scan the original UTF-8 bytes for
+    // duplicate keys without rewriting or normalizing the project.
+    static func validateUniqueKeys(_ data: Data) throws {
+        guard data.count <= 64 * 1024 * 1024, String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
+        try data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0)
+            _ = try scanner.projectName()
+        }
+    }
+
     static func replacing(in data: Data, with name: String) throws -> Data {
         // Renaming reparses the JSON while the preview is still resident.
         // Keep this lower than the viewer limit until streaming validation is available.
@@ -77,14 +89,13 @@ enum LosslessProjectName {
             guard depth < 512 else { throw Failure.invalid }
             try take(123); whitespace()
             if i < bytes.count && bytes[i] == 125 { i += 1; return }
+            var keys = Set<String>()
             while true {
                 let keyRange = try string()
-                var isName = false
-                if project {
-                    let keyData = Data([91] + Array(bytes[keyRange]) + [93])
-                    guard let key = (try? JSONSerialization.jsonObject(with: keyData) as? [String])?.first else { throw Failure.invalid }
-                    isName = key == "Name"
-                }
+                let keyData = Data([91] + Array(bytes[keyRange]) + [93])
+                guard let key = (try? JSONSerialization.jsonObject(with: keyData) as? [String])?.first,
+                      keys.insert(key).inserted else { throw Failure.invalid }
+                let isName = project && key == "Name"
                 try take(58); whitespace()
                 if isName {
                     guard nameRange == nil, i < bytes.count, bytes[i] == 34 else { throw Failure.invalid }

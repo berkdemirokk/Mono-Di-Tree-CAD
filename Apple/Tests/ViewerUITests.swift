@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testVersionSixNotchPreviewAndInvalidNotches() {
+        let project = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0,"IsFinite":true}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(project.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["İşaretli"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir."].exists)
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch.tap()
+        let row = app.buttons["Ön"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("1 köşe işareti"))
+        app.terminate()
+        for invalid in [project.replacingOccurrences(of: #""X":4,"Y":0,"IsFinite"#, with: #""X":3,"Y":0,"IsFinite"#),
+                        project.replacingOccurrences(of: #""VertexIndex":1"#, with: #""VertexIndex":true"#),
+                        project.replacingOccurrences(of: "[6,", with: "[5,")] {
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(invalid.utf8).base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+            app.terminate()
+        }
+    }
     func testSameNameCopiesCanBeSearchedAndDeletedByFullIdentity() {
         let fixture = #"{"Name":"Aynı Model","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
