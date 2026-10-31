@@ -1193,14 +1193,17 @@ internal static class DesktopVerification
         var propertyRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
         Check(propertyRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && propertyRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
             "Coordinate property movement carries matching grading increments with the source",checks);
+        Check(!status.Text.Contains("eski serileme kuralı",StringComparison.Ordinal),"Matching grading rule does not produce a stale-rule warning",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Coordinate property move undo restores geometry and grading rule together",checks);
         studio.Commit("Eski kural testi",()=>studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints[0]=new Point2(-1,0));
         var staleRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).Clone();
         var beforeStaleMove=studio.Document.Clone();
         positionX.Text="10";Invoke(studio,"ApplyProperties");
-        Check(studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints),
-            "Coordinate property movement leaves stale grading rules unchanged",checks);
+        Check(studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints) &&
+            status.Text.Contains("özellikleri uygulandı",StringComparison.Ordinal) && status.Text.Contains("eski serileme kuralı",StringComparison.Ordinal) &&
+            status.Text.Contains(source.Id.ToString("D"),StringComparison.Ordinal),
+            "Coordinate property movement succeeds while identifying the preserved stale grading rule",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeStaleMove,studio.Document),"Undo restores coordinate move with stale rule",checks);
         Invoke(studio,"Undo");
@@ -5386,6 +5389,18 @@ internal static class DesktopVerification
         Invoke(studio,"Undo");
         Check(JsonSerializer.Serialize(studio.Document)==before,
             "One undo restores both pieces after applying the draft transaction",checks);
+        var matching=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=true,SourcePoints=[..first.Points],Deltas=[new(1,0),new(1,0),new(1,0)] };
+        var stale=new GradingRuleSet { SourcePieceId=second.Id,SourceClosed=true,SourcePoints=[new(19,0),new(30,0),new(30,10)],Deltas=[new(2,0),new(2,0),new(2,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second],GradingRules=[matching,stale] });
+        studio.Select(first.Id);x.Text="5";studio.Select(second.Id);x.Text="25";
+        var mixedPath=Path.Combine(work,"property-drafts-stale-rule.tcad");Invoke(studio,"SaveTo",mixedPath);
+        var mixedSaved=ProjectStorage.Load(mixedPath);
+        var mixedStatus=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        Check(mixedSaved.GradingRules.Single(r=>r.SourcePieceId==first.Id).SourcePoints.SequenceEqual(mixedSaved.Pieces.Single(p=>p.Id==first.Id).Points) &&
+            mixedSaved.GradingRules.Single(r=>r.SourcePieceId==second.Id).SourcePoints.SequenceEqual(stale.SourcePoints) &&
+            mixedStatus.Text.Contains("Proje kaydedildi",StringComparison.Ordinal) && mixedStatus.Text.Contains("eski serileme kuralı",StringComparison.Ordinal) &&
+            mixedStatus.Text.Contains(second.Id.ToString("D"),StringComparison.Ordinal) && !mixedStatus.Text.Contains(first.Id.ToString("D"),StringComparison.Ordinal),
+            "Saving mixed property drafts identifies the stale rule and persists both pieces",checks);
         Check(!studio.IsVisible,"Property draft verification remains hidden",checks);
     }
     private static void VerifyDraftRemovalConfirmationRace(MainWindow studio,List<string> checks)

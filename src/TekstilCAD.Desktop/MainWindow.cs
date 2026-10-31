@@ -1238,11 +1238,27 @@ public class MainWindow : Window
         var ulp=Math.Max(Math.Abs(Math.BitIncrement(requested)-requested),Math.Abs(requested-Math.BitDecrement(requested)));
         return Math.Abs(actual-requested)<=8*ulp;
     }
+    private static string StaleRulesNotice(ProjectDocument document,IReadOnlyList<(Guid Id, string Name, double X, double Y)> changes)
+    {
+        var stale=new List<PatternPiece>();
+        foreach(var change in changes)
+        {
+            var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
+            if(change.X==bounds.MinX && change.Y==bounds.MinY)continue;
+            var rule=document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+            if(rule is not null && (rule.SourceClosed!=piece.Closed || rule.Deltas.Count!=piece.Points.Count || !rule.SourcePoints.SequenceEqual(piece.Points)))stale.Add(piece);
+        }
+        if(stale.Count==0)return "";
+        var names=string.Join(", ",stale.Take(3).Select(p=>$"{SafePieceName(p.Name)} ({p.Id:D})"));
+        return $" · {stale.Count} parçada eski serileme kuralı korundu; yeni konumla ilişkisini serileme atölyesinde gözden geçirin: {names}"+
+            (stale.Count>3 ? $" ve {stale.Count-3} parça daha." : ".");
+    }
     private void ApplyPropertyDrafts(IEnumerable<Guid> ids)
     {
         if(BlockForIncompleteRecovery())return;
         var changes=ValidatePropertyDrafts(Document,ids);
         if(changes.Count==0)return;
+        var staleNotice=StaleRulesNotice(Document,changes);
         bool changed;
         try
         {
@@ -1251,7 +1267,7 @@ public class MainWindow : Window
         catch { dirty=session.IsDirty;Refresh();throw; }
         foreach(var change in changes)propertyDrafts.Remove(change.Id);
         dirty=session.IsDirty;
-        try { Refresh();SetStatus("Parça özellikleri uygulandı"); }
+        try { Refresh();SetStatus("Parça özellikleri uygulandı"+staleNotice); }
         catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             if(changed)_=SaveRecoveryAsync();
@@ -1723,6 +1739,7 @@ public class MainWindow : Window
         EnsureWritableDestination(path);
         // Prepare a detached snapshot so a failed write cannot change the live session.
         var changes=ValidatePropertyDrafts(Document,propertyDrafts.Keys);
+        var staleNotice=StaleRulesNotice(Document,changes);
         var candidate=Document.Clone();
         ApplyDraftChanges(candidate,changes);
         Validate(candidate);
@@ -1750,7 +1767,7 @@ public class MainWindow : Window
         try
         {
             if(!canvas.HasPendingDrawing) { ArchiveRecoveredSource(); ClearRecovery(); }
-            Refresh(); SetStatus("Proje kaydedildi: " + path + (canvas.HasPendingDrawing ? " · Tamamlanmamış çizim proje dosyasına dahil değil; otomatik kurtarma sonraki kayıtta güncellenir" : ""));
+            Refresh(); SetStatus("Proje kaydedildi: " + path + (canvas.HasPendingDrawing ? " · Tamamlanmamış çizim proje dosyasına dahil değil; otomatik kurtarma sonraki kayıtta güncellenir" : "") + staleNotice);
         }
         catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
