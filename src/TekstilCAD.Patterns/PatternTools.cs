@@ -372,6 +372,8 @@ public static class PatternTools
         points[index] = position;
         if (repeatedClosure && (index == 0 || index == points.Count - 1))
         { points[0] = position; points[^1] = position; }
+        if(piece.Closed && !repeatedClosure && points.Count>1 && points[0]==points[^1])
+            throw new ArgumentException("Nokta taşıması kapanış kenarını sıfıra indiriyor; kontur değiştirilmedi.");
         cancellationToken.ThrowIfCancellationRequested();
         if (points.Count > Geometry.MaxValidatedContourVertices)
         {
