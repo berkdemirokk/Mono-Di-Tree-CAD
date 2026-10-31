@@ -39,6 +39,15 @@ internal sealed class ImmutableHistoryPublication : IDisposable
         public uint FileNameLength;
         public char FileName;
     }
+    private static string ExtendedPath(string path)
+    {
+        // Paths reaching this class have already passed the local-drive,
+        // reparse and normalized-component checks in ValidateOutputDirectory.
+        if (!Path.IsPathFullyQualified(path) || path.StartsWith(@"\\", StringComparison.Ordinal) ||
+            path.Length < 3 || path[1] != ':' || path[2] != '\\' || path.Contains('/'))
+            throw new IOException("Yerel tam dosya yolu doğrulanamadı.");
+        return @"\\?\" + path;
+    }
     private static IOException Failure(string message) => new(message, new Win32Exception(Marshal.GetLastWin32Error()));
 
     internal static ImmutableHistoryPublication Open(string directory)
@@ -62,7 +71,7 @@ internal sealed class ImmutableHistoryPublication : IDisposable
     }
     private void OpenDirectory(string path)
     {
-        var handle = CreateFileW(path, ReadAttributes, ShareRead | ShareWrite, IntPtr.Zero, OpenExisting, BackupSemantics | OpenReparsePoint, IntPtr.Zero);
+        var handle = CreateFileW(ExtendedPath(path), ReadAttributes, ShareRead | ShareWrite, IntPtr.Zero, OpenExisting, BackupSemantics | OpenReparsePoint, IntPtr.Zero);
         if (handle.IsInvalid) { handle.Dispose(); throw Failure("Klasör kilitlenemedi."); }
         if (!GetFileInformationByHandle(handle, out var info)) { handle.Dispose(); throw Failure("Klasör kimliği okunamadı."); }
         const uint directoryAttribute = 0x10, reparseAttribute = 0x400;
@@ -73,7 +82,7 @@ internal sealed class ImmutableHistoryPublication : IDisposable
     internal void Publish(string tempName, string targetName, byte[] bytes, Action? afterWrite, CancellationToken token)
     {
         var tempPath = Path.Combine(directory, tempName);
-        using var handle = CreateFileW(tempPath, GenericWrite | Delete, 0, IntPtr.Zero, CreateNew, OpenReparsePoint, IntPtr.Zero);
+        using var handle = CreateFileW(ExtendedPath(tempPath), GenericWrite | Delete, 0, IntPtr.Zero, CreateNew, OpenReparsePoint, IntPtr.Zero);
         if (handle.IsInvalid) throw Failure("Geçici dosya oluşturulamadı.");
         using var stream = new FileStream(handle, FileAccess.Write, 4096, false);
         var stamp = FileIdentity.CaptureOwnedFile(handle);
@@ -84,7 +93,7 @@ internal sealed class ImmutableHistoryPublication : IDisposable
         // The Win32 wrapper accepts an absolute destination with RootDirectory
         // null. Every ancestor remains held without delete sharing.
         var targetPath = Path.Combine(directory, targetName);
-        var name = Encoding.Unicode.GetBytes(targetPath);
+        var name = Encoding.Unicode.GetBytes(ExtendedPath(targetPath));
         int nameOffset = checked((int)Marshal.OffsetOf<RenameLayout>(nameof(RenameLayout.FileName)));
         // Include a zero UTF-16 terminator in the buffer, while FileNameLength
         // remains the byte length of the path itself.

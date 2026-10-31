@@ -39,6 +39,7 @@ public sealed class MachineCenterWindow : Window
     private bool updatingChoices;
     private bool preparing;
     internal Action? BeforeHistoryReadForVerification;
+    internal Action? BeforeLegacyOpenForVerification;
     private bool historyBusy;
     private bool historyComplete;
     private CancellationTokenSource? historyCancellation;
@@ -46,6 +47,7 @@ public sealed class MachineCenterWindow : Window
     private readonly Button nextHistory=new() { Content="Sonraki sayfa" };
     private readonly Button restartHistory=new() { Content="Geçmişi baştan tara" };
     private readonly Button cancelHistory=new() { Content="Taramayı iptal et",Visibility=Visibility.Collapsed };
+    private readonly Button openLegacy=new() { Content="Eski geçmişi görüntüle" };
     private readonly TextBlock historyStatus=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,6) };
     private CancellationTokenSource? prepareCancellation;
     internal Action? BeforePrepareForVerification;
@@ -76,6 +78,7 @@ public sealed class MachineCenterWindow : Window
         if(!queue.IsStreamingHistory)throw new ArgumentException("Makine merkezi sayfalı geçmiş kullanan bir kuyruk gerektirir.",nameof(queue));
         this.studio=studio;this.queue=queue;openingSnapshot=studio.Document.Clone();Owner=studio;
         Title="Makine merkezi · Mono Di Tree CAD";Width=1060;Height=840;MinWidth=720;MinHeight=540;
+        if(queue.IsLegacyReadOnly)Title="Eski iş geçmişi · salt okunur";
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(26) };Content=root;
         var footer=new Border { Background=StudioTheme.Surface,BorderBrush=StudioTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(14),Margin=new Thickness(0,16,0,0) };
@@ -113,6 +116,10 @@ public sealed class MachineCenterWindow : Window
         body.Children.Add(new TextBlock { Text="Yerel dosya hazırlama ve bütünlük kontrolü",Foreground=StudioTheme.Muted,Margin=new Thickness(0,0,0,18) });
         var notice=new TextBlock { Text="SİMÜLATÖR  ·  Fiziksel bağlantı kurulmaz. Makine uyumluluğu doğrulanmadı.",Foreground=StudioTheme.Warning,TextWrapping=TextWrapping.Wrap };
         body.Children.Add(Card(notice));
+        body.Children.Add(new TextBlock { Text=queue.IsLegacyReadOnly
+            ? "ESKİ GEÇMİŞ · Salt okunur. Eski kayıtlar değiştirilemez veya doğrulanamaz; önceki doğrulama güncel dosya kontrolü değildir. Yeni işler ayrı geçmiştedir."
+            : "YENİ GEÇMİŞ · Yeni işler ayrı kuyruğa kaydedilir. Önceki işler eski geçmişte salt okunur görüntülenebilir.",
+            Foreground=StudioTheme.Warning,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) });
         if(openingSnapshot.NestingSnapshot is not null)
         {
             var historyNotice=new TextBlock { Text="Pastal geçmişindeki kumaş ölçüleri, kenar payı ve kaynak–kopya eşleşmesi hazırlanan DXF/HPGL dosyasına aktarılmaz. Yalnız seçili parçaların geometrisi, her parça bir kez hazırlanır. Geçmiş bilgiler üretim veya makine uygunluğu onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
@@ -193,7 +200,9 @@ public sealed class MachineCenterWindow : Window
         var historyActions=new WrapPanel();StyleButton(nextHistory);StyleButton(restartHistory);StyleButton(cancelHistory);
         nextHistory.Click+=async (_,_)=>await ReadHistory(false);restartHistory.Click+=async (_,_)=>await ReadHistory(true);
         cancelHistory.Click+=(_,_)=> { if(cancelHistory.IsKeyboardFocusWithin)historyStatus.Focus();historyCancellation?.Cancel();cancelHistory.IsEnabled=false;historyStatus.Text="İptal istendi; taramanın durması bekleniyor."; };
-        historyActions.Children.Add(nextHistory);historyActions.Children.Add(restartHistory);historyActions.Children.Add(cancelHistory);queuePanel.Children.Add(historyActions);body.Children.Add(Card(queuePanel));
+        historyActions.Children.Add(nextHistory);historyActions.Children.Add(restartHistory);historyActions.Children.Add(cancelHistory);
+        if(!queue.IsLegacyReadOnly) { StyleButton(openLegacy);openLegacy.Click+=async (_,_)=>await OpenLegacyHistory();historyActions.Children.Add(openLegacy); }
+        queuePanel.Children.Add(historyActions);body.Children.Add(Card(queuePanel));
         var preview=new StackPanel();preview.Children.Add(new TextBlock { Text="03  Hazırlanan dosyayı kontrol edin",FontSize=17,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         preview.Children.Add(previewSummary);
         var previewGrid=new Grid { Height=280 };previewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(0.8,GridUnitType.Star) });previewGrid.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1.2,GridUnitType.Star) });
@@ -304,13 +313,14 @@ public sealed class MachineCenterWindow : Window
         if(error is null&&(!TryNumber(scale,out var s)||s<=0||s>1000))error="Ölçek çarpanı 0'dan büyük, en fazla 1000 olmalıdır.";
         if(error is null&&format.SelectedIndex==1&&(!TryNumber(units,out var u)||u<=0||u>10000))error="HPGL birim/mm değeri 0'dan büyük, en fazla 10000 olmalıdır.";
         inputHint.Text=error??((format.SelectedIndex==0?"DXF milimetre biriminde hazırlanır. HPGL kalibrasyonu bu biçimde kullanılmaz.":"HPGL değeri yalnızca dosya dönüşümünü belirler; fiziksel kalibrasyon yerine geçmez.")+" Nokta veya virgül ondalıktır; binlik ayırıcı kullanmayın.");
-        inputHint.Foreground=error is null?StudioTheme.Muted:StudioTheme.Warning;prepare.IsEnabled=!preparing && !historyBusy && error is null;
+        if(queue.IsLegacyReadOnly)inputHint.Text="Eski geçmiş salt okunurdur; yeni dosya hazırlamak için bu pencereyi kapatın.";
+        inputHint.Foreground=error is null?StudioTheme.Muted:StudioTheme.Warning;prepare.IsEnabled=!queue.IsLegacyReadOnly && !preparing && !historyBusy && error is null;
     }
     private void Execute(Action action)
     { try { action(); } catch(Exception ex) { result.Foreground=StudioTheme.Danger;result.Text="İşlem başarısız: "+ex.Message; } }
     private async Task Prepare()
     {
-        if(preparing || historyBusy)return;
+        if(queue.IsLegacyReadOnly || preparing || historyBusy)return;
         try
         {
             var selected=SelectedPieceIds.ToHashSet();
@@ -451,13 +461,13 @@ public sealed class MachineCenterWindow : Window
         choiceList.IsEnabled=!busy;
         choiceSearch.IsEnabled=!busy;clearChoiceSearch.IsEnabled=!busy;
         foreach(var button in choiceActions)button.IsEnabled=!busy;
-        simulate.IsEnabled=!busy && !historyBusy && jobs.SelectedItem is SimulationQueue.HistoryEntry { Job:not null };
+        simulate.IsEnabled=!queue.IsLegacyReadOnly && !busy && !historyBusy && jobs.SelectedItem is SimulationQueue.HistoryEntry { Job:not null };
         UpdateAvailability();UpdateHistoryControls();
         if(moveFromCancel) { if(prepare.IsEnabled)prepare.Focus();else messagesViewer.Focus(); }
     }
     private void Simulate()
     {
-        if(preparing || historyBusy || jobs.SelectedItem is not SimulationQueue.HistoryEntry { Job:not null } selected)return;
+        if(queue.IsLegacyReadOnly || preparing || historyBusy || jobs.SelectedItem is not SimulationQueue.HistoryEntry { Job:not null } selected)return;
         var updated=queue.SimulateHistoryEntry(selected);
         ReplaceEntry(selected,updated);
         if(updated.Job is not { } job)throw new InvalidOperationException("Doğrulama kaydı yeniden okunamadı; geçmişi baştan tarayın.");
@@ -477,6 +487,41 @@ public sealed class MachineCenterWindow : Window
     {
         nextHistory.IsEnabled=!preparing && !historyBusy && historyScan is not null && !historyComplete;
         restartHistory.IsEnabled=!preparing && !historyBusy;
+        openLegacy.IsEnabled=!preparing && !historyBusy;
+    }
+    private async Task OpenLegacyHistory()
+    {
+        if(queue.IsLegacyReadOnly || preparing || historyBusy)return;
+        var restoreFocus=openLegacy.IsKeyboardFocusWithin;
+        var previousStatus=historyStatus.Text;
+        historyBusy=true;historyCancellation=new CancellationTokenSource();var token=historyCancellation.Token;
+        cancelHistory.Visibility=Visibility.Visible;cancelHistory.IsEnabled=true;
+        if(restoreFocus)cancelHistory.Focus();
+        jobs.IsEnabled=false;simulate.IsEnabled=false;UpdateAvailability();UpdateHistoryControls();
+        historyStatus.Text="Eski geçmiş salt okunur açılmak üzere hazırlanıyor; iptal isteyebilirsiniz.";
+        SimulationQueue? legacy=null;
+        try
+        {
+            legacy=await Task.Run(()=> { BeforeLegacyOpenForVerification?.Invoke();token.ThrowIfCancellationRequested();var value=SimulationQueue.OpenLegacyReadOnly(AppPaths.MachineSpoolDirectory);token.ThrowIfCancellationRequested();return value; });
+            token.ThrowIfCancellationRequested();
+            historyStatus.Text=previousStatus;
+        }
+        catch(OperationCanceledException) when(token.IsCancellationRequested)
+        { historyStatus.Text="Eski geçmiş açılması iptal edildi; yeni geçmiş korunuyor."; }
+        catch(Exception ex)
+        { historyStatus.Text="Eski geçmiş açılamadı: "+ex.Message+" Yeni geçmiş kullanılabilir."; }
+        finally
+        {
+            var returnFocus=cancelHistory.IsKeyboardFocusWithin || (restoreFocus && historyStatus.IsKeyboardFocusWithin);
+            historyCancellation.Dispose();historyCancellation=null;cancelHistory.Visibility=Visibility.Collapsed;
+            historyBusy=false;jobs.IsEnabled=true;UpdateAvailability();UpdateHistoryControls();ShowSelection();
+            if(returnFocus)openLegacy.Focus();
+        }
+        if(legacy is not null)
+        {
+            var window=new MachineCenterWindow(studio,legacy) { Owner=this };
+            window.ShowDialog();
+        }
     }
     private async Task ReadHistory(bool restart)
     {
@@ -548,7 +593,7 @@ public sealed class MachineCenterWindow : Window
     private void ShowSelection()
     {
         selectedFileReadError=null;
-        simulate.IsEnabled=!preparing && !historyBusy && jobs.SelectedItem is SimulationQueue.HistoryEntry { Job:not null };
+        simulate.IsEnabled=!queue.IsLegacyReadOnly && !preparing && !historyBusy && jobs.SelectedItem is SimulationQueue.HistoryEntry { Job:not null };
         geometryPreview.Clear();
         if(jobs.SelectedItem is SimulationQueue.HistoryEntry { Job:null } issue) { details.Text=$"Kayıt okunamadı: {issue.Path}\n{issue.Error}";filePreview.Text="Bu kayıt için önizleme yok.";previewSummary.Text="Kayıt okunamadığı için doğrulama yapılamaz.";return; }
         if(jobs.SelectedItem is not SimulationQueue.HistoryEntry { Job: { } job }) { details.Text="Kuyruktan bir dosya seçin. Profil, ölçü ayarları ve dosya konumu burada görünür.";filePreview.Text="Henüz dosya seçilmedi.";previewSummary.Text="Henüz çıktı seçilmedi. Önizleme, hazırlandıktan sonra gerçek dosyadan okunur.";return; }

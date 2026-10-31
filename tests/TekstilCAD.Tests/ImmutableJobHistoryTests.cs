@@ -22,6 +22,30 @@ public sealed class ImmutableJobHistoryTests
     private static void Clean(string path) { if (Directory.Exists(path)) Directory.Delete(path, true); }
 
     [Fact]
+    public void WindowsLongDestinationPublishesAndReopensWithoutChangingBase()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var root=Path.Combine(@"C:\Projects\TekstilCAD\work", "immutable-long-path-tests", Guid.NewGuid().ToString("N"));
+        var path=Path.Combine(root, new string('a', 100), new string('b', 100), Guid.NewGuid().ToString("N"));
+        try
+        {
+            Directory.CreateDirectory(path);
+            File.WriteAllBytes(Path.Combine(path,"manifest.json"),Original);
+            var history=new ImmutableJobHistory(path);
+            var published=history.Append(history.Inspect().HeadHash!,First);
+            var record=Assert.Single(Records(path));
+            Assert.True(Path.GetFullPath(record).Length>260);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.Valid,published.Status);
+            var reopened=new ImmutableJobHistory(path).Inspect();
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.Valid,reopened.Status);
+            Assert.Equal(published.HeadHash,reopened.HeadHash);
+            Assert.Equal(First,reopened.Payload);
+            Assert.Equal(Original,File.ReadAllBytes(Path.Combine(path,"manifest.json")));
+        }
+        finally { Clean(root); }
+    }
+
+    [Fact]
     public void EntryBudgetCountsUnrelatedFilesAndDirectoriesWithoutChangingThem()
     {
         var path = NewDirectory();

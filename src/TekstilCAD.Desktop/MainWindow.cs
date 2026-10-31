@@ -45,7 +45,7 @@ public class MainWindow : Window
     private SimulationQueue? machineQueue;
     private Button? machineQueueCommand;
     private readonly TextBox machineQueueMessage = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MaxHeight=64,Width=220,Margin=new Thickness(3,2,3,3),Visibility=Visibility.Collapsed };
-    internal Func<SimulationQueue> MachineQueueFactory { get; set; } = () => new SimulationQueue(AppPaths.MachineSpoolDirectory, streamingHistory:true);
+    internal Func<SimulationQueue> MachineQueueFactory { get; set; } = () => SimulationQueue.OpenVersionedV2(AppPaths.MachineSpoolV2Directory);
     internal bool MachineQueueLoading { get; private set; }
     private readonly TextBlock status = new(), metrics = new(), projectTitle = new();
     private readonly TextBlock grainlineStatus = new() { TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(3,5,3,8) };

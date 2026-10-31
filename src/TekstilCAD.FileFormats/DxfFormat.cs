@@ -1927,6 +1927,13 @@ public static class DxfFormat
     }
     private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion)
     {
+        var text=PrepareText(project);
+        if (expectedVersion is null) ProjectStorage.AtomicWrite(path, text);
+        else ProjectStorage.AtomicWriteIfUnchanged(path, text, expectedVersion);
+    }
+    /// <summary>Builds the same validated DXF text as Export without writing a file. The caller owns destination selection and publication.</summary>
+    public static string PrepareText(ProjectDocument project)
+    {
         var layers = PlanLayers(project);
         GrainlineExportGuard.EnsureSupported(project);
         if(layers.Count==0)throw new InvalidDataException("DXF dışa aktarımı için en az bir parça gerekir.");
@@ -1958,8 +1965,7 @@ public static class DxfFormat
             foreach (var pt in p.Points) b.Append("10\n").Append(F(pt.X)).Append("\n20\n").Append(F(pt.Y)).Append('\n');
         }
         b.Append("0\nENDSEC\n0\nEOF\n");
-        if (expectedVersion is null) ProjectStorage.AtomicWrite(path, b.ToString());
-        else ProjectStorage.AtomicWriteIfUnchanged(path, b.ToString(), expectedVersion);
+        return b.ToString();
     }
 }
 

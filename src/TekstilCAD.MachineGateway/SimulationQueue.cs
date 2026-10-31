@@ -55,13 +55,25 @@ public sealed class SimulationQueue
     private readonly Dictionary<Guid, string> manifestHashes = [];
     private readonly List<string> recoveryWarnings = [];
     private readonly string spoolDirectory;
+    private enum QueueMode { Compatibility, LegacyReadOnly, VersionedV2 }
+    private QueueMode mode;
     private readonly bool streamingHistory;
+    public bool IsLegacyReadOnly => mode == QueueMode.LegacyReadOnly;
+    public bool IsVersionedV2 => mode == QueueMode.VersionedV2;
+    public static SimulationQueue OpenLegacyReadOnly(string path) => new(path, QueueMode.LegacyReadOnly);
+    public static SimulationQueue OpenVersionedV2(string path) => new(path, QueueMode.VersionedV2);
+    private SimulationQueue(string path, QueueMode selected) : this(path, streamingHistory: true) { mode = selected; }
+    private void EnsureWritableMode()
+    { if (IsLegacyReadOnly) throw new InvalidOperationException("Eski iş geçmişi salt okunurdur; dosyalar değiştirilmedi."); }
+    private void EnsureVersionedMode()
+    { if (!IsVersionedV2) throw new InvalidOperationException("Bu işlem yalnız yeni sürümlü kuyrukta kullanılabilir; dosyalar değiştirilmedi."); }
     public bool IsStreamingHistory => streamingHistory;
     private Guid lastPreparedId;
     private string? lastPreparedHash;
     // Instance-scoped hook for deterministic temporary-file ownership tests.
     internal Action<string>? BeforeManifestCommitForVerification { get; set; }
     internal Action<string>? AfterHistoryCommitForVerification { get; set; }
+    internal Action<string>? AfterVersionedOutputForVerification { get; set; }
     private const int MaximumRecoveredJobs = 10_000;
     private const int MaximumManifestBytes = 128 * 1024;
     public IReadOnlyList<SimulationJob> Jobs => jobs.AsReadOnly();
@@ -252,18 +264,52 @@ public sealed class SimulationQueue
         if (!IsExpectedPath(entry.Path, expected)) throw new InvalidOperationException("İş yolu eşleşmiyor.");
         return entry.Job;
     }
-    // The legacy client cannot recognize immutable history and may still write
-    // the base manifest. Until the spool is isolated from those clients, do
-    // not publish updates that an older client would silently misunderstand.
     public HistoryEntry ConfirmHistoryEntry(HistoryEntry entry)
     {
-        RequireHistoryEntry(entry);
-        throw new InvalidOperationException("Kaynak onayı yapılamadı: eski kuyruklarla güvenli ayrım henüz sağlanmadı. Dosyalar değiştirilmedi.");
+        EnsureVersionedMode();
+        var job = RequireHistoryEntry(entry);
+        return UpdateVersionedHistory(entry, job with { SourceSnapshotUnconfirmed = false });
     }
     public HistoryEntry SimulateHistoryEntry(HistoryEntry entry)
     {
-        RequireHistoryEntry(entry);
-        throw new InvalidOperationException("İş durumu güncellenemedi: eski kuyruklarla güvenli ayrım henüz sağlanmadı. Dosyalar değiştirilmedi.");
+        EnsureVersionedMode();
+        var job = RequireHistoryEntry(entry);
+        try
+        {
+            ValidateOutputDirectory(Path.GetDirectoryName(job.OutputPath)!);
+            RejectReparseFile(job.OutputPath);
+            if (!File.Exists(job.OutputPath) || Checksum(job.OutputPath) != job.Sha256)
+                throw new InvalidDataException("Çıktı dosyası eksik veya özeti değişmiş.");
+            job = job with { Status = JobStatus.Simulated, Error = null };
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+        { job = job with { Status = JobStatus.Failed, Error = ex.Message }; }
+        return UpdateVersionedHistory(entry, job);
+    }
+    private HistoryEntry UpdateVersionedHistory(HistoryEntry entry, SimulationJob job)
+    {
+        var directory = Path.GetDirectoryName(job.ManifestPath)!;
+        ValidateOutputDirectory(directory);
+        var lockPath = Path.Combine(directory, "manifest.json.lock");
+        RejectReparseFile(lockPath);
+        if (OperatingSystem.IsWindows()) FileIdentity.RejectMultipleLinksForReplacement(lockPath);
+        using var gate = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+        var current = ReadHistoryDirectory(directory);
+        if (current.Job != entry.Job || current.ManifestHash != entry.ManifestHash || current.Error != entry.Error)
+            throw new InvalidOperationException("İş kaydı değişti veya doğrulanamadı; geçmişi yeniden tarayın.");
+        ImmutableJobHistory.Inspection after;
+        try
+        {
+            after = new ImmutableJobHistory(directory).Append(entry.ManifestHash!, JsonSerializer.SerializeToUtf8Bytes(job, JsonOptions));
+            AfterHistoryCommitForVerification?.Invoke(job.ManifestPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or OperationCanceledException)
+        { throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt durumunu yeniden tarayarak kontrol edin.", ex); }
+        var result = ReadHistoryDirectory(directory);
+        if (after.Status != ImmutableJobHistory.InspectionStatus.Valid || after.PublishedHash is null ||
+            after.HeadHash != after.PublishedHash || result.Job != job || result.ManifestHash != after.PublishedHash)
+            throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt doğrulanamadı. Durumu yeniden tarayarak kontrol edin.");
+        return result;
     }
 
     private static bool HasImmutableHistory(string directory)
@@ -318,6 +364,7 @@ public sealed class SimulationQueue
     /// </summary>
     public PreparedHpglJob PrepareHpglReview(ProjectDocument document,MachineProfile profile,CancellationToken cancellationToken=default)
     {
+        EnsureWritableMode();
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(profile);profile.Validate();ProjectStorage.Validate(document);
         cancellationToken.ThrowIfCancellationRequested();
@@ -345,6 +392,7 @@ public sealed class SimulationQueue
     public SimulationJob CommitPreparedHpgl(PreparedHpglJob prepared,ProjectDocument document,MachineProfile profile,
         bool sourceSnapshotUnconfirmed=false,CancellationToken cancellationToken=default)
     {
+        EnsureWritableMode();
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(prepared);ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(profile);
         profile.Validate();ProjectStorage.Validate(document);
@@ -358,10 +406,17 @@ public sealed class SimulationQueue
         Directory.CreateDirectory(directory);
         var output=Path.Combine(directory,"preview.plt");var version=ProjectStorage.CaptureVersion(output);
         if(version.Sha256 is not null)throw new IOException("Yeni iş çıktı dosyası zaten mevcut; işlem uygulanmadı.");
-        HpglFormat.WritePrepared(prepared.Output,output,version,cancellationToken);
+        if (IsVersionedV2) PublishNewFile(directory, "preview.plt", Encoding.UTF8.GetBytes(prepared.Output.Text), cancellationToken);
+        else HpglFormat.WritePrepared(prepared.Output,output,version,cancellationToken);
         // Record the hash of the reviewed bytes, not a subsequently substituted file.
         var reviewedHash=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(prepared.Output.Text)));
-        if(Checksum(output)!=reviewedHash)throw new IOException("Hazırlanan HPGL dosyası yazımdan sonra değişti; iş kaydı oluşturulmadı.");
+        try
+        {
+            if (IsVersionedV2) AfterVersionedOutputForVerification?.Invoke(output);
+            if (Checksum(output) != reviewedHash) throw new IOException("Çıktı incelenen baytlarla eşleşmiyor.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        { throw new IOException("Çıktı yayımlanmış olabilir; dosya durumu doğrulanamadı. İş kaydı oluşturulmadı, dosyayı ve kuyruğu kontrol edin.", ex); }
         var job=new SimulationJob(id,prepared.Source.Name,prepared.Profile,JobFormat.Hpgl,JobStatus.Prepared,output,
             Path.Combine(directory,"manifest.json"),reviewedHash,DateTimeOffset.UtcNow,
             prepared.Source.Pieces.Count,prepared.Source.Pieces.Sum(p=>p.Points.Count)) { SourceSnapshotUnconfirmed=sourceSnapshotUnconfirmed };
@@ -373,6 +428,7 @@ public sealed class SimulationQueue
 
     public SimulationJob Prepare(ProjectDocument document, MachineProfile profile, JobFormat format, bool sourceSnapshotUnconfirmed = false, CancellationToken cancellationToken = default)
     {
+        EnsureWritableMode();
         ArgumentNullException.ThrowIfNull(profile);
         profile.Validate();
         ProjectStorage.Validate(document);
@@ -398,10 +454,28 @@ public sealed class SimulationQueue
         var directory = ValidateOutputDirectory(Path.Combine(spoolDirectory, id.ToString("N")));
         Directory.CreateDirectory(directory);
         var output = Path.Combine(directory, format == JobFormat.Dxf ? "preview.dxf" : "preview.plt");
-        if (format == JobFormat.Dxf) DxfFormat.Export(scaled, output);
+        string? preparedHash = null;
+        if (IsVersionedV2)
+        {
+            var content = format == JobFormat.Dxf
+                ? DxfFormat.PrepareText(scaled)
+                : HpglFormat.Prepare(scaled, profile.UnitsPerMillimeter, hpglCancellation).Text;
+            var preparedBytes = Encoding.UTF8.GetBytes(content);
+            preparedHash = Convert.ToHexString(SHA256.HashData(preparedBytes));
+            PublishNewFile(directory, format == JobFormat.Dxf ? "preview.dxf" : "preview.plt", preparedBytes, hpglCancellation);
+            try
+            {
+                AfterVersionedOutputForVerification?.Invoke(output);
+                if (Checksum(output) != preparedHash)
+                    throw new IOException("Çıktı hazırlanan baytlarla eşleşmiyor.");
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { throw new IOException("Çıktı yayımlanmış olabilir; dosya durumu doğrulanamadı. İş kaydı oluşturulmadı, dosyayı ve kuyruğu kontrol edin.", ex); }
+        }
+        else if (format == JobFormat.Dxf) DxfFormat.Export(scaled, output);
         else HpglFormat.Export(scaled, output, profile.UnitsPerMillimeter, hpglCancellation);
         var job = new SimulationJob(id, document.Name, profile, format, JobStatus.Prepared, output,
-            Path.Combine(directory, "manifest.json"), Checksum(output), DateTimeOffset.UtcNow,
+            Path.Combine(directory, "manifest.json"), preparedHash ?? Checksum(output), DateTimeOffset.UtcNow,
             scaled.Pieces.Count, scaled.Pieces.Sum(p => p.Points.Count)) { SourceSnapshotUnconfirmed = sourceSnapshotUnconfirmed };
         var writtenHash = SaveManifest(job);
         if (streamingHistory) { lastPreparedId = job.Id; lastPreparedHash = writtenHash; }
@@ -411,6 +485,8 @@ public sealed class SimulationQueue
 
     public SimulationJob ConfirmSourceSnapshot(Guid id)
     {
+        EnsureWritableMode();
+        if (IsVersionedV2) throw new InvalidOperationException("Sürümlü kuyrukta geçmiş satırını kullanın.");
         var index = jobs.FindIndex(j => j.Id == id);
         if (index < 0) throw new KeyNotFoundException("Kuyruk işi bulunamadı.");
         var job = jobs[index] with { SourceSnapshotUnconfirmed = false };
@@ -421,6 +497,8 @@ public sealed class SimulationQueue
 
     public SimulationJob Simulate(Guid id)
     {
+        EnsureWritableMode();
+        if (IsVersionedV2) throw new InvalidOperationException("Sürümlü kuyrukta geçmiş satırını kullanın.");
         var index = jobs.FindIndex(j => j.Id == id);
         if (index < 0) throw new KeyNotFoundException("Kuyruk işi bulunamadı.");
         var job = jobs[index];
@@ -442,8 +520,22 @@ public sealed class SimulationQueue
     private static string Checksum(string path)
     { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)); }
 
+    private static void PublishNewFile(string directory, string name, byte[] bytes, CancellationToken token = default)
+    {
+        using var publication = ImmutableHistoryPublication.Open(directory);
+        publication.Publish(".initial-" + Guid.NewGuid().ToString("N") + ".tmp", name, bytes, null, token);
+    }
+
     private string SaveManifest(SimulationJob job, string? selectedHash = null)
     {
+        EnsureWritableMode();
+        if (IsVersionedV2)
+        {
+            if (selectedHash is not null) throw new InvalidOperationException("Sürümlü temel kayıt değiştirilemez.");
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(job, JsonOptions);
+            PublishNewFile(Path.GetDirectoryName(job.ManifestPath)!, "manifest.json", bytes);
+            return Convert.ToHexString(SHA256.HashData(bytes));
+        }
         ValidateOutputDirectory(Path.GetDirectoryName(job.ManifestPath)!);
         if (File.Exists(job.ManifestPath) && HasImmutableHistory(Path.GetDirectoryName(job.ManifestPath)!))
             throw new InvalidOperationException("Değişmez geçmiş içeren iş eski yöntemle güncellenemez; kayıt korunuyor.");

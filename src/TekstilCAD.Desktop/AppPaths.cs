@@ -17,6 +17,7 @@ internal static class AppPaths
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TekstilCAD", DataFolderName);
     public static string RecoveryDirectory => Path.Combine(DataDirectory, "Recovery");
     public static string MachineSpoolDirectory => Path.Combine(DataDirectory, "MachineSpool");
+    public static string MachineSpoolV2Directory => Path.Combine(DataDirectory, "MachineSpoolV2");
     public static string ProjectsDirectory => Path.Combine(DataDirectory, "Projects");
     public static string LogsDirectory => Path.Combine(DataDirectory, "Logs");
     public static string PrepareProjectsDirectory()

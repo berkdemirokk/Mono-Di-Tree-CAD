@@ -12,7 +12,7 @@ public sealed class ImmutableJobHistory
 {
     public enum InspectionStatus { Valid, Conflict, Invalid, LimitExceeded }
     public sealed record Inspection(InspectionStatus Status, string? BaseHash, string? HeadHash, byte[]? Payload, string? Error)
-    { public int RecordCount { get; init; } }
+    { public int RecordCount { get; init; } public string? PublishedHash { get; init; } }
     private sealed record VersionRecord(int Version, Guid JobId, string BaseHash, string ParentHash, string Nonce, byte[] Payload);
     private readonly string directory;
     private readonly Guid jobId;
@@ -171,7 +171,8 @@ public sealed class ImmutableJobHistory
         }
         // Publication already happened; cancellation cannot claim it did not.
         var after = Inspect(maxRecords, CancellationToken.None, maxEntries, maxReadBytes);
-        return after.Status == InspectionStatus.Valid ? after : after with
-        { Error = "Yeni sürüm yayımlandı; sonraki tarama tamamlanamadı veya tutarsızlık buldu. " + after.Error };
+        return after.Status == InspectionStatus.Valid
+            ? after with { PublishedHash = hash }
+            : after with { PublishedHash = hash, Error = "Yeni sürüm yayımlandı; sonraki tarama tamamlanamadı veya tutarsızlık buldu. " + after.Error };
     }
 }
