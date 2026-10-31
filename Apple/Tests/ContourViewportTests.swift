@@ -4,6 +4,16 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testRevealPreservesVisiblePositionAndMovesOnlyOffscreenAxes() throws {
+        let size = CGSize(width: 200, height: 100)
+        let unchanged = try XCTUnwrap(ContourViewport.visibleOffset(point: CGPoint(x: 100, y: 50), size: size, zoom: 2, offset: .zero))
+        XCTAssertEqual(unchanged, .zero)
+        let shifted = try XCTUnwrap(ContourViewport.visibleOffset(point: CGPoint(x: 190, y: 50), size: size, zoom: 2, offset: .zero))
+        XCTAssertEqual(shifted.width, -102, accuracy: 1e-9)
+        XCTAssertEqual(shifted.height, 0, accuracy: 1e-9)
+        XCTAssertNil(ContourViewport.visibleOffset(point: .zero, size: .zero, zoom: 2, offset: .zero))
+    }
+
     func testTinyContourStillFillsViewport() throws {
         let points = [p(0, 0), p(1e-200, 0), p(1e-200, 1e-200)]
         let viewport = try XCTUnwrap(ContourViewport(points: points, width: 232, height: 132))

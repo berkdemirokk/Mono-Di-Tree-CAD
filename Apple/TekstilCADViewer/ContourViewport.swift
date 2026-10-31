@@ -36,4 +36,20 @@ struct ContourViewport {
         CGPoint(x: offsetX + ((point.x - minX) / extent) * fitted,
                 y: height - offsetY - ((point.y - minY) / extent) * fitted)
     }
+
+    // Keep the highlighted ring inside the clipped canvas without changing zoom.
+    static func visibleOffset(point: CGPoint, size: CGSize, zoom: CGFloat, offset: CGSize) -> CGSize? {
+        guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0,
+              zoom.isFinite, zoom > 0, point.x.isFinite, point.y.isFinite,
+              offset.width.isFinite, offset.height.isFinite else { return nil }
+        func adjust(_ p: CGFloat, _ length: CGFloat, _ current: CGFloat) -> CGFloat {
+            let margin = min(10 * zoom + 2, length / 2)
+            let displayed = (p - length / 2) * zoom + length / 2 + current
+            return current + max(margin - displayed, 0) - max(displayed - (length - margin), 0)
+        }
+        let result = CGSize(width: adjust(point.x, size.width, offset.width),
+                            height: adjust(point.y, size.height, offset.height))
+        guard result.width.isFinite, result.height.isFinite else { return nil }
+        return result
+    }
 }

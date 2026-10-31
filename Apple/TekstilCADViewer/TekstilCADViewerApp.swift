@@ -189,6 +189,7 @@ private struct ContentView: View {
                             Button("Önceki işaret") {
                                 if let point = NotchSearch.adjacent(in: notches, current: current, forward: false) {
                                     selectedNotch = (selectedPiece, point)
+                                    notchSelectionRevision = UUID()
                                 }
                             }
                             .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
@@ -196,6 +197,7 @@ private struct ContentView: View {
                             Button("Sonraki işaret") {
                                 if let point = NotchSearch.adjacent(in: notches, current: current, forward: true) {
                                     selectedNotch = (selectedPiece, point)
+                                    notchSelectionRevision = UUID()
                                 }
                             }
                             .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
@@ -244,9 +246,10 @@ private struct ContentView: View {
                         DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
-                        highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
+                        highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
+                        selectionRevision: notchSelectionRevision
                         )
-                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")-\(notchSelectionRevision)")
+                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
                     } else {
                         Text("Bu projede görüntülenebilir kontur yok.")
@@ -1174,7 +1177,7 @@ private struct ExperimentalPointEditor: View {
                 #endif
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
-                    DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil)
+                    DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil, selectionRevision: nil)
                         .frame(height: 240)
                     Button("Yeni kopyayı kaydet") { saveCopy() }
                     .disabled(candidate == nil || working || saving)
@@ -1349,6 +1352,7 @@ private struct DrawingView: View {
     let pieces: [Drawing.Piece]
     let label: String
     let highlightedNotch: Int?
+    let selectionRevision: UUID?
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var showGrain = true
@@ -1413,8 +1417,9 @@ private struct DrawingView: View {
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
             )
-            .onAppear { canvasSize = geometry.size }
-            .onChange(of: geometry.size) { canvasSize = $0 }
+            .onAppear { canvasSize = geometry.size; revealSelectedNotch(size: geometry.size) }
+            .onChange(of: geometry.size) { canvasSize = $0; revealSelectedNotch(size: $0) }
+            .onChange(of: selectionRevision) { _ in revealSelectedNotch(size: geometry.size) }
         }
         .frame(height: 320)
                 VStack(alignment: .leading, spacing: 8) {
@@ -1453,15 +1458,27 @@ private struct DrawingView: View {
         offset = limitedOffset(CGSize(width: offset.width + width, height: offset.height + height), size: size, scale: zoom)
     }
 
+    private var viewportPoints: [Drawing.Point] {
+        var points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
+        if showGrain {
+            for piece in pieces where !piece.points.isEmpty {
+                if let grain = piece.grain { points.append(contentsOf: [grain.start, grain.end]) }
+            }
+        }
+        return points
+    }
+
+    private func revealSelectedNotch(size: CGSize) {
+        guard pieces.count == 1, let index = highlightedNotch,
+              pieces[0].points.indices.contains(index), pieces[0].notches.contains(index),
+              let viewport = ContourViewport(points: viewportPoints, width: Double(size.width), height: Double(size.height)),
+              let result = ContourViewport.visibleOffset(point: viewport.position(pieces[0].points[index]), size: size, zoom: zoom, offset: offset) else { return }
+        offset = limitedOffset(result, size: size, scale: zoom)
+    }
+
     private var drawing: some View {
         Canvas { context, size in
-            var points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
-            if showGrain {
-                for piece in pieces where !piece.points.isEmpty {
-                    if let grain = piece.grain { points.append(contentsOf: [grain.start, grain.end]) }
-                }
-            }
-            guard let viewport = ContourViewport(points: points, width: Double(size.width), height: Double(size.height)) else { return }
+            guard let viewport = ContourViewport(points: viewportPoints, width: Double(size.width), height: Double(size.height)) else { return }
             func position(_ p: Drawing.Point) -> CGPoint { viewport.position(p) }
             var remainingNotches = Self.maximumVisibleNotches
             for piece in pieces {

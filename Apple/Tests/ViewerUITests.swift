@@ -129,7 +129,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists, "The saved library model should finish opening after the picker is cancelled")
     }
 
-    func testSelectingNotchResetsZoomEvenWhenSelectingItAgain() {
+    func testSelectingNotchPreservesZoomEvenWhenSelectingItAgain() {
         let fixture = #"[6,{"Name":"İşaret Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-fixture"]
@@ -137,6 +137,7 @@ final class ViewerUITests: XCTestCase {
         app.launch()
         let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
         XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        var expectedZoom: String?
         for _ in 0..<2 {
             picker.tap()
             let notch = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch
@@ -146,11 +147,38 @@ final class ViewerUITests: XCTestCase {
             XCTAssertTrue(preview.waitForExistence(timeout: 5))
             let scroll = app.scrollViews.firstMatch
             for _ in 0..<6 where !preview.isHittable { scroll.swipeUp() }
-            XCTAssertEqual(preview.value as? String, "Yüzde 100")
+            if let expectedZoom { XCTAssertEqual(preview.value as? String, expectedZoom) }
             preview.pinch(withScale: 1.5, velocity: 1)
             XCTAssertNotEqual(preview.value as? String, "Yüzde 100")
+            expectedZoom = preview.value as? String
             for _ in 0..<6 where !picker.isHittable { scroll.swipeDown() }
             XCTAssertTrue(picker.isHittable)
+        }
+    }
+
+    func testNotchNavigationPreservesZoomInBothDirections() {
+        let fixture = #"[6,{"Name":"İşaret Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":100,"Y":100}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let nextPiece = app.buttons["Sonraki parça"]
+        XCTAssertTrue(nextPiece.waitForExistence(timeout: 15))
+        nextPiece.tap()
+        app.buttons["Sonraki işaret"].tap()
+        let scroll = app.scrollViews.firstMatch
+        let preview = app.otherElements["Kol kontur önizlemesi"]
+        for button in ["Sonraki işaret", "Önceki işaret"] {
+            for _ in 0..<6 where !preview.isHittable { scroll.swipeUp() }
+            XCTAssertTrue(preview.isHittable)
+            preview.pinch(withScale: 1.5, velocity: 1)
+            XCTAssertNotEqual(preview.value as? String, "Yüzde 100")
+            let zoomBeforeNavigation = preview.value as? String
+            let navigation = app.buttons[button]
+            for _ in 0..<6 where !navigation.isHittable { scroll.swipeDown() }
+            XCTAssertTrue(navigation.isHittable)
+            navigation.tap()
+            XCTAssertEqual(preview.value as? String, zoomBeforeNavigation)
         }
     }
 
