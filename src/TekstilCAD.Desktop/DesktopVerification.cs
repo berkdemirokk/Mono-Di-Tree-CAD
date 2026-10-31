@@ -4720,6 +4720,18 @@ internal static class DesktopVerification
             "0\nSECTION\n2\nENTITIES\n0\nINSERT\n2\nA\n10\n0\n20\n0\n0\nENDSEC\n0\nEOF\n";
         using var stream=new MemoryStream(System.Text.Encoding.UTF8.GetBytes(drawing),writable:false);
         var inspection=DxfFormat.InspectBlockPlacements(stream,DxfTextEncoding.Utf8);
+        var inventoryDrawing=drawing.Replace("0\nENDBLK\n", "0\nSPLINE\n70\n8\n0\nENDBLK\n")
+            .Replace("0\nINSERT\n", "0\nSPLINE\n70\n8\n0\nINSERT\n");
+        using var inventoryStream=new MemoryStream(System.Text.Encoding.UTF8.GetBytes(inventoryDrawing),writable:false);
+        var inventoryInspection=DxfFormat.InspectBlockPlacements(inventoryStream,DxfTextEncoding.Utf8);
+        var inventoryPicker=studio.CreateDxfLayerSelectionWindow(inventoryInspection,new MainWindow.DxfLayerSelectionState());
+        var inventoryRoot=(FrameworkElement)inventoryPicker.Content;
+        var inventory=Descendants<TextBlock>(inventoryRoot).Single(t=>AutomationProperties.GetAutomationId(t)=="DxfSourceInventory");
+        Check(inventory.Text.Contains("BLOCKS · SPLINE: 1") && inventory.Text.Contains("ENTITIES · SPLINE: 1")
+            && inventory.Text.Contains("parça veya yerleştirme sayısı değildir")
+            && Descendants<TextBlock>(inventoryRoot).Any(t=>t.Text.Contains("Kodlama ve destek sınırları")),
+            "DXF inspection displays section source counts and preserves support warnings",checks);
+        inventoryPicker.Close();
         var selection=new MainWindow.DxfLayerSelectionState();
         var picker=studio.CreateDxfLayerSelectionWindow(inspection,selection);
         Render(picker,Path.ChangeExtension(reportPath,".dxf-strict-layer-selection.png"),500,380);

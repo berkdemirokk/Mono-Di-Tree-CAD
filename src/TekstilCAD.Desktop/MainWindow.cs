@@ -2002,6 +2002,15 @@ public class MainWindow : Window
         body.Children.Add(new TextBlock { Text="Kodlama ve destek sınırları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,3) });
         foreach(var warning in inspection.Warnings.Concat(inspection.Limitations))
             body.Children.Add(new TextBlock { Text="• "+warning,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,2,0,4) });
+        var sourceCounts=inspection.SupplementalGeometry.SourceCounts;
+        if(!sourceCounts.IsEmpty)
+        {
+            var inventory="Kaynak kayıtları (parça veya yerleştirme sayısı değildir; çoklu çizgiler düz de olabilir):\n"+
+                string.Join("\n",sourceCounts.Select(c=>$"{c.Section} · {c.EntityType}: {c.Count}"));
+            var inventoryText=new TextBlock { Text=inventory,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) };
+            System.Windows.Automation.AutomationProperties.SetAutomationId(inventoryText,"DxfSourceInventory");
+            body.Children.Add(inventoryText);
+        }
         body.Children.Add(new TextBlock { Text="Dosyada kullanılan tüm katmanların anlamını kaynakta doğrulayın ve onaylayın. Kullanılan bir katman onaylanmazsa aktarım durur; seçim filtreleme yapmaz. Hiçbir katman önceden onaylı değildir. Renkler projede korunmaz ve kesim/dikiş anlamı otomatik belirlenmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) });
         body.Children.Add(layers);
         body.Children.Add(new TextBlock { Text="Koordinat toleransı (mm, her eksen için): 0 tam eşleşme ister ve geçerli ondalık ölçüleri reddedebilir. Üretim toleransı doğrulanmamıştır; izin verilen farkı dikkatle belirleyin (0–1 mm).",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
