@@ -1454,6 +1454,11 @@ internal static class DesktopVerification
             Check(studio.Document.Name=="Changed during approval","Read completed after window closure cannot replace work",checks);
 
             studio.BeforeProjectReadForVerification=null;
+            studio.ConfirmOpenDiscardForVerification=()=> { ProjectStorage.Save(new ProjectDocument { Name="Changed on disk" },path);return (true,false); };
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Changed during approval" && ProjectStorage.Load(path).Name=="Changed on disk",
+                "Source changed during approval prevents opening the stale snapshot and preserves work",checks);
+            ProjectStorage.Save(new ProjectDocument { Name="Opened" },path);
             studio.ConfirmOpenDiscardForVerification=()=> (true,false);
             pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             Check(studio.Document.Name=="Opened","Approved background project read installs loaded project",checks);

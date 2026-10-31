@@ -2,6 +2,7 @@
 
 Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamamlandığı iddia edilmez.
 
+- Proje dosyasının okunması ve uygulamadan önce sürümünün yeniden kontrol edilmesi arka planda yapılır. İptal edilen okumada sonuç kullanılmaz, ancak mevcut okuma tamamlanana kadar yeni açma bekler. Son kontrolden sonra dosya yine değişebilir; sonraki kayıtta sürüm çatışması kontrol edilir. Belgenin yerleştirilmesi ve görünümün yenilenmesi hâlâ arayüzü bekletebilir; gerçek fabrika verileriyle ölçülmedi.
 - Windows WPF hedefi var; Uno/iPad/iPhone/macOS uygulamaları yok.
 - Bézier ve yaylar örneklenmiş çoklu çizgi olarak saklanır; parametrik eğri düzenleme yok.
 - Çoklu seçim, katman modeli, pens, genel kontur birleştirme, çentik meta verisi ve gelişmiş ölçülendirme henüz yok.

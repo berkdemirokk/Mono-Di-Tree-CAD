@@ -1556,7 +1556,7 @@ public class MainWindow : Window
     {
         projectOpenGeneration++;
         if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Collapsed;
-        if(projectOpenRunning && !windowClosed)SetStatus("Proje açma iptal edildi; okuma tamamlandığında sonuç kullanılmayacak.");
+        if(projectOpenRunning && !windowClosed)SetStatus("Proje açma iptal edildi; okuma bitene kadar yeni açma işlemi bekleyecek ve sonuç kullanılmayacak.");
     }
     private bool OpenApprovalStillValid(DxfPreparationStamp stamp, Guid epoch, long generation) =>
         generation==projectOpenGeneration && !windowClosed && !recoveryClosing && !recoveryRestoreIncomplete &&
@@ -1573,13 +1573,17 @@ public class MainWindow : Window
         {
             var loaded=await Task.Run(()=> { BeforeProjectReadForVerification?.Invoke();return ProjectStorage.LoadWithVersion(path); });
             if(generation!=projectOpenGeneration || windowClosed || recoveryClosing)return;
-            if(BlockForDxfImport() || BlockForExport() || BlockForActiveDrag() || BlockForLargeVertexValidation() || recoveryRestoreIncomplete || dxfReviewActive)return;
+            if(BlockForDxfImport() || BlockForExport() || BlockForActiveDrag() || BlockForLargeVertexValidation())return;
+            if(recoveryRestoreIncomplete || dxfReviewActive)
+            { SetStatus("Proje açılmadı · Önce devam eden kurtarma veya DXF incelemesini tamamlayın.");return; }
             var epoch=projectEpoch;
             var stamp=CaptureDxfPreparationStamp();
             if(canvas.HasPendingDrawing)
             {
                 var accepted=ConfirmOpenDrawingForVerification?.Invoke() ?? ConfirmDiscardPendingDrawing("Bu işlem sürdürülürse");
-                if(!accepted || !OpenApprovalStillValid(stamp,epoch,generation))return;
+                if(!accepted) { SetStatus("Proje açma iptal edildi · Mevcut çalışma korundu.");return; }
+                if(!OpenApprovalStillValid(stamp,epoch,generation))
+                { if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)SetStatus("Çalışma değişti · Proje açılmadı. Yeniden deneyin.");return; }
             }
             if(HasUnsavedDocumentWork)
             {
@@ -1595,15 +1599,27 @@ public class MainWindow : Window
                 // Saving can apply drafts and change the document. Require a fresh
                 // open rather than extending approval to an altered state.
                 if(saved) { if(!windowClosed)SetStatus("Çalışma kaydedildi. Projeyi açmak için yeniden seçin.");return; }
-                if(!accepted || !OpenApprovalStillValid(stamp,epoch,generation))return;
+                if(!accepted) { SetStatus("Proje açma iptal edildi · Mevcut çalışma korundu.");return; }
+                if(!OpenApprovalStillValid(stamp,epoch,generation))
+                { if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)SetStatus("Çalışma değişti · Proje açılmadı. Yeniden deneyin.");return; }
             }
-            if(!OpenApprovalStillValid(stamp,epoch,generation))return;
+            if(!OpenApprovalStillValid(stamp,epoch,generation))
+            { if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)SetStatus("Çalışma değişti · Proje açılmadı. Yeniden deneyin.");return; }
+            // The prompt may have been open while another application changed
+            // the source. Compare the same byte-based version before replacing
+            // the workspace; this narrows, but cannot eliminate, later races.
+            var currentVersion=await Task.Run(()=>ProjectStorage.CaptureVersion(loaded.Version.FullPath));
+            if(!OpenApprovalStillValid(stamp,epoch,generation))
+            { if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)SetStatus("Çalışma değişti · Proje açılmadı. Yeniden deneyin.");return; }
+            if(!Equals(currentVersion,loaded.Version))
+            { SetStatus("Kaynak dosya okunduktan sonra değişti veya kaldırıldı · Proje açılmadı. Dosyayı yeniden seçin.");return; }
             ApplyOpenedProject(loaded);
         }
         catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)
             {
+                SetStatus("Proje açma işlemi tamamlanamadı · Ayrıntıyı kontrol edin.");
                 if(ProjectOpenErrorForVerification is { } report)report(ex);
                 else MessageBox.Show(this,ex.Message,"İşlem tamamlanamadı",MessageBoxButton.OK,MessageBoxImage.Warning);
             }
