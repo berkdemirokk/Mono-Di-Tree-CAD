@@ -598,7 +598,12 @@ private struct DrawingView: View {
 
     private var drawing: some View {
         Canvas { context, size in
-            let points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
+            var points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
+            if showGrain {
+                for piece in pieces where !piece.points.isEmpty {
+                    if let grain = piece.grain { points.append(contentsOf: [grain.start, grain.end]) }
+                }
+            }
             guard let first = points.first else { return }
             var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
             for p in points { minX = min(minX, p.x); maxX = max(maxX, p.x); minY = min(minY, p.y); maxY = max(maxY, p.y) }
