@@ -102,6 +102,23 @@ private struct ContentView: View {
                 }
             } catch { self.error = error.localizedDescription }
         }
+        #if DEBUG && targetEnvironment(simulator)
+        .onAppear {
+            guard ProcessInfo.processInfo.arguments.contains("--ui-test-fixture"),
+                  let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FIXTURE"],
+                  let data = Data(base64Encoded: encoded), data.count <= 64 * 1024 else { return }
+            let url = FileManager.default.temporaryDirectory
+                .appendingPathComponent("ui-test-\(UUID().uuidString).tcad")
+            defer { try? FileManager.default.removeItem(at: url) }
+            do {
+                try data.write(to: url, options: .atomic)
+                let drawing = try Drawing.load(url)
+                selectedPiece = nil
+                drawingRevision = UUID()
+                project = drawing
+            } catch { self.error = error.localizedDescription }
+        }
+        #endif
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }

@@ -1,7 +1,10 @@
   TekstilCADViewerUITests:
     type: bundle.ui-testing
     platform: iOS
-    sources: [Tests/ViewerUITests.swift]
+    sources:
+      - path: Tests/ViewerUITests.swift
+      - path: Tests/Fixtures
+        buildPhase: resources
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:

@@ -1,0 +1,1 @@
+[5, {"Name":"Seçim Testi","Pieces":[{"Name":"Ön Beden","Closed":true,"Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":100,"Y":200}]},{"Name":"Arka Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":100}]}]}]
