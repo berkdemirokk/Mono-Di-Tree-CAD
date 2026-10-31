@@ -378,6 +378,7 @@ internal static class DesktopVerification
             VerifyNotchGradingAndNesting(studio,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
+            VerifyNotchList(studio,checks);
             NotchVertexEditVerification.Run(studio,checks);
             NotchPathJoinClosureVerification.Run(studio,checks);
             NotchTransformVerification.Run(studio,checks);
@@ -7058,6 +7059,34 @@ internal static class DesktopVerification
                 "Rejected marked property translation preserves the geometry, marks, history and draft",checks);
         }
         finally { studio.LoadDocument(new ProjectDocument()); }
+    }
+
+    private static void VerifyNotchList(MainWindow studio,List<string> checks)
+    {
+        var p=new PatternPiece { Name="İşaretli",Points=[new(0,0),new(10.125,0),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(10.125,0) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[p] });studio.Select(p.Id);
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var list=(ListBox)typeof(TextileToolsWindow).GetField("notchList",PrivateInstance)!.GetValue(tools)!;
+            var remove=(Button)typeof(TextileToolsWindow).GetField("notchRemoveSelected",PrivateInstance)!.GetValue(tools)!;
+            var index=(TextBox)typeof(TextileToolsWindow).GetField("vertexIndexInput",PrivateInstance)!.GetValue(tools)!;
+            var before=studio.Document.Clone();
+            Check(list.Items.Count==1 && list.Items[0].ToString()!.Contains("10.125") && AutomationProperties.GetName(list).Contains("işaretleri"),
+                "Notch list presents round-trip millimeter coordinates with an accessible name",checks);
+            list.SelectedIndex=0;
+            Check(index.Text=="1" && remove.IsEnabled,"Selecting a notch populates the vertex index",checks);
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(studio.Document.Pieces[0].Notches is null && list.Items.Count==0 && session.UndoCount==1,
+                "Removing a listed notch updates the list in one transaction",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores the listed notch",checks);
+            // The list belongs to the old document snapshot after history changes.
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(DocumentSession.ContentEquals(before,studio.Document),"Stale notch-list action does not edit another document state",checks);
+        }
+        finally { tools.Close(); }
     }
 
     private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)

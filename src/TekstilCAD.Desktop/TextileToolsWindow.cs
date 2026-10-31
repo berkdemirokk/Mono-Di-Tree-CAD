@@ -42,6 +42,12 @@ public sealed class TextileToolsWindow : Window
     private bool gradeBusy;
     private bool vertexMoveBusy;
     private TextBox? vertexIndexInput, vertexXInput, vertexYInput;
+    private ListBox? notchList;
+    private Button? notchRemoveSelected;
+    private sealed record NotchRow(Guid PieceId,int Index,Point2 Position)
+    {
+        public override string ToString() => $"Nokta {Index} · X {MeasurementInput.Format(Position.X)} mm · Y {MeasurementInput.Format(Position.Y)} mm";
+    }
     private CancellationTokenSource? vertexMoveCancellation;
     private readonly Button cancelVertexMove = new() { Content="Nokta doğrulamasını iptal et", Padding=new Thickness(12,7,12,7), Margin=new Thickness(0,0,8,0), Visibility=Visibility.Collapsed };
     internal Action? BeforeVertexMoveForVerification { get; set; }
@@ -312,6 +318,20 @@ public sealed class TextileToolsWindow : Window
         refreshingSource=true;source.ItemsSource=workspace.Document.Pieces.ToList();
         source.SelectedItem=workspace.Document.Pieces.FirstOrDefault(p=>p.Id==selected)??workspace.Document.Pieces.FirstOrDefault();refreshingSource=false;
         if(reload)ReloadRows();else RefreshCommands();
+        RefreshNotchList();
+    }
+    private void RefreshNotchList()
+    {
+        if(notchList is null)return;
+        notchList.ItemsSource=source.SelectedItem is PatternPiece piece
+            ? piece.Notches?.Select(mark=>new NotchRow(piece.Id,mark.VertexIndex,mark.Position)).ToArray() ?? []
+            : Array.Empty<NotchRow>();
+    }
+    private bool CurrentNotch(NotchRow row)
+    {
+        if(source.SelectedItem is not PatternPiece piece || piece.Id!=row.PieceId ||
+           !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==row.PieceId),piece))return false;
+        return piece.Notches?.Any(mark=>mark.VertexIndex==row.Index && mark.Position==row.Position)==true;
     }
     private void ReloadRows()
     {
@@ -768,6 +788,27 @@ public sealed class TextileToolsWindow : Window
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
         Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. Nokta eklendiğinde veya taşındığında işaretler köşelerini izler. İşaretli nokta silinemez; önce işareti kaldırın. Serileme kuralını yeniden kontrol edin.");
+        Note(panel,"Seçili parçanın köşe işaretleri aşağıdadır. Bir satır seçmek nokta indeksini doldurur; koordinatlar modelin milimetre değerleridir. İşaretler fiziksel çentik veya üretim onayı değildir.");
+        notchList=new ListBox { MinHeight=65,MaxHeight=170,Margin=new Thickness(0,4,0,8) };
+        VirtualizingPanel.SetIsVirtualizing(notchList,true);VirtualizingPanel.SetVirtualizationMode(notchList,VirtualizationMode.Recycling);
+        ScrollViewer.SetCanContentScroll(notchList,true);
+        AutomationProperties.SetName(notchList,"Seçili parçanın köşe işaretleri");
+        AutomationProperties.SetHelpText(notchList,"İndeksi nokta alanına aktarmak için işareti seçin; koordinatlar milimetredir.");
+        notchList.SelectionChanged+=(_,_)=>
+        {
+            if(notchList.SelectedItem is not NotchRow row)return;
+            if(!CurrentNotch(row)) { result.Foreground=StudioTheme.Warning;result.Text="İşaret listesi güncel değil; atölyeyi yeniden açın.";return; }
+            index.Text=row.Index.ToString(CultureInfo.InvariantCulture);
+        };
+        panel.Children.Add(notchList);
+        notchRemoveSelected=Button(panel,"Listede seçili işareti kaldır",()=>
+        {
+            if(notchList.SelectedItem is not NotchRow row || !CurrentNotch(row))
+                throw new InvalidOperationException("İşaret seçimi güncel değil; atölyeyi yeniden açın.");
+            SetVertexNotch(row.Index.ToString(CultureInfo.InvariantCulture),false);
+        },()=>notchList.SelectedItem is NotchRow row && CurrentNotch(row));
+        notchList.SelectionChanged+=(_,_)=>RefreshCommands();
+        RefreshNotchList();
         Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
         Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
