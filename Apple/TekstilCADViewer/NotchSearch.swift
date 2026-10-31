@@ -5,6 +5,14 @@ enum ModelSearch {
     static func matches(_ text: String, query: String) -> Bool {
         text.localizedStandardContains(query)
     }
+
+    /// Match each search word across the visible name and record identity.
+    static func matchesLibrary(name: String, identities: [String], query: String) -> Bool {
+        let fields = [name] + identities
+        return query.split(whereSeparator: { $0.isWhitespace }).allSatisfy { word in
+            fields.contains { $0.localizedStandardContains(String(word)) }
+        }
+    }
 }
 
 /// Shared by the notch list and its search so visible labels are searchable.

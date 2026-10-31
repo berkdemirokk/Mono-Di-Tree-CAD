@@ -26,6 +26,19 @@ final class NotchSearchTests: XCTestCase {
         XCTAssertTrue(ModelSearch.matches("Malzeme: Pamuk", query: "pamuk"))
         XCTAssertFalse(ModelSearch.matches("Arka Beden", query: "on beden"))
     }
+    func testLibrarySearchMatchesWordsAcrossNameAndIdentityInAnyOrder() {
+        let name = "Ön Beden Kol"
+        let identities = ["On Beden - ABC123.tcad", "tcad · ABC123"]
+        func matches(_ query: String) -> Bool {
+            ModelSearch.matchesLibrary(name: name, identities: identities, query: query)
+        }
+        XCTAssertTrue(matches("kol on"))
+        XCTAssertTrue(matches("ABC123 beden"))
+        XCTAssertTrue(matches("  "))
+        XCTAssertFalse(matches("kol arka"))
+        XCTAssertFalse(matches("ABC999 beden"))
+    }
+
     func testAdjacentNotchNavigationUsesFileOrderWithoutWrapping() {
         let points = [8, 2, 12]
         XCTAssertNil(NotchSearch.adjacent(in: [], current: nil, forward: true))

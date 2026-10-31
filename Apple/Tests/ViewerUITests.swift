@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLibraryFindsModelWhenNameWordsAreReversed() {
+        let fixture = #"{"Name":"Ön Beden Kol","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launchEnvironment["TCAD_UI_TEST_FILENAME"] = "Ön Beden Kol.tcad"
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("kol on")
+        let model = app.buttons["Ön Beden Kol"]
+        XCTAssertTrue(model.waitForExistence(timeout: 5))
+        model.tap()
+        XCTAssertTrue(app.staticTexts["Ön Beden Kol"].waitForExistence(timeout: 10))
+    }
+
     func testNotchSearchCombinesPieceAndPoint() {
         let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"Ön Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":25,"Y":40}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":25,"Y":40}}]},{"Name":"Arka Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":25,"Y":40}],"Notches":[{"VertexIndex":1,"Position":{"X":25,"Y":40}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

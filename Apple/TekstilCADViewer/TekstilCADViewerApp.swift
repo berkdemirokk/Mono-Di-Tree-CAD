@@ -693,9 +693,7 @@ private struct ModelLibrary: View {
     private var matches: [ModelStore.Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return models.filter {
-            query.isEmpty || $0.name.localizedStandardContains(query) ||
-                $0.displayIdentity.localizedCaseInsensitiveContains(query) ||
-                $0.readableIdentity.localizedCaseInsensitiveContains(query)
+            ModelSearch.matchesLibrary(name: $0.name, identities: [$0.displayIdentity, $0.readableIdentity], query: query)
         }.sorted { first, second in
             if sortOrder == .newest {
                 switch (first.date, second.date) {
