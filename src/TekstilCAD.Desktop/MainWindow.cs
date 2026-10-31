@@ -140,6 +140,7 @@ public class MainWindow : Window
     internal Action? AfterDxfSourceCheckForVerification { get; set; }
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
+    internal Func<DxfImportResult,(string Layer,IReadOnlyList<DxfNotchPointSelection> Selections)?>? ConfirmDxfNotchReviewForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
     internal Func<(bool Accepted,bool Saved)>? DxfDiscardDecisionForVerification { get; set; }
@@ -2180,6 +2181,36 @@ public class MainWindow : Window
                 return;
             }
             if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            IReadOnlyList<DxfNotchPointSelection> notchSelections=Array.Empty<DxfNotchPointSelection>();
+            string? notchLayer=null,notchFingerprint=null;
+            var hasNotchPoints=imported.SupplementalGeometry is { Truncated:false } supplemental &&
+                !supplemental.Records.IsDefault && supplemental.Records.Any(r=>r.EntityType=="POINT" && r.Section=="ENTITIES" && r.Block is null);
+            if(hasNotchPoints && imported.ImportParameters?.MillimetersPerUnit==1 &&
+               (ConfirmDxfReviewForVerification is null || ConfirmDxfNotchReviewForVerification is not null))
+            {
+                try { notchFingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(imported); }
+                catch(Exception ex) when(ex is InvalidDataException or ArgumentException) { notchFingerprint=null; }
+                if(notchFingerprint is not null)
+                {
+                    if(ConfirmDxfNotchReviewForVerification is { } review)
+                    {
+                        var choice=review(imported);
+                        if(!PreparedImportMatches())return;
+                        if(choice is null) { OfferDxfReviewRetry(imported,"Nokta işareti incelemesi iptal edildi; proje değiştirilmedi.");return; }
+                        notchLayer=choice.Value.Layer;notchSelections=choice.Value.Selections.ToArray();
+                    }
+                    else
+                    {
+                        var window=new DxfNotchPointReviewWindow(this,imported with { Project=importSnapshot.Clone() },notchFingerprint);
+                        var acceptedNotches=window.ShowDialog()==true;
+                        if(!PreparedImportMatches())return;
+                        if(!acceptedNotches) { OfferDxfReviewRetry(imported,"Nokta işareti incelemesi iptal edildi; proje değiştirilmedi.");return; }
+                        notchLayer=window.ApprovedLayer;notchSelections=window.Selections.ToArray();
+                    }
+                    if(!PreparedImportMatches())return;
+                    if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+                }
+            }
             IReadOnlyList<DxfGrainlineSelection> grainSelections = Array.Empty<DxfGrainlineSelection>();
             string? grainFingerprint = null;
             var hasGrainCandidates = imported.Project.Pieces.Any(p => p.Closed && p.Points.Count >= 3 && p.Grainline is null) &&
@@ -2228,15 +2259,24 @@ public class MainWindow : Window
             if (!PreparedImportMatches()) return;
             // Persist only the verified import snapshot, never an absolute source
             // path. A missing/oversized history fails before replacing the document.
-            var candidate = grainSelections.Count == 0
-                ? importSnapshot.Clone()
-                : DxfTextileGrainlineMapping.Apply(imported with { Project = importSnapshot.Clone() }, grainSelections,
-                    grainFingerprint ?? throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.")).Project;
+            var candidate = notchSelections.Count==0 ? importSnapshot.Clone() :
+                DxfNotchPointMapping.Apply(imported with { Project=importSnapshot.Clone() },notchSelections,
+                    notchLayer ?? throw new InvalidOperationException("Nokta işareti katmanı eksik."),
+                    notchFingerprint ?? throw new InvalidOperationException("Nokta işareti inceleme kimliği eksik.")).Project;
+            if(grainSelections.Count>0)
+            {
+                if(grainFingerprint is null)throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.");
+                var grainInput=imported with { Project=candidate };
+                candidate=DxfTextileGrainlineMapping.Apply(grainInput,grainSelections,
+                    DxfTextileGrainlineMapping.CaptureFingerprint(grainInput)).Project;
+            }
             var historyWarnings = imported.Warnings.ToList();
             if (grainReviewUnavailable)
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
                 historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
+            if(notchSelections.Count>0)
+                historyWarnings.Add("DXF POINT kayıtları kullanıcı seçimiyle görsel köşe işaretlerine eşlendi. Kaynak katmanı ve kayıt ilişkileri projede saklanmaz; fiziksel çentik veya üretim uygunluğu doğrulanmadı.");
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
                 MillimetersPerUnit=preparedDxfFactor, Warnings=historyWarnings, PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };

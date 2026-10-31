@@ -1017,6 +1017,7 @@ internal static class DesktopVerification
             VerifyDxfImportCancellation(studio,work,checks);
             VerifyDxfSourceCheckWorkflow(studio,work,checks);
             VerifyDxfReviewRetry(studio,work,checks);
+            VerifyDxfNotchPointImport(studio,work,checks);
             VerifyBasicNestingLengthPrecision(studio,checks);
             VerifyNestingAndGrading(studio,checks);
             VerifyConcaveAllowance(studio,checks);
@@ -2002,6 +2003,72 @@ internal static class DesktopVerification
         }
         finally { studio.BeforeDxfPreparationForVerification=null;SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
+    private static void VerifyDxfNotchPointImport(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"notch-point-import-"+Guid.NewGuid().ToString("N")+".dxf");
+        var bytes=System.Text.Encoding.UTF8.GetBytes("0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\nCUT\n90\n3\n70\n1\n10\n0\n20\n0\n10\n10\n20\n0\n10\n0\n20\n10\n0\nPOINT\n8\nMARK\n10\n10\n20\n0\n0\nENDSEC\n0\nEOF\n");
+        DxfImportResult Prepare()
+        {
+            File.WriteAllBytes(path,bytes);studio.LoadDocument(new ProjectDocument());
+            var task=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>task.IsCompleted);
+            return task.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Nokta işareti DXF hazırlanamadı.");
+        }
+        void Run() { var task=studio.ReviewPreparedDxfAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            var incoming=Prepare();
+            var dialog=new DxfNotchPointReviewWindow(studio,incoming,DxfTextileGrainlineMapping.CaptureFingerprint(incoming));
+            var layer=(ComboBox)typeof(DxfNotchPointReviewWindow).GetField("layer",PrivateInstance)!.GetValue(dialog)!;
+            var point=(ComboBox)typeof(DxfNotchPointReviewWindow).GetField("point",PrivateInstance)!.GetValue(dialog)!;
+            var contour=(ComboBox)typeof(DxfNotchPointReviewWindow).GetField("contour",PrivateInstance)!.GetValue(dialog)!;
+            var vertex=(ComboBox)typeof(DxfNotchPointReviewWindow).GetField("vertex",PrivateInstance)!.GetValue(dialog)!;
+            var selected=(ListBox)typeof(DxfNotchPointReviewWindow).GetField("selected",PrivateInstance)!.GetValue(dialog)!;
+            var add=(Button)typeof(DxfNotchPointReviewWindow).GetField("add",PrivateInstance)!.GetValue(dialog)!;
+            var remove=(Button)typeof(DxfNotchPointReviewWindow).GetField("remove",PrivateInstance)!.GetValue(dialog)!;
+            var preview=typeof(DxfNotchPointReviewWindow).GetField("preview",PrivateInstance)!.GetValue(dialog)!;
+            var previewPiece=preview.GetType().GetField("piece",PrivateInstance)!;
+            Check(layer.SelectedIndex==-1 && point.SelectedIndex==-1 && dialog.Selections.Count==0,
+                "DXF point review starts with no implicit layer or marker approval",checks);
+            layer.SelectedIndex=0;point.SelectedIndex=0;contour.SelectedIndex=0;vertex.SelectedIndex=1;
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(((PatternPiece?)previewPiece.GetValue(preview))?.Notches is { Count:1 } && selected.Items.Count==1,
+                "Validated point review displays the marked detached preview",checks);
+            selected.SelectedIndex=0;remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(previewPiece.GetValue(preview) is null && selected.Items.Count==0,
+                "Removing a point mapping clears the old marked preview",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            contour.SelectedIndex=-1;
+            Check(previewPiece.GetValue(preview) is null,"Changing contour clears the old marked preview",checks);
+            contour.SelectedIndex=0;vertex.SelectedIndex=1;selected.SelectedIndex=0;remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));layer.SelectedIndex=-1;
+            Check(previewPiece.GetValue(preview) is null && selected.Items.Count==0,
+                "Changing layer clears mappings and their preview",checks);
+            dialog.Close();
+            studio.ConfirmDxfReviewForVerification=_=>true;studio.DxfDiscardDecisionForVerification=()=>(true,false);
+            studio.ConfirmDxfNotchReviewForVerification=import=>
+                ("MARK",(IReadOnlyList<DxfNotchPointSelection>)[new(import.SupplementalGeometry!.Records.Single(r=>r.EntityType=="POINT").SourceOrdinal,import.Project.Pieces[0].Id,1)]);
+            Run();var piece=studio.Document.Pieces.Single();
+            Check(piece.Notches is { Count:1 } && piece.Notches[0].VertexIndex==1 && piece.Notches[0].Position==piece.Points[1] &&
+                File.ReadAllBytes(path).SequenceEqual(bytes) && studio.Document.ImportProvenance!.Warnings.Any(w=>w.Contains("POINT")),
+                "Approved DXF point mapping imports a visual mark without changing the source",checks);
+            incoming=Prepare();var before=studio.Document.Clone();
+            studio.ConfirmDxfNotchReviewForVerification=import=>
+            {
+                studio.Commit("Kaynak değişti",()=>studio.Document.Name="Değişti");
+                return ("MARK",(IReadOnlyList<DxfNotchPointSelection>)[new(import.SupplementalGeometry!.Records.Single(r=>r.EntityType=="POINT").SourceOrdinal,import.Project.Pieces[0].Id,1)]);
+            };
+            Run();
+            Check(studio.Document.Name=="Değişti" && studio.Document.Pieces.Count==before.Pieces.Count,
+                "Workspace change during point review prevents replacement",checks);
+        }
+        finally
+        {
+            studio.ConfirmDxfReviewForVerification=null;studio.ConfirmDxfNotchReviewForVerification=null;
+            studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous);
+        }
+    }
+
     private static void VerifyDxfReviewRetry(MainWindow studio,string work,List<string> checks)
     {
         var previousContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
