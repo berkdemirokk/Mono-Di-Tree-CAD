@@ -67,7 +67,7 @@ private struct ContentView: View {
         ScrollView {
         VStack(spacing: 12) {
             HStack {
-                Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
+                Button(".tcad aç") { showingImporter = true }
                     .accessibilityHint("Önizlemek için bir proje dosyası seçin").disabled(isSaving)
                 Button("Modellerim") { showingLibrary = true }.disabled(isSaving)
                 Spacer()
