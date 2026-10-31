@@ -643,7 +643,7 @@ final class ViewerUITests: XCTestCase {
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
-        search.typeText("42")
+        search.typeText("42 kol")
         XCTAssertEqual(rows.count, 1)
         XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains("Beden: 42"))
         rows.firstMatch.tap()

@@ -1254,8 +1254,7 @@ private struct PiecePicker: View {
     private var matchingIndices: [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return pieces.indices.filter { index in
-            (query.isEmpty || ModelSearch.matches(pieces[index].displayName(index: index), query: query) ||
-                ModelSearch.matches(pieces[index].selectionDetails(index: index), query: query))
+            ModelSearch.matchesLibrary(name: pieces[index].displayName(index: index), identities: [pieces[index].selectionDetails(index: index)], query: query)
         }
     }
 
