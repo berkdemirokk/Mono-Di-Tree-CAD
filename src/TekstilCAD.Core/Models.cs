@@ -65,6 +65,18 @@ public sealed class GradingRuleSet
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
 
+    /// <summary>Keep a matching rule attached to a safely translated source contour.</summary>
+    public GradingRuleSet? TranslatedFor(PatternPiece source, IReadOnlyList<Point2> translated, double dx, double dy)
+    {
+        if (source.Id != SourcePieceId || source.Closed != SourceClosed ||
+            Deltas.Count != source.Points.Count || !SourcePoints.SequenceEqual(source.Points)) return null;
+        // Recompute with the same geometry precision checks so an unrelated edit
+        // cannot accidentally be adopted as a translation.
+        if (!Geometry.Translate(source.Points, dx, dy).SequenceEqual(translated)) return null;
+        var result = Clone(); result.SourcePoints = translated.ToList();
+        return result;
+    }
+
     /// <summary>Carry a matching rule through an edge midpoint insertion using linearly interpolated increments.</summary>
     public GradingRuleSet? WithEdgeMidpointFor(PatternPiece source, PatternPiece edited, int afterIndex)
     {

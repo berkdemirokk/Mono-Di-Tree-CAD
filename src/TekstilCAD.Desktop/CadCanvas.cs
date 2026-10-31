@@ -183,12 +183,16 @@ public sealed class CadCanvas : FrameworkElement
         var id=piece.Id;
         var translated=Geometry.Translate(piece.Points,dx,dy);
         var translatedGrain=GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
+        var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);
+        var translatedRule=rule?.TranslatedFor(piece,translated,dx,dy);
         owner.CommitObserved($"Parça klavyeyle taşındı · X {dx.ToString("0.#",CultureInfo.GetCultureInfo("tr-TR"))} mm · Y {dy.ToString("0.#",CultureInfo.GetCultureInfo("tr-TR"))} mm",()=>
         {
             var target=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id)
                 ?? throw new InvalidOperationException("Seçili parça değişti. Yeniden seçerek taşıyın.");
             target.Points=translated;
             target.Grainline=translatedGrain;
+            if(translatedRule is not null)
+                owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
         },()=>observedCommits++);
         owner.ClearCanvasError();
     }

@@ -1135,6 +1135,22 @@ internal static class DesktopVerification
         }
         var peer=UIElementAutomationPeer.CreatePeerForElement(canvas);
         Check(peer is not null && peer.GetName()=="Kalıp çalışma alanı" && !string.IsNullOrWhiteSpace(peer.GetHelpText()),"Canvas exposes accessible name and keyboard guidance",checks);
+        var source=studio.Selected!;
+        var original=studio.Document.Clone();
+        studio.Commit("Serileme testi",()=> {
+            studio.Document.GradingRules.RemoveAll(r=>r.SourcePieceId==source.Id);
+            studio.Document.GradingRules.Add(new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=source.Closed,
+                SourcePoints=[..source.Points],Deltas=source.Points.Select(_=>new Point2(1,2)).ToList() });
+        });
+        var beforeMove=studio.Document.Clone();
+        move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
+        var movedRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
+        Check(movedRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && movedRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
+            "Keyboard movement carries matching grading increments with the source",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(original,studio.Document),"Keyboard grading verification restores the original document",checks);
     }
     private static void VerifyViewNavigation(MainWindow studio,CadCanvas canvas,List<string> checks)
     {
