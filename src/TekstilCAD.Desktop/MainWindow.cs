@@ -185,7 +185,7 @@ public class MainWindow : Window
         header.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
         header.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
         var brand = new StackPanel { Margin = new Thickness(0, 0, 28, 0) };
-        brand.Children.Add(new TextBlock { Text = "TEKSTİLCAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 22 });
+        brand.Children.Add(new TextBlock { Text = "Mono Di Tree CAD", Foreground = StudioTheme.Accent, FontWeight = FontWeights.Bold, FontSize = 22 });
         brand.Children.Add(new TextBlock { Text = "STUDIO  /  KALIP TASARIMI", Foreground = Muted, FontSize = 9, Margin = new Thickness(1, 3, 0, 0) });
         header.Children.Add(brand);
         var project = new StackPanel { VerticalAlignment = VerticalAlignment.Center };

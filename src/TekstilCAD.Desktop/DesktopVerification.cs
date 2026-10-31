@@ -295,6 +295,7 @@ internal static class DesktopVerification
             studio.ConfirmHpglReviewForVerification=(_,_)=>true;
             StopTimer(studio);
             checks.Add("MainWindow constructed without Show");
+            Check(studio.Title.StartsWith("Mono Di Tree CAD",StringComparison.Ordinal) && Descendants<TextBlock>((DependencyObject)studio.Content).Any(t=>t.Text=="Mono Di Tree CAD"), "Main window displays the official product name", checks);
             _ = new WindowInteropHelper(studio).EnsureHandle();
             VerifyQuantityChoiceIdentity(studio,reportPath,checks);
             var sample = new ProjectDocument { Name = "Arka plan doğrulaması", Pieces = [new PatternPiece { Name = "100 mm kare", Points = [new(0,0),new(100,0),new(100,100),new(0,100)] }] };
