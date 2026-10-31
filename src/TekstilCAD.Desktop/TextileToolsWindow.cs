@@ -675,7 +675,9 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(create,"Yeni parça bilgileri varsayılan olarak otomatik aktarılmaz; isteğe bağlı seçilebilir. Adet hiçbir zaman aktarılmaz; adetli pastal için ayrıca girin.");
         create.ToolTip="İsteğe bağlı beden, rol ve malzeme seçilebilir; adet her zaman ayrıca girilir.";
         create.VerticalAlignment=VerticalAlignment.Bottom;create.Margin=new Thickness(0,0,0,0);create.Padding=new Thickness(12,7,12,7);
-        var secondaryActions=new WrapPanel();lower.Children.Add(secondaryActions);
+        // Leave room below the last row for the scroll viewer's clipped viewport,
+        // so its buttons can be scrolled fully into view at the minimum size.
+        var secondaryActions=new WrapPanel { Margin=new Thickness(0,0,0,12) };lower.Children.Add(secondaryActions);
         var batch=Button(secondaryActions,"Birden fazla beden oluştur…",()=>
         {
             if(!CommitGradeEdit())throw new ArgumentException("Serileme tablosundaki hücreyi tamamlayın.");
