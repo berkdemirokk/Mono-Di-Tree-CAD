@@ -158,6 +158,27 @@ private struct ContentView: View {
                             }
                         ))
                     }
+                    HStack {
+                        Button("Önceki parça") {
+                            guard let current = selectedPiece, current > 0 else { return }
+                            selectedNotch = nil
+                            selectedPiece = current - 1
+                        }
+                        .disabled(modelLoad.isLoading || selectedPiece == nil || selectedPiece == 0)
+                        Spacer()
+                        Text(selectedPiece.map { "\($0 + 1) / \(project.pieces.count)" } ?? "Tüm parçalar")
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1), toplam \(project.pieces.count)" } ?? "Tüm parçalar gösteriliyor")
+                        Spacer()
+                        Button("Sonraki parça") {
+                            let next = selectedPiece.map { $0 + 1 } ?? 0
+                            guard next < project.pieces.count else { return }
+                            selectedNotch = nil
+                            selectedPiece = next
+                        }
+                        .disabled(modelLoad.isLoading || selectedPiece == project.pieces.count - 1)
+                    }
+                    .buttonStyle(.bordered)
                     if let selectedPiece {
                         #if DEBUG
                         Button("Deneysel nokta düzenle…") {

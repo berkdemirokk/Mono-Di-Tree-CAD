@@ -21,6 +21,28 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(selected.exists)
     }
 
+    func testPieceNavigationMovesBetweenContoursAndClearsNotch() {
+        let fixture = #"[6,{"Name":"Gezinme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Ön","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":50}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let next = app.buttons["Sonraki parça"]
+        let previous = app.buttons["Önceki parça"]
+        XCTAssertTrue(next.waitForExistence(timeout: 15))
+        XCTAssertFalse(previous.isEnabled)
+        next.tap()
+        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
+        app.buttons["Köşe işaretlerini ara ve seç…"].tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.tap()
+        next.tap()
+        XCTAssertTrue(app.otherElements["Ön kontur önizlemesi"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Seçili köşe işareti:")).firstMatch.exists)
+        XCTAssertFalse(next.isEnabled)
+        previous.tap()
+        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
+        XCTAssertFalse(previous.isEnabled)
+    }
     func testSelectionIsUnavailableWhileAnotherModelLoads() {
         let fixture = #"[6,{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()
