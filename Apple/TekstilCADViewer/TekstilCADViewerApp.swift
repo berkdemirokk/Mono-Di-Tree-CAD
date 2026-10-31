@@ -27,7 +27,7 @@ private struct ContentView: View {
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
-            Text("Yalnızca kontur önizlemesi. Düzenleme, kaydetme, serileme, pastal, iplik yönü ve üretim çıktıları desteklenmez.")
+            Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
@@ -137,6 +137,11 @@ private struct Drawing {
         let name: String?
         let points: [Point]
         let closed: Bool
+        let role: String?
+        let size: String?
+        let material: String?
+        let quantity: Int?
+        let grainStatus: String
 
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -191,7 +196,31 @@ private struct Drawing {
                 }
                 return Point(x: x, y: y)
             }
-            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed))
+            let metadata = raw["Metadata"] as? [String: Any]
+            let quantityNumber = metadata?["Quantity"] as? NSNumber
+            let quantity: Int? = quantityNumber.flatMap { number in
+                guard CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite,
+                      number.doubleValue.rounded() == number.doubleValue,
+                      number.doubleValue >= 0, number.doubleValue <= 1_000_000 else { return nil }
+                return number.intValue
+            }
+            let grainStatus: String
+            if let grain = raw["Grainline"] as? [String: Any],
+               let start = grain["Start"] as? [String: Any], let end = grain["End"] as? [String: Any],
+               let sx = jsonNumber(start["X"]), let sy = jsonNumber(start["Y"]),
+               let ex = jsonNumber(end["X"]), let ey = jsonNumber(end["Y"]),
+               sx.isFinite, sy.isFinite, ex.isFinite, ey.isFinite,
+               (sx != ex || sy != ey), let review = jsonBoolean(grain["NeedsReview"]) {
+                grainStatus = review ? "İplik yönü: Kontrol bekliyor" : "İplik yönü: Kayıtlı"
+            } else if raw["Grainline"] == nil || raw["Grainline"] is NSNull {
+                grainStatus = "İplik yönü: Belirtilmemiş"
+            } else {
+                grainStatus = "İplik yönü: Okunamadı"
+            }
+            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed,
+                                role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
+                                material: metadata?["Material"] as? String, quantity: quantity,
+                                grainStatus: grainStatus))
         }
         return Drawing(name: name, pieces: pieces)
     }
@@ -270,6 +299,11 @@ private struct PieceDetails: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Kontur bilgisi").font(.subheadline.bold())
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
+                if let role = piece.role, !role.isEmpty { Text("Rol: \(role)") }
+                if let size = piece.size, !size.isEmpty { Text("Beden: \(size)") }
+                if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
+                if let quantity = piece.quantity { Text("Adet: \(quantity)") }
+                Text(piece.grainStatus)
                 Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
                 Text("Boyutlar dosyadaki koordinat birimindedir.")
                     .foregroundStyle(.secondary)

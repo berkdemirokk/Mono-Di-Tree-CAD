@@ -1,1 +1,1 @@
-[5, {"Name":"Seçim Testi","Pieces":[{"Name":"Ön Beden","Closed":true,"Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":100,"Y":200}]},{"Name":"Arka Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":100}]}]}]
+[5, {"Name":"Seçim Testi","Pieces":[{"Name":"Ön Beden","Closed":true,"Points":[{"X":0,"Y":0},{"X":100,"Y":0},{"X":100,"Y":200}]},{"Name":"Arka Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":100}],"Metadata":{"Role":"Kesim","Size":"M","Material":"Pamuk","Quantity":2},"Grainline":{"Start":{"X":1,"Y":0},"End":{"X":1,"Y":20},"NeedsReview":true}}]}]

@@ -71,6 +71,10 @@ final class ViewerUITests: XCTestCase {
         let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Arka Beden")).firstMatch
         XCTAssertTrue(selected.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].exists)
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü: Kontrol bekliyor")).firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 10))
+        XCTAssertTrue(details.label.contains("Pamuk"))
+        XCTAssertTrue(details.label.contains("Adet: 2"))
         selected.tap()
         XCTAssertTrue(app.buttons["Tüm parçalar"].waitForExistence(timeout: 10))
         app.buttons["Tüm parçalar"].tap()
