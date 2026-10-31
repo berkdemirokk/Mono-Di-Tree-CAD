@@ -192,6 +192,23 @@ public static class AutomaticPerCopyNesting
             shortWork += 2L * v * v;
             if (shortUnique.Add((mapping.SourcePieceId, option.Angle))) shortWork += 2L * v * v;
         }
+        // A consistent second allowed orientation can pack better than choosing
+        // each piece independently by width or height. It remains a bounded
+        // heuristic and goes through the same placement and validation path.
+        var second = new Dictionary<(Guid, int), int>();
+        var secondUnique = new HashSet<(Guid, int)>();
+        long secondWork = 0;
+        foreach (var mapping in expansion.Placements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = (mapping.SourcePieceId, mapping.CopyNumber);
+            var options = candidates[mapping.SourcePieceId];
+            int angle = options[Math.Min(1, options.Count - 1)].Angle;
+            second.Add(key, angle);
+            long v = originals[mapping.SourcePieceId].Points.Count;
+            secondWork += 2L * v * v;
+            if (secondUnique.Add((mapping.SourcePieceId, angle))) secondWork += 2L * v * v;
+        }
         foreach (var (angles, cost, needed) in new[]
         {
             (alternate, extra, differs),
@@ -199,7 +216,11 @@ public static class AutomaticPerCopyNesting
                 narrow.Any(pair => alternate[pair.Key] != pair.Value)),
             (shortRows, shortWork, shortRows.Any(pair => chosen[pair.Key] != pair.Value) &&
                 shortRows.Any(pair => alternate[pair.Key] != pair.Value) &&
-                shortRows.Any(pair => narrow[pair.Key] != pair.Value))
+                shortRows.Any(pair => narrow[pair.Key] != pair.Value)),
+            (second, secondWork, second.Any(pair => chosen[pair.Key] != pair.Value) &&
+                second.Any(pair => alternate[pair.Key] != pair.Value) &&
+                second.Any(pair => narrow[pair.Key] != pair.Value) &&
+                second.Any(pair => shortRows[pair.Key] != pair.Value))
         })
         {
             if (!needed) continue;

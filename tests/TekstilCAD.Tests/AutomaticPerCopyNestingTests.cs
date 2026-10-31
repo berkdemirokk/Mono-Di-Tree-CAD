@@ -6,6 +6,30 @@ namespace TekstilCAD.Tests;
 public sealed class AutomaticPerCopyNestingTests
 {
     [Fact]
+    public void SecondAllowedOrientationsCanFitWhenIndividualPoliciesDoNot()
+    {
+        PatternPiece Rectangle(int width, int height) => new()
+        {
+            Points = [new(0, 0), new(width, 0), new(width, height), new(0, height)],
+            Grainline = new() { Start = new(0, 0), End = new(0, 1) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 }
+        };
+        var source = new ProjectDocument { Pieces = [Rectangle(6, 4), Rectangle(2, 2), Rectangle(6, 6), Rectangle(6, 8)] };
+        var ids = source.Pieces.Select(p => p.Id).ToArray();
+        var original = source.Clone();
+        var allowed = ids.ToDictionary(id => id, _ => (IReadOnlyList<int>)[0, 90]);
+
+        var result = AutomaticPerCopyNesting.Arrange(source, ids, allowed, 10, 0, 12, 0,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+
+        Assert.Equal(12, result.Plan.Nesting.UsedLength);
+        Assert.True(PerCopyTraceVerifier.IsValidForAllowedAngles(source, ids, result, allowed,
+            GrainDirectionPolicy.Direction.TwoWay, 90, 10, 0, 0, 12));
+        Assert.Equal(original.Pieces.SelectMany(p => p.Points), source.Pieces.SelectMany(p => p.Points));
+        Assert.All(source.Pieces, p => Assert.Equal(1, p.Metadata!.Quantity));
+    }
+
+    [Fact]
     public void NarrowOrientationsRecoverAValidShorterMarker()
     {
         PatternPiece Rectangle(int width, int height) => new()
