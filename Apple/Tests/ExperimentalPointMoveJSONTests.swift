@@ -1,5 +1,5 @@
 import XCTest
-@testable import TekstilCADViewer
+@testable import TekstilCADViewer_iOS
 
 final class ExperimentalPointMoveJSONTests: XCTestCase {
     private let id = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!

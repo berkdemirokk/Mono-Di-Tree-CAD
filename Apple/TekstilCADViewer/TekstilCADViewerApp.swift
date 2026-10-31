@@ -1242,6 +1242,7 @@ private struct DrawingView: View {
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var showGrain = true
+    @State private var panEnabled = false
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
 
@@ -1269,7 +1270,7 @@ private struct DrawingView: View {
                     .offset(currentOffset)
                     .frame(width: geometry.size.width, height: geometry.size.height)
                     .accessibilityLabel(label)
-                    .accessibilityHint("Yakınlaştırmak için iki parmağınızı kullanın; çizimi taşımak için sürükleyin.")
+                    .accessibilityHint("Yakınlaştırmak için iki parmağınızı kullanın. Çizimi sürüklemek için taşıma modunu açın; yön düğmeleriyle de taşıyabilirsiniz.")
                     .accessibilityValue("Yüzde \(Int(currentZoom * 100))")
                     .accessibilityAdjustableAction { direction in
                         switch direction {
@@ -1280,6 +1281,16 @@ private struct DrawingView: View {
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
                 VStack(alignment: .trailing, spacing: 8) {
+                    Button(panEnabled ? "Taşımayı bitir" : "Çizimi taşı") { panEnabled.toggle() }
+                        .accessibilityHint(panEnabled ? "Sayfayı kaydırmaya dön" : "Çizimi sürüklemek için taşıma modunu aç")
+                    if panEnabled {
+                        HStack {
+                            Button("Sol") { moveDrawing(width: -40, height: 0, size: geometry.size) }
+                            Button("Sağ") { moveDrawing(width: 40, height: 0, size: geometry.size) }
+                            Button("Yukarı") { moveDrawing(width: 0, height: -40, size: geometry.size) }
+                            Button("Aşağı") { moveDrawing(width: 0, height: 40, size: geometry.size) }
+                        }
+                    }
                     Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
                     if pieces.contains(where: { $0.grain != nil }) {
                         Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
@@ -1293,23 +1304,27 @@ private struct DrawingView: View {
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
             .clipped()
-            .gesture(
+            .gesture(panEnabled ? DragGesture()
+                .updating($drag) { value, state, _ in state = value.translation }
+                .onEnded { value in
+                    offset = limitedOffset(
+                        CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height),
+                        size: geometry.size, scale: zoom
+                    )
+                } : nil)
+            .simultaneousGesture(
                 MagnificationGesture()
                     .updating($pinch) { value, state, _ in state = value }
                     .onEnded { value in
                         zoom = limitedZoom(zoom * value)
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
-                    .simultaneously(with: DragGesture()
-                        .updating($drag) { value, state, _ in state = value.translation }
-                        .onEnded { value in
-                            offset = limitedOffset(
-                                CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height),
-                                size: geometry.size, scale: zoom
-                            )
-                        })
             )
         }
+    }
+
+    private func moveDrawing(width: CGFloat, height: CGFloat, size: CGSize) {
+        offset = limitedOffset(CGSize(width: offset.width + width, height: offset.height + height), size: size, scale: zoom)
     }
 
     private var drawing: some View {

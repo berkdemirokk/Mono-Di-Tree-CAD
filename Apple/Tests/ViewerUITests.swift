@@ -17,6 +17,33 @@ final class ViewerUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(preview.frame.height, 300)
     }
 
+    func testContourScrollPanAndPinchModes() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let preview = app.otherElements["1 parçalı kontur önizlemesi"]
+        XCTAssertTrue(preview.waitForExistence(timeout: 15))
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<4 where !app.buttons["Çizimi taşı"].isHittable { scroll.swipeUp() }
+        let pan = app.buttons["Çizimi taşı"]
+        XCTAssertTrue(pan.isHittable)
+        pan.tap()
+        XCTAssertTrue(app.buttons["Taşımayı bitir"].exists)
+        XCTAssertTrue(app.buttons["Sağ"].exists)
+        app.buttons["Sağ"].tap()
+        let center = preview.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.6))
+        center.press(forDuration: 0.1, thenDragTo: center.withOffset(CGVector(dx: 35, dy: 35)))
+        preview.pinch(withScale: 1.5, velocity: 1)
+        XCTAssertTrue((preview.value as? String)?.contains("Yüzde") == true)
+        XCTAssertNotEqual(preview.value as? String, "Yüzde 100")
+        app.buttons["Taşımayı bitir"].tap()
+        XCTAssertTrue(pan.exists)
+        let before = preview.frame.minY
+        preview.swipeDown()
+        XCTAssertGreaterThan(preview.frame.minY, before, "A swipe over the drawing should scroll the page after leaving pan mode")
+    }
     func testLibrarySearchAndSortCanBeUsedToSelectAModel() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
