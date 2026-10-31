@@ -176,11 +176,30 @@ public static class AutomaticPerCopyNesting
             narrowWork += 2L * v * v;
             if (narrowUnique.Add((mapping.SourcePieceId, option.Angle))) narrowWork += 2L * v * v;
         }
+        // Narrow pieces are not always the shortest marker: a wider, shorter
+        // orientation can reduce the height of every shelf. Verify that policy
+        // with the same actual layout and resource budget as the other choices.
+        var shortRows = new Dictionary<(Guid, int), int>();
+        var shortUnique = new HashSet<(Guid, int)>();
+        long shortWork = 0;
+        foreach (var mapping in expansion.Placements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = (mapping.SourcePieceId, mapping.CopyNumber);
+            var option = candidates[mapping.SourcePieceId].OrderBy(c => c.Height).ThenBy(c => c.Width).First();
+            shortRows.Add(key, option.Angle);
+            long v = originals[mapping.SourcePieceId].Points.Count;
+            shortWork += 2L * v * v;
+            if (shortUnique.Add((mapping.SourcePieceId, option.Angle))) shortWork += 2L * v * v;
+        }
         foreach (var (angles, cost, needed) in new[]
         {
             (alternate, extra, differs),
             (narrow, narrowWork, narrow.Any(pair => chosen[pair.Key] != pair.Value) &&
-                narrow.Any(pair => alternate[pair.Key] != pair.Value))
+                narrow.Any(pair => alternate[pair.Key] != pair.Value)),
+            (shortRows, shortWork, shortRows.Any(pair => chosen[pair.Key] != pair.Value) &&
+                shortRows.Any(pair => alternate[pair.Key] != pair.Value) &&
+                shortRows.Any(pair => narrow[pair.Key] != pair.Value))
         })
         {
             if (!needed) continue;
