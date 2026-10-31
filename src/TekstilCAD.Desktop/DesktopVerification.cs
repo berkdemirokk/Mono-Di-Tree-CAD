@@ -1021,6 +1021,7 @@ internal static class DesktopVerification
             VerifyHpglReviewWindow(studio,reportPath,checks);
             VerifyAsyncDxfImport(studio,work,checks);
             VerifyAsyncDxfBulgeImport(studio,work,reportPath,checks);
+            VerifySampledReviewOnly(studio,work,checks);
             VerifyDxfGrainlineReview(studio,work,checks);
             VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
@@ -1861,7 +1862,7 @@ internal static class DesktopVerification
                 File.ReadAllBytes(path).SequenceEqual(source) && DocumentSession.ContentEquals(original,studio.Document),
                 "Opt-in bulge prepares both directed arcs with captured source hash and tolerance without replacing workspace",checks);
             var preview=(Window)typeof(MainWindow).GetMethod("BuildImportPreviewCapturedWithState",PrivateInstance)!.Invoke(studio,
-                [imported.Project,imported.Warnings,1.0,"async-bulge.dxf",imported.Units,imported.SourceSha256,imported.SourceByteLength,(Action)(()=>{}),imported.SkippedRelevantInsertEntities])!;
+                [imported.Project,imported.Warnings,1.0,"async-bulge.dxf",imported.Units,imported.SourceSha256,imported.SourceByteLength,(Action)(()=>{}),imported.SkippedRelevantInsertEntities,false])!;
             try
             {
                 Render(preview,Path.ChangeExtension(reportPath,".dxf-bulge-import-preview.png"),800,650);
@@ -4880,7 +4881,7 @@ internal static class DesktopVerification
         }
         Window Preview(DxfImportResult result,Action retry) => (Window)typeof(MainWindow)
             .GetMethod("BuildImportPreviewCapturedWithState",PrivateInstance)!.Invoke(studio,
-                [result.Project,result.Warnings,1.0,"retry.dxf",result.Units,result.SourceSha256,result.SourceByteLength,retry,result.SkippedRelevantInsertEntities])!;
+                [result.Project,result.Warnings,1.0,"retry.dxf",result.Units,result.SourceSha256,result.SourceByteLength,retry,result.SkippedRelevantInsertEntities,false])!;
         try
         {
             var legacy=Legacy();
@@ -5034,7 +5035,7 @@ internal static class DesktopVerification
         var options=studio.CreateDxfOptionsWindow(initial);
         Render(options,Path.ChangeExtension(reportPath,".dxf-sampled-options.png"),440,340);
         var root=(FrameworkElement)options.Content;
-        var sampled=Descendants<CheckBox>(root).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel: uygun örneklenmiş POLYLINE",StringComparison.Ordinal)==true);
+        var sampled=Descendants<CheckBox>(root).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel önizleme:",StringComparison.Ordinal)==true);
         var methods=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="DXF okuma yöntemi");
         var scroller=Descendants<ScrollViewer>(root).Single(c=>AutomationProperties.GetName(c)=="DXF ölçü ve kodlama seçenekleri");
         var cancel=Descendants<Button>(root).Single(c=>Equals(c.Content,"Vazgeç"));
@@ -5045,7 +5046,7 @@ internal static class DesktopVerification
         var y=sampled.TransformToAncestor(scroller).Transform(new Point(0,0)).Y+scroller.VerticalOffset;
         scroller.ScrollToVerticalOffset(Math.Max(0,y-10));root.UpdateLayout();
         Check(scroller.Focusable && KeyboardNavigation.GetIsTabStop(scroller) && FullyVisible(sampled,root) && FullyVisible(cancel,root) && FullyVisible(read,root)
-            && description.Text.Contains("yalnız standart aktarımda"),
+            && description.Text.Contains("yalnız önizleme"),
             "Sampled option and actions are reachable in the small options window, with non-guarantee guidance",checks);
         sampled.IsChecked=true;methods.SelectedIndex=1;
         Check(!sampled.IsEnabled && sampled.IsChecked==false,"Controlled block-placement mode clears and disables sampled mode",checks);
@@ -5058,7 +5059,7 @@ internal static class DesktopVerification
             var state=new MainWindow.DxfOptionsState();var dialog=studio.CreateDxfOptionsWindow(state);
             Render(dialog,Path.ChangeExtension(reportPath,$".dxf-sampled-choice-{enable}.png"),440,340);
             var dialogRoot=(FrameworkElement)dialog.Content;
-            var choice=Descendants<CheckBox>(dialogRoot).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel: uygun örneklenmiş POLYLINE",StringComparison.Ordinal)==true);
+            var choice=Descendants<CheckBox>(dialogRoot).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel önizleme:",StringComparison.Ordinal)==true);
             var start=Descendants<Button>(dialogRoot).Single(c=>Equals(c.Content,"DXF okumayı başlat"));
             dialog.Dispatcher.BeginInvoke(new Action(()=> { choice.IsChecked=enable;start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }));
             var accepted=dialog.ShowDialog();
@@ -5074,15 +5075,58 @@ internal static class DesktopVerification
         const string source="0\nSECTION\n2\nENTITIES\n0\nPOLYLINE\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n70\n0\n0\nVERTEX\n10\n10\n20\n0\n70\n8\n0\nVERTEX\n10\n0\n20\n10\n70\n0\n0\nSEQEND\n0\nENDSEC\n0\nEOF\n";
         using var input=new MemoryStream(System.Text.Encoding.UTF8.GetBytes(source));
         var imported=DxfFormat.ImportWithSampledPolylineExperiment(input,"sentetik",1,DxfTextEncoding.Utf8);
-        var preview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[imported.Project,imported.Warnings,1.0,"synthetic.dxf",imported.Units])!;
+        var preview=(Window)typeof(MainWindow).GetMethod("BuildImportPreviewCapturedWithState",PrivateInstance)!.Invoke(studio,[imported.Project,imported.Warnings,1.0,"synthetic.dxf",imported.Units,imported.SourceSha256,imported.SourceByteLength,null,imported.SkippedRelevantInsertEntities,true])!;
         Render(preview,Path.ChangeExtension(reportPath,".dxf-sampled-review.png"),500,380);
         var previewRoot=(FrameworkElement)preview.Content;
         var notice=Descendants<TextBlock>(previewRoot).Single(t=>t.Text.StartsWith("Deneysel örneklenmiş POLYLINE:",StringComparison.Ordinal));
         var previewCancel=Descendants<Button>(previewRoot).Single(b=>Equals(b.Content,"Vazgeç"));
+        var apply=Descendants<Button>(previewRoot).Single(b=>Equals(b.Content,"İçe aktar ve projeyi değiştir"));
         Check(notice.Text.Contains("parametrik spline doğruluğu") && notice.Text.Contains("üretime uygunluk garanti edilmez")
-            && WarningReachable(notice,previewRoot) && FullyVisible(previewCancel,previewRoot) && previewCancel.IsDefault,
+            && WarningReachable(notice,previewRoot) && FullyVisible(previewCancel,previewRoot) && previewCancel.IsDefault && !apply.IsEnabled
+            && Descendants<TextBlock>(previewRoot).Any(t=>t.Text.Contains("yalnız önizleme") && t.Text.Contains("projeye aktarılamaz")),
             "Sampled polyline preview exposes the non-guarantee warning and safe cancellation on a small screen",checks);
         preview.Close();
+    }
+
+    private static void VerifySampledReviewOnly(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"sampled-review-only.dxf");
+        var source=System.Text.Encoding.UTF8.GetBytes("0\nSECTION\n2\nENTITIES\n"+
+            "0\nLINE\n10\n20\n20\n0\n11\n30\n21\n0\n"+
+            "0\nPOLYLINE\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n70\n0\n0\nVERTEX\n10\n10\n20\n0\n70\n8\n0\nVERTEX\n10\n0\n20\n10\n70\n0\n0\nSEQEND\n0\nENDSEC\n0\nEOF\n");
+        File.WriteAllBytes(path,source);
+        var piece=new PatternPiece { Name="Eski",Closed=false,Points=[new(0,0),new(1,0)] };
+        var original=new ProjectDocument { Name="Mevcut",Pieces=[piece],ImportProvenance=new DxfImportProvenance {
+            SourceFileName="onceki.dxf",SourceSha256=new string('A',64),SourceByteLength=1,MillimetersPerUnit=1,Warnings=["Önceki uyarı"],PieceIds=[piece.Id] } };
+        studio.LoadDocument(original);var before=studio.Document.Clone();
+        try
+        {
+            var prepare=studio.StartDxfPreparationWithBulgeAsync(path,1,DxfTextEncoding.Utf8,null,true);
+            PumpUntil(()=>prepare.IsCompleted);
+            var imported=prepare.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Sampled preview fixture was not prepared.");
+            Check(imported.Warnings.Any(w=>w.StartsWith("Deneysel örneklenmiş POLYLINE:",StringComparison.Ordinal)) && imported.Project.Pieces.Count==2,
+                "Synthetic sampled geometry is available for review",checks);
+            studio.ConfirmDxfReviewForVerification=_=>true;
+            studio.DxfDiscardDecisionForVerification=()=>throw new InvalidOperationException("Review-only import must not request replacement.");
+            var review=studio.ReviewPreparedDxfAsync();PumpUntil(()=>review.IsCompleted);review.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(before,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source),
+                "Even forced preview acceptance leaves the document, historical provenance and source unchanged",checks);
+
+            studio.DxfDiscardDecisionForVerification=()=>(true,false);
+            var normal=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>normal.IsCompleted);
+            var standard=normal.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Standard fixture was not prepared.");
+            review=studio.ReviewPreparedDxfAsync();PumpUntil(()=>review.IsCompleted);review.GetAwaiter().GetResult();
+            Check(standard.Project.Pieces.Count==1 && DocumentSession.ContentEquals(standard.Project,new ProjectDocument { Name=studio.Document.Name,Pieces=studio.Document.Pieces.Select(p=>p.Clone()).ToList() }) &&
+                studio.Document.ImportProvenance?.SourceSha256==Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source)) && File.ReadAllBytes(path).SequenceEqual(source),
+                "A later standard import still applies its supported geometry and records source provenance",checks);
+        }
+        finally
+        {
+            studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
     }
 
     private static void VerifyDxfBulgeOptions(MainWindow studio,string reportPath,List<string> checks)

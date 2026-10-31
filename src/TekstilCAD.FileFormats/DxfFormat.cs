@@ -330,7 +330,9 @@ public static class DxfFormat
     public static DxfImportResult Import(Stream input, string projectName, double millimetersPerUnit, DxfTextEncoding encoding, CancellationToken cancellationToken=default)
         => ImportCore(input,projectName,millimetersPerUnit,encoding,null,cancellationToken);
 
-    /// <summary>Experimental sampled vertex-chain import, without spline accuracy guarantees.</summary>
+    /// <summary>Experimental sampled vertex-chain inspection, without spline accuracy guarantees.
+    /// The returned project is editable and carries no enforced review-only marker; API callers
+    /// must not persist or export it as production geometry. Desktop enforces review-only separately.</summary>
     public static DxfImportResult ImportWithSampledPolylineExperiment(Stream input, string projectName, double millimetersPerUnit, DxfTextEncoding encoding, CancellationToken cancellationToken = default)
         => ImportCore(input,projectName,millimetersPerUnit,encoding,null,cancellationToken,sampledPolylineExperiment:true);
 

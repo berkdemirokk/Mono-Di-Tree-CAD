@@ -143,6 +143,8 @@ public class MainWindow : Window
     private Button? dxfImportCommand;
     private DxfPreparationStamp? dxfPreparationStamp;
     private DxfImportResult? preparedDxf;
+    // Bound to the preparation operation, not to mutable warning text or piece IDs.
+    private bool preparedDxfReviewOnly;
     private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed, Margin=new Thickness(0,4,0,0) };
     private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
     private readonly TextBlock dxfNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
@@ -2031,9 +2033,9 @@ public class MainWindow : Window
         content.Children.Add(new TextBlock { Text="Okuma yöntemi",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,4) });
         methods=new ComboBox { ItemsSource=new[] { "Standart aktarım (blok yerleşimleri uygulanmaz)", "Kontrollü aktarım (sınırlı destek)" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
         System.Windows.Automation.AutomationProperties.SetName(methods,"DXF okuma yöntemi");content.Children.Add(methods);
-        sampled=new CheckBox { Content="Deneysel: uygun örneklenmiş POLYLINE noktalarını içe al",Margin=new Thickness(0,4,0,4) };content.Children.Add(sampled);
+        sampled=new CheckBox { Content="Deneysel önizleme: uygun örneklenmiş POLYLINE noktalarını oku",Margin=new Thickness(0,4,0,4) };content.Children.Add(sampled);
         methods.SelectionChanged+=(_,_)=> { sampled.IsEnabled=methods.SelectedIndex==0; if(!sampled.IsEnabled)sampled.IsChecked=false; };
-        content.Children.Add(new TextBlock { Text="Bu seçenek yalnız standart aktarımda kullanılır. Kaynaktaki örneklenmiş noktalar düz çizgilerle birleştirilir; parametrik spline doğruluğu ve üretime uygunluk garanti edilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        content.Children.Add(new TextBlock { Text="Bu seçenek yalnız önizleme içindir; geometri projeye aktarılamaz. Kaynaktaki örneklenmiş noktalar düz çizgilerle birleştirilir; parametrik spline doğruluğu ve üretime uygunluk garanti edilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge yaylarını yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kodlama otomatik tahmin edilmez. Yanlış seçim harfleri değiştirebilir; kaynak dosyanın kodlamasını kontrol edin. Okuma kaynak dosyayı değiştirmez; proje ancak önizlemede onaylanırsa değiştirilir.",TextWrapping=TextWrapping.Wrap });
         return options;
@@ -2085,8 +2087,13 @@ public class MainWindow : Window
             importSnapshot = imported.Project.Clone();
             if (!PreparedImportMatches()) return;
             var retryPlacements=false;
-            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(importSnapshot.Clone(),imported.Warnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
+            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(importSnapshot.Clone(),imported.Warnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities,preparedDxfReviewOnly).ShowDialog()==true;
             if (!PreparedImportMatches()) return;
+            if(preparedDxfReviewOnly)
+            {
+                OfferDxfReviewRetry(imported,"Deneysel okuma yalnız önizleme içindir; geometri projeye aktarılmadı ve üretim için kullanılamaz.");
+                return;
+            }
             if(retryPlacements) { await RetryPreparedDxfPlacementsAsync(imported);return; }
             if(!accepted) { OfferDxfReviewRetry(imported,"DXF önizlemesi kapatıldı; proje değiştirilmedi.");return; }
             // Enforce the same restriction here, including non-visual callers:
@@ -2318,7 +2325,7 @@ public class MainWindow : Window
         var sourcePath=Path.GetFullPath(path);var stamp=CaptureDxfPreparationStamp();
         var before=BeforeDxfPreparationForVerification;var after=AfterDxfPreparationForVerification;
         using var cancellation=new CancellationTokenSource();dxfImportCancellation=cancellation;
-        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
+        preparedDxfReviewOnly=false;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
         dxfReview.Visibility=Visibility.Collapsed;dxfNotice.Visibility=Visibility.Visible;
         dxfCancel.Content="DXF okumayı iptal et";System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
         dxfCancel.IsEnabled=true;dxfCancel.Visibility=Visibility.Visible;
@@ -2386,7 +2393,7 @@ public class MainWindow : Window
         var after=AfterDxfPreparationForVerification;
         using var cancellation=new CancellationTokenSource();
         dxfImportCancellation=cancellation;
-        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
+        preparedDxfReviewOnly=false;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
         dxfReview.Visibility=Visibility.Collapsed;
         dxfNotice.Visibility=Visibility.Visible;
         dxfCancel.Content="DXF okumayı iptal et";System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
@@ -2403,7 +2410,7 @@ public class MainWindow : Window
             cancellation.Token.ThrowIfCancellationRequested();
             if(!DxfStampMatches(stamp))
             { if(!windowClosed) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text); } return null; }
-            preparedDxf=result;dxfPreparationStamp=stamp;preparedDxfPath=sourcePath;
+            preparedDxfReviewOnly=sampledPolylineExperiment;preparedDxf=result;dxfPreparationStamp=stamp;preparedDxfPath=sourcePath;
             preparedDxfFactor=factor;preparedDxfSource=Path.GetFileName(sourcePath);preparedDxfEncoding=encoding;
             SetStatus(result.Warnings.Count>0
                 ? "DXF okundu; aktarım uyarıları var. Ölçüleri ve uyarıları inceleyin; proje henüz değiştirilmedi."
@@ -2457,7 +2464,7 @@ public class MainWindow : Window
     private Window BuildImportPreviewCaptured(ProjectDocument incoming,IReadOnlyList<string> warnings,double factor,string sourceName,DxfUnitInfo? units,string? sourceSha256,long? sourceByteLength,Action? retryPlacements=null)
         => BuildImportPreviewCapturedWithState(incoming,warnings,factor,sourceName,units,sourceSha256,sourceByteLength,retryPlacements,HasSkippedDxfInsert(warnings));
 
-    private Window BuildImportPreviewCapturedWithState(ProjectDocument incoming,IReadOnlyList<string> warnings,double factor,string sourceName,DxfUnitInfo? units,string? sourceSha256,long? sourceByteLength,Action? retryPlacements,bool? skippedInsertEntities)
+    private Window BuildImportPreviewCapturedWithState(ProjectDocument incoming,IReadOnlyList<string> warnings,double factor,string sourceName,DxfUnitInfo? units,string? sourceSha256,long? sourceByteLength,Action? retryPlacements,bool? skippedInsertEntities,bool reviewOnly=false)
     {
         var bounds=Geometry.Bounds(incoming.Pieces.SelectMany(p=>p.Points).ToList());
         var preview=new Window { Owner=this,Title="İçe aktarmadan önce kontrol edin",Width=650,Height=460,MinWidth=500,MinHeight=380,WindowStartupLocation=WindowStartupLocation.CenterOwner };
@@ -2484,15 +2491,16 @@ public class MainWindow : Window
         var unitMismatch=units is { IsReliable:true, MillimetersPerUnit: double declared } && Math.Abs(declared-factor)>Math.Max(1e-12,Math.Abs(declared)*1e-12);
         var unitUnknown=units is not { IsReliable:true, MillimetersPerUnit: not null };
         var cancel=AddButton(actions,"Vazgeç",()=>preview.DialogResult=false);cancel.IsCancel=true;cancel.IsDefault=true;
-        if(insertSkipped && retryPlacements is not null)
+        if(!reviewOnly && insertSkipped && retryPlacements is not null)
             AddButton(actions,"Yerleşimleri kontrollü oku…",()=> { retryPlacements();preview.DialogResult=false; });
         var apply=AddButton(actions,"İçe aktar ve projeyi değiştir",()=>preview.DialogResult=true);
-        if(insertSkipped || insertStatusUnknown)
+        if(reviewOnly || insertSkipped || insertStatusUnknown)
         {
             apply.IsEnabled=false;
-            apply.ToolTip=insertSkipped ? "Blok yerleşimleri okunmadığı için önce kontrollü okumayı deneyin." : "Blok yerleşimlerinin aktarım durumu doğrulanamadı; dosyayı yeniden içe aktarın.";
+            apply.ToolTip=reviewOnly ? "Deneysel okuma yalnız önizleme içindir; projeye veya üretime aktarılamaz." : insertSkipped ? "Blok yerleşimleri okunmadığı için önce kontrollü okumayı deneyin." : "Blok yerleşimlerinin aktarım durumu doğrulanamadı; dosyayı yeniden içe aktarın.";
         }
         var riskNotices=new StackPanel();
+        if(reviewOnly) riskNotices.Children.Add(new TextBlock { Text="Deneysel okuma yalnız önizleme içindir. Geometri projeye aktarılamaz, kaydedilemez veya üretimde kullanılamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         var sampledWarning=warnings.FirstOrDefault(w=>w.StartsWith("Deneysel örneklenmiş POLYLINE:",StringComparison.Ordinal));
         if(sampledWarning is not null)
         {
