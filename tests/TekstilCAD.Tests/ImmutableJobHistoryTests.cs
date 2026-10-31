@@ -22,6 +22,86 @@ public sealed class ImmutableJobHistoryTests
     private static void Clean(string path) { if (Directory.Exists(path)) Directory.Delete(path, true); }
 
     [Fact]
+    public void EntryBudgetCountsUnrelatedFilesAndDirectoriesWithoutChangingThem()
+    {
+        var path = NewDirectory();
+        try
+        {
+            var unrelated = Path.Combine(path, "unrelated.txt");
+            var folder = Path.Combine(path, "unrelated-folder");
+            File.WriteAllText(unrelated, "keep"); Directory.CreateDirectory(folder);
+            var history = new ImmutableJobHistory(path);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.LimitExceeded, history.Inspect(maxEntries: 2).Status);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.Valid, history.Inspect(maxEntries: 3).Status);
+            Assert.Throws<InvalidOperationException>(() => history.Append(Hash(Original), First, maxEntries: 2));
+            Assert.Equal("keep", File.ReadAllText(unrelated)); Assert.True(Directory.Exists(folder));
+            Assert.Equal(Original, File.ReadAllBytes(Path.Combine(path, "manifest.json")));
+            Assert.Empty(Records(path));
+        }
+        finally { Clean(path); }
+    }
+
+    [Fact]
+    public void ByteBudgetIncludesRepeatedBaseAndHeadReads()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var path = NewDirectory();
+        try
+        {
+            var history = new ImmutableJobHistory(path);
+            var head = history.Inspect().HeadHash!;
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.LimitExceeded, history.Inspect(maxReadBytes: Original.Length * 2L - 1).Status);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.Valid, history.Inspect(maxReadBytes: Original.Length * 2L).Status);
+            history.Append(head, First);
+            var record = Assert.Single(Records(path));
+            var recordBytes = File.ReadAllBytes(record);
+            long required = Original.Length * 2L + recordBytes.Length * 2L;
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.LimitExceeded, history.Inspect(maxReadBytes: required - 1).Status);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.Valid, history.Inspect(maxReadBytes: required).Status);
+            Assert.Equal(recordBytes, File.ReadAllBytes(record));
+            Assert.Equal(Original, File.ReadAllBytes(Path.Combine(path, "manifest.json")));
+        }
+        finally { Clean(path); }
+    }
+
+    [Fact]
+    public void LimitAfterPublicationReportsIncompleteInspectionWithoutRemovingRecord()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        var path = NewDirectory();
+        try
+        {
+            var history = new ImmutableJobHistory(path);
+            var result = history.Append(history.Inspect().HeadHash!, First, maxEntries: 1);
+            Assert.Equal(ImmutableJobHistory.InspectionStatus.LimitExceeded, result.Status);
+            Assert.Single(Records(path));
+            Assert.Equal(First, history.Inspect().Payload);
+            Assert.Equal(Original, File.ReadAllBytes(Path.Combine(path, "manifest.json")));
+        }
+        finally { Clean(path); }
+    }
+
+    [Fact]
+    public void CancellationDuringChunkedScanStopsWithoutChangingFiles()
+    {
+        var path = NewDirectory();
+        try
+        {
+            var manifest = Path.Combine(path, "manifest.json");
+            var original = new byte[20000]; new Random(42).NextBytes(original); File.WriteAllBytes(manifest, original);
+            var history = new ImmutableJobHistory(path);
+            using var cancellation = new CancellationTokenSource();
+            var hook = typeof(ImmutableJobHistory).GetProperty("AfterReadChunkForVerification", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            var chunks = 0;
+            hook.SetValue(history, (Action)(() => { chunks++; cancellation.Cancel(); }));
+            Assert.ThrowsAny<OperationCanceledException>(() => history.Inspect(cancellationToken: cancellation.Token));
+            Assert.Equal(1, chunks);
+            Assert.Equal(original, File.ReadAllBytes(manifest)); Assert.Empty(Records(path));
+        }
+        finally { Clean(path); }
+    }
+
+    [Fact]
     public void AppendsPreserveOriginalAndReadLatestPayloadAfterReopen()
     {
         var path = NewDirectory();

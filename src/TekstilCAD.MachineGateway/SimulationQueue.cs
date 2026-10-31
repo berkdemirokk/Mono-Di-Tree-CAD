@@ -100,6 +100,8 @@ public sealed class SimulationQueue
                     ValidateOutputDirectory(directory);
                     if (!Guid.TryParseExact(Path.GetFileName(directory), "N", out var directoryId))
                         throw new InvalidDataException("İş klasörü geçerli bir kimlik taşımıyor.");
+                    if (HasImmutableHistory(directory))
+                        throw new InvalidDataException("Bu iş değişmez geçmiş içeriyor; eski kuyrukla açılamaz.");
                     var manifest = Path.Combine(directory, "manifest.json");
                     RejectReparseFile(manifest);
                     using var stream = new FileStream(manifest, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -221,10 +223,10 @@ public sealed class SimulationQueue
             ValidateOutputDirectory(directory);
             if (!Guid.TryParseExact(Path.GetFileName(directory), "N", out var id)) throw new InvalidDataException("İş klasörü geçerli bir kimlik taşımıyor.");
             var manifest = Path.Combine(directory, "manifest.json");
-            RejectReparseFile(manifest);
-            using var stream = new FileStream(manifest, FileMode.Open, FileAccess.Read, FileShare.Read);
-            if (stream.Length > MaximumManifestBytes) throw new InvalidDataException("İş kaydı boyut sınırını aşıyor.");
-            using var json = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 32 });
+            var inspection = new ImmutableJobHistory(directory).Inspect();
+            if (inspection.Status != ImmutableJobHistory.InspectionStatus.Valid || inspection.Payload is null || inspection.HeadHash is null)
+                throw new InvalidDataException("İş geçmişi doğrulanamadı (" + inspection.Status + "): " + inspection.Error);
+            using var json = JsonDocument.Parse(inspection.Payload, new JsonDocumentOptions { MaxDepth = 32 });
             var job = json.RootElement.Deserialize<SimulationJob>(JsonOptions) ?? throw new InvalidDataException("İş kaydı boş.");
             ValidateRecoveredJob(job, id, directory, manifest);
             if (json.RootElement.TryGetProperty("Profile", out var profile))
@@ -232,8 +234,7 @@ public sealed class SimulationQueue
                 if (profile.TryGetProperty("IsVerified", out var verified) && verified.ValueKind != JsonValueKind.False) throw new InvalidDataException("Simülasyon profili fiziksel doğrulama iddiası taşıyamaz.");
                 if (profile.TryGetProperty("IsSimulator", out var simulator) && simulator.ValueKind != JsonValueKind.True) throw new InvalidDataException("İş yalnız dosya simülatörüne ait olmalıdır.");
             }
-            stream.Position = 0;
-            var hash = Convert.ToHexString(SHA256.HashData(stream));
+            var hash = inspection.HeadHash;
             job = job with { Sha256 = job.Sha256.ToUpperInvariant() };
             RejectReparseFile(job.OutputPath);
             var error = !File.Exists(job.OutputPath) ? "Çıktı dosyası eksik; iş yeniden hazırlanmalı." : null;
@@ -251,42 +252,28 @@ public sealed class SimulationQueue
         if (!IsExpectedPath(entry.Path, expected)) throw new InvalidOperationException("İş yolu eşleşmiyor.");
         return entry.Job;
     }
+    // The legacy client cannot recognize immutable history and may still write
+    // the base manifest. Until the spool is isolated from those clients, do
+    // not publish updates that an older client would silently misunderstand.
     public HistoryEntry ConfirmHistoryEntry(HistoryEntry entry)
     {
-        var job = RequireHistoryEntry(entry) with { SourceSnapshotUnconfirmed = false };
-        var writtenHash = SaveManifest(job, entry.ManifestHash);
-        return VerifyCommittedHistoryEntry(job, writtenHash);
+        RequireHistoryEntry(entry);
+        throw new InvalidOperationException("Kaynak onayı yapılamadı: eski kuyruklarla güvenli ayrım henüz sağlanmadı. Dosyalar değiştirilmedi.");
     }
     public HistoryEntry SimulateHistoryEntry(HistoryEntry entry)
     {
-        var job = RequireHistoryEntry(entry);
-        try
-        {
-            ValidateOutputDirectory(Path.GetDirectoryName(job.OutputPath)!);
-            RejectReparseFile(job.OutputPath);
-            if (!File.Exists(job.OutputPath) || Checksum(job.OutputPath) != job.Sha256)
-                throw new InvalidDataException("Çıktı dosyası eksik veya özeti değişmiş.");
-            job = job with { Status = JobStatus.Simulated, Error = null };
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
-        { job = job with { Status = JobStatus.Failed, Error = ex.Message }; }
-        var writtenHash = SaveManifest(job, entry.ManifestHash);
-        return VerifyCommittedHistoryEntry(job, writtenHash);
+        RequireHistoryEntry(entry);
+        throw new InvalidOperationException("İş durumu güncellenemedi: eski kuyruklarla güvenli ayrım henüz sağlanmadı. Dosyalar değiştirilmedi.");
     }
 
-    private HistoryEntry VerifyCommittedHistoryEntry(SimulationJob job, string writtenHash)
+    private static bool HasImmutableHistory(string directory)
     {
-        try
+        foreach (var path in Directory.EnumerateFiles(directory))
         {
-            AfterHistoryCommitForVerification?.Invoke(job.ManifestPath);
-            var observed = GetHistoryEntry(job.Id);
-            if (observed.Job == job && observed.ManifestHash == writtenHash) return observed;
+            var name = Path.GetFileName(path);
+            if (name.StartsWith("history-", StringComparison.OrdinalIgnoreCase) || name.StartsWith(".history-", StringComparison.OrdinalIgnoreCase)) return true;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
-        {
-            throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt sonrasında doğrulanamadı. Durumu yeniden tarayarak kontrol edin.", ex);
-        }
-        throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt sonrasında değişti veya doğrulanamadı. Durumu yeniden tarayarak kontrol edin.");
+        return false;
     }
 
     private static void ValidateRecoveredJob(SimulationJob job, Guid directoryId, string directory, string manifest)
@@ -458,6 +445,8 @@ public sealed class SimulationQueue
     private string SaveManifest(SimulationJob job, string? selectedHash = null)
     {
         ValidateOutputDirectory(Path.GetDirectoryName(job.ManifestPath)!);
+        if (File.Exists(job.ManifestPath) && HasImmutableHistory(Path.GetDirectoryName(job.ManifestPath)!))
+            throw new InvalidOperationException("Değişmez geçmiş içeren iş eski yöntemle güncellenemez; kayıt korunuyor.");
         RejectReparseFile(job.ManifestPath);
         // Every writer holds this per-job lock while comparing and replacing the manifest.
         // Keep the lock file: deleting it would allow another process to lock a different inode.
