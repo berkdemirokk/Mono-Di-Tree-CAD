@@ -1187,6 +1187,24 @@ internal static class DesktopVerification
             "Mouse movement carries matching grading increments with the source",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Mouse move undo restores geometry and grading rule together",checks);
+        var positionX=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+        positionX.Text="10";
+        Invoke(studio,"ApplyProperties");
+        var propertyRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
+        Check(propertyRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && propertyRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
+            "Coordinate property movement carries matching grading increments with the source",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Coordinate property move undo restores geometry and grading rule together",checks);
+        studio.Commit("Eski kural testi",()=>studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints[0]=new Point2(-1,0));
+        var staleRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).Clone();
+        var beforeStaleMove=studio.Document.Clone();
+        positionX.Text="10";Invoke(studio,"ApplyProperties");
+        Check(studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints),
+            "Coordinate property movement leaves stale grading rules unchanged",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeStaleMove,studio.Document),"Undo restores coordinate move with stale rule",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Stale grading test restores the matching rule",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeRule,studio.Document),"Keyboard grading verification removes its test rule",checks);
         Invoke(studio,"Undo");

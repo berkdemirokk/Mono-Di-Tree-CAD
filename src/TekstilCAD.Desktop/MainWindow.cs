@@ -1195,7 +1195,7 @@ public class MainWindow : Window
     {
         // Prepare the entire batch before changing any piece. A precision or
         // bounds failure must leave every property draft applicable/reviewable.
-        var prepared=new List<(PatternPiece Piece, string Name, List<Point2>? Points, Grainline? Grainline)>(changes.Count);
+        var prepared=new List<(PatternPiece Piece, string Name, List<Point2>? Points, Grainline? Grainline, GradingRuleSet? Rule, GradingRuleSet? MovedRule)>(changes.Count);
         foreach(var change in changes)
         {
             var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
@@ -1218,11 +1218,14 @@ public class MainWindow : Window
                 if(!TargetPositionMatches(actual.MinX,change.X) || !TargetPositionMatches(actual.MinY,change.Y))
                     throw new InvalidDataException($"“{SafePieceName(piece.Name)} (kimlik: {piece.Id:D})” için istenen konum sayısal hassasiyetle yeterince temsil edilemiyor. Taslak korunuyor; daha küçük koordinatlar kullanın.");
             }
-            prepared.Add((piece,change.Name,translated,translatedGrain));
+            var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+            var movedRule=rule?.TranslatedFor(piece,translated!,dx,dy);
+            prepared.Add((piece,change.Name,translated,translatedGrain,rule,movedRule));
         }
         foreach(var item in prepared)
         {
             if(item.Points is not null) { item.Piece.Points=item.Points;item.Piece.Grainline=item.Grainline; }
+            if(item.MovedRule is not null)document.GradingRules[document.GradingRules.IndexOf(item.Rule!)]=item.MovedRule;
             item.Piece.Name=item.Name;
         }
     }
