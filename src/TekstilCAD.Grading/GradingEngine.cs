@@ -150,6 +150,23 @@ public static class GradingEngine
         // closing vertex from the source contour.
         if (basePiece.Closed && basePiece.Points[0] != basePiece.Points[^1] && result[0] == result[^1])
             throw new InvalidDataException("Serileme kapanış kenarını sıfıra indirdi; kuralları kontrol edin.");
+        // A uniform rule is a translation. Checking each absolute displacement
+        // alone can miss substantial distortion of a much shorter edge.
+        if (increments.All(p => p == increments[0]))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                var translated = Geometry.Translate(basePiece.Points, increments[0].X * steps, increments[0].Y * steps);
+                if (!translated.SequenceEqual(result))
+                    throw new InvalidDataException("Serileme konturu güvenle taşıyamadı.");
+            }
+            catch (ArgumentException error)
+            {
+                throw new InvalidDataException("Serileme sırasında kontur şekli sayısal hassasiyetle korunamıyor.", error);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+        }
         if (grainline is not null && increments.All(p => p == increments[0]))
         {
             var delta = increments[0];
