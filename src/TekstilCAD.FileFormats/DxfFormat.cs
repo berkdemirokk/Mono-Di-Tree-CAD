@@ -1962,6 +1962,19 @@ public static class DxfFormat
             if (count < 3 || (count > 1 && p.Points[0] == p.Points[count - 1]))
                 throw new InvalidDataException("Kapalı DXF konturu en az üç nokta içermeli ve kapanış noktası yalnız bir kez yinelenmelidir.");
         }
+        foreach (var p in project.Pieces)
+        {
+            // One repeated last point is a supported explicit closure and is
+            // omitted by the writer. Other adjacent duplicates produce a zero
+            // length DXF segment, including the implicit closing segment.
+            var count = p.Points.Count;
+            if (p.Closed && p.Points[0] == p.Points[^1]) count--;
+            for (var i = 1; i < count; i++)
+                if (p.Points[i - 1] == p.Points[i])
+                    throw new InvalidDataException("DXF dışa aktarımında sıfır uzunluklu kenar var; yinelenen komşu noktaları düzeltin.");
+            if (p.Closed && p.Points[count - 1] == p.Points[0])
+                throw new InvalidDataException("DXF dışa aktarımında sıfır uzunluklu kapanış kenarı var.");
+        }
         var usedLayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nextSuffix = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var result = new List<DxfLayerMapping>(project.Pieces.Count);
