@@ -2523,6 +2523,13 @@ public class MainWindow : Window
         // consume the entire compact window and hide the piece review.
         var riskTextLength=riskNotices.Children.OfType<TextBlock>().Sum(item=>item.Text.Length);
         var compactRisk=blockDefinitions || insertSkipped || riskNotices.Children.Count>=3 || riskTextLength>170;
+        var skippedPolylineWarning=warnings.FirstOrDefault(w=>w.StartsWith("Atlanan çoklu çizgi:",StringComparison.Ordinal));
+        if(skippedPolylineWarning is not null)
+        {
+            var notice=new TextBlock { Text=skippedPolylineWarning,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Danger,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,4) };
+            AutomationProperties.SetName(notice,notice.Text);
+            DockPanel.SetDock(notice,Dock.Top);panel.Children.Add(notice);
+        }
         if(insertStatusUnknown)
         {
             var unknownNotice=new TextBlock { Text="Blok yerleşimlerinin aktarım durumu doğrulanamadı; proje değiştirilemez. Dosyayı yeniden içe aktarın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,4) };

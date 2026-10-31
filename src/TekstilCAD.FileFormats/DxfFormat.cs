@@ -1253,6 +1253,8 @@ public static class DxfFormat
         if(opaqueLinesSeparated)warnings.Add("Uygulama veya genişletilmiş verisi bulunan LINE kayıtları anlamları bilinmediği için ayrı aktarıldı; bağlantıları ve kaynak semantiğini kontrol edin.");
         // Keep safety-relevant reasons complete even when the general
         // unsupported-type summary is truncated or full of vendor types.
+        if(skippedPolylines.Count>0)
+            warnings.Add($"Atlanan çoklu çizgi: {(skippedPolylinesTruncated ? "en az " : "")}{skippedPolylines.Count}. Önizleme eksik; eksikler giderilip doğrulanmadan üretimde kullanmayın.");
         if(skippedGeometryReasons.Count>0)warnings.Add("Atlanan DXF geometrisi: "+string.Join(", ",skippedGeometryReasons.Order(StringComparer.Ordinal)));
         if (blockGeometry) warnings.Add("BLOCK tanım geometrisi doğrudan alındı; INSERT yerleşim/dönüşümleri ve katman görünürlüğü mirası uygulanmaz. AAMA/ASTM beden, çentik ve iplik yönü semantiği doğrulanmadı.");
         if(unknownLayerUsed)warnings.Add("DXF katman görünürlüğü bilinmiyor: katman tablosu veya gerekli durum bilgisi eksik. Görünürlük ve viewport ayarlarını doğrulayın.");

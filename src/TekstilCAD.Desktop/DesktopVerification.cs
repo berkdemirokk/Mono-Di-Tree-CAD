@@ -670,6 +670,16 @@ internal static class DesktopVerification
             var mixedDxf=Path.Combine(work,"mixed-curve-import.dxf");
             File.WriteAllText(mixedDxf,"0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0\n20\n0\n11\n100\n21\n0\n0\nARC\n10\n50\n20\n50\n40\n20\n50\n0\n51\n90\n0\nENDSEC\n0\nEOF\n");
             var mixed=(DxfImportResult)typeof(MainWindow).GetMethod("PrepareDxfImport",PrivateInstance)!.Invoke(studio,[mixedDxf,1.0])!;
+            var fittedDxf=Path.Combine(work,"synthetic-fitted-review.dxf");
+            File.WriteAllText(fittedDxf,"0\nSECTION\n2\nENTITIES\n0\nLINE\n10\n0\n20\n0\n11\n10\n21\n0\n0\nPOLYLINE\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n70\n8\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n0\nENDSEC\n0\nEOF\n");
+            var fitted=(DxfImportResult)typeof(MainWindow).GetMethod("PrepareDxfImport",PrivateInstance)!.Invoke(studio,[fittedDxf,1.0])!;
+            var fittedReview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[fitted.Project,fitted.Warnings,1.0,"synthetic.dxf",fitted.Units])!;
+            Render(fittedReview,Path.ChangeExtension(reportPath,".import-fitted-review.png"),650,460);
+            var fittedRoot=(FrameworkElement)fittedReview.Content;
+            var fittedNotice=Descendants<TextBlock>(fittedRoot).Single(t=>t.Text.StartsWith("Atlanan çoklu çizgi: 1.",StringComparison.Ordinal));
+            Check(fitted.Project.Pieces.Count==1 && fittedNotice.Text.Contains("üretimde kullanmayın") && FullyVisible(fittedNotice,fittedRoot),
+                "Skipped fitted POLYLINE count and production warning are visible in preview",checks);
+            fittedReview.Close();
             var mixedReview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[mixed.Project,mixed.Warnings,1.0,"mixed-curve-import.dxf",mixed.Units])!;
             Render(mixedReview,Path.ChangeExtension(reportPath,".import-curve-review.png"),650,460);
             var mixedRoot=(FrameworkElement)mixedReview.Content;

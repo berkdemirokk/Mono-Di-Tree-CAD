@@ -50,6 +50,6 @@ public class DxfUnsupportedVertexFlagsTests
         var result=Import(flags);
         Assert.Single(result.Project.Pieces);
         Assert.False(result.Project.Pieces[0].Closed);
-        Assert.NotEmpty(result.Warnings);
+        Assert.Contains(result.Warnings,w=>w.StartsWith("Atlanan çoklu çizgi: 1.") && w.Contains("üretimde kullanmayın"));
     }
 }
