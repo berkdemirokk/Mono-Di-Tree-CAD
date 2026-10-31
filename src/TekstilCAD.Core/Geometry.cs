@@ -37,9 +37,50 @@ public static class Geometry
         Validate(polygon);
         if (polygon.Count < 3) return 0;
         // Translate to the first vertex to reduce cancellation for far-from-origin contours.
-        var origin = polygon[0]; double sum = 0;
-        for (var i = 1; i < polygon.Count - 1; i++) sum += Cross(polygon[i] - origin, polygon[i + 1] - origin);
+        var origin = polygon[0]; double sum = 0, magnitude = 0;
+        for (var i = 1; i < polygon.Count - 1; i++)
+        {
+            var a = polygon[i] - origin; var b = polygon[i + 1] - origin;
+            var left = a.X * b.Y; var right = a.Y * b.X;
+            sum += left - right;
+            magnitude += Math.Abs(left) + Math.Abs(right);
+        }
+        // Near cancellation can erase a real area or reverse its orientation.
+        // Include accumulation error for long contours as well as errors in
+        // subtraction and multiplication. Double.Epsilon is the smallest
+        // subnormal, not the rounding unit of IEEE double precision.
+        var roundingBound = Math.Max(1e-12, (polygon.Count + 8d) * 2.220446049250313e-16);
+        if (magnitude > 0 && Math.Abs(sum) <= magnitude * roundingBound)
+            return ExactSignedArea(polygon);
         return FiniteResult(sum / 2);
+    }
+
+    private static double ExactSignedArea(IReadOnlyList<Point2> polygon)
+    {
+        // Every finite double is an integer multiple of 2^-1074.
+        static BigInteger Scaled(double value)
+        {
+            var bits = BitConverter.DoubleToInt64Bits(value);
+            var exponent = (int)((bits >> 52) & 0x7ff);
+            var fraction = (ulong)bits & 0x000f_ffff_ffff_ffffUL;
+            var mantissa = exponent == 0 ? fraction : fraction | (1UL << 52);
+            var integer = new BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -integer : integer;
+        }
+
+        var ox = Scaled(polygon[0].X); var oy = Scaled(polygon[0].Y);
+        BigInteger sum = 0;
+        var ax = Scaled(polygon[1].X) - ox; var ay = Scaled(polygon[1].Y) - oy;
+        for (int i = 2; i < polygon.Count; i++)
+        {
+            var bx = Scaled(polygon[i].X) - ox; var by = Scaled(polygon[i].Y) - oy;
+            sum += ax * by - ay * bx;
+            ax = bx; ay = by;
+        }
+        if (sum.IsZero) return 0;
+        // Reduce before conversion, retaining extra bits for rounding.
+        int shift = (int)Math.Max(0, BigInteger.Abs(sum).GetBitLength() - 60);
+        return FiniteResult(Math.ScaleB((double)(sum >> shift), shift - 2149));
     }
 
     public static Bounds2 Bounds(IReadOnlyList<Point2> points)
