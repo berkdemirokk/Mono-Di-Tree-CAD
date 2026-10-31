@@ -13,7 +13,9 @@ public static class GradeBatchInput
         if (input.Length > 1_000_000) throw new ArgumentException("Beden listesi çok uzun; en fazla 1.000.000 karakter girin.");
         var result = new List<GradeBatchEntry>();
         var names = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        var lines = input.Replace("\r", "").Split('\n');
+        // Treat CRLF, LF and CR as line boundaries. Removing CR can silently
+        // join adjacent fields (for example, "S;1\r0" becomes step 10).
+        var lines = input.Split(["\r\n", "\n", "\r"], StringSplitOptions.None);
         for (var index = 0; index < lines.Length; index++)
         {
             if (string.IsNullOrWhiteSpace(lines[index])) continue;

@@ -36,4 +36,20 @@ public class GradeBatchQuantityTests
         var entries = GradeBatchInput.Parse("S; -1\nL; 1; ");
         Assert.All(entries, e => Assert.Null(e.Quantity));
     }
+
+    [Fact]
+    public void MixedLineEndingsPreserveSizesStepsAndQuantities()
+    {
+        var entries = GradeBatchInput.Parse("S;-1;2\rM;0;3\r\nL;1;4\nXL;2;5");
+        Assert.Equal(new[] { "S", "M", "L", "XL" }, entries.Select(e => e.Size.Name));
+        Assert.Equal(new double[] { -1, 0, 1, 2 }, entries.Select(e => e.Size.Steps));
+        Assert.Equal(new int?[] { 2, 3, 4, 5 }, entries.Select(e => e.Quantity));
+    }
+
+    [Fact]
+    public void CarriageReturnCannotMergeTwoLinesIntoADifferentStep()
+    {
+        var error = Assert.Throws<ArgumentException>(() => GradeBatchInput.Parse("S;1\r0"));
+        Assert.Contains("2. satır", error.Message);
+    }
 }
