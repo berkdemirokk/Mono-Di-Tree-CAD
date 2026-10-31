@@ -329,6 +329,7 @@ internal static class DesktopVerification
             VerifyAsyncArea(studio, checks);
             VerifySelectedPieceLimits(studio, reportPath, checks);
             VerifyPropertyDrafts(studio,work,checks);
+            GroupMoveVerification.Run(studio,checks);
             VerifyDraftRemovalConfirmationRace(studio,checks);
             VerifyFitSelectedPiece(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);

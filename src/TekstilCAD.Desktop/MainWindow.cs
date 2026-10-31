@@ -401,6 +401,7 @@ public class MainWindow : Window
         pieces.ItemTemplate=new DataTemplate { VisualTree=pieceRows };
         pieces.SelectionChanged += (_, _) => { if (!syncing) { var id=(pieces.SelectedItem as PatternPiece)?.Id; if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation())) { syncing=true;pieces.SelectedItem=Selected;syncing=false;return; } SelectedId=id; Refresh(); } };
         inspector.Children.Add(pieces);
+        AddButton(inspector,"Birden fazla parçayı taşı…",OpenGroupMove,"Parça listesinden birden fazla parça seçip aynı X/Y kadar taşıyın; işlem tek adımda geri alınır.");
         pieceSearch.TextChanged+=(_,_)=>RefreshPieceSearch();
         AutomationProperties.SetName(selectedPieceIdentity,"Seçili parçanın tam adı ve kimliği");
         AutomationProperties.SetHelpText(selectedPieceIdentity,"Adı ve kimliği seçip kopyalayabilirsiniz. Görünmeyen karakterler Unicode koduyla gösterilir.");
@@ -720,6 +721,7 @@ public class MainWindow : Window
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);
+    internal bool CanRetainCurrentUndoSnapshot => session.CanRetainCurrentUndoSnapshot;
     // Called only after a changed document is committed, before UI refresh can fail.
     internal void CommitObserved(string description, Action action, Action? onCommitted)
     {
@@ -1304,6 +1306,14 @@ public class MainWindow : Window
         var dialog=new GrainlineEditorWindow(this,source,()=>GrainlineEditProblem(stamp));
         if(dialog.ShowDialog()==true)ApplyGrainlineEdit(stamp,dialog.Result);
     }
+    private void OpenGroupMove()
+    {
+        if(!EnsureMainMutationReady() || BlockForIncompleteRecovery() || BlockForDxfImport() || BlockForExport())return;
+        if(HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
+        if(Document.Pieces.Count<2) { SetStatus("Toplu taşıma için en az iki parça gereklidir.");return; }
+        new GroupMoveWindow(this).ShowDialog();
+    }
+
     private void EditPieceMetadata()
     {
         if(!EnsureMainMutationReady())return;
