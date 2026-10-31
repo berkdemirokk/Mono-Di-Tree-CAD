@@ -13,6 +13,7 @@ private struct ContentView: View {
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
+    @State private var drawingRevision = UUID()
 
     var body: some View {
         VStack(spacing: 12) {
@@ -36,9 +37,12 @@ private struct ContentView: View {
                     if let selectedPiece {
                         PieceDetails(piece: project.pieces[selectedPiece])
                     }
-                    DrawingView(pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces)
+                    DrawingView(
+                        pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
+                        label: selectedPiece.map { "Parça \($0 + 1) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
+                    )
+                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
-                        .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi")
                 } else {
                     Text("Bu projede görüntülenebilir kontur yok.")
                         .foregroundStyle(.secondary)
@@ -64,6 +68,7 @@ private struct ContentView: View {
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
                 let loaded = try Drawing.load(url)
                 selectedPiece = nil
+                drawingRevision = UUID()
                 project = loaded
             } catch { self.error = error.localizedDescription }
         }
@@ -151,7 +156,78 @@ private struct PieceDetails: View {
 }
 private struct DrawingView: View {
     let pieces: [Drawing.Piece]
+    let label: String
+    @State private var zoom: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @GestureState private var pinch: CGFloat = 1
+    @GestureState private var drag: CGSize = .zero
+
+    private func limitedZoom(_ value: CGFloat) -> CGFloat {
+        min(max(value.isFinite ? value : 1, 0.5), 10)
+    }
+
+    private func limitedOffset(_ value: CGSize, size: CGSize, scale: CGFloat) -> CGSize {
+        let limitX = size.width * max(scale, 1)
+        let limitY = size.height * max(scale, 1)
+        return CGSize(width: min(max(value.width, -limitX), limitX),
+                      height: min(max(value.height, -limitY), limitY))
+    }
+
     var body: some View {
+        GeometryReader { geometry in
+            let currentZoom = limitedZoom(zoom * pinch)
+            let currentOffset = limitedOffset(
+                CGSize(width: offset.width + drag.width, height: offset.height + drag.height),
+                size: geometry.size, scale: currentZoom
+            )
+            ZStack(alignment: .topTrailing) {
+                drawing
+                    .scaleEffect(currentZoom)
+                    .offset(currentOffset)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .accessibilityLabel(label)
+                    .accessibilityHint("Yakınlaştırmak için iki parmağınızı kullanın; çizimi taşımak için sürükleyin.")
+                    .accessibilityValue("Yüzde \(Int(currentZoom * 100))")
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: zoom = limitedZoom(zoom * 1.25)
+                        case .decrement: zoom = limitedZoom(zoom / 1.25)
+                        @unknown default: break
+                        }
+                        offset = limitedOffset(offset, size: geometry.size, scale: zoom)
+                    }
+                Button("Görünümü sıfırla") {
+                    zoom = 1
+                    offset = .zero
+                }
+                .font(.caption)
+                .padding(8)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+                .padding(8)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+            .contentShape(Rectangle())
+            .clipped()
+            .gesture(
+                MagnificationGesture()
+                    .updating($pinch) { value, state, _ in state = value }
+                    .onEnded { value in
+                        zoom = limitedZoom(zoom * value)
+                        offset = limitedOffset(offset, size: geometry.size, scale: zoom)
+                    }
+                    .simultaneously(with: DragGesture()
+                        .updating($drag) { value, state, _ in state = value.translation }
+                        .onEnded { value in
+                            offset = limitedOffset(
+                                CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height),
+                                size: geometry.size, scale: zoom
+                            )
+                        })
+            )
+        }
+    }
+
+    private var drawing: some View {
         Canvas { context, size in
             let points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
             guard let first = points.first else { return }
