@@ -193,6 +193,30 @@ public static class PatternTools
         return result;
     }
 
+    /// <summary>Cut an inward V notch into a closed contour edge. Half-width equals depth.</summary>
+    public static PatternPiece InsertNotch(PatternPiece piece, int afterIndex, double fraction, double depth, CancellationToken cancellationToken = default)
+    {
+        var points = SnapshotPointEdit(piece, cancellationToken);
+        if (!piece.Closed) throw new ArgumentException("Çentik için kapalı kontur gereklidir.");
+        if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
+        if (points.Count + 3 > LargeContourValidator.MaximumStoredPoints) throw new ArgumentException("Kontur nokta sınırı aşılıyor.");
+        ValidatePointEdit(true, points, cancellationToken);
+        if (points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1) afterIndex = 0;
+        var next = afterIndex + 1 < points.Count ? afterIndex + 1 : 0;
+        var sourceArea = Geometry.SignedArea(points);
+        var notch = NotchPoints(points[afterIndex], points[next], fraction, depth);
+        if (sourceArea < 0)
+        {
+            var center = points[afterIndex] + (points[next] - points[afterIndex]) * fraction;
+            notch[1] = center * 2 - notch[1];
+        }
+        points.InsertRange(afterIndex + 1, notch);
+        ValidatePointEdit(true, points, cancellationToken);
+        var resultArea = Geometry.SignedArea(points);
+        if (Math.Sign(resultArea) != Math.Sign(sourceArea) || Math.Abs(resultArea) >= Math.Abs(sourceArea))
+            throw new ArgumentException("Çentik kontur alanını güvenle azaltmadı; işlem uygulanmadı.");
+        return NewPiece(piece, points, "", preserveGrainline:true);
+    }
     public static PatternPiece InsertPoint(PatternPiece piece, int afterIndex, Point2 point)
         => InsertPoint(piece, afterIndex, point, CancellationToken.None);
 

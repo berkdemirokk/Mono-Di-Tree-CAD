@@ -300,6 +300,7 @@ internal static class DesktopVerification
             var sample = new ProjectDocument { Name = "Arka plan doğrulaması", Pieces = [new PatternPiece { Name = "100 mm kare", Points = [new(0,0),new(100,0),new(100,100),new(0,100)] }] };
             studio.LoadDocument(sample);
             Check(studio.Document.Pieces.Count == 1, "LoadDocument", checks);
+
             VerifySourceHistoryNotice(studio,work,reportPath,checks);
             VerifyHistoryCapacityNotice(studio,reportPath,checks);
             studio.LoadDocument(sample);
@@ -381,6 +382,8 @@ internal static class DesktopVerification
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
+            VerifyNotchEdit(studio,checks);
+
             VerifyReverseOpenPath(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
@@ -7064,6 +7067,46 @@ internal static class DesktopVerification
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
+    private static void VerifyNotchEdit(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Çentik",Points=[new(0,0),new(20,0),new(20,10),new(0,10),new(0,0)],Metadata=new PieceMetadata { Quantity=2 } };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],Deltas=piece.Points.Select(_=>new Point2(0,0)).ToList() };
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        void Prepare() { studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()],GradingRules=[rule.Clone()] });studio.Select(piece.Id); }
+        void Finish(Task task) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            Prepare();var before=studio.Document.Clone();var tools=new TextileToolsWindow(studio);
+            try
+            {
+                Finish(tools.InsertNotchAsync("3","0.5","2"));
+                var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                Check(studio.Document.Pieces[0].Points.Count==8 && studio.Document.Pieces[0].Points[0]==studio.Document.Pieces[0].Points[^1] &&
+                    JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && result.Text.Contains("serileme",StringComparison.OrdinalIgnoreCase) && session.UndoCount==1,
+                    "Notch keeps explicit closure and original grading rule with review warning",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Notch is one undoable edit",checks);
+            }
+            finally { tools.Close(); }
+            foreach(var scenario in new[]{"cancel","source"})
+            {
+                Prepare();tools=new TextileToolsWindow(studio);using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+                tools.BeforeVertexMoveForVerification=()=> { reached.Set();release.Wait(); };
+                try
+                {
+                    pending=tools.InsertNotchAsync("0","0.5","2");PumpUntil(()=>reached.IsSet);
+                    if(scenario=="cancel")tools.RequestVertexMoveCancellation();
+                    else studio.Commit("Kaynak değişti",()=>studio.Document.Pieces[0].Points[1]=new Point2(21,0));
+                    var expected=studio.Document.Clone();var undo=session.UndoCount;release.Set();Finish(pending);
+                    var message=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                    Check(DocumentSession.ContentEquals(expected,studio.Document) && session.UndoCount==undo && message.Text.Contains(scenario=="cancel"?"iptal":"uygulanmadı",StringComparison.OrdinalIgnoreCase),
+                        $"Notch {scenario} does not apply stale or cancelled geometry",checks);
+                }
+                finally { release.Set();if(pending is not null)Finish(pending);tools.Close(); }
+            }
+        }
+        finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
+    }
     private static void VerifyEdgeMidpoint(MainWindow studio,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
