@@ -6278,6 +6278,14 @@ internal static class DesktopVerification
         {
             studio.LoadDocument(new ProjectDocument { Name="Nokta geri al" });
             var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
+            studio.SetTool("Bézier");
+            var loopControl = new Point2[] { new(0,0), new(100,100), new(-100,100) };
+            canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Bézier",loopControl));
+            var loopError=canvas.AddDrawingPointAt(new Point2(0,0));
+            Check(loopError is not null && canvas.CapturePendingDrawing()!.Points.SequenceEqual(loopControl) &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                "Intersecting open Bezier is rejected while its prior drawing and history remain intact",checks);
+            canvas.CancelDrawing();
             foreach(var (tool,points) in new (string,Point2[])[] {
                 ("Çizgi",[new(1,2)]), ("Dikdörtgen",[new(1,2)]),
                 ("Bézier",[new(1,2),new(3,4),new(5,6)]),

@@ -248,8 +248,14 @@ public sealed class CadCanvas : FrameworkElement
     {
         foreach(var point in points) Geometry.Validate(point);
         if(closed) Geometry.ValidateContour(points);
-        else if(points.Count<2 || points.Zip(points.Skip(1),(a,b)=>Geometry.Distance(a,b)).All(d=>d<.001))
-            throw new ArgumentException("Çizgi uzunluğu sıfır olamaz.");
+        else
+        {
+            // Drawing must obey the same open-path rules as later point edits
+            // and joins. A sampled curve can double back or intersect itself.
+            try { LargeOpenPathValidator.Validate(points); }
+            catch (ArgumentException ex)
+            { throw new ArgumentException("Açık çizgi sıfır uzunluklu, üst üste binen veya kesişen kenar içeriyor; çizim tamamlanmadı.", ex); }
+        }
         owner.AddPiece(points,closed,()=> { observedCommits++;drawing.Clear(); });
     }
     public void FinishPolyline()
