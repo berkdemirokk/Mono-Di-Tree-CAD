@@ -226,6 +226,17 @@ public static class ProjectStorage
         {
             foreach (var item in element.EnumerateArray()) RejectDuplicateProperties(item);
         }
+        else if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var number) && number == 0)
+        {
+            // Reject a nonzero decimal that would silently deserialize to zero.
+            // Digits in the exponent do not make a zero mantissa nonzero.
+            foreach (var c in element.GetRawText())
+            {
+                if (c is 'e' or 'E') break;
+                if (c is >= '1' and <= '9')
+                    throw new InvalidDataException("Proje sayısı sıfıra yuvarlanacak kadar küçük; veri kaybını önlemek için dosya açılmadı.");
+            }
+        }
     }
     public static ProjectFileVersion CaptureVersion(string path)
     {
