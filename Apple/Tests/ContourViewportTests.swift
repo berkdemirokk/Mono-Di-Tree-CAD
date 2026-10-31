@@ -14,6 +14,21 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertNil(ContourViewport.visibleOffset(point: .zero, size: .zero, zoom: 2, offset: .zero))
     }
 
+    func testRevealAfterGrainVisibilityChangesViewport() throws {
+        let size = CGSize(width: 200, height: 100)
+        let contour = [p(0, 0), p(100, 0)]
+        let withGrain = try XCTUnwrap(ContourViewport(points: contour + [p(-1000, 0), p(1000, 0)], width: 200, height: 100))
+        let withoutGrain = try XCTUnwrap(ContourViewport(points: contour, width: 200, height: 100))
+        let zoom: CGFloat = 4
+        let selected = contour[1]
+        let oldOffset = try XCTUnwrap(ContourViewport.visibleOffset(point: withGrain.position(selected), size: size, zoom: zoom, offset: .zero))
+        let newPosition = withoutGrain.position(selected)
+        let corrected = try XCTUnwrap(ContourViewport.visibleOffset(point: newPosition, size: size, zoom: zoom, offset: oldOffset))
+        XCTAssertNotEqual(corrected, oldOffset)
+        let visibleX = (newPosition.x - size.width / 2) * zoom + size.width / 2 + corrected.width
+        XCTAssertGreaterThanOrEqual(visibleX, 0)
+        XCTAssertLessThanOrEqual(visibleX, size.width)
+    }
     func testTinyContourStillFillsViewport() throws {
         let points = [p(0, 0), p(1e-200, 0), p(1e-200, 1e-200)]
         let viewport = try XCTUnwrap(ContourViewport(points: points, width: 232, height: 132))

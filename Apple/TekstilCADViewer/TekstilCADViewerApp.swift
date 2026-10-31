@@ -1420,6 +1420,7 @@ private struct DrawingView: View {
             .onAppear { canvasSize = geometry.size; revealSelectedNotch(size: geometry.size) }
             .onChange(of: geometry.size) { canvasSize = $0; revealSelectedNotch(size: $0) }
             .onChange(of: selectionRevision) { _ in revealSelectedNotch(size: geometry.size) }
+            .onChange(of: showGrain) { _ in revealSelectedNotch(size: geometry.size) }
         }
         .frame(height: 320)
                 VStack(alignment: .leading, spacing: 8) {
