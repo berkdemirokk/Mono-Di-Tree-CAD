@@ -3,6 +3,7 @@
     platform: iOS
     sources:
       - path: Tests/LosslessProjectNameTests.swift
+      - path: Tests/ExperimentalPieceRenameTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:
