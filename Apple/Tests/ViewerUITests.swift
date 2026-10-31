@@ -1,6 +1,48 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSameNameCopiesCanBeSearchedAndDeletedByFullIdentity() {
+        let fixture = #"{"Name":"Aynı Model","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 15))
+        for _ in 0..<2 {
+            rename.tap()
+            let editor = app.alerts["Proje adını değiştir"]
+            XCTAssertTrue(editor.waitForExistence(timeout: 5))
+            editor.buttons["Yeni kopyayı kaydet"].tap()
+            XCTAssertTrue(app.staticTexts["Yeni kopya Modellerim bölümüne kaydedildi."].waitForExistence(timeout: 10))
+        }
+        app.buttons["Modellerim"].tap()
+        let rows = app.buttons.matching(identifier: "Aynı Model")
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertEqual(rows.count, 2)
+        let firstValue = rows.element(boundBy: 0).value as? String ?? ""
+        let secondValue = rows.element(boundBy: 1).value as? String ?? ""
+        let prefix = "Kayıt kimliği: "
+        XCTAssertTrue(firstValue.hasPrefix(prefix));XCTAssertTrue(secondValue.hasPrefix(prefix))
+        let firstID = String(firstValue.dropFirst(prefix.count)).components(separatedBy: ", Kaydedildi:")[0]
+        let secondID = String(secondValue.dropFirst(prefix.count)).components(separatedBy: ", Kaydedildi:")[0]
+        XCTAssertFalse(firstID.isEmpty);XCTAssertNotEqual(firstID, secondID)
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5));search.tap();search.typeText(firstID)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains(firstID))
+        rows.firstMatch.swipeLeft();app.buttons["Sil"].tap()
+        let confirmation = app.alerts["Modeli sil?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        XCTAssertTrue(confirmation.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", firstID)).firstMatch.exists)
+        confirmation.buttons["Sil"].tap()
+        search.tap();search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: firstID.count))
+        XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: 5));XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains(secondID))
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Aynı Model"].waitForExistence(timeout: 10))
+    }
+
     func testInsufficientContoursRemainSearchableButAreNotDrawnOrMeasured() {
         let fixture = #"{"Name":"Eksik","Pieces":[{"Name":"Boş","Closed":false,"Points":[]},{"Name":"Tek","Closed":false,"Points":[{"X":0,"Y":0}]},{"Name":"Kapalı iki","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]},{"Name":"Geçerli","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]}]}"#
         let app = XCUIApplication()

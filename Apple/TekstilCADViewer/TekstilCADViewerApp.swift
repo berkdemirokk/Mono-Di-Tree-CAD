@@ -358,6 +358,15 @@ private enum ModelStore {
         let date: Date?
         let canOpen: Bool
         var id: URL { url }
+        // The complete directory entry name distinguishes records in this
+        // library; actions continue to use the full URL, never a display ID.
+        var displayIdentity: String { url.lastPathComponent }
+        var readableIdentity: String {
+            let stem = url.deletingPathExtension().lastPathComponent
+            let candidate = stem.range(of: " - ", options: .backwards).map { String(stem[$0.upperBound...]) } ?? stem
+            guard let uuid = UUID(uuidString: candidate) else { return displayIdentity }
+            return "\(url.pathExtension.lowercased()) · \(uuid.uuidString)"
+        }
     }
     private struct CopyMetadata: Codable {
         let version: Int
@@ -498,7 +507,7 @@ private struct ModelLibrary: View {
 
     private var matches: [ModelStore.Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+        return models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.displayIdentity.localizedCaseInsensitiveContains(query) || $0.readableIdentity.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
@@ -519,6 +528,8 @@ private struct ModelLibrary: View {
                     } label: {
                         VStack(alignment: .leading) {
                             Text(model.name)
+                            Text("Kayıt: \(model.readableIdentity)")
+                                .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             if let date = model.date {
                                 Text("Kaydedildi: \(date.formatted(date: .abbreviated, time: .standard))")
                                     .font(.caption).foregroundStyle(.secondary)
@@ -526,6 +537,9 @@ private struct ModelLibrary: View {
                         }
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(model.name)
+                    .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .swipeActions {
                         Button("Sil", role: .destructive) { modelToDelete = model }
                     }
@@ -557,7 +571,7 @@ private struct ModelLibrary: View {
                     modelToDelete = nil
                 }
             } message: {
-                Text("\(modelToDelete?.name ?? "Model") telefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
+                Text("\(modelToDelete?.name ?? "Model")\nKayıt: \(modelToDelete?.readableIdentity ?? "")\nTam kayıt kimliği: \(modelToDelete?.displayIdentity ?? "")\nTelefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
             }
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
