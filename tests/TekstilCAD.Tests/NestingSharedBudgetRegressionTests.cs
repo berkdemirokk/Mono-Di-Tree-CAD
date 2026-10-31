@@ -6,12 +6,12 @@ namespace TekstilCAD.Tests;
 public sealed class NestingSharedBudgetRegressionTests
 {
     [Fact]
-    public void ProductionRejectsBothContourPassesBeforeExpansion()
+    public void ProductionRejectsExcessiveValidationBeforeExpansion()
     {
         var piece = new PatternPiece
         {
             Points = Enumerable.Range(0, 1000).Select(i => new Point2(i, i % 2)).ToList(),
-            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 26 }
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 50 }
         };
         var document = new ProjectDocument { Pieces = [piece] };
 
@@ -19,6 +19,6 @@ public sealed class NestingSharedBudgetRegressionTests
         var error = Assert.Throws<ArgumentException>(() =>
             ProductionNestingPlan.Arrange(document, [piece.Id], 0));
         Assert.Contains("kaynak sınırlarını", error.Message);
-        Assert.Equal(26, piece.Metadata.Quantity);
+        Assert.Equal(50, piece.Metadata.Quantity);
     }
 }
