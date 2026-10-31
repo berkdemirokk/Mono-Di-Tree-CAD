@@ -5464,7 +5464,10 @@ internal static class DesktopVerification
         var y=(TextBox)typeof(MainWindow).GetField("y",PrivateInstance)!.GetValue(studio)!;
         studio.Select(first.Id);name.Text="Silinen parça taslağı";x.Text="geçersiz";y.Text="12,5";
         studio.Select(second.Id);name.Text="Korunan taslak";x.Text="25";y.Text="3";
-        studio.Select(first.Id);Invoke(studio,"DeleteSelection");
+        // Simulate a programmatic document change that removes a piece while
+        // its draft exists. The interactive delete command now blocks this.
+        studio.Select(first.Id);
+        studio.Commit("Programatik parça kaldırma",()=>studio.Document.Pieces.RemoveAll(p=>p.Id==first.Id));
         var deletedState=JsonSerializer.Serialize(studio.Document);
         try { Invoke(studio,"Save");throw new InvalidOperationException("Missing-piece draft was saved."); }
         catch(InvalidDataException) { }
