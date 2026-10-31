@@ -4,6 +4,7 @@
     sources:
       - path: Tests/LosslessProjectNameTests.swift
       - path: Tests/ModelFilePublisherTests.swift
+      - path: Tests/ModelLoadStateTests.swift
       - path: Tests/ExperimentalPieceRenameTests.swift
       - path: Tests/ContourMeasureTests.swift
       - path: Tests/ExperimentalContourValidationTests.swift

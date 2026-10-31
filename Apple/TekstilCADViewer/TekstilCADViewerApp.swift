@@ -66,8 +66,7 @@ private struct ContentView: View {
     @State private var selectedPiece: Int?
     @State private var drawingRevision = UUID()
     @State private var notchSelectionRevision = UUID()
-    @State private var loadRequest = UUID()
-    @State private var isLoading = false
+    @State private var modelLoad = ModelLoadState()
 
     var body: some View {
         ScrollView {
@@ -81,11 +80,11 @@ private struct ContentView: View {
             }
             Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
-            if isLoading { ProgressView("Proje açılıyor…") }
+            if modelLoad.isLoading { ProgressView("Proje açılıyor…") }
             if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
-                    .disabled(isSaving || isLoading)
+                    .disabled(isSaving || modelLoad.isLoading)
             }
             if let project {
                 Button("Açık modeli dışa aktar…") {
@@ -95,10 +94,10 @@ private struct ContentView: View {
                     exportName = exportFileName(project.name)
                     saveNotice = nil
                     showingExportWarning = true
-                }.disabled(isSaving || isLoading || sourceData == nil)
+                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
-                }.disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
                 if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
                     Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -113,7 +112,7 @@ private struct ContentView: View {
                     Text("Sürüm 6 için yalnız UTF-8 ve en fazla 8 MB desteklenir. İşaretler ve konturlar önizlenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
-                        .disabled(isLoading)
+                        .disabled(modelLoad.isLoading)
                         .sheet(isPresented: $showingNotches) {
                             NotchPicker(pieces: project.pieces) { piece, point in
                                 selectedPiece = piece
@@ -148,7 +147,7 @@ private struct ContentView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(isLoading)
+                    .disabled(modelLoad.isLoading)
                     .accessibilityHint("Parçaları aramak veya seçmek için açın")
                     .sheet(isPresented: $showingPieces) {
                         PiecePicker(pieces: project.pieces, selection: Binding(
@@ -164,13 +163,13 @@ private struct ContentView: View {
                         Button("Deneysel nokta düzenle…") {
                             guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
                             pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
-                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: loadRequest)
+                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: modelLoad.request)
                         }
-                            .disabled(isSaving || isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+                            .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: $pointEditSnapshot) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
-                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && loadRequest == snapshot.loadRequest && !isLoading },
-                                    invalidateForTesting: { loadRequest = UUID() })
+                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && modelLoad.request == snapshot.loadRequest && !modelLoad.isLoading },
+                                    invalidateForTesting: { modelLoad.invalidate() })
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -183,7 +182,7 @@ private struct ContentView: View {
                             pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
                             showingPieceNameEditor = true
                         }
-                        .disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        .disabled(isSaving || modelLoad.isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
                         if !project.pieceRenameIdentitiesValid {
                             Text("Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -233,7 +232,10 @@ private struct ContentView: View {
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
-                guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
+                guard url.pathExtension.lowercased() == "tcad" else {
+                    modelLoad.invalidate()
+                    throw ViewerError.message("Lütfen bir .tcad dosyası seçin.")
+                }
                 openModel(url, imported: true)
             } catch {
                 if !isFilePickerCancellation(error) { self.error = error.localizedDescription }
@@ -321,9 +323,7 @@ private struct ContentView: View {
 
     private func openModel(_ url: URL, imported: Bool) {
         saveNotice = nil
-        let request = UUID()
-        loadRequest = request
-        isLoading = true
+        let request = modelLoad.begin()
         // Acquire the picker grant while still handling its result. Keep it
         // alive until the background coordinated read has finished.
         let access = imported && url.startAccessingSecurityScopedResource()
@@ -337,8 +337,7 @@ private struct ContentView: View {
                 return (try Drawing.load(data), data)
             }
             DispatchQueue.main.async {
-                guard loadRequest == request else { return }
-                isLoading = false
+                guard modelLoad.finish(request) else { return }
                 switch loaded {
                 case .success(let (drawing, data)):
                     #if DEBUG
