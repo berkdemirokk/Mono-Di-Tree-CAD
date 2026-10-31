@@ -336,6 +336,7 @@ internal static class DesktopVerification
             VerifyDraftTranslationPrecision(studio,work,checks);
             VerifyDxfEncodingChoice(studio,work,reportPath,checks);
             VerifyDxfBulgeOptions(studio,reportPath,checks);
+            VerifyDxfSampledOptions(studio,reportPath,checks);
             VerifyDxfStrictOptions(studio,work,reportPath,checks);
             VerifyDxfPlacementRetry(studio,work,reportPath,checks);
             VerifyDxfDecodedNames(studio,reportPath,checks);
@@ -5025,6 +5026,63 @@ internal static class DesktopVerification
             studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;
             SynchronizationContext.SetSynchronizationContext(oldContext);
         }
+    }
+
+    private static void VerifyDxfSampledOptions(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var initial=new MainWindow.DxfOptionsState();
+        var options=studio.CreateDxfOptionsWindow(initial);
+        Render(options,Path.ChangeExtension(reportPath,".dxf-sampled-options.png"),440,340);
+        var root=(FrameworkElement)options.Content;
+        var sampled=Descendants<CheckBox>(root).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel: uygun örneklenmiş POLYLINE",StringComparison.Ordinal)==true);
+        var methods=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="DXF okuma yöntemi");
+        var scroller=Descendants<ScrollViewer>(root).Single(c=>AutomationProperties.GetName(c)=="DXF ölçü ve kodlama seçenekleri");
+        var cancel=Descendants<Button>(root).Single(c=>Equals(c.Content,"Vazgeç"));
+        var read=Descendants<Button>(root).Single(c=>Equals(c.Content,"DXF okumayı başlat"));
+        Check(sampled.IsChecked==false && sampled.IsEnabled && !initial.UseSampledPolylineExperiment && methods.SelectedIndex==0 && cancel.IsDefault && cancel.IsCancel,
+            "Sampled polyline experiment is unchecked by default and cancellation is the default action",checks);
+        var description=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("parametrik spline doğruluğu") && t.Text.Contains("üretime uygunluk garanti edilmez"));
+        var y=sampled.TransformToAncestor(scroller).Transform(new Point(0,0)).Y+scroller.VerticalOffset;
+        scroller.ScrollToVerticalOffset(Math.Max(0,y-10));root.UpdateLayout();
+        Check(scroller.Focusable && KeyboardNavigation.GetIsTabStop(scroller) && FullyVisible(sampled,root) && FullyVisible(cancel,root) && FullyVisible(read,root)
+            && description.Text.Contains("yalnız standart aktarımda"),
+            "Sampled option and actions are reachable in the small options window, with non-guarantee guidance",checks);
+        sampled.IsChecked=true;methods.SelectedIndex=1;
+        Check(!sampled.IsEnabled && sampled.IsChecked==false,"Controlled block-placement mode clears and disables sampled mode",checks);
+        methods.SelectedIndex=0;
+        Check(sampled.IsEnabled && sampled.IsChecked==false,"Returning to standard mode requires a fresh explicit sampled opt-in",checks);
+        options.Close();
+
+        foreach(var enable in new[]{false,true})
+        {
+            var state=new MainWindow.DxfOptionsState();var dialog=studio.CreateDxfOptionsWindow(state);
+            Render(dialog,Path.ChangeExtension(reportPath,$".dxf-sampled-choice-{enable}.png"),440,340);
+            var dialogRoot=(FrameworkElement)dialog.Content;
+            var choice=Descendants<CheckBox>(dialogRoot).Single(c=>c.Content?.ToString()?.StartsWith("Deneysel: uygun örneklenmiş POLYLINE",StringComparison.Ordinal)==true);
+            var start=Descendants<Button>(dialogRoot).Single(c=>Equals(c.Content,"DXF okumayı başlat"));
+            dialog.Dispatcher.BeginInvoke(new Action(()=> { choice.IsChecked=enable;start.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }));
+            var accepted=dialog.ShowDialog();
+            Check(accepted==true && state.UseSampledPolylineExperiment==enable && !state.UseBlockPlacements,
+                $"Sampled option commits only the explicit choice ({enable})",checks);
+        }
+
+        var rejected=false;
+        try { studio.StartDxfPreparationWithBulgeAsync("synthetic.dxf",1,DxfTextEncoding.Utf8,0.1,true).GetAwaiter().GetResult(); }
+        catch(ArgumentException) { rejected=true; }
+        Check(rejected,"Sampled and bulge approximation modes cannot be combined",checks);
+
+        const string source="0\nSECTION\n2\nENTITIES\n0\nPOLYLINE\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n70\n0\n0\nVERTEX\n10\n10\n20\n0\n70\n8\n0\nVERTEX\n10\n0\n20\n10\n70\n0\n0\nSEQEND\n0\nENDSEC\n0\nEOF\n";
+        using var input=new MemoryStream(System.Text.Encoding.UTF8.GetBytes(source));
+        var imported=DxfFormat.ImportWithSampledPolylineExperiment(input,"sentetik",1,DxfTextEncoding.Utf8);
+        var preview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[imported.Project,imported.Warnings,1.0,"synthetic.dxf",imported.Units])!;
+        Render(preview,Path.ChangeExtension(reportPath,".dxf-sampled-review.png"),500,380);
+        var previewRoot=(FrameworkElement)preview.Content;
+        var notice=Descendants<TextBlock>(previewRoot).Single(t=>t.Text.StartsWith("Deneysel örneklenmiş POLYLINE:",StringComparison.Ordinal));
+        var previewCancel=Descendants<Button>(previewRoot).Single(b=>Equals(b.Content,"Vazgeç"));
+        Check(notice.Text.Contains("parametrik spline doğruluğu") && notice.Text.Contains("üretime uygunluk garanti edilmez")
+            && WarningReachable(notice,previewRoot) && FullyVisible(previewCancel,previewRoot) && previewCancel.IsDefault,
+            "Sampled polyline preview exposes the non-guarantee warning and safe cancellation on a small screen",checks);
+        preview.Close();
     }
 
     private static void VerifyDxfBulgeOptions(MainWindow studio,string reportPath,List<string> checks)

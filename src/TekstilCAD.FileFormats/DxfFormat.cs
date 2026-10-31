@@ -330,6 +330,10 @@ public static class DxfFormat
     public static DxfImportResult Import(Stream input, string projectName, double millimetersPerUnit, DxfTextEncoding encoding, CancellationToken cancellationToken=default)
         => ImportCore(input,projectName,millimetersPerUnit,encoding,null,cancellationToken);
 
+    /// <summary>Experimental sampled vertex-chain import, without spline accuracy guarantees.</summary>
+    public static DxfImportResult ImportWithSampledPolylineExperiment(Stream input, string projectName, double millimetersPerUnit, DxfTextEncoding encoding, CancellationToken cancellationToken = default)
+        => ImportCore(input,projectName,millimetersPerUnit,encoding,null,cancellationToken,sampledPolylineExperiment:true);
+
     /// <summary>Explicit experimental 2D bulge import; tolerance is a nominal sampling target, not a production guarantee.</summary>
     public static DxfImportResult ImportWithBulgeApproximation(Stream input, string projectName, double millimetersPerUnit,
         DxfTextEncoding encoding, double toleranceMm, CancellationToken cancellationToken = default)
@@ -418,7 +422,7 @@ public static class DxfFormat
     private sealed record StrictInsertOptions(double ComponentToleranceMm, HashSet<string> ApprovedLayers, string? ExpectedSha256=null, long? ExpectedByteLength=null);
     private static DxfImportResult ImportCore(Stream input, string projectName, double millimetersPerUnit,
         DxfTextEncoding encoding, StrictInsertOptions? strict, CancellationToken cancellationToken,
-        Action<DxfBlockPlacementInspection>? inspectionSink=null, double? bulgeToleranceMm=null)
+        Action<DxfBlockPlacementInspection>? inspectionSink=null, double? bulgeToleranceMm=null, bool sampledPolylineExperiment=false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if(!Enum.IsDefined(encoding))throw new ArgumentOutOfRangeException(nameof(encoding));
@@ -890,7 +894,7 @@ public static class DxfFormat
         string section = "", block = ""; int blockOccurrence=0, nextBlockOccurrence=0;
         string? excludedBlockReason=null;
         bool excludedBlockCertain=false;
-        bool blockGeometry = false, skippedInsertEntities=false, skippedRelevantInsertEntities=false, unknownLayerUsed=false, nonPlotLayerUsed=false,modelLayerExamined=false,viewportLayerUsed=false,unknownLineTypeUsed=false,colorsUsed=false,unknownColorUsed=false,opaqueLinesSeparated=false; int lineCount = 0;
+        bool blockGeometry = false, skippedInsertEntities=false, skippedRelevantInsertEntities=false, unknownLayerUsed=false, nonPlotLayerUsed=false,modelLayerExamined=false,viewportLayerUsed=false,unknownLineTypeUsed=false,colorsUsed=false,unknownColorUsed=false,opaqueLinesSeparated=false; int lineCount = 0, sampledPolylineCount = 0;
         for (int i = 0; i < entities.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1143,7 +1147,7 @@ public static class DxfFormat
                 if (vertices.Count < 2) throw new InvalidDataException("POLYLINE yeterli nokta içermiyor.");
                 if(strictImport && (doc.Pieces.Count>=ProjectStorage.MaximumPieces || vertices.Count>ProjectStorage.MaximumTotalPoints-acceptedPoints))
                     throw new InvalidDataException("DXF doğrudan ve yerleştirilmiş geometrinin ortak sınırını aşıyor.");
-                bool hasBulge = false, has3D = false, hasFittedVertex = false;
+                bool hasBulge = false, has3D = false, hasFittedVertex = false, sampledFlagsOnly = true;
                 string? excludedVertexReason=null;
                 var hasWidth = HasNonzeroPolylineWidth(e, cancellationToken, 40, 41);
                 foreach (var vertex in vertices)
@@ -1152,13 +1156,14 @@ public static class DxfFormat
                     var flags = vertex.Flags(70);
                     // Undefined and unused VERTEX flag bits carry semantics we
                     // cannot safely interpret as a plain 2D vertex.
-                    if ((flags & ~(1 | 2 | 8 | 16 | 32 | 64 | 128)) != 0)
+                    if ((flags & ~(1 | 2 | 8 | 16 | 32 | 64 | 128)) != 0 && !sampledPolylineExperiment)
                         throw new InvalidDataException("VERTEX desteklenmeyen bayrak içeriyor; kontur aktarılmadı.");
                     _ = vertex.LayerName();
                     var vertexReason=ExcludedSpaceOrVisibility(vertex,cancellationToken);
                     excludedVertexReason ??= vertexReason;
                     has3D |= (flags & (32 | 64 | 128)) != 0 || HasUnsupportedPlane(vertex);
                     hasFittedVertex |= (flags & (1 | 2 | 8 | 16)) != 0;
+                    sampledFlagsOnly &= flags is 0 or 8;
                     var bulge=vertex.Data.Where(p=>p.Code==42).ToArray();
                     if(bulge.Length>1)throw new InvalidDataException("DXF VERTEX için 42 alanı yinelenmiş.");
                     if(bulge.Length==1)hasBulge |= IsNonzeroDecimal(bulge[0].Value);
@@ -1168,7 +1173,10 @@ public static class DxfFormat
                 if (has3D) { RecordSkipped("3D VERTEX (kontur atlandı)"); continue; }
                 if (hasWidth) { RecordSkipped("genişlikli POLYLINE (kontur atlandı)"); continue; }
                 if (hasBulge && bulgeToleranceMm is null) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
-                if (hasFittedVertex || (polylineFlags & (2 | 4)) != 0) { RecordSkipped("eğri/spline POLYLINE (kontur atlandı)"); continue; }
+                var sampledEligible=sampledPolylineExperiment && hasFittedVertex && sampledFlagsOnly && !hasBulge &&
+                    (polylineFlags & (2 | 4)) == 0 && e.Flags(75)==0 && !e.Data.Any(p=>p.Code==76);
+                if ((sampledPolylineExperiment && !sampledFlagsOnly) || ((hasFittedVertex || (polylineFlags & (2 | 4)) != 0) && !sampledEligible)) { RecordSkipped("eğri/spline POLYLINE (kontur atlandı)"); continue; }
+                if(sampledEligible) sampledPolylineCount++;
                 var points = new List<Point2>(vertices.Count);
                 var sourceVertices = new List<DxfBulgeVertex>();
                 var scaledOrigins = new Dictionary<Point2,SourcePoint>();
@@ -1256,6 +1264,7 @@ public static class DxfFormat
         if(skippedPolylines.Count>0)
             warnings.Add($"Atlanan çoklu çizgi: {(skippedPolylinesTruncated ? "en az " : "")}{skippedPolylines.Count}. Önizleme eksik; eksikler giderilip doğrulanmadan üretimde kullanmayın.");
         if(skippedGeometryReasons.Count>0)warnings.Add("Atlanan DXF geometrisi: "+string.Join(", ",skippedGeometryReasons.Order(StringComparer.Ordinal)));
+        if(sampledPolylineCount>0) warnings.Add($"Deneysel örneklenmiş POLYLINE: {sampledPolylineCount}. Kaynak noktaları sırasıyla düz çizgilerle birleştirildi; parametrik spline doğruluğu ve üretime uygunluk garanti edilmez.");
         if (blockGeometry) warnings.Add("BLOCK tanım geometrisi doğrudan alındı; INSERT yerleşim/dönüşümleri ve katman görünürlüğü mirası uygulanmaz. AAMA/ASTM beden, çentik ve iplik yönü semantiği doğrulanmadı.");
         if(unknownLayerUsed)warnings.Add("DXF katman görünürlüğü bilinmiyor: katman tablosu veya gerekli durum bilgisi eksik. Görünürlük ve viewport ayarlarını doğrulayın.");
         if(nonPlotLayerUsed)warnings.Add("DXF plotlanmayan katman bilgisi aktarılmaz; yazdırma/kesim kapsamını doğrulayın.");

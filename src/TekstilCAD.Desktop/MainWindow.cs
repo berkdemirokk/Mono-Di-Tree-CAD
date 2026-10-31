@@ -1901,7 +1901,7 @@ public class MainWindow : Window
         if(options.ShowDialog()!=true)return;
         var factor=optionsState.Factor;
         double? bulgeTolerance=null;
-        if(!optionsState.UseBlockPlacements)
+        if(!optionsState.UseBlockPlacements && !optionsState.UseSampledPolylineExperiment)
         {
             if(ConfirmDxfBulgeOptionsForVerification is { } confirm)
             {
@@ -1918,7 +1918,7 @@ public class MainWindow : Window
         {
             var imported=optionsState.UseBlockPlacements
                 ? await StartInspectedDxfPreparationAsync(dlg.FileName,factor,optionsState.Encoding)
-                : await StartDxfPreparationWithBulgeAsync(dlg.FileName,factor,optionsState.Encoding,bulgeTolerance);
+                : await StartDxfPreparationWithBulgeAsync(dlg.FileName,factor,optionsState.Encoding,bulgeTolerance,optionsState.UseSampledPolylineExperiment);
             if(imported is null || windowClosed)return;
             preparedDxfFactor=factor;preparedDxfSource=Path.GetFileName(dlg.FileName);
             dxfNotice.Text="DXF hazır. Proje henüz değiştirilmedi; önizlemeyi açarak ölçüleri kontrol edin.";
@@ -1932,6 +1932,7 @@ public class MainWindow : Window
         internal double Factor { get; set; }=1;
         internal DxfTextEncoding Encoding { get; set; }=DxfTextEncoding.Utf8;
         internal bool UseBlockPlacements { get; set; }
+        internal bool UseSampledPolylineExperiment { get; set; }
     }
     internal sealed class DxfLayerSelectionState
     {
@@ -2016,8 +2017,8 @@ public class MainWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var cancel=AddButton(actions,"Vazgeç",()=>options.DialogResult=false);cancel.IsCancel=true;cancel.IsDefault=true;
-        ComboBox units=null!,encodings=null!,methods=null!;
-        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >2 || methods.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama ve okuma yöntemini seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex switch { 1 => DxfTextEncoding.Windows1254, 2 => DxfTextEncoding.Windows1252, _ => DxfTextEncoding.Utf8 };state.UseBlockPlacements=methods.SelectedIndex==1;options.DialogResult=true; });
+        ComboBox units=null!,encodings=null!,methods=null!; CheckBox sampled=null!;
+        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >2 || methods.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama ve okuma yöntemini seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex switch { 1 => DxfTextEncoding.Windows1254, 2 => DxfTextEncoding.Windows1252, _ => DxfTextEncoding.Utf8 };state.UseBlockPlacements=methods.SelectedIndex==1;state.UseSampledPolylineExperiment=!state.UseBlockPlacements && sampled.IsChecked==true;options.DialogResult=true; });
         var content=new StackPanel();
         var scroll=new ScrollViewer { Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         KeyboardNavigation.SetIsTabStop(scroll,true);System.Windows.Automation.AutomationProperties.SetName(scroll,"DXF ölçü ve kodlama seçenekleri");root.Children.Add(scroll);
@@ -2030,6 +2031,9 @@ public class MainWindow : Window
         content.Children.Add(new TextBlock { Text="Okuma yöntemi",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,4) });
         methods=new ComboBox { ItemsSource=new[] { "Standart aktarım (blok yerleşimleri uygulanmaz)", "Kontrollü aktarım (sınırlı destek)" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
         System.Windows.Automation.AutomationProperties.SetName(methods,"DXF okuma yöntemi");content.Children.Add(methods);
+        sampled=new CheckBox { Content="Deneysel: uygun örneklenmiş POLYLINE noktalarını içe al",Margin=new Thickness(0,4,0,4) };content.Children.Add(sampled);
+        methods.SelectionChanged+=(_,_)=> { sampled.IsEnabled=methods.SelectedIndex==0; if(!sampled.IsEnabled)sampled.IsChecked=false; };
+        content.Children.Add(new TextBlock { Text="Bu seçenek yalnız standart aktarımda kullanılır. Kaynaktaki örneklenmiş noktalar düz çizgilerle birleştirilir; parametrik spline doğruluğu ve üretime uygunluk garanti edilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge yaylarını yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kodlama otomatik tahmin edilmez. Yanlış seçim harfleri değiştirebilir; kaynak dosyanın kodlamasını kontrol edin. Okuma kaynak dosyayı değiştirmez; proje ancak önizlemede onaylanırsa değiştirilir.",TextWrapping=TextWrapping.Wrap });
         return options;
@@ -2369,12 +2373,13 @@ public class MainWindow : Window
     }
     internal Task<DxfImportResult?> StartDxfPreparationAsync(string path,double factor,DxfTextEncoding encoding=DxfTextEncoding.Utf8)
         =>StartDxfPreparationWithBulgeAsync(path,factor,encoding,null);
-    internal async Task<DxfImportResult?> StartDxfPreparationWithBulgeAsync(string path,double factor,DxfTextEncoding encoding,double? bulgeToleranceMm)
+    internal async Task<DxfImportResult?> StartDxfPreparationWithBulgeAsync(string path,double factor,DxfTextEncoding encoding,double? bulgeToleranceMm,bool sampledPolylineExperiment=false)
     {
         EnsureNoExport();
         if(DxfImportRunning)throw new InvalidOperationException("DXF okuma sürüyor; işlemin bitmesini bekleyin.");
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         if(bulgeToleranceMm is double requested && (!double.IsFinite(requested) || requested<=0))throw new ArgumentOutOfRangeException(nameof(bulgeToleranceMm));
+        if(sampledPolylineExperiment && bulgeToleranceMm is not null)throw new ArgumentException("Örneklenmiş POLYLINE ve bulge yaklaştırması birlikte seçilemez.");
         var sourcePath=Path.GetFullPath(path);
         var stamp=CaptureDxfPreparationStamp();
         var before=BeforeDxfPreparationForVerification;
@@ -2392,7 +2397,7 @@ public class MainWindow : Window
         SetStatus("DXF arka planda açılıp okunuyor; dosyanın açıldığı andaki içeriği kullanılacak. İşlemin bitmesini bekleyin.");
         try
         {
-            var result=await Task.Run(()=> { before?.Invoke(); cancellation.Token.ThrowIfCancellationRequested(); var imported=bulgeToleranceMm is double tolerance
+            var result=await Task.Run(()=> { before?.Invoke(); cancellation.Token.ThrowIfCancellationRequested(); var imported=sampledPolylineExperiment ? PrepareDxfSampledImportCancellable(sourcePath,factor,encoding,cancellation.Token) : bulgeToleranceMm is double tolerance
                 ? PrepareDxfBulgeImportCancellable(sourcePath,factor,encoding,tolerance,cancellation.Token)
                 : PrepareDxfImportCancellable(sourcePath,factor,cancellation.Token,encoding); after?.Invoke(); return imported; });
             cancellation.Token.ThrowIfCancellationRequested();
@@ -2427,6 +2432,14 @@ public class MainWindow : Window
         Validate(imported.Project);
         cancellationToken.ThrowIfCancellationRequested();
         if(imported.Project.Pieces.Count == 0) throw new InvalidDataException("Desteklenen geometri bulunamadı; mevcut proje korunuyor.");
+        return imported;
+    }
+    private DxfImportResult PrepareDxfSampledImportCancellable(string path,double factor,DxfTextEncoding encoding,CancellationToken cancellationToken)
+    {
+        using var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+        var imported=DxfFormat.ImportWithSampledPolylineExperiment(input,Path.GetFileNameWithoutExtension(path),factor,encoding,cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();Validate(imported.Project);cancellationToken.ThrowIfCancellationRequested();
+        if(imported.Project.Pieces.Count==0)throw new InvalidDataException("Desteklenen geometri bulunamadı; mevcut proje korunuyor.");
         return imported;
     }
     private DxfImportResult PrepareDxfBulgeImportCancellable(string path,double factor,DxfTextEncoding encoding,double toleranceMm,CancellationToken cancellationToken)
@@ -2480,6 +2493,12 @@ public class MainWindow : Window
             apply.ToolTip=insertSkipped ? "Blok yerleşimleri okunmadığı için önce kontrollü okumayı deneyin." : "Blok yerleşimlerinin aktarım durumu doğrulanamadı; dosyayı yeniden içe aktarın.";
         }
         var riskNotices=new StackPanel();
+        var sampledWarning=warnings.FirstOrDefault(w=>w.StartsWith("Deneysel örneklenmiş POLYLINE:",StringComparison.Ordinal));
+        if(sampledWarning is not null)
+        {
+            var sampledNotice=new TextBlock { Text=sampledWarning,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
+            AutomationProperties.SetName(sampledNotice,sampledWarning);riskNotices.Children.Add(sampledNotice);
+        }
         if(ambiguousLines)
         {
             var lineNotice=new TextBlock { Text="Belirsiz LINE bağlantıları birleştirilmedi; ilgili çizgiler ayrı parçalar olarak aktarıldı. Konturları ve bağlantıları kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
