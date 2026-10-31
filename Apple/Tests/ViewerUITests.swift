@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testDuplicatePieceNamesCanBeDistinguishedAndFoundBySize() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Metadata":{"Size":"38","Material":"Pamuk"},"Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Metadata":{"Size":"42","Material":"Yün"},"Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap()
+        let rows = app.buttons.matching(identifier: "Kol")
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertTrue((rows.element(boundBy: 0).value as? String ?? "").contains("Beden: 38"))
+        XCTAssertTrue((rows.element(boundBy: 1).value as? String ?? "").contains("Parça 2"))
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("42")
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains("Beden: 42"))
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
     func testFailedPieceRenameRetainsEditOnlyForSameSelectionUntilCancel() {
         // The viewer accepts duplicate keys, while the lossless editor rejects them.
         let fixture = #"{"Name":"Deneme","Name":"Deneme","Pieces":[{"Name":"Ilk","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Diger","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#

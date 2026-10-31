@@ -530,6 +530,14 @@ private struct Drawing {
             }
             return name
         }
+
+        func selectionDetails(index: Int) -> String {
+            let fields = [("Beden", size), ("Tür", role), ("Malzeme", material)].compactMap { label, value -> String? in
+                guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
+                return "\(label): \(value)"
+            }
+            return (["Parça \(index + 1)"] + fields).joined(separator: " · ")
+        }
     }
     let name: String
     let pieces: [Piece]
@@ -642,7 +650,8 @@ private struct PiecePicker: View {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return pieces.indices.filter { index in
             pieces[index].points.count > 1 &&
-            (query.isEmpty || pieces[index].displayName(index: index).localizedCaseInsensitiveContains(query))
+            (query.isEmpty || pieces[index].displayName(index: index).localizedCaseInsensitiveContains(query) ||
+                pieces[index].selectionDetails(index: index).localizedCaseInsensitiveContains(query))
         }
     }
 
@@ -651,7 +660,8 @@ private struct PiecePicker: View {
             List {
                 selectionRow(title: "Tüm parçalar", index: nil)
                 ForEach(matchingIndices, id: \.self) { index in
-                    selectionRow(title: pieces[index].displayName(index: index), index: index)
+                    selectionRow(title: pieces[index].displayName(index: index), index: index,
+                                 details: pieces[index].selectionDetails(index: index))
                 }
                 if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Eşleşen parça bulunamadı.")
@@ -668,13 +678,18 @@ private struct PiecePicker: View {
         }
     }
 
-    private func selectionRow(title: String, index: Int?) -> some View {
+    private func selectionRow(title: String, index: Int?, details: String? = nil) -> some View {
         Button {
             selection = index
             dismiss()
         } label: {
             HStack {
-                Text(title).foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).foregroundStyle(.primary)
+                    if let details {
+                        Text(details).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 Spacer()
                 if selection == index {
                     Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
@@ -684,6 +699,9 @@ private struct PiecePicker: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+        .accessibilityValue(details ?? "")
         .accessibilityAddTraits(selection == index ? .isSelected : [])
     }
 }
