@@ -308,7 +308,7 @@ public class MainWindow : Window
         }
         AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
-        selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Seçili geometriyi ve varsa iplik yönünü aynı konumda kopyalar; parça bilgileri ve serileme kuralları kopyalanmaz."));
+        selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi aynı konumda kopyalar; parça bilgileri ve iplik yönü isteğe bağlıdır. Serileme ve pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
         tools.Children.Add(Label("GÖRÜNÜM", Muted, 10));
         selectionCommands.Add(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"));
@@ -1422,6 +1422,7 @@ public class MainWindow : Window
         }
     }
     internal Func<PatternPiece,bool>? ConfirmDuplicateForVerification { get; set; }
+    internal Func<PatternPiece,DuplicateOptions?>? ChooseDuplicateForVerification { get; set; }
     internal void DuplicateSelectedPiece()
     {
         if(!EnsureMainMutationReady() || BlockForIncompleteRecovery() || BlockForDxfImport() || BlockForExport())return;
@@ -1438,11 +1439,15 @@ public class MainWindow : Window
         var previewLength=Math.Min(sourcePiece.Name.Length,20);
         if(previewLength<sourcePiece.Name.Length && previewLength>0 && char.IsHighSurrogate(sourcePiece.Name[previewLength-1]))previewLength--;
         var shownName=SafePieceName(sourcePiece.Name[..previewLength])+(previewLength<sourcePiece.Name.Length?"…":"");
-        var accepted=ConfirmDuplicateForVerification is { } confirm
-            ? confirm(sourcePiece.Clone())
-            : MessageBox.Show(this,$"‘{shownName}’ (kimlik: {sourceId:D}) parçasının geometrisi ve varsa iplik yönü aynı konuma yeni bir kimlikle kopyalanacak; parçalar üst üste görünebilir. Rol, beden, malzeme, adet ve serileme kuralları kopyalanmaz. Devam edilsin mi?",
-                "Parçayı çoğalt",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
-        if(!accepted)return;
+        DuplicateOptions? choice;
+        if(ChooseDuplicateForVerification is { } choose) choice=choose(sourcePiece.Clone());
+        else if(ConfirmDuplicateForVerification is { } confirm) choice=confirm(sourcePiece.Clone()) ? new DuplicateOptions(false,true) : null;
+        else
+        {
+            var dialog=new DuplicatePieceWindow(this,sourcePiece.Clone(),shownName);
+            choice=dialog.ShowDialog()==true ? dialog.Options : null;
+        }
+        if(choice is null)return;
         if(HasPendingCanvasOrPropertyWork || recoveryRestoreIncomplete || BlockForDxfImport() || BlockForExport() || projectEpoch!=originalEpoch ||
            !ReferenceEquals(Document,originalDocument) || SelectedId!=sourceId || !DocumentSession.ContentEquals(Document,originalContent))
         { SetStatus("Proje, seçim veya bekleyen çalışma değişti · Parça çoğaltılmadı. Yeniden kontrol edin.");return; }
@@ -1450,12 +1455,13 @@ public class MainWindow : Window
         var length=Math.Min(sourcePiece.Name.Length,1024-suffix.Length);
         if(length<sourcePiece.Name.Length && length>0 && char.IsHighSurrogate(sourcePiece.Name[length-1]))length--;
         var duplicate=new PatternPiece { Id=Guid.NewGuid(),Name=sourcePiece.Name[..length]+suffix,
-            Points=[..sourcePiece.Points],Closed=sourcePiece.Closed,Metadata=null,Grainline=sourcePiece.Grainline?.Clone() };
+            Points=[..sourcePiece.Points],Closed=sourcePiece.Closed,Metadata=choice.Value.CopyMetadata ? sourcePiece.Metadata?.Clone() : null,
+            Grainline=choice.Value.CopyGrainline ? sourcePiece.Grainline?.Clone() : null };
         var committed=false;
         try
         {
             CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);SelectedId=duplicate.Id; },()=>committed=true);
-            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; varsa iplik yönü kopyalandı. Rol, beden, malzeme, adet ve serileme kuralları kopyalanmadı.");
+            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}. Serileme ve pastal geçmişi kopyalanmadı.");
         }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {

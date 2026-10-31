@@ -360,6 +360,7 @@ internal static class DesktopVerification
             VerifyOpenPathJoin(studio,checks);
             VerifyOpenPathClosure(studio,checks);
             VerifyDuplicatePiece(studio,checks);
+            VerifyDuplicateOptions(studio,checks);
             VerifyDeleteShortcutSafety(studio,checks);
             VerifyGradeResetConfirmation(studio,checks);
             VerifyGradingGeometryNotice(studio,reportPath,checks);
@@ -8499,6 +8500,44 @@ internal static class DesktopVerification
         Check(savedAsked==3 && savedTable.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="0" && studio.Document.GradingRules[0].Deltas.SequenceEqual(savedBefore),
             "Confirming grading reset does not alter saved grading increments",checks);
     }
+    private static void VerifyDuplicateOptions(MainWindow studio,List<string> checks)
+    {
+        var source=new PatternPiece { Name="Ön",Points=[new(0,0),new(10,0),new(0,10)],
+            Metadata=new PieceMetadata { Role="Kesim",Size="M",Material="Pamuk",Quantity=3 },
+            Grainline=new Grainline { Start=new(1,1),End=new(1,5),NeedsReview=true } };
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,0),new(0,0),new(0,0)] };
+        var initial=new ProjectDocument { Pieces=[source],GradingRules=[rule] };
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            var dialog=new DuplicatePieceWindow(studio,source,"Ön");
+            Check(dialog.CopyMetadata.IsEnabled && dialog.CopyGrainline.IsEnabled && !dialog.Options.CopyMetadata && !dialog.Options.CopyGrainline,
+                "Duplicate options require explicit opt-in for metadata and grainline",checks);
+            dialog.Close();
+            foreach(var metadata in new[] { false,true })
+            foreach(var grain in new[] { false,true })
+            {
+                studio.LoadDocument(initial);studio.Select(source.Id);var before=studio.Document.Clone();
+                studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(metadata,grain);
+                studio.DuplicateSelectedPiece();
+                var original=studio.Document.Pieces.Single(p=>p.Id==source.Id);var copy=studio.Document.Pieces.Single(p=>p.Id!=source.Id);
+                Check((copy.Metadata is not null)==metadata && (copy.Grainline is not null)==grain &&
+                    (!metadata || (copy.Metadata!.Quantity==3 && copy.Metadata.Size=="M" && !ReferenceEquals(copy.Metadata,original.Metadata))) &&
+                    (!grain || (copy.Grainline!.NeedsReview && copy.Grainline.Start==original.Grainline!.Start && !ReferenceEquals(copy.Grainline,original.Grainline))) &&
+                    JsonSerializer.Serialize(original)==JsonSerializer.Serialize(before.Pieces[0]) &&
+                    JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
+                    $"Duplicate respects metadata={metadata} grainline={grain} and preserves source/rules",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Duplicate options undo in one step",checks);
+            }
+            studio.LoadDocument(initial);studio.Select(source.Id);
+            studio.ChooseDuplicateForVerification=_=> { studio.Commit("Kaynak değişikliği",()=>studio.Document.Pieces[0].Metadata!.Quantity=4);return new DuplicateOptions(true,true); };
+            studio.DuplicateSelectedPiece();
+            Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Metadata!.Quantity==4,
+                "Duplicate option confirmation is rejected after source metadata changes",checks);
+        }
+        finally { studio.ChooseDuplicateForVerification=null;studio.LoadDocument(new ProjectDocument()); }
+    }
+
     private static void VerifyDuplicatePiece(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
@@ -8516,7 +8555,7 @@ internal static class DesktopVerification
             var duplicateButton=buttons.Single(b=>Equals(b.Content,"Parçayı çoğalt…"));
             Check(duplicateButton.IsEnabled && (duplicateButton.ToolTip as string ?? "").Contains("kopyalanmaz",StringComparison.OrdinalIgnoreCase)
                 && UIElementAutomationPeer.CreatePeerForElement(duplicateButton)?.GetName()=="Parçayı çoğalt…",
-                "Duplicate command is accessible and states metadata and grading are not copied",checks);
+                "Duplicate command is accessible and states project history is not copied",checks);
             var before=studio.Document.Clone();var undo=session.UndoCount;var calls=0;
             studio.ConfirmDuplicateForVerification=p=> { calls++; return false; };
             studio.DuplicateSelectedPiece();
