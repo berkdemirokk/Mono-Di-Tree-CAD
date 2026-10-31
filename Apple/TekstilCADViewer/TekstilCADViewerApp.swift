@@ -179,6 +179,27 @@ private struct ContentView: View {
                         .disabled(modelLoad.isLoading || selectedPiece == project.pieces.count - 1)
                     }
                     .buttonStyle(.bordered)
+                    if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
+                        let notches = project.pieces[selectedPiece].notches
+                        let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
+                        HStack {
+                            Button("Önceki işaret") {
+                                if let point = NotchSearch.adjacent(in: notches, current: current, forward: false) {
+                                    selectedNotch = (selectedPiece, point)
+                                }
+                            }
+                            .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
+                            Spacer()
+                            Button("Sonraki işaret") {
+                                if let point = NotchSearch.adjacent(in: notches, current: current, forward: true) {
+                                    selectedNotch = (selectedPiece, point)
+                                }
+                            }
+                            .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityHint("Seçili parçanın işaretleri arasında dosya sırasıyla gezinin")
+                    }
                     if let selectedPiece {
                         #if DEBUG
                         Button("Deneysel nokta düzenle…") {
