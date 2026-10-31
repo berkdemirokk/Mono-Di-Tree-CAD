@@ -77,49 +77,15 @@ public static class Geometry
             270 or -90 => (0d, -1d),
             _ => (Math.Cos(angle * Math.PI / 180), Math.Sin(angle * Math.PI / 180))
         };
-        var rotated = Map(points, p => new(origin.X + (p.X - origin.X) * c - (p.Y - origin.Y) * s,
-            origin.Y + (p.X - origin.X) * s + (p.Y - origin.Y) * c));
+        var rotated = ExactPivotRotation.Rotate(points, c, s, origin);
         if (angle is 90 or -270 or 180 or -180 or 270 or -90)
         {
-            // A quadrant rotation about a pivot differs from the exact rotation
-            // about zero only by a translation. Check that rounding did not
-            // destroy the represented edges or axis spans during that shift.
             var aroundZero = Map(points, p => new(p.X * c - p.Y * s, p.X * s + p.Y * c));
             try { TranslationPrecision.Validate(aroundZero, rotated); }
             catch (ArgumentException ex)
             { throw new ArgumentException("Döndürme sırasında parça şekli sayısal hassasiyetle korunamıyor. Daha küçük koordinatlar kullanın.", nameof(points), ex); }
-            ValidateOrthogonalRotationPositions(points, rotated, origin, (int)c, (int)s);
         }
         return rotated;
-    }
-
-    // Compare with the exact dyadic result, including its absolute position.
-    // Vector checks alone cannot detect an equal displacement of every point.
-    private static void ValidateOrthogonalRotationPositions(IReadOnlyList<Point2> points,
-        IReadOnlyList<Point2> rotated, Point2 origin, int c, int s)
-    {
-        static BigInteger Scaled(double value)
-        {
-            var bits = BitConverter.DoubleToInt64Bits(value);
-            var exponent = (int)((bits >> 52) & 0x7ff);
-            var fraction = (ulong)bits & 0x000f_ffff_ffff_ffffUL;
-            var mantissa = exponent == 0 ? fraction : fraction | (1UL << 52);
-            var integer = new BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
-            return bits < 0 ? -integer : integer;
-        }
-
-        var ox = Scaled(origin.X); var oy = Scaled(origin.Y);
-        for (var i = 0; i < points.Count; i++)
-        {
-            var x = Scaled(points[i].X); var y = Scaled(points[i].Y);
-            var expectedX = ox + (x - ox) * c - (y - oy) * s;
-            var expectedY = oy + (x - ox) * s + (y - oy) * c;
-            var errorX = BigInteger.Abs(Scaled(rotated[i].X) - expectedX);
-            var errorY = BigInteger.Abs(Scaled(rotated[i].Y) - expectedY);
-            if (errorX * 1_000_000_000 > BigInteger.Abs(expectedX)
-                || errorY * 1_000_000_000 > BigInteger.Abs(expectedY))
-                throw new ArgumentException("Döndürme sırasında nokta konumu sayısal hassasiyetle korunamıyor. Daha küçük koordinatlar kullanın.", nameof(points));
-        }
     }
 
     /// <summary>Mirror across x=axisCoordinate when verticalAxis is true; otherwise y=axisCoordinate.</summary>
@@ -319,3 +285,5 @@ public static class Geometry
         && p.X >= Math.Min(a.X, b.X) - Epsilon && p.X <= Math.Max(a.X, b.X) + Epsilon
         && p.Y >= Math.Min(a.Y, b.Y) - Epsilon && p.Y <= Math.Max(a.Y, b.Y) + Epsilon;
 }
+
+

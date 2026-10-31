@@ -77,6 +77,41 @@ internal static class ExperimentalExactAffineRotation
 public sealed class ExperimentalExactAffineRotationTests
 {
     [Fact]
+    public void SingleProductAndTranslationMatchIndependentFusedMultiplyAdd()
+    {
+        var random = new Random(71173);
+        double Finite()
+        {
+            while (true)
+            {
+                var bytes = new byte[8]; random.NextBytes(bytes);
+                var value = BitConverter.Int64BitsToDouble(BitConverter.ToInt64(bytes));
+                if (double.IsFinite(value)) return value;
+            }
+        }
+        for (var i = 0; i < 2000; i++)
+        {
+            var x = Finite(); var c = Finite(); var offset = Finite();
+            var actual = ExperimentalExactAffineRotation.Rotate(x, 0, c, 0, offset).X;
+            var expected = Math.FusedMultiplyAdd(c, x, offset);
+            Assert.True(actual == expected || (actual == 0 && expected == 0), $"Case {i}: {x:R} * {c:R} + {offset:R}");
+        }
+    }
+
+    [Fact]
+    public void OverflowBoundaryMatchesFusedMultiplyAdd()
+    {
+        var midpoint = Math.ScaleB(1, 970);
+        foreach (var offset in new[] { Math.BitDecrement(midpoint), midpoint, Math.BitIncrement(midpoint) })
+        {
+            var expected = Math.FusedMultiplyAdd(double.MaxValue, 1, offset);
+            var actual = ExperimentalExactAffineRotation.Rotate(double.MaxValue, 0, 1, 0, offset).X;
+            Assert.Equal(expected, actual);
+        }
+        Assert.Equal(double.PositiveInfinity, Math.FusedMultiplyAdd(double.MaxValue, 1, midpoint));
+    }
+
+    [Fact]
     public void OrdinaryRotationUsesRepresentedCoefficients()
     {
         double c = Math.Cos(Math.PI / 6), s = Math.Sin(Math.PI / 6);

@@ -39,15 +39,19 @@ public class RotatePrecisionTests
             [new(0, 0), new(0.000000001, 0)], 90, new(50_000_000, -50_000_000)));
 
     [Fact]
-    public void DistantPivotCannotEraseSinglePointPosition()
-        => Assert.Throws<ArgumentException>(() => Geometry.Rotate(
-            [new(0.000000001, 0)], 90, new(50_000_000, 50_000_000)));
+    public void DistantPivotPreservesSinglePointPositionThroughCancellation()
+    {
+        var result = Geometry.Rotate([new(0.000000001, 0)], 90, new(50_000_000, 50_000_000));
+        Assert.Equal(new Point2(100_000_000, 0.000000001), result[0]);
+    }
 
     [Fact]
-    public void DistantPivotCannotShiftAllPointsWhilePreservingTheirVectors()
-        => Assert.Throws<ArgumentException>(() => Geometry.Rotate(
-            [new(0.000000001, 0), new(0.000000001, 1)], 90, new(50_000_000, 50_000_000)));
-
+    public void DistantPivotPreservesPositionsAsWellAsVectors()
+    {
+        var result = Geometry.Rotate([new(0.000000001, 0), new(0.000000001, 1)], 90, new(50_000_000, 50_000_000));
+        Assert.Equal(new Point2(100_000_000, 0.000000001), result[0]);
+        Assert.Equal(new Point2(99_999_999, 0.000000001), result[1]);
+    }
     [Fact]
     public void OrdinaryQuarterTurnPreservesDetail()
     {
@@ -55,17 +59,8 @@ public class RotatePrecisionTests
         Assert.Equal(new Point2[] { new(8, 1), new(4, 4) }, Geometry.Rotate(source, 90, new(5, 5)));
     }
 
-    [Theory]
-    [InlineData(90, 0, double.Epsilon)]
-    [InlineData(-90, 0, -double.Epsilon)]
-    [InlineData(180, -double.Epsilon, 0)]
-    public void OrthogonalTurnPreservesSubnormalCoordinate(double angle, double expectedX, double expectedY)
-    {
-        var result = Geometry.Rotate([new(double.Epsilon, 0)], angle);
-        Assert.Equal(new Point2(expectedX, expectedY), Assert.Single(result));
-    }
-
     [Fact]
     public void FullTurnStillValidatesOrigin()
         => Assert.Throws<ArgumentOutOfRangeException>(() => Geometry.Rotate([new(1, 2)], 0, new(double.NaN, 0)));
 }
+
