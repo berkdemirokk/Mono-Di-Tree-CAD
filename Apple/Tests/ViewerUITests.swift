@@ -214,6 +214,22 @@ final class ViewerUITests: XCTestCase {
             app.terminate()
         }
     }
+    func testVersionMustBeAnIntegerJSONNumber() {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        for version in ["true", "false", "1.0", "1e0", "1E+0", "18446744073709551617", "9223372036854775809", "7", "0"] {
+            let project = "[\(version),{\"Name\":\"Sürüm testi\",\"Pieces\":[]}]"
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(project.utf8).base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15), "Invalid version \(version) must be rejected")
+            app.terminate()
+        }
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(" \n[ \t1 \r, {\"Name\":\"Sürüm testi\",\"Pieces\":[]}]".utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Sürüm testi"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
+    }
+
     func testLargeNotchListDisclosesPreviewLimit() {
         let points = (0..<501).map { #"{"X":\#($0),"Y":0}"# }.joined(separator: ",")
         let marks = (0..<501).map { #"{"VertexIndex":\#($0),"Position":{"X":\#($0),"Y":0}}"# }.joined(separator: ",")

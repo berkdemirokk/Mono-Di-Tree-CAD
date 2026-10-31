@@ -818,6 +818,21 @@ private struct Drawing {
               CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
         return number.boolValue
     }
+
+    // JSONSerialization does not promise to preserve a number's spelling.
+    // Examine the first array element in the UTF-8 source before interpreting it.
+    private static func envelopeVersion(_ data: Data) -> Int? {
+        var bytes = data.makeIterator()
+        func nextNonWhitespace() -> UInt8? {
+            while let byte = bytes.next() {
+                if byte != 0x20 && byte != 0x09 && byte != 0x0a && byte != 0x0d { return byte }
+            }
+            return nil
+        }
+        guard nextNonWhitespace() == 0x5b, let digit = nextNonWhitespace(),
+              (0x31...0x36).contains(digit), nextNonWhitespace() == 0x2c else { return nil }
+        return Int(digit - 0x30)
+    }
     static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
 
     static func readData(_ url: URL) throws -> Data {
@@ -854,7 +869,7 @@ private struct Drawing {
         let object: [String: Any]
         let formatVersion: Int
         if let array = root as? [Any], array.count == 2,
-           let version = array[0] as? Int, (1...6).contains(version), let body = array[1] as? [String: Any] {
+           let version = envelopeVersion(data), let body = array[1] as? [String: Any] {
             object = body; formatVersion = version
         } else if let body = root as? [String: Any] { object = body; formatVersion = 0 }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
