@@ -40,8 +40,12 @@ public sealed class MachineCenterWindow : Window
     private bool preparing;
     private bool historyScanning;
     private string? historyScanFailure;
+    private bool historyScanCancelled;
+    private bool historyReturnFocus;
+    private CancellationTokenSource? historyCancellation;
     private readonly Button loadHistory=new() { Content="Geçmiş taramasına devam et" };
     private readonly Button restartHistory=new() { Content="Geçmişi yeniden tara" };
+    private readonly Button cancelHistory=new() { Content="Geçmiş taramasını iptal et",Visibility=Visibility.Collapsed };
     private readonly TextBlock historyStatus=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,6) };
     private readonly TextBox historyIssues=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=120,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private CancellationTokenSource? prepareCancellation;
@@ -114,9 +118,6 @@ public sealed class MachineCenterWindow : Window
             System.Windows.Automation.AutomationProperties.SetName(historyNotice,"Pastal geçmişi çıktı kapsamı uyarısı");
             body.Children.Add(Card(historyNotice));
         }
-        if(queue.RecoveryWarnings.Count>0)
-            body.Children.Add(Card(new Expander { Header=$"Kuyruk açılış notları ({queue.RecoveryWarnings.Count})",IsExpanded=true,Foreground=StudioTheme.Warning,
-                Content=new TextBox { Text=string.Join("\n",queue.RecoveryWarnings),IsReadOnly=true,TextWrapping=TextWrapping.Wrap,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto } }));
         var settings=new StackPanel();
         settings.Children.Add(new TextBlock { Text="01  Dosya profili",FontSize=17,FontWeight=FontWeights.SemiBold });
         settings.Children.Add(new TextBlock { Text=$"Kaynak: {studio.Document.Name}  ·  {studio.Document.Pieces.Count} parça  ·  {studio.Document.Pieces.Sum(p=>p.Points.Count)} nokta",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,16) });
@@ -188,15 +189,17 @@ public sealed class MachineCenterWindow : Window
         queuePanel.Children.Add(jobs);
         AutomationProperties.SetName(historyStatus,"İş geçmişi tarama durumu");
         AutomationProperties.SetLiveSetting(historyStatus,AutomationLiveSetting.Polite);
+        historyStatus.Focusable=true;KeyboardNavigation.SetIsTabStop(historyStatus,true);
         AnnounceTextChanges(historyStatus,"İş geçmişi tarama durumu");
         queuePanel.Children.Add(historyStatus);
         AutomationProperties.SetName(historyIssues,"İş geçmişi tarama hataları");
         queuePanel.Children.Add(historyIssues);
         var historyActions=new WrapPanel { Margin=new Thickness(0,6,0,0) };
-        StyleButton(loadHistory);StyleButton(restartHistory);
+        StyleButton(loadHistory);StyleButton(restartHistory);StyleButton(cancelHistory);
         loadHistory.Click+=async (_,_)=>await ScanHistory(false);
         restartHistory.Click+=async (_,_)=>await ScanHistory(true);
-        historyActions.Children.Add(loadHistory);historyActions.Children.Add(restartHistory);queuePanel.Children.Add(historyActions);
+        cancelHistory.Click+=(_,_)=> { historyReturnFocus=cancelHistory.IsKeyboardFocusWithin;if(historyReturnFocus)historyStatus.Focus();historyCancellation?.Cancel();cancelHistory.IsEnabled=false;historyStatus.Text="İptal istendi; taramanın durması bekleniyor."; };
+        historyActions.Children.Add(loadHistory);historyActions.Children.Add(restartHistory);historyActions.Children.Add(cancelHistory);queuePanel.Children.Add(historyActions);
         body.Children.Add(Card(queuePanel));
         var preview=new StackPanel();preview.Children.Add(new TextBlock { Text="03  Hazırlanan dosyayı kontrol edin",FontSize=17,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         preview.Children.Add(previewSummary);
@@ -207,7 +210,7 @@ public sealed class MachineCenterWindow : Window
         var tabs=new TabControl();tabs.Items.Add(new TabItem { Header="Çıktı geometrisi",Content=geometryPreview });tabs.Items.Add(new TabItem { Header="Dosya metni",Content=filePreview });Grid.SetColumn(tabs,1);previewGrid.Children.Add(tabs);
         preview.Children.Add(previewGrid);simulate.Margin=new Thickness(0,12,0,0);simulate.HorizontalAlignment=HorizontalAlignment.Left;preview.Children.Add(simulate);body.Children.Add(Card(preview));
         jobs.SelectionChanged+=(_,_)=>ShowSelection();
-        Closing+=(_,e)=> { if(preparing || historyScanning) { e.Cancel=true;result.Foreground=StudioTheme.Warning;result.Text=historyScanning ? "Geçmiş taranıyor; işlem bitince pencereyi kapatabilirsiniz." : "Dosya hazırlanıyor; işlem bitince pencereyi kapatabilirsiniz."; } };
+        Closing+=(_,e)=> { if(preparing || historyScanning) { e.Cancel=true;result.Foreground=StudioTheme.Warning;result.Text=historyScanning ? "Geçmiş taranıyor; iptal isteyebilir ve tarama durunca pencereyi kapatabilirsiniz." : "Dosya hazırlanıyor; işlem bitince pencereyi kapatabilirsiniz."; } };
         Refresh(null);UpdateAvailability();UpdateHistoryStatus();
     }
     private static bool NeedsSafeChoiceName(string value)
@@ -482,9 +485,16 @@ public sealed class MachineCenterWindow : Window
         historyStatus.Text=error is not null
             ? "Geçmiş taraması tamamlanamadı. Hata ayrıntısını kontrol edip yeniden tarayın."
             : queue.HistoryScanComplete
-                ? "Geçmiş taraması tamamlandı."+(issueCount>0 ? $" {issueCount} kayıt yüklenemedi; ayrıntıları kontrol edin." : "")
-                : "Geçmiş taraması tamamlanmadı; listede henüz görünmeyen işler olabilir. Devam ederek sonraki bölümü yükleyin.";
-        historyIssues.Text=string.Join("\n",queue.HistoryScanIssues.Select(issue=>$"{issue.Path}: {issue.Error}").Prepend(error ?? "").Where(value=>value.Length>0));
+                ? "Alınan klasör listesi tarandı. Yeni veya tarama sırasında değişen kayıtlar için yeniden tarayın."+(issueCount>0 ? $" {issueCount} kayıt için uyarı var; ayrıntıları kontrol edin." : "")
+                : (historyScanCancelled ? "Geçmiş taraması iptal edildi. " : "Geçmiş taraması tamamlanmadı. ")+"Listede henüz görünmeyen işler olabilir; devam ederek sonraki bölümü yükleyin."+(issueCount>0 ? $" {issueCount} kayıt için uyarı var." : "");
+        // Bound both the number and size of displayed messages; the queue retains
+        // the complete diagnostic list independently of this presentation.
+        const int maxIssues=100,maxCharacters=500;
+        static string Shorten(string value) => value.Length<=maxCharacters ? value : value[..maxCharacters]+"…";
+        var lines=queue.HistoryScanIssues.Take(maxIssues).Select(issue=>Shorten($"{issue.Path}: {issue.Error}")).ToList();
+        if(error is not null)lines.Insert(0,Shorten(error));
+        if(issueCount>maxIssues)lines.Add($"{issueCount-maxIssues} ek uyarı gösterilmiyor.");
+        historyIssues.Text=string.Join("\n",lines);
         historyIssues.Visibility=historyIssues.Text.Length==0 ? Visibility.Collapsed : Visibility.Visible;
         loadHistory.IsEnabled=!preparing && !queue.HistoryScanComplete && error is null;
         restartHistory.IsEnabled=!preparing;
@@ -493,17 +503,28 @@ public sealed class MachineCenterWindow : Window
     {
         if(preparing || historyScanning)return;
         var selected=(jobs.SelectedItem as SimulationJob)?.Id;
-        historyScanning=true;historyScanFailure=null;
+        var initiatingButton=restart ? restartHistory : loadHistory;
+        var restoreFocus=initiatingButton.IsKeyboardFocusWithin;
+        historyScanning=true;historyScanFailure=null;historyScanCancelled=false;historyReturnFocus=false;
+        historyCancellation=new CancellationTokenSource();
+        var token=historyCancellation.Token;
+        cancelHistory.Visibility=Visibility.Visible;cancelHistory.IsEnabled=true;
+        if(restoreFocus)cancelHistory.Focus();
         jobs.IsEnabled=false;simulate.IsEnabled=false;UpdateAvailability();UpdateHistoryStatus();
         try
         {
-            await Task.Run(()=> { if(restart)queue.RestartHistoryScan();queue.LoadNextHistoryPage(); });
+            await Task.Run(()=> { if(restart)queue.RestartHistoryScan();queue.LoadNextHistoryPage(cancellationToken:token); });
         }
+        catch(OperationCanceledException) when(token.IsCancellationRequested) { historyScanCancelled=true; }
         catch(Exception ex) { historyScanFailure=ex.Message; }
         finally
         {
+            var returnFocus=cancelHistory.IsKeyboardFocusWithin || (historyReturnFocus && historyStatus.IsKeyboardFocusWithin);
+            historyCancellation.Dispose();historyCancellation=null;
+            cancelHistory.Visibility=Visibility.Collapsed;
             historyScanning=false;jobs.IsEnabled=true;
             Refresh(selected);UpdateAvailability();UpdateHistoryStatus();
+            if(returnFocus) { if(initiatingButton.IsEnabled)initiatingButton.Focus();else if(restartHistory.IsEnabled)restartHistory.Focus(); }
         }
     }
     private void Refresh(Guid? selected)
