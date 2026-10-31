@@ -1,0 +1,46 @@
+{
+  "agent": "R10",
+  "role": "API Platform Engineer",
+  "scope": "Yerel TCAD belge sözleşmesi, şema evrimi, kimlik ve köken bilgisi; kaynak/test incelemesi, çalıştırma yok",
+  "evidence": ["src/TekstilCAD.Core/Models.cs:19-34", "src/TekstilCAD.FileFormats/ProjectStorage.cs:8-43", "src/TekstilCAD.FileFormats/DxfFormat.cs:7,50", "tests/TekstilCAD.Tests/FormatTests.cs:28-58", "tests/TekstilCAD.Tests/FormatSafetyTests.cs:31-34"],
+  "findings": [
+    {
+      "id": "R10-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Yerel dosya sürümü ve uyumluluk kapısı yok",
+      "evidence": "Models.cs:29-34 yalnız Name/Pieces taşır; ProjectStorage.cs:8,15,21 doğrudan model JSON serileştirmesi kullanır. Şema sürümü, asgari okuyucu sürümü, uzantı alanı veya göç yolu yok. FormatTests.cs:28-42 mevcut modelin gidiş-dönüşünü doğrular. Bilinmeyen alanları koruyan bir model alanı bulunmuyor.",
+      "impact": "Yeni sürümün eklediği üretim verisinin eski uygulamada açılıp kaydedilmesi korunamaz; fabrika arşivlerinin uzun dönem okunabilirliği sözleşmeye bağlı değildir.",
+      "acceptance": "Sürümlü kalıcı DTO ve belgelenmiş göç zinciri oluşturulsun; sürümsüz v0 örnekleri yeni sürüme deterministik göç etsin. Desteklenmeyen gelecek sürüm yazılabilir açılmasın; bilinmeyen alan politikası açık olsun. Tarihsel/gelecek sürüm fixture testleri geometri ve kimlik kaybını denetlesin.",
+      "effort_days": [5, 9],
+      "dependencies": ["Kalıcı belge sözleşmesi", "Eski TCAD örnek arşivi"],
+      "confidence": "high"
+    },
+    {
+      "id": "R10-F2",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Eksik parça kimliği yükleme sırasında rastgele tamamlanıyor",
+      "evidence": "Models.cs:21 Id başlangıç değeri Guid.NewGuid(); ProjectStorage.cs:21 doğrudan bu tipe deserialize eder, :39 yalnız boş/tekrarlı kimlikleri reddeder. JSON içinde Id bulunmadığında oluşan yeni GUID bu kontrolden geçer; aynı dosyanın tekrar yüklenmesi farklı kimlik üretir. Kaynak çıkarımıdır, çalıştırılarak yeniden üretilmedi.",
+      "impact": "Eksik kimlikli dosya bozuk olarak belirlenmez; parça bağlantıları ve sonradan eklenecek revizyon karşılaştırması aynı geometriyi başka parça sayabilir.",
+      "acceptance": "Kalıcı DTO yüklenirken zorunlu kimlik varlığı doğrulansın; eksik/null/boş/tekrarlı kimlikli dosyalar açık hata versin. Yalnız tanımlı eski sürüm göçü kimlik üretebilsin; üretilen kimlik kaydedilen göç çıktısında sabitlensin. Aynı geçerli dosyanın iki yüklemesinde tüm kimlikler eşit olsun.",
+      "effort_days": [1, 3],
+      "dependencies": ["R10-F1 kalıcı DTO ve eski sürüm politikası"],
+      "confidence": "high"
+    },
+    {
+      "id": "R10-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Belge kimliği, revizyon ve kaynak izi saklanmıyor",
+      "evidence": "Models.cs:29-34 proje yalnız ad/parça listesi içerir; :3 milimetre kod yorumudur, kalıcı şema alanı değildir. DxfFormat.cs:7 uyarılar ProjectDocument dışında döner; :50 içe aktarılan belgede yalnız dosya taban adı atanır. ProjectStorage.cs:15 yalnız ProjectDocument kaydeder.",
+      "impact": "Bir TCAD dosyasının hangi kaynak ve birim dönüşümünden, hangi belge revizyonundan geldiği arşivden doğrulanamaz; büyük fabrikada yanlış revizyonun üretime verilmesini önleyecek veri temeli eksiktir.",
+      "acceptance": "Şemada document_id, revision_id/parent_revision_id, sabit mm koordinat sözleşmesi, kaynak formatı/hash ve uygulanan dönüşüm/uyarı özeti tanımlansın. Kaydet-aç sonrasında alanlar değişmesin; yeni revizyon ve farklı belge olarak kopyalama davranışları ayrı testlerle doğrulansın. İş emri/onay modeliyle revizyon referansı kararlaştırılsın.",
+      "effort_days": [4, 7],
+      "dependencies": ["R10-F1", "Fabrika revizyon ve onay gereksinimleri", "İçe aktarma raporu sözleşmesi"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": ["Sahadaki eski TCAD dosyalarının sayısı ve sürümleri bilinmiyor.", "Müşterinin revizyon saklama, imzalama ve kaynak dosyası koruma politikası bilinmiyor.", "Bu incelemede testler çalıştırılmadı; fiziksel üretim doğrulaması yapılmadı."],
+  "recommendation": "İlk fabrika pilotundan önce sürümlü kalıcı DTO ve kimlik doğrulamasını sabitleyin; revizyon/köken alanlarını aynı sözleşmeye ekleyin. Mevcut sonlu koordinat, benzersiz GUID, boyut sınırı ve atomik yazma kontrollerini koruyun. Tahminler yalnız bu kapsamdaki kişi-günüdür; entegrasyon/QA ve diğer raporlardaki mükerrer revizyon işleri ayrıca ele alınmalıdır."
+}

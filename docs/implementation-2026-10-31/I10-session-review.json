@@ -1,0 +1,50 @@
+{
+  "agent": "I10",
+  "role": "Code Reviewer",
+  "scope": "DocumentSession, DocumentHistory ve MainWindow belge işlemlerinin salt okunur incelemesi; bağlantı doğrulamasında görülen tek derleme tipi notu ayrıca eklendi.",
+  "verification": "Derleme, test, UI veya fiziksel cihaz işlemi yapılmadı. Kaynaklar diğer ajanlarca eşzamanlı değiştirilebilir; satırlar inceleme anına aittir.",
+  "findings": [
+    {
+      "id": "I10-F1",
+      "priority": "P1",
+      "kind": "compile_error",
+      "title": "Serileme doğrulamasında metin alanlarına tamsayı atanıyor",
+      "evidence": "src/TekstilCAD.Desktop/DesktopVerification.cs:115 row.Dx=1 ve row.Dy=2 atar. src/TekstilCAD.Desktop/TextileToolsWindow.cs:197-200 GradeRow.Dx ve Dy özelliklerini string olarak tanımlar.",
+      "impact": "Yeni masaüstü doğrulaması bu haliyle derlenmez; oturum/serileme regresyon kapısı çalıştırılamaz. Bu gözlenmiş derleme çıktısı değil, kaynak tipi uyuşmazlığıdır.",
+      "suggestion": "Dx ve Dy değerlerini sırasıyla metin \"1\" ve \"2\" olarak atayın; ardından root Release derlemesini ve --verify akışını çalıştırsın.",
+      "acceptance": "Release derlemesi tip hatası vermeden tamamlanır ve ardışık L/XL serileme doğrulaması çalışır.",
+      "owner": "root / DesktopVerification",
+      "reported_to_root": true
+    }
+  ],
+  "reviewed_behaviors": [
+    {
+      "area": "No-op ve kayıt noktası",
+      "evidence": "DocumentSession.Execute yalnız ContentEquals false iken history.Record çağırır; IsDirty ayrı kaydedilmiş içerikle karşılaştırır. MarkUnsaved içe aktarım/kurtarma gereksinimini MarkSaved veya Load'a kadar tutar.",
+      "assessment": "Kaynak akışında no-op sonrası redo silinmesi veya kayıt noktasına dönüşte yanlış kirli durum için yeni bir kusur bulunmadı. DocumentSessionTests bu davranışları hedefleyen testler içerir; çalıştırılmadı."
+    },
+    {
+      "area": "Sahiplik ve rollback",
+      "evidence": "DocumentSession.Load girdiyi ve doğrulanan sonucu klonlar; Execute işlem öncesi snapshot alır ve başarılı sonuçları klonlar. Hata halinde belge/seçim geri alınır; doğrulama/eylem hataları history.Record öncesindedir.",
+      "assessment": "Girdi listesi veya action/validator tarafından tutulan eski referans üzerinden başarılı işlem sonrası canlı belge değişimi bu yollarda ayrıştırılmış. İşlem sonrası UI nesneleri kimlik üzerinden yeniden bulunmalıdır."
+    },
+    {
+      "area": "Geçmiş ve seçim",
+      "evidence": "DocumentHistory Entry seçim kimliğini taşır; UndoState/RedoState eski API'leri korur. Toplam snapshot/nokta sınırı undo ve redo üzerinde uygulanır. DocumentSession.Restore seçimi belgedeki kimliklerle normalize eder.",
+      "assessment": "Seçim bağlamı ve geçmiş bütçesi akışında kaynakla kanıtlanan P1 kusur bulunmadı; sınır aşımında geçmişin bilinçli temizlenmesi mevcut sözleşmedir."
+    },
+    {
+      "area": "MainWindow bağlantısı",
+      "evidence": "MainWindow Commit, Undo, Redo ve LoadDocument kirli aynasını session.IsDirty ile günceller; SaveTo yalnız başarılı kalıcı kayıt sonrasında MarkSaved çağırır. ImportDxf ve mevcut kurtarma yükleme akışı MarkUnsaved uygular. ApplyProperties R gösterimini kullanıp sıfır konum farkında geometriyi yeniden hesaplamaz.",
+      "assessment": "İncelenen desteklenen belge işlemlerinde dirty aynasının kaydet/geri al akışından kopmasına ilişkin yeni bir kaynak kusuru bulunmadı. New/Open/Import UI diyalogları çalıştırılmadı."
+    }
+  ],
+  "limitations": [
+    "DocumentSession.Document canlı ve değişebilir modeldir; sınıf bunu açıkça okuma sözleşmesiyle sunar. Tüm mutasyonların Execute/Commit üzerinden yapılması gerekir. Başka entegrasyonlar bu sözleşmeyi atlayabilirse MainWindow dirty aynası da güncellenmez; mevcut incelemede yeni bir desteklenen atlama yolu gösterilmedi.",
+    "Core validate callback opsiyoneldir ve constructor alan doğrulaması yapmaz; Core tek başına üretim geçerliliği garantisi vermez. MainWindow Load/Execute yolları ProjectStorage.Validate bağlar; Sample başlangıcı kaynakta sabit geçerli şekillerdir.",
+    "Kaydedilmiş içerik için ek belge kopyası ve işlem kopyaları history.StoredPointCount bütçesine dahil değildir. Gerçek büyük fabrika verisinde tepe bellek ve gecikme ölçülmedi.",
+    "History.Record içindeki tahsis/çok düşük bellek gibi süreç kaynak arızaları çalıştırılmadı. Normal doğrulama/eylem hatası rollback'i ile süreç dayanıklılığı aynı kabul değildir.",
+    "Depolama çatışmaları ve yeni RecoveryStore yaşam döngüsü ayrı inceleme kapsamındadır."
+  ],
+  "verdict": "Belge oturumu ve MainWindow belge akışlarında yeni P1 kaynak kusuru bulunmadı. Masaüstü doğrulamasındaki I10-F1 tip hatası kapatılıp root testleri çalıştırılmalı; bu rapor test başarısı veya üretim kabulü değildir."
+}

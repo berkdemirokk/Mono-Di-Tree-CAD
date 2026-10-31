@@ -1,0 +1,49 @@
+{
+  "Name": "Ba\u015Fka oturum",
+  "Pieces": [
+    {
+      "Id": "3da0e203-b13f-4757-9992-a33913774e26",
+      "Name": "Hassas kal\u0131p",
+      "Points": [
+        {
+          "X": 0.123456789,
+          "Y": 0.987654321,
+          "IsFinite": true
+        },
+        {
+          "X": 100.123456789,
+          "Y": 0.987654321,
+          "IsFinite": true
+        },
+        {
+          "X": 100.123456789,
+          "Y": 100.987654321,
+          "IsFinite": true
+        },
+        {
+          "X": 0.123456789,
+          "Y": 100.987654321,
+          "IsFinite": true
+        }
+      ],
+      "Closed": true
+    },
+    {
+      "Id": "95f346e9-46c4-4b47-99dd-4c19087f2e7c",
+      "Name": "Par\u00E7a 2",
+      "Points": [
+        {
+          "X": 150,
+          "Y": 0,
+          "IsFinite": true
+        },
+        {
+          "X": 200,
+          "Y": 0,
+          "IsFinite": true
+        }
+      ],
+      "Closed": false
+    }
+  ]
+}

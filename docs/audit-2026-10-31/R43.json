@@ -1,0 +1,81 @@
+{
+  "agent": "R43",
+  "role": "Büyük fabrika pilot kabul kanıtı denetçisi",
+  "scope": "Tek ürün ailesi için revizyon, serileme, pastal ve tek USB plotter modeli pilot çıkış kapıları; salt okunur kaynak/belge incelemesi.",
+  "evidence": [
+    "TEST_REPORT.md:25,33 — 156 test ve 20 gizli WPF kontrolüne rağmen etkileşimli ve fiziksel kabul ayrı iş.",
+    "docs/PRODUCT_RELEASE_PLAN.md:19,25,36,38 — kurtarma, operatör ve fiziksel kabul niyeti var; dar pilot ölçütleri tanımlı değil.",
+    "src/TekstilCAD.Grading/GradingEngine.cs:39-62 — nokta indeksine bağlı serileme.",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:11-14 — deterministik raf yerleşimi; kenar marjı eklenmiyor.",
+    "tests/TekstilCAD.Tests/GradingTests.cs:6-16 ve tests/TekstilCAD.Tests/NestingTests.cs:8-20 — sentetik ölçü/yerleşim örnekleri.",
+    "tests/TekstilCAD.Tests/MachineGatewayTests.cs:17-22,65-72 — kare fikstür ve simülasyon; fiziksel uyum kanıtı yok.",
+    "MACHINE_COMPATIBILITY.md:3,15,17 — model doğrulanmamış; birim, kalibrasyon ve model kaydı gerekli."
+  ],
+  "findings": [
+    {
+      "id": "R43-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Tek ürün ailesi için ölçülü pilot kabul sözleşmesi eksik",
+      "evidence": "docs/PRODUCT_RELEASE_PLAN.md:13-14 üretimci dosyası ve pastal doğrulaması ister, :32 yalnız pilot geri bildirimi belirtir; hedefli pilot/operatör/kabul/tolerans/revizyon taraması bu belgede nicel pilot matrisi göstermedi. GradingEngine.cs:39-62 nokta indeksi kuralı, NestingEngine.cs:11-14 raf yerleşimi sınırını açıklar.",
+      "impact": "Sentetik doğruluk sonuçları büyük fabrikanın beden, adet, yön, revizyon ve kumaş kullanım gereksinimlerini karşıladığını göstermez; kapsam belirsizliği pilotu kontrolsüz genişletir.",
+      "acceptance": "Öneri: fabrika sorumlusuyla tek ürün ailesi, iki onaylı revizyon ve küçük/temel/büyük bedenlerden oluşan başlangıç korpusu seçilsin (örneklem büyüklükleri teklif, yeterlilik garantisi değildir). Her işte kaynak revizyonu, kural sürümü, beden-parça-adet listesi, kumaş eni ve izinli yönler kayıtlı olsun. Referans ölçülerin tamamı önceden imzalanmış mm toleranslarında, adetler birebir, çakışma ve sınır ihlali sıfır olsun; pastal boyu/fire/süre referansla karşılaştırılsın, kabul eşikleri pilot öncesi fabrika tarafından sayısal doldurulsun. Eski revizyon yanlışlıkla güncel çıktı sayılmamalı; onaylı korpusun tüm zorunlu senaryoları kanıt dosyasıyla kapatılmadan pilot kabul edilmesin.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Fabrika ürün ailesi ve referans dosyaları",
+        "Üretim/kalite sorumlusunun ölçü ve performans eşikleri",
+        "Revizyon ve iş kimliği altyapısı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R43-F2",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Gerçek operatörün uçtan uca iş ve kurtarma kabulü kanıtlanmadı",
+      "evidence": "TEST_REPORT.md:33 156 xUnit ve 20 pencere göstermeyen kontrol bildirir; aynı satır etkileşimli klavye/OS diyaloğu kabulünü ayrı tutar. docs/reviews/ui-smoke.md:3 gerçek kayıt tamamlanmadığını belirtir. docs/PRODUCT_RELEASE_PLAN.md:19,25,38 kurtarma ve operatör kabulünü sonraki iş olarak tanımlar.",
+      "impact": "Arka plan kontrolleri vardiyada kayıt/açma, revizyon değişimi ve hata sonrası doğru işi sürdürme yeteneğini kanıtlamaz. Planlanan 7+ yazılım geliştiricisi operatör katılımının yerine sayılamaz.",
+      "acceptance": "Öneri: fabrika tarafından seçilen iki gerçek operatörle başlangıç oturumu yapılıp kapsam vardiya/rol riskine göre genişletilsin; bu sayı istatistiksel yeterlilik iddiası değildir. Her katılımcı aynı ürün ailesinde açma→revizyon seçme→serileme→pastal→kaydetme→yeniden açma→çıktı hazırlama akışını tamamlasın. Kayıt başarısızlığı ve uygulama kesintisinde son kalıcı revizyon, kaybolabilecek işlem aralığı ve kurtarılan belge karşılaştırılsın; kabul edilen veri kaybı sınırı önceden sayısal belirlensin. Her zorunlu senaryo için sonuç, süre, yardım gereksinimi, ekran kanıtı ve operatör onayı kaydedilsin; veri kaybı/yanlış revizyon/yanlış adet gibi kritik açıklar sıfır olmadan kapı kapanmasın.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Fabrika tarafından ayrılan gerçek operatörler",
+        "Kabul korpusu ve ölçütleri",
+        "İzole test verisi ve kurtarma senaryosu hazırlığı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R43-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Tek USB plotter modeli için fiziksel çıktı kabulü yok",
+      "evidence": "MACHINE_COMPATIBILITY.md:3 fiziksel model doğrulanmadığını, :15 HPGL biriminin hedefte varsayılamayacağını belirtir. MachineGatewayTests.cs:65-72 yalnız dosya koordinatı ve Simulated durumunu doğrular; :21-22 profil fiziksel doğrulamasının false olduğunu sınar.",
+      "impact": "Dosyanın oluşması ve simülasyon başarısı, USB bağlantısının doğru ölçekle eksiksiz ve tek sefer çıktı verdiğini göstermez; seri üretim öncesi model bazlı kapı gerekir.",
+      "acceptance": "Öneri: tek marka/model/kontrolör/firmware, Windows sürücüsü ve USB taşıma/protokolü sabitlenip yetkili fiziksel test planı hazırlanmalı. Onaylı aynı ürün ailesinin revizyon/beden/pastal çıktıları iş kimliği, dosya özeti ve profil sürümüyle eşleşmeli. Başlangıçta kalibrasyon şekli ve gerçek pastal için üç tekrar önerilir; tekrar sayısı yeterlilik standardı değildir. Her tekrarın X/Y ve diyagonal ölçüleri, uzun pastal ölçek sapması, eksik/fazla parça ve çizim tamamlanması kaydedilmeli; model ve fabrika tarafından önceden imzalanan toleranslar aşılmamalı. USB kopma/yeniden bağlanma ve başarısız işin tekrar gönderiminde durum açık olmalı, otomatik mükerrer çıktı olmamalı. Fotoğraf, ölçüm tablosu, iş günlüğü ve fabrika kabulü olmadan yalnız bu model için dahi doğrulandı etiketi verilmemeli.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "Kesin USB plotter kimliği ve üretici protokol belgesi",
+        "Model adaptörünün tamamlanması",
+        "Fiziksel test yetkisi ve fabrika erişimi",
+        "Ölçüm ekipmanı ve imzalı toleranslar"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın ürün ailesi, referans beden/revizyon korpusu, toleransları ve vardiya yükü bilinmiyor.",
+    "7+ kişi geliştirme ekibidir; pilot operatör sayısı ve yetkinliği doğrulanmadı.",
+    "USB plotter marka/model/kontrolör/protokolü bilinmiyor.",
+    "Bu incelemede test, derleme, UI veya cihaz işlemi yapılmadı; mevcut test raporu sonuçları yeniden çalıştırılmadı."
+  ],
+  "recommendation": "Pilot kabulü henüz kanıtlanmadı. Önce tek ürün ailesi ve tek USB modeline bağlı kabul matrisi imzalansın; yazılım regresyonu, gerçek operatör kabulü ve fiziksel çıktı kanıtı ayrı kapatılsın. Eforlar yalnız kabul planı/kanıt hazırlığı için ön mühendis kişi-gün tahminidir; özellik/adaptör geliştirme, entegrasyon ve QA hariçtir, diğer raporlarla körlemesine toplanmamalıdır."
+}

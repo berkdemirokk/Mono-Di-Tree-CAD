@@ -1,0 +1,93 @@
+{
+  "agent": "R08",
+  "role": "Model QA Specialist — Beden serileme denetçisi",
+  "scope": "Serileme kuralları, beden ailesi/temel beden, indeks kararlılığı, kalıcı kayıt ve giysi ölçü doğrulaması; kaynak incelemesi, test çalıştırılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Grading/GradingEngine.cs:7-35",
+    "src/TekstilCAD.Grading/GradingEngine.cs:39-80",
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:76-107",
+    "src/TekstilCAD.Core/Models.cs:19-34",
+    "tests/TekstilCAD.Tests/GradingTests.cs:6-33",
+    "tests/TekstilCAD.Tests/GradingReviewTests.cs:13-53"
+  ],
+  "findings": [
+    {
+      "id": "R08-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Temel beden ve fabrika beden tablosu üretim çıktısına bağlanmıyor",
+      "evidence": "GradingEngine.cs:10 BaseSize yalnız GradeRule metadatasıdır; Generate:40 GradeRule almıyor, :55 tek artım vektörünü steps ile çarpıyor. GradeSize:35 sadece Name/Steps içerir. :62 çıktıda yalnız yeni Id/ad/koordinatlar vardır; Models.cs:19-34 beden ailesi, temel parça, beden tablosu veya serileme revizyonu saklamaz.",
+      "impact": "Aynı modelin bedenlerini ve temel beden revizyonunu güvenilir biçimde izlemek mümkün değil; beden aralıklarında değişen fabrika artım kuralları tek doğrusal adımla ifade edilemiyor.",
+      "acceptance": "Onaylı bir modelde en az beş beden ve en az iki farklı aralık artımı saklanmalı; temel beden, parça ailesi, tablo/rule revizyonları kaydet-aç sonrasında korunmalı; temel beden değişikliği tüm bağımlı bedenleri açıkça geçersiz kılmalı veya yeniden üretmeli.",
+      "effort_days": [
+        10,
+        20
+      ],
+      "dependencies": [
+        "Beden ailesi ve revizyon veri modeli",
+        "Fabrikanın onaylı beden/artım tablosu"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R08-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Nokta indeksli kurallar kaynak kimliği ve topoloji revizyonuyla korunmuyor",
+      "evidence": "GradingEngine.cs:39 indeks eşleşmesini açıklar; :48 yalnız nokta sayısını karşılaştırır; :55 aynı indekslerde toplama yapar. GradeRule:7-11 kaynak parça kimliği, nokta kimlikleri veya topoloji sürümü içermiyor. Models.cs:4 Point2 yalnız X/Y içerir.",
+      "impact": "Aynı sayıda fakat farklı sıralanmış veya farklı parçaya ait noktalar için kural uygulanması engellenmiyor. Geometrik olarak geçerli görünen ancak yanlış anatomik noktalara artım verilmiş beden üretilebilir; bu sonuç burada çalıştırılarak doğrulanmadı.",
+      "acceptance": "Kaynak/parça revizyonu farklı, noktaları döndürülmüş/yeniden sıralanmış veya sil-ekle ile aynı sayıya dönmüş konturlarda eski kural sessizce uygulanmamalı; güvenilir kimlik eşlemesi veya açık yeniden eşleme gerekmeli. Her senaryo regresyon testiyle doğrulanmalı.",
+      "effort_days": [
+        5,
+        10
+      ],
+      "dependencies": [
+        "Kalıcı nokta kimliği veya topoloji parmak izi",
+        "Parça revizyon modeli"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R08-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Serileme tablosunun masaüstü ve proje kaydı entegrasyonu eksik",
+      "evidence": "TextileToolsWindow.cs:76-80 ReloadRows mevcut satırları temizleyerek yeniden oluşturur; :148 Dx/Dy varsayılanları sıfırdır. :105 yalnız anlık satırları Generate'e gönderir. src genelinde GradeRule/BaseSize aramasında yalnız GradingEngine.cs eşleşir; GradeRule.ToJson/FromJson kütüphanede var ancak masaüstü çağrısı yok. Models.cs:29-34 proje kural koleksiyonu içermez.",
+      "impact": "Operatörün girdiği kurallar kaynak değiştirme veya pencereyi yeniden açma sonrasında tekrar girilmek zorunda; ekip içinde aynı onaylı kuralın tekrar kullanılması güvence altında değil.",
+      "acceptance": "A/B kaynakları arasında geçiş, pencereyi kapat-aç ve projeyi kaydet-aç sonrasında her parçanın kural değerleri birebir korunmalı. İçe/dışa aktarım ve onaylı kural seçimi açık olmalı; geçersiz kural yükleme mevcut tabloyu değiştirmemeli.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "Kural-parça bağlama sözleşmesi",
+        "Proje serileştirme sürüm geçişi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R08-F4",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Gerçek giysi beden ölçüleri için doğrulama kanıtı yok",
+      "evidence": "GradingTests.cs:6-7 temel veri kare ve sabit köşe artımlarıdır; :8-33 koordinat, boyut, geometrik geçerlilik ve JSON testlerini kapsar. GradingReviewTests.cs:13-53 sınırlar/null/bütçe kontrollerini kapsar. Generate:50-60 kontur geçerliliğini kontrol eder; giysi ölçü hedefi veya eşlenen dikiş uzunluğu kabulü içermez.",
+      "impact": "Sayısal/geometrik kontrollerin geçmesi, göğüs-bel-boy hedefleri veya bedenler boyunca eş parçaların dikilebilirliğinin sağlandığını kanıtlamaz; fabrika pilotunda hatalı bedenin fark edilmesi operatöre kalır.",
+      "acceptance": "Fabrikanın imzaladığı en az üç giysi ailesi ve aile başına beş beden içeren sürümlü referans veri setinde tanımlı ölçüm noktaları/ölçüleri ve eş dikiş uzunlukları karşılaştırılmalı; tüm sonuçlar fabrika tarafından belirlenen tolerans içinde olmalı. Sapmalar mm ve beden/parça bazında raporlanmalı; veri veya tolerans yoksa pilot uygunluğu verilmemeli.",
+      "effort_days": [
+        5,
+        12
+      ],
+      "dependencies": [
+        "Onaylı gerçek giysi referans seti",
+        "Ölçüm noktası ve dikiş eşleme modeli",
+        "Fabrika toleransları"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın beden adlandırma sistemi, temel beden, aralık bazlı artım kuralları ve toleransları bilinmiyor.",
+    "Kaynakta incelenen sentetik testler dışında müşteri onaylı gerçek giysi serileme doğrulaması görülmedi; böyle bir dış kayıt bulunup bulunmadığı bilinmiyor."
+  ],
+  "recommendation": "Pilot öncesinde beden ailesi ve kuralın kaynak/revizyon bağı kurulsun, masaüstü kural kaydı tamamlanıp fabrika referanslarıyla ölçü kabulü yapılsın. Tahminler izole mühendislik kişi-günüdür; entegrasyon ve bağımsız QA hariçtir, diğer raporlarla körlemesine toplanmamalıdır."
+}

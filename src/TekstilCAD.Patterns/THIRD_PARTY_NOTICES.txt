@@ -1,0 +1,4 @@
+Clipper2 2.0.0, Copyright Angus Johnson and contributors.
+Source: https://github.com/AngusJohnson/Clipper2
+License: Boost Software License 1.0. The full license text is provided in CLIPPER2-LICENSE.txt alongside this notice.
+The package is distributed as machine-executable object code. The license and this notice are included for both source and published builds.

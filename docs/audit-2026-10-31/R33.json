@@ -1,0 +1,74 @@
+{
+  "agent": "R33",
+  "role": "Uygulama güvenliği — lisans güven mimarisi",
+  "scope": "Çevrimdışı RSA lisans doğrulayıcısı, masaüstü entegrasyonu, zaman/iptal ve cihaz yaşam döngüsü; yalnız kaynak ve test okuması.",
+  "evidence": [
+    "src/TekstilCAD.Licensing/LicenseVerifier.cs:16-24 — RSA imzası doğrulanır; güvenilir anahtar, UTC ve cihaz kimliği çağırandan beklenir; çevrimdışı zaman/iptal sınırları açıkça belgelenir.",
+    "src/TekstilCAD.Licensing/LicenseVerifier.cs:48-77 — imza, iddia sınırları, tarih aralığı ve isteğe bağlı birebir cihaz eşleşmesi.",
+    "src/TekstilCAD.Desktop/App.xaml.cs:6-16; src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj:15-22 — açılış ana pencereyi açar; Licensing proje referansı bulunmaz.",
+    "tests/TekstilCAD.Tests/LicensingTests.cs:17-75 — geçerli/değiştirilmiş imza, yanlış anahtar, zaman sınırları, cihaz eşleşmesi ve bozuk iddialar için test kaynakları mevcut; çalıştırılmadı.",
+    "src ve tests altında *.cs ve *.csproj için License/Licens/license/lisans hedefli rg: doğrulayıcı kullanımını yalnız LicensingTests.cs içinde buldu."
+  ],
+  "findings": [
+    {
+      "id": "R33-F1",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Lisans sonucu ürün yetkilerine bağlanmamış",
+      "evidence": "src/TekstilCAD.Desktop/App.xaml.cs:16 doğrudan MainWindow açıyor; Desktop.csproj:15-22 Licensing referansı içermiyor. src/TekstilCAD.Licensing/LicenseVerifier.cs:9 plan adlarını tanımlıyor, :77 yalnız doğrulama sonucu döndürüyor; hedefli src taramasında ürün çağrısı yok.",
+      "impact": "Ücretli sürümde hangi planın hangi işlevi açtığı ve süresi dolan lisansın açık fabrika işine etkisi tanımlanıp uygulanamaz. Bu, mevcut geliştirme önizlemesinde gözlenmiş bir saldırı değil, ürünleştirme boşluğudur.",
+      "acceptance": "Plan-yetenek matrisi ve geçerli/eksik/süresi dolmuş lisans durumları tanımlansın; ortak yetki servisinin ilgili komutlarda uygulandığı entegrasyon testleri eklensin. Süre dolarken açık işin kaydedilmesi ve üretim işinin güvenli tamamlanma politikası doğrulansın.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "Ticari plan ve yetenek matrisi",
+        "Fabrika iş sürekliliği kararı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R33-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Güvenilir zaman, iptal ve anahtar yenileme politikası eksik",
+      "evidence": "src/TekstilCAD.Licensing/LicenseVerifier.cs:18-19 bu sınırları açıkça bildiriyor; :24 UTC ve publicKeyPem çağırandan geliyor; :73-74 yalnız verilen zaman aralığını kontrol ediyor. :10-12 modelinde iptal sürümü/anahtar kimliği veya iptal sonucu yok. LicensingTests.cs:34-43 verilen sabit UTC ile aralık kontrolünü kapsıyor.",
+      "impact": "İptal edilen veya yenilenen fabrika lisansının çevrimdışı istasyonlara ne zaman yansıyacağı ve güven bilgisi eskidiğinde hizmetin nasıl süreceği belirli değil; imza doğruluğu tek başına yaşam döngüsü güvencesi sağlamaz.",
+      "acceptance": "Azami çevrimdışı süre, güven güncellemesi yöntemi ve kesinti toleransı yazılsın; seçilen mimariye göre imzalı yenileme/iptal paketi veya süreli yetki belgesi uygulansın. Eski paket, anahtar geçişi, saat belirsizliği ve ağ kesintisi senaryolarında belirlenmiş sonuçları doğrulayan testler eklensin; çevrimdışı anlık iptal vaat edilmesin.",
+      "effort_days": [
+        5,
+        10
+      ],
+      "dependencies": [
+        "Çevrimdışı işletim gereksinimi",
+        "Lisans yayımlama ve güven kökü yönetimi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R33-F3",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Cihaz bağlama ve istasyon değişimi yaşam döngüsü tanımlanmamış",
+      "evidence": "src/TekstilCAD.Licensing/LicenseVerifier.cs:11 DeviceId isteğe bağlı; :24 cihaz kimliği çağırandan alınıyor; :75-76 yalnız ordinal eşitlik kontrolü var. LicensingTests.cs:45-53 büyük/küçük harf farklılığını reddetmeyi ve bağsız lisansı kabul etmeyi gösteriyor; hedefli src taramasında kimlik sağlayıcısı/ürün lisans çağrısı bulunmadı.",
+      "impact": "İstasyon arızası, yeniden kurulum veya donanım değişiminde lisansın nasıl taşınacağı bilinmiyor. Fabrika sürekliliği için kurtarma ve yeniden bağlama süreci gerekir; operatör veya eşzamanlı koltuk sayısı bu modelden çıkarılamaz.",
+      "acceptance": "Lisans birimi (istasyon/tesis/başka birim), kararlı cihaz kimliği kaynağı ve yetkili yeniden bağlama akışı tanımlansın. Yeniden kurulum, donanım değişimi, boş kimlik, eski ve yeni istasyon geçişi için karar tablosu ve testler hazırlansın; işlem kimliğiyle denetlenebilir devir kaydı oluşsun.",
+      "effort_days": [
+        3,
+        7
+      ],
+      "dependencies": [
+        "Lisans birimi ticari kararı",
+        "Destek ve istasyon kurtarma süreci"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Operatör ve lisanslanacak istasyon sayısı bilinmiyor; 7+ sayısı yazılım geliştirme ekibidir.",
+    "Üretim lisans yayımlayıcısı, anahtar saklama/rotasyon altyapısı ve dağıtım politikası bu incelemede doğrulanmadı.",
+    "Derleme, test, UI, cihaz veya WearCAD işlemi yapılmadı; test kaynaklarının varlığı çalışma başarısı değildir."
+  ],
+  "recommendation": "RSA doğrulayıcısını temel bileşen olarak koruyun; ücretli sürüm öncesi ürün yetki servisi, çevrimdışı güven politikası ve istasyon devrini birlikte tanımlayın. Yerel kullanıcıya karşı müdahaleci kontroller yerine lisans yayımlama ve güven güncelleme mimarisini tamamlayın. Tahminler yalnız bu dar kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve diğer raporlarla körlemesine toplanmamalıdır."
+}

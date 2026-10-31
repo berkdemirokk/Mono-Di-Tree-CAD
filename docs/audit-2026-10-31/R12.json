@@ -1,0 +1,91 @@
+{
+  "agent": "R12",
+  "role": "SRE — oturum kurtarma ve veri kaybı hedefleri",
+  "scope": "MainWindow otomatik kayıt, OfferRecovery, ArchiveRecoveredSource, AppPaths ve masaüstü doğrulamasının statik incelemesi",
+  "evidence": [
+    "src/TekstilCAD.Desktop/MainWindow.cs:39-40,164-167,215,275-281,316-343",
+    "src/TekstilCAD.Desktop/AppPaths.cs:9-11",
+    "src/TekstilCAD.Desktop/App.xaml.cs:6-17",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:31-33,171"
+  ],
+  "findings": [
+    {
+      "id": "R12-F1",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Canlı oturum kaydı çökmüş oturum gibi kurtarılabiliyor",
+      "evidence": "AppPaths.cs:9-11 kullanıcıya ortak Recovery dizini tanımlar. MainWindow.cs:339 yalnız kendi GUID dosyasını dışlar; canlı oturum denetimi yoktur. App.xaml.cs:16 her açılışta pencere oluşturur. MainWindow.cs:324 kurtarılan kaynağı kalıcı kayıttan sonra taşır.",
+      "impact": "Aynı Windows hesabında ikinci uygulama örneği açık çalışmanın eski anlık görüntüsünü kurtarma diye sunabilir; ardından kaynak dosyasını arşivleyerek ilk oturumun kurtarma kaydını geçici olarak ortadan kaldırabilir. GUID adları dosya çakışmasını önler ancak oturum sahipliğini sağlamaz.",
+      "acceptance": "İki eşzamanlı süreç testinde canlı oturum aday listesinde görünmemeli ve başka süreççe arşivlenmemeli; bir süreç zorla kapatıldığında onun en son tamamlanmış kaydı kurtarılabilmeli. Oturum sahipliği, kapanış ve yeniden başlatma testleri otomasyonda geçmeli.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Oturum kimliği ve sahiplik/lease tasarımı",
+        "Çok süreçli kurtarma test düzeneği"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R12-F2",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Bozuk veya reddedilen en yeni kayıt diğer kurtarmaları gizliyor",
+      "evidence": "MainWindow.cs:339 FirstOrDefault ile yalnız en yeni dosyayı seçer; :341 Hayır sonucu dosya/tercih durumunu değiştirmeden döner; :342-343 yükleme hatasında diğer adaylara geçmez. :316-329 arşivleme yalnız başarıyla kurtarılmış proje kaydedilince yapılır.",
+      "impact": "En yeni kayıt bozuksa daha eski geçerli kayıt arayüzden seçilemez. Kullanıcının reddettiği kayıt sonraki başlangıçta yeniden sunulur. Fabrikada aynı PC üzerindeki farklı işler için kurtarma süresi belirsizleşir.",
+      "acceptance": "Bozuk en yeni ve iki geçerli eski kayıt fikstüründe geçerli kayıtlar proje/zaman bilgisiyle seçilebilmeli; bozuk dosya korunarak hata gösterilmeli; 'şimdilik atla' ile açıkça onaylanmış 'kurtarmayı reddet' ayrılmalı ve tekrar açılış davranışı test edilmeli.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Kurtarma aday listesi ve operatör karar modeli",
+        "Proje/oturum metaverisi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R12-F3",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Kurtarma dizini taramasındaki G/Ç hatası açılışta yakalanmıyor",
+      "evidence": "MainWindow.cs:167 Loaded içinde OfferRecovery çağrılır; :339 Directory.GetFiles ve GetLastWriteTimeUtc, :342'de başlayan try bloğunun dışındadır. App.xaml.cs:6-17 uygulama düzeyinde hata yakalama içermiyor.",
+      "impact": "Dizin erişimi tarama sırasında kaybolursa veya G/Ç hatası oluşursa kurtarma özelliği pencerenin açılışını kesebilir; sorun yalnız ilgili kurtarma dosyasıyla sınırlı tutulmuyor. Bu statik hata yolu bulgusudur; çökme çalıştırılarak gözlenmedi.",
+      "acceptance": "Tarama ve tarih okumasına enjekte edilen IOException/UnauthorizedAccessException altında uygulama açılmalı, kalıcı okunabilir uyarı göstermeli ve hiçbir kurtarma dosyasını silmemeli; bir adayın hatası diğer adayların listelenmesini engellememeli.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "Dosya sistemi hata enjeksiyonu sınırı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R12-F4",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "30 saniyelik zamanlayıcı fabrika için doğrulanmış RPO/RTO sağlamıyor",
+      "evidence": "MainWindow.cs:39 DispatcherTimer 30 saniyedir; :165 kayıt UI zamanlayıcısında senkron çalışır ve hata yalnız SetStatus ile bildirilir. DesktopVerification.cs:31-33 pencere Show edilmez ve zamanlayıcı durdurulur; :171 StopTimer bunu uygular. Hedefli recovery/autosave aramasında testlerde kurtarma senaryosu bulunmadı.",
+      "impact": "UI yoğunken veya yazma başarısızken en son kurtarılabilir değişikliğin yaşı 30 saniyeyi aşabilir. Mevcut masaüstü kontrolleri gerçek çökme/yeniden başlama, disk dolması veya kullanıcı kurtarma süresine kanıt oluşturmuyor.",
+      "acceptance": "Temsilî fabrika proje büyüklüğü ve referans PC tanımlanmalı; ilk pilot için önerilen RPO en çok 60 saniye ve RTO en çok 120 saniye hedefleri müşteriyle onaylanmalı. Yoğun işlem, disk dolması ve zorla kapatma/yeniden açma matrisi son başarılı kayıt yaşını ve kurtarma süresini ölçmeli; eşik aşımında kalıcı uyarı görünmeli. Hedefler kanıt ölçümleriyle raporlanmalı.",
+      "effort_days": [
+        4,
+        7
+      ],
+      "dependencies": [
+        "Temsilî büyük fabrika proje veri kümesi",
+        "Müşteri tarafından onaylı RPO/RTO",
+        "Çökme ve disk arızası test düzeneği"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Gerçek proje büyüklükleri, donanım ve operatörlerin kabul ettiği azami veri kaybı/kurtarma süresi bilinmiyor.",
+    "Çoklu süreç, disk arızası, zorla kapatma ve kullanıcı akışları bu denetimde çalıştırılmadı.",
+    "Kalıcı kayıt atomikliği ayrı veri saklama denetiminin kapsamındadır."
+  ],
+  "recommendation": "Büyük fabrika pilotundan önce oturum sahipliği ve çoklu kurtarma seçimini tamamlayın; açılış G/Ç hatalarını izole edin. RPO/RTO'yu zamanlayıcı aralığından çıkarsamayın; temsilî veri üzerinde çökme testleriyle ölçün. Tahminler yalnız bu kapsamın mühendislik günleridir; ortak işlerle körlemesine toplanmamalıdır."
+}

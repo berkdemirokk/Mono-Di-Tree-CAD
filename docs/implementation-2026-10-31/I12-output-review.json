@@ -1,0 +1,32 @@
+{
+  "agent": "I12",
+  "role": "Code Reviewer",
+  "scope": "PlotFormats.cs HPGL kuantalama kontrolü ve MeasurementInput.cs sayı sözleşmesi; yalnız kaynak/test okuması.",
+  "verdict": "NEEDS WORK: HPGL'de komşu olmayan farklı noktaların kuantalama ile birleşmesi hâlâ sessiz geometrik kayıp üretebilir. MeasurementInput sözleşmesinde bu incelemede kanıtlı bloklayıcı bulunmadı.",
+  "findings": [
+    {
+      "id": "I12-F1",
+      "priority": "P1",
+      "kind": "defect",
+      "title": "Komşu olmayan noktaların kuantalama ile birleşmesi iç ayrıntıyı silebiliyor",
+      "evidence": "src/TekstilCAD.FileFormats/PlotFormats.cs:63-68 yalnız komşu kenarların uçlarını karşılaştırıyor; :79-85 yalnız toplam tamsayı alanının sıfır olup olmadığını kontrol ediyor. :49-56 bu kontrollerden geçen geometriyi doğrudan yazar.",
+      "reproduction": "Kaynak akışından matematiksel örnek, çalıştırılmadı: kapalı basit kontur (0,0),(4,0),(4,4),(2.4,4),(2.4,1),(1.6,2),(1.6,4),(0,4), unitsPerMillimeter=1. Kaynak alan 14. Kuantalama sonrası (0,0),(4,0),(4,4),(2,4),(2,1),(2,2),(2,4),(0,4) oluşur. Hiçbir komşu kenar sıfırlanmaz, toplam alan 16'dır; iki ayrı iç sınır üst üste biner ve iç ayrıntı kaybolur. Bütün kaynak koordinatları /40 ile ölçeklenirse varsayılan 40 birim/mm için aynı çıktı noktaları oluşur.",
+      "impact": "Kenar çökmesi kontrolü başarıyla geçmesine rağmen farklı özgün noktalar birleşerek üretim ayrıntısını silebilir. Bu fiziksel cihazda gözlenmiş hata değildir; dosya üretim kaynak akışı çıkarımıdır.",
+      "suggestion": "En azından her çıktı noktası için ilk özgün koordinatı tutan bir sözlükle, farklı özgün noktaların aynı tamsayı noktaya birleşmesini de reddedin. Aynı özgün noktanın tekrarından oluşan açıkça yazılmış kapanış desteklenebilir. Genel kesişim/topoloji korunumunun ayrıca sınırı açık kalsın.",
+      "acceptance": "Örnek kontur hem units=1 hem koordinatlar/40 + default40 ile reddedilir; mevcut hedef dosya aynen korunur. Geçerli explicit closure örneği çalışmayı sürdürür. Gerçek test yürütme sonucu root tarafından kaydedilmelidir.",
+      "confidence": "high"
+    }
+  ],
+  "positive_evidence": [
+    "PlotFormats.cs:38-44 sonlu pozitif birim, çarpım taşması ve simetrik tamsayı aralığı kontrolü var.",
+    "PlotFormats.cs:49-56 tüm parçaların kontrollerini AtomicWrite öncesinde yapar; geçersiz sonraki parça da eski dosyayı yazmadan reddedilebilir.",
+    "PlotFormats.cs:79-83 Int128 alan hesabı, 10000 nokta/parça ve int koordinat sınırları içinde toplam taşmasını önler.",
+    "MeasurementInput.cs:14-45 grammar ASCII işaret/rakam, tek ondalık ayırıcı ve bilimsel gösterimi açıkça ayırır; karışık/gruplu ayırıcı, sonlu olmayan sonuç ve nonzero mantissa underflow reddedilir.",
+    "MeasurementInput.cs:49-66 çağıran sınırını clamp etmeden reddeder; invariant R biçimlendirme aynı parser sözleşmesine uygundur. '1,500' ve '1.500' için ondalık 1.5 davranışı bu incelemede hata sayılmadı; kullanıcıya sözleşme açıklanmalıdır."
+  ],
+  "limits": [
+    "Build/test/UI veya cihaz işlemi yapılmadı; test kaynakları geçme kanıtı değildir.",
+    "Ölçü doğruluğu toleransı, genel kuantalama sonrası kesişim/topoloji ve fiziksel cihaz profili yeterliliği bu dar düzeltmeyle tamamlanmış sayılmaz.",
+    "Uygulama kodu ve WearCAD dosyaları değiştirilmedi; yalnız bu inceleme kaydı yazıldı."
+  ]
+}

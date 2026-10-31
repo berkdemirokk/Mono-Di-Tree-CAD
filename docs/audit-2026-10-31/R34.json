@@ -1,0 +1,80 @@
+{
+  "agent": "R34",
+  "role": "Kimlik ve erişim gereksinimleri denetçisi",
+  "scope": "Büyük fabrika için hesap, rol, onay, kimlikli işlem izi ve çevrimdışı/yerinde işletim; yalnız kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:29-34 ProjectDocument yalnız ad ve parçaları içeriyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28 SimulationJob kimlik/onay alanı taşımıyor; :42 ve :70 girişlerinde kullanıcı bağlamı yok.",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:82-91 doğrudan Prepare/Simulate çağrıları; fiziksel gönderim yok.",
+    "src/TekstilCAD.Licensing/LicenseVerifier.cs:9-11 plan ve şirket lisans alanlarıdır, kullanıcı rolü değildir.",
+    "src/TekstilCAD.Licensing/README.md:5-7 hesap, iptal ve koltuk yönetimi yok; Desktop doğrulayıcıdan bağımsız.",
+    "src/TekstilCAD.Desktop/AppPaths.cs:9-14 veriler Windows kullanıcısının LocalApplicationData dizinindedir.",
+    "Hedefli rg: Core, MachineGateway, Licensing, Desktop üzerinde user|role|auth|audit|approv|license|offline|operator araması ve ilgili modeller/metotlar incelendi."
+  ],
+  "findings": [
+    {
+      "id": "R34-F1",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Fabrika rolleri ve yetki sınırı tanımlanmamış",
+      "evidence": "Core/Models.cs:29-34 hesap/üyelik modeli içermez; MachineGateway/SimulationQueue.cs:42,70 kullanıcı veya yetki bağlamı almaz; Desktop/MachineCenterWindow.cs:84-91 doğrudan çağırır. Licensing/LicenseVerifier.cs:9-11 Factory planı yetkilendirme değildir.",
+      "impact": "Ücretli çok kullanıcılı fabrika kullanımında hazırlama, profil değiştirme, onaylama ve ileride gönderme sorumlulukları uygulamada ayrılamaz. Bugünkü simülatörde fiziksel yetkisiz gönderim gözlendiği iddia edilmez.",
+      "acceptance": "Fabrika temsilcisi işlem/rol matrisini onaylar; seçilen Windows/yerel hesap modeliyle yetkisiz işlem hem arayüzden hem uygulama servisinden reddedilir. Hesabı kapatılan kişi ve rolü düşürülen kişi için negatif testler geçer; lisans planı kullanıcı rolü yerine geçmez.",
+      "effort_days": [
+        5,
+        10
+      ],
+      "dependencies": [
+        "Gerçek operatör sayısı ve paylaşılan PC kullanımı",
+        "Müşteri tarafından onaylanan rol matrisi",
+        "Yerel/Windows kimlik seçimi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R34-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Pilot için sorumlu kişi ve revizyon onayı kaydı eksik",
+      "evidence": "MachineGateway/SimulationQueue.cs:26-28 kayıt iş kimliği, zaman ve dosya özeti taşır fakat hazırlayan/onaylayan yok; :92-99 manifest mevcut durumla üzerine yazılır. Core/Models.cs:29-34 belge revizyonu veya onay referansı içermez.",
+      "impact": "Fabrikaya verilen dosyanın kim tarafından ve hangi revizyonla kabul edildiği mevcut işlem kaydından çıkarılamaz. SHA256 kontrolü kişi onayı sayılmaz.",
+      "acceptance": "İlk fiziksel pilot öncesinde her iş için hazırlayan, sorumlu onaylayan, revizyon/çıktı SHA256, zaman ve sonuç tutulur; pilotta kontrollü dış iş formu kabul edilebilir. Çıktı değişince önceki onayın geçersiz olduğu süreçte doğrulanır. Ücretli sürümde bu kayıtlar uygulama işlem günlüğüne bağlanır; eski olaylar durum güncellemesiyle silinmez.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "Pilot sorumlusu ve kabul süreci",
+        "İş/revizyon numarası kuralı",
+        "Fiziksel pilot kapsamı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R34-F3",
+      "kind": "proposal",
+      "priority": "P2",
+      "title": "Çevrimdışı fabrika kimlik ve lisans işletim sözleşmesi belirlenmeli",
+      "evidence": "Licensing/README.md:5 çevrimdışı iptal, hesap/koltuk ve güvenilir saat sınırlarını açıklar; :7 Desktop entegrasyonu yoktur. Desktop/AppPaths.cs:9-14 kullanıcıya özel yerel depolama; MachineGateway/SimulationQueue.cs:104-107 ağ yollarını kabul etmez.",
+      "impact": "Vardiya devri, internet kesintisi ve kullanıcı ayrılışında kimlerin ne kadar süre çalışabileceği henüz ürün kararı değildir. Bulut veya SSO zorunluluğu çıkarılamaz.",
+      "acceptance": "Müşteriyle desteklenen yerel/yerinde kurulum, bağlantısız çalışma süresi, iptal bilgisinin taşınması, vardiya devri ve lisans süresi dolunca mevcut işin davranışı yazılı karara bağlanır. Seçilen model için bağlantı kesintisi, saat geri alma ve kapatılmış hesabın yeniden kullanımı kabul senaryoları tanımlanır; desteklenmeyen garantiler pazarlama iddiası yapılmaz.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika ağ ve Windows hesap politikası",
+        "Ücretlendirme/koltuk modeli kararı",
+        "Kesinti toleransı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Operatör sayısı, eşzamanlı koltuk sayısı ve vardiya düzeni bilinmiyor; 7+ ifadesi yazılım geliştirme ekibidir.",
+    "Active Directory/SSO gereksinimi, internetsiz süre, yerinde sunucu bulunması ve paylaşılan Windows hesabı kullanımı bilinmiyor.",
+    "Dört göz onayı zorunluluğu müşteri tarafından doğrulanmadı; rol ayrımı önerisi otomatik zorunluluk değildir.",
+    "Build/test/UI veya cihaz işlemi yapılmadı; işletim sistemi ACL'leri ve gerçek saha davranışı doğrulanmadı."
+  ],
+  "recommendation": "Önce pilotta isimli sorumluluk ve çıktı özetiyle onay sürecini kurun; ücretli fabrika sürümünde müşteri rol matrisi ve çevrimdışı kimlik politikasını uygulayın. Bulut/SSO dayatmayın. Eforlar yalnız belirtilen dar kapsam içindir; F2 pilot sürecidir, tam denetim altyapısı tahmini değildir; entegrasyon/QA hariçtir ve diğer raporlarla körlemesine toplanmamalıdır."
+}

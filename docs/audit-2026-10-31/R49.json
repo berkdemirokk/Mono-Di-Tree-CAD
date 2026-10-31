@@ -1,0 +1,98 @@
+{
+  "agent": "R49",
+  "role": "Senior Project Manager — bağımsız ekip kapasitesi ve takvim denetçisi",
+  "scope": "R01–R48 bulgu başlıkları ve kanıtları, mevcut ürün belgeleri ve kök plan taslağının kaynak kısıtlı teslim denetimi. 7+ kişi yazılım geliştirme ekibidir; fabrika operatörü sayısı değildir. Kod/test/UI/cihaz işlemi yapılmadı.",
+  "evidence": [
+    "docs/audit-2026-10-31/R01.json–R48.json: tüm findings başlıkları ve evidence alanları incelendi; aynı kök nedenler kişi-gün toplamına dönüştürülmedi.",
+    "docs/PRODUCT_RELEASE_PLAN.md:3,11-26,30-38 üretim doğruluğu, veri güvenliği, dağıtım, ticari hizmet ve fiziksel kabul kapsamı.",
+    "ROADMAP.md:5-12 mevcut geliştirme ve sonraki kapsam.",
+    "work/audit/plan_content.json:24-335 WP02–WP18 sahiplik, bağımlılık ve kabul koşulları.",
+    "work/audit/build_report.py:117 kritik yol; 157-176 takvim ve ekip taslağı."
+  ],
+  "findings": [
+    {
+      "id": "R49-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Takvimde format, DevOps ve QA için kaynak yükü gösterilmiyor",
+      "evidence": "work/audit/plan_content.json:127-143 WP08 ayrı format/entegrasyon mühendisi, :260-310 WP15/WP17 güvenlik/DevOps, :312-335 WP18 iki QA ister. work/audit/build_report.py:174 çekirdek ekipte ayrı format/DevOps koltuğu yok; :176 kısmi desteğin süresi belirtilmemiş. R14–R19 format/korpus, R30–R32/R44–R45 test/dağıtım/kurtarma yükünü kanıtlar.",
+      "impact": "Aynı kişi cihaz adaptörü, format ve fabrika backend işlerini eşzamanlı tam kapasite yapamaz; 7 kişilik senaryoda özellikle tek entegrasyon/backend ve tek QA darboğazdır.",
+      "acceptance": "İlk dört haftada her WP için haftalık rol payı ve kabul sahibi yazılsın; kişi başı toplam tahsis 1 FTE'yi aşmasın. Dokuz kişide entegrasyon mühendisinin format→adaptör sırası; mimar/CAD yardım payı; iki QA'nın otomasyon ve saha sorumluluğu gösterilsin. Yedi kişide backend/cihaz dalgaları ardışık planlansın. Dış destek saatleri ve fabrika erişimi ayrıca bütçelensin.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "WP01 kapsam",
+        "ekip özgeçmişleri ve işe başlama tarihleri",
+        "WP08/WP10/WP12 iş dilimleri"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R49-F2",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Kritik yol metni pilot güvenlik kapısını yanlış sıraya koyuyor",
+      "evidence": "work/audit/build_report.py:117 WP18 pilot → WP15/16/17 ticari çıkış yazar. Buna karşılık work/audit/plan_content.json:260-275 WP15 P1; :323-332 WP18 bağımlılıkları WP15'i içerir. :335 aynı commit test/paket ve temiz VM pilot kabulüdür; :293-310 ticari kurulum/rollback WP17 P2'dir.",
+      "impact": "Metin izlenirse güvenlik/rol/veri sınırları pilot sonrasına kalabilir; WP18 ile WP15 arasında sahte bağımlılık döngüsü oluşur. Bu uygulama kusuru değil, taslak planın iç tutarsızlığıdır.",
+      "acceptance": "Tek DAG yayımlansın: modelden CAD/format ve kuyruk/rol/güvenlik dalları ayrı ilerleyip WP18 öncesinde birleşsin; WP11, WP13, WP14, WP15 ve testli temiz VM paketi pilot girişidir. WP16/WP17 ticari çıkış kapısı olarak ayrı kalsın; ticari paket çalışması pilot sırasında başlayabilsin.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "WP18 pilot giriş sözleşmesi",
+        "WP15 kapsamı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R49-F3",
+      "kind": "proposal",
+      "priority": "P1",
+      "title": "52 hafta iyimser senaryo; kaynak ve rezerv açıklaştırılmalı",
+      "evidence": "work/audit/build_report.py:158-167 temel 1–52 hafta dalgaları ve 9 FTE için 52–68, 7 FTE için 64–84 hafta önerir; ölçülmüş hız yoktur. plan_content.json:99-121 WP06→WP07, :174-194 WP08/WP09→WP10→WP11, :229-254 UI/performance bağımlılıklarını gösterir. R04–R09/R19/R29 gerçek korpus ve doğruluk belirsizliğini; R03/R21/R43/R48 cihaz belirsizliğini gösterir.",
+      "impact": "Geometri, format, cihaz ve gerçek kullanıcı kabulünün ardışık düzeltmeleri takvimde son faza yığılabilir. Aralıklar taahhüt veya istatistiksel güven aralığı değildir.",
+      "acceptance": "Başlangıç bütçe senaryosu 9 kişide 56–72, 7 kişide 72–92 hafta olarak değerlendirilip 4. hafta ve iki teslim sprinti sonrası yeniden boyutlandırılsın. 9×56=504 kişi-hafta temel tavanının yaklaşık %55'i özellik/dokümantasyon, %30'u entegrasyon/QA/düzeltme, %15'i koordinasyon/izin/öğrenmeye ayrılsın; 16 hafta ek takvim rezervi aynı işe tekrar eklenmesin. Bunlar ölçülmüş verim değil plan varsayımıdır. 7×72=504 kişi-hafta aynı toplam bütçeyi verir fakat uzman darboğazlarını çözmez; 20 haftalık üst rezerv de hız garantisi değildir. Her rol bütçesi ayrıca kontrol edilsin; PO/QA kapasitesi kodlama kapasitesi sayılmasın.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "R49-F1 rol yükleme",
+        "WP01 gerçek korpus",
+        "ilk iki sprint gerçekleşen süreleri",
+        "cihaz erişimi"
+      ],
+      "confidence": "low"
+    },
+    {
+      "id": "R49-F4",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fabrika ve USB cihaz erişimi için takvim durdurma ölçütü yok",
+      "evidence": "work/audit/build_report.py:159 G0 cihaz kimliği; :162 21–36 hafta cihaz, :163 37–44 pilot öngörür. plan_content.json:174-196 fiziksel kabulün model/format/kuyruk ön koşulları vardır. R03-F1/R21-F3 model, protokol/SDK bilinmediğini; R43-F1 gerçek kabul korpusunun açık olduğunu kaydeder.",
+      "impact": "Yazılım ekibini büyütmek üretici belgesi, cihaz randevusu, kumaş/medya veya yetkili fabrika kabul sahibinin bekleme süresini gidermez.",
+      "acceptance": "4. haftada cihaz kimliği, belgeli taşıma yolu, protokol/SDK erişimi, sorumlu fabrika temsilcileri ve laboratuvar tarihleri için sahip/son tarih kaydı olsun. Eksikse cihaz ve pilot bitişi yeniden tahmin edilsin; onaylı üretici dosya devri alternatifinin kabul kapsamı açıkça seçilsin. Cihaz için sınırsız bekleme plan bandının dışında açıklansın; ek model/ERP/AI/mobil ayrı bütçe olsun.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "fabrika erişimi",
+        "üretici bilgisi",
+        "WP01",
+        "WP10"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Geliştiricilerin CAD/tekstil, WPF, format, sürücü ve backend deneyimi; işe alım/başlama tarihleri ve tam zamanlı uygunluğu.",
+    "Tek ürün ailesinin gerçek veri hacmi, toleransları, onaylı format alt kümesi, zorunlu ERP/MES kapsamı ve çevrimdışı kimlik politikası.",
+    "USB plotter modeli/kontrolör/firmware/protokol, SDK hakkı, cihaz-laboratuvar erişimi ve üretici yanıt süreleri.",
+    "Ölçülmüş sprint hızı veya güvenilir görev bazlı üç noktalı tahmin yoktur; takvim güveni düşüktür. 50 inceleme 50 mühendisin teslim kapasitesi değildir."
+  ],
+  "recommendation": "Dokuz kişilik yazılım ürün ekibi önerisi: 1 ürün/tekstil analisti, 1 mimar/çekirdek lideri, 2 CAD/geometri/optimizasyon, 1 WPF masaüstü, 1 format/cihaz entegrasyonu, 1 backend, 2 QA. Fabrika modelhane/üretim/bakım temsilcileri bu dokuz kişiye dahil değildir. Başlangıç bütçe varsayımı olarak UX 0,2 FTE ve güvenlik/DevOps 0,3 FTE kısmi destek; lisans/hukuk ayrı talep bazlı destek yazılsın, mevcut bütçe yoksa çekirdekten bu zaman düşülsün. İlk 4 hafta kapsam/korpus/cihaz keşfi; 5–14 model/oturum/kurtarma ve test altyapısı; 13–32 CAD/serileme/pastal/format; 17–38 kuyruk/rol/güvenlik ve hazır sözleşmelerle cihaz; 33–44 entegre akış/performans/temiz VM/fiziksel kabul; 45–50 kontrollü pilot; 49–56 ticari paket/lisans/destek ve pilot düzeltmesi. Bunlar hedef pencereleridir; QA ve kullanılabilir UI ilk sprintten itibaren her dalgada çalışır. Pilot, bütün giriş kapıları geçilmeden başlamaz; en az dört ardışık pilot haftası önerisi müşteri kabulüne bağlıdır. 56–72 hafta düşük güvenli bütçe bandı; 52 hafta ancak daraltılmış kapsam ve erken kanıtla mümkün iyimser alt senaryo. Yedi kişide backend/entegrasyon birleşir, QA bire iner; 1–4 keşif, 5–18 temel, 17–40 CAD/format, 33–52 fabrika/cihaz, 49–60 entegrasyon/kabul, 61–66 pilot, 65–72 ticari çıkış hedefleri ve 72–92 hafta bütçe bandı önerilir. Üst bantlar rezerv içerir, ayrıca tekrar yüzde pay eklenmez. Kaynak yüklemesi ve gerçek sprint sonuçları olmadan hiçbir aralık teslim sözü değildir. İlk ücretli sürüm tek ürün ailesi, tek yeterli USB model/üretici devir yolu; geniş katalog, tam ERP/MES, mobil ve AI kapsam dışıdır. Bulgulardaki effort_days yalnız plan düzeltme/yeniden tahmin eforudur, ürün geliştirme süresi değildir."
+}

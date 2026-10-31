@@ -1,0 +1,211 @@
+{
+  "agent": "I15",
+  "role": "UI Finish-Gate Reviewer",
+  "status": "final_render_and_source_review_complete",
+  "scope": "I01-I14 Windows masaüstü iyileştirmelerinin kaynak ve gizli render incelemesi; gerçek kullanıcı/ekran okuyucu/OS odağı/fiziksel cihaz kabulü değildir.",
+  "product_lens": "Büyük fabrika modelhane operatörü milimetre geometrisini koruyarak kalıbı düzenler, aynı temel kaynaktan beden üretir ve doğru parça kümesini dosyaya aktarır. İlk bakışta aktif kalıp, birim, kayıt durumu ve sonraki işlem anlaşılmalıdır. Kompakt kanvas, özellik paneli ve tablo yoğunluğu bu işe uygundur; dekoratif dashboard veya boş övgü dili gerekmez. Geliştirme ekibi 7+ varsayımı operatör sayısı değildir.",
+  "design_contract": {
+    "user_and_job": "Modelhane/serileme operatörü: doğru kaynak ve ölçüyle düzenle, doğrula, kaydet ve kontrollü çıktı hazırla.",
+    "first_read_object": "Ana ekranda kalıp ve kayıt durumu; atölyede temel parça ve hedef beden; makine merkezinde seçili üretim kümesi ve gerçek çıktı ölçüsü.",
+    "primary_action": "Bağlama göre güvenli kaydetme, yeni beden oluşturma veya yalnız seçili parçaları dosyaya hazırlama.",
+    "density": "Ana ekranda kompakt araçlar ve geniş kanvas; serilemede satır/sütun hizalı sayısal tablo; çıktı ekranında teknik ayrıntıdan önce seçim ve geometrik kontrol.",
+    "hierarchy": "İş nesnesi ve durum → karar girdisi → uygulanacak eylem → sonuç/geri dönüş → teknik ayrıntı.",
+    "interaction_model": "Windows masaüstü CAD kanvası, özellik düzenleyici, beden tablosu, açık seçim listesi ve kalıcı iş kuyruğu.",
+    "responsive_priority": "1024×640 çalışma alanında kritik eylem kaybolmamalı; modal başlangıç boyutu ekran çalışma alanını aşmamalı. Mobil bu dilimin kapsamında değil.",
+    "forbidden_defaults": [
+      "CAD işini gizleyen karşılama dashboard'u",
+      "Ölçü/karar taşımayan eş ağırlıklı kartlar",
+      "Çalışmayan dekoratif düğmeler",
+      "Dosya üretimini fiziksel başarı diye sunma",
+      "Hata veya kayıp bilgisini yalnız renge bırakma"
+    ],
+    "finish_evidence": [
+      "1440×900 ve 1024×640 ana ekran renderı",
+      "Atölye/makine varsayılan ve kompakt renderları",
+      "Seçimsiz, hatalı giriş ve uzun sonuç durumları",
+      "Kod ve root komut regresyonları; gerçek kullanıcı kabulü ayrıca"
+    ]
+  },
+  "reference_patterns": [
+    {
+      "source": "I06/E02",
+      "url": "https://help.autodesk.com/cloudhelp/2023/ENU/AutoCAD-Core/files/GUID-DDDADE14-9558-4EDB-A8C9-C235291CCBB4.htm",
+      "pattern": "Birden çok kurtarma adayı ve son kayıt zamanı",
+      "lesson": "Kullanıcı hangi çalışmaya döndüğünü seçebilmeli; bozuk aday diğerini gizlememeli."
+    },
+    {
+      "source": "I06/E03",
+      "url": "https://support.clo3d.com/hc/en-us/articles/115000493067-2D-Pattern-DXF-Import-Export",
+      "pattern": "Birim ve seçili kalıp/beden aktarımı",
+      "lesson": "Çıktı kümesi ve ölçü kararı işlemden önce açık olmalı."
+    },
+    {
+      "source": "I06/E04",
+      "url": "https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-Core/files/GUID-89604826-0B55-4994-8214-1CA93FA66985.htm",
+      "pattern": "Model ölçüsü ile çıktı ölçeğinin ayrılması",
+      "lesson": "Ekrana sığdırma, üretim ölçeğini değiştirdiği izlenimini vermemeli."
+    },
+    {
+      "source": "I06/E05",
+      "url": "https://optitex.com/optitex-o26-release/",
+      "pattern": "Temel beden ve bağlama uygun araç yoğunluğu",
+      "lesson": "Kaynak beden ve geçerli eylemler görünür kalmalı; tüm araçları aynı ağırlıkta sergilemek gerekmiyor."
+    }
+  ],
+  "reference_limit": "Bu dört desen I06'nın birincil kaynak kayıtlarından alınmıştır; bağımsız rakip kullanılabilirlik ölçümü veya şikayet sıklığı iddiası değildir.",
+  "findings": [
+    {
+      "id": "I15-F1",
+      "priority": "P1",
+      "kind": "source_workflow_gap",
+      "title": "Atölye kapanışında serileme taslağı için koruma yok",
+      "evidence": "TextileToolsWindow.cs constructor close.Click=>Close; GradePanel kalıcılık notu tabloların yalnız açık pencere boyunca tutulduğunu söylüyor. gradeDrafts pencere örneğine ait; kapanış koruması görülmedi.",
+      "impact": "Operatör tekrar kullanacağı artışları kapatma eylemiyle kaybedebilir; küçük açıklama bu eylemin sonucunu durdurmaz. Gerçek kullanıcı kaybı gözlenmedi.",
+      "required_change": "En azından değişmiş taslak varken kapanışta geri dönme/koruma yolu; kalıcı kural kaydı ayrı ürün işi olarak izlenmeli.",
+      "verification": "Sıfırdan farklı artış gir → atölyeyi kapat: kullanıcı kaybı anlamadan devam edememeli. Tekrar açma davranışı açık olmalı.",
+      "state": "addressed_in_source_interactive_acceptance_unverified",
+      "followup": "TextileToolsWindow.cs:59 ve 175-191: sıfırdan farklı veya geçersiz artış varken görünür pencere kapanışı onay gerektirir. Varsayılan Atölyeye dön; kaybın yalnız kurallar için olduğu açıklanır. Gerçek kapanış diyaloğu denenmedi; kalıcı kural kaydı ayrı ürün işidir.",
+      "evidence_stage": "original_finding_before_final_fixes; see followup for current state"
+    },
+    {
+      "id": "I15-F2",
+      "priority": "P1",
+      "kind": "source_workflow_gap",
+      "title": "İki dışa aktarma yolu farklı parça kapsamını belirsiz anlatıyor",
+      "evidence": "MainWindow.cs Export bütün Document için DXF/SVG/HPGL çağırır; üst düğme 'Dışa aktar…'. Yeni MachineCenterWindow Prepare yalnız SelectedPieceIds alt kümesini verir.",
+      "impact": "Aynı dosya biçimini iki yerden üreten operatör birinde seçili bedenleri, diğerinde kaynak+türev tüm projeyi çıkarabilir. İstenmeyen çıktı riski çıkarımıdır.",
+      "required_change": "Genel yol 'Tüm projeyi dışa aktar…' olarak açık anlatılmalı; parça sayısı ve mm boyut/kapsam özetiyle onay veya ortak kapsam seçimi sağlanmalı.",
+      "verification": "Kaynak+L+XL belgesinde yalnız L seçiliyken iki yolun kapsamı işlemden önce anlaşılır; çıktı parça sayısı belirtilen kapsamla eşleşir.",
+      "state": "addressed_in_source_and_render_native_dialog_unverified",
+      "followup": "Final ana ekran Tümünü dışa aktar… diyor; SaveFileDialog başlığı tüm proje ve parça sayısını içeriyor. Makine seçili alt kümesi ayrıca açık anlatılıyor. Native kaydetme diyaloğu ve dosya görevi bu incelemede yürütülmedi.",
+      "evidence_stage": "original_finding_before_final_fixes; see followup for current state"
+    },
+    {
+      "id": "I15-F3",
+      "priority": "P1",
+      "kind": "source_workflow_gap",
+      "title": "İçe aktarım ölçü ve kayıp kararı mevcut belge değiştikten sonra geliyor",
+      "evidence": "MainWindow.cs ImportDxf birim seçimi sonrası Import/Validate ardından LoadDocument yapar; ölçü kontrol durum mesajı ve Warnings bundan sonra gösterilir.",
+      "impact": "Yanlış birim veya kayıplı içeriği operatör belgeye uygulamadan önce değerlendiremiyor. I06/UX01 ile aynı kök nedendir, ayrı efor sayılmamalı.",
+      "required_change": "Geçici sonuç için mm en-boy, parça sayısı, birim çarpanı ve kayıp özeti; Uygula/Vazgeç kararı LoadDocument öncesi.",
+      "verification": "Yanlış birim seçimini özette fark et → vazgeç; mevcut belge ve geçmiş korunur. 100 mm referans örnek onay öncesi 100×100 mm görünür.",
+      "state": "addressed_in_source_and_render_interactive_cancel_unverified",
+      "followup": "MainWindow.cs:325 önizleme onayı, :326 LoadDocument çağrısından önce. Final import-review PNG dosya/parça/nokta sayısı, 100×100 mm, birim çarpanı, uyarı örneği ve projenin değişeceği bilgisini gösteriyor; Vazgeç ve İçe aktar ve projeyi değiştir ayrı. Gerçek iptal/geri dönüş görevi denenmedi.",
+      "evidence_stage": "original_finding_before_final_fixes; see followup for current state"
+    },
+    {
+      "id": "I15-F4",
+      "priority": "P1",
+      "kind": "observed_render_defect",
+      "title": "Kompakt atölyede serileme tablosuna kullanılabilir alan kalmıyor",
+      "evidence": "work/implementation-v03.TextileToolsWindow.compact.png 1024×640: kaynak kartı ve üst bölüm yaklaşık315px, sabit ad/adım/eylem bloğu yaklaşık180px. Tabloyu içeren scroll viewport yaklaşık40px; başlık ve kesilmiş açıklama görünüyor, nokta/artış satırları görünmüyor. StudioTheme.Apply artık çalışma alanına başlangıç boyutu clamp ediyor; eski clamp eksikliği kaynakta giderilmiş.",
+      "impact": "Artış tablosu bu görüntüde okunup düzenlenebilir bir çalışma alanı sunmuyor. Bu gerçek PNG gözlemidir; OS/DPI davranışı ayrı doğrulanmalıdır.",
+      "required_change": "Kompakt atölyede üst başlık/kaynak bölümünü sıkıştır; uzun talimatı yardıma taşı; tabloya en az sütun başlığı ve üç veri satırı için yaklaşık160px alan ayır. Alt eylem görünürlüğünü koru.",
+      "verification": "1024×640 güncel renderda sütun başlıkları ve en az üç artış satırı okunur; hedef beden/adım ve oluştur eylemi aynı görünümde erişilir. Gerçek klavye/scroll kabulü ayrıca gerekir.",
+      "state": "addressed_in_final_render",
+      "followup": "Final 1024×640 atölyede kaynak bölümü sıkışmış; sütun başlığı ve dört satır tam okunuyor. Hedef beden, temel bedenden adım sayısı ve oluştur eylemi aynı görünümde. Önceki 40px tablo sorunu giderilmiş. Root ayrıca görünen 250px ve ilk üç satır denetimini bildirdi; bağımsız test çalıştırılmadı.",
+      "evidence_stage": "original_finding_before_final_fixes; see followup for current state"
+    },
+    {
+      "id": "I15-F5",
+      "priority": "P2",
+      "kind": "observed_render_limitation",
+      "title": "Tam hassasiyetli X/Y değeri dar alanda kesiliyor",
+      "evidence": "work/implementation-v03.compact.png sağ panelde uzun ondalık X/Y metni kutu genişliğini aşıyor; görüntüde son basamaklar görünmüyor.",
+      "impact": "Hassas konumu kontrol eden operatör tam değeri ilk bakışta göremiyor; sayı girdisi korunuyor, yuvarlama hatası iddiası yok.",
+      "required_change": "Değerleri yuvarlamadan tam sayıyı tooltip veya geniş odak düzenleme alanında göster.",
+      "verification": "0.123456789 gibi uzun değer tam olarak erişilebilir; yalnız ad değiştirme koordinatı değiştirmez.",
+      "state": "addressed_in_source_tooltip_interaction_unverified",
+      "followup": "Final ana ekranda dar X/Y kutularında son basamaklar hâlâ ilk bakışta kesilebilir. MainWindow.cs:243 tam X/Y metnini mm ve sayı yardım bilgisiyle ToolTip olarak sağlar. Bu talep edilen alternatif erişim yoludur; hover/klavye/ekran okuyucu erişimi gerçek oturumda denenmedi.",
+      "evidence_stage": "original_finding_before_final_fixes; see followup for current state"
+    }
+  ],
+  "keep": [
+    "Kanvasın ana çalışma nesnesi olması; araç/özellik düzeni",
+    "Kayıt durumu ile kurtarma kopyasını ayrı anlatma",
+    "Temel beden kaynağını koruyan serileme akışı",
+    "Makine merkezi seçili küme ve gerçek dosya önizlemesi yönü",
+    "Fiziksel makine bağlantısı olmadığını açık belirten durum"
+  ],
+  "evidence_reviewed": [
+    {
+      "path": "work/packaged-v02.compact.png",
+      "status": "baseline_only"
+    },
+    {
+      "path": "work/packaged-v02.TextileToolsWindow.png",
+      "status": "baseline_only"
+    },
+    {
+      "path": "work/implementation-v03.compact.png",
+      "status": "intermediate_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03.TextileToolsWindow.compact.png",
+      "status": "intermediate_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03.MachineCenterWindow.compact.png",
+      "status": "intermediate_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03.MachineCenterPrepared.png",
+      "status": "intermediate_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.compact.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.TextileToolsWindow.compact.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.MachineCenterWindow.compact.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.MachineCenterPrepared.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.import-review.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.TextileToolsWindow.png",
+      "status": "final_headless_render_visually_inspected"
+    },
+    {
+      "path": "work/implementation-v03-final.png",
+      "status": "final_headless_render_visually_inspected_1440x900"
+    }
+  ],
+  "verdict": "PASS — yalnız I01-I14 için incelenen kaynak ve gizli render bitiş kapısı. Bildirilen beş bulguya dar kapsamlı düzeltme mevcut; kompakt tablo kullanılabilir alan buluyor. Gerçek operatör, erişilebilirlik, OS/DPI ve fiziksel cihaz kabulü doğrulanmadı; satılabilir fabrika ürünü kabulü değildir.",
+  "limitations": [
+    "Görünür UI açılmadı; build/test çalıştırılmadı.",
+    "Ekran okuyucu, gerçek klavye odağı, OS pencere/DPI, operatör görevi ve fiziksel cihaz uygunluğu değerlendirilmedi.",
+    "Uygulama kaynakları diğer ajanlar tarafından değişiyor; bulgular inceleme anına aittir."
+  ],
+  "visual_observations": [
+    "Ana1024×640 görünümde kalıp/aktif araç/kayıt durumu ve özellik düzeni korunuyor.",
+    "Makine hazırlanmış çıktısında gerçek200×200mm ölçü, ölçek2 ve geometrik kare birlikte görülüyor; ekran sığdırma ile fiziksel1:1 ayrımı açık.",
+    "Makine başlangıç kompakt görüntüsünde hazırlama eylemi aşağıda kalıyor; dış scroll mevcut. Tek görüntüden erişilemez olduğu çıkarılmadı; gerçek görev testi gerekli.",
+    "Final kompakt atölyede dört veri satırı ve oluşturma girdileri birlikte görünür; temel parça, artış ve hedef beden ilişkisinin ilk okuması netleşmiş.",
+    "Final import-review görünümü mevcut projeyi değiştirme kararını ölçü ve aktarım notlarıyla aynı pencerede sunar.",
+    "0.2 karşılaştırması görsel düzen ve görev açıklığıyla sınırlı: CAD kanvası korunmuş, kaynak/beden ve seçili çıktı kapsamı daha açık; görev tamamlama süresi ölçülmedi."
+  ],
+  "root_reported_validation": {
+    "build": "0 warning",
+    "tests_passed": 267,
+    "headless_checks_passed": 42,
+    "independently_executed_by_I15": false
+  },
+  "remaining_acceptance": [
+    "Gerçek kullanıcıyla kalıp aç/düzenle/kaydet, beden üret, yalnız hedef parçayı hazırla görevleri.",
+    "Kapanışta Atölyeye dön ve Kaydetmeden kapat; import özeti Vazgeç ile belge/geçmiş korunması.",
+    "1024×640 gerçek scroll, odak, tooltip, ekran okuyucu ve yüksek DPI; özellikle makine hazırlama eylemine aşağı kaydırarak ulaşma.",
+    "Kontrast ve klavye erişilebilirliği ayrı ölçülmeli; render incelemesi WCAG/ekran okuyucu sertifikası değildir.",
+    "Model/protokol belirlenince fiziksel cihaz, ölçek ve kesinti kabulü; bu inceleme hiçbir cihazı kullanmadı."
+  ]
+}

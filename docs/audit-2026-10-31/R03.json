@@ -1,0 +1,80 @@
+{
+  "agent": "R03",
+  "role": "Network Engineer / plotter ortam envanteri",
+  "scope": "Yerel Windows yazıcı kuyruğu, sürücü ve port envanteri; Algotex sürümü; fiziksel cihaz kimliği için kanıt sınırı",
+  "evidence": [
+    "2026-10-31 yerel Get-Printer: yalnızca OneNote (Desktop), Microsoft Print to PDF, AnyDesk Printer kuyrukları görüldü.",
+    "2026-10-31 yerel Get-PrinterDriver: Microsoft sınıf/sanal sürücüleri ve AnyDesk sürücüsü; üreticiye özgü plotter sürücüsü listelenmedi.",
+    "2026-10-31 yerel Get-PrinterPort: COM1:-COM4:, LPT1:-LPT3:, FILE:, PORTPROMPT:, nul:, AD_Port; PrinterHostAddress alanı tümünde boş. Bunlar gerçek fiziksel port/cihaz bağlantısını kanıtlamaz.",
+    "Yerel uninstall kaydı AlgotexPlotterSoftware DisplayVersion=4.6.1.5, InstallLocation=C:\\Program Files (x86)\\Algotex\\Plotter\\. AlgoPlotClient.exe, AlgoPlotServer.exe ve Viewer.exe dosya sürümleri 4, 6, 1, 5.",
+    "C:\\WearCadfe\\Plotter1-3.exe mevcut; ProductVersion ve FileVersion alanları boş.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:13-16 profil yalnızca ad, UnitsPerMillimeter ve Scale alıyor; IsVerified=false, IsSimulator=true.",
+    "Kullanıcı bu denetim sırasında mevcut plotterın bilgisayara USB ile bağlandığını bildirdi. Bu kullanıcı beyanıdır; cihaz marka/modeli ve USB protokolü henüz bilinmiyor, fiziksel test yapılmadı."
+  ],
+  "findings": [
+    {
+      "id": "R03-F1",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "USB bağlantısı kullanıcı tarafından bildirildi; hedef model ve protokol belirsiz",
+      "evidence": "Yerel Get-Printer envanterinde fiziksel plotter kuyruğu yok; kurulu Algotex 4.6.1.5 yazılımı tek başına cihaz marka/modelini veya bağlı olduğunu kanıtlamaz. Hiçbir ağ/USB/seri cihaz yoklaması yapılmadı. Kullanıcı mevcut bağlantıyı USB olarak doğruladı; USB sınıfı/protokolü ve model bilinmiyor.",
+      "impact": "Model ve kontrolör bilinmeden sürücü/protokol, ölçek, medya genişliği ve bağlantı eforu güvenilir planlanamaz. Özel üretici sunucusuyla çalışan cihazın Windows kuyruğunda görünmemesi de mümkündür.",
+      "acceptance": "Kullanıcı/teknisyen hedef cihazın marka, tam model, kontrolör/firmware, çizim genişliği, desteklenen dosya biçimleri ve fiziksel bağlantı türünü bir cihaz kayıt formunda doğrular; resmi üretici kılavuzunun sürümü ve kaynağı eklenir.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "Plotter seçimi",
+        "Cihaz etiketi ve resmi üretici belgesi",
+        "Saha sorumlusu"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R03-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Makine profili fiziksel bağlantı kimliği ve yetenek kaydı içermiyor",
+      "evidence": "src/TekstilCAD.MachineGateway/SimulationQueue.cs:13-16 MachineProfile(Name, UnitsPerMillimeter=40, Scale=1); model, bağlantı, firmware, medya sınırı veya doğrulama sürümü alanı yok.",
+      "impact": "İleride aynı isimli ama farklı model/kalibrasyondaki cihazlar karışabilir; simülasyon profilini fiziksel uyumluluk kaydı olarak kullanmak yanıltıcı olur.",
+      "acceptance": "Sürümlü cihaz profili; üretici/model/kontrolör, aktarım yöntemi, format yetenekleri, birim, medya/çizim sınırları ve kalibrasyon kaydı taşır. Simülasyon ve fiziksel doğrulama durumları ayrılır; eksik zorunlu alanla fiziksel gönderim açılmaz.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "R03-F1 cihaz bilgileri",
+        "Makine adaptör sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R03-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Üretici yazılımına dosya devri ve kalibrasyon kabulü yapılmadı",
+      "evidence": "Algotex istemci/sunucu 4.6.1.5 yerelde kurulu; src/TekstilCAD.MachineGateway/SimulationQueue.cs:57-61 yalnızca yerel DXF/HPGL dosyası oluşturur. IsVerified sürekli false; hiçbir iş gönderilmedi.",
+      "impact": "HPGL dosyasının varlığı, Algotex tarafından kabulü, doğru ölçekte çizim veya kesintiden güvenli toparlanma kanıtı değildir.",
+      "acceptance": "Önce üretici görüntüleyicisinde dosya kabulü/ölçek/medya sınırı doğrulanır. Ardından ayrı yetkili saha testinde 100 mm kare ve iki eksenli kalibrasyon deseni ölçülür; üretici toleransı kaydedilir. Bağlantı kesilmesi ve tekrar gönderimde mükerrer iş davranışı belgelenir. Test kaydı yalnızca sınanan model/firmware/arayüz bileşimine uygulanır.",
+      "effort_days": [
+        3,
+        7
+      ],
+      "dependencies": [
+        "R03-F1 cihaz kimliği",
+        "Üretici dosya/protokol belgesi",
+        "Kontrollü fiziksel test yetkisi",
+        "Medya ve operatör erişimi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Gerçek plotter marka/modeli, kontrolör ve firmware bilinmiyor.",
+    "Mevcut bağlantı USB olarak kullanıcı tarafından bildirildi; USB sınıfı/protokolü, sürücü yolu ve gelecekteki Ethernet/seri hedefleri bilinmiyor.",
+    "Windows kuyruğu dışında Algotex sunucusuna bağlı cihaz olup olmadığı sınanmadı.",
+    "Çizim genişliği, medya türü, üretici ölçü toleransı ve operatör iş akışı bilinmiyor."
+  ],
+  "recommendation": "İlk pilotu mevcut USB plotterın tam modeli ve üreticinin desteklediği dosya devriyle sınırlandırın. Her makine uyumluluğunu garanti etmek yerine adaptör/yetenek sözleşmesi ve model-firmware-arayüz bazlı sertifikasyon matrisi geliştirin. Kurulu Algotex yazılımını yalnızca ortam kanıtı sayın. Windows port adlarını fiziksel bağlantı kanıtı olarak yorumlamayın. Envanter salt okunur alındı; cihaza veri veya iş gönderilmedi."
+}

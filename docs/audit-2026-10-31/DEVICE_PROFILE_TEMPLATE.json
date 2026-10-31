@@ -1,0 +1,10 @@
+{
+  "profileVersion": 1,
+  "status": "Unqualified",
+  "device": {"manufacturer": null, "model": null, "controller": null, "firmware": null, "function": null},
+  "connection": {"physicalConnector": "USB", "confirmedBy": "user", "protocol": null, "windowsDriver": null, "driverVersion": null, "usbClass": null, "vendorId": null, "productId": null},
+  "vendorSoftware": {"observedProduct": "Algotex Plotter Software", "observedVersion": "4.6.1.5", "proof": "R03.json local inventory; not proof of attached device model"},
+  "capabilities": {"formats": [], "unitsPerMillimeter": null, "origin": null, "axes": null, "mediaWidthMm": null, "maximumJobLengthMm": null, "tools": [], "statusFeedback": null, "cancelSemantics": null, "resumeSemantics": null},
+  "evidence": {"manualUrl": null, "manualRevision": null, "sdkLicense": null, "referenceFiles": [], "calibrationRecord": null, "qualifiedCombination": null, "operatorApproval": null},
+  "physicalSendEnabled": false
+}

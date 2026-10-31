@@ -1,0 +1,43 @@
+{
+  "agent": "R11",
+  "role": "Database Reliability Engineer",
+  "scope": "ProjectStorage kalıcılık, atomik kayıt sınırları ve MainWindow çoklu süreç kayıt güvenliği; salt okunur kaynak denetimi",
+  "evidence": [
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:12-25 Save/Load yalnız belge ve yol alıyor; sürüm belirteci yok.",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:68-83 Aynı dizinde benzersiz geçici dosya, Flush(true), ardından File.Move(overwrite:true); önceki sürüm saklanmıyor.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:264-286 Açılışta belge/yol tutuluyor; SaveTo doğrudan kaydediyor ve başarı dönüşünden sonra dirty=false yapıyor.",
+    "tests/TekstilCAD.Tests/FormatTests.cs:28-51 Normal kayıt/açma ve geçersiz belgenin mevcut dosyayı koruması kapsanıyor; bu kontroller süreç çökmesi veya disk arızası kanıtı değil."
+  ],
+  "findings": [
+    {
+      "id": "R11-F1", "kind": "missing", "priority": "P1",
+      "title": "İki uygulama örneğinin aynı projeyi ezmesini önleyen denetim yok",
+      "evidence": "ProjectStorage.cs:12-15 ve 81 koşulsuz üzerine yazıyor; MainWindow.cs:267-281 açılıştaki içerik sürümünü kaydetmiyor veya kayıt öncesi karşılaştırmıyor. Geçici dosyanın FileShare.None kilidi yalnız o geçici dosyayı kapsıyor.",
+      "impact": "İki operatör aynı projeyi açarsa ikinci kayıt birinci operatörün değişikliklerini sessizce değiştirebilir. Bu kaynak akışından çıkarımdır; iki süreçli deney yapılmadı.",
+      "acceptance": "İki ayrı süreç aynı sürümü açar; A kaydeder; B'nin eski sürüm kaydı açık çatışma bildirimiyle engellenir ve farklı kaydet seçeneği sunulur. Kontrol ile değiştirme arasındaki yarış da süreçler arası koordinasyonla kapatılır. Harici dosya değişikliği ve silinmesi ayrıca denenir; hiçbir değişiklik sessiz kaybolmaz.",
+      "effort_days": [3, 6], "dependencies": ["Proje sürüm/çatışma politikası", "Çoklu süreç test düzeneği"], "confidence": "high"
+    },
+    {
+      "id": "R11-F2", "kind": "unverified", "priority": "P1",
+      "title": "Atomik kayıt için çökme ve depolama arızası doğrulaması eksik",
+      "evidence": "ProjectStorage.cs:75-83 geçici dosyayı Flush(true) ile diske aktarır ve File.Move ile hedefi değiştirir. MainWindow.cs:280-281 başarı dönüşünü kayıt durumu için kullanır. FormatTests.cs:45-51 yalnız doğrulama hatasını kapsar; bu denetimde gerçek arıza enjeksiyonu çalıştırılmadı.",
+      "impact": "Bu olumlu kayıt düzeni tek başına güç kesintisi, dolu disk, dosya paylaşım kilidi veya belirli dosya sistemlerinde kalıcılık sertifikası değildir. Fabrika pilotunda eski/yeni dosyanın kurtarılabilirliği henüz ölçülmüş değil.",
+      "acceptance": "Geçici yazma, flush öncesi/sonrası ve hedef değiştirme öncesi/sonrasında süreç sonlandırma; disk dolması; salt okunur hedef; başka süreçte silme paylaşımı kapalı okuyucu matrisi çalıştırılır. Her durumda hedef eski veya yeni tam ve açılabilir belge olur; başarısız işlem kaydedildi göstermez ve düzenlemeler korunur. Desteklenen dosya sistemi/depolama türleri için sonuç kaydı tutulur. Güç kesintisi dayanımı ayrıca izole ortamda doğrulanmadıkça garanti edilmez.",
+      "effort_days": [4, 8], "dependencies": ["İzole arıza enjeksiyonu ortamı", "Desteklenen depolama matrisi", "Kabul edilen veri kaybı ve kurtarma süresi hedefleri"], "confidence": "high"
+    },
+    {
+      "id": "R11-F3", "kind": "missing", "priority": "P2",
+      "title": "Başarılı kayıt öncesindeki sağlam proje sürümü tutulmuyor",
+      "evidence": "ProjectStorage.cs:81 hedefi yedek sürüm oluşturmadan değiştirir; MainWindow.cs:281 başarılı kalıcı kayıttan sonra oturum kurtarma dosyasını temizler. Bu kalıcı kayıt yolu revizyon yedeği sunmuyor.",
+      "impact": "Geçerli fakat yanlış düzenleme kaydedildiğinde mevcut tek proje dosyası üzerinden önceki üretim verisine dönüş sağlanamaz. Atomik değiştirme, geçmiş sürüm ve yedek geri yükleme ihtiyacını karşılamaz.",
+      "acceptance": "İşletmenin onayladığı saklama süresi/adet politikasına göre önceki başarılı sürümler korunur; geri yükleme özgün dosyayı ezmeden yeni hedefe yapılır. Ayrı ortama gerçek geri yüklemede parça kimlikleri, koordinatlar ve belge bütünlüğü doğrulanır; ölçülen kurtarma süresi hedefi karşılar. Disk alanı dolduğunda yedek/kayıt davranışı açıkça tanımlanır.",
+      "effort_days": [4, 7], "dependencies": ["Revizyon ve yedek saklama politikası", "Kurtarma hedefleri", "R12 kurtarma denetimiyle kapsam birleştirme"], "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Sahada kullanılacak disk/dosya sistemi, güç koruması ve harici yedekleme çözümü bilinmiyor.",
+    "İşletmenin kabul edeceği RPO/RTO ve revizyon saklama süresi henüz onaylanmadı.",
+    "Bu görevde test, süreç çökertme veya disk arızası deneyi yapılmadı; test kaynaklarının varlığı yürütme sonucu olarak sunulmuyor."
+  ],
+  "recommendation": "Büyük fabrika pilotundan önce çoklu süreçte sessiz üzerine yazmayı engelleyin ve kayıt arıza matrisini kanıtlayın. Ücretli sürüm öncesi kalıcı sürüm saklama ile ölçülmüş geri yükleme uygulayın. Tahminler yalnız bu dar iş kapsamına aittir; diğer ajan bulgularıyla birleştirilmeden toplanmamalıdır."
+}

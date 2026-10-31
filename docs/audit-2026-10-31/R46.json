@@ -1,0 +1,42 @@
+{
+  "agent": "R46",
+  "role": "Mobil ve çok platform uygulanabilirlik denetçisi",
+  "scope": "Windows fabrika pilotunu geciktirmeden ertelenmiş mobil inceleme ve tam CAD ayrımı; yalnızca kaynak/doküman incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj:4-5 net10.0-windows ve UseWPF=true.",
+    "src/TekstilCAD.Core/TekstilCAD.Core.csproj:3 net10.0 hedefi.",
+    "ARCHITECTURE.md:5 yeni UI katmanı gerektiğini, :31 mobil/Uno ve bulut eşitlemenin ayrı aşamalar olduğunu belirtir.",
+    "ROADMAP.md:12 çok platform çalışmasını Windows doğrulamasının sonrasına koyar.",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:26-28 fare olayları; :56 orta tuşla pan; :126 tekerlekle yakınlaştırma.",
+    "src/TekstilCAD.Core/Models.cs:29-35 ProjectDocument yalnızca Name ve Pieces tutar.",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:12-25 yerel JSON kayıt/yükleme; :81 hedef dosya değiştirilir."
+  ],
+  "findings": [
+    {
+      "id": "R46-F1",
+      "kind": "proposal",
+      "priority": "P3",
+      "title": "Mobil ilk dilim salt okunur fabrika incelemesi olarak sınırlandırılmalı",
+      "evidence": "Desktop.csproj:4-5 Windows/WPF, Core.csproj:3 net10.0; ARCHITECTURE.md:5 taşınabilir çekirdek ile yeni UI ihtiyacını ayırır. CadCanvas.cs:56 ve :126 pan/zoom fareye bağlıdır; ROADMAP.md:12 mobil aşamayı Windows doğrulaması sonrasına bırakır. Mobil cihazda çalışma veya dokunmatik başarı gözlenmedi.",
+      "impact": "Tam CAD'i doğrudan taşıma varsayımı, 7+ kişilik ekibin büyük fabrika pilotu ve ilk nitelikli USB plotter çalışmalarından kapasite çekebilir. Salt okunur kalıp/pastal ve revizyon incelemesi daha dar bir sonraki aşamadır.",
+      "acceptance": "Windows pilot çıkışı sonrasında hedef tablet ve kullanıcı rolü seçilsin; bağımsız inceleme prototipinde açma, parmakla pan/zoom, parça seçimi ve ölçü okuma için 5 gerçek operatör görevi tanımlanıp gözlensin. Dosya değiştirme ve üretim gönderimi kapsam dışında kalsın. Tam CAD kararı ancak kalem/parmak hassas nokta seçimi, sayısal mm girişi ve undo görevleri için önceden belirlenen hata/süre eşikleri karşılanınca verilsin.",
+      "effort_days": [5, 10],
+      "dependencies": ["Windows büyük fabrika pilot çıkışı", "Hedef tablet ve kullanıcı rolü seçimi", "Temsilî fabrika projeleri"],
+      "confidence": "high"
+    },
+    {
+      "id": "R46-F2",
+      "kind": "missing",
+      "priority": "P3",
+      "title": "Çevrimdışı mobil kopya için revizyon sözleşmesi tanımlanmamış",
+      "evidence": "Models.cs:29-35 proje kimliği/revizyon/şema sürümü alanı içermez; ProjectStorage.cs:12-25 doğrudan JSON kaydeder/yükler ve :81 dosyayı değiştirir. ARCHITECTURE.md:31 sürümlü şema ve bulut eşitlemeyi gelecekteki işler olarak listeler. Bu yerel kayıt akışı tek başına mobil eşitleme kanıtı değildir.",
+      "impact": "İleride çevrimdışı tablette açılan kopyanın hangi fabrika revizyonuna ait olduğunun belirsizliği eski kalıbın güncel sanılmasına yol açabilir; düzenleme eklenirse sessiz üzerine yazma riski doğar. Mevcut mobil hata gözlenmiş değildir.",
+      "acceptance": "Mobil inceleme öncesi proje kimliği, değişmez revizyon kimliği, şema sürümü ve son alınma zamanı içeren paket sözleşmesi tanımlansın. İki farklı revizyon çevrimdışı açıldığında kimlik/sürüm görünür olsun ve güncellik doğrulanamadığı açıkça gösterilsin. Tam CAD/eşitleme öncesi aynı tabandan iki düzenleme senaryosunda sessiz üzerine yazma yerine açık çatışma sonucu ve veri korunumu şart koşulsun.",
+      "effort_days": [2, 4],
+      "dependencies": ["Masaüstü sürümlü proje sözleşmesi", "Mobil inceleme kapsam kararı"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": ["Hedef mobil OS/cihaz, operatör rolü ve gerçek ihtiyaç hacmi bilinmiyor.", "Dokunmatik/kalem kullanılabilirliği, mobil bellek ve açılış performansı ölçülmedi.", "Mobil uygulama veya eşitleme uygulanmış kabul edilmedi; build/test/UI/cihaz işlemi yapılmadı.", "Eforlar yalnızca kapsam/prototip ve sözleşme çalışmalarının ön tahminidir; tam uygulama, entegrasyon ve QA dahil değildir, diğer raporlarla körlemesine toplanmamalıdır."],
+  "recommendation": "7+ kişilik ekip önce Windows büyük fabrika pilotu, veri güvenilirliği ve tek nitelikli USB plotter teslimini tamamlasın. Ardından revizyonu belirgin, çevrimdışı salt okunur mobil inceleme prototipi değerlendirilsin; tam mobil CAD ayrı ürün kararı ve giriş/eşitleme doğrulaması gerektirsin. WearCAD ve uygulama kaynaklarına dokunulmadı."
+}

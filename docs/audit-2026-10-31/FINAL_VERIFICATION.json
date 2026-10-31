@@ -1,0 +1,238 @@
+{
+  "audit_date": "2026-10-31",
+  "source_commit": "059047b6a9214b29fbf6f6c83527994475fc778f",
+  "source_files_checked": 44,
+  "changed_source_files": [],
+  "wearcad_fixture_hash_matches": true,
+  "wearcad_fixture_sha256": "74B74B88B93ACB4A53BDD5225926F2A3F0DCCD2010E6295F3068B77AEDF84214",
+  "wearcad_scope_note": "One explicit reference fixture hash checked. No claim of a full WearCAD installation content audit. No authorized writes or device I/O were performed.",
+  "tests": {
+    "total": "156",
+    "executed": "156",
+    "passed": "156",
+    "failed": "0",
+    "error": "0",
+    "timeout": "0",
+    "aborted": "0",
+    "inconclusive": "0",
+    "passedButRunAborted": "0",
+    "notRunnable": "0",
+    "notExecuted": "0",
+    "disconnected": "0",
+    "warning": "0",
+    "completed": "0",
+    "inProgress": "0",
+    "pending": "0"
+  },
+  "tests_scope": "Existing Release build; dotnet test --no-build. No new build or interactive UI/device acceptance in this audit.",
+  "prior_packaged_ui_verification": {
+    "status": "PASS",
+    "checks": [
+      "MainWindow constructed without Show",
+      "LoadDocument",
+      "Undo disabled for fresh document",
+      "AddPiece",
+      "Undo enabled after edit",
+      "Undo",
+      "Redo",
+      "Invalid commit rolled back",
+      "Canvas validation failure handled without mutation",
+      "Desktop SaveTo and native load round trip",
+      "Replacing document clears previous save destination",
+      "Offscreen layout and render at 1440x900 and 1024x640",
+      "TextileToolsWindow construction and layout",
+      "MachineCenterWindow construction and layout",
+      "Grade table has visible sized columns and source rows",
+      "Grading command adds and selects a generated piece",
+      "Machine UI command creates a local exchange job",
+      "Machine UI verifies checksum without hardware",
+      "No window shown",
+      "Runtime data directory isolated from installation and verification stays local"
+    ],
+    "failure": null,
+    "imagePath": "C:\\Projects\\TekstilCAD\\work\\packaged-v02.png",
+    "scope": "Background construction/layout and command checks only. No interactive input, dialogs, physical machine, or full workflow certification."
+  },
+  "agent_count": 50,
+  "report_count": 50,
+  "finding_count": 155,
+  "source_reference_path_checks": "All explicit src/tests full file references in reports exist. Line semantics reviewed by assigned agents, not independently runtime reproduced.",
+  "source_hashes": [
+    {
+      "sha256": "8B6EF9491F546A2A34D2BD50617E9202E21636AE94851A39334A42A318EEAF99",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Core\\DocumentHistory.cs"
+    },
+    {
+      "sha256": "7A4864C47429E29CE5A96D6303AF5499764AFD3D325F39ED8CCA6975A5A414CE",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Core\\Geometry.cs"
+    },
+    {
+      "sha256": "D4EA553FC391D86574C5919C702B056C88D9A03A87C40B877B142F2C6E5C28BE",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Core\\Models.cs"
+    },
+    {
+      "sha256": "3472FCCCE5613343D3B55F6C2BBC48CBFD3DE01F9CF32FD8607B8AC3A7E26395",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Core\\TekstilCAD.Core.csproj"
+    },
+    {
+      "sha256": "E5B2B64B28DCC3B08CB6FDB659519380C5CF6731537A22C84BBAF45E54DFD83D",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\App.xaml"
+    },
+    {
+      "sha256": "9A9D4DC33C5D13992C627E76C9BE0B2B996C20AD8D7F00E8766740BF2D63845C",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\App.xaml.cs"
+    },
+    {
+      "sha256": "49BCFDDB9C705CE9BC8ADBDEA28AAD9AC3AF57290562A1802CFCDEA16E9C705D",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\AppPaths.cs"
+    },
+    {
+      "sha256": "1CA9F04475EA4EF54CB9E763683866BB0B757FB40AF1EE3262D9433ED5BCE128",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\CadCanvas.cs"
+    },
+    {
+      "sha256": "DC78553368F829823F02D4989E3329CB181688D085EEAF5D6D843B842B64A58A",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\DesktopVerification.cs"
+    },
+    {
+      "sha256": "456512169CD907E152454CBC74B4586363E31215BF64A600ABD8F67C39786CA6",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\MachineCenterWindow.cs"
+    },
+    {
+      "sha256": "979DD630D70774D9F3F8C5D8F5F9D9FDDCE0CA860472A3350567C21AA1098798",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\MainWindow.cs"
+    },
+    {
+      "sha256": "4877F65BCD4CCA11EBCA4327B0D212D209F09A4AE045915A4195F38A6682F8EA",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\StudioTheme.cs"
+    },
+    {
+      "sha256": "0DA78540CFF7CF3E3DEC78CA58776148FD7EAAC3E63B9864BFBBABFC6E77CB61",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\TekstilCAD.Desktop.csproj"
+    },
+    {
+      "sha256": "E421BE2949A15126435C58BB941FDE2DF98B4A9331DEC5B04F9CAC23F7399327",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\TextileToolsWindow.cs"
+    },
+    {
+      "sha256": "FF6FB162585C836E645A3EADD2A1F8603BD4F924997217800FEE0B6871C18893",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Desktop\\Assets\\Studio.ico"
+    },
+    {
+      "sha256": "D38C855057EE9EC219A83852C65C47FF74C2D259A17572C8180B8874296F3F9D",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.FileFormats\\DxfFormat.cs"
+    },
+    {
+      "sha256": "936DDAC5A79A54B1A4582B31EBF06C0B5F263AC1F5C3EF0737A541FA5DDAF90A",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.FileFormats\\PlotFormats.cs"
+    },
+    {
+      "sha256": "35A9845C511493990D9BDF973F73F726C12E4BDBB0CD43C5F718B6FBAB46CC8F",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.FileFormats\\ProjectStorage.cs"
+    },
+    {
+      "sha256": "1D7E6623F8EEBFC098AFE0DD49D7DA21B1499BB795E5800089981CCA8A353644",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.FileFormats\\TekstilCAD.FileFormats.csproj"
+    },
+    {
+      "sha256": "D0263382A166F38DF98DA914C2D642D3E11117B088D243D01C9D9D2EBD04144B",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Grading\\GradingEngine.cs"
+    },
+    {
+      "sha256": "9E0AFCBAABD6F0579BE3A6DA8B90DDECDCFA359A9B1521DE866EAE9BBD177084",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Grading\\TekstilCAD.Grading.csproj"
+    },
+    {
+      "sha256": "F4C32AC8EC1E5FB19601653A67F3C34591BCFCCB25577786EB120C4AFAD8399A",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Licensing\\LicenseVerifier.cs"
+    },
+    {
+      "sha256": "D7A314C6B2B600E7CF25EC99868034590C03224D4987B3FCECA4AB4B942F3E52",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Licensing\\README.md"
+    },
+    {
+      "sha256": "3F5FB79449282540AA14532B9A5899BEA97DFEF1594882982602601F696D073A",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Licensing\\TekstilCAD.Licensing.csproj"
+    },
+    {
+      "sha256": "8B38333E7F4956346AB88E1BB05E7884FAA30BD7D45EAE0F2FCC32572D4B1A18",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.MachineGateway\\SimulationQueue.cs"
+    },
+    {
+      "sha256": "3117783AB4CFC52274830576D4939881BDEAE6935CF4003CF4B9C820A91E5378",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.MachineGateway\\TekstilCAD.MachineGateway.csproj"
+    },
+    {
+      "sha256": "80EA3B2BB0467548F81DB2E27E6A784936C433F953B838F80C280DBD57836552",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Nesting\\NestingEngine.cs"
+    },
+    {
+      "sha256": "2E53C4A032620CFFBC5869BB80B3278BF90264D001D00255A5412A0DB005C222",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Nesting\\TekstilCAD.Nesting.csproj"
+    },
+    {
+      "sha256": "4E75378A5282889C309024313FB3FA89D460BEAC41461A8DC39915F974E4331A",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Patterns\\PatternTools.cs"
+    },
+    {
+      "sha256": "7C14C83D3E4FFCC21F962768390419DB441C22C22A591CAE1B46A9EF8DE6BA4E",
+      "path": "C:\\Projects\\TekstilCAD\\src\\TekstilCAD.Patterns\\TekstilCAD.Patterns.csproj"
+    },
+    {
+      "sha256": "0835D2845D383C458957B7914E3CA91554031396C4B4C299E4BE0DFAC05EBB70",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\FormatSafetyTests.cs"
+    },
+    {
+      "sha256": "7C44B8B2F3C34DF642BD60478501D6F0DBD6A92E749B7B2A314B833FA887371B",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\FormatTests.cs"
+    },
+    {
+      "sha256": "7DAE029A69F94CEB16AF3530C04649F82A5242E4118036B824E57CDA56DDC416",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\GeometryRobustnessTests.cs"
+    },
+    {
+      "sha256": "E31B61A159B365094BF408FC29420B95AE093B76E6BC39AAAE6C2980220F563B",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\GeometryTests.cs"
+    },
+    {
+      "sha256": "E67DD49CEEB2F3402D9811371642452943F03F42840B179C00449B54D36673D5",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\GradingReviewTests.cs"
+    },
+    {
+      "sha256": "040CB1BC018D006DAB75B28808258F1B3E15DB746E33E547C59F21C6177C2828",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\GradingTests.cs"
+    },
+    {
+      "sha256": "393B0EB3BC325003534C177D578A17BD54D17728CBA81D97AB3F9605DAEADBD8",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\HistoryTests.cs"
+    },
+    {
+      "sha256": "8840AE90E5174AB5A35E91B58CCBA96854CAC4E7F008FE3FC031D8AA3473A43C",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\LicensingTests.cs"
+    },
+    {
+      "sha256": "F24DF24A2AB1E115C30D73E134E733BA000597C6159C0742E9AF9CA78065D0B6",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\MachineGatewayTests.cs"
+    },
+    {
+      "sha256": "04BA03CE8B160E7563CB7A3E61697732B9F5A3AD3A4C123CA352F7021CE5104B",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\NestingReviewTests.cs"
+    },
+    {
+      "sha256": "CE780EA18EBBAD232B2F4633E4DCF0A6EF435ADE853685AF751543EAC8AA562B",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\NestingTests.cs"
+    },
+    {
+      "sha256": "1CCD64D98E07231198E86E3B88C8D15D07800D584AEF325EB796F872DB3AF547",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\PatternReviewTests.cs"
+    },
+    {
+      "sha256": "B6FC66AC96556CE009D684228BD8B0BFE813DB422E3CB39FC2B05C612CAD0568",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\PatternToolsTests.cs"
+    },
+    {
+      "sha256": "4BEAEC6C5FC7D9A1AF6BDFAC675F327655ED33280818B63919DA25C04031358D",
+      "path": "C:\\Projects\\TekstilCAD\\tests\\TekstilCAD.Tests\\TekstilCAD.Tests.csproj"
+    }
+  ]
+}

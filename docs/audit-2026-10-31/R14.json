@@ -1,0 +1,90 @@
+{
+  "agent": "R14",
+  "role": "Agents Orchestrator / DXF Import Reviewer",
+  "scope": "ASCII DXF içe aktarma, birimler, bloklar ve veri kaybı",
+  "evidence": [
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:25-43",
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:61-104",
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:132-143",
+    "src/TekstilCAD.Desktop/MainWindow.cs:290-306"
+  ],
+  "findings": [
+    {
+      "id": "R14-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Birim başlığı okunup uyuşmazlık doğrulanmıyor",
+      "evidence": "DxfFormat.cs:41-43 yalnız $INSUNITS varlığını buluyor; değerini yorumlamıyor. Ölçek Import parametresinden gelir; MainWindow.cs:294-306 kullanıcı seçimini kullanır ve ölçü kontrolü ister.",
+      "impact": "Operatörün yanlış ölçek seçmesi fabrika çıktısında tüm kalıpları yanlış boyuta taşıyabilir; mevcut uyarı birim uygunluğunu kanıtlamaz.",
+      "acceptance": "Desteklenen birim başlıkları ayrıştırılır; kullanıcı ölçeğiyle çelişki açıkça çözümlenir; birimsiz dosyada referans mesafe onayı kaydedilir; mm/inç örnekleri bağımsız ölçü oracle'ıyla geçer.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "İçe aktarma profil sözleşmesi",
+        "Onaylı birim test korpusu"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R14-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "BLOCK tanımları yerleşim dönüşümü olmadan geometriye çevriliyor",
+      "evidence": "DxfFormat.cs:61-65 ENTITIES ve BLOCKS kabul edilir;:104 INSERT desteklenmeyen olarak toplanır;:132 blok geometrisinin doğrudan alındığı ve INSERT dönüşümlerinin uygulanmadığı açıkça uyarılır.",
+      "impact": "Blok kullanan fabrika DXF'lerinde görünür yerleşim, tekrar sayısı ve ölçek kaynak dosyayı temsil etmeyebilir. Bu mevcut belirtilmiş kapsam sınırıdır.",
+      "acceptance": "Pilot format profili blok/INSERT içermiyorsa dosya uygunluk kontrolü üretim onayını engeller; desteklenecekse iç içe dönüşüm, tekrar ve döngü sınırları bağımsız viewer karşılaştırmalarıyla geçer.",
+      "effort_days": [
+        8,
+        15
+      ],
+      "dependencies": [
+        "Pilot kaynak CAD profili",
+        "Geometri dönüşüm sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R14-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kayıp raporu kalıcı ve sayılabilir üretim kanıtı değil",
+      "evidence": "DxfFormat.cs:40 genişletilmiş veriyi uyarır;:87,99 bulge konturunu atlar;:133 HashSet yalnız atlanan tür adlarını verir. DxfImportResult:7 uyarılar ayrı listede; MainWindow.cs:306 geçici ileti kutusunda gösterir; Models.cs ProjectDocument yalnız Name/Pieces içerir.",
+      "impact": "Kaydedilen projeden kaç öğenin hangi nedenle atlandığı ve operatörün kaybı kabul edip etmediği izlenemez.",
+      "acceptance": "Import raporu kaynak hash'i, profil, birim, entity türüne göre kabul/red sayısı ve kimlikleriyle projeye bağlanır; kritik kayıp varsa üretim onayı engellenir; yeniden açmada rapor korunur.",
+      "effort_days": [
+        6,
+        12
+      ],
+      "dependencies": [
+        "Sürümlü proje şeması",
+        "Üretim onayı akışı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R14-F4",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Katman kimliği ve tekstil rolleri parça adına indirgeniyor",
+      "evidence": "DxfFormat.cs:65 blok+katman metni ad olarak birleştirilir;:143 yalnız PatternPiece.Name/Points/Closed oluşturulur. Models.cs PatternPiece içinde özgün layer/entity handle/tekstile özgü rol yok.",
+      "impact": "Çentik, iplik yönü ve kesim/iç çizgi ayrımlarını güvenilir biçimde geri aktarmak ve katman filtresiyle doğrulamak mümkün değil.",
+      "acceptance": "Pilot CAD profili için özgün katman kimliği ve eşleme sürümü saklanır; bilinmeyen katmanlar karantinaya alınır; onaylı örneklerde roller ve konturlar round-trip kontrolünü geçer.",
+      "effort_days": [
+        8,
+        15
+      ],
+      "dependencies": [
+        "Semantik kalıp modeli",
+        "AAMA/ASTM veya kaynak profil şartnamesi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Pilot fabrikanın kaynak CAD sürümü ve DXF profili",
+    "Gerçek dosyalarda INSERT/bulge/özel katman yaygınlığı"
+  ],
+  "recommendation": "Genel DXF destek iddiası yerine pilot veri profili ve kalıcı kayıp/birim onayı oluşturun; kaynak korunarak karşılaştırmalı kabul yapın."
+}

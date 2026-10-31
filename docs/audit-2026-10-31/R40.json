@@ -1,0 +1,78 @@
+{
+  "agent": "R40",
+  "role": "Ticari ürün ve değer kabul denetçisi",
+  "scope": "Büyük fabrika için satılabilir kapsam, ölçülebilir ürün iddiaları, değer kanıtı ve destek çıkış kapısı; yalnızca belge/kod incelemesi",
+  "evidence": [
+    "README.md:3,22-26,38,53 geliştirme önizlemesi ve sınırlar",
+    "ROADMAP.md:3-11 tamamlanma iddiası olmayan aşamalar",
+    "docs/PRODUCT_RELEASE_PLAN.md:3,14,19,26-36 ticari kabul başlıkları",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-16,30 fiziksel bağlantı olmayan simülasyon",
+    "src/TekstilCAD.Licensing/README.md:5-7 koltuk uygulaması ve ücretli özellik kapısı yok"
+  ],
+  "findings": [
+    {
+      "id": "R40-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fabrika pilotunun satılabilir kapsamı ve kabul sahibi tanımlı değil",
+      "evidence": "docs/PRODUCT_RELEASE_PLAN.md:3 operatör kabulünü şart koşuyor; :38 ilk akışları sıralıyor, ancak iş korpusu, sayısal başarı eşiği, kabul sahibi ve pilot süresi vermiyor. README.md:53 ürünü önizleme olarak tanımlıyor; SimulationQueue.cs:15 fiziksel profil doğrulamasını false döndürüyor.",
+      "impact": "Büyük fabrika alıcısı önizlemenin hangi işi teslim edeceğini ve hangi noktada üretime alınacağını değerlendiremez; simülasyon cihaz uyumluluğu vaadine dönüşebilir.",
+      "acceptance": "Pilot öncesi PM ve fabrika üretim sorumlusu tek kapsam kartını onaylar: seçilmiş iş türü, desteklenen dosya alt kümesi, gerçek iş sayısı, süre, ölçü toleransı ve sıfır kayıp/yanlış revizyon koşulu açıkça yazılır. Seçilen korpustaki tüm işler kabul kaydıyla kapanır. Fiziksel kullanım vaat ediliyorsa yalnızca adı/modeli belirlenen ve ayrı yeterlilik kaydı tamamlanan ilk USB plotter kapsamda olur.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika kabul sorumlusu ve temsilî iş korpusu",
+        "Operatör sayısı/iş yükü keşfi",
+        "Fiziksel kapsam varsa cihaz modeli ve ayrı yeterlilik"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R40-F2",
+      "kind": "proposal",
+      "priority": "P2",
+      "title": "Üstünlük ve fiyat-değer iddiasını tekrar üretilebilir fabrika ölçümüne bağla",
+      "evidence": "README.md:22 raf pastalı için optimum garantisi vermiyor; docs/PRODUCT_RELEASE_PLAN.md:14 belgeli performans istiyor fakat karşılaştırma veri kümesi/eşiği yok. ROADMAP.md:6 iyileştirmeleri gelecek iş olarak listeliyor. İncelenen belgeler üstünlük kanıtı sunmuyor; mevcut yanıltıcı pazarlama iddiası saptanmış değildir.",
+      "impact": "En gelişmiş veya tasarruf sağlar türü iddialar ölçüm olmadan satış beklentisini büyütür; özellik sayısı alıcının ekonomik değerini göstermez.",
+      "acceptance": "Ücretli çıkış öncesi aynı müşteri onaylı iş korpusunda mevcut süreç ve aday sürüm için iş başına aktif operatör dakikası, yeniden işleme oranı, kısıtlara uygun kumaş kullanımı ve ölçü sapması kaydedilir; sürüm, donanım ve ham sonuçlar rapora eklenir. Her satış iddiası bu kanıtın kapsamıyla sınırlandırılır. Müşterinin doğruladığı hacim ve maliyet girdileriyle değer hesabı ve fiyat kabul görüşmesi belgelenir; fiyat, rakip üstünlüğü veya tasarruf rakamı varsayılmaz.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Pilot kapsam kartı",
+        "Müşteriden mevcut süreç ve maliyet girdileri",
+        "Tekrarlanabilir benchmark çalıştırma sahibi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R40-F3",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Ücretli fabrika desteği için ölçülebilir hizmet kabul kapısı eksik",
+      "evidence": "docs/PRODUCT_RELEASE_PLAN.md:26 destek tanılamasını, :32 müşteri sözleşmesi/destek sürecini anıyor; olay seviyeleri, çalışma saatleri, ilk yanıt hedefi, kurtarma sorumlusu ve tatbikat çıkış eşiği belirtilmiyor. src/TekstilCAD.Licensing/README.md:5-7 ücretli erişim ve koltuk sınırı uygulamasının bulunmadığını açıkça belirtiyor.",
+      "impact": "Vardiyada kesinti yaşayan fabrikanın kime, hangi sürede ve hangi veri kurtarma beklentisiyle başvuracağı belirsizdir; geliştirme ekibinin 7+ kişilik olması destek kapasitesi veya kullanıcı lisans sayısı kanıtı değildir.",
+      "acceptance": "Ücretli çıkıştan önce destek sahibi ve yedeği atanır; fabrika ile kapsam/saat dilimi, olay öncelikleri, ilk yanıt hedefleri, eskalasyon, kurtarma hedefleri ve lisans cihaz-değişim sorumluluğu yazılı kabul edilir. Bir kayıt kurtarma ve bir cihaz/lisans değişim senaryosu tatbikatında tüm kararlaştırılmış süreler ölçülüp karşılanır; karşılanmayan hizmet satılmaz.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika vardiya düzeni",
+        "Destek sahibi ve kapasite planı",
+        "Kurtarma ve lisans akışlarının ayrı teknik doğrulaması"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Operatör/koltuk sayısı, eşzamanlı kullanım ve vardiya yükü bilinmiyor; 7+ sayısı geliştirme ekibine aittir.",
+    "Plotter marka/model/protokolü ve fiziksel yeterlilik bilinmiyor.",
+    "Müşteri maliyetleri, ödeme isteği, hedef fiyat ve mevcut süreç performansı bilinmiyor.",
+    "Build/test/UI/cihaz işlemi yapılmadı; eforlar yalnız bu dar kapsamın ön tahminidir, entegrasyon ve QA hariçtir."
+  ],
+  "recommendation": "Önce PM sahipliğinde pilot kapsam kartını kapat; ardından aynı fabrika işleri üzerinden değer kanıtını ve destek tatbikatını ücretli çıkış kapısı yap. Genel en gelişmiş veya tüm makinelerle uyumlu iddiası için mevcut kanıt yeterli değildir."
+}

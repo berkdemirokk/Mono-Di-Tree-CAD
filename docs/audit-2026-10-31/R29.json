@@ -1,0 +1,78 @@
+{
+  "agent": "R29",
+  "role": "Performans ve kaynak bütçesi denetçisi",
+  "scope": "Kaynak üzerinden büyük dosya, iptal, bellek sınırları ve fabrika performans yeterliliği; ölçüm/test/UI/aygıt erişimi yapılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:61,140 senkron düğme eylemi ve Arrange çağrısı",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:19-26,38-45 mevcut geometri/iş sınırları ve iptal parametresi olmayan API",
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:28-49,135-143 dosya sınırı, ara koleksiyonlar ve son doğrulama",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:19-24,41 tam metin okuma ve sonradan geometri doğrulama",
+    "tests/TekstilCAD.Tests/NestingReviewTests.cs:31-38 işlem bütçesi aşımını reddetme testi; çalıştırılmadı"
+  ],
+  "findings": [
+    {
+      "id": "R29-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Uzun işlemlerde iptal ve arayüz yanıt bütçesi yok",
+      "evidence": "src/TekstilCAD.Desktop/TextileToolsWindow.cs:61 eylemi Click içinde senkron çalıştırır; :140 Arrange çağırır. src/TekstilCAD.Nesting/NestingEngine.cs:25-26 API iptal/ilerleme parametresi içermez. src/TekstilCAD.Desktop/MainWindow.cs:181,267,301 senkron olay yolundan proje/DXF yükler. Kaynak çıkarımı: bu işlemler tamamlanana kadar aynı UI iş parçacığı başka olay işleyemez; gözlenmiş donma süresi iddia edilmez.",
+      "impact": "Büyük işte operatör iptal edemez; fabrika iş akışında bekleme ve yeniden başlatma riski değerlendirilmemiştir. Gerçek operatör/kullanıcı sayısı bilinmiyor.",
+      "acceptance": "Onaylı büyük iş kümesinde işlem sırasında UI girişi işlenmeli; iptal sonrası belge değişmemeli, geçici sonuçlar temizlenmeli. İş yükü/donanım onayı bekleyen öneri: UI yanıt p95 ≤100 ms, iptal tamamlama p95 ≤1 s; tekrarlı ölçüm ve %95 güven aralığı raporlanmalı.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Temsilî fabrika dosyaları",
+        "Hedef PC profili",
+        "İşlem yaşam döngüsü ve belge güncelleme sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R29-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Dosya sınırı tepe bellek bütçesini güvencelemiyor",
+      "evidence": "src/TekstilCAD.FileFormats/DxfFormat.cs:28-30 64 MB kontrolünden sonra tüm satırları ayırır ve ancak ardından 1.000.000 satır kontrolü yapar; :31-49 çift ve entity listeleri kurar; :135 toplam geometriyi en sonda doğrular. src/TekstilCAD.FileFormats/ProjectStorage.cs:19-24 tüm metni ve nesne ağacını oluşturduktan sonra Validate çağırır (:41 toplam nokta limiti). Kaynak çıkarımı: dosya boyutu RAM üst sınırı değildir; tahsis çarpanı ölçülmedi.",
+      "impact": "Kabul edilen dosyalar ile sınırda reddedilen dosyaların tepe bellek tüketimi hedef fabrika PC'sinde bilinmiyor; çoklu büyük belge işlerinde kaynak baskısı oluşabilir.",
+      "acceptance": "64 MB altı yoğun satır, aşırı nokta ve uzun metin örnekleriyle tepe working-set/tahsis ölçülmeli; okuma sırasında satır/nokta/kayıt sınırları aşılınca erken çıkılmalı. Hedef PC ve eşzamanlı iş sayısı belirlendikten sonra sayısal bellek bütçesi kabul edilmeli; hata/iptal sonrası belge korunmalı.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Hedef PC RAM profili",
+        "Büyük ve bozuk dosya örnek kümesi",
+        "Eşzamanlı belge/iş gereksinimi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R29-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Mevcut işlem sınırlarının fabrika p95 hedeflerine uygunluğu doğrulanmamış",
+      "evidence": "src/TekstilCAD.Nesting/NestingEngine.cs:19-23 10.000 parça, 2.000 köşe/parça, 200.000 toplam köşe ve 50.000.000 doğrulama işi sınırı uygular; :43 kareler toplamını hesaplar, :62 kesişim doğrular. tests/TekstilCAD.Tests/NestingReviewTests.cs:31-38 yalnızca bütçe aşımında istisna beklentisini içerir. src/tests *.cs üzerinde Stopwatch|Benchmark|CancellationToken|GC.Get|WorkingSet|p95|Percentile hedefli araması eşleşme vermedi. İşlem karmaşıklığı çıkarımı: doğrulama bütçesi Σ(v_i²) vekilidir; süre ölçümü değildir.",
+      "impact": "Koruma sınırları mevcut olsa da gerçek fabrika işlerinin reddedilme oranı, bekleme süresi ve kapasitesi bilinmiyor; pilot uygunluğu kaynak testlerinden çıkarılamaz.",
+      "acceptance": "Fabrikanın gerçek kullanıcı sayısı ve iş yükü ayrı keşif gereksinimi olarak belirlenmeli; iş dağılımı, dosya/nokta yüzdelikleri, PC profili ve eşzamanlılık ölçüm planına alınmalı; küçük/orta/üst sınır iş kümesinde açma, pastal, kaydetme p50/p95, tepe bellek, ret oranı ve %95 güven aralığı raporlanmalı. Bu işlemler için sayısal p95 bütçeleri iş yükü teyidini bekliyor; onay sonrası regresyon kapısı kurulmalı.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika iş yükü keşfi",
+        "Onaylı p95 hedefleri",
+        "Temsilî ölçüm ortamı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "7+ kişi yazılım geliştirme ekibini ifade eder; fabrika operatörü/kullanıcısı sayısı ve aynı belgeye mi bağımsız işlere mi çalışacakları bilinmiyor.",
+    "Gerçek dosya boyutu, köşe/parça dağılımı ve günlük iş hacmi bilinmiyor.",
+    "Hedef PC CPU/RAM/depolama ve uygulama dışı yük bilinmiyor.",
+    "Ölçülmüş süre, bellek ve kullanıcı arayüzü davranışı yok; testler çalıştırılmadı."
+  ],
+  "recommendation": "Mevcut geometri ve geçmiş sınırlarını koruyarak önce fabrika iş yükünü tanımlayın; iptal ve erken kaynak kontrolü gereksinimlerini pilot kabulüne alın. Ardından ölçümlü p95/bellek bütçeleri belirleyin. Eforlar yalnız bu dar kapsam için ön tahmindir, entegrasyon/QA hariçtir ve diğer raporlarla körlemesine toplanmamalıdır."
+}

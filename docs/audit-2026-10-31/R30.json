@@ -1,0 +1,75 @@
+{
+  "agent": "R30",
+  "role": "Test otomasyonu ve sürüm kapıları denetçisi",
+  "scope": "Çökme/kurtarma, eşzamanlı erişim, temiz ortam ve paket doğrulama kapıları; yalnız statik inceleme.",
+  "evidence": [
+    "tests/TekstilCAD.Tests/FormatTests.cs:45-51",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:68-83",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:28-32,137-139,171",
+    "scripts/Package.ps1:36-45,64",
+    "scripts/VerifyArchive.ps1:29-40",
+    "TEST_REPORT.md:7-12,29,33"
+  ],
+  "findings": [
+    {
+      "id": "R30-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kurtarma ve atomik kayıt için hata enjeksiyonu kabulü eksik",
+      "evidence": "FormatTests.cs:45-51 yalnız doğrulama öncesi NaN hatasında eski dosyayı korumayı sınar; ProjectStorage.cs:76-81 disk yazımı/flush/rename aşamaları içerir. DesktopVerification.cs:32,171 autosave zamanlayıcısını durdurur. MainWindow.cs:164-167 kurtarma yazma, kapanış ve açılış yollarını bağlar. tests altında Process.Start/Kill/Parallel/Task.Run/Recovery/IOException hedefli araması süreç kesintisi veya eşzamanlı kurtarma testi bulmadı.",
+      "impact": "Büyük fabrikada elektrik/süreç kesintisi veya iki açık oturum sonrası hangi revizyonun geri geleceği mevcut yeşil test sayısıyla kanıtlanamaz; gözlenmiş veri kaybı iddiası değildir.",
+      "acceptance": "Yazma/flush/rename sınırlarında kontrollü süreç sonlandırma, kilitli dosya, disk doluluğu ve iki oturum senaryoları için eski veya yeni geçerli belge kalması, başka oturum kurtarmasının silinmemesi ve yeniden açılış sonucu doğrulansın; her senaryo 10 ardışık çalışmada geçsin ve hata çıktıları saklansın.",
+      "effort_days": [
+        4,
+        7
+      ],
+      "dependencies": [
+        "Kurtarma revizyonu ve eşzamanlı oturum davranışı sözleşmesi",
+        "İzole süreç ve dosya sistemi hata enjeksiyon düzeneği"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R30-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Paket üretimi test başarısına zorunlu bağlı değil",
+      "evidence": "Package.ps1:36-45 publish veya SkipPublish dizinindeki dört dosyayı kontrol eder; :64 VerifyArchive çağrısına BuildExtractedSource geçmez. VerifyArchive.ps1:29 cleanBuild='not requested'; :31-40 build/test yalnız isteğe bağlıdır. Build.ps1:9-10 test de ayrı switch gerektirir. TEST_REPORT.md:29 tarihsel ayrı doğrulama bildirir; bu otomatik paket kapısı değildir.",
+      "impact": "Bir sonraki paket regresyon testleri başarısızken veya eski PublishedDirectory kullanılarak üretilebilir; manifest commit alanı tek başına runtime'ın aynı kaynak revizyonundan geldiğini doğrulamaz.",
+      "acceptance": "Paket kapısı aynı commit için kaynak testlerini ve çıkarılmış runtime doğrulamasını zorunlu kılsın; kasıtlı başarısız test ile paket yayımlama reddedilsin. SkipPublish için doğrulanmış build kimliği/hash eşleşmesi gereksin; manifest test raporu ve runtime doğrulama hashlerini bağlasın.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Tek sahipli CI/paket hattı",
+        "Commit ve çıktı kökeni sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R30-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Temiz klasör testi temiz fabrika bilgisayarı kabulü değil",
+      "evidence": "VerifyArchive.ps1:32-38 kaynakları mevcut kökün work dizinine çıkarır ve kökün .tools SDK'sını kullanır. DesktopVerification.cs:28 çalışma dizinini C:\\Projects\\TekstilCAD altında sabitler; :137-139 rapor yolları geliştirici makinesine bağlıdır. TEST_REPORT.md:29 SDK bağımsız EXE kontrolü bildirir ancak SDK bulunmayan ayrı kullanıcı/VM kabul kanıtı sunmaz.",
+      "impact": "Standart yetkili fabrika kullanıcısında farklı kurulum yolu, boş kullanıcı profili ve SDK yokluğu koşullarındaki ilk açılış/kayıt doğrulanmamış kalır.",
+      "acceptance": "SDK bulunmayan temiz Windows VM'de standart kullanıcı ve farklı kurulum yolu ile yayımlanmış ZIP açılsın; ilk açılış, kendi veri dizinine kayıt/yeniden açma ve yeniden başlatma doğrulansın. Harness geliştiriciye ait C:\\Projects yolunu gerektirmesin; OS, kullanıcı yetkisi, paket SHA256 ve sonuç raporu saklansın.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Temiz Windows test imajı",
+        "Taşınabilir doğrulama çıktı yolu"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Bu denetimde build/test/UI çalıştırılmadı; TEST_REPORT.md başarıları yeniden doğrulanmadı.",
+    "Harici CI veya temiz VM kanıtı mevcut olabilir; incelenen kaynakta .github dizini bulunmadı.",
+    "Fiziksel USB plotter modeli/protokolü bilinmiyor; bu bulgular cihaz kabulü değildir."
+  ],
+  "recommendation": "Pilot öncesinde kurtarma hata enjeksiyonu, commit'e bağlı zorunlu paket kapısı ve temiz standart kullanıcı kabulünü tamamlayın. Mevcut test raporunun UI/üretim sınırlamalarını koruyun; eforlar yalnız bu dar iş kapsamındadır, örtüşen raporlarla toplanmamalıdır."
+}

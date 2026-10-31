@@ -1,0 +1,93 @@
+{
+  "agent": "R27",
+  "role": "WPF erişilebilirlik kaynak denetçisi",
+  "scope": "Canvas klavye işlemleri, UI Automation anlamlandırması, alan adları ve durum bildirimleri; yalnız kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/CadCanvas.cs:25-28,54-86,126,128-142",
+    "src/TekstilCAD.Desktop/MainWindow.cs:87,129-131,189,345-377",
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:34,50-54",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:65-66",
+    "Hedefli rg: src/TekstilCAD.Desktop içinde AutomationPeer|OnCreateAutomationPeer|LiveSetting|LiveRegionChanged|SetLabeledBy|SetName araması yalnız MainWindow.cs:111,129-131,155-156 SetName kayıtlarını buldu."
+  ],
+  "findings": [
+    {
+      "id": "R27-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Çizime nokta ekleme ve görünüm gezinmesi için klavye eşdeğeri yok",
+      "evidence": "CadCanvas.cs:54-86 çizim noktalarını sol fare tıklamasıyla, :56 ve :91 kaydırmayı orta tuşla, :126 yakınlaştırmayı tekerlekle işler. MainWindow.cs:363-375 araç seçme, sığdırma, bitirme/iptal/silme sunar; koordinatla yeni çizim noktası ekleme ve bağımsız yakınlaştırma/kaydırma komutu yok. Parça listesi ve özellik alanları bulunduğundan bütün seçim/düzenleme işlevlerinin fareye bağlı olduğu iddia edilmiyor.",
+      "impact": "7+ kişilik planlama ekibinde fare kullanamayan veya hassas giriş için klavyeyi tercih eden operatör yeni kontur oluşturma akışını aynı yöntemle tamamlayamaz.",
+      "acceptance": "Koordinat girişli nokta ekleme ve belgelenmiş yakınlaştırma/kaydırma komutları sağlansın. Fare kullanılmadan çizgi, dikdörtgen, çoklu çizgi, yay ve Bézier oluşturma; görünümü kaydırma/yakınlaştırma; iptal ve geri alma senaryolarının tamamı geçsin. WCAG 2.2 2.1.1 Keyboard değerlendirme referansıdır; WPF uygunluk kararı değildir.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Ortak çizim komut modeli",
+        "Klavye kullanıcı kabul senaryoları"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R27-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Özel çizim yüzeyi için erişilebilir geometri sözleşmesi tanımlanmamış",
+      "evidence": "CadCanvas.cs:10 FrameworkElement türetir; :128-142 konturları, parça adlarını ve köşeleri DrawingContext ile çizer. Hedefli kaynak aramasında özel AutomationPeer/OnCreateAutomationPeer bulunmadı. Ana penceredeki parça listesi alternatif bilgi sağlar; çizim yüzeyinin çalışma zamanı UIA ağacı incelenmedi.",
+      "impact": "Ekran okuyucu kullanan operatörün aktif çizim aracı, geçici noktalar ve seçili köşe ilişkisini hangi erişilebilir arayüzden öğrenebileceği belirsizdir.",
+      "acceptance": "Canvas veya eşdeğer klavye panelinde araç, seçili parça, nokta sırası ve mm koordinatları erişilebilir ad/değer/durum olarak sunulsun. Windows UIA incelemesi ve gerçek NVDA oturumunda üç parçalı örnekte seçili parça ve noktanın koordinatı doğru okunup değiştirilebilsin. Referans: 4.1.2 Name, Role, Value.",
+      "effort_days": [
+        3,
+        7
+      ],
+      "dependencies": [
+        "Erişilebilir geometri etkileşim tasarımı",
+        "NVDA ve UIA doğrulama ortamı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R27-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Atölye ve makine ayar alanlarının programatik etiketleri eksik",
+      "evidence": "TextileToolsWindow.cs:50-54 Input görünür TextBlock ve ayrı TextBox oluşturur; :34 kaynak seçicisi aynı yaklaşımı kullanır. MachineCenterWindow.cs:65-66 Field görünür TextBlock ile Control'ü yan yana ekler; LabeledBy/Name atamaz. MainWindow.cs:129-131 ise ad ve X/Y alanları için SetName kullanır; bu olumlu örnek diğer pencerelere taşınmamış.",
+      "impact": "Ölçek, birim ve tekstil parametrelerinin yalnız değer olarak duyurulması riski yanlış alan girişine yol açabilir; gerçek okuyucu davranışı henüz ölçülmedi.",
+      "acceptance": "Tüm atölye/makine TextBox ve ComboBox alanlarında görünür etiketle eşleşen erişilebilir ad, gerekli yerde birim sağlansın. UIA taramasında adsız düzenlenebilir alan sayısı sıfır olsun; NVDA ile alanlar arasında Tab yapıldığında her alanın adı ve değeri doğru duyulsun. Referanslar: 1.3.1 Info and Relationships, 4.1.2 Name, Role, Value.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "Alan adı ve birim envanteri",
+        "UIA/NVDA doğrulaması"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R27-F4",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Önemli işlem durumları için erişilebilir duyuru ve kalıcılık ayrımı yok",
+      "evidence": "MainWindow.cs:189 SetStatus yalnız status.Text değiştirir; :87 aynı TextBlock görsel durum satırıdır. CadCanvas.cs:98 her fare hareketinde bu satırı koordinatlarla değiştirir. MainWindow.cs:165 kurtarma kaydı başarısızlığını ve :281 kaydetme sonucunu aynı alana yazar. Kaynakta LiveSetting/LiveRegionChanged bulunmadı.",
+      "impact": "İşlem sonucu veya kurtarma uyarısı sonraki fare hareketinde kaybolabilir; operatörün sonucu sonradan kontrol etmesi ve ekran okuyucunun haberdar olması için belirlenmiş yol yoktur.",
+      "acceptance": "Koordinat telemetrisi ile işlem sonucu/uyarı alanları ayrılsın; son önemli sonuç kullanıcı okuyana veya sonraki işlem sonucuna kadar erişilebilir kalsın. Kaydetme ve kurtarma hatası NVDA testinde bir kez duyurulsun; 100 fare hareketi önemli mesajı silmesin ve koordinat duyuru seli yaratmasın. Referans: 4.1.3 Status Messages.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "Durum mesajı önem sınıflaması",
+        "NVDA duyuru doğrulaması"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "UI, klavye, ekran okuyucu, UIA otomatik taraması, kontrast ölçümü, yüksek karşıtlık ve büyütme testleri çalıştırılmadı; denetim kaynakla sınırlıdır ve erişilebilirlik uygunluğu belirlenmemiştir.",
+    "Odak göstergesinin görünürlüğü ve diyalog kapanışında odak dönüşü çalışma zamanında doğrulanmadı; başarısız oldukları ileri sürülmüyor.",
+    "Kaynak renklerinden ölçülmüş kontrast veya hukuken zorunlu WCAG uygunluğu iddiası yoktur.",
+    "Eforlar yalnız ilgili uygulama işinin ön tahminidir; ortak altyapı ve tekrarlar nedeniyle körlemesine toplanmamalıdır."
+  ],
+  "recommendation": "Pilot öncesi klavye ile kontur oluşturma ve programatik alan etiketlerini tamamlayın; ardından otomatik UIA taraması ile gerçek NVDA/klavye oturumunu birlikte uygulayın. Mevcut ana pencere alan adlarını ve standart WPF denetimlerini koruyun."
+}

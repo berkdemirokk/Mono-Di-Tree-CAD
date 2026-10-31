@@ -1,0 +1,70 @@
+{
+  "agent": "R09",
+  "role": "Operations Manager — fabrika pastal gereksinimleri",
+  "scope": "Pastal motoru, üretim talepleri, kumaş sınırları, yön kuralları ve kullanım ölçümü; yalnız kaynak incelemesi, testler çalıştırılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:19-34 — parça ve proje veri modeli",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:11-26 — sabit yönlü raf yöntemi ve API",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:71-97 — yerleşim ve kullanım hesabı",
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:134-143 — temel pastal arayüzü",
+    "tests/TekstilCAD.Tests/NestingTests.cs:12-107 — mevcut geometrik senaryolar",
+    "tests/TekstilCAD.Tests/NestingReviewTests.cs:17-52 — kimlik, kaynak sınırı ve tam sınır senaryoları"
+  ],
+  "findings": [
+    {
+      "id": "R09-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Pastal üretim talebi ve beden/adet mutabakatı modellenmemiş",
+      "evidence": "Models.cs:19-34 yalnız Id, Name, Points, Closed ve proje Pieces alanlarını içeriyor. TextileToolsWindow.cs:138-141 bütün proje parçalarını birer kez Arrange metoduna veriyor. NestingEngine.cs:57 aynı kimliği tekrar kabul etmiyor; NestingReviewTests.cs:17-21 bu davranışı hedefliyor. Adet, beden oranı, malzeme veya lot girdisi bulunmuyor.",
+      "impact": "Geometrik olarak geçerli bir yerleşim siparişin gereken beden ve parça sayılarını temsil etmeyebilir; farklı kumaş gerektiren parçaların aynı pastala alınmasını motor denetleyemez.",
+      "acceptance": "S/M/L oranı 1:2:1, beden başına iki ön ve bir arka parça içeren sabit işte tam 12 yerleşim örneği üretilsin; her örnek benzersiz kimlik ve kaynak parça/sipariş revizyonu bağlantısı taşısın. İki uyumsuz malzeme/lot grubunu tek pastala sokan iş reddedilsin veya açıkça ayrı işlere bölünsün. Eksik/fazla adet mutabakatı sıfır olmadan üretim onayı verilmesin; kaynak geometriler değişmesin.",
+      "effort_days": [12, 22],
+      "dependencies": ["Sipariş ve revizyon modeli", "Beden ve malzeme ana verisi", "Lot karıştırma kurallarının fabrika tarafından tanımlanması"],
+      "confidence": "high"
+    },
+    {
+      "id": "R09-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "İplik yönü, hav ve izinli dönüş kuralları doğrulanmıyor",
+      "evidence": "NestingEngine.cs:11-14 ve :85-86 yalnız mevcut yönü koruyan öteleme yapıldığını gösteriyor. Models.cs:19-26 iplik yönü veya hav verisi taşımıyor. NestingTests.cs:68-70 geniş parçanın döndürülmeden reddini sınar. TextileToolsWindow.cs:136 kısıtı dürüstçe açıklıyor; bu davranış tekstil yön uygunluğunu doğrulamak anlamına gelmiyor.",
+      "impact": "Başlangıçta yanlış yönde hazırlanmış kalıp yerleşim sırasında korunur; kumaşın tek yönlü kullanım şartı ve izin verilen açılar denetlenemez.",
+      "acceptance": "Parça iplik ekseni, kumaş yönü, açısal tolerans, izinli dönüşler ve aynalama izni kaydedilsin. Tek yön/çift yön/serbest dönüş için en az birer olumlu ve olumsuz sabit vaka doğrulansın; 180 derece dönüş tek yönlü vakada reddedilsin. Toleransı aşan veya zorunlu yön verisi eksik parça üretim onayını durdursun. Sonuçta ihlal sayısı sıfır olarak bağımsız doğrulansın.",
+      "effort_days": [10, 18],
+      "dependencies": ["Kumaş kural şeması", "Parça yön işaretleme arayüzü", "Pastal sonuç doğrulayıcısı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R09-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kullanılabilir top boyu, kenar payı ve kusurlu bölgeler iş akışına bağlı değil",
+      "evidence": "NestingEngine.cs:25-26 maxLength sunuyor ve :80-81 sınırı denetliyor; NestingTests.cs:74-78 taşmayı sınar. Ancak TextileToolsWindow.cs:137-140 yalnız en ve boşluk alıp maxLength aktarmıyor. NestingEngine.cs:14 kenar payı eklenmediğini açıkça belirtiyor; :69-86 yerleşimi sıfırdan başlatıyor. API top/artan kumaş veya kusur bölgesi kabul etmiyor.",
+      "impact": "Kullanıcı fiziksel top uzunluğunu aşan veya kullanılmaması gereken kenar/kusur bölgelerine giren pastalı uygulama içinden engelleyemez. Artan kumaşın kullanılabilirliği ve lot ilişkisi izlenemez.",
+      "acceptance": "Sonlu kullanılabilir boy arayüzden motora taşınsın: mevcut 60 mm sınırına 65 mm isteyen sabit iş kaynak değişmeden reddedilsin; tam sınır kabul edilsin. Sol/sağ ve baş/son paylar ile en az bir dikdörtgen kusur bölgesi içeren vakada tüm parçalar kullanılabilir bölgede kalsın. Artan kumaş için kaynak top/lot ve ölçülen kullanılabilir boy kaydedilsin; aynı stok parçasının eşzamanlı iki işe tahsisi engellensin.",
+      "effort_days": [15, 28],
+      "dependencies": ["Top ve artan kumaş envanteri", "Kullanılabilir alan modeli", "Pastal sonuç doğrulayıcısı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R09-F4",
+      "kind": "unverified",
+      "priority": "P2",
+      "title": "Fabrika ölçeğinde verim ve süre için ölçülmüş karşılaştırma yok",
+      "evidence": "NestingEngine.cs:71 çevre kutusu yüksekliğine göre raf sıralıyor; :95-97 kullanım oranını net parça alanı/(en × kullanılan boy) olarak hesaplıyor. TextileToolsWindow.cs:136 optimum fire garantisi vermiyor ve :142 hesap tabanını açıklıyor. İncelenen NestingTests.cs:12-107 ve NestingReviewTests.cs:10-52 sentetik doğruluk/kaynak sınırı vakaları içeriyor; gerçek fabrika pastalı karşılaştırma verisi bu dosyalarda yok.",
+      "impact": "Mevcut oran doğru tanımlanmış geometrik göstergedir; satın alınan kumaş firesi veya işletmede tasarruf sağlandığının kanıtı değildir. Algoritma geliştirme yatırımının faydası başlangıç ölçümü olmadan değerlendirilemez.",
+      "acceptance": "Pilot fabrikadan izinli en az 20 temsilî iş için aynı adet, yön, en, pay ve kusur kısıtlarında mevcut yöntem ve referans operatör yerleşimi karşılaştırılsın. Her koşuda kullanılan boy, yerleşim kullanım oranı, satın alınan/top tüketim oranı, çalışma süresi, donanım ve ihlal sayısı ayrı kaydedilsin. 20 işin tamamında ihlal sıfır olsun; hız ve tasarruf iddiaları yalnız bu veriyle desteklensin. Hedef süre ve boy farkı eşikleri geliştirme öncesi pilot sahibiyle belirlensin.",
+      "effort_days": [5, 10],
+      "dependencies": ["İzinli gerçek iş veri kümesi", "Fabrika referans sonuçları", "Üretim kısıtlarının eşitlenmesi"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Gerçek sipariş hacmi, pastal başına adet/nokta sayısı, kullanılan kumaş ve hav kuralları bilinmiyor.",
+    "Top, lot ve artan kumaş verisinin kaynağı ve ölçüm doğruluğu bilinmiyor.",
+    "Kaynak testleri bu denetimde çalıştırılmadı; inceleme üretim doğrulaması değildir.",
+    "Kişi-gün aralıkları izole geliştirme tahminidir; entegrasyon ve QA hariçtir ve diğer ajanların örtüşen bulgularıyla toplanmamalıdır."
+  ],
+  "recommendation": "Önce talep mutabakatı, kumaş kısıtları ve bağımsız sonuç doğrulamasıyla bir fabrika pilotunu güvenilir hale getirin. Raf yöntemini ölçülebilir başlangıç olarak koruyun; daha gelişmiş optimizasyon yatırımını aynı koşullardaki gerçek iş karşılaştırmasına göre sıralayın."
+}

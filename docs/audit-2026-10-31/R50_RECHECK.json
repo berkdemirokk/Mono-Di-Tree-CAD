@@ -1,0 +1,39 @@
+{
+  "doc_fixes_closed": [
+    {
+      "id": "R50-F1",
+      "status": "document_closed_implementation_pending",
+      "evidence": "work/audit/plan_content.json:70-71 WP04 tam veri yedeği ve ayrı PC/hesap/yol dönüşünü pilot öncesine alır; WP18 acceptance aynı mutabakatı zorunlu kılar. work/audit/build_report.py:145,148,155 G1/G4 ve ayrı felaket RPO/RTO açıklamasıyla tutarlıdır."
+    },
+    {
+      "id": "R50-F2",
+      "status": "document_closed_implementation_pending",
+      "evidence": "plan_content.json WP09 acceptance geri çekilmiş profille bekleyen işi taşıma çağrısından önce engeller; WP10:180 hazırlama ve gönderim anı yeterlilik kontrolünü, WP11:197 yeniden yeterlilik/açık yeniden hazırlama ve değişmez eski kanıtı tanımlar."
+    },
+    {
+      "id": "R49-F2",
+      "status": "document_closed",
+      "evidence": "build_report.py:117 WP15 dahil pilot önkoşullarını WP18 öncesinde birleştirir; plan_content.json:333 WP18→önkoşul WP15 kaydıyla tutarlıdır. Ticari WP16/17 ayrı kapıdır."
+    },
+    {
+      "id": "R50-F3_claim_boundary",
+      "status": "document_closed_estimate_unvalidated",
+      "evidence": "plan_content.json:471-475 seçilmiş 56–72/72–92 bandını düşük güvenli bütçe varsayımı olarak sınırlar; 4. hafta ve iki sprint sonrası yeniden tahmin, cihaz erişim kapısı, dış UX/DevOps kapasitesi belirtilir. :575 kaynak hücrelerini gerçekleşmiş hız saymaz; :576 ham örneklem sayılarını tek ürün ailesi pilotuna otomatik yüklemez. plan_review_resolution.json durumları uygulama kabulü iddia etmez."
+    },
+    {
+      "id": "WP04_developer_allocation",
+      "status": "document_closed_capacity_unvalidated",
+      "evidence": "plan_content.json resource_rows 5–14 hafta: mimar 02:.35,03:.25,04:.25; masaüstü 03:.40,04:.25,13:.20; backend 09:.35,04:.25,12:.25. WP04 için toplam 0,75 geliştirici FTE açık; her değişen hücre 0,85 teslim + 0,15 genel pay sınırında. QA payları ayrıdır."
+    },
+    {
+      "id": "obsolete_schedule_fallback",
+      "status": "document_closed",
+      "evidence": "build_report.py:159 schedule=plan[schedule], :161 schedule_note ve :162 estimate_note doğrudan zorunlu plan alanlarından okunur; eski fallback kaldırılmıştır."
+    }
+  ],
+  "planning_unknowns": [
+    "45 rol-dönem hücresinin 0,85 teslim + 0,15 genel pay aritmetiği tutarlı görünür; bu işlerin bu paylarla biteceğini kanıtlamaz. Gerçek isim/deneyim, haftalık uzman dağılımı, iki sprint hızı, saha erişimi ve 7 kişi için ayrıntılı yükleme hâlâ yeniden tahmin konusudur.",
+    "44 kaynak SHA, test sonuçları ve 50 rapor/155 bulgu sayısı bu dar belge kontrolünde bağımsız tekrar doğrulanmadı; root'un kanıt kaydıdır. Kaynak, build/test, UI veya fiziksel cihaz kontrolü yapılmadı."
+  ],
+  "verdict": "Belge düzeyindeki R50-F1/F2 ve R49-F2 düzeltmeleri kabul edildi. WP04 geliştirici tahsisi ve eski takvim fallback düzeltmeleri son dar okumada doğrulandı. Takvim uygun şekilde düşük güvenli varsayımdır; gerçek kapasite ve saha erişimiyle yeniden tahmin hâlâ gereklidir. Bu sonuç üretim, uygulama, fiziksel USB veya test kabulü değildir; ürün hazır oluşu NEEDS WORK. Orijinal R50.json değişmedi."
+}

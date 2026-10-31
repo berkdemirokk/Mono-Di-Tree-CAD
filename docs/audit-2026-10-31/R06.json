@@ -1,0 +1,70 @@
+{
+  "agent": "R06",
+  "role": "Code Reviewer — kontur topolojisi ve dikiş payı",
+  "scope": "PatternTools, tek-kontur veri modeli, üretim konturu doğrulaması ve ilgili testlerin salt okunur incelemesi",
+  "evidence": [
+    "src/TekstilCAD.Patterns/PatternTools.cs:4-42",
+    "src/TekstilCAD.Patterns/PatternTools.cs:60-83",
+    "src/TekstilCAD.Core/Models.cs:19-26",
+    "src/TekstilCAD.Core/Geometry.cs:99-146",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:10,36",
+    "tests/TekstilCAD.Tests/PatternToolsTests.cs:7-26",
+    "tests/TekstilCAD.Tests/PatternReviewTests.cs:9-18,34-41,63-71"
+  ],
+  "findings": [
+    {
+      "id": "R06-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Genel kalıp dikiş payı yerine yalnızca kesin dışbükey kontur desteği var",
+      "evidence": "PatternTools.cs:8,11-22 tek sabit mm değerini alır, negatif payı ve içbükey/doğrusal köşeleri açıkça reddeder. PatternToolsTests.cs:20-23 içbükey şeklin reddini doğrulayan test içerir. Bu sessiz yanlış sonuç değil, bilinçli kapsam sınırıdır.",
+      "impact": "İçbükey veya aynı doğru üzerinde ara noktaları olan fabrika kalıplarında otomatik dikiş payı akışı durur; kenara göre farklı pay üretilemez.",
+      "acceptance": "Pilot fabrikanın onayladığı en az 30 dışbükey/içbükey/doğrusal-ara-noktalı referans kalıp için kenar bazlı pay, kaynak koruma, kapalı/topolojik geçerli çıktı ve yeniden açma testi; ölçü hatası müşteriyle imzalanmış tolerans içinde olmalı. Geçersiz girdiler kaynak değiştirilmeden açıklanmalı.",
+      "effort_days": [25,45],
+      "dependencies": ["Üretim toleransı ve köşe politikası", "Kenar kimliği ve pay meta verisi", "Lisansı incelenmiş sağlam offset çekirdeği"],
+      "confidence": "high"
+    },
+    {
+      "id": "R06-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "İç kontur/delik ve birleştirme-ayırma için topoloji modeli yok",
+      "evidence": "Models.cs:19-26 PatternPiece yalnızca tek Points listesi ve Closed alanı taşır; iç/dış halka ilişkisi yok. PatternTools.cs:8-115 API yüzeyi offset, çentik noktası, nokta ekle/sil ve yay örneklemesinden oluşur. Kaynakta Union/Difference/Hole araması boolean/topoloji operasyonu göstermedi.",
+      "impact": "Birden fazla halka içeren parçalar bağımsız çizgiler gibi ele alınır; kontur birleştirme veya parça bölme sonucu kaynak kimliği ve iç/dış kontur ilişkisi güvenilir biçimde korunamaz.",
+      "acceptance": "Dış halka + en az iki iç halka içeren parçada alan, yön, kayıt/açma ve DXF aktarımı korunmalı; kesişen iki kontur için birleşim/fark/bölme senaryoları referans sonuçlarla doğrulanmalı; her çıktıda halka sahipliği ve kaynak ilişkisi tanımlı olmalı.",
+      "effort_days": [30,50],
+      "dependencies": ["Sürümlü belge şeması", "Halka/kenar kimliği modeli", "Boolean geometri çekirdeği", "Dosya formatı semantik eşlemesi"],
+      "confidence": "high"
+    },
+    {
+      "id": "R06-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Keskin köşe payının üretim açısından kabul sınırı tanımlanmamış",
+      "evidence": "PatternTools.cs:35-38 miter kesişimini üretir ve ancak köşe uzaması payın 1000 katını aşarsa reddeder; bevel/round join seçimi yok. Mevcut offset testleri kare, ters yön, açık/içbükey ret ve çalışma alanı aşımını kapsar; dar açılı üretim köşesi için onaylı miter sınırı veya alternatif join kabulü göstermez.",
+      "impact": "Matematiksel olarak geçerli dışbükey bir parçada çok uzun köşe çıkıntısı oluşması kabul edilebilir sayılabilir; fiziksel çizim/kesim için beklenen köşe biçimi henüz kanıtlanmamıştır.",
+      "acceptance": "Fabrika tarafından onaylanan köşe tipleri ve miter-limit kuralı yazılı olmalı. Dar açı serisi ve farklı paylarda çıktı, kaynak, alan ve maksimum köşe uzaması otomatik sınanmalı; kural aşılırsa operatöre açık ret veya onaylı bevel/round dönüşümü sunulmalı.",
+      "effort_days": [8,15],
+      "dependencies": ["Pilot üretim köşe örnekleri", "Genel offset tasarımı", "Önizleme ve operatör kabulü"],
+      "confidence": "high"
+    },
+    {
+      "id": "R06-F4",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Dosyaya kabul edilen yoğun konturların düzenlenebilirlik sözleşmesi eksik",
+      "evidence": "ProjectStorage.cs:10,36 parça başına 10000 noktaya izin verir. Geometry.cs:132-146 üretim konturunu 4096 noktayla sınırlar; HasSelfIntersections:106-124 karesel kenar karşılaştırmasıdır. PatternTools.cs:100-107 4096 sınırını aşan kaynakta düzenlemeyi baştan reddeder. Bu kaynak sınırı koruyucudur ancak dosya açma ile araç kapasitesi farklıdır.",
+      "impact": "Geçerli biçimde açılıp saklanan yoğun DXF konturu daha sonra dikiş payı veya nokta düzenlemede reddedilebilir; operatör kapasite sınırını işlem anında öğrenir.",
+      "acceptance": "İçe aktarım raporu her parça için düzenlenebilirlik durumunu önceden göstermeli. Onaylı sadeleştirme veya uzamsal indeksli doğrulama eklenmeli; 4096/4097/10000 nokta sınırlarında hata, süre ve kaynak koruma testleri ile seçilmiş maksimum iş boyutu belgelenmeli.",
+      "effort_days": [10,20],
+      "dependencies": ["Gerçek kalıp nokta dağılımı korpusu", "Performans bütçesi", "Tolerans kontrollü sadeleştirme veya uzamsal indeks"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Pilot fabrikanın içbükey/iç halkalı parça oranı ve kenar bazlı pay ihtiyaçları henüz örnek korpusla ölçülmedi.",
+    "Keskin köşe politikası, izin verilen ölçü sapması ve fiziksel plotter toleransı kullanıcı/üretici tarafından onaylanmadı.",
+    "Bu görevde yeni test veya fiziksel cihaz deneyi çalıştırılmadı; sonuçlar kaynak ve test tanımı incelemesidir."
+  ],
+  "recommendation": "Önce pilot kalıp korpusuyla dikiş payı/köşe kabul sözleşmesini tanımlayın; sonra halka ve kenar kimliklerini sürümlü modele ekleyerek genel offset/boolean motorunu kurun. Mevcut açık retler ve kaynak koruma yaklaşımı korunmalı; unsupported durumlar üretim uyumlu olarak etiketlenmemeli. İşgünü aralıkları yalnızca bu kapsamdaki ilk tahminlerdir, örtüşen geometri işlerine eklenerek körlemesine toplanmamalıdır."
+}

@@ -1,0 +1,42 @@
+{
+  "agent": "R07",
+  "role": "Workflow Architect — tekstil kalıp semantiği",
+  "scope": "PatternPiece veri sözleşmesi, dikiş/kesim/iç çizgi rolleri, çentik-pens, yön ve üretim metaverileri; yalnızca kaynak incelemesi",
+  "evidence": ["src/TekstilCAD.Core/Models.cs:19-34", "src/TekstilCAD.Patterns/PatternTools.cs:8-57", "src/TekstilCAD.Desktop/MainWindow.cs:129-135,213,228", "src/TekstilCAD.Desktop/TextileToolsWindow.cs:110-125"],
+  "findings": [
+    {
+      "id": "R07-F1", "kind": "missing", "priority": "P1",
+      "title": "Kesim, dikiş ve iç çizgi aynı genel parça modeliyle temsil ediliyor",
+      "evidence": "Models.cs:19-26 yalnızca Id, Name, Points, Closed içeriyor; alt kontur rolü veya kaynak ilişkisi yok. PatternTools.cs:42 dikiş payını NewPiece ile döndürüyor; TextileToolsWindow.cs:114,124 bunu Document.Pieces listesine ayrı parça olarak ekliyor. Ad son eki dışında dikiş/kesim bağı bulunmuyor.",
+      "impact": "Operatörün aynı fiziksel parçaya ait referans çizgilerini bağımsız üretim parçalarından güvenilir biçimde ayıracak sözleşmesi yok; kaynak kontur değişikliğinde türetilen payın güncelliği izlenemiyor.",
+      "acceptance": "Bir fiziksel parçada kesim konturu, dikiş konturu ve iki iç çizgi tanımlanır; kaydet-aç ve geri al-yinele sonrasında roller ve bağlantılar korunur. Kaynak düzenlenince bağlı pay yeniden hesaplanır veya güncel değil durumuna geçer; çözümlenmeden üretim onayı verilmez. Dışa aktarım her çizgiyi rolüne göre seçer ve referans çizgilerini parça adedine katmaz.",
+      "effort_days": [8,15], "dependencies": ["Sürümlü kalıp veri sözleşmesi", "Üretim çizgi rolü gereksinimlerinin modelhaneyle onayı"], "confidence": "high"
+    },
+    {
+      "id": "R07-F2", "kind": "missing", "priority": "P1",
+      "title": "İplik yönü, kat yeri ve aynalama izni kalıcı parça özellikleri değil",
+      "evidence": "Models.cs:19-26 yön, kat veya simetri alanı içermiyor. MainWindow.cs:135 Aynala komutu yalnızca Geometry.Mirror dönüşümü uyguluyor; parça düzeyinde üretim yönü uygunluğunu belirtecek model alanı yok.",
+      "impact": "Fabrikanın onayladığı yön ve katlama kısıtları çizimden üretime taşınamıyor; dönüşümün üretime uygunluğu yalnızca operatörün dış bilgisinde kalıyor.",
+      "acceptance": "Yön vektörü, izinli dönüş açısı, aynalama izni ve kat hattı tanımlanan örnek parça kaydet-aç işleminde bu bilgileri korur. Aynalama yasak örneğin üretim yerleşimi reddedilir; izinli örnek geçer. Geometri döndürülürken bağlı yön/kat tanımları birlikte güncellenir; silinen kat referansı açık doğrulama hatasına dönüşür.",
+      "effort_days": [6,12], "dependencies": ["Parça koordinat ve dönüşüm sözleşmesi", "Malzeme/yön kurallarının fabrika tarafından tanımlanması"], "confidence": "high"
+    },
+    {
+      "id": "R07-F3", "kind": "missing", "priority": "P1",
+      "title": "Çentik geometrisi kalıcı ve bağlı bir kalıp işareti değil",
+      "evidence": "PatternTools.cs:46-57 NotchPoints yalnızca üç Point2 döndürüyor; parça/kenar kimliği veya çentik kimliği almıyor. Models.cs:19-26 çentik ve pens koleksiyonu içermiyor. TextileToolsWindow.cs:110-120 araç paneli dikiş payı ve nokta ekle/sil işlemlerini sunuyor.",
+      "impact": "Çentiklerin hangi kenara ait olduğu, düzenleme sonrası geçerliliği ve üretimde işaret rolü korunamıyor. Pens tanımı da genel çizgilerden ayırt edilemiyor; bu alanın pilot kapsamı ayrıca netleştirilmeli.",
+      "acceptance": "Kimlikli çentik kenara bağlanır; kenar taşınması, nokta ekleme, aynalama ve kaydet-aç sonrasında konumu/rolü doğrulanır. Bağlı kenar silindiğinde işaret sessizce kaybolmaz; kullanıcı düzeltme veya açık silme seçer, çözülmemiş durumda üretim onayı engellenir. Pens pilot kapsamındaysa uç, iki kol ve açma/kapama durumları için aynı bağ-koruma senaryosu uygulanır.",
+      "effort_days": [8,16], "dependencies": ["Kararlı kenar/işaret kimlikleri", "Çentik ve pens için pilot kabul örnekleri"], "confidence": "high"
+    },
+    {
+      "id": "R07-F4", "kind": "missing", "priority": "P1",
+      "title": "Parça miktarı ve malzeme bilgisi modelde tutulmuyor",
+      "evidence": "Models.cs:19-34 PatternPiece ve ProjectDocument içinde miktar, malzeme, eş/çift bilgisi bulunmuyor; MainWindow.cs:129-132 özellik uygulaması ad ve X/Y alanlarıyla sınırlı. MainWindow.cs:213 yeni parçayı yalnızca Name, Points, Closed ile oluşturuyor.",
+      "impact": "Bir şeklin kaç kez ve hangi malzemeden üretileceği uygulama verisinden belirlenemiyor; fabrika iş emriyle kalıp arasında doğrulanabilir miktar eşleştirmesi kurulamaz.",
+      "acceptance": "Aynı modelde ana kumaş, astar ve tela parçaları ile farklı adetler tanımlanır; kaydet-aç sonrası değişmez. Üretim talebi malzeme ve adet toplamlarını listeler; sıfır/negatif adet veya eksik zorunlu malzeme onayı durdurur. Eş parça tanımının adet hesabı açık sözleşmeyle sınanır; iş emri değişince önceki onay eski durumuna geçer.",
+      "effort_days": [5,10], "dependencies": ["Malzeme sözlüğü", "İş emri-parça miktar sözleşmesi", "Onay ve revizyon yaşam döngüsü"], "confidence": "high"
+    }
+  ],
+  "unknowns": ["Pilot fabrikanın çentik/pens türleri ve malzeme yön kuralları henüz örneklerle doğrulanmadı.", "Bu incelemede çalışma zamanı, dosya turu veya fiziksel çıktı sınanmadı.", "Eforlar yalnızca bu semantik kapsamın ön tahminidir; entegrasyon/QA hariçtir ve diğer ajan tahminleriyle doğrudan toplanmamalıdır."],
+  "recommendation": "Önce modelhaneyle örnek parça üzerinden semantik veri sözleşmesini onaylayın; çizgi rolleri, bağlı işaretler, yön ve miktar bilgileri kaydet-aç/dönüşüm akışlarında korunmadan büyük fabrika üretim pilotunu tamamlanmış saymayın. Pensin pilot zorunluluğunu örnek işlerle netleştirin."
+}

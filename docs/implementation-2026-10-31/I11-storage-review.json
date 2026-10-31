@@ -1,0 +1,50 @@
+{
+  "agent": "I11",
+  "role": "Code Reviewer",
+  "scope": "ProjectStorage optimistic save, RecoveryStore lease/archive and new storage/recovery test cleanup. Static source review only; no build, application test, UI or device I/O.",
+  "findings": [
+    {
+      "id": "I11-F1",
+      "priority": "P1",
+      "title": "Bozuk kurtarma belgesi taramanın tamamını kesiyor",
+      "evidence": "src/TekstilCAD.FileFormats/RecoveryStore.cs:96 loads a candidate; :99 catches only IsFileFailure; :184-185 omits InvalidDataException. ProjectStorage.cs:39-41 wraps invalid JSON in InvalidDataException and Validate also uses that type. The local framework metadata reports InvalidDataException.BaseType == System.SystemException, not IOException.",
+      "impact": "Bozuk en yeni kayıt diğer geçerli adayları gizlememe hedefini bozuyor; Scan çağrısından istisna kaçıyor. Çalıştırılmış hata tekrarı değil, açık exception-type akışıdır.",
+      "suggestion": "IsFileFailure içine InvalidDataException ekleyin; mevcut CorruptNewestCandidateDoesNotHideOlderValidFile testini çalıştırın. Geçersiz geometri ve boyut sınırı adayları da listeyi kesmemeli.",
+      "acceptance": "Bozuk JSON veya geçersiz geometri adayı Error olarak listelenir; geçerli komşu yüklenebilir; özgün dosyalar değişmez.",
+      "confidence": "high"
+    },
+    {
+      "id": "I11-F2",
+      "priority": "P2",
+      "title": "Arşivleme regresyonunun fikstürü yeni lease sözleşmesiyle uyumsuz",
+      "evidence": "tests/TekstilCAD.Tests/RecoveryStoreTests.cs:92-94 generates a GUID path and uses ProjectStorage.Save directly, without a RecoveryStore lease marker. RecoveryStore.cs:118 consequently returns CanArchive=false; :132-133 rejects it before hash validation. Test :96 expects IOException and :99 expects successful archival.",
+      "impact": "Doğru legacy koruması testte yanlış başarısızlık üretir; hash değişimi ve başarılı arşiv akışı gerçekte kapsanamaz.",
+      "suggestion": "Bu arşiv fikstürünü ayrı RecoveryStore ile Save edip Dispose ederek oluşturun. Mevcut RecoveryLegacyTests marker olmayan özgün kaydın taşınmamasını ayrı doğrulasın.",
+      "acceptance": "Yeni sürümden terk edilmiş kayıt değişirse IOException ile korunur, taze okununca arşivlenir; lease-marker olmayan dosya arşivlenmez.",
+      "confidence": "high"
+    },
+    {
+      "id": "I11-F3",
+      "priority": "P2",
+      "title": "Test dosya konumu ve recursive temizliği ortak güvenli sınıra bağlanmalı",
+      "evidence": "StorageConcurrencyTests.cs:11-17 repo/work altında GUID dizini oluşturur, fakat :133 Directory.Delete(directory,true) çağrısından önce son absolute hedef doğrulanmaz. RecoveryLegacyTests.cs:11 Path.GetTempPath kullanır; :29-31 parent-check vardır. AGENTS.md test çalışmasını C:\\Projects\\TekstilCAD altında tutar. RecoveryStoreTests recursive deletion yapmaz.",
+      "impact": "StorageConcurrency testinde talep edilen son hedef denetimi eksik; legacy testi repo dışına veri yazar. Mevcut koddan kök dizinin silindiği veya bir sömürü yapıldığı iddia edilmiyor.",
+      "suggestion": "Her test kökünü repo/work altında belirleyin; silmeden hemen önce Path.GetFullPath sonucunun beklenen test kökünün doğrudan GUID alt dizini olduğunu doğrulayın. Reparse-point hedefleri için ortak test helper'ı düşünülebilir.",
+      "acceptance": "Test dosyaları repo/work altında kalır; temizleme hedefi absolute ve beklenen kök içinde doğrulanır; sınır dışı hedef temizlenmez.",
+      "confidence": "high"
+    }
+  ],
+  "positive_checks": [
+    "LoadWithVersion parses and hashes the same captured bytes; BOM-aware decoding and actual byte hash are consistent.",
+    "SaveIfUnchanged compares the token inside the same cooperating-writer mutex as replacement; returned hash matches BOM-free UTF-8 writer encoding.",
+    "Legacy marker check preserves unknown old-version recovery sources; ArchiveRecovered checks marker and loaded hash before moving.",
+    "Per-target write lease is IDisposable and abandoned mutex ownership is accounted for; source review found no nested-mutex deadlock in current call paths."
+  ],
+  "limitations": [
+    "No tests or application code were executed. Only local framework type metadata was read to confirm exception inheritance.",
+    "Noncooperating writers, hard-link/8.3 aliases and concurrent path replacement remain explicitly outside the current coordination contract; no exploit was demonstrated.",
+    "Cross-process Windows behavior, crash/disk-full durability and physical machine acceptance remain root/QA tasks.",
+    "Root is editing MainWindow and may fix findings while this snapshot is written; references describe the inspected version."
+  ],
+  "verdict": "NEEDS WORK: close I11-F1 before treating recovery isolation as working, align the archival fixture and safe test cleanup, then run the targeted regression suite. App/source files were not modified by this reviewer."
+}

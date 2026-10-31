@@ -1,0 +1,57 @@
+{
+  "agent": "R41",
+  "role": "Internationalization Engineer",
+  "scope": "Türkçe/İngilizce sayısal giriş, gösterim ve dosya birimi sözleşmesi; yalnızca kaynak/test incelemesi",
+  "evidence": [
+    "src/TekstilCAD.Desktop/MainWindow.cs:227-241",
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:68-69,93-105",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:68,100",
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:20-24,41-43,148",
+    "src/TekstilCAD.FileFormats/PlotFormats.cs:10-17,30-38",
+    "tests/TekstilCAD.Tests/FormatTests.cs:61-79"
+  ],
+  "findings": [
+    {
+      "id": "R41-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Yerel sayı girişinde binlik ayırıcı ve ondalık ayrımı tanımlı değil",
+      "evidence": "MainWindow.cs:241, TextileToolsWindow.cs:68 ve MachineCenterWindow.cs:68 virgülü noktaya çevirip InvariantCulture/NumberStyles.Float ile okuyor. Böylece '1,500' ve '1.500' aynı 1,5 değerine dönüşüyor; kullanıcının en-US binlik virgül veya tr-TR binlik nokta niyeti belirlenmiyor. TextileToolsWindow.cs:69 yalnızca virgül/nokta kullanılabileceğini söylüyor. Bu kaynak davranışıdır; gerçek kullanıcı yanlış girişi gözlenmedi.",
+      "impact": "Farklı bölgesel ayarlardaki ölçü tablolarından yapıştırılan 1500 mm kumaş eni veya koordinat 1,5 mm yorumlanabilir. Sayı sonlu olduğu için mevcut sınır kontrolleri bu niyet uyuşmazlığını yakalamaz.",
+      "acceptance": "Desteklenen sayı giriş sözleşmesi kararlaştırılsın: binlik ayırıcı yasaksa alan yardımı açıkça söylesin ve belirsiz yapıştırmada onaylı yorum gösterilsin; destekleniyorsa seçili giriş kültürüne göre ayrıştırılsın. tr-TR/en-US için 1,5; 1.5; 1.500; 1,500; 1.500,25; 1,500.25 örneklerinin beklenen değer/ret sonucu üç giriş yüzeyinde aynı sözleşmeyle test edilsin. Dosya dışa aktarımının invariant biçimi korunsun.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Ürün tarafından onaylanan sayı giriş ve yapıştırma sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R41-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Sayı gösterimi aynı ekranda iki farklı kültür kuralı kullanıyor",
+      "evidence": "MainWindow.cs:227 koordinat kutuları InvariantCulture ile; :228 ölçü ve alan metinleri geçerli kültüre bağlı interpolasyonla hazırlanıyor. tr-TR altında örneğin 1.5 koordinatı ile 1,5 ölçüsü aynı panelde görülebilir. DxfFormat.cs:42-43 kullanıcıya gösterilen ölçek uyarısında da dosya için kullanılan invariant F yordamı kullanılıyor. FormatTests.cs:61-79 Türkçe kültürde DXF round-trip testi içeriyor; incelenen kültür aramasında UI giriş/gösterim tr-TR/en-US matrisi bulunmadı.",
+      "impact": "Türkçe arayüzde bölgesel sayı yazımının değişmesi ölçü kontrolünü ve destek anlatımlarını zorlaştırır; İngilizce işletim sistemi ile Türkçe arayüzün hangi gösterim kuralını kullanacağı belirsiz kalır.",
+      "acceptance": "UI sayı kültürü için açık seçim/varsayılan belirlensin ve koordinat, ölçü, alan, profil ve uyarı gösterimleri aynı kurala bağlansın. tr-TR ve en-US senaryolarında 25,4 mm eşdeğeri tutarlı gösterilsin; DXF/SVG/HPGL dosya sayıları kültürden bağımsız kalsın. R04-F3 koordinat yuvarlama düzeltmesi bu işin kapsamına tekrar dahil edilmesin.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "UI kültürü politikası",
+        "R04-F3 ile özellik paneli değişikliklerinin koordinasyonu"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "UI, test, build veya cihaz işlemi yapılmadı; test kaynağının varlığı geçme kanıtı değildir.",
+    "İngilizce arayüz yayın hedefi bilinmiyor; rapor İngilizce işletim sistemi sayı kültürünü de kapsar.",
+    "DXF invariant sayı kullanımı, SVG mm boyutları ve HPGL birim/mm dönüşümü kasıtlı dosya sözleşmeleridir; yerelleştirme kusuru olarak işaretlenmedi.",
+    "7+ kişi yazılım geliştirme planlama ekibidir; operatör sayısı olarak yorumlanmadı."
+  ],
+  "recommendation": "Önce ölçü girişindeki belirsiz ayırıcı sözleşmesini netleştirin; UI kültürünü dosya serileştirme kültüründen ayrı tutun. Tahminler yalnızca bu dar işlerin mühendis-günüdür; ortak ayrıştırıcı ve QA çalışmalarıyla örtüşmeleri nedeniyle körlemesine toplanmamalıdır."
+}

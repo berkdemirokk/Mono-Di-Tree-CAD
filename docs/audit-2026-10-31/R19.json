@@ -1,0 +1,79 @@
+{
+  "agent": "R19",
+  "role": "Tekstil test veri kümesi denetçisi",
+  "scope": "Temsilî konfeksiyon verisi, patolojik geometri ve kaynak sürümü izlenebilir referans sonuçlar; yalnız test kaynakları incelendi, test çalıştırılmadı.",
+  "evidence": [
+    "tests/TekstilCAD.Tests/FormatTests.cs:20-25 sentetik kare ve çizgi",
+    "tests/TekstilCAD.Tests/FormatTests.cs:98-115 isteğe bağlı dış DXF ve sentetik yedek",
+    "tests/TekstilCAD.Tests/GradingTests.cs:6-16 kare üzerinden serileme",
+    "tests/TekstilCAD.Tests/NestingTests.cs:8-26 küçük dikdörtgen yerleşimleri",
+    "tests/TekstilCAD.Tests/GeometryRobustnessTests.cs:44-57 patolojik kontur ve boyut sınırı örnekleri",
+    "tests/TekstilCAD.Tests/NestingReviewTests.cs:32-38 büyük sentetik işin reddi",
+    "tests altında rg --files ve fixture|golden|corpus|sha256|manifest|reference_dxf hedefli araması; veri kümesi manifesti bulunmadı, makine kuyruğu manifesti ayrı amaçlı."
+  ],
+  "findings": [
+    {
+      "id": "R19-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Gerçek giysi ve fabrika işi temsil eden kabul veri kümesi eksik",
+      "evidence": "FormatTests.cs:20-25 Ön beden adlı örnek gerçekte dört köşeli karedir; GradingTests.cs:6-16 kareyi büyütür; NestingTests.cs:8-26 iki/üç dikdörtgen kullanır. tests dosya envanterinde sürümlü gerçek giysi fixture dosyası bulunmadı.",
+      "impact": "Birim test sayısı veya geçiş oranı; kol evi, yaka, iç kontur, beden serisi ve tam pastal gibi fabrika senaryolarının kapsandığını göstermez. Pilot uygunluğu bu kaynaklardan doğrulanamaz.",
+      "acceptance": "Pilot fabrikanın onayladığı en az 3 giysi ailesi için tam parça seti ve en az 3 beden içeren bağımsız kopyalar; içe alma, serileme, yerleşim, kaydet/aç ve çıktı adımlarında beklenen parça adedi, boyut ve toleranslar kayıtlı olsun. Desteklenmeyen özellikler sessiz başarı yerine beklenen ret/uyarı olarak işaretlensin.",
+      "effort_days": [
+        8,
+        14
+      ],
+      "dependencies": [
+        "Pilot fabrika modelisti",
+        "Anonimleştirilmiş kullanım izinli örnekler",
+        "Ölçü toleransı ve desteklenen özellik sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R19-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Dış kaynak referansının kökeni ve çalıştırıldığı kanıtı sabitlenmiyor",
+      "evidence": "tests/TekstilCAD.Tests/FormatTests.cs:100-106 TEKSTILCAD_REFERENCE_DXF yoksa test aynı isimle üretilen dört LINE içeren DXF üzerinden devam eder; 107-115 ölçü ve roundtrip kontrol eder. Kaynak yazılım sürümü, dosya özeti veya fixture kimliği bu testte doğrulanmıyor.",
+      "impact": "Aynı test adı farklı makinelerde gerçek dış dosya veya sentetik kareyi temsil edebilir; başarı kaydı dış CAD sürümü uyumluluğunun denetlenebilir kanıtı olmaz.",
+      "acceptance": "Sentetik test ve dış kaynak entegrasyon testi ayrı kimliklerde raporlansın; dış dosya yokluğu açık atlama/eksik kabul olarak görünsün. Her golden dosya için SHA-256, kaynak uygulama/sürüm, birim, ihracat ayarları, beklenen sonuç ve modelist onayı manifestte doğrulansın; iki ortam aynı manifestle aynı sonuçları üretsin.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Referans veri manifest şeması",
+        "Kaynak CAD sürümü ve dışa aktarma kayıtları"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R19-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Patolojik küçük örneklerden büyük geçerli fabrika işine genelleme yapılamıyor",
+      "evidence": "GeometryRobustnessTests.cs:44-57 boş, doğrusal, kesişen ve sınır üstü konturları reddetmeyi hedefler; NestingReviewTests.cs:32-38 51 adet 1000 noktalı sentetik işin kaynak sınırından reddini bekler. NestingTests.cs:58 ayrıklığı dört dikdörtgenle denetler. Bunlar geçerli yüksek hacimli giysi işinin tamamlanma ölçümü değildir.",
+      "impact": "Gerçek fabrikanın nokta/parça yoğunluğu ve karmaşıklığı kabul sınırlarına sığmayabilir; gecikme ve reddedilen iş oranı bilinmiyor.",
+      "acceptance": "Pilot iş dağılımından tipik, yüksek hacimli ve destek sınırına yakın geçerli işler seçilsin; parça/nokta sayısı, tamamlanma süresi, bellek ve sonuç doğruluğu kaydedilsin. Yakın çakışma, kısa segment ve tekrarlı nokta varyantları için beklenen kabul/ret tanımlansın; fabrikanın onayladığı kapasite ve süre eşikleri sağlansın.",
+      "effort_days": [
+        5,
+        9
+      ],
+      "dependencies": [
+        "Pilot iş hacmi örneklemi",
+        "Kapasite/SLA kararı",
+        "Tekrarlanabilir performans ortamı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Bu incelemede testler çalıştırılmadı; geçen test sayısı, çalışma zamanı ve fiziksel çıktı doğruluğu bilinmiyor.",
+    "Depo dışındaki özel müşteri veri kümeleri incelenmedi; WearCAD dizinleri taranmadı.",
+    "Kaynak incelemesi istatistiksel örneklem değildir; hata olasılığı, güven aralığı ve anlamlılık hesaplamak için yürütme/üretim verisi yoktur.",
+    "Önerilen adet ve süreler kabul planı taslağıdır; fabrika ile doğrulanmalıdır."
+  ],
+  "recommendation": "7+ kişilik ekipte QA/veri sorumlusu ile fabrika modelisti ortak kabul veri kümesini önce sabitlesin. Sentetik birim test başarısı, gerçek kaynak uyumluluğu ve fabrika iş kapsamı ayrı raporlansın. Eforlar yalnız bu izole işin kişi-gün tahminidir; entegrasyon/QA hariçtir ve örtüşen raporlarla körlemesine toplanmamalıdır."
+}

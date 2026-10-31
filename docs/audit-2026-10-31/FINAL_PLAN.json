@@ -1,0 +1,577 @@
+{
+  "title": "TekstilCAD Studio | Fabrika ürünleşme planı",
+  "date": "31 Ekim 2026",
+  "customer": "Büyük fabrika; 7+ kişilik geliştirme ekibi",
+  "position": "0.2 çalışan Windows geliştirme önizlemesidir. Fabrika üretim kabulü ve fiziksel cihaz uyumluluğu henüz kanıtlanmamıştır.",
+  "scope": "Bu çalışma gereksinim, kaynak kod ve mevcut veri kanıtlarının denetimidir. Uygulama kodu değiştirilmez; WearCAD salt okunur kalır; fiziksel cihaza iş gönderilmez.",
+  "work_packages": [
+    {
+      "id": "WP01",
+      "title": "Fabrika pilotu ve kabul sözleşmesi",
+      "priority": "P1",
+      "owner": "Ürün sorumlusu + tekstil uzmanı",
+      "agents": [
+        "R01",
+        "R19",
+        "R40",
+        "R43"
+      ],
+      "dependencies": [],
+      "deliverable": "Tek ürün ailesi, rol/iş akışı, örnek veri, referans donanım, ölçü toleransı ve başarısızlık tanımları.",
+      "acceptance": "Fabrika sahibi her gereksinimi örnek iş ve kabul testiyle eşler; modelhane, üretim ve bakım temsilcileri aynı pilot kapsamını onaylar."
+    },
+    {
+      "id": "WP02",
+      "title": "Sürümlü tekstil veri modeli",
+      "priority": "P1",
+      "owner": "Mimar + CAD mühendisi",
+      "agents": [
+        "R02",
+        "R07",
+        "R10",
+        "R39"
+      ],
+      "dependencies": [
+        "WP01"
+      ],
+      "deliverable": "Belge/parça/nokta kimliği, revizyon, şema sürümü, katman/çizgi rolü, çentik, iplik yönü, malzeme ve adet; eski dosya göçü.",
+      "acceptance": "Eski dosya kontrollü göç eder; yeni bilinmeyen sürüm sessizce açılmaz; tüm üretim metaverisi kaydet-aç çevriminde korunur."
+    },
+    {
+      "id": "WP03",
+      "title": "Düzenleme oturumu ve işlem geçmişi",
+      "priority": "P1",
+      "owner": "Masaüstü + çekirdek mühendisi",
+      "agents": [
+        "R02",
+        "R04",
+        "R13"
+      ],
+      "dependencies": [
+        "WP02"
+      ],
+      "deliverable": "UI'dan bağımsız belge oturumu, tek mutasyon yolu, savepoint, değişikliksiz işlem koruması ve seçim bağlamı.",
+      "acceptance": "Ad değiştirme koordinatı değiştirmez; no-op redo'yu silmez; kayıt noktasına dönüş temiz gösterilir; iptal edilen işlem belgeyi değiştirmez."
+    },
+    {
+      "id": "WP04",
+      "title": "Güvenli kayıt ve oturum kurtarma",
+      "priority": "P1",
+      "owner": "Çekirdek + QA",
+      "agents": [
+        "R11",
+        "R12",
+        "R45"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP03"
+      ],
+      "deliverable": "Eski sürüm üzerine yazma engeli, oturum sahipliği, kurtarma adayları, revizyon saklama; proje/revizyon, Recovery, spool/iş geçmişi, profil ve ayarları kapsayan tam yedek sözleşmesi.",
+      "acceptance": "İki süreç sessizce birbirini ezmez; canlı oturum kurtarılmaz; disk hatasında kaydedildi denmez. Pilot öncesi ayrı PC/hesap/yolda tam yedekten dönüşte revizyon, çıktı özeti ve iş durumu eşleşir; otomatik gönderim olmaz."
+    },
+    {
+      "id": "WP05",
+      "title": "Hassas eğri ve topoloji çekirdeği",
+      "priority": "P1",
+      "owner": "2 CAD/geometri mühendisi",
+      "agents": [
+        "R04",
+        "R05",
+        "R06"
+      ],
+      "dependencies": [
+        "WP02"
+      ],
+      "deliverable": "Analitik yay/Bézier, hata kontrollü örnekleme, içbükey pay, birleşim/ayırma, iç kontur, keskin köşe politikası.",
+      "acceptance": "Bağımsız referans geometri korpusunda kontur, alan ve dikiş uzunluğu onaylı tolerans içinde; geçersiz sonuç üretime geçmez."
+    },
+    {
+      "id": "WP06",
+      "title": "Revizyona bağlı profesyonel serileme",
+      "priority": "P1",
+      "owner": "CAD + tekstil uzmanı",
+      "agents": [
+        "R08",
+        "R07",
+        "R26"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP03",
+        "WP05"
+      ],
+      "deliverable": "Temel beden, beden tablosu, kalıcı nokta kimliğine bağlı kural, kural revizyonu, ölçü karşılaştırması ve yeniden kullanım.",
+      "acceptance": "Topolojisi değişmiş kalıba eski kural sessizce uygulanmaz; ardışık L/XL üretimi aynı temel beden ve korunmuş kurallardan hesaplanır; pilot beden seti referans ölçülerle eşleşir."
+    },
+    {
+      "id": "WP07",
+      "title": "Üretim kısıtlı pastal ve adet mutabakatı",
+      "priority": "P1",
+      "owner": "Optimizasyon/CAD mühendisi",
+      "agents": [
+        "R09",
+        "R07",
+        "R29",
+        "R26"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP05",
+        "WP06"
+      ],
+      "deliverable": "Beden/adet, kumaş eni/top boyu, kenar/kesim aralığı, iplik/hav/dönüş kuralları, manuel düzeltme ve deterministik alternatifler.",
+      "acceptance": "Kaynak/türev kalıplardan yalnız onaylı üretim kümesi ve adetler yerleşir; kaynak belge korunur. Eksik/fazla parça, çakışma ve yön ihlali sıfır; alan temelli fire ölçülür; aynı giriş/ayar aynı sonucu verir."
+    },
+    {
+      "id": "WP08",
+      "title": "Format uyumluluğu ve WearCAD geçişi",
+      "priority": "P1",
+      "owner": "Format/entegrasyon mühendisi",
+      "agents": [
+        "R14",
+        "R15",
+        "R17",
+        "R18",
+        "R19"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP05"
+      ],
+      "deliverable": "Desteklenen DXF/AAMA/ASTM alt kümeleri, birim/layer eşleme, kayıp raporu, gerçek örnek korpusu; PDF/SVG ölçek kontrolü.",
+      "acceptance": "Her destek iddiası altın örnekle kanıtlanır; kayıp metaveri açık raporlanır; WearCAD özgün dosyaları değişmez; yalnız geometrik DXF tekstil uyumluluğu sayılmaz."
+    },
+    {
+      "id": "WP09",
+      "title": "Kalıcı üretim kuyruğu ve durum modeli",
+      "priority": "P1",
+      "owner": "Entegrasyon + QA",
+      "agents": [
+        "R20",
+        "R22",
+        "R23",
+        "R37"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP04"
+      ],
+      "deliverable": "Kalıcı iş kimliği, onaylı revizyon ve çıktı özeti, yeniden başlatma, olay günlüğü, belirsiz teslim durumunda mutabakat.",
+      "acceptance": "Yeniden başlatmada işler korunur; gönderildi ve fiziksel tamamlandı ayrıdır; belirsiz iş otomatik tekrar gönderilmez. Hazırlanmış işin profili geri çekilirse taşıma çağrısından önce gönderim engellenir; eski iş kanıtı korunur."
+    },
+    {
+      "id": "WP10",
+      "title": "İlk USB plotter adaptörü ve profil sözleşmesi",
+      "priority": "P1",
+      "owner": "Cihaz entegrasyon mühendisi",
+      "agents": [
+        "R03",
+        "R16",
+        "R21",
+        "R48"
+      ],
+      "dependencies": [
+        "WP01",
+        "WP08",
+        "WP09"
+      ],
+      "deliverable": "Doğrulanmış model/firmware/protokol kimliği, yetenek beyanı, sürümlü profil, üretici dosya devri veya belgeli taşıma adaptörü.",
+      "acceptance": "Belgeli tek model yolu seçilir; kuantalama kaybı ve medya sınırı denetlenir. Hazırlamada ve gönderim anında profilin güncel yeterliliği kontrol edilir; askıda/geri çekilmiş profil reddedilir. Dosya üretimi fiziksel onay değildir."
+    },
+    {
+      "id": "WP11",
+      "title": "Fiziksel kalibrasyon ve cihaz kabulü",
+      "priority": "P1",
+      "owner": "Entegrasyon + fabrika teknisyeni + QA",
+      "agents": [
+        "R24",
+        "R25",
+        "R43",
+        "R48"
+      ],
+      "dependencies": [
+        "WP10"
+      ],
+      "deliverable": "Eksen/orijin/ölçek, kullanılabilir en, uzun çizim, medya kayması, kopma/iptal ve yeniden başlatma laboratuvar matrisi.",
+      "acceptance": "Fiziksel ölçü fabrika/üretici toleransındadır. Firmware/kalibrasyon değişimi onayı geçersizleştirir; yeniden yeterlilik ve açık yeniden hazırlama gerekir. Eski iş/profil/ölçüm kanıtı değişmez."
+    },
+    {
+      "id": "WP12",
+      "title": "Fabrika işleri, revizyon ve erişim rolleri",
+      "priority": "P1",
+      "owner": "Backend + ürün sorumlusu",
+      "agents": [
+        "R34",
+        "R39",
+        "R42"
+      ],
+      "dependencies": [
+        "WP01",
+        "WP02",
+        "WP04",
+        "WP09"
+      ],
+      "deliverable": "Sipariş/iş, ürün revizyonu, taslak-onaylı-yayımlanmış durumları; tasarımcı/onaylayan/operatör/yönetici; audit izi.",
+      "acceptance": "Operatör yalnız onaylı ve doğru revizyonu gönderir; onay sonrası düzenleme yeni revizyon açar; yetkisiz durum geçişleri servis katmanında reddedilir."
+    },
+    {
+      "id": "WP13",
+      "title": "Operatör deneyimi ve erişilebilirlik",
+      "priority": "P1",
+      "owner": "Masaüstü + UX + QA",
+      "agents": [
+        "R26",
+        "R27",
+        "R28",
+        "R41"
+      ],
+      "dependencies": [
+        "WP03",
+        "WP06",
+        "WP07",
+        "WP09",
+        "WP12"
+      ],
+      "deliverable": "Uçtan uca görev ekranları, gerçek çıktı geometrisi/ölçüsü/revizyon önizlemesi, klavye, DPI, Türkçe sayılar/birimler ve hata sonrası devam.",
+      "acceptance": "Gerçek operatör pilot işi yardım almadan tamamlar; kritik hata sıfır; 100/150/200% DPI, klavye akışı ve kültür matrisi kanıtı saklanır."
+    },
+    {
+      "id": "WP14",
+      "title": "Büyük veri performansı ve iptal",
+      "priority": "P1",
+      "owner": "CAD + masaüstü + QA",
+      "agents": [
+        "R02",
+        "R19",
+        "R29",
+        "R30"
+      ],
+      "dependencies": [
+        "WP03",
+        "WP05",
+        "WP07",
+        "WP08"
+      ],
+      "deliverable": "Fabrika veri boyutu sınıfları, referans PC, süre/bellek ölçümü, UI dışı işler, iptal ve eski sonucun reddi.",
+      "acceptance": "Temsilî korpusta p50/p95 süre ve tepe bellek raporu; uzun iş iptalinde veri değişmez; belge revizyonu değişmişse eski hesap sonucu uygulanmaz."
+    },
+    {
+      "id": "WP15",
+      "title": "Güvenlik, veri ve bağımlılık yönetimi",
+      "priority": "P1",
+      "owner": "Backend + güvenlik/DevOps",
+      "agents": [
+        "R35",
+        "R36",
+        "R38"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP12"
+      ],
+      "deliverable": "Girdi/yol sınırları, rol güvenliği, paylaşılmış PC veri politikası, SBOM ve lisans envanteri, hassas veri içermeyen destek paketi.",
+      "acceptance": "Bozuk/kötü niyetli dosya matrisi geçer; korunan WearCAD yollarına yazma olmaz; sürüm paketinin bağımlılık/lisans kayıtları eksiksizdir."
+    },
+    {
+      "id": "WP16",
+      "title": "Fabrika lisans yaşam döngüsü",
+      "priority": "P2",
+      "owner": "Backend + ürün sorumlusu",
+      "agents": [
+        "R33",
+        "R40"
+      ],
+      "dependencies": [
+        "WP12",
+        "WP15"
+      ],
+      "deliverable": "Çevrimdışı süre, koltuk/cihaz değişimi, aktivasyon ve destek; imza anahtarları için operasyon politikası.",
+      "acceptance": "Saat geri alma, süresi dolma, bozuk imza ve cihaz değişimi test edilir; lisans sorunu mevcut kullanıcı verisini kaybettirmez; politikalar müşteriye açıktır."
+    },
+    {
+      "id": "WP17",
+      "title": "Kurulum, güncelleme ve geri dönüş",
+      "priority": "P2",
+      "owner": "DevOps + masaüstü + QA",
+      "agents": [
+        "R31",
+        "R32",
+        "R44",
+        "R45"
+      ],
+      "dependencies": [
+        "WP04",
+        "WP15",
+        "WP16"
+      ],
+      "deliverable": "İmzalı paket, temiz Windows testi, minimum yetki, güncelleme/rollback ve şema göç yedeği; yeniden üretilebilir kanıt manifesti.",
+      "acceptance": "Temiz makinede kur/aç/güncelle/kaldır döngüsü; başarısız güncellemede son sağlam sürüm/veri korunur; kullanıcı projeleri kaldırmada silinmez."
+    },
+    {
+      "id": "WP18",
+      "title": "Regresyon, destek ve fabrika pilotu",
+      "priority": "P1",
+      "owner": "2 QA + fabrika temsilcisi",
+      "agents": [
+        "R19",
+        "R30",
+        "R37",
+        "R43",
+        "R44",
+        "R45"
+      ],
+      "dependencies": [
+        "WP04",
+        "WP06",
+        "WP07",
+        "WP08",
+        "WP11",
+        "WP12",
+        "WP13",
+        "WP14",
+        "WP15"
+      ],
+      "deliverable": "Gereksinim-test-kanıt matrisi, hata enjeksiyonu, aynı commit için zorunlu testli paket, temiz standart kullanıcı VM kontrolü; gerçek operatör ve kontrollü fabrika pilotu.",
+      "acceptance": "Testli paket ve temiz VM geçer; ayrı PC/hesap/yolda tam fabrika yedeğinden dönüş kanıtlanır (revizyon/çıktı/iş durumu eşleşir, otomatik gönderim yok). Kritik açık hata yok; pilot ölçü/adet/revizyon ve fiziksel çıktı mutabakatı imzalanır."
+    },
+    {
+      "id": "WP19",
+      "title": "ERP/MES ve ek cihaz yayılımı",
+      "priority": "P3",
+      "owner": "Entegrasyon + backend",
+      "agents": [
+        "R22",
+        "R23",
+        "R42",
+        "R48"
+      ],
+      "dependencies": [
+        "WP12",
+        "WP18"
+      ],
+      "deliverable": "İlk müşterinin API/dosya sözleşmesi; sonraki üretici/model adaptörleri ve ayrı yeterlilik kayıtları.",
+      "acceptance": "İdempotent sipariş senkronizasyonu, birim/adet/revizyon mutabakatı; her yeni model/firmware/taşıma birleşiminin ayrı kabul raporu."
+    },
+    {
+      "id": "WP20",
+      "title": "Mobil ve doğrulanabilir AI",
+      "priority": "P3",
+      "owner": "Sonraki ürün ekibi",
+      "agents": [
+        "R46",
+        "R47"
+      ],
+      "dependencies": [
+        "WP02",
+        "WP03",
+        "WP18"
+      ],
+      "deliverable": "Önce görüntüleme/onay için mobil fizibilite; geometri doğrulayıcısına bağlı isteğe bağlı AI önerileri.",
+      "acceptance": "Windows çekirdeği çevrimdışı bağımsız kalır; AI önerisi kendiliğinden üretime gönderilmez; mobil editör ve Apple dağıtımı ayrı kabul ve bütçeye bağlanır."
+    }
+  ],
+  "pilot_flow": [
+    "Sipariş/ürün ailesi ve malzeme seçimi",
+    "Kalıp içe aktarımı veya düzenleme",
+    "Ölçü ve topoloji kontrolü",
+    "Revizyona bağlı beden seti",
+    "Adet/yön kısıtlı pastal",
+    "Yetkili kişi tarafından revizyon onayı",
+    "Profil doğrulaması ve çıktı önizlemesi",
+    "Kalıcı iş kuyruğuna kabul",
+    "Belgeli üretici devri / doğrulanmış USB adaptörü",
+    "Fiziksel ölçü-adet kontrolü ve iş mutabakatı"
+  ],
+  "initial_90_days": [
+    [
+      "Gün 1-15",
+      "Ürün sorumlusu + fabrika",
+      "Tek ürün ailesi, gerçek dosya korpusu, günlük hacim, cihaz etiketi/firmware ve üretici protokolü; kabul eşikleri. WearCAD örnekleri yalnız kopyalarda çalışılır."
+    ],
+    [
+      "Gün 16-30",
+      "Mimar + çekirdek + QA",
+      "Şema/kimlik/revizyon ADR'si, DocumentSession tasarımı, çok süreçli kayıt ve kurtarma regresyonları. Mevcut kaynak bulguları çalıştırılabilir testlerle doğrulanır."
+    ],
+    [
+      "Gün 31-60",
+      "CAD + masaüstü + QA",
+      "Sürümlü modelin ilk dikey dilimi; aç-düzenle-kaydet-kurtar; üretim metaverisi ve serileme kural bağlantısı. Temsilî performans ölçümü başlar."
+    ],
+    [
+      "Gün 61-90",
+      "Entegrasyon + CAD + fabrika teknisyeni",
+      "Kalıcı simülasyon kuyruğu, cihaz profili, desteklenen DXF/HPGL korpusu; belgeler ve emniyet koşulları sağlanırsa kontrollü laboratuvar hazırlığı. Fabrika üretim sürümü taahhüdü değildir."
+    ]
+  ],
+  "risks": [
+    [
+      "Cihaz protokolü/SDK erişimi",
+      "Belgeler veya lisans erişimi yoksa otomatik gönderim yolunu durdur; üretici yazılımına kontrollü dosya devri seç. Cihaz takvimi yeniden hesaplanır."
+    ],
+    [
+      "Tekstil semantiği ve geometri kapsamı",
+      "Bir ürün ailesiyle başla; içbükey pay, çentik ve beden ölçülerini gerçek referansla doğrula. Gösterişli ekranlar kabul kapısının yerine geçmez."
+    ],
+    [
+      "Kurum içi çoklu kullanıcı",
+      "Paylaşımlı dosya kilidini ekip işbirliği sanma; revizyon/onay ve yetkilendirme servis sınırlarını kur. Çevrimdışı çatışma politikası seç."
+    ],
+    [
+      "50 ayrı incelemede örtüşme",
+      "Bulgu sürelerini toplama. Ortak veri modeli, test düzeneği ve kuyruk işlerini tek iş paketine birleştir; öncelikleri ürün kapısında yeniden değerlendir."
+    ],
+    [
+      "Tüm makineler beklentisi",
+      "Destek etiketi cihaz+firmware+taşıma+format+profil sürümüne aittir. Plotter kabulü kesici/CNC/lazer kabulüne taşınmaz."
+    ],
+    [
+      "En gelişmiş ürün hedefi",
+      "İddia yerine görev süresi, ölçü hatası, kumaş kullanım oranı, kurtarma başarısı ve cihaz kabul kapsamını ölç. Rakiplerden üstünlük henüz ölçülmedi."
+    ]
+  ],
+  "schedule": [
+    [
+      "A - keşif",
+      "1-4. hafta",
+      "Kapsam, korpus, cihaz yolu ve erişimi; G0"
+    ],
+    [
+      "B - temel",
+      "5-14. hafta",
+      "Model, oturum, kurtarma, test altyapısı; G1"
+    ],
+    [
+      "C - tekstil",
+      "13-32. hafta",
+      "CAD, serileme, pastal ve format; G2/G3"
+    ],
+    [
+      "D - fabrika/cihaz",
+      "17-38. hafta",
+      "Kuyruk, rol, güvenlik; hazır format sonrası adaptör"
+    ],
+    [
+      "E - bütünleştirme",
+      "33-44. hafta",
+      "Performans, temiz VM, tam restore, fiziksel kabul; G4"
+    ],
+    [
+      "F - pilot",
+      "45-50. hafta",
+      "Tüm giriş kapıları sonrası kontrollü fabrika pilotu; G5"
+    ],
+    [
+      "G - ticari",
+      "49-56. hafta",
+      "Lisans, imzalı paket, destek, pilot düzeltmesi; G6"
+    ]
+  ],
+  "schedule_note": "9 kişilik çekirdek ekip için seçilmiş başlangıç bütçe senaryosu; teslim sözü ve ölçülmüş hız değildir. Fazlar, yalnız bağımsız iş dilimleri ve hazır sözleşmelerde örtüşür. 4. haftada ve sonraki iki teslim sprinti sonunda kapsam, rol yükü ve gerçek sürelerle yeniden tahmin yapılır.",
+  "estimate_note": "Düşük güvenli bütçe bandı: 9 kişide 56-72 hafta; 7 kişide 72-92 hafta. Daha geniş bant seçmek ölçüm veya istatistiksel güven artışı değildir. 9×56 ve 7×72 = 504 brüt kişi-hafta yalnız kapasite üst sınırı hesabıdır; uzman darboğazlarını çözmez. Varsayılan dağılım %55 özellik/dokümantasyon, %30 entegrasyon/QA/düzeltme, %15 koordinasyon/izin/öğrenmedir. Üst banttaki 16/20 hafta takvim rezervi dahildir; aynı pay ayrıca eklenmez. Üretici/cihaz erişiminde sınırsız dış bekleme bu bandın dışındadır.",
+  "seven_person_schedule": "7 kişide hedef pencereler: 1-4 keşif; 5-18 temel; 17-40 CAD/format; 33-52 fabrika/cihaz; 49-60 bütünleştirme/kabul; 61-66 pilot; 65-72 ticari çıkış. Tek entegrasyon/backend uzmanı önce format, sonra adaptör ve fabrika hizmeti dilimleriyle çalışır; 9 kişilik takvimin aynı paralelliği varsayılmaz.",
+  "access_gate": "4. hafta kontrolü: cihaz kimliği, belgeli taşıma yolu/SDK erişimi, fabrika kabul sahibi, korpus ve laboratuvar randevusu için sorumlu/tarih kaydı. Eksikse cihaz/pilot tarihleri yeniden hesaplanır; belgeli üretici dosya devri alternatifi ayrıca kabul edilir. Diğer yazılım işleri ilerleyebilir.",
+  "partial_staff": "Ek kapasite varsayımı: UX 0,2 FTE (ortalama 8 saat/hafta), güvenlik/DevOps 0,3 FTE (12 saat/hafta); 40 saatlik hafta varsayımıyla. Lisans/hukuk ihtiyaç bazlı ayrı bütçe. Bu destek alınmazsa süreleri çekirdek ekipten düşürüp takvimi uzatın. Fabrika operatörü/teknisyeni bu kadroya dahil değildir.",
+  "resource_periods": [
+    "1-4",
+    "5-14",
+    "15-32",
+    "33-44",
+    "45-56"
+  ],
+  "resource_rows": [
+    [
+      "Ürün/tekstil",
+      [
+        "01:.85",
+        "01:.85",
+        "01:.55,18:.30",
+        "18:.85",
+        "18:.45,16:.40"
+      ]
+    ],
+    [
+      "Mimar",
+      [
+        "01:.50,02:.35",
+        "02:.35,03:.25,04:.25",
+        "05:.35,12:.30,15:.20",
+        "14:.35,15:.30,18:.20",
+        "17:.45,18:.40"
+      ]
+    ],
+    [
+      "CAD 1",
+      [
+        "01:.60,05:.25",
+        "05:.65,02:.20",
+        "05:.65,08:.20",
+        "05:.50,14:.35",
+        "18:.85"
+      ]
+    ],
+    [
+      "CAD 2",
+      [
+        "01:.60,06:.25",
+        "02:.50,05:.35",
+        "06:.50,07:.35",
+        "07:.55,14:.30",
+        "18:.85"
+      ]
+    ],
+    [
+      "Masaüstü",
+      [
+        "01:.85",
+        "03:.40,04:.25,13:.20",
+        "13:.85",
+        "13:.65,14:.20",
+        "18:.60,17:.25"
+      ]
+    ],
+    [
+      "Format/cihaz",
+      [
+        "10:.40,08:.45",
+        "08:.85",
+        "08:.65,10:.20",
+        "10:.40,11:.45",
+        "18:.65,17:.20"
+      ]
+    ],
+    [
+      "Backend",
+      [
+        "01:.50,12:.35",
+        "09:.35,04:.25,12:.25",
+        "09:.35,12:.50",
+        "12:.65,15:.20",
+        "16:.50,18:.35"
+      ]
+    ],
+    [
+      "QA otomasyon",
+      [
+        "01:.85",
+        "04:.60,18:.25",
+        "05:.25,08:.30,18:.30",
+        "14:.40,18:.45",
+        "17:.35,18:.50"
+      ]
+    ],
+    [
+      "QA saha/UI",
+      [
+        "01:.85",
+        "04:.35,13:.50",
+        "06:.25,07:.25,13:.35",
+        "11:.45,18:.40",
+        "18:.85"
+      ]
+    ]
+  ],
+  "resource_note": "Bu tablo haftalık rezervasyon önerisidir; gerçekleşmiş kapasite değildir. Hücreler WP numarası:FTE payıdır; her kişi için toplam 0,85 teslim işi + 0,15 koordinasyon/izin/öğrenme = 1,00 FTE. Test/düzeltme ilgili WP payına dahildir; ayrıca ikinci kez eklenmez. İşin daha erken fazında hazır olmayan ön koşul varsa pay tasarım/korpus/test hazırlığına gider; uygulama kabulü ön koşuldan önce kapanmaz. Kişi isimleri/deneyimleri ve ilk sprint verisiyle haftalık olarak yeniden yüklenmelidir.",
+  "scope_disposition": "Ham raporların örneklem önerileri (örneğin 2 başlangıç operatörü, 7 araştırma katılımcısı veya üç giysi ailesi) tek pilotun eşzamanlı zorunlu kapsamı değildir. Pilot tek ürün ailesinde kalır; katılımcı/korpus kapsamı rol ve risklere göre WP01 ile seçilir. Ek giysi aileleri sonraki ürün kapısına atanır."
+}

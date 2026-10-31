@@ -1,0 +1,80 @@
+{
+  "agent": "I06",
+  "role": "UX Researcher",
+  "date": "2026-10-31",
+  "scope": "Resmî destek/yayın belgeleri ve mevcut kaynak akışının dar incelemesi. Uygulama kodu, WearCAD, UI ve cihazlar değiştirilmedi/kullanılmadı.",
+  "research_questions": [
+    "Ölçek, kaynak beden, kayıt ve üretim kapsamı kararlarında hangi bilgiler operatöre işlemden önce görünmeli?",
+    "Hata sonrasında çalışma ve güven nasıl korunabilir?",
+    "Kritik kalıp görevleri fare, klavye ve yardımcı teknolojiyle tamamlanabilir mi?"
+  ],
+  "method": "Beş birincil kaynağın masa başı taraması ve MainWindow/TextileToolsWindow/CadCanvas/MachineCenterWindow kaynak eşlemesi. Gerçek katılımcı, görüşme, kullanılabilirlik oturumu, çalışma zamanı testi veya şikayet sıklığı ölçümü yoktur. Üretici yardım belgesi özellik/iş akışı kanıtıdır; tek başına kullanıcı şikayeti değildir. Yalnız E01 açıkça üreticinin bildirdiği kullanıcı sorununu aktarır. Rakip üstünlüğü veya tüm şikayetlerin kapsandığı iddia edilmez.",
+  "context": {"customer":"Büyük fabrika","development_team":"7+ kişi","operator_count":"Bilinmiyor; geliştirme ekibi sayısından çıkarılmadı","hardware":"USB bağlantısı bildirildi, plotter model/protokolü bilinmiyor"},
+  "sources": [
+    {"id":"E01","type":"official_support_reported_issue","title":"Autodesk: Objects are scaled when inserted into a drawing","url":"https://www.autodesk.com/support/technical/article/caas/sfdcarticles/sfdcarticles/Blocks-xrefs-or-raster-images-are-scaled-when-inserted.html","retrieved":"2026-10-31","evidence":"Autodesk destek makalesi, eklenen nesnelerin yanlış ölçekte göründüğüne ilişkin kullanıcı bildirimlerini; kaynak/hedef birim ve ölçek ayarlarını ele alıyor. Bilinen ölçüyle karşılaştırma öneriliyor.","limit":"Bu sorun TekstilCAD'da gözlenmiş değildir; ürünler arası yaygınlık oranı vermez."},
+    {"id":"E02","type":"official_help","title":"Autodesk: About Recovering from a System Failure","url":"https://help.autodesk.com/cloudhelp/2023/ENU/AutoCAD-Core/files/GUID-DDDADE14-9558-4EDB-A8C9-C235291CCBB4.htm","retrieved":"2026-10-31","evidence":"Kurtarma yöneticisi bir çizim için kurtarma, otomatik kayıt, asıl ve yedek seçeneklerini son kayıt zamanıyla listeler. Belge hiç kaydedilmemiş çizimlerin bu yönetici tarafından izlenmediğini ayrıca açıklar.","limit":"Sürüm bağlamı 2023 yardım sayfasıdır; güncel tüm ürün davranışlarına genellenmez. Çoklu aday ve kapsamı açık anlatma tasarım referansıdır."},
+    {"id":"E03","type":"official_textile_help","title":"CLO: 2D Pattern (DXF) Import/Export","url":"https://support.clo3d.com/hc/en-us/articles/115000493067-2D-Pattern-DXF-Import-Export","retrieved":"2026-10-31","evidence":"DXF aktarımında format ve kaynak birimi; kesim/dikiş çizgisi ve çentik davranışı seçiliyor. Dışa aktarım belirli beden grubu veya seçili kalıplarla sınırlandırılabiliyor.","limit":"Tekstil bilgilerinin açık seçilmesine örnektir; TekstilCAD'in AAMA/ASTM uyumunu kanıtlamaz. Kaynağın tüm seçenekleri ilk sürüme otomatik kapsam değildir."},
+    {"id":"E04","type":"official_help","title":"Autodesk: About Setting the Plot Scale","url":"https://help.autodesk.com/cloudhelp/2025/ENU/AutoCAD-Core/files/GUID-89604826-0B55-4994-8214-1CA93FA66985.htm","retrieved":"2026-10-31","evidence":"Gerçek ölçekte model ile çıktı ölçeğini ayırır; belirli ölçek ve kağıda sığdırma farklı seçeneklerdir. Kağıt/plotter/yön değişince sığdırma ölçeği değişebilir.","limit":"TekstilCAD'da fiziksel ölçek hatası gözlemi değildir. Ekrana sığdırmanın üretim ölçeği sanılmaması için tasarım girdisidir."},
+    {"id":"E05","type":"official_release_description","title":"Optitex O/26: Advancing Digital Patternmaking and Connected Production Workflows","url":"https://optitex.com/optitex-o26-release/","retrieved":"2026-10-31","evidence":"Üretici, Production Diagram'da yalnız temel bedenle görsel yoğunluğu azaltmayı; seçime bağlı ilgili komutları göstermeyi; ölçü-serileme tablolarını eşlemeyi ve dikiş/kesim çizgisi değişiminde teyidi anlatıyor.","limit":"Üretici yayın açıklamasıdır. Hız veya hata oranı iyileşmesini bağımsız ölçmüş değiliz; şikayet sıklığı ya da rakip başarısızlığı kanıtı sayılmaz."}
+  ],
+  "requirements": [
+    {
+      "id":"UX01","priority":"P1","title":"İçe aktarım kararını ölçü önizlemesiyle verdir",
+      "sources":["E01","E03"],
+      "local_evidence":"src/TekstilCAD.Desktop/MainWindow.cs ImportDxf: mm/cm/inç seçimi ve sonradan uyarı var; belge LoadDocument ile değiştirilmeden önce toplam ölçü ve kayıp özeti onayı yok.",
+      "status":"Birim seçimi mevcut; değişiklik öncesi ölçü/kayıp önizlemesi eksik.",
+      "requirement":"Dosya birimi, kullanılan çarpan, sonuç en-boy (mm), parça sayısı ve desteklenmeyen kayıtları tek özetle göster. Bilinmeyen birimi tahmin edip saklama; referans ölçü doğrulama ve Vazgeç mevcut belgeyi korusun.",
+      "task_test":"Aynı 100 mm kareyi mm/cm/inç kaynak örneklerinden aktar; sonuç her seferinde 100 mm olmalı. Yanlış birim seçilmiş senaryoda operatör belgeye uygulamadan hatayı fark edip düzeltebilmeli. Vazgeç sonrası belge/geçmiş byte-içerik eşdeğeri kalmalı. Sonuç ve yardım gereksinimini kaydet; şu an test edilmedi."
+    },
+    {
+      "id":"UX02","priority":"P1","title":"Kaydetme ve kurtarma durumunu karar verilebilir hale getir",
+      "sources":["E02"],
+      "local_evidence":"MainWindow SaveTo/OfferRecovery ve audit R11/R12; kaynak okuma anında tek en yeni kurtarma adayı sunuluyor. I04/I05 bu akışı değiştiriyor; tamamlandı kabul edilmedi.",
+      "status":"Kayıt durumu ve otomatik kurtarma var; çok aday/canlı oturum/çatışma kontrolü uygulama dalgasında.",
+      "requirement":"Proje adı, kayıt zamanı, kaynak konum ve kurtarılabilir durumla aday listesi sun; bozuk aday diğerlerini gizlemesin. Eski sürüm kaydetme çatışmasında kullanıcının düzenlemesini koru ve Farklı kaydet yolunu görünür yap. 'Diske kaydedildi' ile 'kurtarma kopyası var' ayrı anlatılsın.",
+      "task_test":"İki oturum ve bozuk en yeni/geçerli eski kayıt içeren görev: canlı çalışma aday olmamalı; operatör doğru eski kaydı açmalı. Eski sürümü kaydetme denemesi diğer dosyayı ezmemeli; kendi düzenlemesini farklı kaydetmeli. Kritik veri kaybı/yanlış revizyon sıfır hedefi kabul önerisidir."
+    },
+    {
+      "id":"UX03","priority":"P1","title":"Serilemede temel kaynak ve kural ömrünü sürekli göster",
+      "sources":["E05"],
+      "local_evidence":"TextileToolsWindow.cs:42-45,89-114,150-151,173-176 güncel I03 değişikliği temel kaynağı ve pencere içi taslağı koruyor; geometri değişiminde yeniden kurma kontrolü var.",
+      "status":"Yeni kodda uygulanmış; bu araştırmada çalıştırılmadı. Kuralı proje içinde kalıcı kaydetme hâlâ ayrı eksik.",
+      "requirement":"Temel parça adı, hedef beden ve temel bedenden adım görünür kalsın. Kuralın yalnız pencere boyunca tutulduğunu açıkla; kapanışta kayıp riski varsa saklama/geri dönme yolu tasarla. Geometri değişiminde eski kurallar sessiz uygulanmasın.",
+      "task_test":"Aynı tabandan L/XL üret; L=1, XL=2 adım geometrisi beklenir, kaynak ve artışlar korunur. A→B→A geçişi taslağı korur. Geometri değişiminde operatör eski kuralı uygulayamaz ve nedenini anlayabilir. Kapat-aç görevi kalıcılık sınırını ayrıca belgelemeli."
+    },
+    {
+      "id":"UX04","priority":"P1","title":"Üretim kümesini ve gerçek çıktı geometrisini onaylat",
+      "sources":["E03","E04"],
+      "local_evidence":"TextileToolsWindow NestingPanel tüm Document.Pieces listesini kullanıyor; MainWindow Export tüm belgeyi aktarıyor; MachineCenterWindow.cs:99-102 önizleme dosyanın ilk 12000 karakteri, geometrik çıktı görünümü değil.",
+      "status":"Tüm proje çıktısı ve metin önizlemesi var; üretim kümesi, adet ve dönüştürülmüş geometrik önizleme eksik.",
+      "requirement":"Kaynak/türev/beden parçalarından üretime gidecek küme ve adetleri açık seçtir. Çıktı dönüşümünden elde edilen kontur, toplam mm ölçüsü, ölçek, profil ve revizyon özeti göster. Ekrana sığdırmayı çıktı ölçeğinden ayır; fiziksel tamamlanmayı dosya üretimiyle karıştırma.",
+      "task_test":"Ana kalıp+L+XL+dikiş payı türevi içeren belgede yalnız L/XL seçilip istenen adetlerle çıkmalı. 1:1 ve farklı ölçek önizlemesi ölçülerini değiştirir; kanvas zoom çıktıyı değiştirmez. Beklenmeyen parça veya bilinmeyen profil üretim onayına geçmez; fiziksel ölçüm ayrı kapıdır."
+    },
+    {
+      "id":"UX05","priority":"P2","title":"Aracı bulma ve sonraki adımı durumdan anlat",
+      "sources":["E05"],
+      "local_evidence":"MainWindow SetTool ve toolButtons kısayolları gösteriyor; CadCanvas Down yay/Bézier nokta sayısıyla durum mesajı veriyor. Seçim olmayan bazı komutlar devre dışı. Genel komut arama/yerinde görev rehberi yok.",
+      "status":"Bağlama göre aktiflik ve kısayollar kısmen mevcut; keşfedilebilirlik kullanıcıyla ölçülmedi.",
+      "requirement":"Aktif araç, beklenen girdi ve Esc/Enter davranışı kanvas yanında kısa ve sürekli görünsün. Devre dışı eylemin nedenini açıklayan erişilebilir yardım olsun. Yeni menü/AI yerine önce bu görev yönlendirmesini test et.",
+      "task_test":"İlk kez kullanan katılımcı çizgi, kapalı çoklu çizgi, çentik/nokta düzenleme ve dışa aktarma yolunu yönlendirmesiz bulsun. İlk doğru eyleme süre, yanlış araç seçimi ve yardım sayısı ölçülsün. Sayısal hız hedefi başlangıç ölçümü sonrası belirlenmeli; mevcut performans uydurulmadı."
+    },
+    {
+      "id":"UX06","priority":"P1","title":"Kritik iş akışını klavye ve yardımcı teknolojiyle de tamamlat",
+      "sources":[],
+      "evidence_type":"Kaynak incelemesinden araştırma hipotezi; rakip şikayeti iddiası değil",
+      "local_evidence":"MainWindow OnKeyDown araç/undo/save kısayolları ve alan AutomationProperties adları var. TextileToolsWindow yeni erişilebilir adlar içeriyor. CadCanvas kurucusu geometri girişini fare olaylarına bağlıyor; tam klavye kontur girişi kaynakta görülmedi.",
+      "status":"Kısayol ve bazı alan adları var; uçtan uca klavye, ekran okuyucu, yüksek DPI/yüksek karşıtlık kabulü yapılmadı.",
+      "requirement":"Geometriyi hassas sayısal nokta girişiyle oluşturma/düzenleme, görünür odak, tutarlı Tab sırası ve hatanın ilgili alana bağlanmasını sağla. Hata/başarı yalnız renk ile anlatılmasın. 100/150/200% DPI ve yüksek karşıtlıkta görev yolları kaybolmasın.",
+      "task_test":"Fare kullanmadan proje aç→parça seç→hassas koordinat değiştir→serileme→kaydet→çıktı kontrolü akışı; ekran okuyucuyla alan adı/değer/hata ve sonuç duyurusu kontrol edilir. Kritik eylemlerde klavye tuzağı ve erişilemeyen eylem sıfır hedeflenir. Gerçek test yapılmadığından erişilebilirlik uygunluğu verilmez."
+    }
+  ],
+  "study_plan": {
+    "proposed_sample":"İlk keşif ve yinelenen kullanılabilirlik turu için 6-8 gerçek fabrika operatörü önerisi; istatistiksel temsil veya yeterlilik garantisi değildir. Geliştirme ekibi bu katılımcıların yerine sayılmaz. Modelhane/serileme/üretim rolleri, farklı CAD deneyimleri ve klavye/yardımcı teknoloji ihtiyacı kapsansın; erişim durumuna göre tur planı onaylansın.",
+    "protocol":"45-60 dakika, kısa alışma sonrası gerçekçi görevler ve sesli düşünme; görev sırasında çözüm öğretme yok. Aynı kritik görevler düzeltme sonrası yeni veya karşı dengelenmiş örneklerle yeniden denenir.",
+    "metrics":["Yardımsız görev tamamlandı/kısmen/başarısız", "Yanlış ölçü/beden/revizyon/adet gibi kritik hata sayısı", "Görev süresi ve yardım sayısı", "Kayıt/kurtarma sonrası içerik eşleşmesi", "Erişilemeyen klavye eylemi ve odak kaybı", "Görev sonrası güven/anlaşılırlık açıklaması"],
+    "ethics":"Açık katılım/kayıt onayı; anonim iş örnekleri; gerçek müşteri kalıplarını dış servise yükleme yok; ekran kayıtları ve görüşme notları için erişim/saklama süresi önceden belirlenir.",
+    "interpretation":"Küçük örneklem sonuçları tüm kullanıcılara genellenmez; hata türleri ve görev bazında raporlanır. Başlangıç verisi olmadan yüzde iyileşme, memnuniyet puanı veya tüm rakiplerden üstünlük üretilmez."
+  },
+  "recommended_sequence":["UX02 kayıt/kurtarma güvenliği ve UX03 ardışık beden regresyonu", "UX01 ölçü önizlemesi ve UX04 üretim kümesi/çıktı görünümü", "UX06 klavye/erişilebilirlik ile UX05 yerinde yönlendirmeyi aynı gerçek görev turunda doğrulama"],
+  "limitations":["Kaynaklar çalışma sırasında başka ajanlarca değişiyor; atıflar okuma anındaki durumu anlatır.","Resmî destek sorunları tüm CAD kullanıcılarının şikayet dağılımını göstermez.","Style3D yardım sonucu aramada bulundu fakat açma başarısız olduğundan kanıt listesine alınmadı.","WearCAD incelemesi, kaynak/arayüz varlığı kopyalama ve fiziksel plotter deneyi yapılmadı."]
+}

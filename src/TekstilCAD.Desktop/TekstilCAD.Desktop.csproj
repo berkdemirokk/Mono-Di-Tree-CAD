@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>TekstilCAD.Studio</AssemblyName>
+    <Version>0.4.0</Version>
+    <FileVersion>0.4.0.0</FileVersion>
+    <Product>Mono Di Tree CAD</Product>
+    <Description>Windows tekstil CAD geliştirme önizlemesi</Description>
+    <ApplicationIcon>Assets\Studio.ico</ApplicationIcon>
+  </PropertyGroup>
+  <!-- Only explicitly requested preview builds use a separate runtime data directory. -->
+  <PropertyGroup Condition="'$(TekstilCADIsolatedPreview)' == 'true'">
+    <DefineConstants>$(DefineConstants);TEKSTILCAD_ISOLATED_PREVIEW</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TekstilCAD.Core/TekstilCAD.Core.csproj" />
+    <ProjectReference Include="../TekstilCAD.FileFormats/TekstilCAD.FileFormats.csproj" />
+    <ProjectReference Include="../TekstilCAD.Grading/TekstilCAD.Grading.csproj" />
+    <ProjectReference Include="../TekstilCAD.Nesting/TekstilCAD.Nesting.csproj" />
+    <ProjectReference Include="../TekstilCAD.Patterns/TekstilCAD.Patterns.csproj" />
+    <ProjectReference Include="../TekstilCAD.MachineGateway/TekstilCAD.MachineGateway.csproj" />
+  </ItemGroup>
+</Project>
+
+

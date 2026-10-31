@@ -1,0 +1,41 @@
+{
+  "agent": "R23",
+  "role": "USB sanal COM / seri adaptör gereksinim denetçisi",
+  "scope": "Yalnız gelecekte model profili ile doğrulanacak seri taşıma: çerçeveleme, akış kontrolü, süre sınırları ve yeniden bağlantı. Fiziksel cihaz erişimi, test ve uygulama değişikliği yapılmadı.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-22 MachineProfile yalnız ad, birim ve ölçek içeriyor; IsSimulator=true, IsVerified=false.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:30-31 sınıf açıklaması fiziksel makine I/O olmadığını açıkça belirtiyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:59-64 yalnız yerel DXF/HPGL dosyası hazırlanıyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:9-10,26-28 iş durumu Prepared/Simulated/Failed ve dosya manifestiyle sınırlı.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:70-85 Simulate yalnız dosya özeti denetleyip durumu kaydediyor.",
+    "src altında hedefli rg: SerialPort, FlowControl, Handshake eşleşmesi yok; gateway dosya envanterinde SimulationQueue.cs ve proje dosyası var."
+  ],
+  "findings": [
+    {
+      "id": "R23-F1", "kind": "missing", "priority": "P1",
+      "title": "USB bağlantısı seri taşıma olarak henüz nitelendirilmemiş",
+      "evidence": "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-22 fiziksel bağlantı türü, cihaz kimliği veya seri ayar profili içermiyor; mevcut profil açıkça simülatör. Kullanıcı yalnız USB bağlantısını doğruladı; sanal COM bilgisi yok.",
+      "impact": "Yanlış taşıma veya varsayılan seri ayarlarla hazırlanacak adaptör ilk fabrika pilotunda kullanılamayabilir.",
+      "acceptance": "İlk plotter marka/model/kontrolcü ve üretici bağlantı belgesi kaydedilsin. Yalnız sanal COM doğrulanırsa baud, veri biti, parity, stop biti, akış kontrolü ve hat açılış davranışı sürümlü model profiline alınsın; eksik veya onaysız profil gönderimi engellesin. Seri olmayan USB modeli ilgili adaptöre yönlendirilsin.",
+      "effort_days": [1, 3], "dependencies": ["İlk plotter marka/model/kontrolcü bilgisi", "Üretici bağlantı ve protokol belgesi"], "confidence": "high"
+    },
+    {
+      "id": "R23-F2", "kind": "missing", "priority": "P1",
+      "title": "Seri adaptör için sınırlı akış ve çerçeveleme sözleşmesi yok",
+      "evidence": "src/TekstilCAD.MachineGateway/SimulationQueue.cs:59-64 dosya üretimi; :70-85 yalnız checksum simülasyonu. Bu akışta paketleme, yanıt ayrıştırma, geri basınç veya iletişim süre sınırı tanımlı değil.",
+      "impact": "Sanal COM seçilirse yavaş veya yanıt vermeyen alıcıda işin ne kadar bekleyeceği ve hangi yanıtın kabul sayılacağı belirsiz kalır.",
+      "acceptance": "Doğrulanmış model protokolüne göre kodlama, komut/yanıt sınırları, azami tampon ve parça boyutu, desteklenen akış kontrolü, okuma/yazma ve toplam iş süre sınırları tanımlansın. Sahte taşıma ile bölünmüş/birleşmiş yanıt, bozuk çerçeve, durdurulmuş alıcı ve sessizlik senaryoları doğrulansın; her işlem yapılandırılmış süre içinde sonuç veya açık hata versin ve bellek sınırı aşılmasın.",
+      "effort_days": [3, 6], "dependencies": ["R23-F1 kapsamında seri taşımanın doğrulanması", "Modelin yanıt ve akış kontrolü sözleşmesi", "Test edilebilir taşıma arayüzü"], "confidence": "high"
+    },
+    {
+      "id": "R23-F3", "kind": "missing", "priority": "P1",
+      "title": "Bağlantı kopmasında belirsiz teslim ve güvenli yeniden bağlanma tanımsız",
+      "evidence": "src/TekstilCAD.MachineGateway/SimulationQueue.cs:10 durumlar yalnız Prepared/Simulated/Failed; :26-28 son gönderilen/onaylanan konum veya bağlantı oturumu yok; :78-80 dosya bütünlüğü başarılı simülasyon sayılıyor.",
+      "impact": "Gelecek seri gönderimde kopmadan önce hangi komutların uygulandığı bilinmezse otomatik tekrar aynı çizimi yeniden üretebilir veya işi eksik bırakabilir.",
+      "acceptance": "Kopma sonrası teslimi bilinmeyen iş ayrı durumda saklansın; yeni bağlantı cihaz kimliği ve profil eşleşmesini tekrar doğrulasın. Model protokolü devam noktasını güvenilir biçimde doğrulamıyorsa otomatik yeniden gönderim yapılmasın, operatör kararı kaydedilsin. Sahte taşıma ile yazma öncesi, kısmi yazma ve onay öncesi kopmalar test edilsin; hiçbir senaryo sessizce tamamlandı sayılmasın veya işi otomatik çoğaltmasın.",
+      "effort_days": [3, 5], "dependencies": ["R23-F1 kapsamında seri taşımanın doğrulanması", "Modelin kabul/tamamlanma ve devam yetenekleri", "Kalıcı fiziksel iş durum modeli"], "confidence": "high"
+    }
+  ],
+  "unknowns": ["USB cihazının sanal COM, yazıcı sınıfı veya üreticiye özgü taşıma kullanıp kullanmadığı bilinmiyor.", "Seri iletişim ayarları, akış kontrolü, tampon kapasitesi, yanıt ve yeniden başlatma yetenekleri bilinmiyor.", "Gerçek cihaz davranışı doğrulanmadı; mevcut testler bu denetimde çalıştırılmadı."],
+  "recommendation": "Önce ilk USB plotterın model ve taşımasını belgeleyin; yalnız sanal COM doğrulanırsa bu üç koşullu pilot gereksinimini uygulayın. Süreler yalnız bu dar kapsam için ön mühendislik tahminidir; entegrasyon/QA hariçtir ve örtüşen raporlarla doğrudan toplanmamalıdır."
+}

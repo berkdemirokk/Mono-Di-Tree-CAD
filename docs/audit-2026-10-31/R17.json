@@ -1,0 +1,77 @@
+{
+  "agent": "R17",
+  "role": "SVG ve fiziksel baskı ölçeği denetçisi",
+  "scope": "SVG mm/viewBox tutarlılığı, sayfa sınırı ve 1:1 kağıt çıktısı önkoşulları; yalnız kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:3 dünya koordinatını milimetre tanımlar.",
+    "src/TekstilCAD.FileFormats/PlotFormats.cs:14-21 SVG boyutunu geometri sınırından üretir; aynı sayısal ölçüler mm ve viewBox için kullanılır; stroke-width 0.25.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:308-314 dosya dışa aktarır; yazdırma ayarı sunmaz.",
+    "tests/TekstilCAD.Tests/FormatTests.cs:140-151 SVG XML boyutları, isim ve kapanış doğrulamaları vardır; testler bu denetimde çalıştırılmadı.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-16 profil açıkça simülatördür; fiziksel doğrulama false.",
+    "Hedefli rg: src/tests içinde PrintDialog|PrintDocument|PrintTicket|PageMediaSize için eşleşme bulunmadı."
+  ],
+  "findings": [
+    {
+      "id": "R17-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "1:1 baskı için kağıt ve ölçek sözleşmesi yok",
+      "evidence": "src/TekstilCAD.Desktop/MainWindow.cs:308-314 yalnız SaveFileDialog ve format ihracı içerir. src/TekstilCAD.FileFormats/PlotFormats.cs:16-17 çıktı sayfasını geometri genişliği/yüksekliği olarak seçer; kağıt, yazdırılabilir alan, kenar payı veya büyük çıktı politikası parametresi yok. Hedefli src/tests PrintDialog|PrintDocument|PrintTicket|PageMediaSize taraması eşleşmesiz.",
+      "impact": "SVG dosyası doğru mm ölçüsü taşısa da operatörün harici görüntüleyicide sayfaya sığdırması, kağıt yönü veya baskı dışı alan seçimi kalıbın gerçek ölçüsünü değiştirebilir; mevcut kod fiziksel çıktıyı güvenceye almıyor.",
+      "acceptance": "İlk onaylı görüntüleyici/sürücü ve cihaz için 100%/gerçek boyut reçetesi, kağıt/rulo eni, yön ve yazdırılabilir alan kaydedilsin. Taşan kalıp sessiz küçültülmesin: engelleme veya açıkça seçilmiş 1:1 döşeme politikası uygulansın. 100 mm ve 1000 mm referansların kağıtta ölçümü önceden kabul edilen toleransla doğrulansın.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "İlk USB plotter marka/model ve sürücü bilgisi",
+        "Fabrikanın baskı toleransı ve kağıt/rulo ölçüsü",
+        "Seçilen dış yazdırma yolu veya uygulama içi baskı kararı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R17-F2",
+      "kind": "defect",
+      "priority": "P2",
+      "title": "SVG sayfa sınırı kontur kalınlığını kapsamıyor",
+      "evidence": "src/TekstilCAD.FileFormats/PlotFormats.cs:15-17 min/max yalnız noktalardan alınır; :21 kontur kalınlığı 0.25 birimdir. Dolayısıyla sınırdaki çizginin 0.125 mm yarısı sayfa dikdörtgeninin dışında kalır. Gerçek görüntüleyicide kırpılma gözlenmedi; kaynakta stroke kapsamının sayfa hesabına katılmadığı kesindir.",
+      "impact": "Sayfa sınırında kırpma uygulayan baskı/yerleştirme araçları dış konturu kısmen kesebilir. Kalıbın merkez çizgisi koordinatları doğru olsa da kağıt üzerindeki çizgi görünürlüğü ve kenar okunabilirliği değişebilir.",
+      "acceptance": "Kontur kapsamına göre açık kenar payı eklenirken 1 SVG birimi = 1 mm ilişkisi korunsun. Negatif koordinatlı ve dört kenara temas eden dikdörtgen örneğinde viewBox ve fiziksel sayfa birlikte genişlesin; hedef görüntüleyici/baskı önizlemesinde dört kenarın tam çizgi kalınlığı görünür olsun.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "SVG sayfa kenar payı politikası"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R17-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Dosya ölçüsü testi fiziksel ölçek kabulü yerine geçmiyor",
+      "evidence": "tests/TekstilCAD.Tests/FormatTests.cs:145-146 yalnız 100mm width/height özniteliklerini doğrular; :147-151 yol sayısı/isim/kapanış kontrolüdür. src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-16 fiziksel uyumluluğun doğrulanmadığını açıkça belirtir. Bu kapsamda fiziksel baskı ölçümü yapılmadı.",
+      "impact": "Büyük fabrikada aynı dijital kalıp farklı sürücü, medya veya cihaz ayarıyla farklı ölçüde çıkabilir; sayısal ihracat testi üretim onayı sağlayamaz.",
+      "acceptance": "İlk cihaz için X/Y yönlerinde kısa ve uzun ölçüler, köşegen, başlangıç/son rulo bölgesi ve en az üç tekrarlı baskıdan oluşan kabul formu hazırlanıp uygulanmalı. Tolerans fabrika tarafından önceden belirlenmeli; cihaz/sürücü/medya/ölçek ayarları, ölçülen sapmalar, operatör ve tarih kaydedilmeli. Kabul dışı kombinasyon üretim için onaylı sayılmamalı.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fiziksel cihaz ve ölçüm ekipmanı erişimi",
+        "Fabrika kalite sorumlusunun tolerans onayı",
+        "R17-F1 baskı reçetesi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB bağlantısı kullanıcı tarafından belirtilmiştir; marka/model, denetleyici, sürücü ve kağıt/rulo özellikleri bilinmiyor.",
+    "Harici SVG görüntüleyicisi ve varsayılan baskı ölçeklendirmesi bilinmiyor.",
+    "Fabrikanın kabul toleransı ve ölçüm yöntemi belirlenmemiştir.",
+    "UI, build, test veya fiziksel cihaz işlemi yapılmadı; WearCAD dosyalarına dokunulmadı."
+  ],
+  "recommendation": "Önce tek USB cihaz ve sabit baskı reçetesini fiziksel ölçümle yeterli bulun; SVG mm/viewBox eşlemesini koruyup kontur kenar payını düzeltin. Tahminler yalnız bu dar iş kapsamının mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve çakışan raporlarla toplanmamalıdır."
+}

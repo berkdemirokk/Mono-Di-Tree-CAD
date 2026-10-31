@@ -1,0 +1,45 @@
+{
+  "agent": "R39",
+  "role": "Proje revizyonu ve üretim çıktısı izlenebilirliği denetçisi",
+  "scope": "ProjectDocument, DocumentHistory, proje kaydetme/açma ve simülasyon işi üzerinden iş revizyonu, onay ve değişiklik etkisi; atomik depolama kapsam dışıdır.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:29-34 ProjectDocument yalnızca Name ve Pieces taşır.",
+    "src/TekstilCAD.Core/DocumentHistory.cs:6-14,20-24,43-55 geçmiş bellek içi, sınırlı undo/redo anlık görüntüleridir.",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:12-25 yalnızca ProjectDocument serileştirilir ve yüklenir.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:204-215 değişiklik kaydı undo geçmişine gider; belge yüklemek geçmişi temizler.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:10,26-28,42-67,70-85 iş modeli ve hazırlama/simüle etme akışı.",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:85,91 mevcut belge hazırlanır; seçilen iş kimliğiyle simüle edilir."
+  ],
+  "findings": [
+    {
+      "id": "R39-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kalıcı iş revizyonu ve proje kimliği tanımlanmamış",
+      "evidence": "Models.cs:29-34 proje kimliği, revizyon, üst revizyon, değişiklik nedeni veya yazar alanı içermez. ProjectStorage.cs:12-25 bu modeli saklar. DocumentHistory.cs:14,43-55 geçmişi sınırlar; MainWindow.cs:215 yüklemede temizler. Dolayısıyla mevcut undo geçmişi iş revizyon kaydı değildir.",
+      "impact": "Büyük fabrika pilotunda aynı adlı projelerin ve geçmiş üretim sürümlerinin güvenilir ayrımı yapılamaz; değişiklik nedeni ve hangi sürümün kullanıldığı kaynak kayıttan yeniden kurulamaz. Bu saptama eşzamanlı kullanıcı veya operatör sayısı varsaymaz.",
+      "acceptance": "Kalıcı proje kimliği, değişmez revizyon kimliği, üst revizyon, değişiklik nedeni ve sorumlu kaydı tanımlansın. Aynı adlı iki proje ayrışsın; kaydet/kapat/aç sonrasında en az üç revizyon ve farkları erişilebilir olsun; eski revizyonu geri alma yeni revizyon oluştursun ve eski kaydı değiştirmesin.",
+      "effort_days": [5, 9],
+      "dependencies": ["Proje kimliği ve revizyon sözleşmesi", "Mevcut tcad dosyaları için uyumluluk ve geçiş kararı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R39-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Çıktı onayı ve değişiklik sonrası geçersizleşme bağı yok",
+      "evidence": "SimulationQueue.cs:26-28 manifestte ProjectName ve çıktı Sha256 bulunur; kaynak revizyon veya onay kaydı yoktur. Satır 42-67 belgeyi çıktıya dönüştürür. Satır 70-85 yalnızca dosyanın varlığını/çıktı özetini kontrol edip Simulated yapar. JobStatus satır 10 sadece Prepared, Simulated, Failed değerleridir. MainWindow.cs:204-210 belge değişikliğini geçmişe kaydeder; hazırlanmış işlerle ilişki kurmaz.",
+      "impact": "Mevcut işlev yalnızca dosya simülatörüdür ve gerçek üretim hatası gözlenmemiştir. Fiziksel üretime geçildiğinde değişmiş kaynak veya geri çekilmiş onaya ait çıktı dosyasının özeti hâlâ doğru olabilir; çıktı bütünlüğü tek başına üretime uygun güncel sürüm olduğunu kanıtlamaz.",
+      "acceptance": "Her çıktı kaynak proje/revizyonu, üretim parametreleri ve onay kimliğine bağlansın. Revizyon değişikliği veya onayın geri çekilmesi etkilenen bekleyen işleri görünür biçimde geçersiz kılsın; yeniden onaysız gönderim engellensin. Eski revizyonun bilinçli tekrar üretimi gerekçe ve ayrı yetkili karar gerektirsin. Kaynağı değiştirip çıktı dosyasını değiştirmeyen senaryoda bütünlük kontrolü geçse de gönderim kapısı reddetsin.",
+      "effort_days": [6, 11],
+      "dependencies": ["R39-F1 kalıcı revizyon kimliği", "Onay ve geri çekme iş kuralları", "Gelecek fiziksel gönderim öncesi kontrol sözleşmesi"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın onaylayan rolü, çift onay ihtiyacı ve eski revizyonu yeniden üretme politikası belirtilmemiştir.",
+    "Gerçek cihaz gönderimi bu kapsamda mevcut kabul edilmemiştir; UI, test, build veya cihaz işlemi çalıştırılmadı.",
+    "7+ kişi geliştirme/planlama ekibidir; fabrika operatör sayısı olarak yorumlanmadı."
+  ],
+  "recommendation": "Önce kalıcı proje/revizyon sözleşmesini, ardından bu revizyona bağlı onay ve çıktı geçersizleşme kurallarını belirleyin. Bunları ilk nitelendirilmiş cihazın pilot gönderim kapısına bağlayın. Tahminler yalnızca bu kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve başka raporlarla körlemesine toplanmamalıdır."
+}

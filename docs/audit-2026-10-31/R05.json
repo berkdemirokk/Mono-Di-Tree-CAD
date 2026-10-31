@@ -1,0 +1,69 @@
+{
+  "agent": "R05",
+  "role": "Kıdemli CAD eğri ve düzenleme inceleyicisi",
+  "scope": "Parametrik eğriler, örnekleme doğruluğu, bağlantı sürekliliği ve dikiş ölçümü",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:18-31 PatternPiece yalnızca Points ve Closed saklıyor",
+    "src/TekstilCAD.Core/Geometry.cs:152-165 eşit parametre adımlı Bézier örnekleme",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:68-79 eğrileri 64 segmentli açık çoklu çizgi olarak ekleme",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:95-113 tek köşe sürükleme",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:117-124 sabit 65 örnekli yay",
+    "src/TekstilCAD.Desktop/MainWindow.cs:228 özellikler yalnızca çevre kutusu, nokta sayısı, alan gösteriyor"
+  ],
+  "findings": [
+    {
+      "id": "R05-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Eğri kimliği ve kontrol geometrisi kayboluyor",
+      "evidence": "Models.cs:18-25 kontrol noktası/segment tipi/radyus içermez; CadCanvas.cs:71 ve78 yalnızca örneklenmiş noktaları AddValidated üzerinden kaydeder.",
+      "impact": "Kullanıcı kaydet-aç sonrasında Bézier tutamaçlarını veya yay yarıçapını düzenleyemez; serileme ve tekrar dışa aktarma özgün eğriyi koruyamaz.",
+      "acceptance": "Line/Arc/CubicBezier içeren sürümlü segment modeli; kontrol geometrisi, yön ve kapalı kontur üyeliği kaydet-aç ve undo/redo sonrası birebir korunmalı; aynı parametreleri kullanan iki render ölçeği aynı model değerlerini vermeli.",
+      "effort_days": [15, 30],
+      "dependencies": ["Sürümlü yerel dosya şeması", "Belge/düzenleme kullanım senaryosu katmanı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R05-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Çıkış eğrileri için milimetre hata bütçesi yok",
+      "evidence": "Geometry.cs:152-165 eşit t adımları kullanır; CadCanvas.cs:71 ve124 boyuttan/eğrilikten bağımsız 64 segment üretir. Analitik örnek: 1000 mm yarıçaplı 180 derece yayda 64 kirişin azami sapması yaklaşık 0,301 mm'dir; bu hesap kaynak algoritmadan çıkarımdır, fiziksel ölçüm değildir.",
+      "impact": "Büyük veya yüksek eğrilikli parçalarda ekranda düzgün görünen çizgi plotter dosyasında kabul edilmemiş geometrik sapma oluşturabilir.",
+      "acceptance": "Fabrikanın onaylayacağı dijital tolerans parametresiyle adaptif düzleştirme; örnek kabul hedefi 0,1 mm için farklı yarıçap/eğrilik korpusunda azami eğri-kiriş uzaklığı hedefi aşmamalı. Ekran yakınlığı üretim dosyasının toleransını değiştirmemeli; segment üst sınırı aşıldığında açık hata/uyarı verilmeli.",
+      "effort_days": [8, 15],
+      "dependencies": ["Parametrik eğri modeli", "Dijital tolerans sözleşmesi", "Çıkış profilleri"],
+      "confidence": "high"
+    },
+    {
+      "id": "R05-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Karma kontur ve teğet sürekliliği düzenlenemiyor",
+      "evidence": "CadCanvas.cs:71/78 her Bézier/yayı ayrı açık parça ekler; FinishPolyline satır45 yalnızca Çoklu çizgi aracını kapatır. Satır95 ve113 sürüklemede bir örnek köşesini değiştirir; tangent handle veya bağlantı kısıtı bulunmaz.",
+      "impact": "Kol evi/yaka gibi eğrileri düz kenarlarla kapalı üretim konturuna birleştirmek ve düzeltme sonrasında düzgün geçişleri korumak mümkün değildir.",
+      "acceptance": "Uç birleştirme, bölme/trim ve çizgi-eğri karma kapalı kontur araçları; isteğe bağlı G1 teğet kilidi; sınanmış örneklerde birleşim açıklığı ve teğet açısı onaylı tolerans altında kalmalı, undo/redo aynı bağlantı topolojisini geri getirmeli.",
+      "effort_days": [20, 40],
+      "dependencies": ["Parametrik segment modeli", "Topoloji ve bağlantı kimlikleri", "Geometrik kısıt çözümü"],
+      "confidence": "high"
+    },
+    {
+      "id": "R05-F4",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Dikiş yolu uzunluğu ve eşleşme kontrolü yok",
+      "evidence": "MainWindow.cs:228 yalnızca çevre kutusu boyutları, nokta sayısı ve poligon alanını gösterir. İncelenen Geometry.cs yalnızca iki nokta mesafesi sunar; eğri yolu uzunluğu ve seçili alt-yol ölçümü API'si yoktur.",
+      "impact": "Fabrika operatörü iki parçanın dikilecek eğrilerinin uzunluğunu ve tolerans farkını uygulama içinde doğrulayamaz.",
+      "acceptance": "Seçili segment zinciri/çentikler arası yol uzunluğu, iki dikiş yolu farkı ve sayısal rapor; daire yayında analitik uzunluğa, Bézier referans korpusunda bağımsız yüksek hassasiyetli çözüme onaylı hata bütçesinde uymalı. Ekran zoomu ölçüyü değiştirmemeli.",
+      "effort_days": [10, 20],
+      "dependencies": ["Parametrik eğri modeli", "Çentik/alt-yol referans modeli", "Operatör ölçü toleransları"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın kabul edeceği dijital eğri ve dikiş uzunluğu toleransları henüz belirlenmedi.",
+    "USB plotterın fiziksel çözünürlüğü ve uzun mesafeli kâğıt besleme hatası bilinmiyor; dijital tolerans fiziksel doğruluk iddiası değildir.",
+    "Kullanıcının mevcut gerçek kalıplarında hangi eğri tiplerinin öncelikli olduğu bu dar kapsamda incelenmedi."
+  ],
+  "recommendation": "Büyük fabrika pilotunda eğriyi yalnızca görsel çizim aracı olarak sunmak yerine parametrik model, tolerans kontrollü dışa aktarım ve dikiş yolu ölçümü aynı kabul zincirine alınmalı. Tahmini eforlar kesişir; doğrudan toplanmamalıdır."
+}

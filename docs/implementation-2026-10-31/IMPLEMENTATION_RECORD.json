@@ -1,0 +1,133 @@
+{
+  "version": "0.3.0-preview",
+  "date": "2026-10-31",
+  "target": "Large factory; 7+ development/product staff",
+  "agents": [
+    {
+      "id": "I01",
+      "task": "document_session"
+    },
+    {
+      "id": "I02",
+      "task": "output_geometry"
+    },
+    {
+      "id": "I03",
+      "task": "grading_workflow"
+    },
+    {
+      "id": "I04",
+      "task": "storage_concurrency"
+    },
+    {
+      "id": "I05",
+      "task": "recovery_sessions"
+    },
+    {
+      "id": "I06",
+      "task": "operator_research"
+    },
+    {
+      "id": "I07",
+      "task": "numeric_input"
+    },
+    {
+      "id": "I08",
+      "task": "canvas_keyboard"
+    },
+    {
+      "id": "I09",
+      "task": "queue_restart"
+    },
+    {
+      "id": "I10",
+      "task": "session_review"
+    },
+    {
+      "id": "I11",
+      "task": "storage_review"
+    },
+    {
+      "id": "I12",
+      "task": "output_review"
+    },
+    {
+      "id": "I13",
+      "task": "machine_usability"
+    },
+    {
+      "id": "I14",
+      "task": "desktop_acceptance"
+    },
+    {
+      "id": "I15",
+      "task": "ux_finish_review"
+    }
+  ],
+  "concurrency": "Maximum three subagents plus root, executed in waves",
+  "unitTests": {
+    "passed": 267,
+    "skipped": 0,
+    "failed": 0
+  },
+  "build": {
+    "errors": 0,
+    "warnings": 0
+  },
+  "hiddenDesktop": {
+    "status": "PASS",
+    "checks": [
+      "MainWindow constructed without Show",
+      "LoadDocument",
+      "Undo disabled for fresh document",
+      "AddPiece",
+      "Undo enabled after edit",
+      "Undo",
+      "Redo",
+      "Invalid commit rolled back",
+      "Canvas validation failure handled without mutation",
+      "Desktop SaveTo and native load round trip",
+      "Replacing document clears previous save destination",
+      "Renaming preserves full precision coordinates",
+      "Undo to saved content is clean",
+      "No-op properties preserve redo",
+      "Redo restores named edit and selection",
+      "Desktop conflict preserves external file and local edits",
+      "Canvas keyboard command 1 mm records one edit",
+      "Canvas keyboard undo restores geometry and selection 1 mm",
+      "Canvas keyboard command Shift 10 mm records one edit",
+      "Canvas keyboard undo restores geometry and selection Shift 10 mm",
+      "Canvas keyboard command Ctrl 0.1 mm records one edit",
+      "Canvas keyboard undo restores geometry and selection Ctrl 0.1 mm",
+      "Canvas ignores unsupported modifiers, missing selection and active preview",
+      "Canvas exposes accessible name and keyboard guidance",
+      "Offscreen layout and render at 1440x900 and 1024x640",
+      "Import review exposes dimensions and loss notes before replacing the document",
+      "TextileToolsWindow construction and layout",
+      "MachineCenterWindow construction and layout",
+      "Grade table has visible sized columns and source rows",
+      "Compact grading grid has at least 150 visible pixels (actual 250, visible 250)",
+      "Compact grading column headers are inside the clipped content viewport",
+      "Compact grading first three rows are fully readable inside the clipped content viewport",
+      "Grading command adds and selects a generated piece",
+      "Sequential sizes retain base and grading increments",
+      "Duplicate size name does not create extra geometry",
+      "Machine selection explicitly retains the chosen source piece",
+      "Machine UI command creates a local exchange job",
+      "Machine prepares only selected pieces without mutating the source",
+      "Machine preview uses the prepared file and its actual scaled millimetre bounds",
+      "Machine UI verifies checksum without hardware",
+      "No window shown",
+      "Runtime data directory isolated from installation and verification stays local"
+    ],
+    "count": 42
+  },
+  "limits": [
+    "Physical device compatibility unverified; USB model/protocol unknown",
+    "Grading rule drafts are not persisted; close warning implemented",
+    "No real operator, screen reader or multi-DPI acceptance",
+    "Named mutex and recovery instances tested; independent OS process crash testing pending",
+    "General textile schema, production permissions, installer and commercial release gates pending"
+  ],
+  "wearcad": "No writes or device operations"
+}

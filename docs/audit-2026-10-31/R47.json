@@ -1,0 +1,56 @@
+{
+  "agent": "R47",
+  "role": "AI mühendisi",
+  "scope": "Ertelenmiş AI önerileri: geometri doğrulaması, veri kullanım hakları ve çevrimdışı değerlendirme",
+  "evidence": [
+    "ROADMAP.md:12 AI aşamasını Windows doğrulamasının sonrasına koyar; önerilerin çekirdek geometriyle doğrulanmasını ve temel kullanımın API'ye bağımlı olmamasını ister.",
+    "src/TekstilCAD.Core/Geometry.cs:129-146 kapalı basit kontur doğrulaması; 4096 köşe sınırı, tekrar, alan ve kesişim kontrolleri.",
+    "src/TekstilCAD.Core/DocumentHistory.cs:20-27 kayıt/undo/redo; :39-40 nokta bütçesi aşıldığında geçmiş temizlenir.",
+    "src/TekstilCAD.Core/Models.cs:19-34 parça ve proje modelinde ad, kimlik ve noktalar mevcut; AI öneri kökeni veya veri kullanım izni alanı yok.",
+    "docs/PRODUCT_RELEASE_PLAN.md:3 çevrimdışı Windows hedefi; :11-14 üretim geometrisi ve tekrarlanabilir pastal beklentileri."
+  ],
+  "findings": [
+    {
+      "id": "R47-F1",
+      "kind": "proposal",
+      "priority": "P3",
+      "title": "AI önerisini doğrulanan ve geri alınabilen değişiklik olarak sınırlandırın",
+      "evidence": "ROADMAP.md:12 geometri doğrulaması şartını koyuyor; Geometry.cs:129-146 yalnız basit kapalı konturu doğruluyor. DocumentHistory.cs:39-40 büyük belgede geçmişi temizleyebiliyor. Bu kaynaklar mevcut AI uygulaması veya tüm tekstil kurallarının doğrulanması kanıtı değildir.",
+      "impact": "Gelecekte biçimsel olarak geçerli fakat ölçü veya üretim kısıtı yanlış öneriler fabrika revizyonlarına taşınabilir; geri alma güvencesi olmadan kabul riski artar.",
+      "acceptance": "AI geliştirmesi başladığında öneri önce ayrı önizlemede gösterilsin; kaynak revizyonu, değişen noktalar ve mm farkları kaydedilsin. Kontur, ölçü toleransı ve mevcut işin tanımlı tekstil kısıtları deterministik doğrulansın; desteklenmeyen doğrulama açıkça reddedilsin. Kabul kullanıcı eylemi gerektirsin; reddetme belgeyi değiştirmesin. Bütçe sınırı dahil her kabul edilen değişiklik tek işlemle geri alınabilsin veya uygulanmadan engellensin. AI hiçbir otomatik fiziksel makine komutu üretip göndermesin.",
+      "effort_days": [5, 9],
+      "dependencies": ["Kararlı belge revizyonu ve işlem sınırı", "Onaylı ölçü/tekstil kısıtları", "Deterministik pilot tamamlanması"],
+      "confidence": "high"
+    },
+    {
+      "id": "R47-F2",
+      "kind": "proposal",
+      "priority": "P3",
+      "title": "AI veri kümesine yalnız kullanım hakkı belirlenmiş kalıpları alın",
+      "evidence": "Models.cs:19-34 veri kullanım izni veya veri kümesi kökeni taşımıyor; ROADMAP.md:12 AI için veri kümesi edinimi, eğitim izni ve saklama kuralı tanımlamıyor. İncelenen bu kapsam dışında sözleşme bulunup bulunmadığı bilinmiyor.",
+      "impact": "Müşteri kalıbının işlenmesine verilen izin eğitim veya dış hizmete aktarım izniyle karıştırılırsa fabrika tasarımlarının gizliliği ve kullanım hakları zedelenebilir.",
+      "acceptance": "İlk deneyden önce ayrı veri manifestinde her örneğin sahibi, kaynak revizyonu, izin verilen kullanım (değerlendirme/eğitim), saklama ve silme kararı bulunsun; hakkı belirsiz örnek sayısı sıfır olsun. Kimlik/ad/yol bilgileri asgariye indirilsin. Varsayılan deney yerel çalışsın; dış aktarım kapalı olsun. WearCAD dosyaları otomatik eğitim kaynağı sayılmasın; yalnız açıkça yetkilendirilmiş bağımsız kopyalar değerlendirilsin.",
+      "effort_days": [2, 4],
+      "dependencies": ["Fabrikanın veri sahibi ve kullanım izni kararı", "Bağımsız deney veri deposu"],
+      "confidence": "high"
+    },
+    {
+      "id": "R47-F3",
+      "kind": "proposal",
+      "priority": "P3",
+      "title": "Çevrimdışı kıyaslama geçmeden AI faydası iddia etmeyin",
+      "evidence": "ROADMAP.md:12 yalnız gelecek AI önerilerini tanımlar; docs/PRODUCT_RELEASE_PLAN.md:3 çevrimdışı ürünü, :14 tekrarlanabilir ve çakışmasız pastalı hedefler. Bu belgeler AI modelini, ölçülmüş hata oranını veya değerlendirme korpusunu belirtmez.",
+      "impact": "Ölçülmemiş AI çalışması 7+ kişilik geliştirme ekibinin deterministik fabrika pilotunu geciktirebilir; öneri kalitesi ürün ailesi veya bedenler arasında farklılaşabilir.",
+      "acceptance": "Pilot sonrasında tek öneri görevi seçilsin ve mevcut deterministik yöntemle aynı ayrılmış değerlendirme kümesinde karşılaştırılsın. Aynı model/kalıp ailesinin yakın revizyonları eğitim ve değerlendirmeye dağılmasın. Ölçü hatası (mm), kısıt ihlali, yanlış kabul, reddetme, düzeltme süresi ve yerel donanımda p95 gecikme raporlansın. Beden/ürün ailesi alt grupları; kişiye bağlı veri varsa ilgili demografik gruplar için kapsama ve hata farkları gösterilsin. Sayısal kabul eşikleri deneyden önce fabrika ile kararlaştırılsın; sınırları aşan öneriler uygulanmasın. İnternet ve ücretli dış servis olmadan temel CAD akışı tamamlanabilsin; AI kapalıyken pilotun tüm kabul görevleri çalışsın.",
+      "effort_days": [4, 7],
+      "dependencies": ["Hakları doğrulanmış değerlendirme korpusu", "Tek görev tanımı ve deterministik karşılaştırma", "Referans yerel donanım", "Fabrika kabul eşikleri"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "AI modeli, sağlayıcı, donanım gereksinimi ve eğitim verisi seçilmiş mi bilinmiyor; mevcut AI yeteneği iddia edilmedi.",
+    "Müşteri kalıplarının eğitim/değerlendirme kullanım hakları incelenen kaynaklardan doğrulanamıyor.",
+    "Derleme, test, UI veya cihaz işlemi yapılmadı; kabul maddeleri gelecekteki önerilerdir."
+  ],
+  "recommendation": "AI'yı deterministik büyük fabrika pilotunun sonrasında, ayrı P3 deney olarak tutun. Önce tek ölçülebilir öneri görevini yerel değerlendirin; model satın alma veya ücretli API şartı koymayın. Eforlar yalnız belirtilen hazırlık/sözleşme/değerlendirme işleri içindir, model eğitimi ve entegrasyon/QA dahil değildir; diğer raporlarla körlemesine toplanmamalıdır."
+}

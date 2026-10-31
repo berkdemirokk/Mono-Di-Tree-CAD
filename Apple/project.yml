@@ -1,0 +1,19 @@
+name: TekstilCADViewer
+options:
+  deploymentTarget:
+    iOS: '16.0'
+    macOS: '13.0'
+targets:
+  TekstilCADViewer:
+    type: application
+    platform: [iOS, macOS]
+    sources: [TekstilCADViewer]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.berkdemirokk.monoditreecad
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_VERSION: '5.0'
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_APP_SANDBOX: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Mono Di Tree CAD
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.graphics-design

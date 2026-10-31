@@ -1,0 +1,8 @@
+{
+  "auditDate": "2026-10-31",
+  "sourceCommit": "059047b6a9214b29fbf6f6c83527994475fc778f",
+  "userConfirmed": {"customer": "Büyük fabrika", "team": "7+ kişi", "currentConnection": "USB", "longTermGoal": "Çok üreticili, çok model ve çözüm desteği"},
+  "notConfirmed": ["Fiziksel marka/model", "Kontrolör/firmware", "USB protokolü/sınıfı", "Üretici SDK/API erişimi", "Çizim eni", "Üretici toleransı", "İlk fabrika ürün ailesi", "Günlük iş/adet ve eşzamanlı operatör", "Mevcut ERP/MES arayüzü"],
+  "auditConstraints": ["Kaynak kod salt okunur", "WearCAD dosyaları salt okunur", "Görünür UI yok", "Cihaza veri veya iş gönderilmez"],
+  "planningPolicy": "Bağlantı türü uyumluluk sertifikası değildir; desteklenen model/firmware/taşıma/format birleşimi ayrı doğrulanır. Tek pilot cihazla başlanır."
+}

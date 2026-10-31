@@ -1,0 +1,58 @@
+{
+  "agent": "R44",
+  "role": "CI ve yeniden üretilebilir yayın denetçisi",
+  "scope": "Kaynak/ikili kökeni, otomatik yayın kapıları ve yeniden üretilebilir derleme girdileri; salt okunur inceleme.",
+  "evidence": [
+    "scripts/Build.ps1:1,7-11",
+    "scripts/Package.ps1:36-39,48-58,64-71",
+    "scripts/VerifyArchive.ps1:29-40",
+    "global.json:1",
+    "tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj:11-14",
+    "Hedefli rg --files --hidden araması: .github/**, .gitlab-ci*, azure-pipelines*, Directory.*, NuGet.Config/nuget.config ve *lock.json eşleşmesi yok."
+  ],
+  "findings": [
+    {
+      "id": "R44-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Paketleme başarılı test ve temiz kaynak derlemesini zorunlu kılmıyor",
+      "evidence": "scripts/Build.ps1:1,9-11 testleri isteğe bağlı Test anahtarına bağlar. scripts/Package.ps1:38-39 yalnız Desktop publish sonucunu kontrol eder; 64 VerifyArchive çağrısında BuildExtractedSource yoktur. scripts/VerifyArchive.ps1:29 cleanBuild alanını not requested yapar; temiz derleme ve testler yalnız 31-40 isteğe bağlı dalındadır. Hedefli dosya aramasında depo içi GitHub/GitLab/Azure CI tanımı bulunmadı; depo dışı CI bilinmiyor.",
+      "impact": "7+ geliştiricili ekipte testleri başarısız kaynak değişikliği mevcut paketleme yolundan dağıtılabilir; fabrikanın aldığı sürüm için tekrarlanabilir yayın kabul kaydı oluşmaz. Bu denetimde başarısız paket üretilmedi.",
+      "acceptance": "Yayın işi temiz checkout üzerinde Release derleme ve testleri zorunlu çalıştırır; kasıtlı başarısız test bulunan değişiklik dağıtılabilir artefakt yayımlayamaz. Başarılı işin commit kimliği, test sonuçları ve arşiv hashleri aynı saklanan yayın kaydına bağlanır.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "CI sağlayıcısı ve Windows runner erişimi",
+        "R31-F1 derleme kökeni eşleme düzeltmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R44-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Sabit arşiv zamanı yeniden üretilebilir derleme kanıtı sağlamıyor",
+      "evidence": "scripts/Package.ps1:48-58 arşiv üye sırasını ve zamanını sabitler; 38 publish örtük restore kullanır ve 66-70 manifest SDK/bağımlılık çözümünü kaydetmez. global.json:1 rollForward latestPatch seçer. tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj:11-14 doğrudan paket sürümlerini belirtir; hedefli aramada kilit dosyası veya merkezi restore ayarı bulunmadı. scripts/VerifyArchive.ps1:22,26 SHA256 hesaplar; 36-40 kaynak derleme/test başarısını denetler, yeniden derlenen ikiliyi dağıtım ikilisiyle karşılaştırmaz.",
+      "impact": "Aynı commitin farklı geliştirici veya runner ortamında aynı ikiliyi verdiği henüz kanıtlanmış değildir. Hashler içerik bütünlüğü karşılaştırmasına yarar; tek başına yayıncı kökenini veya doğrulanmış kaynak-ikili bağını ispatlamaz. Hata yeniden üretimi ve geri dönüş sürümünün denetimi zayıflar.",
+      "acceptance": "Yayın sözleşmesi SDK/runtime, restore girdileri ve runner imajını kaydeder; bağımlılık değişimi kilitli restore kontrolünde reddedilir. Aynı commit iki temiz ortamda yayımlanır; uygulama ikilileri ve paket için beklenen hash eşitliği veya belgelenmiş normalizasyon ölçütü otomatik karşılaştırılır, fark yayın kapısını durdurur.",
+      "effort_days": [
+        2,
+        5
+      ],
+      "dependencies": [
+        "R31-F1 kaynak-ikili köken sözleşmesi",
+        "R44-F1 CI yayın kapısı",
+        "R31-F2 yayıncı imzası ayrı iş kalemi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Depo dışında tanımlanmış CI, korumalı dal kuralları veya manuel yayın onayları incelenemedi.",
+    "Gerçek artefaktların iki temiz derleme arasındaki byte eşitliği ölçülmedi; mevcut SDK varsayılan deterministik derleme davranışının yetersiz olduğu iddia edilmiyor.",
+    "Derleme/test, UI, cihaz iletişimi çalıştırılmadı; WearCAD ve uygulama kodu değiştirilmedi."
+  ],
+  "recommendation": "Önce başarılı testleri zorunlu yayın kapısına bağlayın; R31-F1 ile ortak köken kaydını kullanarak yeniden üretilebilirlik kontrolünü ekleyin. Eforlar yalnız bu dar kapsam için ön mühendis-gün tahminidir; entegrasyon/QA hariçtir ve örtüşen raporlarla doğrudan toplanmamalıdır."
+}

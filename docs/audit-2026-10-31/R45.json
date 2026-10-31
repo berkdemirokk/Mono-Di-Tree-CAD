@@ -1,0 +1,47 @@
+{
+  "agent": "R45",
+  "role": "Veritabanı güvenilirlik mühendisi — dosya tabanlı fabrika felaket kurtarma",
+  "scope": "TekstilCAD proje, Recovery, MachineSpool ve lisans bağımlılıklarının tam yedek kümesi ve temiz bilgisayarda geri dönüşü; yalnız kaynak/belge incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/AppPaths.cs:9-14 kullanıcıya bağlı Studio, Recovery, MachineSpool, Projects ve Logs yolları",
+    "src/TekstilCAD.Desktop/MainWindow.cs:285-286 proje hedefi kullanıcı tarafından değiştirilebilir; :321-324 Recovery/archived saklama yolu",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28 işin OutputPath ve ManifestPath alanları; :34-40 bellek içi iş listesi; :62-65 manifest yazımı",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:17-25 tek proje yükleme ve içerik doğrulama",
+    "src/TekstilCAD.Licensing/LicenseVerifier.cs:75-76 başka cihaz kimliği WrongDevice sonucunu üretir",
+    "MIGRATION.md:13-15 başka bilgisayara taşıma kaynak paketini ve yolların ayrıca kontrolünü anlatır; README.md:14 kullanıcı kalıplarını kaynak yedeğinden hariç tutar",
+    "docs/PRODUCT_RELEASE_PLAN.md:26 yedekleme gelecek işidir; scripts ve tests içindeki backup/restore/rpo/rto hedefli aramada veri yedekleme veya temiz-PC geri yükleme tatbikatı bulunmadı (paket restore ve geometri/history sonuçları hariç)."
+  ],
+  "findings": [
+    {
+      "id": "R45-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fabrika verisinin tam yedek kümesi ve geri yükleme sözleşmesi eksik",
+      "evidence": "AppPaths.cs:9-14 çalışma verisini kullanıcı profiline ayırır; MainWindow.cs:285-286 seçilen proje hedefinin varsayılan klasör dışında olmasına izin verir; :321-324 kurtarma arşivi ayrı alt klasördedir. README.md:14 kaynak yedeğine kullanıcı kalıplarının alınmamasını söyler; MIGRATION.md:15 kaynak taşımasını anlatır. Bu yolları birlikte kapsayan veri yedeği envanteri ve doğrulama manifesti incelenen belgelerde yoktur.",
+      "impact": "Yalnız uygulama ZIP'i veya varsayılan Projects klasörü kopyalanırsa kullanıcı tarafından başka yere kaydedilmiş işler, kurtarma kopyaları ve simülasyon izleri geri dönüş kapsamı dışında kalabilir. Bu gözlenmiş veri kaybı değil, PC/disk kaybına hazırlık boşluğudur.",
+      "acceptance": "Veri sahibiyle kapsam envanteri onaylanır: tüm proje hedefleri, Recovery/archived, MachineSpool ve gerekli günlükler; lisans/güven bilgisi saklama veya yetkili yeniden edinme yolu açıkça tanımlanır. Ayrı hata alanında tutulan yedek manifesti uygulama sürümü, göreli yollar, dosya boyutu, SHA256 ve tutarlı kesim zamanını içerir. Kontrollü kapanış veya tutarlı anlık görüntü yöntemi seçilir. Varsayılan dışı proje içeren örnekte eksik/değişmiş dosya saptanır; özgün hedefi ezmeden yeni dizine geri yüklenir.",
+      "effort_days": [4, 7],
+      "dependencies": ["Fabrika veri sahipliği ve saklama kararı", "R11 revizyon saklama kapsamıyla birleştirme", "R38 veri saklama politikası", "R33 lisans yeniden bağlama sözleşmesi"],
+      "confidence": "high"
+    },
+    {
+      "id": "R45-F2",
+      "kind": "proposal",
+      "priority": "P1",
+      "title": "Temiz bilgisayarda ölçülen felaket kurtarma tatbikatı pilot kapısı olmalı",
+      "evidence": "MIGRATION.md:15 temiz dizinde kaynak derleme ve yolları kontrol etmeyi tarif eder; üretim verisi geri yükleme kanıtı sunmaz. SimulationQueue.cs:26-28,34-40,62-65 manifestte yollar ve bellek içi kuyruk bulunur; dosya kopyası kuyruğun yeniden kurulduğunu kanıtlamaz. LicenseVerifier.cs:75-76 cihaz eşleşmesi kontrol eder. ProjectStorage.cs:17-25 tek dosyayı doğrular; tam sistem sürüm uyumluluğu veya kurtarma süresi ölçmez.",
+      "impact": "Dosyaların elde bulunması, farklı Windows hesabındaki yedek PC'nin işi açıp operatöre güvenli biçimde teslim edebileceğini kanıtlamaz. Gelecek gerçek USB üretim akışında geri yüklenen eski işin tekrar gönderilmesi ayrıca üretim mutabakatı gerektirir; mevcut modül yalnız simülasyondur.",
+      "acceptance": "Fabrika onayına sunulacak ilk felaket senaryosu hedefleri: disk/PC kaybında RPO ≤15 dakika ve hazır yedek PC üzerinde RTO ≤60 dakika; bunlar taahhüt veya ölçülmüş sonuç değildir. Onaylanan hedeflerle farklı hesap/yol içeren temiz PC'de gerçek yedekten dönüş yapılır; desteklenen uygulama/veri sürümü, tüm proje kimlik ve geometri sayımları, çıktı özetleri, lisansın yetkili yeniden edinimi ve iş durumları doğrulanır. Geri yüklenen işler otomatik fiziksel gönderilmez. Felaket ilanından operatörün işi açıp devam onayına kadar süre ve son doğrulanmış veri zamanı kaydedilir. İlk pilot öncesi ve önemli sürüm değişiminde tatbikat, sonrasında fabrika onaylı periyot ve başarısızlık sorumlusu belirlenir.",
+      "effort_days": [3, 6],
+      "dependencies": ["R45-F1 tam yedek kümesi", "Fabrika tarafından onaylanan RPO/RTO ve hazır yedek PC", "R32 sürüm uyumluluğu/geri dönüş politikası", "R33 cihaz devri", "Makine işleri için geri yükleme sonrası mutabakat kararı"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın veri hacmi, harici yedekleme sistemi, saklama süresi ve ayrı hata alanı bilinmiyor.",
+    "Temiz PC geri yükleme veya lisans taşıma tatbikatı çalıştırılmadı; gerçek RPO/RTO ölçülmedi.",
+    "Lisans kitaplığı üretim entegrasyonu ve fiziksel USB plotter modeli/protokolü bu kapsamda doğrulanmadı.",
+    "7+ kişi yazılım geliştirme ekibidir; fabrika istasyonu veya lisans koltuğu sayısı değildir."
+  ],
+  "recommendation": "Büyük fabrika pilotu için önce tam veri yedeği sözleşmesini, ardından temiz PC geri yükleme kanıtını tamamlayın. R11 atomik kayıt/revizyon ve R12 oturum çökmesi kapsamını burada tekrar iş olarak saymayın; bu rapor PC/disk kaybına odaklanır. Tahminler yalnız dar kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve ortak işlerle körlemesine toplanamaz."
+}

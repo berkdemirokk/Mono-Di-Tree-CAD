@@ -1,0 +1,72 @@
+{
+  "agent": "R04",
+  "role": "Statistician / Numerical geometry auditor",
+  "scope": "Milimetre hesapları, tolerans sözleşmesi, sınır testleri ve düzenlemede sayısal korunma",
+  "evidence": [
+    "src/TekstilCAD.Core/Geometry.cs:6,14,37-40,109,119,141-144,175-184",
+    "tests/TekstilCAD.Tests/GeometryTests.cs:6-21",
+    "tests/TekstilCAD.Tests/GeometryRobustnessTests.cs:7-57",
+    "src/TekstilCAD.Desktop/MainWindow.cs:227-241"
+  ],
+  "findings": [
+    {
+      "id": "R04-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Boyuta ve işlem türüne göre tanımlı tolerans sözleşmesi yok",
+      "evidence": "Geometry.cs:6 tek Epsilon=1e-8; :109 uzunluk için, :119 skaler çarpım için, :143 alan için kullanılıyor. :178 yönelim eşiği Epsilon*Max(1,segment uzunluğu), :141 tekrar kontrolü tam eşitlik. Böylece farklı boyutlardaki büyüklükler aynı sayısal eşikle ve farklı eşitlik kurallarıyla ele alınıyor.",
+      "impact": "Neredeyse çakışan veya çok kısa kenarların bir işlemde geçerli, diğerinde geçersiz sayılması riskini ürün gereksinimi açıklamıyor. ±1e8 mm çalışma sınırı doğruluk garantisi değildir.",
+      "acceptance": "Uzunluk(mm), alan(mm²), açısal/kollinear kararlar ve birleştirme için ayrı belgeli toleranslar tanımlansın. Toleransın 0,5x/1x/2x yakınındaki sınır örnekleri, kısa/uzun segment ve ölçek/öteleme dönüşümlerinde beklenen sınıflandırmayı korusun. İzin verilen üretim ölçü hatası tekstil operatörü ve hedef plotter profiliyle onaylansın.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Pilot ölçü doğruluğu hedefi",
+        "Normal kalıp koordinat/kenar uzunluğu zarfı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R04-F2",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Sayısal dayanıklılık referans-orakl ve dönüşüm zinciriyle ölçülmemiş",
+      "evidence": "GeometryTests.cs:6-21 basit kare, 3-4-5 mesafe, tek 90° dönüş ve birkaç kesişim örneği içeriyor. GeometryRobustnessTests.cs:17-23 büyük koordinatlarda sonlu uzunluk/alanı test ediyor; yakın kollinear sınırlar, uzun dönüşüm zincirleri ve yüksek hassasiyetli bağımsız referans karşılaştırması bu iki çekirdek test dosyasında yok. SignedArea Geometry.cs:38-40 normal toplam kullanıyor.",
+      "impact": "Geçen test adedi gerçek kalıp ölçeklerinde maksimum ölçü/alan hatasını veya nadir topoloji yanlış sınıflandırmalarını sınırlandırmıyor. Herhangi bir yanlış çıktı bu denetimde çalıştırılarak gösterilmedi; güven aralığı veya üretim doğruluğu iddiası kurulamaz.",
+      "acceptance": "Sabit seed ile en az 10000 farklı çokgen/segment örneği; küçük kenar, uzak orijin, çok ince parça ve yakın kollinear sınıfları ayrı raporlansın. Bağımsız yüksek hassasiyetli referansa karşı maksimum ve p99 ölçü/alan hatası raporlansın. 1000 döndürme/ters döndürme ile öteleme/ters öteleme zincirleri onaylanan tolerans içinde kalsın; kaynak geometri değişmesin.",
+      "effort_days": [
+        5,
+        10
+      ],
+      "dependencies": [
+        "R04-F1 tolerans sözleşmesi",
+        "Bağımsız referans hesaplayıcı ve test korpusu"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R04-F3",
+      "kind": "defect",
+      "priority": "P2",
+      "title": "Yalnızca parça adı değiştirilirken konum da yuvarlanabiliyor",
+      "evidence": "MainWindow.cs:227 X/Y alanları 0.### formatıyla üç ondalığa yuvarlanıyor. ApplyProperties :236-241 aynı alanları her uygulamada parse edip tüm noktaları px-b.MinX ve py-b.MinY kadar taşıyor. Örneğin minimum X=0,000123 mm olan parçada yalnızca ad değiştirilip Uygula seçilirse gösterilen X=0 değeri nedeniyle konum kayar. Bu kaynak-kod çıkarımıdır; UI çalıştırılmadı.",
+      "impact": "İsim düzenleme, geometriyi değiştirmemesi gereken bir işlemdir. Tek değişimde küçük olsa da içe alınmış yüksek hassasiyetli koordinatların sessiz kaybı, round-trip ve kullanıcı güveni açısından kusurdur.",
+      "acceptance": "Koordinat alanı kullanıcı tarafından değiştirilmediyse ad güncellemesi tüm Point2 değerlerini aynen korusun. 0,000123 ve negatif kesirli koordinatlı dosyada ad-only düzenleme sonrası kaydet/aç eşitliği testi eklensin. Açık koordinat düzenlemesi yalnızca girilen değere taşısın.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "Özellik panelinde değişen alan takibi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Üretim için izin verilen gerçek mm sapması henüz kullanıcı/cihaz modeliyle kararlaştırılmadı.",
+    "Plotter modeli, mekanik hassasiyeti ve kalibrasyon durumu bilinmiyor; USB bağlantı bilgisi doğruluğu belirlemez.",
+    "Bu ajan test çalıştırmadı; kaynak incelemesi yaptı."
+  ],
+  "recommendation": "Önce yazılım tolerans bütçesi ve bağımsız sayısal korpus oluşturulsun. Çekirdek test başarısı fiziksel ölçü doğruluğundan ayrı raporlansın; isim düzenlemedeki sessiz yuvarlama küçük ve bağımsız bir düzeltme dilimidir."
+}

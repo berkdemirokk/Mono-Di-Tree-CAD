@@ -1,0 +1,93 @@
+{
+  "agent": "R20",
+  "role": "Üretim kuyruğu ve yeniden başlatma denetçisi",
+  "scope": "MachineGateway yerel simülasyon kuyruğu: kalıcılık, iş kimliği, yaşam döngüsü, yeniden başlatma uzlaştırması ve iptal. Yalnızca kaynak/test okundu; test çalıştırılmadı.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:10,26-40,56-86,92-101",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:51-52,86,92",
+    "src/TekstilCAD.Desktop/MainWindow.cs:26",
+    "tests/TekstilCAD.Tests/MachineGatewayTests.cs:49-92"
+  ],
+  "findings": [
+    {
+      "id": "R20-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Diskteki işler yeniden başlatmada kuyruğa alınmıyor",
+      "evidence": "SimulationQueue.cs:34 boş liste oluşturur; :37-40 yalnızca klasörü doğrular, manifest yüklemez. :65-66 manifesti yazar ve listeye ekler. MachineCenterWindow.cs:51-52 bu davranışı oturum kuyruğu olarak açıkça belirtir. MachineGatewayTests.cs:49-92 aynı kuyruk örneğini kullanır; yeniden açma senaryosu yoktur.",
+      "impact": "Büyük fabrikada vardiya veya uygulama değişiminde önceki hazırlıklar uygulama kuyruğunda bulunamaz; operatör yeniden hazırlama ile aynı işi çoğaltabilir. Bu mevcut simülatörün açıklanmış sınırıdır, gözlenmiş veri silinmesi değildir.",
+      "acceptance": "Aynı spool ile yeni süreç açıldığında geçerli iş kimlikleri ve son durumları eksiksiz yüklenmeli; bozuk manifest, eksik çıktı ve yarım hazırlık ayrı kurtarma kaydı oluşturmalı; yeniden açma otomatik fiziksel gönderim başlatmamalı.",
+      "effort_days": [
+        4,
+        7
+      ],
+      "dependencies": [
+        "Manifest şema sürümü",
+        "Kurtarma ve karantina politikası"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R20-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "İş kimliği üretim emri ve kaynak revizyonuna bağlı değil",
+      "evidence": "SimulationQueue.cs:26-28 yalnızca Guid, proje adı, profil, biçim, çıktı özeti, zaman ve geometri sayıları içerir; üretim emri, kaynak revizyonu, hazırlayan ve yeniden basım ilişkisi yoktur. :56 her Prepare çağrısında yeni Guid üretir; :62-64 kaynak adı ve çıktı hash'i kaydedilir. MachineGatewayTests.cs:68-70 farklı çıktı yollarını doğrular; tekrarlanan kullanıcı isteği kimliği sınanmaz.",
+      "impact": "Aynı adlı farklı revizyonlar ve tekrar hazırlanan işler arasında üretim izi kurulamaz; çıktı SHA256'sı tek başına iş emrini veya onaylı revizyonu açıklamaz.",
+      "acceptance": "İş manifesti değişmez iş emri/revizyon referansı, hazırlayan, profil sürümü ve özgün istek kimliği taşımalı; aynı istek tekrarında aynı iş dönmeli; bilinçli yeniden basım yeni iş ve önceki işe bağlantı üretmeli.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "İş emri ve revizyon kimlik sözleşmesi",
+        "Operatör kimliği"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R20-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fiziksel işin belirsiz sonucu ve iptal uzlaştırması tanımlı değil",
+      "evidence": "SimulationQueue.cs:10 durumları Prepared/Simulated/Failed ile sınırlar; :70-86 yalnızca checksum doğrular; :30 fiziksel I/O olmadığını belirtir. Sınıfın API'sinde gönderim, iptal, cihaz sorgulama veya yeniden bağlantı uzlaştırması yoktur. MachineCenterWindow.cs:92 fiziksel test yapılmadığını doğru biçimde söyler.",
+      "impact": "Bu bugün fiziksel makine hatası değildir. Gelecekte USB aktarımı bu durum modeline eklenirse, bağlantı kesildiğinde işi tamamlandı sanma veya kör yeniden gönderimle mükerrer üretim riski oluşur; iptal isteği cihazın durduğu anlamına gelmez.",
+      "acceptance": "İlk nitelikli USB adaptöründen önce gönderim/cihaz kabulü/fiziksel tamamlanma/belirsiz sonuç ve iptal isteği/teyidi ayrı tanımlanmalı. Aktarım ortası kesinti ve iptal yarışı testlerinde belirsiz iş otomatik yeniden gönderilmemeli; cihaz sorgusu yoksa operatör uzlaştırması istenmeli. Simulated yalnızca dosya doğrulaması olarak kalmalı.",
+      "effort_days": [
+        4,
+        8
+      ],
+      "dependencies": [
+        "USB marka/model/protokol tespiti",
+        "Cihazın durum ve iptal yeteneklerinin doğrulanması",
+        "İş yaşam döngüsü sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R20-F4",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Durum değişiklikleri geçmişi korunmuyor",
+      "evidence": "SimulationQueue.cs:80-85 durumu değiştirir ve Error alanını başarılı doğrulamada temizler; :98-99 manifesti geçici dosya üzerinden mevcut kaydın yerine taşır. :26-28 yalnızca CreatedAt içerir; durum zamanı, aktör veya olay geçmişi bulunmaz. MachineGatewayTests.cs:76-83 son Failed değerini kontrol eder, başarısızlık sonrası yeniden doğrulama geçmişini kontrol etmez.",
+      "impact": "Dosya bozulması giderilip yeniden doğrulandığında önceki hata son manifestten kaybolur; vardiyalar arası sorun incelemesinde kim, ne zaman, hangi nedenle durumu değiştirdi soruları yanıtlanamaz.",
+      "acceptance": "Her durum geçişi iş kimliği, olay kimliği, sıra, aktör, zaman ve gerekçeyle kalıcı olay geçmişine yazılmalı; başarısızlık ve sonraki başarı iki ayrı olay olarak korunmalı; aynı olayın tekrarı geçmişi çoğaltmamalı.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Kalıcı iş deposu",
+        "Operatör kimliği",
+        "Kayıt saklama politikası"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB plotter marka/model/controller/protokolü ve fiziksel durum sorgulama desteği bilinmiyor.",
+    "Elektrik kesintisinde dosya sistemi dayanıklılığı ve fiziksel cihaz davranışı test edilmedi.",
+    "Testler yalnızca kaynak olarak incelendi; çalıştırılmadı. Mevcut simülatör fiziksel tamamlanma iddiasında bulunmuyor."
+  ],
+  "recommendation": "Önce kalıcı iş yükleme ve revizyon kimliğini kurun; ilk doğrulanmış USB cihazının yeteneklerine göre belirsiz sonuç/iptal uzlaştırmasını tamamlayın. Eforlar yalnızca bu dar kapsamın ön tahminidir; entegrasyon/QA hariçtir ve diğer raporlarla doğrudan toplanmamalıdır."
+}

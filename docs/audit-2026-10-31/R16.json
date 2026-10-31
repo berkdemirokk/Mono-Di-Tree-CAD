@@ -1,0 +1,74 @@
+{
+  "agent": "R16",
+  "role": "HPGL dışa aktarım denetçisi",
+  "scope": "HPGL komut üretimi, kuantalama, ölçek ve sınır doğrulaması; yalnız kaynak/test okuması.",
+  "evidence": [
+    "src/TekstilCAD.FileFormats/PlotFormats.cs:30-48",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-23,42-64",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:27-43",
+    "src/TekstilCAD.Core/Geometry.cs:8-15",
+    "tests/TekstilCAD.Tests/FormatTests.cs:154-167",
+    "tests/TekstilCAD.Tests/MachineGatewayTests.cs:65-72"
+  ],
+  "findings": [
+    {
+      "id": "R16-F1",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Kuantalama sonrası yok olan geometri sessizce dosyaya yazılıyor",
+      "evidence": "PlotFormats.cs:36-38 koordinatları bağımsız yuvarlar; 41-48 benzersiz nokta/kenar/alan kontrolü olmadan yazar. ProjectStorage.cs:27-43 yalnız taslak doğrulaması yapar. Kaynaktan türetilen örnek: (0,0),(0.01,0),(0,0.01) kapalı üçgeni varsayılan 40 birim/mm ile tümü (0,0) olur; yürütülmüş test değildir.",
+      "impact": "Küçük detay veya düşük çözünürlük/ölçek seçimiyle çizilecek kontur kaybolabilir; operatör başarılı dosya üretimini geometrinin korunduğu şeklinde yorumlayabilir.",
+      "acceptance": "Dışa aktarım öncesi/sonrası geometri farkı ölçülsün; sıfıra düşen kenar/alan ve iş toleransını aşan sapma açık hata veya onaylanabilir uyarı üretsin. Varsayılan ve özel birimlerde küçük üçgen, dar detay, negatif koordinat ve yarım-birim sınır örnekleri kapsansın.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Ürün bazlı çizim toleransı ve detay kaybı politikası"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R16-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fiziksel çalışma alanı ve denetleyici sınırları için profil yok",
+      "evidence": "MachineProfile, SimulationQueue.cs:13-22 yalnız ad, birim/mm ve tek ölçek içerir. PlotFormats.cs:36-40 yalnız int.MaxValue büyüklük kontrolü ve sabit IN;SP1;PA başlığı uygular; 43-45 dünya koordinatlarını doğrudan yazar. Kaynakta bu API için yatak/medya sınırı, başlangıç ofseti, eksen yönü ve cihaz koordinat aralığı bulunmuyor.",
+      "impact": "Dosya simülasyonu fiziksel çizilebilirliği kanıtlamaz. İlk USB plotter pilotunda negatif/ofsetli veya medya dışı çizimin nasıl ele alınacağı tanımsızdır; gerçek cihazın kırpma ya da hata davranışı henüz bilinmiyor.",
+      "acceptance": "İlk cihazın resmi kılavuzu ve denetleyicisi belirlenip profil yetenekleri kaydedilsin; dönüştürülmüş tüm koordinatlar medya ve cihaz aralığında doğrulansın. Her sınırın hemen içi/dışı, negatif başlangıç, ofset ve yön örnekleri dosya seviyesinde doğrulansın; fiziksel kalibrasyon ayrıca raporlansın.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "USB plotter kesin marka/model/denetleyici ve resmi protokol belgesi",
+        "Medya ölçüsü ve başlangıç noktası politikası"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R16-F3",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "HPGL taşma testi dönüştürme sınırına ulaşmıyor",
+      "evidence": "FormatTests.cs:162-167 girişe double.MaxValue atar; PlotFormats.cs:32 önce ProjectStorage.Validate çağırır; ProjectStorage.cs:42-43 ve Geometry.cs:8,14 bunu CAD sınırında reddeder. Dolayısıyla bu test PlotFormats.cs:37 HPGL çarpım taşması dalını doğrulamaz. FormatTests.cs:154-159 tam sayı koordinatlı örnektir; MachineGatewayTests.cs:65-72 özel birim için yalnız alt dize denetler.",
+      "impact": "HPGL sınır kontrolü veya yuvarlama davranışı bozulursa mevcut ilgili testler bunu yakalamayabilir; dosya seviyesinde ölçek doğruluğuna güven eksik kalır.",
+      "acceptance": "CAD sınırında geçerli fakat HPGL çarpımında sınırı aşan girdi (örneğin 60.000.000 mm × 40) test edilsin; int.MaxValue çevresi ve negatif eşleri, yarım-birim yuvarlaması, Scale×UnitsPerMillimeter birleşimi ve hata halinde mevcut hedef dosyanın korunması doğrulansın.",
+      "effort_days": [
+        1,
+        2
+      ],
+      "dependencies": [
+        "Kuantalama ve sınır kabul politikası"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Kesin plotter marka/model/denetleyici, USB taşıma türü ve desteklediği HPGL lehçesi bilinmiyor.",
+    "IN/SP/PA/PU/PD komutlarının hedef cihazdaki destek aralıkları resmi cihaz belgesi olmadan doğrulanmadı; genel protokol uyumsuzluğu iddiası yapılmadı.",
+    "Hiçbir build/test çalıştırılmadı; UI veya fiziksel cihaz kullanılmadı.",
+    "Eforlar yalnız bu dar kapsam için ön mühendislik tahminidir; entegrasyon/QA hariçtir ve çakışan raporlarla doğrudan toplanmamalıdır."
+  ],
+  "recommendation": "İlk fiziksel pilot öncesi kuantalama sonrası geometri kontrolü ve cihazdan türetilen sınır profili eklenmeli; mevcut dosya simülasyonu fiziksel uyumluluk kanıtı olarak kullanılmamalıdır."
+}

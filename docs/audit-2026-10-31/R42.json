@@ -1,0 +1,56 @@
+{
+  "agent": "R42",
+  "role": "Büyük fabrika iş akışı ve ERP/MES devir sözleşmesi denetçisi",
+  "scope": "Sipariş, malzeme ve adet izlenebilirliği; Core modeli, pastal girdisi/çıktısı, simülasyon manifesti. Salt okunur kaynak incelemesi; test/build/UI/cihaz işlemi yapılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:19-34 Parça kimliği var; proje yalnız Name ve Pieces taşıyor.",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:5-8 Sonuç yerleşim ve geometrik kullanım metrikleri taşıyor; :25-26 giriş parça listesi, en, boşluk ve azami boy.",
+    "src/TekstilCAD.Nesting/NestingEngine.cs:57 Benzersiz parça kimliği zorunlu; :82-88 her giriş parçası bir kez yerleşiyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28 Manifest iş kimliği, proje adı, çıktı özeti ve geometrik sayımları taşıyor; :78-80 Simulated yalnız dosya özeti kontrolüne dayanıyor.",
+    "src altında Order|Material|Quantity|Batch|Lot|ERP|MES|JobId|ProjectId|Revision|Reconciliation hedefli rg araması iş alanına ait sipariş/malzeme/mutabakat sözleşmesi göstermedi."
+  ],
+  "findings": [
+    {
+      "id": "R42-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Siparişten çıktı dosyasına kimlik bağı tanımlanmamış",
+      "evidence": "src/TekstilCAD.Core/Models.cs:29-34 ProjectDocument içinde kalıcı proje kimliği/revizyonu ve sipariş satırı yok; src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28,62-64 iş yalnız ProjectName üzerinden belgeyle ilişkilendiriliyor. SHA256 çıktıyı doğruluyor, sipariş bağını kurmuyor.",
+      "impact": "Aynı adlı projeler veya değişen siparişler arasında doğru revizyonun üretime devredildiği mevcut manifestten ispatlanamaz.",
+      "acceptance": "Pilot için manuel devir formu veya uygulama manifesti; kaynak sistem, sipariş/satır kimliği, proje kimliği/revizyonu, pastal kimliği, iş kimliği ve çıktı SHA256 bağını zorunlu kılsın. Aynı isimli iki proje ve revize sipariş senaryosunda her çıktı tek onaylı sipariş satırına izlenebilsin; eksik/çelişkili bağ devirden önce ayrılsın.",
+      "effort_days": [2, 5],
+      "dependencies": ["Fabrika planlama sorumlusunun kimlik ve revizyon sözlüğü", "Manuel devir SOP sahibi ve yedeği"],
+      "confidence": "high"
+    },
+    {
+      "id": "R42-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Pastal parça sayısı sipariş adedi ve malzeme lotuyla mutabık değil",
+      "evidence": "src/TekstilCAD.Core/Models.cs:19-24 parçada beden/ürün bileşeni/adet/malzeme bağı yok. src/TekstilCAD.Nesting/NestingEngine.cs:25-26 yalnız geometrik giriş alıyor, :57 tekil kimlik istiyor, :82-88 her parçayı bir kez yerleştiriyor. :14 ve :95 kullanım hesabı satın alınan miktar veya gerçek tüketim değil, en × kullanılan boy esaslı.",
+      "impact": "Geometrik parça adedini ürün adedi kabul etmek eksik/fazla üretime; teorik pastal alanını stok tüketimi kabul etmek yanlış malzeme kaydına yol açabilir. Bunlar gözlenmiş üretim hatası değil, eksik iş sözleşmesinin riskleridir.",
+      "acceptance": "Manuel pilot çizelgesi dahil kabul edilebilir çözüm; sipariş satırı/beden hedef adedi, ürün başına parça katsayısı, pastal tekrar/kat sayısı, malzeme kodu/lotu ve birimleri tanımlansın. Örnek iki bedenli siparişte gereken ve yerleşen parçalar ile planlanan ürün adedi tam eşleşsin; eksik/fazla parçalar raporlansın. Teorik sarf ile ölçülen gerçek sarf ayrı alanlarda tutulsun.",
+      "effort_days": [3, 6],
+      "dependencies": ["Onaylı ürün-parça ve beden reçetesi", "Fabrikanın kat/tekrar ve malzeme birim kuralları"],
+      "confidence": "high"
+    },
+    {
+      "id": "R42-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "ERP/MES veya manuel devir için sonuç mutabakatı sözleşmesi eksik",
+      "evidence": "src/TekstilCAD.MachineGateway/SimulationQueue.cs:10 durumlar Prepared/Simulated/Failed; :56 her hazırlama yeni GUID üretir; :78-80 Simulated dosya varlığı ve checksum kontrolüdür. :26-28 kaydında dış devir kimliği, teslim alan, gerçek tamamlanan adet, hurda veya iptal sonucu bulunmuyor.",
+      "impact": "Dosya hazırlama başarısı üretim tamamlandı olarak yorumlanırsa planlama kaydı yanıltılır; tekrar devirlerin aynı üretim talebine ait olduğu mevcut kayıtla mutabık hale getirilemez.",
+      "acceptance": "Pilot öncesi SOP; benzersiz devir kimliği, tekrar denemede aynı talep bağı, teslim alma teyidi, iptal/yeniden üretim nedeni ve günlük açık iş mutabakatı tanımlasın. Hazır dosya, teslim edildi, fiziksel çıktı doğrulandı ve üretim miktarı kaydedildi durumları ayrı olsun. Aynı devir iki kez işlendiğinde miktar tek kez sayılsın; teyitsiz iş açık kalsın. En az bir tekrar, iptal ve kısmi tamamlama masa başı senaryosu kayda alınsın. ERP/MES bağlantısı pilot şartı değildir.",
+      "effort_days": [2, 4],
+      "dependencies": ["R42-F1 kimlik sözlüğü", "Planlama ve üretim arasında sonuç kaydı sorumlusu/yedeği"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Fabrikanın ERP/MES ürünü, API olanakları, sipariş hacmi ve mevcut manuel devir prosedürü bilinmiyor.",
+    "Kesim/serim akışı, beden reçeteleri ve malzeme lot kuralları kullanıcıyla doğrulanmadı.",
+    "7+ kişi geliştirme ekibidir; operatör kapasitesi veya vardiya sayısı olarak alınmadı."
+  ],
+  "recommendation": "Önce kimlik-adet-malzeme sözlüğü ve sorumlusu/yedeği belli manuel devir SOP'siyle pilot kapsamını sabitleyin. Aynı sözleşmeyi daha sonra ERP/MES adaptörüne taşıyın; entegrasyon veya performans kazancı henüz doğrulanmış değildir. Eforlar yalnız dar sözleşme ve pilot kontrol tasarımı için ön mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve örtüşen raporlarla toplanmamalıdır."
+}

@@ -1,0 +1,79 @@
+{
+  "agent": "R25",
+  "role": "Makine güvenlik sınırları denetçisi",
+  "scope": "Kalem plotter ile kesici/CNC/lazer yeterlilik ayrımı ve gelecekteki fiziksel gönderim kapısı; yalnız kaynak ve belge incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:9-30,42-86",
+    "src/TekstilCAD.FileFormats/PlotFormats.cs:29-48",
+    "docs/PRODUCT_RELEASE_PLAN.md:34-36",
+    "docs/audit-2026-10-31/DEVICE_PROFILE_TEMPLATE.json:3-9",
+    "docs/audit-2026-10-31/BRIEF.md:15"
+  ],
+  "findings": [
+    {
+      "id": "R25-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Yeterlilik kapsamı makine işlevine ve takımına bağlanmalı",
+      "evidence": "SimulationQueue.cs:13-16 MachineProfile yalnız ad, birim ve ölçek taşır; tüm profiller simülatör ve doğrulanmamış olarak işaretlidir. PlotFormats.cs:29 çıktıyı açıkça kalem çizimi olarak tanımlar. DEVICE_PROFILE_TEMPLATE.json:4,7-8 işlev/takım/yeterlilik alanları boş şablondur. PRODUCT_RELEASE_PLAN.md:36 model/protokol doğrulaması ister; işlevler arası yeterlilik devrini tanımlamaz.",
+      "impact": "Bir kalem plotter pilotundan alınan kabul, aynı dosya uzantısını anlayan kesici/CNC/lazer için güvenlik veya üretim uygunluğu kanıtı sayılamaz. Bu mevcut fiziksel açık değil, geniş uyumluluk hedefinin eksik çıkış koşuludur.",
+      "acceptance": "Model, kontrolcü, firmware, sürücü, adaptör sürümü, işlev ve takım birleşimine bağlı yeterlilik kaydı tanımlansın. Kalem çizim yeterliliğiyle kesim/lazer/CNC işi talep edildiğinde gönderim reddedilsin; bilinmeyen birleşimler varsayılan kapalı kalsın. Her ayrı makine sınıfı için üretici belgesi ve yetkili fiziksel güvenlik incelemesine dayanan ayrı kabul kapsamı gereksinimi yazılsın.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Gerçek USB cihaz kimliği",
+        "Üretici kullanım/protokol belgeleri",
+        "Makine sınıfı ve takım envanteri"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R25-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Fiziksel gönderim izni yalnız bir bayrakla temsil edilmemeli",
+      "evidence": "DEVICE_PROFILE_TEMPLATE.json:9 physicalSendEnabled=false güvenli başlangıçtır. SimulationQueue.cs:42-64 hazırlama yalnız profil/geometri/dosya üretimini, 70-80 simülasyon yalnız dosya varlığı ve SHA256 eşleşmesini kontrol eder; fiziksel gönderim metodu bulunmaz. PRODUCT_RELEASE_PLAN.md:36 ayrı yetki ve güvenlik prosedürü ister, ancak uygulanacak kapı sözleşmesi yoktur.",
+      "impact": "Gelecekte USB adaptörü eklenirken Simulated durumunun veya elle açılan profil bayrağının üretim izni gibi kullanılması, yanlış cihaz veya onaysız revizyona gönderim riski doğurur. Şimdiki sürüm cihaz I/O yapmadığından gözlenmiş tehlikeli gönderim iddiası yoktur.",
+      "acceptance": "Tek merkezi gönderim kapısı; doğrulanmış cihaz birleşimi, izin verilen işlev, güncel yeterlilik, yetkili operatör onayı ve onaylanan iş revizyonu/çıktı özeti eşleşmesini zorunlu kılsın. Eksik koşul, cihaz/profil değişimi veya onay sonrası dosya değişiminde fiziksel taşıma çağrısı hiç yapılmasın. Sahte taşıyıcıyla tüm ret yolları doğrulansın; bu testler fiziksel sertifikasyon olarak sunulmasın.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "R25-F1 yeterlilik sözleşmesi",
+        "Kimlik ve operatör yetki modeli",
+        "Değişmez iş/revizyon kimliği",
+        "Fiziksel adaptör arayüzü"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R25-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kesim sınıfları için güvenli duruş ve belirsiz durum sözleşmesi ayrılmalı",
+      "evidence": "SimulationQueue.cs:10 yalnız Prepared/Simulated/Failed durumlarını içerir; 78-80 checksum başarısı Simulated üretir. DEVICE_PROFILE_TEMPLATE.json:7 statusFeedback/cancelSemantics/resumeSemantics henüz null. PRODUCT_RELEASE_PLAN.md:36 fiziksel güvenlik prosedürünü genel ifade eder.",
+      "impact": "Dosya simülasyonu durumları fiziksel hareketin durduğunu veya işin tamamlandığını kanıtlamaz. Bağlantı kesilmesi ya da belirsiz yanıt sonrasında otomatik tekrar, ileride özellikle malzeme kesen cihazlarda aynı işin yeniden yürütülmesine neden olabilir; mevcut sürümde bu davranış gözlenmemiştir.",
+      "acceptance": "Her nitelendirilecek modelde durum teyidi, iptal sonucu ve bağlantı kaybı sözleşmesi üretici kanıtıyla tanımlansın. Belirsiz gönderim sonucunda otomatik yeniden gönderme/başlatma yapılmasın; operatör uzlaştırması gereksinimi yazılsın. Yazılım iptali cihazın donanımsal güvenlik işlevlerinin yerine geçmesin; kesici/CNC/lazer genişlemesi ayrı uzman değerlendirmesi ve yetkili kontrollü kabul olmadan açılmasın.",
+      "effort_days": [
+        2,
+        5
+      ],
+      "dependencies": [
+        "Üretici durum/iptal protokolü",
+        "Operatör kurtarma iş akışı",
+        "Makine sınıfına özgü güvenlik değerlendirmesi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB ile bağlanan cihazın marka/model/kontrolcü/protokolü ve gerçek işlevi bilinmiyor.",
+    "Donanımsal güvenlik düzeni, durum geri bildirimi ve durdurma davranışı incelenmedi; cihazla iletişim kurulmadı.",
+    "Kaynak incelemesi yapıldı; build/test/UI veya fiziksel kabul gerçekleştirilmedi.",
+    "Eforlar yalnız ayrı gereksinim/sözleşme çalışması için ön tahmindir; adaptör uygulaması, saha kabulü, entegrasyon ve QA hariçtir."
+  ],
+  "recommendation": "Büyük fabrika ve 7+ kişilik ekip için ilk fiziksel kapsam tek tanımlanmış USB plotter birleşimi olsun. Kalem çizim yeterliliğini kesim yetkisine dönüştürmeyin; tüm makineler hedefini ayrı yetenek ve model kabul kayıtlarıyla yönetin. Mevcut dosya simülasyonu sınırı korunmalı; WearCAD değiştirilmemelidir."
+}

@@ -1,0 +1,47 @@
+{
+  "agent": "R37",
+  "role": "SRE / saha tanılama denetçisi",
+  "scope": "Desktop ve yerel MachineGateway hata günlükleri, çökme ilişkilendirme, destek paketi ve saha triyajı; yalnızca kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/App.xaml.cs:6-17 normal başlangıç ve --verify ayrımı; genel hata olaylarına kayıt yok.",
+    "src/TekstilCAD.Desktop/AppPaths.cs:14 LogsDirectory tanımlı; src üzerinde hedefli rg bu simgenin başka kullanımını bulmadı.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:165,181,343,379 hata mesajları durum çubuğuna veya ileti kutusuna aktarılıyor.",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:80-81 Execute yalnızca ex.Message gösteriyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28,82-84 iş kimliği ve Error alanı mevcut, hata yalnızca ex.Message olarak manifestte saklanıyor.",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:112,126 doğrulama çalıştırıcısı hata ayrıntısını rapora yazıyor; normal saha oturumu günlüğü değil.",
+    "docs/PRODUCT_RELEASE_PLAN.md:26 hata günlükleri ve destek tanılama sürecini gereksinim olarak sayıyor."
+  ],
+  "findings": [
+    {
+      "id": "R37-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Saha hataları kalıcı oturum ve işlem kimliğiyle ilişkilendirilemiyor",
+      "evidence": "MainWindow.cs:165,181 ve MachineCenterWindow.cs:80-81 yakalanan hatalarda yalnızca kullanıcı mesajı üretiyor. App.xaml.cs:6-17 genel çökme kaydı kurmuyor. SimulationQueue.cs:26-28,82-84 mevcut iş kimliğiyle yalnızca mesaj saklıyor; uygulama sürümü, oturum ve hata türü yok. AppPaths.cs:14 LogsDirectory için src hedefli aramasında tüketici bulunmadı.",
+      "impact": "Büyük fabrika pilotunda aynı hata tekrarladığında 7+ kişilik geliştirme ekibi sürüm, işlem ve istisna bağlamını operatörün hatırlamasına dayanarak toplar; tanı süresi uzayabilir. Gerçek çökme veya kayıp gözlenmedi.",
+      "acceptance": "Yerel ve boyut sınırlandırılmış günlükte UTC, uygulama sürümü, oturum/işlem kimliği, varsa iş kimliği, hata türü ve ayıklanmış yığın izi bulunmalı. Kontrollü içe aktarma, kayıt ve simülasyon hataları yeniden başlatma sonrasında aynı kimlikle bulunmalı; günlük yazılamaması ana işlemi çökertmemeli. Genel hata yakalama, güvenli olmayan yürütmeyi otomatik devam ettirmemeli.",
+      "effort_days": [3, 5],
+      "dependencies": ["Tanılama olay şeması ve yerel saklama sınırları", "Uygulama sürüm kimliği"],
+      "confidence": "high"
+    },
+    {
+      "id": "R37-F2",
+      "kind": "proposal",
+      "priority": "P2",
+      "title": "Kullanıcı onaylı yerel destek paketi ve triyaj şablonu tanımlanmalı",
+      "evidence": "docs/PRODUCT_RELEASE_PLAN.md:26 destek tanılamasını genel madde olarak bırakıyor. SimulationQueue.cs:26-28 manifestte proje adı ve mutlak dosya yolları taşıyor; MachineCenterWindow.cs:100 bunları gösteriyor. DesktopVerification.cs:126 yalnızca doğrulama raporu üretiyor; incelenen Desktop/gateway API'lerinde saha destek paketi bulunmadı.",
+      "impact": "Ham manifest, çizim veya ekran görüntüsünün gelişigüzel paylaşılması müşteri üretim bilgisini açığa çıkarabilir; standart olay kaydı olmadığında geliştiriciler eksik bilgi için tekrar iletişim kurar. Operatör sayısı ve mevcut dış destek sistemi bilinmiyor.",
+      "acceptance": "Kullanıcı önizleme ve açık seçim sonrası çevrimdışı paket oluşturabilmeli; varsayılan paket çizim, proje adı, kullanıcı adı ve tam yolları içermemeli. Sürüm, olay kimliği, ayıklanmış günlük, yeniden üretim adımları ve beklenen/gerçek sonuç alanları içermeli. Hassas veri içeren örnekle ayıklama doğrulanmalı; paket boyutu/saklama politikası ve geliştirici triyaj sorumlusu belgelenmeli. Otomatik bulut aktarımı gerekmemeli.",
+      "effort_days": [3, 5],
+      "dependencies": ["R37-F1 tanılama şeması", "Paylaşılabilir veri alanları ve yerel ayıklama kuralları", "Destek sorumlusu ve olay şablonu"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Kurulu sürümün gerçek çökme oranı, saha MTTR değeri ve mevcut destek kayıt sistemi bilinmiyor.",
+    "Operatör sayısı bilinmiyor; 7+ kişi geliştirme ekibi kabul edildi.",
+    "Fiziksel USB plotter modeli ve protokolü bilinmiyor; mevcut gateway yalnızca yerel simülatör.",
+    "Derleme, test, UI veya cihaz işlemi yapılmadı; kabul ölçütleri öneridir."
+  ],
+  "recommendation": "Pilot öncesi yerel tanılama ve işlem kimliği sağlanmalı; ardından kullanıcı kontrollü destek paketi eklenmeli. Bulut telemetrisi zorunlu tutulmamalı. Tahminler yalnızca bu dar kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve diğer raporlarla körlemesine toplanmamalıdır."
+}

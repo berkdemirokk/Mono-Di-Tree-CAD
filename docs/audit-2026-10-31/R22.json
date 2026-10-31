@@ -1,0 +1,48 @@
+{
+  "agent": "R22",
+  "role": "API Platform Engineer — Ethernet taşıma sözleşmesi",
+  "scope": "Gelecekteki Ethernet plotter adaptörünün teslim, yeniden deneme ve güvenlik gereksinimleri; mevcut uygulama yalnızca dosya simülatörüdür.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:10 durumlar Prepared, Simulated, Failed ile sınırlı.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-16 profil açıkça simülatör ve doğrulanmamış.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-30 iş kaydı ve makine I/O bulunmadığı açıklaması.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:70-85 yalnızca yerel dosya özeti doğrulanır.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:104-107 ağ yolları kabul edilmez; bu yerel spool sınırıdır, Ethernet desteği değildir.",
+    "Hedefli rg --hidden TcpClient|NetworkStream|Ethernet|DeliveryState|MachineGateway src/TekstilCAD.MachineGateway taraması: yalnızca namespace eşleşti; klasördeki uygulama kaynağı SimulationQueue.cs.",
+    "https://www.rfc-editor.org/rfc/rfc9293.html#section-2.2 TCP sıralı, güvenilir bayt akışı sağlar.",
+    "https://www.rfc-editor.org/rfc/rfc9293.html#section-7 TCP yerleşik kriptografik gizlilik veya kimlik doğrulama sağlamaz."
+  ],
+  "findings": [
+    {
+      "id": "R22-F1", "kind": "missing", "priority": "P3",
+      "title": "Ethernet için gönderim, cihaz kabulü ve fiziksel bitiş sözleşmesi eksik",
+      "evidence": "SimulationQueue.cs:10,26-30,78-80 yalnızca dosya simülasyonunu temsil eder. RFC 9293 bölüm 2.2 (https://www.rfc-editor.org/rfc/rfc9293.html#section-2.2) TCP hizmetini bayt akışı olarak tanımlar; dolayısıyla TCP başarısından fiziksel çizim bitişi çıkarılamaz. Mevcut kodda yanlış fiziksel başarı iddiası gözlenmedi.",
+      "impact": "Gelecekte ağ adaptörü eklenirken sokete yazılan baytların tamamlanmış üretim sayılması, 7+ kişilik planlama ekibinin işi erken kapatmasına yol açabilir.",
+      "acceptance": "Adaptör sözleşmesi yerel yazım, doğrulanabilir cihaz kabulü, fiziksel tamamlanma ve sonucu bilinmeyen durumları ayrı tanımlar. Her geçiş kanıt türü ve zamanıyla kaydedilir; cihaz protokolü tamamlanma bilgisi vermiyorsa sistem fiziksel tamamlandı üretmez. Sahte taşıyıcı senaryosunda başarılı yazım fakat eksik uygulama onayı işi tamamlamaz.",
+      "effort_days": [3,6], "dependencies": ["Doğrulanmış ilk USB plotter", "Ethernet cihaz modeli ve üretici protokol belgesi", "Yetenek bazlı adaptör sözleşmesi"], "confidence": "high"
+    },
+    {
+      "id": "R22-F2", "kind": "missing", "priority": "P3",
+      "title": "Belirsiz teslimden sonra yeniden gönderim kararı tanımlı değil",
+      "evidence": "SimulationQueue.cs:26-28 iş kaydı; 70-85 simülasyon akışı taşıma denemesi, cihaz iş kimliği veya belirsiz teslim kaydı içermez. Bu mevcut simülatör hatası değil, gelecek ağ adaptörü gereksinimidir.",
+      "impact": "Bağlantı cihaz işi aldıktan sonra koparsa otomatik tekrar aynı pastalı iki kez basabilir; hiç tekrar etmemek de üretimi durdurabilir. Hangisinin güvenli olduğu protokolün sorgulama ve tekilleştirme yeteneğine bağlıdır.",
+      "acceptance": "İlk bayttan önce kopma, kısmi aktarım, son bayttan sonra onay kaybı ve uygulama yeniden başlatma senaryoları için karar tablosu onaylanır. Deneme kimliği, sabit çıktı özeti ve cihaz korelasyonu kalıcı tutulur. Tekilleştirme/sorgulama kanıtı bulunmayan belirsiz iş otomatik tekrar gönderilmez; yetkili operatör uzlaştırması ve yeni deneme izi gerekir. TCP bağlantısını yeniden açmak tekilleştirme sayılmaz.",
+      "effort_days": [4,8], "dependencies": ["R22-F1 teslim durum sözleşmesi", "Kalıcı iş/deneme günlüğü", "Cihazın iş sorgulama ve tekrar davranışının belgelenmesi"], "confidence": "high"
+    },
+    {
+      "id": "R22-F3", "kind": "proposal", "priority": "P3",
+      "title": "Ethernet adaptörü model ve ağ güvenliği yeterliliğiyle açılmalı",
+      "evidence": "SimulationQueue.cs:13-16 profil yalnızca ad, birim ve ölçek taşır; gerçek cihaz uyumluluğunu reddeder. Ağ uç noktası, protokol ve kimlik doğrulama yetenekleri mevcut değildir. RFC 9293 bölüm 7 (https://www.rfc-editor.org/rfc/rfc9293.html#section-7) TCP'nin kendi başına gizlilik/kimlik doğrulama sağlamadığını belirtir.",
+      "impact": "Gelecek ağ desteğini bütün makinelerde çalışır diye sunmak veya yalnızca IP adresine güvenmek yanlış hedefe üretim gönderme ve yetkisiz erişim riskini değerlendirmeden sahaya taşır. Bugün açık bir ağ servisi veya istismar tespit edilmemiştir.",
+      "acceptance": "Her desteklenen model için protokol, uç nokta, boyut sınırları, durum/onay yetenekleri ve güvenlik seçeneklerini içeren yeterlilik kaydı hazırlanır. Onaylı hedef listesi, gönderme yetkisi, bağlantı/yazma/yanıt zaman aşımı ve sınırlı yanıt ayrıştırma sözleşmeye girer. TLS destekleniyorsa sertifika doğrulanır; desteklenmiyorsa ayrılmış ağ ve erişim kuralları müşteri kurulumu için belgelenir. Desteklenmeyen model varsayılan olarak etkinleşmez; bu audit sırasında cihaz bağlantısı kurulmaz.",
+      "effort_days": [3,6], "dependencies": ["İlk USB pilotunun tamamlanması", "Fabrika BT ağ envanteri ve onaylı hedefler", "Üretici model/protokol/güvenlik belgeleri"], "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Plotter marka, model, kontrolcü ve USB protokolü bilinmiyor; Ethernet portu veya dönüştürücü desteği varsayılmadı.",
+    "Cihazın uygulama onayı, iş sorgulama, fiziksel bitiş bildirimi ve tekrar tekilleştirmesi bilinmiyor.",
+    "Ağ topolojisi, kimlik doğrulama ve TLS olanakları bilinmiyor.",
+    "Derleme, test, UI, cihaz bağlantısı veya ağ probu yapılmadı; WearCAD dosyaları değiştirilmedi."
+  ],
+  "recommendation": "Önce tek doğrulanmış USB plotter ile fabrika pilotunu tamamlayın. Ethernet'i sonraki model bazlı adaptör işi olarak planlayın; taşınan bayt, cihaz kabulü ve fiziksel tamamlanmayı ayırın. P3 mevcut USB pilotunu engellemez; ilgili Ethernet sürümü açılmadan bu koşullar sağlanmalıdır. Tahminler yalnızca bu dar kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve diğer raporlarla körlemesine toplanamaz."
+}

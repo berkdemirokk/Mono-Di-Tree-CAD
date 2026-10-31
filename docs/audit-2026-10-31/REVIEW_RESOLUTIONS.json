@@ -1,0 +1,37 @@
+[
+  {
+    "finding": "R49-F1",
+    "status": "initial_allocation_added_execution_pending",
+    "resolution": "9 kişi için dönemlik rol/FTE matrisi, 7 kişilik ardışık çalışma ve kısmi destek saatleri eklendi. Gerçek isim/deneyim ve sprint hızı hâlâ bilinmiyor; 4. hafta yeniden yükleme zorunlu plan kapısı. Son tekrar kontrolde WP04 geliştirici tahsisi 5-14. haftalarda mimar 0,25 + masaüstü 0,25 + backend 0,25 FTE olarak açıklaştırıldı; QA tahsisinden ayrıdır."
+  },
+  {
+    "finding": "R49-F2",
+    "status": "document_corrected",
+    "resolution": "Tek bağımlılık anlatısı WP15 dahil pilot ön koşullarından WP18 yönüne; WP16/17 ticari kapıya gider."
+  },
+  {
+    "finding": "R49-F3",
+    "status": "budget_assumption_selected_not_validated",
+    "resolution": "56-72 / 72-92 düşük güvenli senaryo seçildi; kapasite/rezerv hesabı ve yeniden tahmin açık. Bu daha doğru olduğu kanıtlanan bir süre değildir."
+  },
+  {
+    "finding": "R49-F4",
+    "status": "planning_gate_added_execution_pending",
+    "resolution": "4. hafta cihaz/SDK/korpus/saha erişimi kapısı ve eksiklikte pilot takvimini yeniden hesaplama eklendi."
+  },
+  {
+    "finding": "R50-F1",
+    "status": "acceptance_added_implementation_pending",
+    "resolution": "WP04/WP18 ve G1/G4 pilot girişine tam yedek, başka PC/hesap/yol restore ve otomatik gönderimsiz mutabakat eklendi."
+  },
+  {
+    "finding": "R50-F2",
+    "status": "acceptance_added_implementation_pending",
+    "resolution": "WP09/10/11 hazırlama ve gönderim anında askı/iptal/geçerlilik kontrolü, eski kanıtı koruma ve açık yeniden hazırlama eklendi."
+  },
+  {
+    "finding": "R50-F3",
+    "status": "budget_assumption_selected_not_validated",
+    "resolution": "Tek senaryo, düşük güven, ilk iki sprintte kaynak yükleme ile tekrar tahmin. 7+ yazılım ekibi, fabrika operatör sayısı bilinmiyor."
+  }
+]

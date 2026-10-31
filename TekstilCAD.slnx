@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TekstilCAD.Core/TekstilCAD.Core.csproj" />
+    <Project Path="src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj" />
+    <Project Path="src/TekstilCAD.FileFormats/TekstilCAD.FileFormats.csproj" />
+    <Project Path="src/TekstilCAD.Grading/TekstilCAD.Grading.csproj" />
+    <Project Path="src/TekstilCAD.Licensing/TekstilCAD.Licensing.csproj" />
+    <Project Path="src/TekstilCAD.MachineGateway/TekstilCAD.MachineGateway.csproj" />
+    <Project Path="src/TekstilCAD.Nesting/TekstilCAD.Nesting.csproj" />
+    <Project Path="src/TekstilCAD.Patterns/TekstilCAD.Patterns.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,73 @@
+{
+  "agent": "R38",
+  "role": "Privacy Engineer",
+  "scope": "Yerel proje/kurtarma/spool saklama, paylaşılan iş istasyonu sınırı ve destek paylaşımında veri minimizasyonu; yalnız kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/AppPaths.cs:9-14 kullanıcı profili altında Projects, Recovery, MachineSpool ve Logs yolları.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:316-343 kurtarılan dosyanın arşivlenmesi, yalnız mevcut recoveryPath silinmesi ve ortak dizinden son kaydın seçilmesi.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:26-28,56-65,92-101 proje adı, mutlak yollar ve hata metninin manifestte saklanması; iş başına çıktı dizini.",
+    "src/TekstilCAD.Core/Models.cs:19-34 serbest proje/parça adları ve geometri; src/TekstilCAD.FileFormats/ProjectStorage.cs:15 tüm proje JSON serileştirmesi. Hedefli retention/Delete/archived/support/diagnostic araması Desktop, MachineGateway ve ProjectStorage kapsamında yapıldı."
+  ],
+  "findings": [
+    {
+      "id": "R38-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kurtarma arşivi ve spool için saklama süresi ve temizleme yolu eksik",
+      "evidence": "MainWindow.cs:321-324 kurtarılan kaynak Recovery/archived altına taşınıyor; :331-333 yalnız bu oturumun recoveryPath dosyası siliniyor. SimulationQueue.cs:56-65 her işe yeni çıktı dizini ve manifest yazıyor; :101 yalnız geçici manifest dosyasını siliyor. İncelenen bu yaşam döngülerinde süre/kota esaslı kalıcı kayıt temizliği yok.",
+      "impact": "Kalıp geometrisi, proje adları ve eski iş kopyaları kullanım amacı bittikten sonra birikebilir; disk tüketimi ve gereksiz veri erişimi riski oluşur. Adların kişisel veri içerdiği doğrulanmadı.",
+      "acceptance": "Öneri: fabrika sahibi kurtarma/spool sürelerini ve korunacak iş istisnalarını belirlesin; süre dolmuş tamamlanmış kayıtları temizleyen işlem aktif işi ve tek kurtarılabilir kopyayı korusun. Sentetik eski/yeni kayıtlarla yeniden başlatma sonrası temizlik ve başarısız silme kaydı doğrulansın.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Fabrika saklama politikası",
+        "İş ve kurtarma yaşam döngüsü sahipliği"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R38-F2",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Aynı Windows hesabındaki vardiyalar için veri ayrımı doğrulanmamış",
+      "evidence": "AppPaths.cs:9-12 Windows LocalApplicationData altında tek Recovery/MachineSpool kökü seçiyor. MainWindow.cs:339-342 başka oturumların session-*.tcad dosyalarından en yenisini seçip açıyor; bu seçimde uygulama operatörü veya iş yetkisi filtresi yok.",
+      "impact": "Aynı Windows hesabı vardiyalar arasında paylaşılıyorsa sonraki kullanıcı önceki kullanıcının kurtarma içeriğine erişebilir. Farklı Windows hesapları arasındaki ACL davranışı veya sahadaki hesap paylaşımı incelenmedi; gerçek yetkisiz erişim gözlenmedi.",
+      "acceptance": "Öneri: pilot öncesi hesap/operatör modeli belgelensin; iki ayrı operatörle kurtarma ve spool görünürlüğü senaryosu doğrulansın. Seçilen modele göre ayrı Windows hesapları veya uygulamada erişim ayrımı kabul ölçütü haline getirilsin.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika iş istasyonu ve Windows hesap modeli",
+        "Operatör yetki gereksinimleri"
+      ],
+      "confidence": "medium"
+    },
+    {
+      "id": "R38-F3",
+      "kind": "proposal",
+      "priority": "P2",
+      "title": "Destek paylaşımı için küçültülmüş tanılama çıktısı tanımlansın",
+      "evidence": "SimulationQueue.cs:26-28 manifest ProjectName, OutputPath, ManifestPath ve Error alanlarını içeriyor; :83 ham ex.Message saklanıyor, :98 tüm iş JSON yazılıyor. AppPaths.cs:9-10 bu yolları Windows kullanıcı profiline bağlayabiliyor. Core/Models.cs:22,31 serbest adlar içeriyor. Otomatik dış gönderim veya mevcut destek paketi tespit edilmedi.",
+      "impact": "Destek amacıyla ham manifest veya spool klasörü paylaşılırsa gereksiz kullanıcı yolu, proje adı ve kalıp çıktısı da aktarılabilir; bu olası paylaşım riski, gerçekleşmiş sızıntı değildir.",
+      "acceptance": "Öneri: paylaşılacak alanlar için izin listeli tanılama çıktısı üretmek; varsayılan paketten mutlak yolları, proje/parça adlarını ve geometrileri çıkarmak. Sentetik kullanıcı/proje işaretlerinin pakette bulunmadığı doğrulansın; geometri eklemek ayrıca açık kullanıcı seçimine bağlı olsun.",
+      "effort_days": [
+        2,
+        3
+      ],
+      "dependencies": [
+        "Destek iş akışı ve gerekli tanılama alanlarının belirlenmesi"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "unknowns": [
+    "7+ kişi geliştirme ekibi büyüklüğüdür; fabrika operatörü sayısı ve eşzamanlı kullanımı bilinmiyor.",
+    "Windows hesap paylaşımı, gerçek ACL'ler, disk şifrelemesi, yedekleme ve dış destek paylaşımı uygulamaları bilinmiyor.",
+    "Serbest metin alanlarında gerçek kişisel veri bulunup bulunmadığı doğrulanmadı; kullanıcı verileri taranmadı.",
+    "Build/test/UI/aygıt I/O çalıştırılmadı; hukuki zorunluluk veya belirli saklama günü iddiası yok."
+  ],
+  "recommendation": "Pilot öncesi kurtarma/spool saklama ve ortak hesap kullanımını netleştirin; destek paylaşımı için minimizasyonu ürün gereksinimi olarak ekleyin. Tahminler yalnız bu dar kapsamın mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve diğer raporlarla doğrudan toplanmamalıdır."
+}

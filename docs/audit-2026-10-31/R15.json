@@ -1,0 +1,74 @@
+{
+  "agent": "R15",
+  "role": "DXF dışa aktarım ve AAMA/ASTM birlikte çalışabilirlik denetçisi",
+  "scope": "Yalnız DXF dışa aktarım sözleşmesi, kimlik aktarımı ve harici CAD doğrulama kapsamı; kaynak incelemesi, test çalıştırılmadı.",
+  "evidence": [
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:145-157 dışa aktarım yalnız HEADER ve LWPOLYLINE üretir.",
+    "src/TekstilCAD.Core/Models.cs:19-26 parça modeli Id/Name/Points/Closed alanlarından oluşur.",
+    "tests/TekstilCAD.Tests/FormatTests.cs:61-77 DXF çevrim testi aynı uygulamanın okuyucusunu kullanır.",
+    "tests/TekstilCAD.Tests/FormatTests.cs:98-115 isteğe bağlı WearCAD referansı yalnız içe aktarım ve yerel kayıt ölçülerini denetler."
+  ],
+  "findings": [
+    {
+      "id": "R15-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Tekstil semantiğini koruyan değişim profili yok",
+      "evidence": "src/TekstilCAD.FileFormats/DxfFormat.cs:9 AAMA/ASTM meta verilerinin uygulanmadığını belirtir; :145-157 dışa aktarım yalnız ad/koordinat/kapanış yazar. src/TekstilCAD.Core/Models.cs:19-26 beden, çentik, iplik yönü ve parça ilişkisi için ayrı alan içermez. src/TekstilCAD.Desktop/MainWindow.cs:310-314 DXF dışa aktarım başarısında kapsam/kayıp bildirimi üretmez.",
+      "impact": "Fabrika CAD zincirinde geometri aktarımı, beden/çentik/iplik yönü aktarımı sanılabilir; üretim anlamı dosya üzerinden korunamaz. Bu bir standart uygunluk hükmü değil, mevcut uygulamanın kapsam eksikliğidir.",
+      "acceptance": "Önce geometrik DXF kapsamı kullanıcıya açıkça gösterilsin; seçilen müşteri değişim profili ve sürümü tanımlansın. Beden, çentik ve iplik yönü içeren onaylı örnekler hedef CAD'de alan bazında karşılaştırılsın; desteklenmeyen alanlar kayıp raporunda listelensin.",
+      "effort_days": [
+        15,
+        30
+      ],
+      "dependencies": [
+        "Fabrikanın hedef CAD ürünü/sürümü ve değişim profili",
+        "Yetkili standart dokümanı ve müşteri örnekleri",
+        "Tekstil semantiği veri modeli"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R15-F2",
+      "kind": "defect",
+      "priority": "P2",
+      "title": "Ad temizliği farklı parçaları aynı katman adına dönüştürüyor",
+      "evidence": "src/TekstilCAD.FileFormats/DxfFormat.cs:151-153 yasak karakterleri '_' yapar; benzersizlik veya ters eşleme yoktur. 'Ön/A' ve 'Ön_A' aynı 'Ön_A' katmanı olur. :153-154 Id yazılmaz; :65 ve :143 yeniden okumada katman adını parça adına dönüştürür ve yeni parça yaratır. src/TekstilCAD.Core/Models.cs:21 kimlik varsayılanı yeni Guid'dir.",
+      "impact": "Geometriler ayrı kalabilse de temizlenen adlardan özgün parça adını/kimliğini geri bulmak mümkün değildir; aynı katmanla çalışan alıcı CAD'de parça takibi belirsizleşir.",
+      "acceptance": "Çakışan ve yasak karakter içeren adlar için deterministik benzersiz eşleme ile özgün ad/kimlik kaydı tanımlansın. 'Ön/A', 'Ön_A' ve eş adlı iki ayrı Id içeren örnekte her parçanın kaynak kimliği kayıpsız izlenebilsin.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Hedef DXF profilinde kimlik ve ad eşleme kararı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R15-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Dışa üretilen DXF için bağımsız alıcı doğrulaması gösterilmiyor",
+      "evidence": "tests/TekstilCAD.Tests/FormatTests.cs:68-75 dışa aktarılan dosyayı DxfFormat.Import ile denetler; :102-115 WearCAD referansı dışa üretilen DXF'yi harici alıcıda açmaz. src/TekstilCAD.FileFormats/DxfFormat.cs:148 AC1015 başlığı üretir; src/TekstilCAD.FileFormats/ProjectStorage.cs:78 UTF-8 yazımı kullanır. İncelenen testler hedef CAD'de ad/karakter kodlaması, katman, fiziksel ölçü ve profil kabulünü kanıtlamaz.",
+      "impact": "Aynı uygulama içindeki çevrim başarılı olsa bile fabrikanın CAD'inin dosyayı kabul ettiği ve Türkçe adları/ölçüleri koruduğu bilinmiyor; pilotta elle düzeltme gerekebilir.",
+      "acceptance": "Bir seçilmiş fabrika CAD ürünü ve sürümü için dışa aktarım matrisi oluşturulsun: Türkçe adlar, çakışan adlar, açık/kapalı kontur, negatif koordinat ve 100 mm referans. Harici alıcıdan bağımsız ölçü/ad/parça sayısı kanıtları kaydedilsin; kabul toleransı fabrika tarafından tanımlansın.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Hedef CAD ürünü/sürümü",
+        "Bağımsız test ortamı ve onaylı örnekler",
+        "Fabrika ölçü toleransı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "AAMA/ASTM'nin hangi sürümünün ve hangi müşteri profilinin isteneceği bilinmiyor; normatif uygunluk incelemesi yapılmadı.",
+    "Harici CAD'de dosya açma, test, UI veya cihaz işlemi yapılmadı; kaynak testlerinin sonucu bilinmiyor.",
+    "USB plotter marka/model/kontrolcü/protokolü bilinmiyor; DXF dosyası üretimi fiziksel makine uyumluluğu kanıtı değildir."
+  ],
+  "recommendation": "Büyük fabrika pilotunda önce bir hedef CAD değişim profili seçin, mevcut çıktıyı geometri kapsamıyla tanımlayın ve bağımsız alıcı doğrulaması yapın. Eforlar yalnız bu dar kapsam için ön mühendislik kişi-günüdür; entegrasyon/QA hariçtir ve örtüşen raporlarla doğrudan toplanmamalıdır."
+}

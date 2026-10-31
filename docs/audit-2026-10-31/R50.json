@@ -1,0 +1,57 @@
+{
+  "agent": "R50",
+  "role": "Bağımsız nihai redteam / entegrasyon gerçeklik denetçisi",
+  "scope": "R01–R49 raporları ile plan_content.json ve build_report.py taslağında kabul kapıları, örtüşme ve iddia sınırları; yalnız belge incelemesi.",
+  "evidence": [
+    "docs/audit-2026-10-31/R01.json–R49.json: uzman bulguları ve kabul önerileri incelendi; kaynak kusurlarını runtime olarak yeniden doğrulamadım.",
+    "work/audit/plan_content.json:57-71,164-197,312-335 iş paketlerinin kabul sözleşmeleri.",
+    "work/audit/build_report.py:117,143-174 bağımlılık anlatısı, kapılar, takvim ve ekip.",
+    "docs/audit-2026-10-31/R45.json:22,34 tam yedek/temiz PC kabulü; R48.json:31 profil geri çekme ve gönderim öncesi kontrol."
+  ],
+  "findings": [
+    {
+      "id": "R50-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Tam fabrika yedeğinden dönüş pilot kapısında kayboluyor",
+      "evidence": "R45.json:22,34 proje/Recovery/spool bütünlüğü ve ayrı PC geri yüklemesini ister. plan_content.json:71 yalnız zorla kapatma sonrası oturum kurtarmasını; :335 testli paket, temiz VM ve iş mutabakatını kabul eder. build_report.py:150 veri geri yüklemeyi G6 ticari çıkışa yerleştirir. Bu taslak birleştirme eksikliğidir; gözlenmiş veri kaybı değildir.",
+      "impact": "Pilot gerçek üretim verisiyle yürütülürken PC/disk kaybından dönüşün sahibi ve kabul kaydı belirsiz kalır; oturum autosave başarısı tüm fabrika yedeğinin açılabildiğini kanıtlamaz.",
+      "acceptance": "WP04/WP18 pilot girişine tam yedek envanteri ve farklı hesap/yolda temiz PC geri dönüş kanıtı açıkça bağlansın; kaynak revizyonları, çıktı özetleri ve bekleyen iş durumları eşleşsin, otomatik yeniden gönderim olmasın. RPO/RTO fabrika tarafından seçilsin. WP17 ticari güncelleme/rollback kabulü ayrı kalsın. Bu R45 uygulamasına ek iş sayılmasın.",
+      "effort_days": [1,2],
+      "dependencies": ["R45 tam yedek kapsamı", "WP04", "WP09", "WP18 pilot kabul sahibi"],
+      "confidence": "high"
+    },
+    {
+      "id": "R50-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Profil geri çekme ve bekleyen işlerin gönderim kontrolü açık kabul değil",
+      "evidence": "R48.json:31 yeterlilik askıya alma/geri çekme ve hazırlama ile fiziksel gönderim öncesinde güncel kontrol ister. plan_content.json:179-180 sürümlü profil/uyumsuz profil reddini, :196-197 ilk fiziksel kabulü kapsar; sonradan iptal edilmiş profille önceden hazırlanmış işi engelleme senaryosunu belirtmez. Eksiklik planın kabul kapsamındadır; mevcut simülatörde fiziksel tehlike yaşandığı iddiası değildir.",
+      "impact": "Bir kez ölçülmüş USB profili bakım, firmware veya kalibrasyon değişiminden sonra hâlâ geçerli sanılabilir; ilk onay tek başına bekleyen üretim işine sürekli izin vermez.",
+      "acceptance": "WP10/WP11/WP09 ortak kabulüne profil v1 ile iş hazırla → yeterliliği geri çek → gönderimi taşıma çağrısından önce reddet → yeniden yeterlilik sonrası açık yeniden hazırlama akışı eklensin. Eski işin profil ve ölçüm kanıtı değişmesin. R24/R25/R48 aynı merkezi gönderim sözleşmesinde birleştirilsin; üç ayrı altyapı olarak tahmin edilmesin.",
+      "effort_days": [1,2],
+      "dependencies": ["R48 profil yaşam döngüsü", "WP09", "WP10", "WP11"],
+      "confidence": "high"
+    },
+    {
+      "id": "R50-F3",
+      "kind": "proposal",
+      "priority": "P1",
+      "title": "Rakip takvim bantlarından hiçbiri doğrulanmış kapasite tahmini değil",
+      "evidence": "build_report.py:167 dokuz kişi için 52–68, yedi kişi için 64–84 hafta önerir; R49.json:57 bunun yerine 56–72/72–92 ve yüzde kapasite varsayımları önerir. build_report.py:166 yeniden tahmin gereğini zaten kabul eder. İki bant da ölçülmüş hız veya haftalık rol yükü üretmez; 504 kişi-hafta aritmetiği tek başına kritik uzman takvimini doğrulamaz.",
+      "impact": "Daha uzun bandın seçilmesi bilimsel güven artışı sanılabilir. Yedi veya dokuz yazılım ürün personeli fabrika operatörleriyle karıştırılırsa saha erişimi ve gerçek mühendislik kapasitesi ayrıca yanlış hesaplanır.",
+      "acceptance": "Tek seçilmiş bütçe senaryosu düşük güvenli varsayım olarak yayımlansın; diğer bandın kanıtlanmış düzeltme olmadığı açıklansın. Dördüncü hafta ve iki teslim sprinti sonrası her WP'nin rol/hafta tahsisi, ortak format-entegrasyon yükü, QA, kısmi DevOps ve cihaz erişimiyle yeniden tahmin yapılsın. Kişi tahsisleri 1 FTE'yi aşmasın; operatör/teknisyen zamanı geliştirme kadrosundan ayrı tutulsun. R49-F1/F3 ile tek planlama işi olsun.",
+      "effort_days": [2,4],
+      "dependencies": ["R49 kaynak yükleme", "WP01 kapsam", "İki sprint gerçek hız verisi", "USB cihaz erişim tarihleri"],
+      "confidence": "medium"
+    }
+  ],
+  "unknowns": [
+    "Taslaklar eşzamanlı düzeltilmektedir; satır atıfları inceleme anındaki sürümedir.",
+    "R49-F2'nin belirttiği build_report.py:117 WP18→WP15 anlatısı JSON WP18 önkoşulu WP15 ile çelişir; bilinen aynı belge kusuru burada ayrı efor olarak tekrar açılmadı. JSON bağımlılıklarında döngü saptanmadı; anlatı son çıktıda aynı DAG'ye bağlanmalıdır.",
+    "156 test ve 20 görünmez WPF kontrolü önceki kayıt iddiasıdır; bu incelemede çalıştırılmadı ve gerçek operatör, fiziksel USB veya üretim kabulü değildir.",
+    "İlk cihazın modeli/protokolü, gerçek iş hacmi ve dış fabrika yedek sistemi bilinmiyor; tüm makineler desteği çıkarılamaz.",
+    "R08-F4 üç giysi ailesi gibi ham kabul sayıları tek ürün ailesi pilotuna otomatik eklenmemeli; onaylı kapsam dışı kalanlar sonraki ürün kapısına atanmalıdır."
+  ],
+  "recommendation": "NEEDS WORK: iki pilot kabul kaybını ana plana açıkça ekleyin; R49 bağımlılık düzeltmesini son belgede doğrulayın ve takvimi kanıtlanmış teslim sözü yapmayın. Kaynak raporları örtüşen kanıt olarak tutun, eforlarını toplamayın. İlk kapsam büyük fabrika Windows masaüstü, 7+ yazılım geliştirme/ürün personeli ve tek yeterli USB modelidir; WearCAD değişmez. Buradaki efor yalnız plan/kabul sözleşmesi düzeltmesi içindir, uygulama ve saha QA süresi değildir. Kod, build, test, UI ve cihaz I/O yapılmadı; yalnız R50.json yazıldı."
+}

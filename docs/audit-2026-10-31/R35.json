@@ -1,0 +1,56 @@
+{
+  "agent": "R35",
+  "role": "Girdi güvenliği ve dosya sistemi sınırı denetçisi",
+  "scope": "ProjectStorage, DXF içe aktarımı, simülasyon yazma yolları ve kurtarma temizliği; salt okunur statik inceleme.",
+  "evidence": [
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:47-65 korunan kök, son nokta/boşluk, UNC/ADS ve mevcut reparse bileşenlerini reddediyor.",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:19-24 boyut kontrolünden sonra ayrı dosya okuma ve nesne doğrulaması yapılıyor.",
+    "src/TekstilCAD.FileFormats/DxfFormat.cs:28-36 dosyanın tamamı satırlara alındıktan sonra satır sınırı uygulanıyor.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:94-101 manifest yolu denetimden sonra tekrar açılıyor.",
+    "tests/TekstilCAD.Tests/FormatSafetyTests.cs:10-22 korunan yol varyantları için kaynak testleri var; çalıştırılmadı."
+  ],
+  "findings": [
+    {
+      "id": "R35-F1",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "İçe aktarmada kaynak sınırları tahsisten önce uygulanmıyor",
+      "evidence": "src/TekstilCAD.FileFormats/DxfFormat.cs:28-30 64 MB ön kontrolüne rağmen ReadAllLines bütün dosyayı tahsis ettikten sonra 1.000.000 satır sınırını denetler; :79-88 ve :140-143 nokta listesi oluşturulduktan sonra parça sınırı denetlenir. ProjectStorage.cs:19-24 JSON nesne grafiği tamamen kurulduktan sonra Validate çağrılır. CWE-400: erken kaynak bütçesi eksikliği; gözlenmiş çökme iddiası yok.",
+      "impact": "Dışarıdan gelen sınır dışı bir dosya reddedilmeden önce gereksiz bellek ve işlem süresi harcatır; DXF çağrısı MainWindow.cs:301 üzerinde eşzamanlıdır. Büyük fabrika pilotunda kabul edilebilir bellek ve bekleme bütçesi henüz kanıtlanmış değil.",
+      "acceptance": "Aynı açık akış üzerinde bayt sınırı uygulansın; satır/nokta/toplam geometri sayacı büyütmeden önce denetlensin. Yalnız TekstilCAD çalışma alanındaki sınır ve sınır+1 örnekleri için belirlenmiş bellek/süre bütçesi altında kontrollü ret ve mevcut belgenin korunması doğrulansın.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "İçe aktarım bellek ve süre bütçesinin belirlenmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R35-F2",
+      "kind": "proposal",
+      "priority": "P2",
+      "title": "WearCAD korumasının eşzamanlı yol değişikliği sınırı tanımlanmalı",
+      "evidence": "src/TekstilCAD.FileFormats/ProjectStorage.cs:70 denetimi ile :72/:76/:81 dizin oluşturma, dosya açma ve taşıma ayrı yol çözümlemeleridir; SimulationQueue.cs:94-99 da aynı yapıyı kullanır. MainWindow.cs:333 kurtarma silmesinde koruyucu çağrı yoktur. CWE-367 açısından mevcut reparse denetimi bir anlık kontroldür; yarış sömürüsü veya WearCAD değişikliği gözlenmedi.",
+      "impact": "Koruma normal sabit yolları kapsıyor; aynı kullanıcı veya başka süreç dizinleri eşzamanlı değiştirebiliyorsa mutasyon anındaki gerçek hedefin korunduğu kaynak koddan kanıtlanamıyor. Bu, kanıtlanmış veri kaybı değil, mutlak salt okunur gereksinimi için açık güven sınırıdır.",
+      "acceptance": "Tehdit modeli yerel eşzamanlı değişikliği kapsayıp kapsamadığını açıklasın. Kapsıyorsa yazma/taşıma/silme işlemleri ortak sınırdan geçsin ve hedef kimliğini işlem boyunca koruyan yaklaşım uygulansın. Gerçek WearCAD köklerine dokunmadan bağımsız geçici korunan kök ve kontrollü yeniden yönlendirme senaryolarında hiçbir mutasyon olmadığını doğrulayan test eklensin.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Yerel dosya sistemi tehdit modeli",
+        "Windows dosya kimliği ve izin stratejisi"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "unknowns": [
+    "Build, test, yarış deneyi, UI ve cihaz I/O çalıştırılmadı; gerçek WearCAD dizinleri incelenmedi veya değiştirilmedi.",
+    "NTFS kısa ad, bağlama noktası ve dizin değiştirme koşullarındaki davranış doğrulanmadı; koruma atlatma sonucu iddia edilmiyor.",
+    "Kaynak dosyaların boyut kontrolü ile okuma arasında değişmesi için bir üretim vakası veya sömürü kanıtı yok.",
+    "Tahminler yalnız bu dar kapsamdaki yazılım geliştirme kişi-günüdür; 7+ kişilik yazılım ekibinde entegrasyon/QA hariçtir, diğer raporlarla körlemesine toplanmamalıdır."
+  ],
+  "recommendation": "Önce içe aktarımı akış ve erken kaynak bütçeleriyle sınırlandırın. WearCAD korumasındaki mevcut doğru normalizasyon kontrollerini koruyarak yerel eşzamanlı değişiklik tehdidini açıkça karara bağlayın; gerçek korunan dizinlerde deney yapmayın."
+}

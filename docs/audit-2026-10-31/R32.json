@@ -1,0 +1,75 @@
+{
+  "agent": "R32",
+  "role": "Masaüstü güncelleme ve geri alma denetçisi",
+  "scope": "Çevrimdışı fabrika bakım penceresinde paket kaynağı, sürüm geçişi ve veri uyumluluğu; yalnız kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:29-34",
+    "src/TekstilCAD.FileFormats/ProjectStorage.cs:8-25,68-83",
+    "src/TekstilCAD.Desktop/AppPaths.cs:9-14",
+    "scripts/Package.ps1:16-22,36-45,64-69",
+    "scripts/VerifyArchive.ps1:18-30",
+    "README.md:44,53",
+    "docs/PRODUCT_RELEASE_PLAN.md:18,24"
+  ],
+  "findings": [
+    {
+      "id": "R32-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Dosya şeması ve eski sürümle açma politikası uygulanmamış",
+      "evidence": "Models.cs:29-34 ProjectDocument yalnız Name/Pieces içeriyor; ProjectStorage.cs:8,21-24 doğrudan model deserialize/validate ediyor, sürüm denetimi veya dönüştürücü yok. docs/PRODUCT_RELEASE_PLAN.md:18 bunu gelecek iş olarak listeliyor.",
+      "impact": "Gelecekte üretim alanları eklendiğinde eski uygulamaya dönüşün proje anlamını koruyacağı garanti edilemiyor; mevcut üretim veri kaybı gözlenmiş değildir. Eski okuyucunun tanımadığı alanlarla kayıt güvenliği için kabul kuralı eksik.",
+      "acceptance": "Sürümsüz mevcut dosya için tanımlı içe geçiş, desteklenen şema sürümleri matrisi ve daha yeni şemada yazmayı reddetme veya kayıpsız koruma uygulanmalı; eski/yeni dosya korpusu ile kimlik, geometri ve meta veri korunumu doğrulanmalı.",
+      "effort_days": [
+        4,
+        7
+      ],
+      "dependencies": [
+        "Kalıcı proje şeması sahipliği",
+        "Desteklenen sürüm matrisi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R32-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Bakım penceresinde veriyle birlikte geri dönüş prosedürü yok",
+      "evidence": "README.md:44 ZIP'i ayrı klasöre açarak çalıştırmayı tarif ediyor; AppPaths.cs:9-14 tüm kurulumları aynı kullanıcı Studio/Recovery/MachineSpool/Projects yollarına yönlendiriyor. README.md:53 önceki kayıtların otomatik taşınmadığını belirtiyor. docs/PRODUCT_RELEASE_PLAN.md:24 güvenli güncelleme/geri almayı gelecek iş olarak listeliyor.",
+      "impact": "Yalnız eski EXE'ye dönmek gelecekte değiştirilmiş kullanıcı durumunu geri getirmez. Büyük fabrikada bakım süresi, yedekten dönüş noktası ve operatörün hangi sürümle devam edeceği tanımsız; bu mevcut sürümde kanıtlanmış bozulma değil pilot işletim gereksinimidir.",
+      "acceptance": "Çevrimdışı N→N+1→N tatbikatında uygulama kapalıyken veri anlık kopyası, doğrulanmış paket, kontrollü sürüm değişimi ve başarısızlıkta uygulama+uyumlu veri geri dönüşü gösterilmeli; hedef bakım süresi ve kabul edilen veri kaybı sınırı fabrika tarafından belirlenip ölçülmeli.",
+      "effort_days": [
+        5,
+        9
+      ],
+      "dependencies": [
+        "Şema uyumluluk politikası",
+        "Fabrika bakım ve geri dönüş hedefleri"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R32-F3",
+      "kind": "defect",
+      "priority": "P2",
+      "title": "SkipPublish eski ikiliyi güncel commit etiketiyle paketleyebilir",
+      "evidence": "scripts/Package.ps1:19-22 HEAD commitini alıyor; :36-45 SkipPublish ile verilen dizinde sadece dört dosyanın varlığını doğruluyor; :65-68 manifesti HEAD ile etiketliyor. VerifyArchive.ps1:18-30 üyeleri ve hashleri hesaplıyor fakat ikilinin bu HEAD'den üretildiğini doğrulamıyor.",
+      "impact": "7+ geliştiricili ekipte eski bir publish klasörü yanlışlıkla yeni sürüm olarak dağıtılabilir; bakım veya geri alma sırasında commit etiketi ile çalışan yazılım farklı olur. Kod yolu kanıtlıdır; fiilen hatalı paket dağıtıldığı iddia edilmiyor.",
+      "acceptance": "Farklı committen publish klasörüyle SkipPublish çağrısı paket üretmeden reddedilmeli; kaynak commitine bağlı üretim kaydı/artifact kimliği doğrulanmalı ve normal paketleme bu bağlamı manifestte taşımalı.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "Yayın artifact kimliği ve üretim kaydı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Gerçek çevrimdışı yükseltme ve geri dönüş tatbikatı çalıştırılmadı.",
+    "Önceki sürümlerin veri örnekleri ve kurulu fabrika ortamı incelenmedi.",
+    "Paket imzalama ve dağıtım dış sistemleri bu dar kaynak incelemesinde doğrulanmadı."
+  ],
+  "recommendation": "Önce sürüm/şema uyumluluk sözleşmesini ve çevrimdışı bakımda uygulama+veri geri dönüş kabulünü tanımlayın; SkipPublish kaynak-ikili bağını düzeltin. Süreler yalnız bu dar işler için kişi-gündür, entegrasyon/QA hariçtir."
+}

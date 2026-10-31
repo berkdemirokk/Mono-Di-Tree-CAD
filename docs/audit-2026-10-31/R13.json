@@ -1,0 +1,52 @@
+{
+  "agent": "R13",
+  "role": "Code Reviewer — düzenleme işlemi ve geçmiş denetimi",
+  "scope": "DocumentHistory, MainWindow.Commit/Undo/Redo ve CadCanvas sürükleme; salt kaynak incelemesi",
+  "evidence": [
+    "src/TekstilCAD.Core/DocumentHistory.cs:20-47 — derin kopya, redo dalı ve toplam snapshot/nokta bütçesi",
+    "src/TekstilCAD.Desktop/MainWindow.cs:204-215 — işlem rollback ve giriş nesnesi sahipliği",
+    "src/TekstilCAD.Desktop/MainWindow.cs:242-247 — özellik uygulama, silme, geri/ileri alma",
+    "src/TekstilCAD.Desktop/MainWindow.cs:275-281 — kaydet sonrası dirty sıfırlama",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:93-115 — modelden ayrı önizleme ve bırakmada tek Commit",
+    "tests/TekstilCAD.Tests/HistoryTests.cs:8-54 — kopyalama, dallanma ve bütçe testleri kaynakta mevcut; çalıştırılmadı"
+  ],
+  "findings": [
+    {
+      "id": "R13-F1", "kind": "defect", "priority": "P2",
+      "title": "Geri alma kaydedilmiş duruma dönse de belge kirli kalıyor",
+      "evidence": "MainWindow.cs:246-247 Undo ve Redo koşulsuz dirty=true yapıyor; :281 yalnız kaydet dirty=false yapıyor. DocumentHistory.cs:6 kaydetme noktası taşımıyor. :250 CanDiscard kararı yalnız dirty üzerinden veriliyor.",
+      "impact": "Kaydet → düzenle → geri al dizisinde dosyayla aynı içerik kaydedilmemiş gösterilir ve gereksiz kaydetme uyarısı çıkar; operatörün sürüm durumuna güveni azalır.",
+      "acceptance": "Kaydet A → düzenle B → Undo A temiz; Redo B kirli; B kaydet → Undo A kirli → Redo B temiz senaryoları doğrulansın. Kaydetme noktası bütçeden atıldığında ve yeni dal oluştuğunda yanlış temiz sonuç üretilmesin.",
+      "effort_days": [2, 4], "dependencies": ["Belge revizyonu ve kaydetme noktası sözleşmesi"], "confidence": "high"
+    },
+    {
+      "id": "R13-F2", "kind": "defect", "priority": "P2",
+      "title": "Değişiklik üretmeyen işlem redo dalını silebiliyor",
+      "evidence": "MainWindow.cs:242 özellikleri aynı değerlerle uygulayabilir; :204-210 içerik eşitliğini kontrol etmeden history.Record çağırır. DocumentHistory.cs:23 Record her zaman redo listesini temizler. CadCanvas.cs:108 sürükleme için eşitlik koruması uygular ancak genel Commit uygulamaz.",
+      "impact": "Bir işlemi geri aldıktan sonra mevcut özellikleri değiştirmeden Uygula seçmek ileri alma olanağını kaybettirir; aynı zamanda gereksiz kirli durum ve geçmiş tüketimi oluşur.",
+      "acceptance": "A → B → Undo A → değişikliksiz özellik uygulama sonrasında Redo B kullanılabilir kalmalı; UndoCount/RedoCount, belge revizyonu ve dirty değişmemeli. Gerçek özellik değişikliği redo dalını temizlemeli.",
+      "effort_days": [1, 3], "dependencies": ["İçerik eşitliği veya değişiklik bildiren işlem sözleşmesi"], "confidence": "high"
+    },
+    {
+      "id": "R13-F3", "kind": "missing", "priority": "P2",
+      "title": "Düzenleme girişlerinde değişebilir nesne sahipliği korunmuyor",
+      "evidence": "MainWindow.cs:213 AddPiece verilen List<Point2> örneğini doğrudan Points alanına atar; :215 LoadDocument verilen belgeyi kopyalamadan Document yapar. Böylece çağıranın tuttuğu referans üzerinden sonraki değişiklik Commit, Validate ve dirty takibini atlayabilir. DocumentHistory.cs:41 geçmiş kayıtları için derin kopya kullanılması bu canlı belge alias'ını engellemez.",
+      "impact": "İçe aktarma veya ileride eklenecek entegrasyonlar aynı nesneleri kullanmayı sürdürürse izlenmeyen geometri değişikliği ve eksik geri alma kaydı doğabilir. Mevcut kullanıcı akışında gerçekleşmiş veri kaybı gözlenmedi.",
+      "acceptance": "LoadDocument girdisinin ve AddPiece listesinin çağrı sonrasında değiştirilmesi canlı belgeyi etkilememeli. Canlı belgeye tüm desteklenen mutasyon yolları tek işlem sözleşmesinden geçmeli; reddedilen işlem belgeyi ve geçmişi değiştirmemeli.",
+      "effort_days": [2, 4], "dependencies": ["Belge oturumu sahipliği ve mutasyon API sınırı"], "confidence": "high"
+    },
+    {
+      "id": "R13-F4", "kind": "missing", "priority": "P2",
+      "title": "Geri alma seçim bağlamını geri getirmiyor",
+      "evidence": "MainWindow.cs:245 silme SelectedId=null yapar; :246-247 Undo/Redo yalnız Document değiştirir. DocumentHistory.cs:6 yalnız belge, nokta sayısı ve sıra taşır. MainWindow.cs:219 seçim mevcut SelectedId üzerinden tekrar kurulur; eklemeyi geri alma sonrasında artık bulunmayan SelectedId de normalize edilmez.",
+      "impact": "Silinen parça geri geldiğinde seçimi ve özellik bağlamı geri gelmez; operatör yoğun kalıp setinde parçayı tekrar bulmak zorunda kalır. Belge ve seçim durumu arasında geçersiz kimlik kalabilir.",
+      "acceptance": "Seçili parçayı sil → Undo senaryosu aynı parçayı seçili geri getirmeli; Redo seçim için tanımlı sonucu vermeli. Ekle → Undo sonrasında SelectedId null veya belgede mevcut bir kimlik olmalı. Geri/ileri alma sonrası hiçbir özellik komutu eski parça örneğini değiştirmemeli.",
+      "effort_days": [1, 2], "dependencies": ["İşlem öncesi/sonrası seçim davranışı sözleşmesi"], "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "UI ve testler bu ajan tarafından çalıştırılmadı; bulgular kaynak akışına dayanıyor.",
+    "Fabrika ölçeğinde uzun düzenleme oturumlarının gerçek bellek ve gecikme ölçümleri bu dar inceleme kapsamında bulunmuyor."
+  ],
+  "recommendation": "Mevcut derin geçmiş kopyası, doğrulama hatasında rollback, sürüklemede ayrı önizleme ve tek Commit doğru temellerdir. Kaydetme noktası, değişikliksiz işlem koruması ve seçim bağlamını aynı işlem sözleşmesinde tamamlayın; giriş nesnelerinde sahipliği açıklaştırın. Tahminler yalnız bu işlere aittir, diğer mimari raporlarla körlemesine toplanmamalıdır."
+}

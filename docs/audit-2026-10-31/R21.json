@@ -1,0 +1,61 @@
+{
+  "agent": "R21",
+  "role": "USB taşıma ve Windows sürücü mimarisi denetçisi",
+  "scope": "USB plotter için sürücü, taşıma ve üretici SDK önkoşulları; yalnız kaynak/belge incelemesi, cihaz erişimi yok.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:9-16 profil yalnız ad/ölçek/birim ve sabit simülatör durumunu içerir.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:30-31,59-64,70-86 yalnız yerel dosya ve özet kontrolü vardır.",
+    "src/TekstilCAD.MachineGateway/TekstilCAD.MachineGateway.csproj:2-3 net10.0 ve yalnız Core/FileFormats başvuruları vardır.",
+    "MACHINE_COMPATIBILITY.md:3,13,17 fiziksel doğrulama yok; Algotex yazılım gözlemi cihaz kimliği değildir.",
+    "Hedefli rg: src/TekstilCAD.MachineGateway ve src/TekstilCAD.Core içinde usb|serialport|winusb|writeprinter|sdk|transport araması uygulama taşıması bulmadı; csproj SDK etiketi haricinde eşleşme yok.",
+    "https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/supported-usb-classes",
+    "https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/usb-driver-installation-based-on-compatible-ids",
+    "https://learn.microsoft.com/en-us/windows-hardware/drivers/print/usb-printing"
+  ],
+  "findings": [
+    {
+      "id": "R21-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "USB bağlantı türü için model ve sürücü kabul kaydı eksik",
+      "evidence": "SimulationQueue.cs:13-16 fiziksel uç nokta veya sürücü kimliği taşımaz; MACHINE_COMPATIBILITY.md:13 Algotex için yalnız yazılım gözlemi bildirir. Microsoft https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/supported-usb-classes USB sınıflarını ve ilgili sürücüleri ayrı tanımlar; https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/usb-driver-installation-based-on-compatible-ids Usbser.sys kullanımını CDC cihazları için açıklar; https://learn.microsoft.com/en-us/windows-hardware/drivers/print/usb-printing USB yazıcı taşımasını Usbprint.sys ile açıklar. USB kablosu bunlardan hangisinin geçerli olduğunu kanıtlamaz.",
+      "impact": "Yanlış COM/yazıcı/özel sürücü varsayımı entegrasyon planını ve fabrika pilot tarihini geçersiz kılabilir.",
+      "acceptance": "İlk cihaz için marka/model, kontrolör/firmware, Windows sürümü/mimarisi, mevcut sürücü sağlayıcı/sürüm, donanım kimliği ve üreticinin bağlantı belgesi kaydedilir; yazıcı kuyruğu, sanal COM veya üretici API yolu kanıtla seçilir. Bilinmeyen cihaz fiziksel gönderime uygun sayılmaz.",
+      "effort_days": [1, 3],
+      "dependencies": ["Cihaz model/kontrolör bilgisi", "Üretici bağlantı belgesi", "Sonraki yetkili keşif oturumu"],
+      "confidence": "high"
+    },
+    {
+      "id": "R21-F2",
+      "kind": "proposal",
+      "priority": "P1",
+      "title": "Dosya biçimi ile USB taşımasını ayrı adaptör sözleşmelerine ayırın",
+      "evidence": "SimulationQueue.cs:9 Dxf/Hpgl dosya biçimini; :59-64 dosya üretimini; :70-86 yalnız özet kontrolünü uygular. :30 açıkça makine I/O olmadığını belirtir. Fiziksel taşıma arayüzü inceleme kapsamındaki gateway'de yoktur. Microsoft https://learn.microsoft.com/en-us/windows-hardware/drivers/usbcon/supported-usb-classes farklı USB sınıfları/sürücü yollarını belgelendirir; belirli plotter için uygun yol henüz bilinmiyor.",
+      "impact": "HPGL üretimini USB desteği saymak yanlış uyumluluk beyanına yol açar; model değişiminde dosya dönüştürücü ile cihaz erişimi gereksiz yere birbirine bağlanır.",
+      "acceptance": "Önerilen tasarım, çıktı kodlayıcıyı model yetenekleri ve taşıma adaptöründen ayırır; yalnız belgelenen ilk taşıma uygulanır. Gönderim/kabul/tamamlanma anlamları ve desteklenmeyen durumlar sözleşmede yazılıdır. Sahte taşıma ile yanlış cihaz seçimi, zaman aşımı ve kopma senaryoları sınanır; gerçek cihaz yeterliliği ayrı kayda alınır.",
+      "effort_days": [3, 6],
+      "dependencies": ["R21-F1 cihaz/sürücü kabul kaydı", "Üretici protokolü", "Gateway iş yaşam döngüsü tasarımı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R21-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Üretici SDK gereksinimi ve dağıtılabilirliği bilinmiyor",
+      "evidence": "TekstilCAD.MachineGateway.csproj:2-3 yalnız net10.0 ve proje başvuruları içerir; MACHINE_COMPATIBILITY.md:17 üretici belgesini gelecekteki entegrasyon önkoşulu olarak sayar. Gerçek model bilinmediği için SDK gerekliliği, lisansı, bit mimarisi ve desteklenen Windows sürümü doğrulanamaz; herhangi bir üretici SDK özelliği varmış gibi kabul edilmedi.",
+      "impact": "SDK gerektiren model seçilirse erişim/lisans ve çalışma ortamı kısıtları kodlama başlamadan pilotu engelleyebilir; tahmin edilmiş sürücü değişimi mevcut üretim yazılımını etkileyebilir.",
+      "acceptance": "Model belirlendikten sonra üreticinin resmi belgeleriyle SDK gerekli/gereksiz kararı, erişim ve yeniden dağıtım hakkı, işletim sistemi ve işlemci mimarisi matrisi kaydedilir. Gerekliyse mevcut üretim sürücüsünü değiştirmeyen kurulum ve kaldırma planı hazırlanır; yalıtılmış deneme ortamında mevcut sürümle birlikte çalışabilirlik doğrulanır. Bu denetimde kurulum/değişiklik yapılmaz.",
+      "effort_days": [1, 4],
+      "dependencies": ["Kesin model ve üretici", "Resmi SDK/protokol belgeleri", "Üretici desteği veya lisans erişimi"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB bağlantı kullanıcı tarafından doğrulandı; cihaz marka/model/kontrolör/protokolü bilinmiyor.",
+    "Cihazın USB yazıcı, sanal COM veya özel sürücü/SDK yolu kullandığı bilinmiyor.",
+    "Algotex kurulumu mevcut fiziksel cihazın Algotex olduğunu kanıtlamaz.",
+    "Gerçek cihaz keşfi, I/O, PnP değişikliği, derleme, test ve UI işlemi yapılmadı.",
+    "Eforlar yalnız dar kapsamlı mühendislik ön tahminidir; üretici bekleme, entegrasyon ve QA hariçtir, diğer raporlarla doğrudan toplanmamalıdır."
+  ],
+  "recommendation": "Önce tek USB cihazın model/sürücü/protokol kaydını kapatın; ardından belgeye uygun tek taşıma adaptörünü nitelendirin. Mevcut simülatör etiketlerini koruyun; geniş uyumluluğu model başına kanıtla genişletin."
+}

@@ -1,0 +1,47 @@
+{
+  "agent": "R01",
+  "role": "Gereksinim lideri / Product Manager",
+  "scope": "İlk satılabilir kapsam, gereksinim izlenebilirliği ve tamamlanma kanıtı",
+  "evidence": [
+    "ROADMAP.md:5-12 — sekiz geniş aşama; iş sahibi, sürüm kapısı ve sayısal başarı ölçütü belirtilmemiş",
+    "src/TekstilCAD.Core/Models.cs:19-33 — parça yalnızca Id/Name/Points/Closed, proje Name/Pieces içeriyor",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:127 — kapsam metni etkileşimli giriş/diyalog/cihaz/tam akış doğrulamasını açıkça dışlıyor",
+    "TEST_REPORT.md:10-12,25,33 — bir 100 mm kare veri örneği ve sınırlı UI doğrulaması; üretim kabulü tamamlanmamış"
+  ],
+  "findings": [
+    {
+      "id": "R01-F1", "kind": "missing", "priority": "P1",
+      "title": "İlk müşteriye ve tek üretim akışına bağlanmış sürüm kapsamı yok",
+      "evidence": "ROADMAP.md:5-12 CAD, tekstil, makine, ticari hizmet, mobil ve AI'yı sıralıyor; docs/PRODUCT_RELEASE_PLAN.md:3 hedefi genel Windows CAD olarak tanımlıyor. İncelenen bu planlarda ilk müşteri segmenti, öncelikli günlük iş ve kapsam dışı kararlarının sahibi yok.",
+      "impact": "Küçük modelhane ile fabrika ihtiyaçları aynı backlog'a girerse kısa sürede satılabilir, uçtan uca güvenilir bir sürüm yerine çok sayıda yarım özellik oluşur.",
+      "acceptance": "Tek sayfalık pilot sözleşmesi hazırlanmalı: birincil operatör/alıcı, başlangıç girdisi, beklenen çıktısı, tek plotter modeli veya yalnızca doğrulanmış dosya aktarımı, açık kapsam dışı liste, karar sahibi ve pilot kullanıcılar tanımlanmalı. En az 5 hedef kullanıcı görüşmesinde ilk üç iş doğrulanmalı; kullanıcı görüşmeleri yapılmış gibi gösterilmemeli.",
+      "effort_days": [2, 4], "dependencies": ["Hedef müşteri segmenti yanıtı", "Plotter marka/model ve bağlantı bilgisi", "Pilot kullanıcı erişimi"], "confidence": "high"
+    },
+    {
+      "id": "R01-F2", "kind": "missing", "priority": "P1",
+      "title": "Gereksinimden kod, teste ve kabul kanıtına uzanan izlenebilirlik yok",
+      "evidence": "ROADMAP.md:5-12 maddeleri aşama düzeyinde; TEST_REPORT.md:7,33 toplam 156 test ve 20 arka plan kontrolü bildiriyor. Bu belgelerde gereksinim kimliği → uygulama bileşeni → otomatik test → gerçek operatör kabul kanıtı matrisi yok.",
+      "impact": "Test sayısı büyürken hangi ana iş gereksiniminin hâlâ eksik kaldığı belirsizleşir; 'kod var', 'UI var' ve 'üretimde doğrulandı' durumları karışabilir.",
+      "acceptance": "Pilot kapsamındaki her gereksinime kalıcı kimlik, sahibi, öncelik, bağımlılık, kabul senaryosu ve kanıt bağlantısı atanmalı. Durumlar ayrı tutulmalı: taslak, kodlandı, otomatik test geçti, operatör kabulü geçti, cihazda doğrulandı. Pilot gereksinimlerinin %100'ü matriste olmalı; kanıtsız 'tamamlandı' satırı kalmamalı.",
+      "effort_days": [3, 5], "dependencies": ["Pilot kapsam sözleşmesi", "50 ajan bulgularının tekilleştirilmesi"], "confidence": "high"
+    },
+    {
+      "id": "R01-F3", "kind": "unverified", "priority": "P1",
+      "title": "Başarılı yazılım testleri günlük operatör işinin tamamlandığını kanıtlamıyor",
+      "evidence": "DesktopVerification.cs:127 doğrulamanın gerçek etkileşim/diyalog/fiziksel cihaz/tam akış sertifikasyonu olmadığını söylüyor. TEST_REPORT.md:12 kaydetme diyaloğunun gerçek UI'da tamamlanmadığını; :25 geniş üretim korpusunun doğrulanmadığını kaydediyor.",
+      "impact": "Satılan ürün çizim ekranında iyi görünse de gerçek dosya açma, düzenleme, beden üretme, kaydetme, yeniden açma ve çıktı alma zincirinde operatör işi yarım kalabilir.",
+      "acceptance": "Önerilen pilot kapısı: en az 3 operatör, toplam 30 temsili iş ve yeniden açma/geri alma/kurtarma senaryoları; en az %95 bağımsız uçtan uca tamamlama, sıfır veri kaybı, sıfır sessiz ölçü/meta veri değişimi. Ölçü toleransı tekstil uzmanı ve cihaz profiliyle önceden belirlenmeli. Başlangıç süreleri ve başarısızlık nedenleri ölçülmeli; hedefler pilot sahibiyle onaylanmalı.",
+      "effort_days": [5, 10], "dependencies": ["Temsili ve kullanım izni olan kalıp korpusu", "Operatör erişimi", "Etkileşimli UI test izni", "Önceden tanımlı ölçü toleransı"], "confidence": "high"
+    },
+    {
+      "id": "R01-F4", "kind": "missing", "priority": "P1",
+      "title": "Üretim işinin anlamı temel geometri modelinde temsil edilmiyor",
+      "evidence": "Models.cs:19-33 parça ve proje alanlarında beden, adet, iplik yönü, malzeme, revizyon, çentik veya dikiş çizgisi ayrımı yok. KNOWN_ISSUES.md:7-10 bunların ve tam AAMA/ASTM semantiğinin eksik olduğunu açıkça bildiriyor.",
+      "impact": "Bir konturun doğru çizilmesi, doğru beden/adet/yön ile plottere veya üretime gönderildiği anlamına gelmez. Bu bilgiler isim metnine veya operatör hafızasına bırakılırsa üretim gereksinimi doğrulanamaz.",
+      "acceptance": "Pilot için zorunlu iş alanları tekstil uzmanıyla seçilmeli; seçilen her alan sürümlü modelde tutulmalı, UI'da görülebilmeli, kaydet/aç boyunca korunmalı ve çıktı önizlemesinde kaynak revizyonuyla eşleşmeli. Desteklenmeyen aktarım alanları sessizce kaybedilmemeli; kullanıcıya aktarım öncesi raporlanmalı.",
+      "effort_days": [3, 6], "dependencies": ["Pilot üretim iş tanımı", "Sürümlü dosya modeli tasarımı", "Dosya ve plotter iş sözleşmeleri"], "confidence": "high"
+    }
+  ],
+  "unknowns": ["İlk alıcı ve günlük kullanıcı segmenti henüz doğrulanmış değil", "Plotter modeli/firmware/bağlantısı bilinmiyor", "Pilot operatör sayısı, gerçek iş hacmi ve kabul toleransları bilinmiyor", "Ekip kapasitesi ve ticari yayın bütçesi bilinmiyor"],
+  "recommendation": "İlk pilotu Windows üzerinde tek müşteri segmenti, tek uçtan uca kalıp/çıktı işi ve en fazla tek doğrulanacak plotter profiliyle sınırlandırın. AI/mobil/çok üreticili bağlantıyı pilotun kritik yoluna koymayın. Bu rapordaki eforlar gereksinim ve kabul hazırlığı içindir; model/cihaz uygulaması ve diğer ajanların işlerini içermez, toplama yapılmadan tekilleştirilmelidir. Mevcut belgeler ürünü zaten dürüstçe önizleme olarak tanımlıyor; bu ayrımı satış materyalinde de koruyun."
+}

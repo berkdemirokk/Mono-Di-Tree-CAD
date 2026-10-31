@@ -1,0 +1,70 @@
+{
+  "agent": "R02",
+  "role": "Software Architect",
+  "scope": "Modül sınırları, uygulama kullanım senaryoları, veri modeli ve plotter genişleme noktaları",
+  "evidence": [
+    "src/TekstilCAD.Core/TekstilCAD.Core.csproj:3 — net10.0; WPF veya dış paket bağımlılığı yok",
+    "src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj:4 — net10.0-windows/UseWPF ve doğrudan modül referansları",
+    "src/TekstilCAD.Core/Models.cs:21 — PatternPiece ve ProjectDocument değiştirilebilir veri taşıyıcıları",
+    "src/TekstilCAD.Desktop/MainWindow.cs:204 — işlem/geçmiş/doğrulama koordinasyonu Window sınıfında",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:19 — özel UI alanlarına reflection ile erişen doğrulama yaklaşımı",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:9 — iki formatlı somut simülatör; fiziksel taşıma sözleşmesi yok"
+  ],
+  "findings": [
+    {
+      "id": "R02-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "UI'dan bağımsız düzenleme oturumu ve kullanım senaryosu katmanı eksik",
+      "evidence": "MainWindow.cs:204-216 Commit/LoadDocument, :246-247 Undo/Redo ve :263-281 açma/kaydetme koordinasyonunu Window içinde tutuyor. TextileToolsWindow.cs:124,131,141 doğrudan workspace.Document.Pieces değiştiriyor. DesktopVerification.cs:43,60,174 Undo/SaveTo için özel yöntem isimlerine reflection ile bağlı.",
+      "impact": "Aynı işlem farklı UI, otomasyon veya ileride mobil uygulamada yeniden yazılmak zorunda kalır; görsel refaktör komut testlerini kırabilir. Mevcut Core bağımsızlığı olumlu, fakat tam iş akışı bağımsızlığı sağlamıyor.",
+      "acceptance": "WPF referansı olmayan DocumentSession/uygulama servisinde yükle, kaydet, geçerli edit, başarısız edit rollback, undo/redo testleri çalışmalı; MainWindow ve tekstil penceresi yalnızca bu açık komut sözleşmelerini çağırmalı. Komut testleri private UI reflection gerektirmemeli.",
+      "effort_days": [5, 9],
+      "dependencies": ["Mevcut 156 regresyon testinin korunması", "Düzenleme oturumu ve belge sahipliği kararı"],
+      "confidence": "high"
+    },
+    {
+      "id": "R02-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Üretim kavramları için genişletilebilir kimlikli alan modeli yok",
+      "evidence": "Models.cs:21-36 PatternPiece yalnızca Id, Name, List<Point2>, Closed içeriyor; ProjectDocument yalnızca Name/Pieces taşıyor. Adlandırılmış beden, analitik eğri, katman, iplik yönü veya parça-adet ilişkisi için alan/sözleşme yok. ARCHITECTURE.md bunları sonraki işler olarak kaydediyor.",
+      "impact": "Yeni üretim özellikleri isim metnine veya nokta listelerine geçici anlam yüklenerek eklenirse dosya geçişleri, serileme ve plotter çıktıları kırılganlaşır; üretim metaverisi bağımsız korunamaz.",
+      "acceptance": "Pilot kapsamına alınan kavramlar için sürümlü belge sözleşmesi, kararlı kimlikler ve açık birim/ilişki kuralları tanımlanmalı; en az eski 0.2 belge yükleme, yeni belge round-trip ve bilinmeyen sürümü güvenli reddetme testleri bulunmalı. Geometri örneklemesi ile üretim metaverisi birbirinden ayrılmalı.",
+      "effort_days": [8, 15],
+      "dependencies": ["Pilot müşteri/özellik kapsamı", "Sürümlü dosya şeması ve göç politikası"],
+      "confidence": "high"
+    },
+    {
+      "id": "R02-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Uzun işlemler için iptal ve değişiklik çakışması sözleşmesi eksik",
+      "evidence": "TextileToolsWindow.cs:105 GradingEngine.Generate ve :140 NestingEngine.Arrange düğme olayında senkron çalışıyor. MainWindow.cs:165 autosave ve :301 DXF okuma aynı UI akışında. İncelenen Desktop/FileFormats/MachineGateway kodlarında async veya CancellationToken sözleşmesi bulunmadı.",
+      "impact": "Büyük veri ve gelecekte plotter hazırlama işleri UI yanıt süresini etkileyebilir; bu incelemede gerçek donma ölçülmedi. Arka plana yalnızca Task.Run eklemek mutable Document nedeniyle bayat sonucu yeni belgeye uygulama riski doğurur.",
+      "acceptance": "İş başlatırken değişmez belge snapshotı/sürüm kimliği alınmalı; iptal, ilerleme ve tek sonuç commit sözleşmesi olmalı. Belge işlem sürerken değişirse sonuç açıkça reddedilmeli/yeniden hesaplanmalı. Büyük kabul korpusunda UI girdisine yanıt ve iptal gecikmesi ölçülmeli; örneğin iptal hedefi 500 ms olarak doğrulanmalı.",
+      "effort_days": [5, 8],
+      "dependencies": ["R02-F1 uygulama oturumu", "Gerçekçi büyük dosya kabul korpusu"],
+      "confidence": "high"
+    },
+    {
+      "id": "R02-F4",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Plotter için yetenek ve taşıma adaptörü sınırı henüz tanımlı değil",
+      "evidence": "SimulationQueue.cs:9 JobFormat Dxf/Hpgl enumu, :13-16 MachineProfile sabit IsVerified=false/IsSimulator=true, :41-62 Prepare içinde format seçimi ve somut export çağrıları var. MainWindow.cs:26 doğrudan SimulationQueue kuruyor; mevcut modülde IPlotterTransport/adapter veya yetenek sözleşmesi yok.",
+      "impact": "Simülatörün içine USB/seri/Ethernet kodu eklemek dosya üretimi, iş yaşam döngüsü ve donanım hatalarını birbirine bağlar. Bir üreticiye göre yazılan davranış diğer modeli yanlışlıkla uyumlu gösterebilir.",
+      "acceptance": "Önce tek hedef model seçilmeli; dosya hazırlama, kalibrasyon/yetenek profili ve gönderim taşıması ayrı sözleşmeler olmalı. Simülatör aynı iş sözleşmesini uygulamalı. Sahte taşıma ile zaman aşımı, kısmi gönderim, yeniden deneme ve iptal testleri yazılmalı; fiziksel cihaz testi geçmeyen profil doğrulanmış olamamalı. Bu tahmin gerçek cihaz sürücüsünü kapsamaz.",
+      "effort_days": [3, 6],
+      "dependencies": ["Plotter marka/model/bağlantı/protokol belgesi", "İş kimliği ve kalıcı kuyruk sözleşmesi"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Pilotun büyük dosya/nokta sayıları ve gecikme toleransları ölçülmedi.",
+    "Plotter marka/modeli ve belgelenmiş taşıma protokolü henüz bilinmiyor.",
+    "Mobil hedefin ticari takvimde ne zaman gerekeceği belirlenmedi."
+  ],
+  "recommendation": "Modüler monolit korunmalı. Seçenek A: mevcut WPF ekranlarını koruyup yalnızca DocumentSession ve açık iş/adapter sınırları çıkarılsın; düşük risk ve aşamalı test avantajı, mevcut UI kod düzeni kısmen kalır. Seçenek B: tüm ekranları MVVM/Uno ile yeniden yazmak daha geniş UI yeniden kullanımına hazırlanır, fakat bugün özellik teslimini yavaşlatır ve regresyon alanını büyütür. Pilot için A önerilir; mikroservis veya genel eklenti çerçevesi şu aşamada gerekmez. Tahminler entegrasyon/QA hariçtir ve diğer uzman raporlarındaki aynı işlerle toplanmamalıdır."
+}
+

@@ -1,0 +1,75 @@
+{
+  "agent": "R31",
+  "role": "Windows masaüstü dağıtım denetçisi",
+  "scope": "Paket kökeni, yayıncı imzası, kurulum/kaldırma ve temiz fabrika Windows bilgisayarında dağıtım kabulü; yalnızca kaynak ve belgeler okundu.",
+  "evidence": [
+    "scripts/Package.ps1:16-25,36-46,64-71",
+    "scripts/VerifyArchive.ps1:18-30",
+    "scripts/CreateDesktopShortcut.ps1:5-14",
+    "README.md:44,53",
+    "docs/PRODUCT_RELEASE_PLAN.md:24",
+    "TEST_REPORT.md:25,29"
+  ],
+  "findings": [
+    {
+      "id": "R31-F1",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "SkipPublish eski ikiliyi yeni commit etiketiyle paketleyebilir",
+      "evidence": "scripts/Package.ps1:19-22 HEAD kimliğini alır; 36-46 SkipPublish ile verilen dizinde yalnızca dört dosyanın varlığını doğrular; 66 manifest commit alanını yine HEAD yapar. scripts/VerifyArchive.ps1:22-30 hash ve üye kontrolü yapar, ikilinin derlendiği commit ile eşleme yapmaz. Kaynak düzeyinde kanıt; yanlış paket üretimi bu denetimde çalıştırılmadı.",
+      "impact": "Fabrikaya verilen çalıştırılabilir sürüm ile destek ekibinin inceleyeceği kaynak farklı olabilir; hata takibi ve geri alma kararı güvenilirliğini kaybeder.",
+      "acceptance": "Önceki committen yayımlanmış klasörle yeni HEAD altında paketleme reddedilir; başarılı pakette doğrulanan derleme kökeni ve ikili hashleri aynı manifestte bağlanır.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "Derleme kökeni kaydı ve paketleme sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R31-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Yayıncı imzası planlanmış, dağıtım hattında uygulanmamış",
+      "evidence": "README.md:44 paketlerin yazılım imzası taşımadığını açıklar. scripts/Package.ps1:38 publish ve 68-71 SHA256 manifesti üretir; imzalama/doğrulama adımı yoktur. docs/PRODUCT_RELEASE_PLAN.md:24 imzalı kurulum ve uygulamayı gelecek iş olarak listeler.",
+      "impact": "Hash manifesti tek başına yayıncı kimliğini doğrulamaz; fabrika BT ekibinin güvenilir dağıtım kaynağı kabulünü zorlaştırır. Bu bir mevzuat zorunluluğu iddiası değildir.",
+      "acceptance": "Kuruluşun belirlediği yayıncı sertifikasıyla uygulama ve seçilen dağıtım paketi imzalanır; yayın kapısı beklenen yayıncıyı ve geçerli zaman damgasını doğrular, değiştirilmiş artefaktı reddeder.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Yayıncı kimliği/sertifika ve güvenli imzalama erişimi",
+        "Dağıtım biçimi kararı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R31-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Temiz fabrika bilgisayarında kurulum ve kaldırma kabulü kanıtlanmamış",
+      "evidence": "README.md:44 ZIP açıp EXE çalıştırmayı tarif eder; 53 kullanıcı verilerinin ayrı tutulduğunu belirtir. scripts/CreateDesktopShortcut.ps1:5-14 yalnız kısayol oluşturur. docs/PRODUCT_RELEASE_PLAN.md:24 temiz Windows hesabı testi planlar. TEST_REPORT.md:29 ayrı klasörde EXE --verify kanıtı sunar; SDK bulunmayan temiz OS/standart kullanıcı, yükseltme ve kaldırma kabulü sunmaz.",
+      "impact": "Büyük fabrikada standart hesapla dağıtım, sürüm değişimi ve kaldırma sırasında veri/kurtarma kayıtlarının korunacağı henüz kabul edilmiş değildir; mevcut ZIP'in çalışmadığı sonucuna varılamaz.",
+      "acceptance": "Desteklenen Windows sürümü belirlenerek SDK bulunmayan temiz standart hesapta çevrimdışı açılış/kaydetme/yeniden açma, eski sürümden geçiş ve geri dönüş doğrulanır; belgelenmiş kaldırma işlemi uygulama/kısayolu kaldırırken kullanıcı verisi ve WearCAD dosyalarını korur. Portable dağıtım seçilirse aynı kabul prosedürü onun için yazılır.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Fabrika BT dağıtım yöntemi ve desteklenen Windows matrisi",
+        "Yalıtılmış temiz Windows test ortamı",
+        "Kullanıcı verisi koruma ve sürüm geçiş politikası"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Mevcut dağıtım ZIP dosyalarının Authenticode durumu bu denetimde doğrudan incelenmedi; imzasızlık bilgisi README ve paketleme hattına dayanır.",
+    "Hedef fabrikanın Windows sürümleri, yönetici yetkisi politikası ve merkezi dağıtım aracı bilinmiyor.",
+    "Hiçbir kurulum, kaldırma, derleme, test veya UI işlemi çalıştırılmadı; WearCAD salt okunur korundu."
+  ],
+  "recommendation": "Pilot öncesi paket commit/ikili eşleşmesini kapatın ve temiz fabrika Windows kabulünü belgeleyin; ücretli yayın için planlanan imzalı dağıtımı tamamlayın. Eforlar yalnız bu kapsamın ön tahminidir, entegrasyon/QA hariçtir ve örtüşen raporlarla doğrudan toplanmamalıdır."
+}

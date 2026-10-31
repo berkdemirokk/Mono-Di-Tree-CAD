@@ -1,0 +1,93 @@
+{
+  "agent": "R26",
+  "role": "Operatör iş akışı ve görev tamamlama denetçisi",
+  "scope": "MainWindow → TextileTools → MachineCenter kaynak incelemesi; büyük fabrika ve 7+ kişilik geliştirme ekibi planı; fabrika operatör sayısı bilinmiyor. UI açılmadı, kullanıcı gözlemi/test/build/cihaz işlemi yapılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/MainWindow.cs:80-81 araçlar modal ShowDialog ile açılıyor.",
+    "src/TekstilCAD.Desktop/TextileToolsWindow.cs:76-107,122-143 serileme ve pastal geçişleri.",
+    "src/TekstilCAD.Desktop/MachineCenterWindow.cs:41-61,82-101 kaynak özeti, kuyruk ve metin önizlemesi.",
+    "tests/TekstilCAD.Tests/GradingReviewTests.cs:12-53 motor doğrulama testleri; tests/TekstilCAD.Tests/NestingReviewTests.cs:10-49 geometri/sınır testleri; tests/TekstilCAD.Tests/MachineGatewayTests.cs:49-87 dosya bütünlüğü testleri."
+  ],
+  "findings": [
+    {
+      "id": "R26-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Serileme ve dikiş payından pastala geçişte üretilecek parça kapsamı seçilemiyor",
+      "evidence": "TextileToolsWindow.cs:105-106,114,124 kaynak korunarak türevler aynı Document.Pieces listesine ekleniyor; :138-143 pastal tüm listeyi kullanıyor ve aynı listeyi yerleşimle değiştiriyor. MainWindow.cs:313 dışa aktarım tüm Document üzerinden; MachineCenterWindow.cs:85 hazırlama tüm Document üzerinden. Kaynakta kanıtlanan davranış; operatör hatası yaşandığı gözlenmedi.",
+      "impact": "Ana kalıp, türetilen beden ve dikiş paylı kontur birlikte bulunan projeden gereksiz/yanlış parçaların üretim dosyasına girmesi riski vardır. Sipariş için yalnız gerekli beden/adetleri seçme adımı yoktur.",
+      "acceptance": "Kaynak kalıp + iki beden + dikiş payı türevi içeren senaryoda operatör üretim kümesini ve adetlerini açıkça seçebilmeli; pastal ve çıktı yalnız onaylanan küme/adetleri içermeli, düzenleme kaynakları korunmalı; seçim özeti çıktı öncesi gösterilmeli.",
+      "effort_days": [
+        5,
+        9
+      ],
+      "dependencies": [
+        "Üretim parçası kapsamı ve adet modeli",
+        "Pastal/çıktı seçim sözleşmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R26-F2",
+      "kind": "defect",
+      "priority": "P1",
+      "title": "Ardışık beden oluşturma serileme artışlarını sessizce sıfırlıyor",
+      "evidence": "TextileToolsWindow.cs:124 AddGenerated yeni parçayı kaynak seçip RefreshSources(generated.Id) çağırıyor; :74 ReloadRows çağrısı, :78 rows.Clear, :80 yeni GradeRow oluşturma, :148 Dx/Dy varsayılanı 0. :101 alan hâlâ 'Temel bedenden adım sayısı'; :105 güncel seçili parça üzerinden üretim yapıyor. Kaynak akışından kanıtlandı, çalıştırılmadı.",
+      "impact": "L üretildikten sonra XL için yalnız beden adı/adımı değiştiren operatör aynı geometriyi farklı adla oluşturabilir; başlangıç kaynağı ve kuralların kaybı seri beden hazırlamada tekrar giriş ve karışıklık yaratır. Gerçek hata sıklığı ölçülmedi.",
+      "acceptance": "Temel bedene sıfırdan farklı artışlar girilip L ve XL peş peşe üretildiğinde aynı temel kaynağa göre 1 ve 2 adımlık beklenen koordinatlar elde edilmeli; kaynak değişimi veya kural sıfırlaması açıkça bildirilip kullanıcı kararı alınmalı.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Temel beden ve serileme kuralı yaşam döngüsü kararı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R26-F3",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Üretim dosyasını görsel olarak onaylayacak son kontrol adımı yok",
+      "evidence": "MachineCenterWindow.cs:41 kaynak için yalnız ad/parça/nokta sayısı; :59-61 önizleme iki metin alanı; :100 profil/yol/hash, :101 ilk 12000 dosya karakteri gösteriliyor; :91-92 doğrulama bütünlük kontrolü olarak açıklanıyor. MainWindow.cs:81 pencere modal. Makine uyumsuzluğu doğru biçimde belirtiliyor (:37); eksik olan geometrik çıktı kontrolü.",
+      "impact": "Aynı isim ve parça sayısıyla farklı yerleşim veya ölçekli dosyaları operatör çıktı görseli, toplam boyut ve sürüm bağlamıyla karşılaştıramaz. Büyük fabrika devrinde yanlış çıktıyı seçme riski çıkarımdır; sahada gözlenmedi.",
+      "acceptance": "Hazırlanan dosyanın gerçek dönüşümüne bağlı geometrik önizleme, toplam mm ölçüsü, üretim kümesi ve değişmez kaynak sürümü gösterilmeli; aynı adlı iki farklı revizyon operatör görevinde doğru ayırt edilmeli. Fiziksel USB gönderimi onayı ancak tanımlanıp kalifiye edilen ilk modele bağlanmalı.",
+      "effort_days": [
+        5,
+        8
+      ],
+      "dependencies": [
+        "Çıktı geometri önizleme modeli",
+        "Değişmez kaynak revizyon kimliği",
+        "İlk USB plotter marka/model/protokol bilgisi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R26-F4",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Uçtan uca ve erişilebilir operatör görevleri doğrulanmamış",
+      "evidence": "TextileToolsWindow.cs:50-54 ve MachineCenterWindow.cs:65-66 alan etiketleri ayrı TextBlock olarak kuruluyor; incelenen iki pencerede hedefli AutomationProperties/LabelledBy/AccessKey/TabIndex aramasında eşleşme yok. tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj:23-29 proje başvuruları motor/kütüphanelere, Desktop başvurusu yok; GradingReviewTests.cs:12-53, NestingReviewTests.cs:10-49, MachineGatewayTests.cs:49-87 uçtan uca UI görevi içermiyor. Bu bulgu ekran okuyucunun başarısız olduğunu kanıtlamaz.",
+      "impact": "Klavye, ekran okuyucu ve büyütme kullanan planlamacıların kaynak seçme → serileme → pastal → çıktı kontrolü görevini yardımsız tamamlaması belirsizdir; kütüphane testleri bu kullanılabilirlik iddiasını desteklemez.",
+      "acceptance": "Araştırma önerisi (kullanıcının belirttiği ekip sayısından bağımsız): pilot öncesi farklı deneyim düzeylerinde en az 7 hedef operatörle yönlendirmesiz görev turu; klavye ve ekran okuyucu kullanan katılımcılar dahil. Kritik yanlış çıktı onayı sıfır, tüm kritik görevlere klavyeyle erişim ve alan ad/değerlerinin okunması doğrulanmalı; başarısızlıklar giderilip tekrar denenmeli. Küçük örneklemden nüfus yüzdesi iddiası çıkarılmamalı.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Temsili fabrika görevleri ve anonim örnek projeler",
+        "Katılımcı erişimi ve onam",
+        "Erişilebilirlik test ortamı"
+      ],
+      "confidence": "medium"
+    }
+  ],
+  "unknowns": [
+    "Gerçek fabrika operatörü gözlemi, görev tamamlama süresi ve hata oranı yok.",
+    "İlk USB plotter marka/model/controller/protokolü bilinmiyor; tüm makinelerle uyumluluk çıkarılamaz.",
+    "Rapor yalnız kaynak incelemesidir; testler çalıştırılmadı ve üretim sertifikasyonu iddiası yok.",
+    "Eforlar izole mühendis/araştırmacı iş günüdür; entegrasyon/QA hariç, diğer raporlarla körlemesine toplanmamalı."
+  ],
+  "recommendation": "Önce serileme kaynağı/kuralı sürekliliği ve üretim kümesi seçimini çözün; değişmez revizyonlu görsel çıktı onayını ekleyip temsilî operatörlerle uçtan uca pilot yapın. İlk fiziksel akış tek kalifiye USB plotter ile sınırlandırılmalı; geniş uyumluluk model bazlı adaptör ve doğrulama gerektirir."
+}

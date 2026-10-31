@@ -1,0 +1,57 @@
+{
+  "agent": "R28",
+  "role": "Windows DPI ve pencere yaşam döngüsü denetçisi",
+  "scope": "WPF yapılandırması, ana pencere boyutları, çoklu monitör ve arka plan doğrulamasının sınırları; yalnızca kaynak okundu, test/build/UI çalıştırılmadı.",
+  "evidence": [
+    "src/TekstilCAD.Desktop/TekstilCAD.Desktop.csproj:4-5 net10.0-windows ve UseWPF; proje dosyasında özel ApplicationManifest tanımı yok.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:47-48 başlangıç 1440×900, minimum 1024×640, CenterScreen.",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:69-78 mantıksal boyutlarda görünmez yerleşim; gizli HWND oluşturuluyor.",
+    "src/TekstilCAD.Desktop/DesktopVerification.cs:154-164 RenderTargetBitmap sabit 96 DPI.",
+    "src/TekstilCAD.Desktop/CadCanvas.cs:155 metin PixelsPerDip değerini VisualTreeHelper.GetDpi üzerinden alıyor.",
+    "src/TekstilCAD.Desktop/MainWindow.cs:164-167 kapanış ve Loaded olayları; App.xaml.cs:9-16 doğrulama ve normal açılış yolları farklı."
+  ],
+  "findings": [
+    {
+      "id": "R28-F1",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "Gerçek monitörler arası DPI geçişi doğrulanmamış",
+      "evidence": "DesktopVerification.cs:33 pencere Show olmadan kuruluyor; :73-75 iki mantıksal boyutta render; :105 pencerelerin görünmezliği kontrol ediliyor; :161 bitmap 96×96 DPI. Bu kontroller gerçek %125/%150/%200 ölçek, WM_DPICHANGED, monitörler arası sürükleme veya fare isabet doğrulaması değildir. CadCanvas.cs:155 DPI duyarlı metin kullanımı olumlu, ancak bütün pencerenin davranışını kanıtlamaz.",
+      "impact": "Fabrikanın farklı ölçekli ekranlarında çizim seçimi, metin ve araç erişiminin doğru kalacağı henüz gösterilemez; kusur gözlendiği iddia edilmiyor.",
+      "acceptance": "İzinli ayrı UI doğrulamasında %100/%125/%150/%200 ölçeklerde ve farklı DPI kullanan iki monitör arasında 10 gidiş-dönüşte metin netliği, komut erişimi, çizim seçimi ve açılan sahipli diyaloglar kayıt altına alınmalı; kullanılan işletim sistemi, etkin süreç DPI farkındalığı ve ekran ölçekleri raporlanmalı.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Hedef Windows ve monitör matrisi",
+        "Görünür UI test izni ve iki monitörlü test istasyonu"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R28-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Kullanılabilir ekran alanına göre pencere boyutlandırma koşulu eksik",
+      "evidence": "MainWindow.cs:47-48 sabit 1440×900 başlangıç ve 1024×640 alt sınırı kullanıyor. TextileToolsWindow.cs:27-28 başlangıç 930×820 ve CenterOwner. Desktop kaynaklarında WorkArea/RestoreBounds/WindowPlacement/DisplaySettingsChanged/LocationChanged hedefli aramasında eşleşme yok. DesktopVerification.cs:74 yalnızca içeriği 1024×640 alana yerleştiriyor; pencere çerçevesini, görev çubuğunu ve gerçek ekran çalışma alanını ölçmüyor.",
+      "impact": "Küçük veya yüksek ölçekli ekranlarda tüm komutların erişilebilir olacağı garanti edilemiyor; 1920×1080 fiziksel ekran %200 ölçekle yaklaşık 960×540 mantıksal alan verir ve ana pencerenin minimumundan küçüktür. Gerçek kırpılma bu denetimde gözlenmedi.",
+      "acceptance": "Desteklenen en küçük mantıksal çalışma alanı açıkça belirlenmeli; o alanda ana/yardımcı pencereler ve onay düğmeleri erişilebilir olmalı. Ekran bağlantısı kesilmesi, yeniden bağlanması, büyütme/geri yükleme ve yeniden açılış senaryolarında başlık/komutlar çalışma alanı içinde kalmalı; desteklenmeyen ölçek ve çözünürlük kombinasyonları belgelenmeli.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Desteklenen minimum ekran/ölçek kararı",
+        "R28-F1 test matrisi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Derlenmiş yürütülebilir dosyanın etkin DPI farkındalığı bu kaynak denetiminde ölçülmedi; özel manifest yokluğu tek başına DPI desteğinin yokluğunu kanıtlamaz.",
+    "Kapanış iptali, Windows oturumu kapanışı, uyku/uyanma ve monitör çıkarılmasının canlı davranışı çalıştırılmadı. DesktopVerification.cs:119 dirty alanını sıfırladığından gerçek kirli belge kapanışı kanıtı değildir.",
+    "Hedef fabrikadaki fiziksel ekran sayısı, çözünürlükler ve Windows ölçek oranları bilinmiyor."
+  ],
+  "recommendation": "Pilot öncesi gerçek DPI/çoklu monitör kabul matrisi tamamlanmalı; mevcut görünmez 96 DPI render kanıtları ayrı yerleşim kontrolleri olarak tutulmalı. Eforlar yalnızca bu dar kapsam içindir ve örtüşen denetim tahminleriyle doğrudan toplanmamalıdır."
+}

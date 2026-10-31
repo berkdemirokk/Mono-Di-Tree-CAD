@@ -1,0 +1,75 @@
+{
+  "agent": "R36",
+  "role": "Bağımlılık ve yazılım tedarik zinciri denetçisi",
+  "scope": "csproj, SDK seçimi, paketleme/doğrulama betikleri ve üçüncü taraf lisans envanteri; yalnızca kaynak incelemesi.",
+  "evidence": [
+    "LICENSE_REPORT.md:3,7,17-22 doğrudan paket envanteri ve geçişli/yayın envanterinin ayrıca hazırlanacağı beyanı.",
+    "tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj:11-14 dört sürümlü test bağımlılığı; src altındaki csproj taramasında harici PackageReference bulunmadı.",
+    "global.json:1 SDK 10.0.403, latestPatch.",
+    "scripts/Package.ps1:38 self-contained yayın; 65-69 commit/arşiv hash/doğrulama manifesti.",
+    "scripts/VerifyArchive.ps1:22 dosya hashleri; 30 zorunlu runtime üyeleri.",
+    "git ls-files '*lock*' '*NuGet*' '*nuget*' '*sbom*' '*props' '*targets' '.github/*' çıktısı boş."
+  ],
+  "findings": [
+    {
+      "id": "R36-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Dağıtılan runtime için sürümlü bileşen envanteri yok",
+      "evidence": "scripts/Package.ps1:38 self-contained runtime dağıtır; 65-69 manifest commit ve arşiv hashlerini taşır. scripts/VerifyArchive.ps1:22,26 dosya hashlerini üretir ancak bileşen adı/sürümü/kaynağı eşleştirmez. LICENSE_REPORT.md:3,22 tamamlanmış dağıtım/SBOM olmadığını açıkça belirtir.",
+      "impact": "Büyük fabrika pilotunda hangi runtime bileşeninin hangi kurulumda bulunduğunu ve bir güncellemenin hangi tesisleri etkilediğini belirlemek elle inceleme gerektirir.",
+      "acceptance": "Her yayın için kesin runtime ve uygulama bileşen sürümleri, kaynakları ve dosya hashleriyle ilişkilendirilmiş makine okunur SBOM üretilecek; yayın manifesti SBOM hashini taşıyacak; eksik envanter paketlemeyi durduracak.",
+      "effort_days": [
+        2,
+        4
+      ],
+      "dependencies": [
+        "Yayın/paketleme sorumlusu",
+        "Seçilen SBOM biçimi ve araç değerlendirmesi"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R36-F2",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Bağımlılık çözümleme ve SDK seçimi yayın kaydında kilitlenmiyor",
+      "evidence": "global.json:1 latestPatch kullanır. tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj:11-14 doğrudan sürümler belirtilmiştir; izlenen lock/NuGet/props/targets taraması boştur. scripts/Build.ps1:7 ve scripts/Package.ps1:38 kilitli restore parametresi kullanmaz; Package.ps1:65-69 seçilen SDK sürümünü kaydetmez.",
+      "impact": "7+ geliştiricili ekipte aynı kaynak noktasının hangi SDK ve geçişli paket çözümlemesiyle doğrulandığını karşılaştırmak zorlaşır; bu bulgu mevcut çıktının farklı veya güvensiz olduğunu kanıtlamaz.",
+      "acceptance": "Onaylı SDK ve NuGet kaynak politikası tanımlanacak; gerçek SDK/runtime sürümleri manifestte kaydedilecek; test bağımlılık grafiği kilitlenip kilit dışı çözümleme kontrolünde hata üretilecek; güncellemeler gözden geçirilen değişiklik olarak yürütülecek.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "SDK güncelleme politikası",
+        "Ekip geliştirme ortamı standardı"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R36-F3",
+      "kind": "missing",
+      "priority": "P2",
+      "title": "Üçüncü taraf bildirimlerinin yayın kapısı bulunmuyor",
+      "evidence": "LICENSE_REPORT.md:7 runtime üçüncü taraf bildirimlerinin korunmasını, 22 kesin yayın dosyalarının ayrıca envanterlenmesini belirtir. scripts/Package.ps1:44-46 ve scripts/VerifyArchive.ps1:30 yalnızca dört çalıştırılabilir/runtime dosyasını zorunlu tutar; LICENSE/NOTICE envanteri veya doğrulaması yapmaz.",
+      "impact": "Ücretli dağıtım öncesi üçüncü taraf bildirimlerinin tamlığını tekrarlanabilir biçimde kanıtlama gereksinimi açık kalır; lisans ihlali tespiti yapılmamıştır.",
+      "acceptance": "Kesin yayın bileşenleri ile gerekli bildirim dosyaları arasında gözden geçirilmiş eşleme oluşturulacak; paketleme bu dosyaların varlığını ve beklenen hashlerini doğrulayacak; kasıtlı eksik bildirim örneği doğrulamada reddedilecek.",
+      "effort_days": [
+        1,
+        3
+      ],
+      "dependencies": [
+        "Kesin yayın bileşen envanteri",
+        "Lisans/bildirim değerlendirmesi için sorumlu kişi"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "Mevcut yayın arşivlerinin gerçek içerikleri ve üçüncü taraf bildirim tamlığı bu dar kapsamda incelenmedi.",
+    "Paketlerin veya runtime'ın güncel güvenlik açığı durumu araştırılmadı; herhangi bir CVE veya güvenlik açığı iddia edilmez.",
+    "Build/test/restore çalıştırılmadı; ortam dışı NuGet yapılandırmaları değerlendirilmedi."
+  ],
+  "recommendation": "7+ kişilik ekipte bir yayın sorumlusu belirleyerek önce pilot SBOM ve sürüm izlenebilirliğini, ardından kilitli çözümleme ve bildirim kontrolünü paketleme akışına ekleyin. Eforlar yalnız bu kapsamdaki kişi-gün tahminleridir; entegrasyon/QA hariçtir ve örtüşen raporlarla doğrudan toplanmamalıdır."
+}

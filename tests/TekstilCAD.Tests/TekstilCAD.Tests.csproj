@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TekstilCAD.Core\TekstilCAD.Core.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.FileFormats\TekstilCAD.FileFormats.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.Grading\TekstilCAD.Grading.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.Nesting\TekstilCAD.Nesting.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.Patterns\TekstilCAD.Patterns.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.MachineGateway\TekstilCAD.MachineGateway.csproj" />
+    <ProjectReference Include="..\..\src\TekstilCAD.Licensing\TekstilCAD.Licensing.csproj" />
+  </ItemGroup>
+
+</Project>

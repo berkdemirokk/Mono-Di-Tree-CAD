@@ -1,0 +1,43 @@
+{
+  "agent": "R48",
+  "role": "IoT Fleet Engineer — cihaz profili yaşam döngüsü",
+  "scope": "Model/firmware/taşıma birleşimine bağlı yeterlilik, yetenek matrisi, profil sürümü, iptal ve kalibrasyon kanıtı. Salt okunur kaynak/belge incelemesi; kod değişikliği, build/test, UI ve cihaz I/O yapılmadı.",
+  "evidence": [
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-28 — yalnız simülatör MachineProfile; Name, UnitsPerMillimeter, Scale; iş profil nesnesini içerir.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:42-64,77-80 — hazırlama profil sayısal doğrulamasını ve çıktı SHA256 kontrolünü kullanır.",
+    "MACHINE_COMPATIBILITY.md:3,15,17 — fiziksel doğrulama yok; ileride model/firmware/kalibrasyon kayıtları isteniyor.",
+    "docs/audit-2026-10-31/DEVICE_PROFILE_TEMPLATE.json:2-9 — sürüm, Unqualified durumu, boş yetenek/kanıt alanları; fiziksel gönderim kapalı."
+  ],
+  "findings": [
+    {
+      "id": "R48-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "İş kaydında sürümlü yeterlilik ve yetenek kanıtı sabitlenmiyor",
+      "evidence": "SimulationQueue.cs:13-16 profil yalnız ad, birim/mm ve ölçek taşır; :26-28 iş bu değişmez record profilini içerir fakat profil kimliği/sürümü, model-kontrolör-firmware-taşıma-format birleşimi veya yeterlilik kanıt özeti yoktur. DEVICE_PROFILE_TEMPLATE.json:2,4-8 bu bilgilerin taslağını içerir; uygulama modeli değildir. MACHINE_COMPATIBILITY.md:17 ayrı kayıt gereğini belirtir.",
+      "impact": "Fiziksel pilot eklendiğinde eski fabrikanın işinin hangi onaylı sınırlar ve cihaz birleşimiyle hazırlandığı kanıtlanamaz; aynı profil adı altında yapılan değişiklikler yeniden üretilebilirliği zayıflatır. Mevcut simülatörde fiziksel hata gözlendiği iddia edilmemektedir.",
+      "acceptance": "Profil kimliği ve değişmez revizyonu, yetenek matrisi ve onaylı model/kontrolör/firmware/sürücü/taşıma/format birleşimi tanımlansın. İş, kullanılan revizyonun anlık görüntüsü ile kanıt ve profil özetlerini sabitlesin. Profil v2 yayımlandığında v1 ile hazırlanmış işin kaydı değişmesin; v2 kullanımı açık yeni hazırlama/revizyon gerektirsin. Bilinmeyen birleşim ve desteklenmeyen format/ölçü sınırları üretim için reddedilsin; simülasyon seçeneği ayrı kalsın.",
+      "effort_days": [3, 5],
+      "dependencies": ["İlk USB plotter model/kontrolör/firmware kimliği", "Üretici teknik belgesi", "Üretim işi ve adaptör sözleşmesi"],
+      "confidence": "high"
+    },
+    {
+      "id": "R48-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Yeterlilik iptali ve kalibrasyon değişimi yaşam döngüsü tanımlı değil",
+      "evidence": "DEVICE_PROFILE_TEMPLATE.json:3 yalnız Unqualified durumunu; :8 tek calibrationRecord, qualifiedCombination ve operatorApproval alanlarını içerir. Revocation, onay tarihi/sahibi, geçerlilik koşulu ve yeniden yeterlilik tetikleyicisi yoktur. SimulationQueue.cs:17-22 yalnız ad ve sayısal sınırları doğrular; :77-80 yalnız çıktı özetini kontrol eder. MACHINE_COMPATIBILITY.md:17 kalibrasyon kaydı ister fakat değişim/iptal politikasını tanımlamaz.",
+      "impact": "İlk fiziksel adaptör sonrasında firmware/sürücü, ölçek veya bakım değişikliği eski onayın fark edilmeden kullanılmasına neden olabilir. Geri çekilen profilin bekleyen işler üzerindeki etkisi belirlenmeden büyük fabrika üretimine geçilemez.",
+      "acceptance": "Taslak, yeterli, askıda ve geri çekilmiş durumları; karar sahibi/tarih/gerekçe ve değişmez ölçüm kanıtı kayıtları tanımlansın. Firmware/sürücü/birim/eksen/kalibrasyon değişimleri için yeniden doğrulama koşulları yazılsın. Yeni iş hazırlama ve fiziksel gönderim öncesi güncel iptal/geçerlilik kontrolü yapılsın; bekleyen eski iş kanıtı korunurken gönderim engellensin. Kalibrasyon kaydında cihaz örneği, profil revizyonu, yöntem, önceden kararlaştırılmış tolerans, sonuç ve ölçüm tarihi bulunsun. Kabul senaryoları profil iptali, kalibrasyon koşulunun bozulması ve değişiklik sonrası tekrar onayı kapsasın.",
+      "effort_days": [3, 6],
+      "dependencies": ["R48-F1 sürümlü profil ve yeterlilik sözleşmesi", "Fabrika kalite sorumlusu ve bakım politikası", "Model bazlı fiziksel kabul toleransları"],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB bağlantısı kullanıcı tarafından doğrulandı; marka/model/kontrolör/firmware ve USB protokolü bilinmiyor.",
+    "Kalibrasyon yöntemi, geçerlilik koşulları ve fabrika toleransları henüz belirlenmedi.",
+    "Şablon planlama girdisidir; fiziksel yeterlilik kanıtı değildir. Kurulu üretici yazılımından bağlı cihaz modeli çıkarılmadı."
+  ],
+  "recommendation": "7+ kişilik geliştirme ekibinde profil/iş sözleşmesi sahibini ve fabrika kalite onay sahibini belirleyin; önce tek USB model birleşimini kanıtla yeterli kılın. Çok makine desteğini uzun vadede yetenek tabanlı adaptör ve model bazlı yeterlilik matrisiyle genişletin; evrensel uyumluluk garantisi vermeyin. Eforlar yalnız bu yaşam döngüsü kapsamı için ön mühendis-kişi-gün tahminidir; entegrasyon/QA ve fiziksel deney maliyeti hariçtir, benzer raporlarla körlemesine toplanmamalıdır."
+}

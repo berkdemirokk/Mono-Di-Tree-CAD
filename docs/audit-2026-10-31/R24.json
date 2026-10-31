@@ -1,0 +1,98 @@
+{
+  "agent": "R24",
+  "role": "Plotter kalibrasyonu denetçisi",
+  "scope": "Medya eni, basılabilir alan, eksen/orijin, ölçek/çarpıklık, ölçüm fikstürü ve profil bazlı geçerlilik; yalnızca kaynak incelemesi.",
+  "evidence": [
+    "src/TekstilCAD.Core/Models.cs:3-16 koordinatlar mm; geometrik sınır modeli.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:12-23 profil yalnız ad, birim/mm ve tek ölçek içerir; fiziksel doğrulama iddiası yoktur.",
+    "src/TekstilCAD.MachineGateway/SimulationQueue.cs:42-65 hazırlama ve manifest; 70-86 simülasyon yalnız dosya özeti doğrular.",
+    "src/TekstilCAD.FileFormats/PlotFormats.cs:30-48 HPGL doğrudan koordinat çarpımı ve tamsayı yuvarlama.",
+    "tests/TekstilCAD.Tests/MachineGatewayTests.cs:17-22,50-72 100 mm kare, dosya ölçeği ve simülatör sınırları test kaynakları.",
+    "Hedefli rg: gateway, fileformats ve testlerde calibr|toleran|skew|mediawidth|printable|unitspermillimeter|origin; medya/basılabilir alan/kalibrasyon geçerlilik modeli bulunmadı."
+  ],
+  "findings": [
+    {
+      "id": "R24-F1",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Medya eni ve dönüştürülmüş basılabilir alan kontrolü yok",
+      "evidence": "SimulationQueue.cs:13 profil medya eni, kenar boşlukları veya besleme sınırı taşımaz; :50-61 ölçeklemeden doğrudan dışa aktarır. PlotFormats.cs:36-38 yalnız int koordinat sınırını denetler.",
+      "impact": "İlk USB plotter pilotunda dosyanın üretilebilir olduğu belirlenemez; kalıp kenar dışına taşabilir. Bu mevcut simülatörde gözlenmiş fiziksel hata değildir.",
+      "acceptance": "Onaylı model profili medya eni (mm), basılabilir X/Y sınırları ve rulo/boy davranışını belirtir. Eksen/orijin/kalibrasyon dönüşümünden sonra tüm kalem yolları sınırda kabul, sınır dışı reddetme testlerinden geçer; boş veya bilinmeyen alan fiziksel gönderimi engeller. Geometrik sayısal tolerans ve fiziksel kenar payları fabrika/üretici onayı bekler.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "İlk USB plotter marka/model ve üretici basılabilir alan bilgisi",
+        "Medya/iş emri profili",
+        "Fiziksel gönderim ön kontrolü"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R24-F2",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Tek ölçek eksen, orijin ve bağımsız X/Y kalibrasyonunu karşılamıyor",
+      "evidence": "SimulationQueue.cs:13,53 tek Scale ile iki ekseni birlikte çarpar. PlotFormats.cs:36-40 X/Y doğrudan çarpılır, IN;SP1;PA başlangıcı yazılır; eksen değişimi, yön ve orijin parametresi yok.",
+      "impact": "Birim dönüşümü fiziksel ölçüm kalibrasyonu sanılabilir; eksen yönü/başlangıç farkı veya farklı X/Y besleme hatası ilk makine üzerinde giderilemez.",
+      "acceptance": "Birim/mm, tasarım ölçeği ve makine düzeltmesi ayrı alanlar olur. Bilinen asimetrik fikstürde eksen değişimi, yön, orijin ofseti, bağımsız X/Y katsayıları ve destekleniyorsa çarpıklık dönüşümü altın koordinatlarla sınanır. Desteklenmeyen çarpıklık cihaz bakımına yönlendirilir; düzeltme sınırları fabrika/üretici onayı bekler.",
+      "effort_days": [
+        4,
+        7
+      ],
+      "dependencies": [
+        "Modelin koordinat sistemi/protokol dokümanı",
+        "Kalibrasyon ölçüm prosedürü",
+        "Profil sürümleme"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R24-F3",
+      "kind": "unverified",
+      "priority": "P1",
+      "title": "100 mm dosya karesi fiziksel ölçü doğruluğunu kanıtlamıyor",
+      "evidence": "MachineGatewayTests.cs:17-18 kare fikstürü; :57 DXF genişliğini, :71 HPGL metnindeki 1000,1000 değerini kontrol eder. SimulationQueue.cs:78-80 yalnız dosya varlığı ve SHA256 kontrolüyle Simulated üretir.",
+      "impact": "Enine ve uzun beslemede ölçü sapması, diklik ve tekrarlanabilirlik hakkında kanıt bulunmuyor; büyük fabrika seri işine geçiş ölçüm kapısı olmadan yapılamaz.",
+      "acceptance": "İlk model için asimetrik eksen işaretleri, en boyunca birden fazla konum, kısa/uzun besleme mesafeleri ve iki köşegen içeren fikstür tanımlanır; önerilen üç tekrar fabrika/üretici onayı bekler. Hedef/ölçülen mm, ölçüm cihazı kimliği-belirsizliği, medya ve operatör kaydedilir. X/Y hata, köşegen farkı ve tekrar dağılımı hesaplanır; sayısal kabul toleransları fabrika/üretici onaylanmadan fiziksel uygunluk verilmez.",
+      "effort_days": [
+        3,
+        6
+      ],
+      "dependencies": [
+        "Fiziksel USB modelinin temini",
+        "Fabrika metroloji sorumlusu ve ölçüm aracı",
+        "Üreticinin hassasiyet/besleme koşulları"
+      ],
+      "confidence": "high"
+    },
+    {
+      "id": "R24-F4",
+      "kind": "missing",
+      "priority": "P1",
+      "title": "Kalibrasyonun hangi profil ve koşullarda geçerli olduğu kaydedilmiyor",
+      "evidence": "SimulationQueue.cs:13-16 profil ad/birim/ölçek ve sabit IsVerified=false taşır; :26-28 manifest iş, profil ve oluşturulma zamanını içerir, kalibrasyon sürümü/kanıtı/geçerlilik bağını içermez.",
+      "impact": "Gelecekte aynı profil adı farklı makine, medya veya değişmiş ayarlarla kullanılırsa eski ölçüm onayı yanlış işe uygulanabilir. Mevcut kodun fiziksel uyumluluk iddia etmemesi doğru korunmalıdır.",
+      "acceptance": "Kalibrasyon kaydı cihaz kimliği, profil revizyonu, firmware/sürücü-adaptör sürümü, medya ve etkili ayarlar, ölçüm kanıtı, onaylayan ve geçerlilik koşullarına bağlanır; iş manifesti bu kaydın değişmez kimliğini içerir. Cihaz/profil/etkili ayar değişimi ve süresi dolmuş kayıt fiziksel gönderimi engeller; simülatör daima doğrulanmamış kalır. Yenileme aralığı fabrika/üretici onayı bekler.",
+      "effort_days": [
+        3,
+        5
+      ],
+      "dependencies": [
+        "Cihaz kimliği ve model yeterlilik kaydı",
+        "Profil sürümleme",
+        "Yetkili fabrika onay akışı"
+      ],
+      "confidence": "high"
+    }
+  ],
+  "unknowns": [
+    "USB bağlantısı kullanıcı beyanı; marka/model, denetleyici ve protokol bilinmiyor.",
+    "Medya eni, rulo/boy sınırları, üretici hassasiyeti, eksen/orijin davranışı ve kabul toleransları MISSING.",
+    "Kaynak testleri okundu; build/test/UI/fiziksel I/O çalıştırılmadı. WearCAD dosyalarına dokunulmadı.",
+    "Eforlar yalnız ayrı kapsamın ön tahminidir; entegrasyon/QA hariç, örtüşen bulgularla körlemesine toplanamaz."
+  ],
+  "recommendation": "7+ kişilik büyük fabrika planında önce tek USB modelini ölçüm kanıtlı profil ile yeterli kılın; simülatörün IsVerified=false sınırını koruyun. Bu belge elektriksel veya makine uygunluk onayı değildir; Fiziksel kurulum/enerjilendirme ileride kapsama girerse ilgili üretici talimatları ve yetkin teknik uzman değerlendirmesi ayrıca planlanmalıdır."
+}
