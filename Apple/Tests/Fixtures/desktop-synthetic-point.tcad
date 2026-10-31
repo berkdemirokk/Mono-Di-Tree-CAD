@@ -1,0 +1,28 @@
+{
+  "Name": "Yeni proje",
+  "Pieces": [
+    {
+      "Id": "92a551ad-c6b2-4b04-ae91-41ada47d1e60",
+      "Name": "\u00D6n",
+      "Points": [
+        {
+          "X": 0,
+          "Y": 0,
+          "IsFinite": true
+        },
+        {
+          "X": 20,
+          "Y": 0,
+          "IsFinite": true
+        },
+        {
+          "X": 0,
+          "Y": 30,
+          "IsFinite": true
+        }
+      ],
+      "Closed": true
+    }
+  ],
+  "GradingRules": []
+}
