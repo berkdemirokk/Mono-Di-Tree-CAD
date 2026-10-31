@@ -26,6 +26,42 @@ internal static class DesktopVerification
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string newFileName,string existingFileName,IntPtr securityAttributes);
     private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
+    {
+        var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
+        var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Name="Kapatma doğrulaması",Pieces=[a],GradingRules=[rule] });
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var initial=studio.Document.Clone();var window=new OpenPathClosureWindow(studio,studio);
+        try
+        {
+            void Preview() { var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            window.ToleranceForVerification.Text="10";Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("Kapanış kenarı") &&
+                DocumentSession.ContentEquals(initial,studio.Document) && session.UndoCount==0,
+                "Open path closure preview leaves the project unchanged and reports the closing edge",checks);
+            window.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==2 && studio.Document.Pieces[1].Closed &&
+                studio.Document.Pieces[1].Id!=a.Id && studio.Document.Pieces[1].Points.SequenceEqual(a.Points) &&
+                JsonSerializer.Serialize(studio.Document.Pieces[0])==JsonSerializer.Serialize(initial.Pieces[0]) &&
+                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(initial.GradingRules) && session.UndoCount==1,
+                "Closure adds one closed piece while preserving the source and its grading rule",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(initial,studio.Document),"Closure undo restores the original project",checks);
+            Preview();window.ToleranceForVerification.Text="9";
+            var before=studio.Document.Clone();var undo=session.UndoCount;
+            Check(!window.ApplyButtonForVerification.IsEnabled,"Changing closure tolerance invalidates preview",checks);
+            window.ApplyForVerification();Preview();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "Stale or insufficient closure tolerance cannot change the project",checks);
+            window.ToleranceForVerification.Text="10";Preview();
+            studio.Commit("Kaynak değişikliği",()=>studio.Document.Pieces.Single(p=>p.Id==a.Id).Points[1]=new Point2(11,0));
+            before=studio.Document.Clone();undo=session.UndoCount;window.ApplyForVerification();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && window.MessageForVerification.Contains("değişti"),
+                "Closure rejects a stale source without a history entry",checks);
+        }
+        finally { window.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
+    }
     private static void VerifyOpenPathJoin(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Ön",Closed=false,Points=[new(0,0),new(10,0)] };
@@ -322,6 +358,7 @@ internal static class DesktopVerification
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyOpenPathJoin(studio,checks);
+            VerifyOpenPathClosure(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDeleteShortcutSafety(studio,checks);
             VerifyGradeResetConfirmation(studio,checks);

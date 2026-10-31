@@ -669,6 +669,12 @@ public sealed class TextileToolsWindow : Window
         Note(panel,"Kaynak parçanın mevcut noktaları arasındaki düz geometrik mesafeyi gösterir.");
         Button(panel,"İki nokta arasını ölç…",()=>new PointDistanceWindow(workspace,this,Piece(),()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
         Button(panel,"İki dikiş kenarını karşılaştır…",()=>new SeamLengthComparisonWindow(workspace,this,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
+        Button(panel,"Açık konturu kapat…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
+            new OpenPathClosureWindow(workspace,this).ShowDialog();
+            RefreshSources((source.SelectedItem as PatternPiece)?.Id);
+        },()=>workspace.Document.Pieces.Any(p=>!p.Closed));
         Button(panel,"İki açık konturu birleştir…",()=>
         {
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
