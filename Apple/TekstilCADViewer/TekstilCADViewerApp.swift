@@ -14,23 +14,26 @@ private struct ContentView: View {
     @State private var error: String?
     @State private var selectedPiece: Int?
     @State private var drawingRevision = UUID()
+    @State private var loadRequest = UUID()
+    @State private var isLoading = false
 
     var body: some View {
         VStack(spacing: 12) {
             HStack {
-                Button(".tcad aç") { showingImporter = true }
+                Button(".tcad aç") { loadRequest = UUID(); isLoading = false; showingImporter = true }
                     .accessibilityHint("Önizlemek için bir proje dosyası seçin")
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
             Text("Yalnızca kontur önizlemesi. Düzenleme, kaydetme, serileme, pastal, iplik yönü ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
+            if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Picker("Gösterilen parça", selection: $selectedPiece) {
                         Text("Tüm parçalar").tag(nil as Int?)
                         ForEach(project.pieces.indices.filter { project.pieces[$0].points.count > 1 }, id: \.self) { index in
-                            Text("Parça \(index + 1)").tag(Optional(index))
+                            Text(project.pieces[index].displayName(index: index)).tag(Optional(index))
                         }
                     }
                     .pickerStyle(.menu)
@@ -39,7 +42,7 @@ private struct ContentView: View {
                     }
                     DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
-                        label: selectedPiece.map { "Parça \($0 + 1) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
+                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
                     )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
@@ -64,12 +67,26 @@ private struct ContentView: View {
             do {
                 let url = try result.get()
                 guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
-                let access = url.startAccessingSecurityScopedResource()
-                defer { if access { url.stopAccessingSecurityScopedResource() } }
-                let loaded = try Drawing.load(url)
-                selectedPiece = nil
-                drawingRevision = UUID()
-                project = loaded
+                let request = UUID()
+                loadRequest = request
+                isLoading = true
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let access = url.startAccessingSecurityScopedResource()
+                    let loaded = Result { try Drawing.load(url) }
+                    if access { url.stopAccessingSecurityScopedResource() }
+                    DispatchQueue.main.async {
+                        guard loadRequest == request else { return }
+                        isLoading = false
+                        switch loaded {
+                        case .success(let drawing):
+                            selectedPiece = nil
+                            drawingRevision = UUID()
+                            project = drawing
+                        case .failure(let error):
+                            self.error = error.localizedDescription
+                        }
+                    }
+                }
             } catch { self.error = error.localizedDescription }
         }
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -85,7 +102,18 @@ private enum ViewerError: LocalizedError {
 
 private struct Drawing {
     struct Point { let x: Double; let y: Double }
-    struct Piece { let points: [Point]; let closed: Bool }
+    struct Piece {
+        let name: String?
+        let points: [Point]
+        let closed: Bool
+
+        func displayName(index: Int) -> String {
+            guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return "Parça \(index + 1)"
+            }
+            return name
+        }
+    }
     let name: String
     let pieces: [Piece]
 
@@ -118,7 +146,7 @@ private struct Drawing {
                 }
                 return Point(x: x, y: y)
             }
-            pieces.append(Piece(points: points, closed: closed))
+            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed))
         }
         return Drawing(name: name, pieces: pieces)
     }

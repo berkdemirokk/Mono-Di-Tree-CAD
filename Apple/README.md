@@ -22,7 +22,7 @@ TestFlight için macOS üzerinde Xcode ve XcodeGen ile projenin üretilmesi, do�
 
 ## GitHub Actions ile derleme kontrolü
 
-`.github/workflows/apple-ci.yml` yalnızca Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir ve iOS Simulator hedefini imzasız derler. Her değişiklikte otomatik çalışmaz. İş akışı yalnızca derleme kontrolüdür: uygulamayı çalıştırmaz, gerçek cihazı doğrulamaz ve TestFlight'a yüklemez. Yeni yapılandırma henüz çalıştırılmadı; GitHub kullanım kotasını önce kontrol edin.
+`.github/workflows/apple-ci.yml` yalnızca Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir, iPhone simülatöründe derler ve temel arayüz testini çalıştırır. Her değişiklikte otomatik çalışmaz. Test uygulamanın açılışını ve dosya seçicisinin iptal edilmesini kontrol eder; dosya içe aktarmayı, gerçek cihazı veya TestFlight yüklemesini doğrulamaz. GitHub kullanım kotasını önce kontrol edin.
 
 TestFlight için ayrıca Apple Developer üyeliği, App Store Connect uygulama kaydı, dağıtım imzası ve arşiv/yükleme gerekir. İmzalama ve yükleme otomasyonu bu iş akışında bulunmaz; kimlik bilgilerini kaynak koduna veya günlüklere koymayın. Başvuru: [GitHub macOS çalıştırıcıları](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/customize-runners), [Apple simülatör hedefleri](https://developer.apple.com/documentation/xcode/building-and-running-an-app), [GitHub imzalama belgeleri](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 
