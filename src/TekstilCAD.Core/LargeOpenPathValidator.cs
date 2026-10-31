@@ -45,7 +45,7 @@ public static class LargeOpenPathValidator
                 var c = snapshot[j]; var d = snapshot[j + 1];
                 if (j == i + 1)
                 {
-                    if (Geometry.Orientation(a, b, d) == 0 && Geometry.Dot(a - b, d - b) > Geometry.Epsilon)
+                    if (Geometry.AdjacentEdgesOverlap(a, b, d))
                         throw new ArgumentException("An open path must not contain a zero-length edge, crossing or overlap.", nameof(points));
                 }
                 else if (!Geometry.CanSkipDisjointSegments(a, b, c, d) && Geometry.SegmentsIntersect(a, b, c, d))

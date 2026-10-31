@@ -85,7 +85,7 @@ public static class LargeContourValidator
                     var common = j == i + 1 ? b : a;
                     var first = j == i + 1 ? a : b;
                     var second = j == i + 1 ? d : c;
-                    if (Geometry.Orientation(first, common, second) == 0 && Geometry.Dot(first - common, second - common) > Geometry.Epsilon)
+                    if (Geometry.AdjacentEdgesOverlap(first, common, second))
                         throw new ArgumentException("A closed contour must not cross or overlap itself.", nameof(points));
                 }
                 else

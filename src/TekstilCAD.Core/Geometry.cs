@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace TekstilCAD.Core;
 
 /// <summary>Independent double precision geometry in millimetres, with boundary-inclusive predicates.</summary>
@@ -128,7 +130,7 @@ public static class Geometry
                     var common = j == i + 1 ? b : a;
                     var first = j == i + 1 ? a : b;
                     var second = j == i + 1 ? d : c;
-                    if (Orientation(first, common, second) == 0 && Dot(first - common, second - common) > Epsilon) return true;
+                    if (AdjacentEdgesOverlap(first, common, second)) return true;
                     continue;
                 }
                 if (SegmentsIntersect(a, b, c, d)) return true;
@@ -200,6 +202,36 @@ public static class Geometry
 
     private static double Cross(Point2 a, Point2 b) => a.X * b.Y - a.Y * b.X;
     internal static double Dot(Point2 a, Point2 b) => a.X * b.X + a.Y * b.Y;
+
+    // Preserve the existing conservative tolerance for near-overlap, and also
+    // catch exact overlaps too short for its dot-product threshold. Comparing
+    // coordinates avoids a rounded dot product in the exact check; its
+    // determinant uses the exact values represented by binary64.
+    internal static bool AdjacentEdgesOverlap(Point2 first, Point2 common, Point2 second)
+    {
+        if (Orientation(first, common, second) == 0 && Dot(first - common, second - common) > Epsilon)
+            return true;
+        var sameDirection = first.X != common.X
+            ? (first.X > common.X) == (second.X > common.X) && second.X != common.X
+            : first.Y != common.Y && second.Y != common.Y && (first.Y > common.Y) == (second.Y > common.Y);
+        if (!sameDirection) return false;
+
+        static BigInteger ScaledInteger(double value)
+        {
+            var bits = BitConverter.DoubleToInt64Bits(value);
+            var exponent = (int)((bits >> 52) & 0x7ff);
+            var fraction = (ulong)bits & 0x000f_ffff_ffff_ffffUL;
+            var mantissa = exponent == 0 ? fraction : fraction | (1UL << 52);
+            var result = new BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -result : result;
+        }
+
+        var ax = ScaledInteger(first.X) - ScaledInteger(common.X);
+        var ay = ScaledInteger(first.Y) - ScaledInteger(common.Y);
+        var bx = ScaledInteger(second.X) - ScaledInteger(common.X);
+        var by = ScaledInteger(second.Y) - ScaledInteger(common.Y);
+        return ax * by == ay * bx;
+    }
     internal static int Orientation(Point2 a, Point2 b, Point2 c)
     {
         var cross = Cross(b - a, c - a);
