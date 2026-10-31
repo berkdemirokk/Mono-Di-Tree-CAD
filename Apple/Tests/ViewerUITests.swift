@@ -1,6 +1,23 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let export = app.buttons["Açık modeli dışa aktar…"]
+        XCTAssertTrue(export.waitForExistence(timeout: 15))
+        export.tap()
+        let cancel = app.buttons["Cancel"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 10))
+        cancel.tap()
+        XCTAssertTrue(export.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Deneme"].exists)
+        XCTAssertFalse(app.staticTexts["Model seçilen hedefe dışa aktarıldı."].exists)
+    }
+
     func testDuplicatePieceNamesCanBeDistinguishedAndFoundBySize() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Metadata":{"Size":"38","Material":"Pamuk"},"Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Metadata":{"Size":"42","Material":"Yün"},"Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
         let app = XCUIApplication()

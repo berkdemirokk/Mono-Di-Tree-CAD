@@ -3,6 +3,19 @@ import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
 
+private struct ProjectExportDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.data] }
+    let data: Data
+    init(data: Data) { self.data = data }
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else { throw CocoaError(.fileReadCorruptFile) }
+        self.data = data
+    }
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
+    }
+}
+
 @main
 struct TekstilCADViewerApp: App {
     var body: some Scene {
@@ -14,6 +27,9 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var showingLibrary = false
+    @State private var showingExporter = false
+    @State private var exportDocument: ProjectExportDocument?
+    @State private var exportName = "Model.tcad"
     @State private var importedData: Data?
     @State private var sourceData: Data?
     @State private var showingNameEditor = false
@@ -49,6 +65,14 @@ private struct ContentView: View {
                     .disabled(isSaving || isLoading)
             }
             if let project {
+                Button("Açık modeli dışa aktar…") {
+                    guard let data = sourceData else { return }
+                    // Capture the loaded bytes before presenting the system picker.
+                    exportDocument = ProjectExportDocument(data: data)
+                    exportName = exportFileName(project.name)
+                    saveNotice = nil
+                    showingExporter = true
+                }.disabled(isSaving || isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
                 }.disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
@@ -127,6 +151,17 @@ private struct ContentView: View {
                 openModel(url, imported: true)
             } catch { self.error = error.localizedDescription }
         }
+        .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in
+            exportDocument = nil
+            switch result {
+            case .success: saveNotice = "Model seçilen hedefe dışa aktarıldı."
+            case .failure(let failure): error = failure.localizedDescription
+            }
+        }
+        .onChange(of: showingExporter) { presented in
+            // The system may dismiss without a completion callback on cancel.
+            if !presented { exportDocument = nil }
+        }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
             Button("İptal", role: .cancel) { editedName = project?.name ?? "" }
@@ -174,6 +209,18 @@ private struct ContentView: View {
         .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
             Button("Tamam", role: .cancel) { error = nil }
         } message: { Text(error ?? "") }
+    }
+
+    private func exportFileName(_ name: String) -> String {
+        var stem = ""
+        for character in name {
+            let part = character == "/" || character == ":" || character.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) ? "_" : String(character)
+            if (stem + part).utf8.count > 100 { break }
+            stem += part
+        }
+        stem = stem.trimmingCharacters(in: .whitespacesAndNewlines)
+        while stem.first == "." { stem.removeFirst() }
+        return (stem.isEmpty ? "Model" : stem) + ".tcad"
     }
 
     private func openModel(_ url: URL, imported: Bool) {
