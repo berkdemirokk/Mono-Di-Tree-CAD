@@ -17,6 +17,9 @@ private struct ContentView: View {
     @State private var sourceData: Data?
     @State private var showingNameEditor = false
     @State private var editedName = ""
+    @State private var showingPieceNameEditor = false
+    @State private var editedPieceName = ""
+    @State private var pieceRenameSnapshot: PieceRenameSnapshot?
     @State private var importedName = ""
     @State private var isSaving = false
     @State private var saveNotice: String?
@@ -72,6 +75,19 @@ private struct ContentView: View {
                         PiecePicker(pieces: project.pieces, selection: $selectedPiece)
                     }
                     if let selectedPiece {
+                        #if DEBUG
+                        Button("Parça adını değiştir ve kopya kaydet") {
+                            guard let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
+                            pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
+                            editedPieceName = name
+                            showingPieceNameEditor = true
+                        }
+                        .disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        if !project.pieceRenameIdentitiesValid {
+                            Text("Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        #endif
                         PieceDetails(piece: project.pieces[selectedPiece])
                     }
                     DrawingView(
@@ -110,6 +126,14 @@ private struct ContentView: View {
             Button("Yeni kopyayı kaydet") { saveRenamedCopy() }
                 .disabled(editedName.utf16.count > 1024)
         } message: { Text("Yeni bir model kaydedilir; açık dosya değişmez. Proje adı en fazla 1024 UTF-16 birimi olabilir.") }
+        #if DEBUG
+        .alert("Parça adını değiştir", isPresented: $showingPieceNameEditor) {
+            TextField("Parça adı", text: $editedPieceName)
+            Button("İptal", role: .cancel) { pieceRenameSnapshot = nil }
+            Button("Yeni kopyayı kaydet") { saveRenamedPieceCopy() }
+                .disabled(editedPieceName.utf16.count > 1024)
+        } message: { Text("Yeni bir model kopyası kaydedilir; açık dosya değişmez. Kayıtlı pastal ve içe aktarma geçmişi eski parça adını veya önceki durumu gösterebilir. Parça adı en fazla 1024 UTF-16 birimi olabilir.") }
+        #endif
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary { url in
                 showingLibrary = false
@@ -198,6 +222,45 @@ private struct ContentView: View {
             }
         }
     }
+    private struct PieceRenameSnapshot {
+        let data: Data
+        let index: Int
+        let name: String
+        let id: UUID?
+        let projectName: String
+    }
+
+    private func saveRenamedPieceCopy() {
+        guard let snapshot = pieceRenameSnapshot, sourceData == snapshot.data, selectedPiece == snapshot.index else {
+            error = "Açık model veya seçili parça değişti. Parçayı yeniden seçin."
+            return
+        }
+        let name = editedPieceName
+        saveNotice = nil
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                let copy: Data
+                if let id = snapshot.id {
+                    copy = try ExperimentalPieceRename.replacing(in: snapshot.data, snapshot: snapshot.data, pieceID: id, with: name)
+                } else {
+                    copy = try ExperimentalPieceRename.replacingLegacy(in: snapshot.data, snapshot: snapshot.data, pieceIndex: snapshot.index, expectedName: snapshot.name, with: name)
+                }
+                try ModelStore.saveRenamed(copy, projectName: "\(snapshot.projectName) – \(name)")
+            }
+            DispatchQueue.main.async {
+                isSaving = false
+                switch result {
+                case .success:
+                    pieceRenameSnapshot = nil
+                    saveNotice = "Parça adı değiştirilmiş yeni kopya Modellerim bölümüne kaydedildi."
+                case .failure:
+                    error = "Parça adı güvenli biçimde değiştirilemedi. Dosya biçimini ve parça kimliklerini kontrol edin."
+                }
+            }
+        }
+    }
+
     private func saveImportedModel() {
         guard let data = importedData else { return }
         let name = importedName
@@ -437,6 +500,7 @@ private struct Drawing {
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
         let name: String?
+        let id: UUID?
         let points: [Point]
         let closed: Bool
         let role: String?
@@ -455,6 +519,7 @@ private struct Drawing {
     }
     let name: String
     let pieces: [Piece]
+    let pieceRenameIdentitiesValid: Bool
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -500,6 +565,8 @@ private struct Drawing {
         }
         var total = 0
         var pieces: [Piece] = []
+        var pieceRenameIdentitiesValid = true
+        var pieceIDs = Set<UUID>()
         for raw in rawPieces {
             guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
                   let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
@@ -536,12 +603,18 @@ private struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            pieces.append(Piece(name: raw["Name"] as? String, points: points, closed: closed,
+            let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
+            if !(raw["Name"] is String) { pieceRenameIdentitiesValid = false }
+            if raw["Id"] != nil {
+                if let id, id.uuidString != "00000000-0000-0000-0000-000000000000", pieceIDs.insert(id).inserted { }
+                else { pieceRenameIdentitiesValid = false }
+            }
+            pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
         }
-        return Drawing(name: name, pieces: pieces)
+        return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid)
     }
 }
 

@@ -1,6 +1,72 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testPieceRenameExplainsInvalidProjectIdentities() {
+        let valid = "11111111-1111-1111-1111-111111111111"
+        let cases = [
+            "\"Id\":\"00000000-0000-0000-0000-000000000000\",\"Name\":\"Diğer\"",
+            "\"Id\":\"bad\",\"Name\":\"Diğer\"",
+            "\"Id\":\"\(valid)\",\"Name\":\"Diğer\"",
+            "\"Id\":null,\"Name\":\"Diğer\"",
+            "\"Id\":\"22222222-2222-2222-2222-222222222222\""
+        ]
+        for other in cases {
+            let fixture = """
+            {"Name":"Deneme","Pieces":[{"Id":"\(valid)","Name":"Seçili","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{\(other),"Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}
+            """
+            let app = XCUIApplication()
+            app.launchArguments += ["--ui-test-fixture"]
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+            app.launch()
+            let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+            XCTAssertTrue(picker.waitForExistence(timeout: 15))
+            picker.tap()
+            app.buttons["Seçili"].tap()
+            let rename = app.buttons["Parça adını değiştir ve kopya kaydet"]
+            XCTAssertTrue(rename.waitForExistence(timeout: 5))
+            XCTAssertFalse(rename.isEnabled)
+            XCTAssertTrue(app.staticTexts["Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı."].exists)
+            app.terminate()
+        }
+    }
+    func testPieceRenameSavesIndependentCopyForIdentifiedAndLegacyPieces() {
+        for idField in ["\"Id\":\"22222222-2222-2222-2222-222222222222\",", ""] {
+            let fixture = """
+            {"Name":"Deneme","Pieces":[{"Name":"İlk","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{\(idField)"Name":"Eski","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}
+            """
+            let app = XCUIApplication()
+            app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+            app.launch()
+            let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+            XCTAssertTrue(picker.waitForExistence(timeout: 15))
+            picker.tap()
+            app.buttons["Eski"].tap()
+            let rename = app.buttons["Parça adını değiştir ve kopya kaydet"]
+            XCTAssertTrue(rename.waitForExistence(timeout: 5))
+            rename.tap()
+            let editor = app.alerts["Parça adını değiştir"]
+            XCTAssertTrue(editor.waitForExistence(timeout: 5))
+            XCTAssertTrue(editor.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "pastal")).firstMatch.exists)
+            let field = editor.textFields.firstMatch
+            field.tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 4) + "Yeni")
+            editor.buttons["Yeni kopyayı kaydet"].tap()
+            XCTAssertTrue(app.staticTexts["Parça adı değiştirilmiş yeni kopya Modellerim bölümüne kaydedildi."].waitForExistence(timeout: 10))
+            XCTAssertTrue(app.descendants(matching: .any)["Eski kontur önizlemesi"].exists)
+            app.buttons["Modellerim"].tap()
+            let saved = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Deneme – Yeni")).firstMatch
+            XCTAssertTrue(saved.waitForExistence(timeout: 10))
+            saved.tap()
+            let reopenedPicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+            XCTAssertTrue(reopenedPicker.waitForExistence(timeout: 10))
+            reopenedPicker.tap()
+            XCTAssertTrue(app.buttons["Yeni"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["İlk"].exists)
+            XCTAssertFalse(app.buttons["Eski"].exists)
+            app.terminate()
+        }
+    }
     func testLaunchAndCancelFilePicker() {
         let app = XCUIApplication()
         app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
