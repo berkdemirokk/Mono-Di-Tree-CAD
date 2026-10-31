@@ -299,8 +299,42 @@ public sealed class CadCanvas : FrameworkElement
     }
     public void Fit()
     {
-        var all=owner.Document.Pieces.SelectMany(p=>p.Points).ToList(); if(all.Count==0 || ActualWidth<1 || ActualHeight<1)return;
-        var b=Geometry.Bounds(all); scale=Math.Clamp(Math.Min((ActualWidth-110)/Math.Max(b.Width,1),(ActualHeight-110)/Math.Max(b.Height,1)),.02,30); offset=new Vector((ActualWidth-b.Width*scale)/2-b.MinX*scale,(ActualHeight-b.Height*scale)/2-b.MinY*scale); InvalidateVisual();
+        if(LargeVertexValidationRunning || LargeCompletionRunning)
+        { owner.SetStatus("Doğrulama sürüyor; görünümü değiştirmek için bitmesini bekleyin.");return; }
+        if(dragId is not null || panStart is not null)
+        { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
+        var width=ActualWidth;var height=ActualHeight;
+        if(!double.IsFinite(width) || !double.IsFinite(height) || width<1 || height<1)
+        { owner.SetStatus("Çalışma alanı henüz hazır değil; görünümü yeniden deneyin.");return; }
+        double minX=double.PositiveInfinity,minY=double.PositiveInfinity,maxX=double.NegativeInfinity,maxY=double.NegativeInfinity;
+        var found=false;
+        foreach(var piece in owner.Document.Pieces)
+        foreach(var point in piece.Points)
+        {
+            if(!point.IsFinite)
+            { owner.SetStatus("Proje koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+            found=true;
+            minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+            maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+        }
+        if(!found) { owner.SetStatus("Gösterilecek parça yok.");return; }
+        var extentX=maxX-minX;var extentY=maxY-minY;
+        if(!double.IsFinite(extentX) || !double.IsFinite(extentY))
+        { owner.SetStatus("Proje sınırları hesaplanamadı; görünüm değiştirilmedi.");return; }
+        var padding=Math.Min(55,Math.Min(width,height)*0.1);
+        var availableWidth=width-2*padding;var availableHeight=height-2*padding;
+        var fitX=extentX==0 ? double.PositiveInfinity : availableWidth/extentX;
+        var fitY=extentY==0 ? double.PositiveInfinity : availableHeight/extentY;
+        var requested=Math.Min(fitX,fitY);
+        var newScale=double.IsPositiveInfinity(requested) ? 30 : Math.Clamp(requested,.02,30);
+        var centerX=minX+extentX/2;var centerY=minY+extentY/2;
+        var newOffset=new Vector(width/2-centerX*newScale,height/2-centerY*newScale);
+        if(!double.IsFinite(newScale) || !double.IsFinite(newOffset.X) || !double.IsFinite(newOffset.Y))
+        { owner.SetStatus("Proje görünümü hesaplanamadı; görünüm değiştirilmedi.");return; }
+        scale=newScale;offset=newOffset;InvalidateVisual();
+        owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
+            ? "Proje ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
+            : "Tüm parçalar çalışma alanında gösteriliyor · Proje geometrisi değişmedi.");
     }
     /// <summary>Frames the current selection without changing project geometry or history.</summary>
     internal void FitSelectedPiece()

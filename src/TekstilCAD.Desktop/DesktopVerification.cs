@@ -1041,15 +1041,25 @@ internal static class DesktopVerification
             canvas.PanView(80,-80);
             Check((Vector)offsetField.GetValue(canvas)! == new Vector(160,-15),"View pan changes only the display offset in the requested direction",checks);
 
+            var compact=new CadCanvas(studio);
+            compact.Measure(new Size(80,80));compact.Arrange(new Rect(0,0,80,80));compact.UpdateLayout();
+            compact.Fit();
+            var compactScale=(double)scaleField.GetValue(compact)!;var compactOffset=(Vector)offsetField.GetValue(compact)!;
+            var allPoints=studio.Document.Pieces.SelectMany(piece=>piece.Points).ToArray();
+            Check(allPoints.Length>0 && compactScale>.02 && allPoints.All(point=>
+                point.X*compactScale+compactOffset.X>=0 && point.X*compactScale+compactOffset.X<=80 &&
+                point.Y*compactScale+compactOffset.Y>=0 && point.Y*compactScale+compactOffset.Y<=80),
+                "Fit all frames every point on a narrow canvas",checks);
+
             foreach(var field in new[] { dragField,panField })
             {
                 if(field==dragField)field.SetValue(canvas,Guid.NewGuid());else field.SetValue(canvas,new Point(1,1));
                 try
                 {
                     var beforeScale=(double)scaleField.GetValue(canvas)!;var beforeOffset=(Vector)offsetField.GetValue(canvas)!;
-                    canvas.ZoomView(true);canvas.PanView(80,0);
+                    canvas.ZoomView(true);canvas.PanView(80,0);canvas.Fit();
                     Check((double)scaleField.GetValue(canvas)! == beforeScale && (Vector)offsetField.GetValue(canvas)! == beforeOffset,
-                        "View navigation waits for active "+field.Name,checks);
+                        "View navigation and fit all wait for active "+field.Name,checks);
                 }
                 finally { field.SetValue(canvas,null); }
             }
