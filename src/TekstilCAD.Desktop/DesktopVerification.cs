@@ -3294,6 +3294,16 @@ internal static class DesktopVerification
         pointIndex.Text="-1";
         Check(!loadPoint.IsEnabled,"Invalid point index disables coordinate loading",checks);
         pointIndex.Text="1";pointX.Text="999";pointY.Text="999";
+        var beforeStaleLoading=studio.Document.Clone();
+        loadPoint.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(pointX.Text=="999" && pointY.Text=="999" && DocumentSession.ContentEquals(studio.Document,beforeStaleLoading)
+            && status.Text.Contains("Kaynak parça değişti; seçimi yenileyin.",StringComparison.Ordinal),
+            "Stale point source is rejected without changing inputs or document",checks);
+        // Undo replaces the document objects while the hidden workshop is still
+        // alive. Refresh its source list just as a user reopening the workshop
+        // would; the stale-reference guard must not load an obsolete contour.
+        typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[source.Id,true]);
+        pointIndex.Text="1";pointX.Text="999";pointY.Text="999";
         var selectedPoint=((PatternPiece)sourceSelector.SelectedItem).Points[1];
         var beforeLoading=studio.Document.Clone();
         loadPoint.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
