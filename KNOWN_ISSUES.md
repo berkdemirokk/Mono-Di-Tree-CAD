@@ -3,9 +3,9 @@
 Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamamlandığı iddia edilmez.
 
 - Proje dosyasının okunması ve uygulamadan önce sürümünün yeniden kontrol edilmesi arka planda yapılır. İptal edilen okumada sonuç kullanılmaz, ancak mevcut okuma tamamlanana kadar yeni açma bekler. Son kontrolden sonra dosya yine değişebilir; sonraki kayıtta sürüm çatışması kontrol edilir. Belgenin yerleştirilmesi ve görünümün yenilenmesi hâlâ arayüzü bekletebilir; gerçek fabrika verileriyle ölçülmedi.
-- Windows WPF hedefi var; Uno/iPad/iPhone/macOS uygulamaları yok.
+- Ana sürüm Windows WPF hedefidir; iPhone için ayrı, henüz Xcode veya gerçek cihazda doğrulanmamış deneysel görüntüleyici geliştirme dalında bulunur. Üretime hazır iPhone uygulaması veya TestFlight sürümü yoktur.
 - Bézier ve yaylar örneklenmiş çoklu çizgi olarak saklanır; parametrik eğri düzenleme yok.
-- Çoklu seçim, katman modeli, pens, genel kontur birleştirme, çentik meta verisi ve gelişmiş ölçülendirme henüz yok.
+- Ayrı pencerede birden fazla parça aynı miktarda taşınabilir; genel tuval üzerinde çoklu seçim ve grup sürükleme yoktur. Katman modeli, pens, genel kontur birleştirme, çentik meta verisi ve gelişmiş ölçülendirme henüz yoktur.
 - İki açık kontur, tek ve belirsiz olmayan uç eşleşmesinde ayrı bir açık parçaya birleştirilebilir. Farklı uçlar arasında seçilen tolerans içinde düz bir köprü eklenir; kaynaklar ve kuralları korunur, yeni parçaya bu kurallar aktarılmaz. Üretim bilgisi veya iplik yönü olan kaynaklar reddedilir. Büyük konturların arayüz gecikmesi, gerçek kullanıcı ve üretim verileriyle sonuç doğrulanmadı; bu işlem genel kontur birleştirmenin yerini tutmaz.
 - Bir açık kontur, uçları seçilen tolerans içindeyse düz kapanış kenarıyla ayrı bir kapalı parçaya dönüştürülebilir; kaynak ve kaynak kuralları korunur, yeni parçaya kurallar aktarılmaz. Üretim bilgisi veya iplik yönü olan kaynak reddedilir. Kapanış geometrisi gerçek fabrika verileri ve kullanıcılarla doğrulanmadı.
 - İki dikiş kenarı karşılaştırması, kayıtlı çoklu çizginin seçili noktaları arasındaki uzunlukları ölçer; parametrik eğri, esneme veya üretim uygunluğu hesaplamaz. Büyük projelerde pencere açılışı ve önizleme performansı gerçek kullanıcı arayüzünde ölçülmedi.
