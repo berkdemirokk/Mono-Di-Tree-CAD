@@ -7200,6 +7200,9 @@ internal static class DesktopVerification
             Check(edited.Points.Count==5 && edited.Points[4]==new Point2(0,5) && edited.Metadata?.Quantity==2 &&
                 JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
                 "Closing edge midpoint preserves piece metadata and leaves grading rule for review",checks);
+            var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            Check(status.Text.Contains("serileme kuralı önceki kontura aittir",StringComparison.Ordinal),
+                "Midpoint insertion warns that the grading rule needs review",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Midpoint insertion is one undo step",checks);
         }
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }

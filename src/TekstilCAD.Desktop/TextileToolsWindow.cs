@@ -870,8 +870,6 @@ public sealed class TextileToolsWindow : Window
                 throw new InvalidOperationException("Proje, seçim veya bekleyen çalışma değişti. Nokta düzenlemesi uygulanmadı; güncel durumu kontrol edin.");
             token.ThrowIfCancellationRequested();
             ReplacePiece(edited);
-            if(operation==VertexEdit.Notch && !toolReviewRequired && workspace.Document.GradingRules.Any(r=>r.SourcePieceId==sourceId))
-                Success("V kesimi kontura uygulandı. Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin.");
         }
         catch(OperationCanceledException) when(vertexMoveCancellation?.IsCancellationRequested==true)
         { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Nokta düzenleme doğrulaması iptal edildi; proje değiştirilmedi."; } }
@@ -1005,8 +1003,10 @@ public sealed class TextileToolsWindow : Window
         edited.Grainline=previous.Grainline?.Clone();
         var grainNeedsReview=edited.Grainline is not null && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));
         if(grainNeedsReview)edited.Grainline!.NeedsReview=true;
+        var gradingNeedsReview=(edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points)) &&
+            workspace.Document.GradingRules.Any(r=>r.SourcePieceId==previous.Id);
         CommitToolChange("Kontur noktası düzenlemesi",()=>workspace.Document.Pieces[index]=edited,()=>
-        { RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success("Kontur noktası düzenlendi ve doğrulandı."+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")); });
+        { RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success("Kontur noktası düzenlendi ve doğrulandı."+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
     }
     private UIElement NestingPanel()
     {
