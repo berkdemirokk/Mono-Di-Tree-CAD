@@ -30,6 +30,19 @@ final class LosslessProjectNameTests: XCTestCase {
         XCTAssertEqual(try replace(input), expected)
     }
 
+    func testReplacementEscapesSpecialCharactersWithoutChangingOtherBytes() throws {
+        let prefix = "[5, {\"Name\" : "
+        let suffix = ", \"other\": {\"Name\":\"untouched\"}}]"
+        let name = "quote\" slash\\ newline\n emoji😀"
+        let output = try LosslessProjectName.replacing(in: Data((prefix + "\"old\"" + suffix).utf8), with: name)
+        let text = try XCTUnwrap(String(data: output, encoding: .utf8))
+        XCTAssertTrue(text.hasPrefix(prefix))
+        XCTAssertTrue(text.hasSuffix(suffix))
+        let root = try XCTUnwrap(JSONSerialization.jsonObject(with: output) as? [Any])
+        let project = try XCTUnwrap(root[1] as? [String: Any])
+        XCTAssertEqual(project["Name"] as? String, name)
+    }
+
     func testRejectsDuplicateProjectNameIncludingEscapedKey() {
         for input in ["{\"Name\":\"a\",\"Name\":\"b\"}",
                       "[1,{\"Name\":\"a\",\"Na\\u006de\":\"b\"}]"] {
