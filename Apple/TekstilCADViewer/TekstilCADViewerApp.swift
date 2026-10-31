@@ -80,7 +80,11 @@ private struct ContentView: View {
                     Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if project.pieces.contains(where: { $0.points.count > 1 }) {
+                if project.pieces.contains(where: { !$0.hasMinimumContourPoints }) {
+                    Text("\(project.pieces.filter { !$0.hasMinimumContourPoints }.count) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if !project.pieces.isEmpty {
                     Button { showingPieces = true } label: {
                         HStack {
                             VStack(alignment: .leading, spacing: 3) {
@@ -116,14 +120,24 @@ private struct ContentView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         #endif
-                        PieceDetails(piece: project.pieces[selectedPiece])
+                        if project.pieces[selectedPiece].hasMinimumContourPoints {
+                            PieceDetails(piece: project.pieces[selectedPiece])
+                        }
                     }
-                    DrawingView(
-                        pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces,
-                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi"
-                    )
+                    if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
+                        Text("Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor.")
+                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
+                        DrawingView(
+                        pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
+                        label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi"
+                        )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
+                    } else {
+                        Text("Bu projede görüntülenebilir kontur yok.")
+                            .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 } else {
                     Text("Bu projede görüntülenebilir kontur yok.")
                         .foregroundStyle(.secondary)
@@ -572,6 +586,7 @@ private struct Drawing {
         let quantity: Int?
         let grainStatus: String
         let grain: Grain?
+        var hasMinimumContourPoints: Bool { points.count >= (closed ? 3 : 2) }
 
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -585,7 +600,8 @@ private struct Drawing {
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
                 return "\(label): \(value)"
             }
-            return (["Parça \(index + 1)"] + fields).joined(separator: " · ")
+            let warning = hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]
+            return (["Parça \(index + 1)"] + fields + warning).joined(separator: " · ")
         }
     }
     let name: String
@@ -681,7 +697,7 @@ private struct Drawing {
                 else { pieceRenameIdentitiesValid = false }
             }
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
-                                contourLength: ContourMeasure.length(points, closed: closed),
+                                contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
@@ -699,7 +715,6 @@ private struct PiecePicker: View {
     private var matchingIndices: [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
         return pieces.indices.filter { index in
-            pieces[index].points.count > 1 &&
             (query.isEmpty || pieces[index].displayName(index: index).localizedCaseInsensitiveContains(query) ||
                 pieces[index].selectionDetails(index: index).localizedCaseInsensitiveContains(query))
         }

@@ -1,6 +1,42 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testInsufficientContoursRemainSearchableButAreNotDrawnOrMeasured() {
+        let fixture = #"{"Name":"Eksik","Pieces":[{"Name":"Boş","Closed":false,"Points":[]},{"Name":"Tek","Closed":false,"Points":[{"X":0,"Y":0}]},{"Name":"Kapalı iki","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]},{"Name":"Geçerli","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "3 parça asgari nokta sayısını karşılamıyor")).firstMatch
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        picker.tap()
+        for name in ["Boş", "Tek", "Kapalı iki"] {
+            let row = app.buttons[name]
+            XCTAssertTrue(row.waitForExistence(timeout: 5))
+            XCTAssertTrue((row.value as? String ?? "").contains("nokta sayısı yetersiz"))
+        }
+        app.buttons["Kapalı iki"].tap()
+        XCTAssertTrue(app.staticTexts["Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["Kapalı iki kontur önizlemesi"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu")).firstMatch.exists)
+        let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Kapalı iki")).firstMatch
+        selected.tap();app.buttons["Geçerli"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Geçerli kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
+    func testAllInsufficientContoursStillHavePicker() {
+        let fixture = #"{"Name":"Eksik","Pieces":[{"Name":"Tek","Closed":false,"Points":[{"X":0,"Y":0}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Bu projede görüntülenebilir kontur yok."].exists)
+        picker.tap();XCTAssertTrue(app.buttons["Tek"].waitForExistence(timeout: 5))
+    }
+
     func testContourLengthTracksSelectedOpenAndClosedPiece() {
         let fixture = #"{"Name":"Ölçü","Pieces":[{"Name":"Açık","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]},{"Name":"Kapalı","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]}]}"#
         let app = XCUIApplication()
