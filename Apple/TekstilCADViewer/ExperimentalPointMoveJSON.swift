@@ -19,7 +19,10 @@ enum ExperimentalPointMoveJSON {
            [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
         else if let body = root as? [String: Any] { project = body; versioned = false; version = 0 }
         else { throw Failure.invalid }
-        // Restrict to a known schema: unknown fields may describe geometry dependencies.
+        // Grading snapshots and nesting can describe the old contour. Grainline
+        // edits must set NeedsReview, so they are rejected rather than copied as
+        // if still reviewed. Metadata is independent and is checked below.
+        // Unknown fields may also describe geometry dependencies.
         guard Set(project.keys).isSubset(of: ["Name", "Pieces", "GradingRules"]), project["Name"] is String,
               let pieces = project["Pieces"] as? [[String: Any]], pieces.count <= 10_000 else { throw Failure.invalid }
         if versioned && project["GradingRules"] == nil { throw Failure.invalid }

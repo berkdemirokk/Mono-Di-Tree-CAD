@@ -83,4 +83,19 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
         }
     }
+
+    func testGeometryDependenciesFailClosedRatherThanBecomeStale() {
+        let grading = #""GradingRules":[{"SourcePieceId":"11111111-1111-1111-1111-111111111111","SourceClosed":true,"SourcePoints":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Deltas":[{"X":0,"Y":0},{"X":0,"Y":0},{"X":0,"Y":0}]}]"#
+        let grain = #", "Grainline":{"Start":{"X":0,"Y":0},"End":{"X":1,"Y":0},"NeedsReview":false}"#
+        let variants = [
+            input.replacingOccurrences(of: #""GradingRules":[]"#, with: grading),
+            input.replacingOccurrences(of: #""Name":"Model"#, with: #""NestingSnapshot":{},"Name":"Model"#),
+            input.replacingOccurrences(of: #""Name":"Model"#, with: #""ImportProvenance":{},"Name":"Model"#),
+            input.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# + grain)
+        ]
+        for text in variants {
+            let bytes = Data(text.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
+        }
+    }
 }
