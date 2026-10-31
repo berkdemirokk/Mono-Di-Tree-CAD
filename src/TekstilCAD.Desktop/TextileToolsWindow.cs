@@ -511,10 +511,6 @@ public sealed class TextileToolsWindow : Window
         Grid.SetRow(lowerScroll,2);layout.Children.Add(lowerScroll);
         var resetRow=new StackPanel();lower.Children.Add(resetRow);
 
-        var rebase=Button(resetRow,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
-        rebase.Margin=new Thickness(0,0,0,6);rebase.Padding=new Thickness(10,5,10,5);
-        AutomationProperties.SetHelpText(rebase,"Yalnızca kayıtlı kural ve kaynak tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
-
         resetRulesButton=Button(resetRow,"Yeni geometri için artışları sıfırla",ResetRulesForCurrentGeometry,()=>HasPiece()&&rulesNeedReset);
         resetRulesButton.Margin=new Thickness(0,0,0,6);resetRulesButton.Padding=new Thickness(10,5,10,5);resetRulesButton.Visibility=Visibility.Collapsed;
         var fields=new WrapPanel { VerticalAlignment=VerticalAlignment.Bottom };lower.Children.Add(fields);
@@ -696,6 +692,9 @@ public sealed class TextileToolsWindow : Window
         },()=>HasPiece()&&!rulesNeedReset);
         batch.Margin=new Thickness(0,8,0,0);batch.HorizontalAlignment=HorizontalAlignment.Left;
         AutomationProperties.SetHelpText(batch,"Birden fazla beden ve adım girip hepsini inceleyin; onaylanınca tek işlem olarak eklenir.");
+        var rebase=Button(lower,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
+        rebase.Margin=new Thickness(0,8,0,0);rebase.Padding=new Thickness(10,5,10,5);rebase.HorizontalAlignment=HorizontalAlignment.Left;
+        AutomationProperties.SetHelpText(rebase,"Yalnızca kayıtlı kural ve kaynak tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
         return layout;
     }
     private bool HasUnsavedGradeDraft(Guid pieceId,GradeDraft draft)

@@ -3794,8 +3794,10 @@ internal static class DesktopVerification
         var optionsVisible=sizeVisible && copyVisible;
         lowerScroll.ScrollToEnd();lowerScroll.UpdateLayout();
         var createVisible=FullyVisible(button,root);
-        Check(optionsVisible && createVisible && lowerScroll.Focusable && KeyboardNavigation.GetIsTabStop(lowerScroll),
-            $"Expanded grading metadata controls: size={sizeVisible}, copy={copyVisible}, create={createVisible}, offset={lowerScroll.VerticalOffset}, scrollable={lowerScroll.ScrollableHeight}, bounds={BoundsInRoot(lowerScroll,root)}, button={BoundsInRoot(button,root)}, buttonVisible={VisibleBoundsInRoot(button,root)}",checks);
+        var rebaseButton=Descendants<Button>(root).Single(b=>Equals(b.Content,"Taşınan kaynakla taslağı eşleştir"));
+        var rebaseVisible=FullyVisible(rebaseButton,root);
+        Check(optionsVisible && createVisible && rebaseVisible && rebaseButton.Focusable && lowerScroll.Focusable && KeyboardNavigation.GetIsTabStop(lowerScroll),
+            $"Expanded grading metadata controls: size={sizeVisible}, copy={copyVisible}, create={createVisible}, rebase={rebaseVisible}, offset={lowerScroll.VerticalOffset}, scrollable={lowerScroll.ScrollableHeight}, bounds={BoundsInRoot(lowerScroll,root)}, button={BoundsInRoot(button,root)}, buttonVisible={VisibleBoundsInRoot(button,root)}",checks);
         var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
         var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
         var selector=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
