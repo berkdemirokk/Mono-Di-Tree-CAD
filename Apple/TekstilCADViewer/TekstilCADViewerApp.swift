@@ -106,6 +106,10 @@ private struct ContentView: View {
                     Text("\(project.pieces.filter { !$0.hasMinimumContourPoints }.count) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
+                if project.pieces.contains(where: { ContourMeasure.isCollapsed($0.points) }) {
+                    Text("Uyarı: \(project.pieces.filter { ContourMeasure.isCollapsed($0.points) }.count) parçanın tüm noktaları üst üste geliyor. Bu konturların geometrisini masaüstünde kontrol edin.")
+                        .font(.caption).foregroundStyle(.orange)
+                }
                 if project.pieces.contains(where: { !$0.notches.isEmpty }) {
                     Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -1489,6 +1493,11 @@ private struct DrawingView: View {
                 for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
                 context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
+                // A path whose vertices all coincide has no visible stroke.
+                if ContourMeasure.isCollapsed(piece.points) {
+                    let p = position(first)
+                    context.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(.accentColor))
+                }
                 for index in piece.notches.prefix(remainingNotches) {
                     let p = position(piece.points[index])
                     let mark = Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))

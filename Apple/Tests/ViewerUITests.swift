@@ -497,6 +497,16 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Aynı Model"].waitForExistence(timeout: 10))
     }
 
+    func testCollapsedContourWarningCountsAffectedPieces() {
+        let fixture = #"{"Name":"Çökmüş","Pieces":[{"Name":"Bir","Closed":false,"Points":[{"X":1,"Y":2},{"X":1,"Y":2}]},{"Name":"İki","Closed":true,"Points":[{"X":3,"Y":4},{"X":3,"Y":4},{"X":3,"Y":4}]},{"Name":"Normal","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":0}]},{"Name":"Tek","Closed":false,"Points":[{"X":0,"Y":0}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "2 parçanın tüm noktaları üst üste geliyor")).firstMatch
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+    }
+
     func testInsufficientContoursRemainSearchableButAreNotDrawnOrMeasured() {
         let fixture = #"{"Name":"Eksik","Pieces":[{"Name":"Boş","Closed":false,"Points":[]},{"Name":"Tek","Closed":false,"Points":[{"X":0,"Y":0}]},{"Name":"Kapalı iki","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]},{"Name":"Geçerli","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}]}]}"#
         let app = XCUIApplication()

@@ -52,6 +52,7 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertEqual(horizontal.position(p(1e-300, 0)).x - horizontal.position(p(0, 0)).x, 200, accuracy: 1e-9)
         let vertical = try XCTUnwrap(ContourViewport(points: [p(0, 0), p(0, 1e-300)], width: 232, height: 132))
         XCTAssertEqual(vertical.position(p(0, 0)).y - vertical.position(p(0, 1e-300)).y, 100, accuracy: 1e-9)
-        XCTAssertNil(ContourViewport(points: [p(1, 1), p(1, 1)], width: 232, height: 132))
+        let collapsed = try XCTUnwrap(ContourViewport(points: [p(1, 1), p(1, 1)], width: 232, height: 132))
+        XCTAssertEqual(collapsed.position(p(1, 1)), CGPoint(x: 116, y: 66))
     }
 }

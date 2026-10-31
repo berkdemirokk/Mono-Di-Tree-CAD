@@ -3,6 +3,12 @@ import Foundation
 enum ContourMeasure {
     struct Point { let x: Double; let y: Double }
 
+    // A single point is handled by the separate minimum-point warning.
+    static func isCollapsed(_ points: [Point]) -> Bool {
+        guard points.count > 1, let first = points.first else { return false }
+        return points.allSatisfy { $0.x == first.x && $0.y == first.y }
+    }
+
     // Measures only the polyline in the file. Invalid or overflowing values
     // are unavailable rather than presented as an authoritative measurement.
     static func length(_ points: [Point], closed: Bool) -> Double? {

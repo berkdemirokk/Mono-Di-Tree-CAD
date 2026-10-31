@@ -4,6 +4,13 @@ import XCTest
 final class ContourMeasureTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testCollapsedRequiresMultipleIdenticalPoints() {
+        XCTAssertFalse(ContourMeasure.isCollapsed([]))
+        XCTAssertFalse(ContourMeasure.isCollapsed([p(1, 2)]))
+        XCTAssertTrue(ContourMeasure.isCollapsed([p(1, 2), p(1, 2), p(1, 2)]))
+        XCTAssertFalse(ContourMeasure.isCollapsed([p(1, 2), p(1, 2), p(1, 3)]))
+    }
+
     func testOpenClosedAndExplicitClosingPoint() throws {
         let triangle = [p(0, 0), p(3, 0), p(3, 4)]
         XCTAssertEqual(try XCTUnwrap(ContourMeasure.length(triangle, closed: false)), 7, accuracy: 1e-12)

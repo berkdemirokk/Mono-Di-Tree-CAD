@@ -20,7 +20,13 @@ struct ContourViewport {
         }
         let modelWidth = maxX - minX, modelHeight = maxY - minY
         let extent = max(modelWidth, modelHeight)
-        guard extent.isFinite, extent > 0 else { return nil }
+        guard extent.isFinite else { return nil }
+        // Keep a collapsed contour available for inspection at the center.
+        if extent == 0 {
+            self.minX = minX; self.minY = minY; self.extent = 1; self.fitted = 0
+            self.offsetX = width / 2; self.offsetY = height / 2; self.height = height
+            return
+        }
         let normalizedWidth = modelWidth / extent, normalizedHeight = modelHeight / extent
         let availableWidth = max(width - 32, 1), availableHeight = max(height - 32, 1)
         let fitted = min(normalizedWidth > 0 ? availableWidth / normalizedWidth : .infinity,
