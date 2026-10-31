@@ -8050,6 +8050,8 @@ internal static class DesktopVerification
         var preview=Control<FrameworkElement>(first,"Preview");
         var result=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(window)!;
         var compare=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(window)!;
+        var expectedEase=(TextBox)typeof(SeamLengthComparisonWindow).GetField("expectedEase",PrivateInstance)!.GetValue(window)!;
+        var tolerance=(TextBox)typeof(SeamLengthComparisonWindow).GetField("tolerance",PrivateInstance)!.GetValue(window)!;
         try
         {
             Check(direction.IsEnabled && !otherDirection.IsEnabled && AutomationProperties.GetName(start).Contains("başlangıç")
@@ -8060,6 +8062,28 @@ internal static class DesktopVerification
             Check(result.Text.Contains("1. yol: 10 mm") && result.Text.Contains("2. yol: 7 mm")
                 && result.Text.Contains("(2 − 1): -3 mm") && result.Text.Contains("Mutlak fark: 3 mm") && result.Text.Contains("üretim kabulü değildir"),
                 "Seam comparison reports both segment lengths and signed second-minus-first difference",checks);
+            expectedEase.Text="-2";
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Changing the target clears the previous comparison and preview",checks);
+            tolerance.Text="1";
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Hedeften sapma: -1 mm") && result.Text.Contains("Tolerans: içinde (±1 mm)"),
+                "Negative target accepts a deviation exactly on the tolerance boundary",checks);
+            tolerance.Text="0,5";
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Changing the tolerance clears the previous comparison and preview",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Hedeften sapma: -1 mm") && result.Text.Contains("Tolerans: dışında (±0.5 mm)"),
+                "Deviation beyond the entered tolerance is reported outside",checks);
+            expectedEase.Text="2";tolerance.Text="5";
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Hedeften sapma: -5 mm") && result.Text.Contains("Tolerans: içinde (±5 mm)"),
+                "Positive target retains second-minus-first sign and includes the boundary",checks);
+            tolerance.Text="-1";
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Tolerans için sıfır veya pozitif") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
+                "Negative tolerance is rejected without displaying an old preview",checks);
+            expectedEase.Text="0";tolerance.Text="0";
             direction.SelectedIndex=1;
             Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
                 "Changing direction clears the old result and preview",checks);

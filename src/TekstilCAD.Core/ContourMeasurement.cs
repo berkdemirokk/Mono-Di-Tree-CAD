@@ -9,6 +9,9 @@ public sealed record ContourPath(IReadOnlyList<Point2> Points, bool Closed, int 
 /// <summary>Lengths in millimetres; SignedDifference is second minus first.</summary>
 public sealed record SeamEdgeComparison(double FirstLength, double SecondLength, double SignedDifference, double AbsoluteDifference);
 
+/// <summary>Deviation from the requested second-minus-first ease, in millimetres.</summary>
+public sealed record SeamEaseAssessment(double ExpectedDifference, double Tolerance, double Deviation, bool WithinTolerance);
+
 /// <summary>Measurements of the stored straight segments of a contour, in millimetres.</summary>
 public static class ContourMeasurement
 {
@@ -62,6 +65,18 @@ public static class ContourMeasurement
         double difference = b - a;
         if (!double.IsFinite(difference)) throw new ArgumentOutOfRangeException(nameof(second));
         return new(a, b, difference, Math.Abs(difference));
+    }
+
+    /// <summary>Compares a signed target difference with the measured difference and a nonnegative tolerance.</summary>
+    public static SeamEaseAssessment AssessEase(SeamEdgeComparison comparison, double expectedDifference, double tolerance)
+    {
+        ArgumentNullException.ThrowIfNull(comparison);
+        if (!double.IsFinite(comparison.SignedDifference)) throw new ArgumentOutOfRangeException(nameof(comparison));
+        if (!double.IsFinite(expectedDifference)) throw new ArgumentOutOfRangeException(nameof(expectedDifference));
+        if (!double.IsFinite(tolerance) || tolerance < 0) throw new ArgumentOutOfRangeException(nameof(tolerance));
+        var deviation = comparison.SignedDifference - expectedDifference;
+        if (!double.IsFinite(deviation)) throw new ArgumentOutOfRangeException(nameof(expectedDifference));
+        return new(expectedDifference, tolerance, deviation, Math.Abs(deviation) <= tolerance);
     }
 
     /// <summary>

@@ -5,6 +5,20 @@ namespace TekstilCAD.Tests;
 public sealed class ContourMeasurementTests
 {
     [Fact]
+    public void SeamEaseUsesSignedTargetAndInclusiveTolerance()
+    {
+        var first = new ContourPath([new(0, 0), new(100, 0)], false, 0, 1);
+        var second = new ContourPath([new(0, 0), new(103, 0)], false, 0, 1);
+        var comparison = ContourMeasurement.ComparePaths(first, second);
+        var accepted = ContourMeasurement.AssessEase(comparison, 2, 1);
+        Assert.Equal(1, accepted.Deviation);
+        Assert.True(accepted.WithinTolerance);
+        Assert.False(ContourMeasurement.AssessEase(comparison, -2, 1).WithinTolerance);
+        Assert.Throws<ArgumentOutOfRangeException>(() => ContourMeasurement.AssessEase(comparison, 0, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => ContourMeasurement.AssessEase(comparison, double.NaN, 1));
+    }
+
+    [Fact]
     public void ClosedPerimeterIncludesClosingEdgeForEitherRepresentation()
     {
         Point2[] vertices = [new(0, 0), new(3, 0), new(3, 4)];

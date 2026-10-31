@@ -18,6 +18,8 @@ internal sealed class SeamLengthComparisonWindow : Window
     private readonly Side first,second;
     private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0) };
     private readonly Button compare=new() { Content="Kenarları karşılaştır",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,10,0,0),HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBox expectedEase=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBox tolerance=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
     private bool stale;
     private sealed record PieceChoice(PatternPiece Piece,string Label);
     private sealed record PointChoice(int Index,string Label);
@@ -51,6 +53,11 @@ internal sealed class SeamLengthComparisonWindow : Window
         var grid=new Grid();grid.ColumnDefinitions.Add(new ColumnDefinition());grid.ColumnDefinitions.Add(new ColumnDefinition());
         AddSide(grid,first,"1. parça",choices,0);AddSide(grid,second,"2. parça",choices,1);body.Children.Add(grid);
         AutomationProperties.SetName(result,"Dikiş kenarı karşılaştırma sonucu");AutomationProperties.SetLiveSetting(result,AutomationLiveSetting.Polite);
+        body.Children.Add(new TextBlock { Text="Hedef fark (2 − 1), mm · ikinci kenar daha kısaysa negatif",Margin=new Thickness(0,10,0,2) });
+        AutomationProperties.SetName(expectedEase,"Hedef fark, milimetre");body.Children.Add(expectedEase);
+        body.Children.Add(new TextBlock { Text="İzin verilen mutlak sapma, mm",Margin=new Thickness(0,6,0,2) });
+        AutomationProperties.SetName(tolerance,"İzin verilen mutlak sapma, milimetre");body.Children.Add(tolerance);
+        expectedEase.TextChanged+=(_,_)=>ClearResult();tolerance.TextChanged+=(_,_)=>ClearResult();
         compare.Click+=(_,_)=>Calculate();body.Children.Add(compare);body.Children.Add(result);
         if(choices.Length>0)first.Piece.SelectedIndex=Math.Max(0,Array.FindIndex(choices,c=>c.Piece.Id==workshopSourceId));
         if(choices.Length>0)second.Piece.SelectedIndex=choices.Length>1 ? (first.Piece.SelectedIndex+1)%choices.Length : 0;
@@ -92,8 +99,11 @@ internal sealed class SeamLengthComparisonWindow : Window
         try
         {
             var a=Path(first);var b=Path(second);var value=ContourMeasurement.ComparePaths(a,b);
+            if(!MeasurementInput.TryParseMillimeters(expectedEase.Text,out var target))throw new ArgumentException("Hedef fark için geçerli bir sayı girin.");
+            if(!MeasurementInput.TryParseMillimeters(tolerance.Text,out var allowed) || allowed<0)throw new ArgumentException("Tolerans için sıfır veya pozitif bir sayı girin.");
+            var assessment=ContourMeasurement.AssessEase(value,target,allowed);
             first.Preview.Set(a);second.Preview.Set(b);
-            result.Text=$"1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nGeometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.";
+            result.Text=$"1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nHedeften sapma: {MeasurementInput.Format(assessment.Deviation)} mm\nTolerans: {(assessment.WithinTolerance ? "içinde" : "dışında")} (±{MeasurementInput.Format(allowed)} mm)\nGeometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.";
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { first.Preview.Clear();second.Preview.Clear();result.Text="Karşılaştırma yapılamadı: "+ex.Message; }
