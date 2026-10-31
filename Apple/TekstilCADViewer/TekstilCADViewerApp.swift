@@ -87,6 +87,12 @@ private struct ContentView: View {
                 if project.pieces.contains(where: { !$0.notches.isEmpty }) {
                     Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Text("Sürüm 6 için yalnız UTF-8 ve en fazla 8 MB desteklenir. İşaretler ve konturlar önizlenir; tüm masaüstü proje kuralları doğrulanmaz.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if (selectedPiece.map { project.pieces[$0].notches.count } ?? project.pieces.reduce(0) { $0 + $1.notches.count }) > DrawingView.maximumVisibleNotches {
+                        Text("Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 if !project.pieces.isEmpty {
                     Button { showingPieces = true } label: {
@@ -901,6 +907,7 @@ private struct PieceDetails: View {
     }
 }
 private struct DrawingView: View {
+    static let maximumVisibleNotches = 500
     let pieces: [Drawing.Piece]
     let label: String
     @State private var zoom: CGFloat = 1
@@ -997,6 +1004,7 @@ private struct DrawingView: View {
             func position(_ p: Drawing.Point) -> CGPoint {
                 CGPoint(x: offsetX + (p.x - minX) * scale, y: Double(size.height) - offsetY - (p.y - minY) * scale)
             }
+            var remainingNotches = Self.maximumVisibleNotches
             for piece in pieces {
                 guard let first = piece.points.first else { continue }
                 var path = Path()
@@ -1004,10 +1012,11 @@ private struct DrawingView: View {
                 for point in piece.points.dropFirst() { path.addLine(to: position(point)) }
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
                 context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
-                for index in piece.notches {
+                for index in piece.notches.prefix(remainingNotches) {
                     let p = position(piece.points[index])
                     let mark = Path(ellipseIn: CGRect(x: p.x - 5, y: p.y - 5, width: 10, height: 10))
                     context.stroke(mark, with: .color(.pink), lineWidth: 2)
+                    remainingNotches -= 1
                 }
                 if showGrain, let grain = piece.grain {
                     let start = position(grain.start), end = position(grain.end)

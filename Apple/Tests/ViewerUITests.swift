@@ -43,6 +43,17 @@ final class ViewerUITests: XCTestCase {
             app.terminate()
         }
     }
+    func testLargeNotchListDisclosesPreviewLimit() {
+        let points = (0..<501).map { #"{"X":\#($0),"Y":0}"# }.joined(separator: ",")
+        let marks = (0..<501).map { #"{"VertexIndex":\#($0),"Position":{"X":\#($0),"Y":0}}"# }.joined(separator: ",")
+        let project = #"[6,{"Name":"Çok işaret","Pieces":[{"Name":"Açık","Closed":false,"Points":[\#(points)],"Notches":[\#(marks)]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(project.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Çok işaret"].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin."].exists)
+    }
     func testSameNameCopiesCanBeSearchedAndDeletedByFullIdentity() {
         let fixture = #"{"Name":"Aynı Model","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
