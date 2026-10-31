@@ -65,6 +65,20 @@ public sealed class GradingRuleSet
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
 
+    /// <summary>Reorder a matching closed-contour rule with its vertices, keeping the first vertex fixed.</summary>
+    public GradingRuleSet? ReversedClosedFor(PatternPiece source)
+    {
+        if (source.Id != SourcePieceId || !source.Closed || !SourceClosed ||
+            Deltas.Count != source.Points.Count || !SourcePoints.SequenceEqual(source.Points)) return null;
+        var result = Clone();
+        var repeated = SourcePoints.Count > 1 && SourcePoints[0] == SourcePoints[^1];
+        var count = SourcePoints.Count - 1 - (repeated ? 1 : 0);
+        if (count < 0) return null;
+        result.SourcePoints.Reverse(1, count);
+        result.Deltas.Reverse(1, count);
+        return result;
+    }
+
     /// <summary>Reorder a rule only when it describes the exact open source contour.</summary>
     public GradingRuleSet? ReversedFor(PatternPiece source)
     {

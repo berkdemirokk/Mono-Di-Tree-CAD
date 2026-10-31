@@ -251,6 +251,18 @@ public static class PatternTools
         return NewPiece(piece,points,"",preserveGrainline:true);
     }
 
+    /// <summary>Reverses a closed contour while retaining its first vertex and closure representation.</summary>
+    public static PatternPiece ReverseClosedContour(PatternPiece piece, CancellationToken cancellationToken = default)
+    {
+        var points = SnapshotPointEdit(piece, cancellationToken);
+        if (!piece.Closed) throw new ArgumentException("Yalnız kapalı konturun yönü ters çevrilebilir.");
+        ValidatePointEdit(true, points, cancellationToken);
+        var repeated = points.Count > 1 && points[0] == points[^1];
+        points.Reverse(1, points.Count - 1 - (repeated ? 1 : 0));
+        cancellationToken.ThrowIfCancellationRequested();
+        return NewPiece(piece, points, "", preserveGrainline:true);
+    }
+
     /// <summary>Splits the edge after the selected vertex at its exact binary64 midpoint.
     /// Rejects a midpoint that cannot be represented exactly, preserving the original edge.</summary>
     public static PatternPiece InsertEdgeMidpoint(PatternPiece piece,int afterIndex,CancellationToken cancellationToken = default)

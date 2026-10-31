@@ -387,6 +387,7 @@ internal static class DesktopVerification
             VerifyNotchEdit(studio,reportPath,checks);
 
             VerifyReverseOpenPath(studio,checks);
+            VerifyReverseClosedContour(studio,checks);
             VerifyReverseOpenPathGradingReview(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
@@ -7161,6 +7162,27 @@ internal static class DesktopVerification
         }
         canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" });studio.SetTool("Seç");
         SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
+
+    private static void VerifyReverseClosedContour(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Points=[new(0,0),new(8,0),new(10,2),new(12,0),new(20,0),new(20,10),new(0,10),new(0,0)] };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],Deltas=[new(0,0),new(1,0),new(2,0),new(3,0),new(4,0),new(5,0),new(6,0),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var task=tools.ReverseClosedContourAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            var after=studio.Document.Clone();
+            Check(after.Pieces[0].Points.SequenceEqual(new[] { piece.Points[0],piece.Points[6],piece.Points[5],piece.Points[4],piece.Points[3],piece.Points[2],piece.Points[1],piece.Points[7] }) &&
+                after.GradingRules[0].SourcePoints.SequenceEqual(after.Pieces[0].Points) && after.GradingRules[0].Deltas[5]==rule.Deltas[2] && session.UndoCount==1,
+                "Closed contour reversal preserves notch and matching grading",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Closed reversal undo restores both",checks);
+            Check(session.Redo() && DocumentSession.ContentEquals(after,studio.Document),"Closed reversal redo restores both",checks);
+        }
+        finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyReverseOpenPath(MainWindow studio,List<string> checks)
