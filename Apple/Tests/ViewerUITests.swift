@@ -1,6 +1,30 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSelectionIsUnavailableWhileAnotherModelLoads() {
+        let fixture = #"[6,{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-open-delay"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let model = app.buttons["Deneme Modeli"]
+        XCTAssertTrue(model.waitForExistence(timeout: 10))
+        model.tap()
+        XCTAssertTrue(app.staticTexts["Proje açılıyor…"].waitForExistence(timeout: 5))
+        let notches = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertFalse(notches.isEnabled)
+        let pieces = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Gösterilen parça")).firstMatch
+        XCTAssertTrue(pieces.exists)
+        XCTAssertFalse(pieces.isEnabled)
+        XCTAssertTrue(notches.waitForExistence(timeout: 10))
+        let enabled = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: notches)
+        wait(for: [enabled], timeout: 10)
+    }
     func testViewerCanScrollToContourOnPhone() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()

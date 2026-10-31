@@ -107,6 +107,7 @@ private struct ContentView: View {
                     Text("Sürüm 6 için yalnız UTF-8 ve en fazla 8 MB desteklenir. İşaretler ve konturlar önizlenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
+                        .disabled(isLoading)
                         .sheet(isPresented: $showingNotches) {
                             NotchPicker(pieces: project.pieces) { piece, point in
                                 selectedPiece = piece
@@ -140,6 +141,7 @@ private struct ContentView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .disabled(isLoading)
                     .accessibilityHint("Parçaları aramak veya seçmek için açın")
                     .sheet(isPresented: $showingPieces) {
                         PiecePicker(pieces: project.pieces, selection: $selectedPiece)
@@ -308,6 +310,9 @@ private struct ContentView: View {
         loadRequest = request
         isLoading = true
         DispatchQueue.global(qos: .userInitiated).async {
+            #if DEBUG && targetEnvironment(simulator)
+            if ProcessInfo.processInfo.arguments.contains("--ui-test-open-delay") { Thread.sleep(forTimeInterval: 3) }
+            #endif
             let access = imported && url.startAccessingSecurityScopedResource()
             defer { if access { url.stopAccessingSecurityScopedResource() } }
             let loaded = Result { () -> (Drawing, Data) in
@@ -323,6 +328,7 @@ private struct ContentView: View {
                     pieceRenameSnapshot = nil
                     #endif
                     showingPieces = false
+                    showingNotches = false
                     selectedPiece = nil
                     selectedNotch = nil
                     drawingRevision = UUID()
