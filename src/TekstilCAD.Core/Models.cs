@@ -65,6 +65,27 @@ public sealed class GradingRuleSet
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
 
+    /// <summary>Carry a matching rule through an edge midpoint insertion using linearly interpolated increments.</summary>
+    public GradingRuleSet? WithEdgeMidpointFor(PatternPiece source, PatternPiece edited, int afterIndex)
+    {
+        if (source.Id != SourcePieceId || source.Closed != SourceClosed || edited.Closed != source.Closed ||
+            Deltas.Count != source.Points.Count || !SourcePoints.SequenceEqual(source.Points) ||
+            afterIndex < 0 || afterIndex >= source.Points.Count) return null;
+        var repeated = source.Closed && source.Points.Count > 1 && source.Points[0] == source.Points[^1];
+        if (repeated && afterIndex == source.Points.Count - 1) afterIndex = 0;
+        if (!source.Closed && afterIndex == source.Points.Count - 1) return null;
+        var next = (afterIndex + 1) % source.Points.Count;
+        var a = source.Points[afterIndex]; var b = source.Points[next];
+        var midpoint = new Point2((a.X + b.X) / 2, (a.Y + b.Y) / 2);
+        var expected = source.Points.ToList(); expected.Insert(afterIndex + 1, midpoint);
+        if (!expected.SequenceEqual(edited.Points)) return null;
+        var da = Deltas[afterIndex]; var db = Deltas[next];
+        var delta = new Point2((da.X + db.X) / 2, (da.Y + db.Y) / 2);
+        if (!delta.IsFinite) return null;
+        var result = Clone(); result.SourcePoints = expected; result.Deltas.Insert(afterIndex + 1, delta);
+        return result;
+    }
+
     /// <summary>Reorder a matching closed-contour rule with its vertices, keeping the first vertex fixed.</summary>
     public GradingRuleSet? ReversedClosedFor(PatternPiece source)
     {
