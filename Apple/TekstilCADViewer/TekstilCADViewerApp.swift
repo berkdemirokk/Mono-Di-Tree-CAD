@@ -721,6 +721,7 @@ private struct ModelLibrary: View {
                     }
                 }
                 ForEach(matchingModels) { model in
+                    HStack {
                     Button {
                         if model.canOpen { open(model.url) }
                         else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
@@ -739,6 +740,16 @@ private struct ModelLibrary: View {
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(model.name)
                     .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .buttonStyle(.plain)
+                    Menu {
+                        Button("Kayıtlı modeli sil", role: .destructive) { modelToDelete = model }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .frame(width: 44, height: 44)
+                    }
+                    .accessibilityLabel("\(model.name) model işlemleri")
+                    .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)")
+                    }
                     .swipeActions {
                         Button("Sil", role: .destructive) { modelToDelete = model }
                     }
