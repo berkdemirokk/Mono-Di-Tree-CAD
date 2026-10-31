@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testExperimentalPointSaveRejectsSourceChangeDuringPreparation() {
+        let fixture = #"{"Name":"Eski","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10}]}],"GradingRules":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-point-save-delay", "--ui-test-point-source-change"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Eski"].waitForExistence(timeout: 15))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch.tap()
+        app.buttons["Ön"].tap()
+        app.buttons["Deneysel nokta düzenle…"].tap()
+        let x = app.textFields["X · mm"]
+        XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap()
+        x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "1")
+        app.buttons["Önizlemeyi hesapla"].tap()
+        XCTAssertTrue(app.staticTexts["Önizleme hazır; kopya henüz kaydedilmedi."].waitForExistence(timeout: 15))
+        app.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(app.buttons["Kaydı iptal et"].waitForExistence(timeout: 5))
+        app.buttons["Test: kaynak değiştir"].tap()
+        XCTAssertTrue(app.staticTexts["Açık model veya seçim değişti; kopya kaydedilmedi."].waitForExistence(timeout: 10))
+        app.buttons["Kapat"].tap()
+        app.buttons["Modellerim"].tap()
+        XCTAssertTrue(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].waitForExistence(timeout: 10))
+    }
     func testExperimentalPointPreviewSavesSeparateCopy() {
         let fixture = #"{"Name":"Deney","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10}]}],"GradingRules":[]}"#
         let app = XCUIApplication()

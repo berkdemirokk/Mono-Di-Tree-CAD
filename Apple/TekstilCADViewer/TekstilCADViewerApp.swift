@@ -46,6 +46,7 @@ private struct ContentView: View {
         let index: Int
         let projectName: String
         let revision: UUID
+        let loadRequest: UUID
     }
     @State private var pointEditSnapshot: PointEditSnapshot?
     #endif
@@ -146,12 +147,13 @@ private struct ContentView: View {
                         Button("Deneysel nokta düzenle…") {
                             guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
                             pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
-                                index: selectedPiece, projectName: project.name, revision: drawingRevision)
+                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: loadRequest)
                         }
                             .disabled(isSaving || isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: $pointEditSnapshot) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
-                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision })
+                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && loadRequest == snapshot.loadRequest && !isLoading },
+                                    invalidateForTesting: { loadRequest = UUID() })
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -875,6 +877,7 @@ private struct ExperimentalPointEditor: View {
     let pieceID: UUID
     let projectName: String
     let isCurrent: () -> Bool
+    let invalidateForTesting: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var pointIndex = 0
     @State private var x = ""
@@ -995,6 +998,11 @@ private struct ExperimentalPointEditor: View {
                     }
                     .disabled(cancellingSave)
                 }
+                #if targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-point-source-change") {
+                    Button("Test: kaynak değiştir") { invalidateForTesting() }
+                }
+                #endif
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
                     DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil)
@@ -1006,7 +1014,7 @@ private struct ExperimentalPointEditor: View {
             .navigationTitle("Deneysel nokta")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear { updatePoint() }
-            .onDisappear { saveGeneration = UUID(); saveActiveID = nil; saving = false; cancellingSave = false }
+            .onDisappear { generation = UUID(); saveGeneration = UUID(); saveActiveID = nil; saving = false; cancellingSave = false }
         }
     }
 }
