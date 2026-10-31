@@ -411,6 +411,7 @@ internal static class DesktopVerification
             VerifyPendingExportPreflightGuards(studio,work,checks);
             VerifyFractionalSelectionWithSnap(studio,checks);
             VerifyNearestVertexSelection(studio,checks);
+            VerifyClosingEdgeDragSafety(studio,checks);
             VerifyOpenVertexDrag(studio,checks);
             VerifyExplicitClosureVertexDrag(studio,checks);
             VerifyLargeVertexValidation(studio,checks);
@@ -1327,6 +1328,46 @@ internal static class DesktopVerification
         }
         finally { snap.IsChecked=previousSnap;scaleField.SetValue(canvas,previousScale);offsetField.SetValue(canvas,previousOffset); }
     }
+    private static void VerifyClosingEdgeDragSafety(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var snap=(CheckBox)typeof(MainWindow).GetField("snap",PrivateInstance)!.GetValue(studio)!;
+        var scale=typeof(CadCanvas).GetField("scale",PrivateInstance)!;var offset=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var previousScale=scale.GetValue(canvas);var previousOffset=offset.GetValue(canvas);var previousSnap=snap.IsChecked;
+        var down=typeof(CadCanvas).GetMethod("Down",PrivateInstance)!;
+        var up=typeof(CadCanvas).GetMethod("Up",PrivateInstance)!.CreateDelegate<Action<MouseButtonEventArgs>>(canvas);
+        var safe=typeof(CadCanvas).GetMethod("Safe",PrivateInstance)!;
+        var error=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            foreach(var index in new[] { 0,3 })
+            {
+                var p=new PatternPiece { Points=[new(0,0),new(100,0),new(100,100),new(0,100)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[p] });studio.SetTool("Seç");studio.Select(p.Id);snap.IsChecked=false;
+                studio.Commit("Geçmiş hazırlığı",()=>studio.Document.Name="Düzenlendi");
+                Check(session.Undo(),"Closing edge test has redo history",checks);studio.Select(p.Id);
+                var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
+                var click=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left);var pointer=click.GetPosition(canvas);
+                scale.SetValue(canvas,1.0);var selected=p.Points[index];offset.SetValue(canvas,new Vector(pointer.X-selected.X,pointer.Y-selected.Y));
+                down.Invoke(canvas,[canvas,click]);Check(canvas.HasActiveDragPreview,"Closing endpoint drag starts",checks);
+                canvas.UpdateDragPreview(new Point(pointer.X,pointer.Y+(index==0?100:-100)));
+                safe.Invoke(canvas,[new Action(()=>up(click)),false,null]);
+                Check(!canvas.HasActiveDragPreview && error.Text.Contains("kapanış kenarını") && DocumentSession.ContentEquals(before,studio.Document) &&
+                    session.UndoCount==undo && session.RedoCount==redo,
+                    $"Closing endpoint {index} collapse is rejected without changing document or history",checks);
+            }
+            var large=new PatternPiece { Points=Enumerable.Range(0,4097).Select(i=> { var angle=Math.Tau*i/4097;return new Point2(100*Math.Cos(angle),100*Math.Sin(angle)); }).ToList() };
+            studio.LoadDocument(new ProjectDocument { Pieces=[large] });studio.SetTool("Seç");studio.Select(large.Id);
+            var original=studio.Document.Clone();var proposed=large.Points.ToArray();proposed[^1]=proposed[0];
+            try { canvas.StartLargeVertexValidation(large.Id,true,large.Points,proposed);throw new InvalidOperationException("Collapsed large contour was accepted."); }
+            catch(ArgumentException ex) when(ex.Message.Contains("kapanış kenarını")) { }
+            Check(!canvas.LargeVertexValidationRunning && DocumentSession.ContentEquals(original,studio.Document) && session.UndoCount==0,
+                "Large closing edge collapse is rejected before starting a worker",checks);
+        }
+        finally { canvas.CancelDrawing();studio.ClearCanvasError();snap.IsChecked=previousSnap;scale.SetValue(canvas,previousScale);offset.SetValue(canvas,previousOffset); }
+    }
+
     private static void VerifyNearestVertexSelection(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;

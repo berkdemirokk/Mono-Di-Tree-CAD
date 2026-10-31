@@ -594,6 +594,7 @@ public sealed class CadCanvas : FrameworkElement
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal))
         {
             foreach(var p in result) Geometry.Validate(p);
+            if(dragVertex>=0) ValidateClosingEdgePreserved(dragOriginal,result,piece.Closed);
             if(dragVertex>=0 && result.Count>Geometry.MaxValidatedContourVertices)
             {
                 StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result);
@@ -618,6 +619,7 @@ public sealed class CadCanvas : FrameworkElement
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
+        ValidateClosingEdgePreserved(original,proposed,closed);
         var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();
         var cancellation=new CancellationTokenSource();largeVertexCancellation=cancellation;
         LargeVertexValidationTask=ValidateLargeVertexAsync(id,closed,source,candidate,document,originalGrain,cancellation);
@@ -659,6 +661,11 @@ public sealed class CadCanvas : FrameworkElement
             if(ReferenceEquals(largeVertexCancellation,cancellation))largeVertexCancellation=null;
             cancellation.Dispose();InvalidateVisual();
         }
+    }
+    private static void ValidateClosingEdgePreserved(IReadOnlyList<Point2> original,IReadOnlyList<Point2> proposed,bool closed)
+    {
+        if(closed && original.Count>1 && proposed.Count==original.Count && original[0]!=original[^1] && proposed[0]==proposed[^1])
+            throw new ArgumentException("Nokta taşıması kapanış kenarını sıfıra indiriyor; kontur değiştirilmedi.");
     }
     // An explicit closing point is the same geometric vertex as the first point.
     internal static List<Point2> PreviewVertexDrag(IReadOnlyList<Point2> original,int vertex,Point2 position,bool closed)
