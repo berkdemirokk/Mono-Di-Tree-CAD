@@ -122,9 +122,12 @@ private struct ContentView: View {
                             }
                         }
                     if let selectedNotch, selectedNotch.piece == selectedPiece {
-                        Text(project.pieces[selectedNotch.piece].hasMinimumContourPoints
-                             ? "Seçili köşe işareti: nokta \(selectedNotch.point). Önizlemede sarı halka ile gösterilir."
-                             : "Seçili köşe işareti: nokta \(selectedNotch.point). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
+                        let piece = project.pieces[selectedNotch.piece]
+                        let point = piece.points[selectedNotch.point]
+                        let coordinates = NotchSearch.label(index: selectedNotch.point, x: point.x.formatted(), y: point.y.formatted())
+                        Text(piece.hasMinimumContourPoints
+                             ? "Seçili köşe işareti: \(coordinates). Önizlemede sarı halka ile gösterilir."
+                             : "Seçili köşe işareti: \(coordinates). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if (selectedPiece.map { project.pieces[$0].notches.count } ?? project.pieces.reduce(0) { $0 + $1.notches.count }) > DrawingView.maximumVisibleNotches {

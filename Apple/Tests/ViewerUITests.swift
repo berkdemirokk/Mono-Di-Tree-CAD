@@ -29,7 +29,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(notchPicker.waitForExistence(timeout: 15))
         notchPicker.tap()
         app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.tap()
-        let selected = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Seçili köşe işareti: nokta 0")).firstMatch
+        let selected = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Seçili köşe işareti: Nokta 0")).firstMatch
         XCTAssertTrue(selected.waitForExistence(timeout: 5))
         let piecePicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Gösterilen parça")).firstMatch
         piecePicker.tap()
@@ -60,6 +60,25 @@ final class ViewerUITests: XCTestCase {
         previous.tap()
         XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
         XCTAssertFalse(previous.isEnabled)
+    }
+    func testSelectedNotchCoordinatesFollowNavigation() {
+        let fixture = #"[6,{"Name":"İşaret inceleme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":25,"Y":40}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":25,"Y":40}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let nextPiece = app.buttons["Sonraki parça"]
+        XCTAssertTrue(nextPiece.waitForExistence(timeout: 15))
+        nextPiece.tap()
+        let nextNotch = app.buttons["Sonraki işaret"]
+        XCTAssertTrue(nextNotch.waitForExistence(timeout: 5))
+        nextNotch.tap()
+        let first = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nokta 0 · X 0 · Y 0 mm")).firstMatch
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        nextNotch.tap()
+        let second = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Nokta 1 · X 25 · Y 40 mm")).firstMatch
+        XCTAssertTrue(second.waitForExistence(timeout: 5))
+        XCTAssertFalse(first.exists)
     }
     func testSelectionIsUnavailableWhileAnotherModelLoads() {
         let fixture = #"[6,{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
