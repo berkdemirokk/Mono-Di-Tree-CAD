@@ -10,6 +10,7 @@ struct TekstilCADViewerApp: App {
 
 private struct ContentView: View {
     @State private var showingImporter = false
+    @State private var showingPieces = false
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
@@ -30,13 +31,24 @@ private struct ContentView: View {
             if isLoading { ProgressView("Proje açılıyor…") }
             if let project {
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
-                    Picker("Gösterilen parça", selection: $selectedPiece) {
-                        Text("Tüm parçalar").tag(nil as Int?)
-                        ForEach(project.pieces.indices.filter { project.pieces[$0].points.count > 1 }, id: \.self) { index in
-                            Text(project.pieces[index].displayName(index: index)).tag(Optional(index))
+                    Button { showingPieces = true } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Gösterilen parça").font(.caption).foregroundStyle(.secondary)
+                                Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                                    .font(.headline).lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.up.chevron.down").foregroundStyle(.secondary)
                         }
+                        .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .pickerStyle(.menu)
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Parçaları aramak veya seçmek için açın")
+                    .sheet(isPresented: $showingPieces) {
+                        PiecePicker(pieces: project.pieces, selection: $selectedPiece)
+                    }
                     if let selectedPiece {
                         PieceDetails(piece: project.pieces[selectedPiece])
                     }
@@ -79,6 +91,7 @@ private struct ContentView: View {
                         isLoading = false
                         switch loaded {
                         case .success(let drawing):
+                            showingPieces = false
                             selectedPiece = nil
                             drawingRevision = UUID()
                             project = drawing
@@ -152,6 +165,61 @@ private struct Drawing {
     }
 }
 
+private struct PiecePicker: View {
+    let pieces: [Drawing.Piece]
+    @Binding var selection: Int?
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    private var matchingIndices: [Int] {
+        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
+        return pieces.indices.filter { index in
+            pieces[index].points.count > 1 &&
+            (query.isEmpty || pieces[index].displayName(index: index).localizedCaseInsensitiveContains(query))
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                selectionRow(title: "Tüm parçalar", index: nil)
+                ForEach(matchingIndices, id: \.self) { index in
+                    selectionRow(title: pieces[index].displayName(index: index), index: index)
+                }
+                if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text("Eşleşen parça bulunamadı.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .searchable(text: $search, prompt: "Parça ara")
+            .navigationTitle("Parça seç")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Kapat") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private func selectionRow(title: String, index: Int?) -> some View {
+        Button {
+            selection = index
+            dismiss()
+        } label: {
+            HStack {
+                Text(title).foregroundStyle(.primary)
+                Spacer()
+                if selection == index {
+                    Image(systemName: "checkmark").foregroundStyle(Color.accentColor)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selection == index ? .isSelected : [])
+    }
+}
 private struct PieceDetails: View {
     let piece: Drawing.Piece
 
