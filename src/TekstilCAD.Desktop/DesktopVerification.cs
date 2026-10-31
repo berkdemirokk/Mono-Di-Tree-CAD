@@ -383,6 +383,7 @@ internal static class DesktopVerification
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
             VerifyEdgeDistance(studio,checks);
+            VerifyEdgePercentage(studio,checks);
             VerifyNotchEdit(studio,reportPath,checks);
 
             VerifyReverseOpenPath(studio,checks);
@@ -7178,6 +7179,41 @@ internal static class DesktopVerification
                     }
                     else Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && !tools.VertexMoveRunningForVerification,
                         $"Distance insertion {scenario} leaves the document and history unchanged",checks);
+                }
+                finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); } tools.Close(); }
+            }
+        }
+        finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
+    private static void VerifyEdgePercentage(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var piece=new PatternPiece { Name="Eğimli kenar",Closed=false,Points=[new(0,0),new(60,80)],Metadata=new PieceMetadata { Quantity=2 } };
+        try
+        {
+            foreach(var scenario in new[] { "commit", "stale", "cancel" })
+            {
+                studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()] });studio.Select(piece.Id);
+                var before=studio.Document.Clone();var undo=session.UndoCount;var tools=new TextileToolsWindow(studio);
+                using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? task=null;
+                try
+                {
+                    tools.BeforeVertexMoveForVerification=()=> { reached.Set();release.Wait(); };
+                    task=tools.InsertEdgePercentageAsync("0","30");PumpUntil(()=>reached.IsSet);
+                    if(scenario=="stale")((TextBox)typeof(TextileToolsWindow).GetField("edgePercentageInput",PrivateInstance)!.GetValue(tools)!).Text="40";
+                    if(scenario=="cancel")tools.RequestVertexMoveCancellation();
+                    release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    if(scenario=="commit")
+                    {
+                        var edited=studio.Document.Pieces.Single();
+                        Check(edited.Id==piece.Id && edited.Metadata?.Quantity==2 && edited.Points[1]==new Point2(18,24) && session.UndoCount==undo+1,
+                            "Percentage insertion commits diagonal geometry and preserves identity and metadata",checks);
+                        Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Percentage insertion is one undo step",checks);
+                    }
+                    else Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && !tools.VertexMoveRunningForVerification,
+                        $"Percentage insertion {scenario} leaves the document and history unchanged",checks);
                 }
                 finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); } tools.Close(); }
             }

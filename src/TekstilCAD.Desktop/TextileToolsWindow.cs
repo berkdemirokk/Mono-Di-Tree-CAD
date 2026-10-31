@@ -41,7 +41,7 @@ public sealed class TextileToolsWindow : Window
     internal Action? AfterOffsetBeforeReturnForVerification { get; set; }
     private bool gradeBusy;
     private bool vertexMoveBusy;
-    private TextBox? vertexIndexInput, vertexXInput, vertexYInput, notchFractionInput, notchDepthInput, notchWidthInput, edgeDistanceInput;
+    private TextBox? vertexIndexInput, vertexXInput, vertexYInput, notchFractionInput, notchDepthInput, notchWidthInput, edgeDistanceInput, edgePercentageInput;
     private CancellationTokenSource? vertexMoveCancellation;
     private readonly Button cancelVertexMove = new() { Content="Nokta doğrulamasını iptal et", Padding=new Thickness(12,7,12,7), Margin=new Thickness(0,0,8,0), Visibility=Visibility.Collapsed };
     internal Action? BeforeVertexMoveForVerification { get; set; }
@@ -799,6 +799,10 @@ public sealed class TextileToolsWindow : Window
         edgeDistanceInput=edgeDistance;
         Note(panel,"Mesafe seçili noktadan sonraki kenar boyunca ölçülür. Sayısal yuvarlama nedeniyle yeni noktanın eski kenardan ve istenen mesafeden sapması en fazla 0,000001 mm olabilir. Serileme kurallarını yeniden gözden geçirin.");
         Button(panel,"Mesafede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeDistanceAsync(index.Text,edgeDistance.Text),()=>ValidIndex()&&IsNumber(edgeDistance.Text,out _)&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
+        var edgePercentage=Input(panel,"Seçili noktadan kenar yüzdesi · %","50");
+        edgePercentageInput=edgePercentage;
+        Note(panel,"Yüzde seçili noktadan sonraki kenar boyunca ölçülür; 0 ile 100 arasında olmalıdır. Yeni noktanın kenardan ve hesaplanan mesafeden sapması en fazla 0,000001 mm olabilir. Serileme kurallarını yeniden gözden geçirin.");
+        Button(panel,"Yüzdede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgePercentageAsync(index.Text,edgePercentage.Text),()=>ValidIndex()&&IsNumber(edgePercentage.Text,out var percentage)&&percentage>0&&percentage<100&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
         Note(panel,"Seçili noktadan sonraki kenarda konturdan fiziksel olarak içe doğru V kesilir; bu işlem yalnızca işaret eklemez. Konum 0 ile 1 arasındaki kenar oranıdır; ağız genişliği ve derinlik ayrı ölçülerdir. Konturu ve serileme kurallarını kontrol edin.");
         var notchFraction=Input(panel,"Çentik konumu · kenar oranı","0,5");
         var notchWidth=Input(panel,"Çentik ağız genişliği · mm","6");
@@ -811,12 +815,13 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&p.Points.Count>(p.Closed?3:2));return Scroll(panel);
     }
-    private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse, Notch, Distance }
+    private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse, Notch, Distance, Percentage }
     internal Task MoveVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Move,indexText,xText,yText);
     internal Task InsertVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Insert,indexText,xText,yText);
     internal Task DeleteVertexAsync(string indexText) => EditVertexAsync(VertexEdit.Delete,indexText,null,null);
     internal Task InsertEdgeMidpointAsync(string indexText) => EditVertexAsync(VertexEdit.Midpoint,indexText,null,null);
     internal Task InsertEdgeDistanceAsync(string indexText,string distanceText) => EditVertexAsync(VertexEdit.Distance,indexText,distanceText,"0");
+    internal Task InsertEdgePercentageAsync(string indexText,string percentageText) => EditVertexAsync(VertexEdit.Percentage,indexText,percentageText,"0");
     internal Task InsertNotchAsync(string indexText,string fractionText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText);
     internal Task InsertNotchAsync(string indexText,string fractionText,string widthText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText,widthText);
     internal Task ReverseOpenPathAsync() => EditVertexAsync(VertexEdit.Reverse,"0",null,null);
@@ -835,7 +840,7 @@ public sealed class TextileToolsWindow : Window
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
-            var inputIndex=vertexIndexInput?.Text;var inputX=vertexXInput?.Text;var inputY=vertexYInput?.Text;var inputFraction=notchFractionInput?.Text;var inputDepth=notchDepthInput?.Text;var inputWidth=notchWidthInput?.Text;var inputDistance=edgeDistanceInput?.Text;
+            var inputIndex=vertexIndexInput?.Text;var inputX=vertexXInput?.Text;var inputY=vertexYInput?.Text;var inputFraction=notchFractionInput?.Text;var inputDepth=notchDepthInput?.Text;var inputWidth=notchWidthInput?.Text;var inputDistance=edgeDistanceInput?.Text;var inputPercentage=edgePercentageInput?.Text;
             if(index<0 || index>=snapshot.Points.Count)throw new ArgumentOutOfRangeException(nameof(index),"Nokta indeksi kaynak parçada bulunmuyor.");
             if(operation==VertexEdit.Move && snapshot.Points[index]==position)
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
@@ -855,6 +860,7 @@ public sealed class TextileToolsWindow : Window
                     VertexEdit.Delete => PatternTools.DeletePoint(snapshot,index,token),
                     VertexEdit.Midpoint => PatternTools.InsertEdgeMidpoint(snapshot,index,token),
                     VertexEdit.Distance => PatternTools.InsertPointAtDistance(snapshot,index,position.X,token),
+                    VertexEdit.Percentage => PatternTools.InsertPointAtPercentage(snapshot,index,position.X,token),
                     VertexEdit.Reverse => PatternTools.ReverseOpenPath(snapshot,token),
                     VertexEdit.Notch => PatternTools.InsertNotch(snapshot,index,position.X,width,position.Y,token),
                     _ => throw new InvalidOperationException("Bilinmeyen nokta düzenleme işlemi.")
@@ -866,7 +872,7 @@ public sealed class TextileToolsWindow : Window
             if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,document) ||
                !DocumentSession.ContentEquals(workspace.Document,original) || workspace.SelectedId!=workspaceSelection ||
                source.SelectedItem is not PatternPiece selectedNow || selectedNow.Id!=sourceId ||
-               vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth || notchWidthInput?.Text!=inputWidth || edgeDistanceInput?.Text!=inputDistance)
+               vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth || notchWidthInput?.Text!=inputWidth || edgeDistanceInput?.Text!=inputDistance || edgePercentageInput?.Text!=inputPercentage)
                 throw new InvalidOperationException("Proje, seçim veya bekleyen çalışma değişti. Nokta düzenlemesi uygulanmadı; güncel durumu kontrol edin.");
             token.ThrowIfCancellationRequested();
             ReplacePiece(edited);

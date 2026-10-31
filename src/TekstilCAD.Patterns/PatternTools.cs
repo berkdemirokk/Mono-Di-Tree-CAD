@@ -282,6 +282,21 @@ public static class PatternTools
         return InsertPoint(detached,afterIndex,midpoint,cancellationToken);
     }
 
+    /// <summary>Splits the next edge at a percentage of its length, using the same
+    /// geometric precision and validation guarantees as distance insertion.</summary>
+    public static PatternPiece InsertPointAtPercentage(PatternPiece piece, int afterIndex, double percentage, CancellationToken cancellationToken = default)
+    {
+        var points = SnapshotPointEdit(piece, cancellationToken);
+        if (!double.IsFinite(percentage) || percentage <= 0 || percentage >= 100)
+            throw new ArgumentException("Yüzde sıfırdan büyük ve 100'den küçük olmalıdır.", nameof(percentage));
+        if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
+        if (piece.Closed && points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1) afterIndex = 0;
+        if (!piece.Closed && afterIndex == points.Count - 1) throw new ArgumentException("Açık konturun son noktasından sonra kenar yok.");
+        var distance = Geometry.Distance(points[afterIndex], points[(afterIndex + 1) % points.Count]) * (percentage / 100);
+        var detached = piece.Clone(); detached.Points = points;
+        return InsertPointAtDistance(detached, afterIndex, distance, cancellationToken);
+    }
+
     /// <summary>Splits the next edge at a distance from the selected vertex. The new
     /// point is at most 0.000001 mm from the original line and requested distance.</summary>
     public static PatternPiece InsertPointAtDistance(PatternPiece piece, int afterIndex, double distance, CancellationToken cancellationToken = default)
