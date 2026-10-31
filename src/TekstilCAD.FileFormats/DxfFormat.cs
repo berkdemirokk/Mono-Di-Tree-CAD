@@ -1848,7 +1848,7 @@ public static class DxfFormat
         {
             var scaled=coordinate.Value*factor;
             if (scaled == 0 && IsNonzeroDecimal(coordinate.Text))
-                throw new InvalidDataException("DXF koordinatı ayrıştırma veya ölçekleme sırasında sıfıra düştü; geometri aktarılmadı.");
+                throw new InvalidDataException("DXF koordinatı ayrıştırma veya ölçekleme hassasiyeti nedeniyle sıfıra düştü; geometri aktarılmadı.");
             return scaled;
         }
         return new Point2(Scale(source.X),Scale(source.Y));
@@ -1953,6 +1953,13 @@ public static class DxfFormat
     {
         ProjectStorage.ValidateForDxfExport(project);
         if (project.Pieces.Any(p => p.Points.Count < 2)) throw new InvalidDataException("DXF dışa aktarımı için her parçada en az iki nokta gerekir; eksik parçaları düzeltin.");
+        foreach (var p in project.Pieces.Where(p => p.Closed))
+        {
+            var count = p.Points.Count;
+            if (count > 1 && p.Points[0] == p.Points[^1]) count--;
+            if (count < 3 || (count > 1 && p.Points[0] == p.Points[count - 1]))
+                throw new InvalidDataException("Kapalı DXF konturu en az üç nokta içermeli ve kapanış noktası yalnız bir kez yinelenmelidir.");
+        }
         var usedLayers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var nextSuffix = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         var result = new List<DxfLayerMapping>(project.Pieces.Count);
@@ -2059,9 +2066,15 @@ public static class DxfFormat
         for (var i = 0; i < project.Pieces.Count; i++)
         {
             var p = project.Pieces[i]; var layer = layers[i].LayerName;
+            var count = p.Points.Count;
+            if (p.Closed && count > 1 && p.Points[0] == p.Points[^1]) count--;
             b.Append("0\nLWPOLYLINE\n5\n").Append(entityHandles[i]).Append("\n100\nAcDbEntity\n8\n").Append(layer)
-                .Append("\n100\nAcDbPolyline\n90\n").Append(p.Points.Count).Append("\n70\n").Append(p.Closed ? 1 : 0).Append('\n');
-            foreach (var pt in p.Points) b.Append("10\n").Append(F(pt.X)).Append("\n20\n").Append(F(pt.Y)).Append('\n');
+                .Append("\n100\nAcDbPolyline\n90\n").Append(count).Append("\n70\n").Append(p.Closed ? 1 : 0).Append('\n');
+            for (var pointIndex = 0; pointIndex < count; pointIndex++)
+            {
+                var pt = p.Points[pointIndex];
+                b.Append("10\n").Append(F(pt.X)).Append("\n20\n").Append(F(pt.Y)).Append('\n');
+            }
         }
         b.Append("0\nENDSEC\n0\nEOF\n");
         if (expectedVersion is null) ProjectStorage.AtomicWrite(path, b.ToString());
