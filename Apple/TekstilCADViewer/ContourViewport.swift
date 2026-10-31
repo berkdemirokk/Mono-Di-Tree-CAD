@@ -2,6 +2,7 @@ import Foundation
 
 // Fits finite model coordinates without multiplying by an enormous scale.
 struct ContourViewport {
+    let coordinateScale: Double
     let minX: Double
     let minY: Double
     let extent: Double
@@ -18,9 +19,14 @@ struct ContourViewport {
             minX = min(minX, p.x); maxX = max(maxX, p.x)
             minY = min(minY, p.y); maxY = max(maxY, p.y)
         }
+        // Finite opposite-sign endpoints can overflow when subtracted.
+        let coordinateScale = (maxX - minX).isFinite && (maxY - minY).isFinite ? 1.0 : 0.5
+        minX *= coordinateScale; maxX *= coordinateScale
+        minY *= coordinateScale; maxY *= coordinateScale
         let modelWidth = maxX - minX, modelHeight = maxY - minY
         let extent = max(modelWidth, modelHeight)
         guard extent.isFinite else { return nil }
+        self.coordinateScale = coordinateScale
         // Keep a collapsed contour available for inspection at the center.
         if extent == 0 {
             self.minX = minX; self.minY = minY; self.extent = 1; self.fitted = 0
@@ -39,8 +45,8 @@ struct ContourViewport {
     }
 
     func position(_ point: ContourMeasure.Point) -> CGPoint {
-        CGPoint(x: offsetX + ((point.x - minX) / extent) * fitted,
-                y: height - offsetY - ((point.y - minY) / extent) * fitted)
+        CGPoint(x: offsetX + ((point.x * coordinateScale - minX) / extent) * fitted,
+                y: height - offsetY - ((point.y * coordinateScale - minY) / extent) * fitted)
     }
 
     // Keep the highlighted ring inside the clipped canvas without changing zoom.

@@ -29,6 +29,16 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(visibleX, 0)
         XCTAssertLessThanOrEqual(visibleX, size.width)
     }
+    func testFiniteOppositeExtremeCoordinatesFitWithoutOverflow() throws {
+        let points = [p(-Double.greatestFiniteMagnitude, -1),
+                      p(Double.greatestFiniteMagnitude, 1)]
+        let viewport = try XCTUnwrap(ContourViewport(points: points, width: 232, height: 132))
+        let left = viewport.position(points[0]), right = viewport.position(points[1])
+        XCTAssertEqual(left.x, 16, accuracy: 1e-9)
+        XCTAssertEqual(right.x, 216, accuracy: 1e-9)
+        XCTAssertTrue(left.y.isFinite && right.y.isFinite)
+    }
+
     func testTinyContourStillFillsViewport() throws {
         let points = [p(0, 0), p(1e-200, 0), p(1e-200, 1e-200)]
         let viewport = try XCTUnwrap(ContourViewport(points: points, width: 232, height: 132))
