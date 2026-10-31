@@ -41,7 +41,7 @@ public sealed class TextileToolsWindow : Window
     internal Action? AfterOffsetBeforeReturnForVerification { get; set; }
     private bool gradeBusy;
     private bool vertexMoveBusy;
-    private TextBox? vertexIndexInput, vertexXInput, vertexYInput, notchFractionInput, notchDepthInput;
+    private TextBox? vertexIndexInput, vertexXInput, vertexYInput, notchFractionInput, notchDepthInput, notchWidthInput;
     private CancellationTokenSource? vertexMoveCancellation;
     private readonly Button cancelVertexMove = new() { Content="Nokta doğrulamasını iptal et", Padding=new Thickness(12,7,12,7), Margin=new Thickness(0,0,8,0), Visibility=Visibility.Collapsed };
     internal Action? BeforeVertexMoveForVerification { get; set; }
@@ -795,11 +795,12 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
         Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
-        Note(panel,"Seçili noktadan sonraki kenarda konturdan fiziksel olarak içe doğru V kesilir; bu işlem yalnızca işaret eklemez. Konum 0 ile 1 arasındaki kenar oranıdır; yarı genişlik derinliğe eşittir. Konturu ve serileme kurallarını kontrol edin.");
+        Note(panel,"Seçili noktadan sonraki kenarda konturdan fiziksel olarak içe doğru V kesilir; bu işlem yalnızca işaret eklemez. Konum 0 ile 1 arasındaki kenar oranıdır; ağız genişliği ve derinlik ayrı ölçülerdir. Konturu ve serileme kurallarını kontrol edin.");
         var notchFraction=Input(panel,"Çentik konumu · kenar oranı","0,5");
-        var notchDepth=Input(panel,"Çentik derinliği ve yarı genişliği · mm","3");
-        notchFractionInput=notchFraction;notchDepthInput=notchDepth;
-        Button(panel,"Sonraki kenara V çentik aç",()=>VertexMoveTaskForVerification=InsertNotchAsync(index.Text,notchFraction.Text,notchDepth.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece { Closed:true }&&IsNumber(notchFraction.Text,out _)&&IsNumber(notchDepth.Text,out _));
+        var notchWidth=Input(panel,"Çentik ağız genişliği · mm","6");
+        var notchDepth=Input(panel,"Çentik derinliği · mm","3");
+        notchFractionInput=notchFraction;notchDepthInput=notchDepth;notchWidthInput=notchWidth;
+        Button(panel,"Sonraki kenara V çentik aç",()=>VertexMoveTaskForVerification=InsertNotchAsync(index.Text,notchFraction.Text,notchWidth.Text,notchDepth.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece { Closed:true }&&IsNumber(notchFraction.Text,out _)&&IsNumber(notchDepth.Text,out _)&&IsNumber(notchWidth.Text,out _));
         Note(panel,"Açık konturun başlangıç ve bitiş yönünü ters çevirebilirsiniz. Noktaların konumu değişmez. Varsa serileme kuralı yeniden gözden geçirilmelidir.");
         Button(panel,"Açık kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseOpenPathAsync(),()=>source.SelectedItem is PatternPiece { Closed:false });
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
@@ -812,8 +813,9 @@ public sealed class TextileToolsWindow : Window
     internal Task DeleteVertexAsync(string indexText) => EditVertexAsync(VertexEdit.Delete,indexText,null,null);
     internal Task InsertEdgeMidpointAsync(string indexText) => EditVertexAsync(VertexEdit.Midpoint,indexText,null,null);
     internal Task InsertNotchAsync(string indexText,string fractionText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText);
+    internal Task InsertNotchAsync(string indexText,string fractionText,string widthText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText,widthText);
     internal Task ReverseOpenPathAsync() => EditVertexAsync(VertexEdit.Reverse,"0",null,null);
-    private async Task EditVertexAsync(VertexEdit operation,string indexText,string? xText,string? yText)
+    private async Task EditVertexAsync(VertexEdit operation,string indexText,string? xText,string? yText,string? widthText=null)
     {
         if(vertexMoveBusy || basicNestingBusy || gradeBusy || offsetBusy || toolReviewRequired)return;
         var started=false;
@@ -823,11 +825,12 @@ public sealed class TextileToolsWindow : Window
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse ? default : new Point2(Number(xText!),Number(yText!));
+            var width=widthText is null ? position.Y * 2 : Number(widthText);
             var selected=Piece();var sourceId=selected.Id;
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
-            var inputIndex=vertexIndexInput?.Text;var inputX=vertexXInput?.Text;var inputY=vertexYInput?.Text;var inputFraction=notchFractionInput?.Text;var inputDepth=notchDepthInput?.Text;
+            var inputIndex=vertexIndexInput?.Text;var inputX=vertexXInput?.Text;var inputY=vertexYInput?.Text;var inputFraction=notchFractionInput?.Text;var inputDepth=notchDepthInput?.Text;var inputWidth=notchWidthInput?.Text;
             if(index<0 || index>=snapshot.Points.Count)throw new ArgumentOutOfRangeException(nameof(index),"Nokta indeksi kaynak parçada bulunmuyor.");
             if(operation==VertexEdit.Move && snapshot.Points[index]==position)
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
@@ -847,7 +850,7 @@ public sealed class TextileToolsWindow : Window
                     VertexEdit.Delete => PatternTools.DeletePoint(snapshot,index,token),
                     VertexEdit.Midpoint => PatternTools.InsertEdgeMidpoint(snapshot,index,token),
                     VertexEdit.Reverse => PatternTools.ReverseOpenPath(snapshot,token),
-                    VertexEdit.Notch => PatternTools.InsertNotch(snapshot,index,position.X,position.Y,token),
+                    VertexEdit.Notch => PatternTools.InsertNotch(snapshot,index,position.X,width,position.Y,token),
                     _ => throw new InvalidOperationException("Bilinmeyen nokta düzenleme işlemi.")
                 };
                 after?.Invoke();token.ThrowIfCancellationRequested();return value;
@@ -857,7 +860,7 @@ public sealed class TextileToolsWindow : Window
             if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,document) ||
                !DocumentSession.ContentEquals(workspace.Document,original) || workspace.SelectedId!=workspaceSelection ||
                source.SelectedItem is not PatternPiece selectedNow || selectedNow.Id!=sourceId ||
-               vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth)
+               vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth || notchWidthInput?.Text!=inputWidth)
                 throw new InvalidOperationException("Proje, seçim veya bekleyen çalışma değişti. Nokta düzenlemesi uygulanmadı; güncel durumu kontrol edin.");
             token.ThrowIfCancellationRequested();
             ReplacePiece(edited);

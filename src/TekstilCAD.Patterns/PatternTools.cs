@@ -180,21 +180,32 @@ public static class PatternTools
 
     /// <summary>V notch with half-width=depth, apex on the left of directed a→b. Caller selects inward edge direction.</summary>
     public static List<Point2> NotchPoints(Point2 a, Point2 b, double alongFraction, double depth)
+        => NotchPoints(a, b, alongFraction, depth * 2, depth);
+
+    public static List<Point2> NotchPoints(Point2 a, Point2 b, double alongFraction, double width, double depth)
     {
+        if (!double.IsFinite(width) || width <= 0) throw new ArgumentOutOfRangeException(nameof(width));
         Geometry.Validate(a); Geometry.Validate(b);
         if (!double.IsFinite(alongFraction) || alongFraction <= 0 || alongFraction >= 1) throw new ArgumentOutOfRangeException(nameof(alongFraction));
         if (!double.IsFinite(depth) || depth <= 0) throw new ArgumentOutOfRangeException(nameof(depth));
         var length = Geometry.Distance(a, b);
-        if (length <= Geometry.Epsilon || depth >= Math.Min(alongFraction, 1 - alongFraction) * length)
+        if (length <= Geometry.Epsilon || width / 2 >= Math.Min(alongFraction, 1 - alongFraction) * length)
             throw new ArgumentException("Çentik kenarın dışına taşıyor veya kenar çok kısa.");
         var unit = (b - a) * (1 / length); var center = a + (b - a) * alongFraction;
-        List<Point2> result = [center - unit * depth, center + new Point2(-unit.Y, unit.X) * depth, center + unit * depth];
+        List<Point2> result = [center - unit * (width / 2), center + new Point2(-unit.Y, unit.X) * depth, center + unit * (width / 2)];
         foreach (var point in result) Geometry.Validate(point);
+        if (result[0] == center || result[2] == center || result[1] == center ||
+            Math.Abs(Geometry.Distance(result[0], result[2]) - width) > width * 1e-9 ||
+            Math.Abs(Geometry.Distance(center, result[1]) - depth) > depth * 1e-9)
+            throw new ArgumentException("Çentik ölçüleri sayısal hassasiyetle temsil edilemiyor.");
         return result;
     }
 
     /// <summary>Cut an inward V notch into a closed contour edge. Half-width equals depth.</summary>
     public static PatternPiece InsertNotch(PatternPiece piece, int afterIndex, double fraction, double depth, CancellationToken cancellationToken = default)
+        => InsertNotch(piece, afterIndex, fraction, depth * 2, depth, cancellationToken);
+
+    public static PatternPiece InsertNotch(PatternPiece piece, int afterIndex, double fraction, double width, double depth, CancellationToken cancellationToken = default)
     {
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (!piece.Closed) throw new ArgumentException("Çentik için kapalı kontur gereklidir.");
@@ -204,12 +215,21 @@ public static class PatternTools
         if (points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1) afterIndex = 0;
         var next = afterIndex + 1 < points.Count ? afterIndex + 1 : 0;
         var sourceArea = Geometry.SignedArea(points);
-        var notch = NotchPoints(points[afterIndex], points[next], fraction, depth);
+        var notch = NotchPoints(points[afterIndex], points[next], fraction, width, depth);
         if (sourceArea < 0)
         {
             var center = points[afterIndex] + (points[next] - points[afterIndex]) * fraction;
-            notch[1] = center * 2 - notch[1];
+            notch[1] = center - (notch[1] - center);
         }
+        var edge = points[next] - points[afterIndex];
+        var edgeLength = Geometry.Distance(points[afterIndex], points[next]);
+        var expectedCenter = points[afterIndex] + edge * fraction;
+        var actualCenter = notch[0] + (notch[2] - notch[0]) * 0.5;
+        if (Geometry.Distance(actualCenter, expectedCenter) > Math.Min(width, depth) * 1e-9 ||
+            Math.Abs(Geometry.Distance(notch[0], notch[2]) - width) > width * 1e-9 ||
+            Math.Abs(Geometry.Distance(actualCenter, notch[1]) - depth) > depth * 1e-9 ||
+            Math.Abs(Geometry.Distance(points[afterIndex], actualCenter) / edgeLength - fraction) > 1e-9)
+            throw new ArgumentException("Çentik konumu veya ölçüleri sayısal hassasiyetle temsil edilemiyor.");
         points.InsertRange(afterIndex + 1, notch);
         ValidatePointEdit(true, points, cancellationToken);
         var resultArea = Geometry.SignedArea(points);

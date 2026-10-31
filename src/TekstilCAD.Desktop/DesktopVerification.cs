@@ -382,7 +382,7 @@ internal static class DesktopVerification
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
-            VerifyNotchEdit(studio,checks);
+            VerifyNotchEdit(studio,reportPath,checks);
 
             VerifyReverseOpenPath(studio,checks);
             VerifyNestingErrorIdentity(checks);
@@ -7067,7 +7067,7 @@ internal static class DesktopVerification
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
-    private static void VerifyNotchEdit(MainWindow studio,List<string> checks)
+    private static void VerifyNotchEdit(MainWindow studio,string reportPath,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         var piece=new PatternPiece { Name="Çentik",Points=[new(0,0),new(20,0),new(20,10),new(0,10),new(0,0)],Metadata=new PieceMetadata { Quantity=2 } };
@@ -7080,7 +7080,38 @@ internal static class DesktopVerification
             Prepare();var before=studio.Document.Clone();var tools=new TextileToolsWindow(studio);
             try
             {
-                Finish(tools.InsertNotchAsync("3","0.5","2"));
+                var root=(FrameworkElement)tools.Content;
+                var tabs=(TabControl)typeof(TextileToolsWindow).GetField("workshopTabs",PrivateInstance)!.GetValue(tools)!;
+                tabs.SelectedIndex=1;
+                root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
+                TextBox Field(string name)=>(TextBox)typeof(TextileToolsWindow).GetField(name,PrivateInstance)!.GetValue(tools)!;
+                var index=Field("vertexIndexInput");var fraction=Field("notchFractionInput");
+                var width=Field("notchWidthInput");var depth=Field("notchDepthInput");
+                var button=Descendants<Button>(root).Single(b=>Equals(b.Content,"Sonraki kenara V çentik aç"));
+                Check(Descendants<TextBlock>(root).Any(t=>t.Text=="Çentik ağız genişliği · mm") &&
+                    Descendants<TextBlock>(root).Any(t=>t.Text=="Çentik derinliği · mm") &&
+                    Descendants<TextBlock>(root).Any(t=>t.Text.Contains("fiziksel olarak içe doğru V kesilir")),
+                    "Notch controls identify independent dimensions and the physical cut",checks);
+                var scroller=Descendants<ScrollViewer>(root).Single(v=>v.IsAncestorOf(width));
+                void ScrollTo(FrameworkElement target)
+                {
+                    var content=(FrameworkElement)scroller.Content;
+                    var y=target.TransformToAncestor(content).Transform(new Point(0,0)).Y;
+                    scroller.ScrollToVerticalOffset(Math.Max(0,y-10));root.UpdateLayout();
+                }
+                ScrollTo(width);
+                Check(scroller.ScrollableHeight>0 && FullyVisible(width,root) && FullyVisible(depth,root),
+                    "Small workshop can scroll to both independent notch fields",checks);
+                ScrollTo(button);
+                Check(FullyVisible(button,root),"Small workshop can scroll to the notch cut button",checks);
+                Render(tools,Path.ChangeExtension(reportPath,".notch-controls-compact.png"),680,540);
+                index.Text="3";fraction.Text="0.5";width.Text="3";depth.Text="2";
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Finish(tools.VertexMoveTaskForVerification ?? throw new InvalidOperationException("Çentik düğmesi görevi başlatmadı."));
+                var cut=studio.Document.Pieces[0].Points;
+                Check(Math.Abs(TekstilCAD.Core.Geometry.Distance(cut[4],cut[6])-3)<1e-9 &&
+                    Math.Abs(TekstilCAD.Core.Geometry.Distance((cut[4]+cut[6])*.5,cut[5])-2)<1e-9,
+                    "Notch button applies the entered independent width and depth",checks);
                 var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
                 Check(studio.Document.Pieces[0].Points.Count==8 && studio.Document.Pieces[0].Points[0]==studio.Document.Pieces[0].Points[^1] &&
                     JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && result.Text.Contains("serileme",StringComparison.OrdinalIgnoreCase) && session.UndoCount==1,
@@ -7088,15 +7119,16 @@ internal static class DesktopVerification
                 Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Notch is one undoable edit",checks);
             }
             finally { tools.Close(); }
-            foreach(var scenario in new[]{"cancel","source"})
+            foreach(var scenario in new[]{"cancel","source","width"})
             {
                 Prepare();tools=new TextileToolsWindow(studio);using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
                 tools.BeforeVertexMoveForVerification=()=> { reached.Set();release.Wait(); };
                 try
                 {
-                    pending=tools.InsertNotchAsync("0","0.5","2");PumpUntil(()=>reached.IsSet);
+                    pending=tools.InsertNotchAsync("0","0.5","3","2");PumpUntil(()=>reached.IsSet);
                     if(scenario=="cancel")tools.RequestVertexMoveCancellation();
-                    else studio.Commit("Kaynak değişti",()=>studio.Document.Pieces[0].Points[1]=new Point2(21,0));
+                    else if(scenario=="source")studio.Commit("Kaynak değişti",()=>studio.Document.Pieces[0].Points[1]=new Point2(21,0));
+                    else ((TextBox)typeof(TextileToolsWindow).GetField("notchWidthInput",PrivateInstance)!.GetValue(tools)!).Text="4";
                     var expected=studio.Document.Clone();var undo=session.UndoCount;release.Set();Finish(pending);
                     var message=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
                     Check(DocumentSession.ContentEquals(expected,studio.Document) && session.UndoCount==undo && message.Text.Contains(scenario=="cancel"?"iptal":"uygulanmadı",StringComparison.OrdinalIgnoreCase),
