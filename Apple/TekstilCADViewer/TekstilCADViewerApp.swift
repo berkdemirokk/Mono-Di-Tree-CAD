@@ -59,6 +59,9 @@ private struct ContentView: View {
     @State private var editedPieceName = ""
     @State private var pieceRenameSnapshot: PieceRenameSnapshot?
     @State private var importedName = ""
+    @State private var showingLibraryNameEditor = false
+    @State private var libraryName = ""
+    @State private var librarySaveSnapshot: (data: Data, request: UUID)?
     @State private var isSaving = false
     @State private var saveNotice: String?
     @State private var project: Drawing?
@@ -85,6 +88,13 @@ private struct ContentView: View {
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
                     .disabled(isSaving || modelLoad.isLoading)
+                Button("Telefona farklı adla kaydet…") {
+                    guard let data = importedData else { return }
+                    librarySaveSnapshot = (data, modelLoad.request)
+                    libraryName = project?.name ?? ""
+                    showingLibraryNameEditor = true
+                }
+                .disabled(isSaving || modelLoad.isLoading)
             }
             if let project {
                 Button("Açık modeli dışa aktar…") {
@@ -310,6 +320,14 @@ private struct ContentView: View {
             // The system may dismiss without a completion callback on cancel.
             if !presented { exportDocument = nil }
         }
+        .alert("Kayıtlı model adı", isPresented: $showingLibraryNameEditor) {
+            TextField("Model adı", text: $libraryName)
+            Button("İptal", role: .cancel) { librarySaveSnapshot = nil }
+            Button("Telefona kaydet") { saveImportedModelWithName() }
+                .disabled(libraryName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || libraryName.utf16.count > 1024)
+        } message: {
+            Text("Bu ad Modellerim listesinde görünür; dosyanın içindeki proje adı değişmez. En fazla 1024 UTF-16 birimi kullanın.")
+        }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
             Button("İptal", role: .cancel) { editedName = project?.name ?? "" }
@@ -472,9 +490,38 @@ private struct ContentView: View {
         }
     }
 
+    private func saveImportedModelWithName() {
+        guard let snapshot = librarySaveSnapshot else { return }
+        librarySaveSnapshot = nil
+        guard !modelLoad.isLoading, modelLoad.request == snapshot.request,
+              importedData == snapshot.data else {
+            error = "Açık model değişti. Kaydetmek istediğiniz modeli yeniden seçin."
+            return
+        }
+        let name = libraryName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, name.utf16.count <= 1024 else { return }
+        saveNotice = nil
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try ModelStore.saveRenamed(snapshot.data, projectName: name) }
+            DispatchQueue.main.async {
+                isSaving = false
+                switch result {
+                case .success:
+                    if modelLoad.request == snapshot.request && importedData == snapshot.data {
+                        importedData = nil
+                        saveNotice = "Model telefona kaydedildi."
+                    }
+                case .failure(let failure): error = failure.localizedDescription
+                }
+            }
+        }
+    }
+
     private func saveImportedModel() {
         guard let data = importedData else { return }
         let name = importedName
+        let request = modelLoad.request
         saveNotice = nil
         isSaving = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -482,7 +529,11 @@ private struct ContentView: View {
             DispatchQueue.main.async {
                 isSaving = false
                 switch result {
-                case .success: importedData = nil; saveNotice = "Model telefona kaydedildi."
+                case .success:
+                    if modelLoad.request == request && importedData == data {
+                        importedData = nil
+                        saveNotice = "Model telefona kaydedildi."
+                    }
                 case .failure(let failure): error = failure.localizedDescription
                 }
             }

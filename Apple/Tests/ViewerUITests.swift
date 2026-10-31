@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testImportedModelCanBeSavedUnderLibraryNameAndReopened() {
+        let fixture = #"{"Name":"Orijinal Proje","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let saveAs = app.buttons["Telefona farklı adla kaydet…"]
+        XCTAssertTrue(saveAs.waitForExistence(timeout: 15))
+        saveAs.tap()
+        let name = app.alerts.textFields.firstMatch
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText(" 2026")
+        app.alerts.buttons["Telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let saved = app.buttons["Orijinal Proje 2026"]
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        saved.tap()
+        XCTAssertTrue(app.staticTexts["Orijinal Proje"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.otherElements["1 parçalı kontur önizlemesi"].exists)
+    }
+
     func testLibraryFindsModelWhenNameWordsAreReversed() {
         let fixture = #"{"Name":"Ön Beden Kol","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
