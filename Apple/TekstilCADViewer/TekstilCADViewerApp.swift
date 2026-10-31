@@ -31,6 +31,7 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingFullScreenDrawing = false
     @State private var showingNotches = false
     @State private var selectedNotch: (piece: Int, point: Int)?
     @State private var showingLibrary = false
@@ -257,6 +258,8 @@ private struct ContentView: View {
                         Text("Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor.")
                             .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
+                        Button("Konturu büyük görünümde incele") { showingFullScreenDrawing = true }
+                            .disabled(modelLoad.isLoading)
                         DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
@@ -290,6 +293,26 @@ private struct ContentView: View {
         .onChange(of: selectedPiece) { _ in pieceRenameSnapshot = nil }
         #endif
         .frame(minWidth: 300, minHeight: 300)
+        .sheet(isPresented: $showingFullScreenDrawing) {
+            if let project {
+                NavigationStack {
+                    GeometryReader { geometry in
+                        ScrollView {
+                            DrawingView(
+                                pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
+                                label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
+                                highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
+                                selectionRevision: notchSelectionRevision,
+                                drawingHeight: max(320, geometry.size.height - 180)
+                            )
+                            .padding()
+                        }
+                    }
+                    .navigationTitle("Kontur inceleme")
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { showingFullScreenDrawing = false } } }
+                }
+            }
+        }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
                 let url = try result.get()
@@ -1412,6 +1435,7 @@ private struct DrawingView: View {
     let label: String
     let highlightedNotch: Int?
     let selectionRevision: UUID?
+    var drawingHeight: CGFloat = 320
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var showGrain = true
@@ -1481,7 +1505,7 @@ private struct DrawingView: View {
             .onChange(of: selectionRevision) { _ in revealSelectedNotch(size: geometry.size) }
             .onChange(of: showGrain) { _ in revealSelectedNotch(size: geometry.size) }
         }
-        .frame(height: 320)
+        .frame(height: drawingHeight)
                 VStack(alignment: .leading, spacing: 8) {
                     Button(panEnabled ? "Taşımayı bitir" : "Çizimi taşı") { panEnabled.toggle() }
                         .accessibilityHint(panEnabled ? "Sayfayı kaydırmaya dön" : "Çizimi sürüklemek için taşıma modunu aç")

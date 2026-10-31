@@ -1,6 +1,30 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSelectedPieceCanBeInspectedInLargeView() {
+        let fixture = #"{"Name":"İnceleme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]},{"Name":"Ön","Closed":false,"Points":[{"X":0,"Y":0},{"X":30,"Y":60}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let next = app.buttons["Sonraki parça"]
+        XCTAssertTrue(next.waitForExistence(timeout: 15))
+        next.tap()
+        let largeView = app.buttons["Konturu büyük görünümde incele"]
+        for _ in 0..<5 where !largeView.isHittable { app.swipeUp() }
+        XCTAssertTrue(largeView.isHittable)
+        largeView.tap()
+        XCTAssertTrue(app.navigationBars["Kontur inceleme"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
+        let zoom = app.buttons["Yakınlaştır"]
+        for _ in 0..<5 where !zoom.isHittable { app.swipeUp() }
+        XCTAssertTrue(zoom.isHittable)
+        zoom.tap()
+        app.navigationBars["Kontur inceleme"].buttons["Kapat"].tap()
+        XCTAssertTrue(largeView.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
+    }
+
     func testImportedModelCanBeSavedUnderLibraryNameAndReopened() {
         let fixture = #"{"Name":"Orijinal Proje","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}]}"#
         let app = XCUIApplication()
