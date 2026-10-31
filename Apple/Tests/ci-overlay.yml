@@ -9,6 +9,8 @@
       - path: Tests/ExperimentalPointMoveJSONTests.swift
       - path: Tests/Fixtures/desktop-synthetic-point.tcad
         buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-notch.tcad
+        buildPhase: resources
       - path: Tests/MeasurementDisplayTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS

@@ -139,4 +139,29 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(invalid, snapshot: invalid, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
         }
     }
+
+    func testVersionSixExplicitClosureMovesNotchAndBothVertices() throws {
+        let text = #"[6,{"Name":"M","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":true,"Points":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4},{"X":0,"Y":0}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0,"IsFinite":true}}]}],"GradingRules":[]}]"#
+        let bytes = Data(text.utf8)
+        let output = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 3, to: .init(x: 1, y: 1))
+        let expected = text.replacingOccurrences(of: #"{"X":0,"Y":0}"#, with: #"{"X":1.0,"Y":1.0}"#)
+            .replacingOccurrences(of: #"{"X":0,"Y":0,"IsFinite":true}"#, with: #"{"X":1.0,"Y":1.0,"IsFinite":true}"#)
+        XCTAssertEqual(output, Data(expected.utf8))
+        for bad in [text.replacingOccurrences(of: #""VertexIndex":0"#, with: #""VertexIndex":3"#),
+                    text.replacingOccurrences(of: #""VertexIndex":0"#, with: #""VertexIndex":0.0"#),
+                    text.replacingOccurrences(of: #""VertexIndex":0"#, with: #""VertexIndex":0,"\u0056ertexIndex":0"#),
+                    text.replacingOccurrences(of: #""IsFinite":true"#, with: #""IsFinite":false"#)] {
+            let invalid = Data(bad.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(invalid, snapshot: invalid, pieceID: id, index: 3, to: .init(x: 1, y: 1)))
+        }
+    }
+
+    func testDesktopSavedVersionSixUnrelatedVertexPreservesNotchBytes() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-notch", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let text = try XCTUnwrap(String(data: data, encoding: .utf8))
+        let sourceID = try XCTUnwrap(UUID(uuidString: "c393b219-2be8-41e7-8665-ed900a1cbf5e"))
+        let result = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: sourceID, index: 1, to: .init(x: 11.5, y: 0))
+        XCTAssertEqual(result, Data(text.replacingOccurrences(of: #""X": 10"#, with: #""X": 11.5"#).utf8))
+    }
 }

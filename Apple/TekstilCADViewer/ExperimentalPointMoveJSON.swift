@@ -16,7 +16,7 @@ enum ExperimentalPointMoveJSON {
         let version: Int
         if let array = root as? [Any], array.count == 2, let v = array[0] as? NSNumber,
            CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.rounded() == v.doubleValue,
-           [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
+           [1.0, 2.0, 4.0, 6.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
         else if let body = root as? [String: Any] { project = body; versioned = false; version = 0 }
         else { throw Failure.invalid }
         // A grading snapshot of the edited piece can describe the old contour.
@@ -32,12 +32,13 @@ enum ExperimentalPointMoveJSON {
         } else { rules = [] }
         guard let projectName = project["Name"] as? String, projectName.utf16.count <= 1024 else { throw Failure.invalid }
         var ids = Set<UUID>(); var selected: Int?; var total = 0; var selectedGrainReview: Bool?
+        var totalNotches = 0; var selectedMarkPositions = Set<Int>()
         for (i, piece) in pieces.enumerated() {
-            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline"]), let name = piece["Name"] as? String, name.utf16.count <= 1024,
+            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]), let name = piece["Name"] as? String, name.utf16.count <= 1024,
                   let raw = piece["Id"] as? String, let id = UUID(uuidString: raw),
                   id.uuidString != "00000000-0000-0000-0000-000000000000", ids.insert(id).inserted else { throw Failure.invalid }
             if let rawGrain = piece["Grainline"] {
-                guard version == 4, id == pieceID, let grain = rawGrain as? [String: Any],
+                guard (version == 4 || version == 6), id == pieceID, let grain = rawGrain as? [String: Any],
                       Set(grain.keys) == Set(["Start", "End", "NeedsReview"]),
                       let review = grain["NeedsReview"] as? NSNumber, CFGetTypeID(review) == CFBooleanGetTypeID() else { throw Failure.invalid }
                 func coordinate(_ raw: Any?) throws -> Point {
@@ -85,8 +86,40 @@ enum ExperimentalPointMoveJSON {
                   }) else { throw Failure.invalid }
             total += otherPoints.count
             guard total <= 200_000 else { throw Failure.invalid }
+            if let rawMarks = piece["Notches"] {
+                guard version == 6, let marks = rawMarks as? [[String: Any]], !marks.isEmpty, marks.count <= 10_000 else { throw Failure.invalid }
+                totalNotches += marks.count
+                guard totalNotches <= 200_000 else { throw Failure.invalid }
+                var seen = Set<Int>()
+                func pointValues(_ raw: [String: Any]) throws -> Point {
+                    guard Set(raw.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                          let x = raw["X"] as? NSNumber, CFGetTypeID(x) != CFBooleanGetTypeID(),
+                          let y = raw["Y"] as? NSNumber, CFGetTypeID(y) != CFBooleanGetTypeID(),
+                          x.doubleValue.isFinite, y.doubleValue.isFinite, abs(x.doubleValue) <= 100_000_000, abs(y.doubleValue) <= 100_000_000 else { throw Failure.invalid }
+                    if let finite = raw["IsFinite"] { guard let v = finite as? NSNumber, CFGetTypeID(v) == CFBooleanGetTypeID(), v.boolValue else { throw Failure.invalid } }
+                    return Point(x: x.doubleValue, y: y.doubleValue)
+                }
+                let firstPoint = try pointValues(otherPoints[0])
+                let lastPoint = try pointValues(otherPoints[otherPoints.count - 1])
+                let repeated = flag.boolValue && otherPoints.count > 1 && firstPoint == lastPoint
+                for (markPosition, mark) in marks.enumerated() {
+                    guard Set(mark.keys) == Set(["VertexIndex", "Position"]), let n = mark["VertexIndex"] as? NSNumber,
+                          CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.rounded() == n.doubleValue,
+                          n.doubleValue >= 0, n.doubleValue < Double(otherPoints.count),
+                          let p = mark["Position"] as? [String: Any] else { throw Failure.invalid }
+                    let vertex = n.intValue
+                    let markPoint = try pointValues(p)
+                    let vertexPoint = try pointValues(otherPoints[vertex])
+                    guard seen.insert(vertex).inserted, !(repeated && vertex == otherPoints.count - 1),
+                          markPoint == vertexPoint else { throw Failure.invalid }
+                    if id == pieceID && (vertex == index || (repeated && index == otherPoints.count - 1 && vertex == 0)) {
+                        selectedMarkPositions.insert(markPosition)
+                    }
+                }
+            }
             if id == pieceID { selected = i }
         }
+        if version == 6 && totalNotches == 0 { throw Failure.invalid }
         // Rules for other pieces are unchanged byte-for-byte. A rule for the
         // edited piece is rejected until an explicit review workflow exists.
         var ruleIDs = Set<UUID>(); var rulePointCount = 0
@@ -127,15 +160,15 @@ enum ExperimentalPointMoveJSON {
         let ranges = try data.withUnsafeBytes { raw -> [(Range<Int>, String)] in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
-            var scanner = Scanner(bytes: bytes, index: bom ? 3 : 0, selected: selected, targets: targets, hasGrain: selectedGrainReview != nil)
+            var scanner = Scanner(bytes: bytes, index: bom ? 3 : 0, selected: selected, targets: targets, hasGrain: selectedGrainReview != nil, markTargets: selectedMarkPositions)
             return try scanner.scan()
         }
         if points[index] == position { return data }
         let x = Data(String(position.x).utf8), y = Data(String(position.y).utf8), review = Data("true".utf8)
         let changed = ranges.filter { item in
-            switch item.1 { case "X": return points[index].x != position.x; case "Y": return points[index].y != position.y; default: return selectedGrainReview == false }
+            switch item.1 { case "X", "NotchX": return points[index].x != position.x; case "Y", "NotchY": return points[index].y != position.y; default: return selectedGrainReview == false }
         }
-        func replacement(_ key: String) -> Data { key == "X" ? x : key == "Y" ? y : review }
+        func replacement(_ key: String) -> Data { key == "X" || key == "NotchX" ? x : key == "Y" || key == "NotchY" ? y : review }
         let resultSize = changed.reduce(data.count) { size, item in size - item.0.count + replacement(item.1).count }
         guard resultSize <= 8 * 1024 * 1024 else { throw Failure.invalid }
         var result = data
@@ -151,19 +184,21 @@ enum ExperimentalPointMoveJSON {
         let selected: Int
         let targets: Set<Int>
         let hasGrain: Bool
+        let markTargets: Set<Int>
         var ranges: [(Range<Int>, String)] = []
         var capturePoint = false
         var selectedPiece = false
+        var captureMark = false
         mutating func whitespace() { while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 } }
         mutating func take(_ byte: UInt8) throws { whitespace(); guard index < bytes.count, bytes[index] == byte else { throw Failure.invalid }; index += 1 }
         mutating func scan() throws -> [(Range<Int>, String)] {
             whitespace()
             if index < bytes.count && bytes[index] == 91 {
                 try take(91); whitespace(); let start = index; try value(depth: 0)
-                guard let version = String(bytes: bytes[start..<index], encoding: .utf8), ["1", "2", "4"].contains(version) else { throw Failure.invalid }
+                guard let version = String(bytes: bytes[start..<index], encoding: .utf8), ["1", "2", "4", "6"].contains(version) else { throw Failure.invalid }
                 try take(44); try object(depth: 0, context: 1); try take(93)
             } else { try object(depth: 0, context: 1) }
-            whitespace(); guard index == bytes.count, ranges.count == targets.count * 2 + (hasGrain ? 1 : 0) else { throw Failure.invalid }; return ranges
+            whitespace(); guard index == bytes.count, ranges.count == targets.count * 2 + (hasGrain ? 1 : 0) + markTargets.count * 2 else { throw Failure.invalid }; return ranges
         }
         mutating func string() throws -> Range<Int> {
             whitespace(); let start = index; try take(34)
@@ -195,10 +230,18 @@ enum ExperimentalPointMoveJSON {
                 try take(58); whitespace()
                 if context == 1 && key == "Pieces" { try pieceArray(depth: depth + 1) }
                 else if context == 2 && key == "Points" { try pointArray(depth: depth + 1) }
+                else if context == 2 && key == "Notches" { try notchArray(depth: depth + 1) }
+                else if context == 6 && key == "VertexIndex" {
+                    let start = index; try value(depth: depth + 1)
+                    guard let token = String(bytes: bytes[start..<index], encoding: .utf8),
+                          !token.isEmpty, token.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                          (token == "0" || token.first != "0"), Int32(token) != nil else { throw Failure.invalid }
+                }
+                else if context == 6 && key == "Position" { try object(depth: depth + 1, context: 7) }
                 else if context == 2 && key == "Grainline" && selectedPiece { try object(depth: depth + 1, context: 4) }
                 else if context == 4 && key == "NeedsReview" { let start = index; try value(depth: depth + 1); ranges.append((start..<index, key)) }
                 else if context == 4 && (key == "Start" || key == "End") { try object(depth: depth + 1, context: 5) }
-                else if (context == 3 || context == 5) && (key == "X" || key == "Y") {
+                else if (context == 3 || context == 5 || context == 7) && (key == "X" || key == "Y") {
                     let start = index
                     try value(depth: depth + 1)
                     // Reject nonzero mantissas that underflow to zero.
@@ -207,6 +250,7 @@ enum ExperimentalPointMoveJSON {
                     let mantissa = token.prefix { $0 != "e" && $0 != "E" }
                     guard parsed != 0 || !mantissa.contains(where: { ("1"..."9").contains(String($0)) }) else { throw Failure.invalid }
                     if context == 3 && capturePoint { ranges.append((start..<index, key)) }
+                    if context == 7 && captureMark { ranges.append((start..<index, "Notch" + key)) }
                 }
                 else { try value(depth: depth + 1) }
                 whitespace(); guard index < bytes.count else { throw Failure.invalid }
@@ -231,6 +275,17 @@ enum ExperimentalPointMoveJSON {
             while true {
                 capturePoint = selectedPiece && targets.contains(position)
                 try object(depth: depth + 1, context: 3)
+                position += 1; whitespace(); guard index < bytes.count else { throw Failure.invalid }
+                if bytes[index] == 93 { index += 1; return }; try take(44)
+            }
+        }
+        mutating func notchArray(depth: Int) throws {
+            guard depth < 512 else { throw Failure.invalid }
+            try take(91); whitespace(); if index < bytes.count && bytes[index] == 93 { index += 1; return }
+            var position = 0
+            while true {
+                captureMark = selectedPiece && markTargets.contains(position)
+                try object(depth: depth + 1, context: 6)
                 position += 1; whitespace(); guard index < bytes.count else { throw Failure.invalid }
                 if bytes[index] == 93 { index += 1; return }; try take(44)
             }
