@@ -38,16 +38,21 @@ public sealed class DocumentSession
     {
         EnsureNotExecuting();
         ArgumentNullException.ThrowIfNull(document);
-        var candidate = document.Clone();
-        validate?.Invoke(candidate);
-        // The validator must not retain ownership of the new live document either.
-        var owned = candidate.Clone();
-        var saved = owned.Clone();
-        Document = owned;
-        savedDocument = saved;
-        selectedId = null;
-        explicitlyUnsaved = false;
-        history.Clear();
+        executing = true;
+        try
+        {
+            var candidate = document.Clone();
+            validate?.Invoke(candidate);
+            // The validator must not retain ownership of the new live document either.
+            var owned = candidate.Clone();
+            var saved = owned.Clone();
+            Document = owned;
+            savedDocument = saved;
+            selectedId = null;
+            explicitlyUnsaved = false;
+            history.Clear();
+        }
+        finally { executing = false; }
     }
 
     /// <returns>True only when document content changed. Selection alone is not a document edit.</returns>

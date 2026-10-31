@@ -175,6 +175,34 @@ public sealed class DocumentSessionTests
     }
 
     [Fact]
+    public void LoadValidationCannotChangeExistingSavepointOrHistory()
+    {
+        var session = new DocumentSession(Example());
+        var id = session.Document.Pieces[0].Id;
+        session.SelectedId = id;
+        session.Execute(d => d.Name = "edited");
+
+        Assert.Throws<InvalidOperationException>(() => session.Load(Example(), _ => session.MarkSaved()));
+        Assert.Equal("edited", session.Document.Name);
+        Assert.Equal(id, session.SelectedId);
+        Assert.True(session.IsDirty);
+        Assert.Equal(1, session.UndoCount);
+        Assert.True(session.Undo());
+        Assert.False(session.IsDirty);
+    }
+
+    [Fact]
+    public void LoadValidationCannotRunNestedEditAndGuardResetsAfterFailure()
+    {
+        var session = new DocumentSession(Example());
+        Assert.Throws<InvalidOperationException>(() => session.Load(Example(), _ =>
+            session.Execute(d => d.Name = "nested")));
+        Assert.Equal("A", session.Document.Name);
+        Assert.True(session.Execute(d => d.Name = "later"));
+        Assert.True(session.IsDirty);
+    }
+
+    [Fact]
     public void NestedStateChangesAreRejectedAndRolledBack()
     {
         var session = new DocumentSession(Example());
