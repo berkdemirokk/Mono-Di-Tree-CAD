@@ -468,7 +468,21 @@ public sealed class MachineCenterWindow : Window
     private void Simulate()
     {
         if(queue.IsLegacyReadOnly || preparing || historyBusy || jobs.SelectedItem is not SimulationQueue.HistoryEntry { Job:not null } selected)return;
-        var updated=queue.SimulateHistoryEntry(selected);
+        SimulationQueue.HistoryEntry updated;
+        try { updated=queue.SimulateHistoryEntry(selected); }
+        catch(Exception ex)
+        {
+            // The version may have been published even when the post-write
+            // check fails. Do not leave the stale entry available for retry.
+            historyScan?.Dispose();historyScan=null;historyComplete=true;
+            jobs.ItemsSource=null;ShowSelection();
+            historyStatus.Text="İşin durumu belirsiz. Geçmişi baştan tarayıp kaydı kontrol edin.";
+            UpdateHistoryControls();
+            result.Foreground=StudioTheme.Warning;
+            result.Text="Dosya kontrolü uygulanmış olabilir; kayıt durumu doğrulanamadı: "+ex.Message+
+                " Yeniden denemeden önce geçmişi baştan tarayıp kaydı kontrol edin. Fiziksel makine testi yapılmadı.";
+            return;
+        }
         ReplaceEntry(selected,updated);
         if(updated.Job is not { } job)throw new InvalidOperationException("Doğrulama kaydı yeniden okunamadı; geçmişi baştan tarayın.");
         if(selectedFileReadError is { } readError)

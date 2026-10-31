@@ -328,6 +328,7 @@ internal static class DesktopVerification
             VerifyMachineDxfSourceConfirmation(studio,work,checks);
             VerifyMachineHistoryPaging(studio,work,checks);
             VerifyMachineHistorySeparation(studio,work,checks);
+            VerifyMachineHistoryUncertainSimulation(studio,work,checks);
             VerifyMachineOpenApprovalState(studio,work,checks);
             VerifyAsyncExportPendingPreviews(studio,work,checks);
             VerifyOptionalGradingMetadata(studio,checks);
@@ -3562,6 +3563,38 @@ internal static class DesktopVerification
                 jobs.Add(entry.Job ?? throw new InvalidOperationException(entry.Error ?? "İş kaydı okunamadı."));
             if(page.Complete)return jobs;
         }
+    }
+
+    private static void VerifyMachineHistoryUncertainSimulation(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var source=new ProjectDocument { Name="Belirsiz doğrulama",Pieces=[new PatternPiece { Name="Çizgi",Closed=false,Points=[new(0,0),new(10,0)] }] };
+        studio.LoadDocument(source);studio.Select(studio.Document.Pieces[0].Id);
+        var queue=SimulationQueue.OpenVersionedV2(Path.Combine(work,"uncertain-simulation-"+Guid.NewGuid().ToString("N")));
+        var job=queue.Prepare(source,new MachineProfile("Test"),JobFormat.Dxf);
+        var originalOutput=File.ReadAllBytes(job.OutputPath);
+        var window=new MachineCenterWindow(studio,queue);
+        var hook=typeof(SimulationQueue).GetProperty("AfterHistoryCommitForVerification",PrivateInstance)!;
+        try
+        {
+            WaitMachineHistory(window);
+            var grid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(window)!;
+            var simulate=(Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(window)!;
+            var restart=(Button)typeof(MachineCenterWindow).GetField("restartHistory",PrivateInstance)!.GetValue(window)!;
+            var status=(TextBlock)typeof(MachineCenterWindow).GetField("historyStatus",PrivateInstance)!.GetValue(window)!;
+            var result=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(window)!;
+            grid.SelectedItem=grid.Items.Cast<SimulationQueue.HistoryEntry>().Single();
+            hook.SetValue(queue,(Action<string>)(path=>File.AppendAllText(path," ")));
+            simulate.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(Directory.EnumerateFiles(Path.GetDirectoryName(job.ManifestPath)!,"history-*.json").Any()
+                && grid.Items.Count==0 && grid.SelectedItem is null && !simulate.IsEnabled && restart.IsEnabled
+                && status.Text.Contains("Geçmişi baştan tarayıp") && result.Foreground==StudioTheme.Warning
+                && result.Text.Contains("uygulanmış olabilir") && result.Text.Contains("geçmişi baştan tarayıp")
+                && File.ReadAllBytes(job.OutputPath).SequenceEqual(originalOutput),
+                "Uncertain post-publication simulation clears the stale row and requests rescan",checks);
+        }
+        finally { hook.SetValue(queue,null);window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyMachineHistorySeparation(MainWindow studio,string work,List<string> checks)
