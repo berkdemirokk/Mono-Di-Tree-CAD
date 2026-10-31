@@ -778,9 +778,13 @@ private struct PieceDetails: View {
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
-                Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
-                if let length = piece.contourLength {
-                    Text("Yaklaşık kontur uzunluğu: \(length.formatted(.number.precision(.fractionLength(0...2))))")
+                if let width = MeasurementDisplay.format(dimensions.width), let height = MeasurementDisplay.format(dimensions.height) {
+                    Text("Yaklaşık en: \(width) • boy: \(height)")
+                } else {
+                    Text("Boyutlar hesaplanamadı.")
+                }
+                if let length = piece.contourLength, let formatted = MeasurementDisplay.format(length) {
+                    Text("Yaklaşık kontur uzunluğu: \(formatted)")
                 } else {
                     Text("Kontur uzunluğu hesaplanamadı.")
                 }
