@@ -1,4 +1,5 @@
 import CoreFoundation
+import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -345,7 +346,11 @@ private enum ModelStore {
         let id = UUID().uuidString
         let staging = directory.appendingPathComponent(".\(id).partial", isDirectory: true)
         let destination = directory.appendingPathComponent("\(id).\(copyExtension)", isDirectory: true)
-        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        // mkdir fails if the path already exists; createDirectory can silently
+        // accept an existing directory that does not belong to this save.
+        guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         defer { try? FileManager.default.removeItem(at: staging) }
         try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
         let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))

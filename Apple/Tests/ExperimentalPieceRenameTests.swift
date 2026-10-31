@@ -55,4 +55,13 @@ final class ExperimentalPieceRenameTests: XCTestCase {
         let input = "{\"Pieces\":[{\"Name\":\"legacy\"},{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"old\"}]}"
         XCTAssertEqual(try edit(input), "{\"Pieces\":[{\"Name\":\"legacy\"},{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"Yeni \\\"ad\\\"\"}]}")
     }
+    func testRejectsDuplicateKeysOutsideSelectedPiece() {
+        let input = "{\"Pieces\":[{\"Name\":\"other\",\"Id\":\"11111111-1111-1111-1111-111111111111\",\"I\\u0064\":\"11111111-1111-1111-1111-111111111111\"},{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\":\"old\"}]}"
+        XCTAssertThrowsError(try edit(input))
+    }
+    func testPreservesBOMAndUnrelatedEscapes() throws {
+        let prefix = "\u{FEFF}{\"Pieces\":[{\"Id\":\"22222222-2222-2222-2222-222222222222\",\"Name\": "
+        let suffix = ",\"Extra\":\"\\u0041\\/\"}]}\r\n"
+        XCTAssertEqual(try edit(prefix + "\"old\"" + suffix), prefix + "\"Yeni \\\"ad\\\"\"" + suffix)
+    }
 }
