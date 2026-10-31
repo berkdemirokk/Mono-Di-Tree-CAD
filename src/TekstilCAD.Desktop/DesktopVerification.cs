@@ -221,6 +221,8 @@ internal static class DesktopVerification
             VerifyMainPieceIdentification(studio,checks);
             studio.LoadDocument(sample);
             VerifyLazyMachineQueue(studio,work,checks);
+            VerifyAsyncProjectOpen(studio,work,checks);
+            studio.LoadDocument(sample);
             var squareMetrics=MainWindow.FormatPieceMetrics(sample.Pieces[0]);
             Check(squareMetrics.Contains("400 mm") && squareMetrics.Contains("100 cm²"),"Valid contour length and area displayed",checks);
             var duplicateClosedMetrics=MainWindow.FormatPieceMetrics(new PatternPiece { Points=[new(0,0),new(100,0),new(100,100),new(0,100),new(0,0)] });
@@ -1399,6 +1401,78 @@ internal static class DesktopVerification
         studio.LoadDocument(loaded);studio.Select(piece.Id);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Desktop save and reload preserve metadata and contour",checks);
         Check(!window.IsVisible,"Metadata workflow did not show a window",checks);
+    }
+    private static void VerifyAsyncProjectOpen(MainWindow studio,string work,List<string> checks)
+    {
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"async-open.tcad");
+        ProjectStorage.Save(new ProjectDocument { Name="Opened" },path);
+        using var reached=new ManualResetEventSlim();
+        using var release=new ManualResetEventSlim();
+        Task? pending=null;
+        try
+        {
+            studio.LoadDocument(new ProjectDocument { Name="Original" });
+            studio.BeforeProjectReadForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            pending=studio.OpenProjectFileAsync(path);
+            PumpUntil(()=>reached.IsSet);
+            var dispatched=false;studio.Dispatcher.BeginInvoke(new Action(()=>dispatched=true));PumpUntil(()=>dispatched);
+            studio.Commit("Edit during read",()=>studio.Document.Name="Edited");
+            var duplicate=studio.OpenProjectFileAsync(path);PumpUntil(()=>duplicate.IsCompleted);
+            studio.ConfirmOpenDiscardForVerification=()=> (false,false);
+            release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Edited","Background project read leaves dispatcher responsive and declining discard preserves edits",checks);
+
+            studio.BeforeProjectReadForVerification=null;
+            studio.ConfirmOpenDiscardForVerification=()=> { studio.Commit("Edit during approval",()=>studio.Document.Name="Changed during approval");return (true,false); };
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Changed during approval","Changed work invalidates project-open approval",checks);
+
+            var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+            studio.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
+            studio.ConfirmOpenDrawingForVerification=()=> { canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(3,4)]));return true; };
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Changed during approval" && canvas.CapturePendingDrawing()!.Points.SequenceEqual([new Point2(3,4)]),
+                "Changing the pending drawing during its confirmation preserves the new drawing",checks);
+            canvas.CancelDrawing();studio.ConfirmOpenDrawingForVerification=null;
+
+            studio.ConfirmOpenDiscardForVerification=()=> (true,true);
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Changed during approval","Saving in discard prompt does not apply stale open approval",checks);
+
+            reached.Reset();release.Reset();
+            studio.BeforeProjectReadForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>reached.IsSet);
+            studio.CancelProjectOpen();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Changed during approval","Cancelled read cannot replace current work",checks);
+
+            reached.Reset();release.Reset();
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>reached.IsSet);
+            var closed=typeof(MainWindow).GetField("windowClosed",PrivateInstance)!;
+            closed.SetValue(studio,true);release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();closed.SetValue(studio,false);
+            Check(studio.Document.Name=="Changed during approval","Read completed after window closure cannot replace work",checks);
+
+            studio.BeforeProjectReadForVerification=null;
+            studio.ConfirmOpenDiscardForVerification=()=> (true,false);
+            pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(studio.Document.Name=="Opened","Approved background project read installs loaded project",checks);
+            ProjectStorage.Save(new ProjectDocument { Name="External change" },path);
+            Exception? conflict=null;
+            try { Invoke(studio,"SaveTo",path); } catch(Exception ex) { conflict=ex is TargetInvocationException { InnerException: { } inner } ? inner : ex; }
+            Check(conflict is ProjectConflictException && ProjectStorage.Load(path).Name=="External change",
+                "Saving an opened snapshot detects a later source change",checks);
+            Exception? failure=null;studio.ProjectOpenErrorForVerification=ex=>failure=ex;
+            pending=studio.OpenProjectFileAsync(Path.Combine(work,"missing-open.tcad"));PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(failure is not null && studio.Document.Name=="Opened","Failed project read preserves current document",checks);
+        }
+        finally
+        {
+            release.Set();if(pending is not null)PumpUntil(()=>pending.IsCompleted);
+            studio.BeforeProjectReadForVerification=null;studio.ConfirmOpenDiscardForVerification=null;
+            studio.ConfirmOpenDrawingForVerification=null;studio.ProjectOpenErrorForVerification=null;
+            SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
     }
     private static void VerifyAsyncDxfImport(MainWindow studio,string work,List<string> checks)
     {

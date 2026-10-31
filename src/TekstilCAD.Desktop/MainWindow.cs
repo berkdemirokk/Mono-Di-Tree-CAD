@@ -23,6 +23,13 @@ public class MainWindow : Window
     // DocumentSession clones on every commit; this token changes only when the
     // whole project is replaced, even if a loaded project reuses a piece ID.
     private Guid projectEpoch = Guid.NewGuid();
+    private long projectOpenGeneration;
+    private bool projectOpenRunning;
+    private Button? projectOpenCancel;
+    internal Action? BeforeProjectReadForVerification { get; set; }
+    internal Func<bool>? ConfirmOpenDrawingForVerification { get; set; }
+    internal Func<(bool Accepted, bool Saved)>? ConfirmOpenDiscardForVerification { get; set; }
+    internal Action<Exception>? ProjectOpenErrorForVerification { get; set; }
     public ProjectDocument Document => session.Document;
     public Guid? SelectedId { get => session.SelectedId; private set => session.SelectedId = value; }
     public PatternPiece? Selected => Document.Pieces.FirstOrDefault(p => p.Id == SelectedId);
@@ -229,6 +236,8 @@ public class MainWindow : Window
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
+        projectOpenCancel=AddButton(files,"Açmayı iptal et",CancelProjectOpen,"Okuma sonucunu kullanma; mevcut çalışma korunur.");
+        projectOpenCancel.Visibility=Visibility.Collapsed;
         var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
@@ -418,6 +427,7 @@ public class MainWindow : Window
         if(recoveryStore is null)recoveryRescan.IsEnabled=false;
         Closing += async (_, e) =>
         {
+            CancelProjectOpen();
             if(recoveryCloseReady)
             {
                 windowClosed=true; canvas.CancelLargeCompletion();canvas.CancelLargeVertexValidation(); areaGeneration++; pendingArea=null; autosaveTimer.Stop();
@@ -1537,15 +1547,82 @@ public class MainWindow : Window
     private void Open()
     {
         if(BlockForDxfImport())return;
+        if(projectOpenRunning) { SetStatus("Proje açma işlemi sürüyor.");return; }
         var dlg = new OpenFileDialog { Filter = "Mono Di Tree CAD proje (*.tcad)|*.tcad|JSON (*.json)|*.json" };
-        if (dlg.ShowDialog(this) != true || !CanDiscard()) return;
-        OpenProjectFile(dlg.FileName);
+        if (dlg.ShowDialog(this) != true) return;
+        _ = OpenProjectFileAsync(dlg.FileName);
+    }
+    internal void CancelProjectOpen()
+    {
+        projectOpenGeneration++;
+        if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Collapsed;
+        if(projectOpenRunning && !windowClosed)SetStatus("Proje açma iptal edildi; okuma tamamlandığında sonuç kullanılmayacak.");
+    }
+    private bool OpenApprovalStillValid(DxfPreparationStamp stamp, Guid epoch, long generation) =>
+        generation==projectOpenGeneration && !windowClosed && !recoveryClosing && !recoveryRestoreIncomplete &&
+        !DxfImportRunning && !dxfReviewActive && !ExportRunning && projectEpoch==epoch && DxfStampMatches(stamp);
+
+    internal async Task OpenProjectFileAsync(string path)
+    {
+        if(projectOpenRunning || windowClosed || recoveryClosing)return;
+        projectOpenRunning=true;
+        var generation=++projectOpenGeneration;
+        if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Visible;
+        SetStatus("Proje arka planda okunuyor…");
+        try
+        {
+            var loaded=await Task.Run(()=> { BeforeProjectReadForVerification?.Invoke();return ProjectStorage.LoadWithVersion(path); });
+            if(generation!=projectOpenGeneration || windowClosed || recoveryClosing)return;
+            if(BlockForDxfImport() || BlockForExport() || BlockForActiveDrag() || BlockForLargeVertexValidation() || recoveryRestoreIncomplete || dxfReviewActive)return;
+            var epoch=projectEpoch;
+            var stamp=CaptureDxfPreparationStamp();
+            if(canvas.HasPendingDrawing)
+            {
+                var accepted=ConfirmOpenDrawingForVerification?.Invoke() ?? ConfirmDiscardPendingDrawing("Bu işlem sürdürülürse");
+                if(!accepted || !OpenApprovalStillValid(stamp,epoch,generation))return;
+            }
+            if(HasUnsavedDocumentWork)
+            {
+                bool accepted,saved;
+                if(ConfirmOpenDiscardForVerification is { } confirm) { var decision=confirm();accepted=decision.Accepted;saved=decision.Saved; }
+                else
+                {
+                    saved=false;
+                    var didSave=false;
+                    accepted=CreateDiscardPrompt(()=>didSave=true).ShowDialog()==true;
+                    saved=didSave;
+                }
+                // Saving can apply drafts and change the document. Require a fresh
+                // open rather than extending approval to an altered state.
+                if(saved) { if(!windowClosed)SetStatus("Çalışma kaydedildi. Projeyi açmak için yeniden seçin.");return; }
+                if(!accepted || !OpenApprovalStillValid(stamp,epoch,generation))return;
+            }
+            if(!OpenApprovalStillValid(stamp,epoch,generation))return;
+            ApplyOpenedProject(loaded);
+        }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        {
+            if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)
+            {
+                if(ProjectOpenErrorForVerification is { } report)report(ex);
+                else MessageBox.Show(this,ex.Message,"İşlem tamamlanamadı",MessageBoxButton.OK,MessageBoxImage.Warning);
+            }
+        }
+        finally
+        {
+            projectOpenRunning=false;
+            if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Collapsed;
+        }
     }
     // Called only after the user has approved replacement of the current work.
     // Parsing and validation occur before changing the live document.
     internal void OpenProjectFile(string path)
     {
         var loaded=ProjectStorage.LoadWithVersion(path);
+        ApplyOpenedProject(loaded);
+    }
+    private void ApplyOpenedProject(ProjectLoadResult loaded)
+    {
         var applied=false;
         try
         {
