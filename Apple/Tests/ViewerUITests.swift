@@ -72,7 +72,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(search.waitForExistence(timeout: 10))
         search.tap()
         search.typeText("Deneme")
-        let savedModel = app.buttons.matching(NSPredicate(format: "label == %@", "Deneme Modeli")).firstMatch
+        let savedModel = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
         XCTAssertTrue(savedModel.waitForExistence(timeout: 10))
         search.typeText("-no-match")
         XCTAssertTrue(app.staticTexts["Eşleşen model bulunamadı."].waitForExistence(timeout: 5))
@@ -82,6 +82,33 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists)
+    }
+
+    func testHiddenFilenameIsVisibleAndCanBeRemoved() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launchEnvironment["TCAD_UI_TEST_FILENAME"] = ".hidden.tcad"
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "hidden")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.swipeLeft()
+        app.buttons["Sil"].tap()
+        let confirmation = app.alerts["Modeli sil?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.buttons["İptal"].tap()
+        XCTAssertTrue(row.exists)
+        row.swipeLeft()
+        app.buttons["Sil"].tap()
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.buttons["Sil"].tap()
+        XCTAssertTrue(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].waitForExistence(timeout: 5))
     }
     func testSearchAndSelectPiece() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))

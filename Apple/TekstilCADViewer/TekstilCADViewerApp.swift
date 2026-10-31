@@ -117,7 +117,7 @@ private struct ContentView: View {
                 project = drawing
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
                     importedData = data
-                    importedName = "Deneme Modeli.tcad"
+                    importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
                 }
             } catch { self.error = error.localizedDescription }
         }
@@ -209,6 +209,7 @@ private enum ModelStore {
             if next.utf8.count > 100 { break }
             safeStem = next
         }
+        while safeStem.first == "." { safeStem.removeFirst() }
         if safeStem.isEmpty { safeStem = "Model" }
         let directory = try directory()
         let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).tcad")
@@ -220,9 +221,22 @@ private enum ModelStore {
 
     static func models() throws -> [URL] {
         try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil,
-                                                    options: [.skipsHiddenFiles])
+                                                    options: [])
             .filter { $0.pathExtension.lowercased() == "tcad" }
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+    }
+
+    static func savedDate(_ url: URL) -> Date? {
+        try? url.resourceValues(forKeys: [.creationDateKey]).creationDate
+    }
+
+    static func delete(_ url: URL) throws {
+        let directory = try directory().standardizedFileURL
+        guard url.standardizedFileURL.deletingLastPathComponent() == directory,
+              url.pathExtension.lowercased() == "tcad" else {
+            throw ViewerError.message("Model silinemedi.")
+        }
+        try FileManager.default.removeItem(at: url)
     }
 
     static func displayName(_ url: URL) -> String {
@@ -239,6 +253,7 @@ private struct ModelLibrary: View {
     @State private var models: [URL] = []
     @State private var search = ""
     @State private var error: String?
+    @State private var modelToDelete: URL?
 
     private var matches: [URL] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -256,8 +271,17 @@ private struct ModelLibrary: View {
                 }
                 ForEach(matches, id: \.self) { url in
                     Button { open(url) } label: {
-                        Text(ModelStore.displayName(url))
-                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        VStack(alignment: .leading) {
+                            Text(ModelStore.displayName(url))
+                            if let date = ModelStore.savedDate(url) {
+                                Text("Kaydedildi: \(date.formatted(date: .abbreviated, time: .standard))")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .swipeActions {
+                        Button("Sil", role: .destructive) { modelToDelete = url }
                     }
                 }
             }
@@ -268,7 +292,20 @@ private struct ModelLibrary: View {
                 do { models = try ModelStore.models() }
                 catch { self.error = error.localizedDescription }
             }
-            .alert("Modeller yüklenemedi", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
+            .alert("Modeli sil?", isPresented: Binding(get: { modelToDelete != nil }, set: { if !$0 { modelToDelete = nil } })) {
+                Button("İptal", role: .cancel) { modelToDelete = nil }
+                Button("Sil", role: .destructive) {
+                    guard let url = modelToDelete else { return }
+                    do {
+                        try ModelStore.delete(url)
+                        models.removeAll { $0 == url }
+                    } catch { self.error = error.localizedDescription }
+                    modelToDelete = nil
+                }
+            } message: {
+                Text("\(modelToDelete.map(ModelStore.displayName) ?? "Model") telefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
+            }
+            .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
         }
