@@ -981,7 +981,7 @@ private struct ExperimentalPointEditor: View {
     var body: some View {
         NavigationStack {
             Form {
-                Text("DENEYSEL DEBUG · Üretim için doğrulanmadı. Orijinal değiştirilmez; yalnız yeni kopya kaydedilir. Uygun v6 köşe işaretleri noktayla taşınır; konumları kontrol edin. Pastal, geçmiş ve seçili parçanın serileme kuralı desteklenmez. İplik yönü varsa yeniden incelenmelidir.")
+                Text("DENEYSEL DEBUG · Üretim için doğrulanmadı. Orijinal değiştirilmez; yalnız yeni kopya kaydedilir. Uygun v6 köşe işaretleri noktayla taşınır; konumları kontrol edin. Serileme kuralı varsa eski kaynak geometrisiyle aynen korunur; değişen konturla eşleşmeyebilir ve masaüstünde yeniden incelenmelidir. Pastal ve geçmiş desteklenmez. İplik yönü varsa yeniden incelenmelidir.")
                 Picker("Nokta", selection: Binding(get: { pointIndex }, set: { pointIndex = $0; updatePoint() })) {
                     ForEach(piece.points.indices, id: \.self) { index in Text("Nokta \(index)").tag(index) }
                 }

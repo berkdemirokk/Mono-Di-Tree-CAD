@@ -13,6 +13,7 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Deneysel nokta düzenle…"].tap()
         let x = app.textFields["X · mm"]
         XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Serileme kuralı varsa eski kaynak geometrisiyle aynen korunur")).firstMatch.exists)
         x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "1")
         app.buttons["Önizlemeyi hesapla"].tap()
         XCTAssertTrue(app.staticTexts["Önizleme hazır; kopya henüz kaydedilmedi."].waitForExistence(timeout: 15))

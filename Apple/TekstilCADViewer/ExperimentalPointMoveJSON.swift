@@ -19,7 +19,8 @@ enum ExperimentalPointMoveJSON {
            [1.0, 2.0, 4.0, 6.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
         else if let body = root as? [String: Any] { project = body; versioned = false; version = 0 }
         else { throw Failure.invalid }
-        // A grading snapshot of the edited piece can describe the old contour.
+        // A grading snapshot of the edited piece can describe the old contour;
+        // it is preserved byte-for-byte for explicit desktop review.
         // Selected grainlines are preserved and marked for review on a move.
         // Unknown fields may also describe geometry dependencies.
         guard Set(project.keys).isSubset(of: ["Name", "Pieces", "GradingRules"]), project["Name"] is String,
@@ -120,13 +121,13 @@ enum ExperimentalPointMoveJSON {
             if id == pieceID { selected = i }
         }
         if version == 6 && totalNotches == 0 { throw Failure.invalid }
-        // Rules for other pieces are unchanged byte-for-byte. A rule for the
-        // edited piece is rejected until an explicit review workflow exists.
+        // Rules are preserved byte-for-byte; a selected rule may no longer
+        // match the contour and must be reviewed in the desktop application.
         var ruleIDs = Set<UUID>(); var rulePointCount = 0
         for rule in rules {
             guard Set(rule.keys) == Set(["SourcePieceId", "SourceClosed", "SourcePoints", "Deltas"]),
                   let rawID = rule["SourcePieceId"] as? String, let id = UUID(uuidString: rawID),
-                  ids.contains(id), id != pieceID, ruleIDs.insert(id).inserted,
+                  ids.contains(id), ruleIDs.insert(id).inserted,
                   let closed = rule["SourceClosed"] as? NSNumber, CFGetTypeID(closed) == CFBooleanGetTypeID(),
                   let source = rule["SourcePoints"] as? [[String: Any]], let deltas = rule["Deltas"] as? [[String: Any]],
                   source.count == deltas.count, source.count >= (closed.boolValue ? 3 : 2), source.count <= 10_000 else { throw Failure.invalid }

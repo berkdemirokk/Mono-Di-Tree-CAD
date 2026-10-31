@@ -90,7 +90,7 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let grading = #""GradingRules":[{"SourcePieceId":"11111111-1111-1111-1111-111111111111","SourceClosed":true,"SourcePoints":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Deltas":[{"X":0,"Y":0},{"X":0,"Y":0},{"X":0,"Y":0}]}]"#
         let grain = #", "Grainline":{"Start":{"X":0,"Y":0},"End":{"X":1,"Y":0},"NeedsReview":false}"#
         let variants = [
-            input.replacingOccurrences(of: #""GradingRules":[]"#, with: grading),
+            input.replacingOccurrences(of: #""GradingRules":[]"#, with: grading.replacingOccurrences(of: #""SourceClosed":true"#, with: #""SourceClosed":1"#)),
             input.replacingOccurrences(of: #""Name":"Model"#, with: #""NestingSnapshot":{},"Name":"Model"#),
             input.replacingOccurrences(of: #""Name":"Model"#, with: #""ImportProvenance":{},"Name":"Model"#),
             input.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# + grain)
@@ -109,7 +109,7 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let bytes = Data(project.utf8)
         let result = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0))
         XCTAssertEqual(result, Data(project.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).utf8))
-        for bad in [project.replacingOccurrences(of: "22222222-2222-2222-2222-222222222222\",\"SourceClosed", with: "11111111-1111-1111-1111-111111111111\",\"SourceClosed"),
+        for bad in [project.replacingOccurrences(of: "22222222-2222-2222-2222-222222222222\",\"SourceClosed", with: "33333333-3333-3333-3333-333333333333\",\"SourceClosed"),
                     project.replacingOccurrences(of: #""SourceClosed":false"#, with: #""SourceClosed":1"#),
                     project.replacingOccurrences(of: #""X":1e-1"#, with: #""X":true"#),
                     project.replacingOccurrences(of: rule, with: rule + "," + rule)] {
@@ -165,6 +165,25 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let sourceID = try XCTUnwrap(UUID(uuidString: "c393b219-2be8-41e7-8665-ed900a1cbf5e"))
         let result = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: sourceID, index: 1, to: .init(x: 11.5, y: 0))
         XCTAssertEqual(result, Data(text.replacingOccurrences(of: #""X": 10"#, with: #""X": 11.5"#).utf8))
+    }
+
+    func testSelectedGradingSnapshotPreservedOnDesktopFixture() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-point", withExtension: "tcad"))
+        let original = try XCTUnwrap(String(data: Data(contentsOf: url), encoding: .utf8))
+        let rule = #"{"SourcePieceId":"92a551ad-c6b2-4b04-ae91-41ada47d1e60","SourceClosed":true,"SourcePoints":[{"X":0,"Y":0},{"X":20,"Y":0},{"X":0,"Y":30}],"Deltas":[{"X":0,"Y":0},{"X":1,"Y":0},{"X":0,"Y":0}]}"#
+        let project = "[1," + original.replacingOccurrences(of: #""GradingRules": []"#, with: #""GradingRules": ["# + rule + "]") + "]"
+        let bytes = Data(project.utf8)
+        let sourceID = try XCTUnwrap(UUID(uuidString: "92a551ad-c6b2-4b04-ae91-41ada47d1e60"))
+        let result = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: sourceID, index: 1, to: .init(x: 21, y: 0))
+        XCTAssertEqual(result, Data(project.replacingOccurrences(of: #""X": 20"#, with: #""X": 21.0"#).utf8))
+        let envelope = try XCTUnwrap(JSONSerialization.jsonObject(with: result) as? [Any])
+        let body = try XCTUnwrap(envelope[1] as? [String: Any])
+        let pieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+        let points = try XCTUnwrap(pieces[0]["Points"] as? [[String: Any]])
+        let rules = try XCTUnwrap(body["GradingRules"] as? [[String: Any]])
+        let savedPoints = try XCTUnwrap(rules[0]["SourcePoints"] as? [[String: Any]])
+        XCTAssertEqual((points[1]["X"] as? NSNumber)?.doubleValue, 21)
+        XCTAssertEqual((savedPoints[1]["X"] as? NSNumber)?.doubleValue, 20)
     }
 
     func testDesktopVersionSixMarkedClosureMovesOnlyRequiredTokens() throws {
