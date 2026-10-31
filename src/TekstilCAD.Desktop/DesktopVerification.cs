@@ -26,6 +26,57 @@ internal static class DesktopVerification
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string newFileName,string existingFileName,IntPtr securityAttributes);
     private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static void VerifyOpenPathJoin(MainWindow studio,List<string> checks)
+    {
+        var a=new PatternPiece { Name="Ön",Closed=false,Points=[new(0,0),new(10,0)] };
+        var b=new PatternPiece { Name="Arka",Closed=false,Points=[new(10.1,0),new(20,0)] };
+        var other=new PatternPiece { Name="Bilgili",Points=[new(0,10),new(10,10),new(10,20)],Metadata=new PieceMetadata { Size="M" } };
+        var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(1,0)] };
+        studio.LoadDocument(new ProjectDocument { Name="Birleştirme doğrulaması",Pieces=[a,b,other],GradingRules=[rule] });
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var before=studio.Document.Clone();
+        var window=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            void Preview()
+            {
+                var task=window.CalculateForVerification(); PumpUntil(()=>task.IsCompleted); task.GetAwaiter().GetResult();
+            }
+            window.ToleranceForVerification.Text="0,2";
+            Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("Kırmızı çizgi") &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+                "Open path preview describes the bridge without changing the project",checks);
+            window.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==4 && studio.Document.Pieces[3].Points.SequenceEqual(new[] { new Point2(0,0),new(10,0),new(10.1,0),new(20,0) }) &&
+                studio.Document.Pieces.Take(3).Select(p=>p.Id).SequenceEqual(before.Pieces.Select(p=>p.Id)) &&
+                JsonSerializer.Serialize(studio.Document.Pieces.Take(3))==JsonSerializer.Serialize(before.Pieces) &&
+                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
+                "Open path apply adds one result and preserves source geometry, metadata and grading rules",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(before,studio.Document),"Undo removes the joined result and restores the source project",checks);
+
+            Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled,"Open path preview can be recalculated after undo",checks);
+            window.ToleranceForVerification.Text="0,05";
+            var beforeTolerance=studio.Document.Clone(); var undoBefore=session.UndoCount;
+            Check(!window.ApplyButtonForVerification.IsEnabled,"Changing tolerance invalidates the preview",checks);
+            window.ApplyForVerification();
+            Check(DocumentSession.ContentEquals(beforeTolerance,studio.Document) && session.UndoCount==undoBefore,
+                "A stale tolerance cannot apply a previous proposal",checks);
+            Preview();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(beforeTolerance,studio.Document),
+                "A tolerance smaller than the gap cannot produce a proposal",checks);
+
+            window.ToleranceForVerification.Text="0,2"; Preview();
+            studio.Commit("Kaynak değişikliği",()=>studio.Document.Pieces.Single(p=>p.Id==a.Id).Points[0]=new Point2(-1,0));
+            var changed=studio.Document.Clone(); undoBefore=session.UndoCount;
+            window.ApplyForVerification();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==undoBefore &&
+                window.MessageForVerification.Contains("değişti"),"A changed source rejects a stale preview without another history entry",checks);
+        }
+        finally { window.Close(); studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
+    }
     private static void VerifyHistoryCapacityNotice(MainWindow studio,string reportPath,List<string> checks)
     {
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -270,6 +321,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
+            VerifyOpenPathJoin(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDeleteShortcutSafety(studio,checks);
             VerifyGradeResetConfirmation(studio,checks);

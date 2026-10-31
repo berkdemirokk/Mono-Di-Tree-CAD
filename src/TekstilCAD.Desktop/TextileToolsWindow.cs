@@ -669,6 +669,13 @@ public sealed class TextileToolsWindow : Window
         Note(panel,"Kaynak parçanın mevcut noktaları arasındaki düz geometrik mesafeyi gösterir.");
         Button(panel,"İki nokta arasını ölç…",()=>new PointDistanceWindow(workspace,this,Piece(),()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
         Button(panel,"İki dikiş kenarını karşılaştır…",()=>new SeamLengthComparisonWindow(workspace,this,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
+        Button(panel,"İki açık konturu birleştir…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
+            var dialog=new OpenPathJoinWindow(workspace,this);
+            dialog.ShowDialog();
+            RefreshSources((source.SelectedItem as PatternPiece)?.Id);
+        },()=>workspace.Document.Pieces.Count(p=>!p.Closed)>=2);
         panel.Children.Add(new Separator { Margin=new Thickness(0,18,0,18) });
         Heading(panel,"Dikiş payı");Note(panel,"Düz kenarlı, basit ve kapalı konturlara eşit dış pay ekler. Ölçüler 0,000001 mm ızgarasına yuvarlanır; dar köşe veya belirsiz kontur reddedilebilir. Sonuç ayrı parçadır. Eğri, çentik ve kenara özel pay desteği yoktur. Deneysel sonucu üretimden önce kontrol edin.");
         var allowance=Input(panel,"Dışa dikiş payı · mm","10");

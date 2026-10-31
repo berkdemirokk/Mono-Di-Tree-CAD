@@ -210,6 +210,38 @@ public sealed class AutomaticPerCopyNestingTests
             GrainDirectionPolicy.Direction.TwoWay, 90, fabric, 0, margin, 100_000_000));
     }
     [Fact]
+    public void RetriesAlternativeWhenGreedyPlacementLosesPiecePrecision()
+    {
+        PatternPiece Rectangle(double width, double height) => new()
+        {
+            Points = [new(0, 0), new(width, 0), new(width, height), new(0, height)],
+            Grainline = new() { Start = new(0, 0), End = new(0, 1) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 }
+        };
+        var wide = Rectangle(90_000_000, 300);
+        var narrow = Rectangle(0.0001, 200);
+        var source = new ProjectDocument { Pieces = [wide, narrow] };
+        var ids = new[] { wide.Id, narrow.Id };
+        var allowed = new Dictionary<Guid, IReadOnlyList<int>> { [wide.Id] = [0], [narrow.Id] = [90, 0] };
+        var greedy = new Dictionary<(Guid, int), int> { [(wide.Id, 1)] = 0, [(narrow.Id, 1)] = 0 };
+        var alternate = new Dictionary<(Guid, int), int> { [(wide.Id, 1)] = 0, [(narrow.Id, 1)] = 90 };
+        const double fabric = 90_000_100;
+
+        var error = Assert.Throws<ArgumentException>(() => PerCopyOrthogonalNesting.Arrange(source, ids,
+            greedy, fabric, 0, 1000, 0, GrainDirectionPolicy.Direction.TwoWay, 90));
+        Assert.True(NestingPieceError.TryGet(error, out var failedId, out _));
+        Assert.Equal(narrow.Id, failedId);
+        var verified = PerCopyOrthogonalNesting.Arrange(source, ids, alternate, fabric, 0, 1000, 0,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.True(PerCopyTraceVerifier.IsValidForConstraints(source, ids, verified, alternate,
+            GrainDirectionPolicy.Direction.TwoWay, 90, fabric, 0, 0, 1000));
+
+        var result = AutomaticPerCopyNesting.Arrange(source, ids, allowed, fabric, 0, 1000, 0,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.True(PerCopyTraceVerifier.IsValidForConstraints(source, ids, result, alternate,
+            GrainDirectionPolicy.Direction.TwoWay, 90, fabric, 0, 0, 1000));
+    }
+    [Fact]
     public void ReportsWhenLengthRetryWouldExceedWorkBudget()
     {
         PatternPiece Rectangle(int width, int height, bool detailed)

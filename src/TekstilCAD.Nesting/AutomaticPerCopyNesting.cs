@@ -127,7 +127,7 @@ public static class AutomaticPerCopyNesting
         }
         cancellationToken.ThrowIfCancellationRequested();
         PerCopyNestingResult? first = null;
-        InvalidOperationException? lengthError = null;
+        Exception? firstError = null;
         try
         {
             first = PerCopyOrthogonalNesting.Arrange(snapshot, ids, chosen, fabricWidth, gap, maxLength, edgeMargin,
@@ -135,7 +135,15 @@ public static class AutomaticPerCopyNesting
         }
         catch (InvalidOperationException error) when (NestingEngine.IsLengthExceeded(error))
         {
-            lengthError = error;
+            firstError = error;
+        }
+        catch (InvalidOperationException error) when (NestingEngine.IsClearancePrecision(error))
+        {
+            firstError = error;
+        }
+        catch (ArgumentException error) when (NestingPieceError.TryGet(error, out _, out _))
+        {
+            firstError = error;
         }
 
         // The estimator uses source order, while the shelf engine sorts by height.
@@ -155,11 +163,11 @@ public static class AutomaticPerCopyNesting
             extra += 2L * v * v;
             if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 2L * v * v;
         }
-        if (!differs) return first ?? throw lengthError!;
+        if (!differs) return first ?? throw firstError!;
         if (extra > NestingEngine.MaximumValidationWork - work)
         {
             if (first is not null) return first;
-            throw new InvalidOperationException("İlk yerleşim boy sınırını aştı; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", lengthError);
+            throw new InvalidOperationException("İlk yerleşim başarısız oldu; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", firstError);
         }
         try
         {
