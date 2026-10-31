@@ -2,6 +2,11 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testPickerCancellationIsDistinctFromRealFileErrors() {
+        XCTAssertTrue(isFilePickerCancellation(CocoaError(.userCancelled)))
+        XCTAssertFalse(isFilePickerCancellation(CocoaError(.fileWriteNoPermission)))
+    }
+
     func testRejectedSelectionStopsOlderLoadFromReplacingCurrentModel() {
         var state = ModelLoadState()
         let older = state.begin()

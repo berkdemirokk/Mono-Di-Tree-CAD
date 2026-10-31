@@ -296,7 +296,8 @@ private struct ContentView: View {
             exportDocument = nil
             switch result {
             case .success: saveNotice = "Model seçilen hedefe dışa aktarıldı."
-            case .failure(let failure): error = failure.localizedDescription
+            case .failure(let failure):
+                if !isFilePickerCancellation(failure) { error = failure.localizedDescription }
             }
         }
         .confirmationDialog("Yüklenmiş kopyayı dışa aktar", isPresented: $showingExportWarning, titleVisibility: .visible) {

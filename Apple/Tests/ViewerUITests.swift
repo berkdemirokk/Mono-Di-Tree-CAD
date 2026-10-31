@@ -582,6 +582,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(export.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Deneme"].exists)
         XCTAssertFalse(app.staticTexts["Model seçilen hedefe dışa aktarıldı."].exists)
+        XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
     }
 
     func testDuplicatePieceNamesCanBeDistinguishedAndFoundBySize() {
