@@ -1253,18 +1253,18 @@ private struct PieceDetails: View {
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
                 if let width = MeasurementDisplay.format(dimensions.width), let height = MeasurementDisplay.format(dimensions.height) {
-                    Text("Yaklaşık en: \(width) • boy: \(height)")
+                    Text("Yaklaşık en: \(width) mm • boy: \(height) mm")
                 } else {
                     Text("Boyutlar hesaplanamadı.")
                 }
                 if let length = piece.contourLength, let formatted = MeasurementDisplay.format(length) {
-                    Text("Yaklaşık kontur uzunluğu: \(formatted)")
+                    Text("Yaklaşık kontur uzunluğu: \(formatted) mm")
                 } else {
                     Text("Kontur uzunluğu hesaplanamadı.")
                 }
                 Text("Uzunluk dosyadaki düz çizgi parçalarının toplamıdır; üretim ölçüsü değildir.")
                     .foregroundStyle(.secondary)
-                Text("Boyutlar ve uzunluk dosyadaki koordinat birimindedir.")
+                Text("Boyutlar ve uzunluk milimetre cinsindendir.")
                     .foregroundStyle(.secondary)
             }
             .font(.caption)

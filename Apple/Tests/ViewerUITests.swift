@@ -404,11 +404,12 @@ final class ViewerUITests: XCTestCase {
         let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
         XCTAssertTrue(picker.waitForExistence(timeout: 15))
         picker.tap(); app.buttons["Açık"].tap()
-        let openLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 7")).firstMatch
+        let openLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 7 mm")).firstMatch
         XCTAssertTrue(openLength.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık en: 3 mm • boy: 4 mm")).firstMatch.exists)
         let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Açık")).firstMatch
         selected.tap(); app.buttons["Kapalı"].tap()
-        let closedLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 12")).firstMatch
+        let closedLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 12 mm")).firstMatch
         XCTAssertTrue(closedLength.waitForExistence(timeout: 5))
     }
 
