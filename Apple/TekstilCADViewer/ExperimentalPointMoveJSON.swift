@@ -12,28 +12,37 @@ enum ExperimentalPointMoveJSON {
               abs(position.y) <= 100_000_000 else { throw Failure.invalid }
         let root = try JSONSerialization.jsonObject(with: data)
         let project: [String: Any]
+        let versioned: Bool
         if let array = root as? [Any], array.count == 2, let v = array[0] as? NSNumber,
            CFGetTypeID(v) != CFBooleanGetTypeID(), v.doubleValue.rounded() == v.doubleValue,
-           (1...5).contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body }
-        else if let body = root as? [String: Any] { project = body }
+           [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true }
+        else if let body = root as? [String: Any] { project = body; versioned = false }
         else { throw Failure.invalid }
         // Restrict to a known schema: unknown fields may describe geometry dependencies.
         guard Set(project.keys).isSubset(of: ["Name", "Pieces", "GradingRules"]), project["Name"] is String,
               let pieces = project["Pieces"] as? [[String: Any]], pieces.count <= 10_000 else { throw Failure.invalid }
+        if versioned && project["GradingRules"] == nil { throw Failure.invalid }
         if let rules = project["GradingRules"] {
             guard let rules = rules as? [Any], rules.isEmpty else { throw Failure.invalid }
         }
-        var ids = Set<UUID>(); var selected: Int?
+        guard let projectName = project["Name"] as? String, projectName.utf16.count <= 1024 else { throw Failure.invalid }
+        var ids = Set<UUID>(); var selected: Int?; var total = 0
         for (i, piece) in pieces.enumerated() {
-            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed"]), piece["Name"] is String,
+            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed"]), let name = piece["Name"] as? String, name.utf16.count <= 1024,
                   let raw = piece["Id"] as? String, let id = UUID(uuidString: raw),
                   id.uuidString != "00000000-0000-0000-0000-000000000000", ids.insert(id).inserted else { throw Failure.invalid }
-            guard let otherPoints = piece["Points"] as? [[String: Any]],
+            guard let flag = piece["Closed"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(),
+                  let otherPoints = piece["Points"] as? [[String: Any]], otherPoints.count >= (flag.boolValue ? 3 : 2), otherPoints.count <= 10_000,
                   otherPoints.allSatisfy({ point in
                       guard Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]), point["X"] != nil, point["Y"] != nil else { return false }
+                      for key in ["X", "Y"] {
+                          guard let n = point[key] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(), n.doubleValue.isFinite, abs(n.doubleValue) <= 100_000_000 else { return false }
+                      }
                       if let value = point["IsFinite"] as? NSNumber { return CFGetTypeID(value) == CFBooleanGetTypeID() && value.boolValue }
                       return point["IsFinite"] == nil
                   }) else { throw Failure.invalid }
+            total += otherPoints.count
+            guard total <= 200_000 else { throw Failure.invalid }
             if id == pieceID { selected = i }
         }
         guard let selected, let rawPoints = pieces[selected]["Points"] as? [[String: Any]],
@@ -75,12 +84,15 @@ enum ExperimentalPointMoveJSON {
         let targets: Set<Int>
         var ranges: [(Range<Int>, String)] = []
         var capturePoint = false
+        var selectedPiece = false
         mutating func whitespace() { while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 } }
         mutating func take(_ byte: UInt8) throws { whitespace(); guard index < bytes.count, bytes[index] == byte else { throw Failure.invalid }; index += 1 }
         mutating func scan() throws -> [(Range<Int>, String)] {
             whitespace()
             if index < bytes.count && bytes[index] == 91 {
-                try take(91); try value(depth: 0); try take(44); try object(depth: 0, context: 1); try take(93)
+                try take(91); whitespace(); let start = index; try value(depth: 0)
+                guard let version = String(bytes: bytes[start..<index], encoding: .utf8), ["1", "2", "4"].contains(version) else { throw Failure.invalid }
+                try take(44); try object(depth: 0, context: 1); try take(93)
             } else { try object(depth: 0, context: 1) }
             whitespace(); guard index == bytes.count, ranges.count == targets.count * 2 else { throw Failure.invalid }; return ranges
         }
@@ -134,8 +146,8 @@ enum ExperimentalPointMoveJSON {
             try take(91); whitespace(); if index < bytes.count && bytes[index] == 93 { index += 1; return }
             var position = 0
             while true {
-                if position == selected { try object(depth: depth + 1, context: 2) }
-                else { try value(depth: depth + 1) }
+                selectedPiece = position == selected
+                try object(depth: depth + 1, context: 2)
                 position += 1; whitespace(); guard index < bytes.count else { throw Failure.invalid }
                 if bytes[index] == 93 { index += 1; return }; try take(44)
             }
@@ -145,7 +157,7 @@ enum ExperimentalPointMoveJSON {
             try take(91); whitespace(); if index < bytes.count && bytes[index] == 93 { index += 1; return }
             var position = 0
             while true {
-                capturePoint = targets.contains(position)
+                capturePoint = selectedPiece && targets.contains(position)
                 try object(depth: depth + 1, context: 3)
                 position += 1; whitespace(); guard index < bytes.count else { throw Failure.invalid }
                 if bytes[index] == 93 { index += 1; return }; try take(44)

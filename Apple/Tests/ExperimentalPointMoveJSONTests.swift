@@ -3,7 +3,7 @@ import XCTest
 
 final class ExperimentalPointMoveJSONTests: XCTestCase {
     private let id = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
-    private let input = #"[5, {"Name":"Model", "Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":true,"Points":[{"Y":0,"X":0},{"X":4,"Y":0},{"X":0,"Y":4},{"X":0,"Y":0}]}]}]"#
+    private let input = #"[4, {"GradingRules":[], "Name":"Model", "Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":true,"Points":[{"Y":0,"X":0},{"X":4,"Y":0},{"X":0,"Y":4},{"X":0,"Y":0}]}]}]"#
     func testOnlyCoordinateTokensChangeIncludingExplicitClosure() throws {
         let data = Data(input.utf8)
         let result = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 0, to: .init(x: 1, y: 1))
@@ -32,7 +32,7 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
     }
 
     func testDesktopShapedProjectAndUnchangedCoordinateToken() throws {
-        let text = #"[5,{"Name":"Model","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Points":[{"X":0.00,"Y":0e0,"IsFinite":true},{"X":4.5,"Y":0,"IsFinite":true},{"X":0,"Y":4,"IsFinite":true}],"Closed":true}],"GradingRules":[]}]"#
+        let text = #"[4,{"Name":"Model","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Points":[{"X":0.00,"Y":0e0,"IsFinite":true},{"X":4.5,"Y":0,"IsFinite":true},{"X":0,"Y":4,"IsFinite":true}],"Closed":true}],"GradingRules":[]}]"#
         let data = Data(text.utf8)
         let result = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 0, to: .init(x: 0, y: 0.5))
         XCTAssertEqual(result, Data(text.replacingOccurrences(of: #""Y":0e0"#, with: #""Y":0.5"#).utf8))
@@ -50,5 +50,21 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let id = try XCTUnwrap(UUID(uuidString: "92a551ad-c6b2-4b04-ae91-41ada47d1e60"))
         let changed = try ExperimentalPointMoveJSON.moving(source, snapshot: source, pieceID: id, index: 1, to: .init(x: 21.5, y: 0))
         XCTAssertEqual(changed, Data(text.replacingOccurrences(of: token, with: #""X": 21.5"#).utf8))
+    }
+
+    func testVersionAndOtherPieceValidation() throws {
+        func rejects(_ text: String) {
+            let data = Data(text.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 0, to: .init(x: 1, y: 1)))
+        }
+        rejects(input.replacingOccurrences(of: "[4,", with: "[5,"))
+        rejects(input.replacingOccurrences(of: "[4,", with: "[3,"))
+        rejects(input.replacingOccurrences(of: "[4,", with: "[4.0,"))
+        rejects(input.replacingOccurrences(of: #""GradingRules":[], "#, with: ""))
+        let second = #",{"Id":"22222222-2222-2222-2222-222222222222","Name":"B","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}"#
+        let two = input.replacingOccurrences(of: #"]}]}]"#, with: "]}" + second + "]}]")
+        rejects(two.replacingOccurrences(of: #""Closed":false"#, with: #""Closed":1"#))
+        rejects(two.replacingOccurrences(of: #""X":1,"Y":1"#, with: #""X":1e-999,"Y":1"#))
+        rejects(two.replacingOccurrences(of: #""X":1,"Y":1"#, with: #""X":100000001,"Y":1"#))
     }
 }
