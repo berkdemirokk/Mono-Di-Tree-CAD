@@ -2,6 +2,7 @@
 
 ## Son kaydedilmiş kanıt
 
+- 31 Ekim 2026'da `757ec867c686` kaynak sürümünde tam `TekstilCAD.Tests` Release çalışması: **2.397 başarılı, 2 başarısız, 1 atlanan**, toplam 2.400 test (`work/full-current/full-current.trx`). İki başarısızlık 512 noktalı üç loblu konturun her iki yönündeki dikiş payı beklentisidir; işlem yerel ayrıntı korumasını doğrulayamadığı için reddediyor. Atlanan test, açıkça atlanmış performans karşılaştırmasıdır. Bu sonuç fiziksel üretim veya iPhone doğrulaması değildir.
 - 31 Ekim 2026, yaklaşık 07:59 yerel saatte biten tam test çalışmasında **1.144 test geçti, 4 test başarısız oldu, 0 test atlandı** (`work/dxf-source-check-full.log`). Bu sonuç sonraki kod değişiklikleri için tekrar çalıştırılmadan geçerli sayılmamalıdır.
 - Dört başarısızlığın ikisi, üç loblu yoğun içbükey konturun dikiş payı işleminde iki kontur yönü için reddedilmesidir (`SmoothAllowanceRegressionTests`). Diğer ikisi, üretimde kullanılmayan bağımsız kapsama tanısının aynı konturu iki yönde tam kapsanmış raporlayamamasıdır (`OffsetShadowCoverageTests`). Bu kontrolleri gevşetmek küçük çentik kaybını gizleyebilir; sorun çözülmüş değildir.
 - Yaklaşık 08:01 yerel saatte Release derlemesi 0 uyarı/0 hata ile tamamlandı ve penceresiz masaüstü doğrulamasında 744 kontrol geçti (`work/dxf-retry-position-build.log`, `work/dxf-retry-position.json`). Bunlar gerçek kullanıcı, ekran okuyucu, fabrika veya fiziksel plotter kabul testi değildir.
