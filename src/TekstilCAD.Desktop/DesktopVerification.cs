@@ -377,6 +377,7 @@ internal static class DesktopVerification
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
+            VerifyNotchPropertyTranslation(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
@@ -419,6 +420,7 @@ internal static class DesktopVerification
             VerifyAsyncExport(studio,work,checks);
             VerifyDxfGrainlineReviewExport(studio,work,checks);
             VerifyDxfGrainlineExportReviewWindow(studio,reportPath,checks);
+            VerifyDxfNotchReviewExport(studio,work,checks);
             VerifyHpglExportCancellation(studio,work,checks);
             VerifyHpglPreparationFlow(studio,work,checks);
             VerifyMachineHpglCancellation(studio,work,checks);
@@ -3834,6 +3836,34 @@ internal static class DesktopVerification
             SynchronizationContext.SetSynchronizationContext(oldContext);
         }
     }
+    private static void VerifyDxfNotchReviewExport(MainWindow studio,string work,List<string> checks)
+    {
+        var oldContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Ön",Points=[new(0,0),new(20,0),new(0,20)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+        var original=new ProjectDocument { Name="İşaret inceleme",Pieces=[piece] };
+        string Target()=>Path.Combine(work,"notch-review-"+Guid.NewGuid().ToString("N")+".dxf");
+        void Reset() { studio.LoadDocument(original);studio.Select(piece.Id); }
+        void Run(string path) { var task=studio.StartDxfNotchReviewExportAsync(path,ProjectStorage.CaptureVersion(path));PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            Reset();var before=studio.Document.Clone();var path=Target();var reviewed=false;
+            studio.ConfirmDxfNotchExportForVerification=plan=> { reviewed=plan.Items.Length==1 && plan.Warning.Contains("makineye göndermeyin") && plan.Matches(before);return true; };
+            Run(path);
+            Check(reviewed && studio.ExportError is null && File.Exists(path) && File.ReadAllText(path).Contains("0\nPOINT\n") && DocumentSession.ContentEquals(before,studio.Document),
+                "Approved notch review writes a POINT without changing the source",checks);
+            Reset();path=Target();studio.ConfirmDxfNotchExportForVerification=_=>false;Run(path);
+            Check(studio.ExportWasCancelled && !File.Exists(path),"Declined notch review writes no file",checks);
+            Reset();path=Target();
+            studio.ConfirmDxfNotchExportForVerification=_=> { studio.Commit("Proje değişti",()=>studio.Document.Name="Değişti");return true; };
+            Run(path);
+            Check(studio.ExportError is not null && !File.Exists(path),"Changed source invalidates notch review",checks);
+            Reset();path=Target();studio.ConfirmDxfNotchExportForVerification=_=> { File.WriteAllText(path,"other writer");return true; };Run(path);
+            Check(studio.ExportError is not null && File.ReadAllText(path)=="other writer","Notch review does not overwrite a new destination",checks);
+        }
+        finally { studio.ConfirmDxfNotchExportForVerification=null;studio.BeforeNotchExportPreparationForVerification=null;SynchronizationContext.SetSynchronizationContext(oldContext); }
+    }
     private static void VerifyAsyncExport(MainWindow studio,string work,List<string> checks)
     {
         var original=new ProjectDocument { Name="Dışa aktarma testi",Pieces=[new PatternPiece { Name="Özgün parça",Points=[new(0,0),new(100,0),new(100,100),new(0,100)] }] };
@@ -6900,6 +6930,36 @@ internal static class DesktopVerification
             Check(prompts==2,"Saving already upgraded file does not repeat compatibility prompt",checks);
         }
         finally { studio.ChooseCompatibilityForVerification=null;tools.Close(); }
+    }
+
+    private static void VerifyNotchPropertyTranslation(MainWindow studio,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="İşaretli",Points=[new(0,0),new(10,0),new(10,10),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) }],
+            Grainline=new Grainline { Start=new(2,2),End=new(2,8),NeedsReview=true } };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var x=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+        var y=(TextBox)typeof(MainWindow).GetField("y",PrivateInstance)!.GetValue(studio)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            var before=studio.Document.Clone();x.Text="0,1";y.Text="2";Invoke(studio,"ApplyProperties");
+            var moved=studio.Document.Pieces.Single();var after=studio.Document.Clone();
+            Check(moved.Points.SequenceEqual(TekstilCAD.Core.Geometry.Translate(piece.Points,.1,2)) &&
+                moved.Notches!.Single().VertexIndex==1 && moved.Notches[0].Position==moved.Points[1] &&
+                moved.Grainline!.Start==new Point2(2.1,4) && moved.Grainline.NeedsReview && session.UndoCount==1 && status.Text.Contains("işaretleri"),
+                "Property translation moves the marked vertex and grainline with the existing geometry checks",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Marked property translation is one undoable and redoable transaction",checks);
+            studio.Select(piece.Id);var stable=studio.Document.Clone();var undo=session.UndoCount;
+            x.Text="100000000";y.Text="2";
+            try { Invoke(studio,"ApplyProperties");throw new InvalidOperationException("Out-of-range translation was accepted."); }
+            catch(InvalidDataException) { }
+            Check(DocumentSession.ContentEquals(stable,studio.Document) && session.UndoCount==undo && x.Text=="100000000",
+                "Rejected marked property translation preserves the geometry, marks, history and draft",checks);
+        }
+        finally { studio.LoadDocument(new ProjectDocument()); }
     }
 
     private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)
