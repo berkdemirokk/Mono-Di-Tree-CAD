@@ -387,6 +387,7 @@ internal static class DesktopVerification
             VerifyNotchEdit(studio,reportPath,checks);
 
             VerifyReverseOpenPath(studio,checks);
+            VerifyReverseOpenPathGradingReview(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
             VerifyNestingErrorNavigationLarge(studio,reportPath,checks);
@@ -7154,6 +7155,45 @@ internal static class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Open path reversal is one undo step",checks);
         }
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
+    private static void VerifyReverseOpenPathGradingReview(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            foreach(var stale in new[] { false,true })
+            {
+                var piece=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10)] };
+                var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,
+                    SourcePoints=stale ? [new(0,0),new(9,0),new(10,10)] : [..piece.Points],
+                    Deltas=[new(1,0),new(2,0),new(3,0)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+                var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+                var tools=new TextileToolsWindow(studio);
+                try
+                {
+                    var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                    var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+                    if(!stale)rows[0].Dx="7"; // A typed but unapplied increment must survive the edit.
+                    var task=tools.ReverseOpenPathAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                    var sourceInfo=(TextBlock)typeof(TextileToolsWindow).GetField("sourceInfo",PrivateInstance)!.GetValue(tools)!;
+                    Check(studio.Document.Pieces[0].Points.SequenceEqual(piece.Points.AsEnumerable().Reverse()) &&
+                        JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) &&
+                        session.UndoCount==1 && table.IsReadOnly && sourceInfo.Text.Contains("Geometri değişti") &&
+                        result.Text.Contains("Mevcut serileme kuralı önceki kontura aittir") &&
+                        (stale || table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7"),
+                        stale ? "Reversing with a stale grading rule preserves it and asks for review" :
+                            "Reversing with an unapplied grading draft preserves it and asks for review",checks);
+                    Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
+                        stale ? "Undo restores contour with stale grading rule" : "Undo restores contour with unapplied grading draft",checks);
+                }
+                finally { tools.Close(); }
+            }
+        }
+        finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyNotchEdit(MainWindow studio,string reportPath,List<string> checks)
