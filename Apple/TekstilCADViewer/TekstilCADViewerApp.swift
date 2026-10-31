@@ -515,8 +515,8 @@ private enum ModelStore {
     static func finishPointCopy(_ prepared: PreparedPointCopy) throws {
         try FileManager.default.moveItem(at: prepared.staging, to: prepared.destination)
     }
-    static func discardPointCopy(_ prepared: PreparedPointCopy) {
-        try? FileManager.default.removeItem(at: prepared.staging)
+    static func discardPointCopy(_ prepared: PreparedPointCopy) throws {
+        try FileManager.default.removeItem(at: prepared.staging)
     }
     #endif
 
@@ -886,6 +886,8 @@ private struct ExperimentalPointEditor: View {
     @State private var working = false
     @State private var saving = false
     @State private var saveGeneration = UUID()
+    @State private var saveActiveID: UUID?
+    @State private var cancellingSave = false
 
     private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = "" }
     private func updatePoint() {
@@ -929,7 +931,7 @@ private struct ExperimentalPointEditor: View {
         guard !saving, isCurrent(), let bytes = candidate else {
             message = "Açık model veya seçim değişti; kopya kaydedilmedi."; return
         }
-        let request = UUID(); saveGeneration = request; saving = true
+        let request = UUID(); saveGeneration = request; saveActiveID = request; saving = true; cancellingSave = false
         message = "Kopya hazırlanıyor…"
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result { try ModelStore.preparePointCopy(bytes, projectName: projectName + " · nokta denemesi") }
@@ -938,13 +940,24 @@ private struct ExperimentalPointEditor: View {
             #endif
             DispatchQueue.main.async {
                 guard saveGeneration == request, saving, isCurrent(), candidate == bytes else {
+                    let wasCancelled = saveGeneration != request
                     if case .success(let prepared) = result {
-                        DispatchQueue.global(qos: .utility).async { ModelStore.discardPointCopy(prepared) }
+                        DispatchQueue.global(qos: .utility).async {
+                            let cleanup = Result { try ModelStore.discardPointCopy(prepared) }
+                            DispatchQueue.main.async {
+                                guard saveActiveID == request else { return }
+                                saveActiveID = nil; saving = false; cancellingSave = false
+                                if case .failure = cleanup { message = "Kopya kaydedilmedi; geçici kayıt temizlenemedi." }
+                                else { message = wasCancelled ? "Kayıt iptal edildi; kopya oluşturulmadı." : "Açık model veya seçim değişti; kopya kaydedilmedi." }
+                            }
+                        }
+                    } else if saveActiveID == request {
+                        saveActiveID = nil; saving = false; cancellingSave = false
+                        message = wasCancelled ? "Kayıt iptal edildi; kopya oluşturulmadı." : "Açık model veya seçim değişti; kopya kaydedilmedi."
                     }
-                    if saveGeneration == request { saving = false; message = "Açık model veya seçim değişti; kopya kaydedilmedi." }
                     return
                 }
-                saving = false
+                saveActiveID = nil; saving = false
                 switch result {
                 case .failure(let failure): message = "Kopya kaydedilemedi: \(failure.localizedDescription)"
                 case .success(let prepared):
@@ -955,7 +968,7 @@ private struct ExperimentalPointEditor: View {
                         message = "Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."
                         candidate = nil
                     } catch {
-                        DispatchQueue.global(qos: .utility).async { ModelStore.discardPointCopy(prepared) }
+                        DispatchQueue.global(qos: .utility).async { try? ModelStore.discardPointCopy(prepared) }
                         message = "Kopya kaydedilemedi: \(error.localizedDescription)"
                     }
                 }
@@ -977,9 +990,10 @@ private struct ExperimentalPointEditor: View {
                 Button(working ? "Önizleme hazırlanıyor…" : "Önizlemeyi hesapla") { makePreview() }.disabled(working || saving)
                 if saving {
                     Button("Kaydı iptal et") {
-                        saveGeneration = UUID(); saving = false
-                        message = "Kayıt iptal edildi; kopya oluşturulmadı."
+                        saveGeneration = UUID(); cancellingSave = true
+                        message = "Kayıt iptal ediliyor; geçici dosya temizleniyor…"
                     }
+                    .disabled(cancellingSave)
                 }
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
@@ -992,7 +1006,7 @@ private struct ExperimentalPointEditor: View {
             .navigationTitle("Deneysel nokta")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear { updatePoint() }
-            .onDisappear { saveGeneration = UUID(); saving = false }
+            .onDisappear { saveGeneration = UUID(); saveActiveID = nil; saving = false; cancellingSave = false }
         }
     }
 }

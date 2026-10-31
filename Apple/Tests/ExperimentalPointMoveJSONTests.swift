@@ -77,6 +77,8 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         XCTAssertEqual(output, Data(withMetadata.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).utf8))
         for invalid in [withMetadata.replacingOccurrences(of: "[2,", with: "[1,"),
                         withMetadata.replacingOccurrences(of: #""Quantity":2"#, with: #""Quantity":0"#),
+                        withMetadata.replacingOccurrences(of: #""Quantity":2"#, with: #""Quantity":2.0"#),
+                        withMetadata.replacingOccurrences(of: #""Quantity":2"#, with: #""Quantity":2e0"#),
                         withMetadata.replacingOccurrences(of: #""Role":"Kesim"#, with: #""Role":"Bilinmiyor"#),
                         withMetadata.replacingOccurrences(of: metadata, with: #", "Grainline":null"#)] {
             let bytes = Data(invalid.utf8)

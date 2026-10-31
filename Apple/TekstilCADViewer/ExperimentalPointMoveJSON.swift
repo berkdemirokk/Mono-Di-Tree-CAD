@@ -230,6 +230,15 @@ enum ExperimentalPointMoveJSON {
                 try take(58); whitespace()
                 if context == 1 && key == "Pieces" { try pieceArray(depth: depth + 1) }
                 else if context == 2 && key == "Points" { try pointArray(depth: depth + 1) }
+                else if context == 2 && key == "Metadata" { try object(depth: depth + 1, context: 8) }
+                else if context == 8 && key == "Quantity" {
+                    let start = index; try value(depth: depth + 1)
+                    guard let token = String(bytes: bytes[start..<index], encoding: .utf8) else { throw Failure.invalid }
+                    if token != "null" {
+                        guard !token.isEmpty, token.allSatisfy({ $0 >= "0" && $0 <= "9" }),
+                              token.first != "0", let quantity = Int32(token), (1...100_000).contains(quantity) else { throw Failure.invalid }
+                    }
+                }
                 else if context == 2 && key == "Notches" { try notchArray(depth: depth + 1) }
                 else if context == 6 && key == "VertexIndex" {
                     let start = index; try value(depth: depth + 1)

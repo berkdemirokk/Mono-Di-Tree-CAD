@@ -24,6 +24,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Kaydı iptal et"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["Yeni kopyayı kaydet"].isEnabled)
         app.buttons["Kaydı iptal et"].tap()
+        XCTAssertFalse(app.buttons["Yeni kopyayı kaydet"].isEnabled)
         XCTAssertTrue(app.staticTexts["Kayıt iptal edildi; kopya oluşturulmadı."].waitForExistence(timeout: 5))
         app.buttons["Yeni kopyayı kaydet"].tap()
         XCTAssertTrue(app.staticTexts["Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."].waitForExistence(timeout: 10))
