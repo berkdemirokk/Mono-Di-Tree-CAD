@@ -16,8 +16,7 @@ public class NotchOperationGuardTests
     public void AllDerivedPatternEditsRejectWithoutChangingSource()
     {
         var p=Closed();var before=p.Clone();
-        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),()=>PatternTools.InsertPoint(p,0,new(10,0)),
-            ()=>PatternTools.InsertEdgeMidpoint(p,0),()=>PatternTools.DeletePoint(p,0),()=>PatternTools.MovePoint(p,0,new(1,1))];
+        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),()=>PatternTools.InsertEdgeMidpoint(p,0)];
         foreach(var action in operations) { var ex=Assert.Throws<ArgumentException>(action);Assert.Contains("Çentik",ex.Message); }
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
     }

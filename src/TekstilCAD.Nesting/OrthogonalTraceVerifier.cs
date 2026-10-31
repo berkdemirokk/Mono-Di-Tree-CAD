@@ -125,6 +125,8 @@ public static class OrthogonalTraceVerifier
                 !ValidMetadata(piece.Metadata) || piece.Name is null || piece.Name.Length > 1024 ||
                 piece.Metadata!.Quantity is not int quantity || quantity < 1 || quantity > 100000 || piece.Points is null ||
                 piece.Points.Count is < 3 or > NestingEngine.MaximumVerticesPerPiece) return false;
+            try { NestingEngine.ValidateNotches(piece,cancellationToken); }
+            catch(ArgumentException) { return false; }
             material ??= piece.Metadata.Material;
             if (!string.Equals(material, piece.Metadata.Material, StringComparison.Ordinal)) return false;
             int count = piece.Points.Count;
@@ -142,6 +144,8 @@ public static class OrthogonalTraceVerifier
             if (piece is null || piece.Id == Guid.Empty || sourceIds.Contains(piece.Id) || piece.Points is null ||
                 piece.Name is null || piece.Name.Length > 1024 || !ValidMetadata(piece.Metadata) ||
                 piece.Points.Count > NestingEngine.MaximumVerticesPerPiece || !placed.TryAdd(piece.Id, piece)) return false;
+            try { NestingEngine.ValidateNotches(piece,cancellationToken); }
+            catch(ArgumentException) { return false; }
         }
         try
         {

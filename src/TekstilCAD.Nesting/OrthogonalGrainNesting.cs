@@ -131,6 +131,9 @@ public static class OrthogonalGrainNesting
             extraPlacementWork += 2L * n * count * count;
             if (copies > NestingEngine.MaximumPieces || vertices > NestingEngine.MaximumTotalVertices || work > NestingEngine.MaximumValidationWork)
                 throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı.", nameof(source));
+            // Validate before Clone: malformed marker entries must be reported
+            // as source errors rather than dereferenced during snapshot capture.
+            NestingEngine.ValidateNotches(piece,cancellationToken);
         }
 
         var rotated = new Dictionary<Guid, PatternPiece>();

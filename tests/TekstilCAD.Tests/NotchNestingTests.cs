@@ -55,4 +55,20 @@ public class NotchNestingTests
         var rebound=result with { LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(result.Plan.Nesting.Layout) };
         Assert.False(OrthogonalTraceVerifier.IsValid(source,[p.Id],rebound));
     }
+
+    [Fact]
+    public void NullMarkerIsRejectedBeforeSnapshotAndTraceFingerprinting()
+    {
+        var p=Piece();var source=new ProjectDocument { Pieces=[p] };
+        var fixedResult=OrthogonalGrainNesting.Arrange(source,[p.Id],20,1,100,1,[0],GrainDirectionPolicy.Direction.TwoWay,90);
+        var angles=new Dictionary<(Guid,int),int> { [(p.Id,1)]=0,[(p.Id,2)]=0,[(p.Id,3)]=0 };
+        var perCopy=PerCopyOrthogonalNesting.Arrange(source,[p.Id],angles,20,1,100,1,GrainDirectionPolicy.Direction.TwoWay,90);
+        fixedResult.Plan.Nesting.Layout.Pieces[0].Notches![0]=null!;
+        perCopy.Plan.Nesting.Layout.Pieces[0].Notches![0]=null!;
+        Assert.False(OrthogonalTraceVerifier.IsValid(source,[p.Id],fixedResult));
+        Assert.False(PerCopyTraceVerifier.IsValidForConstraints(source,[p.Id],perCopy,angles,GrainDirectionPolicy.Direction.TwoWay,90,20,1,1,100));
+        p.Notches![0]=null!;
+        Assert.False(OrthogonalTraceVerifier.IsValid(source,[p.Id],fixedResult));
+        Assert.Throws<ArgumentException>(()=>OrthogonalGrainNesting.Arrange(source,[p.Id],20,1,100,1,[0],GrainDirectionPolicy.Direction.TwoWay,90));
+    }
 }

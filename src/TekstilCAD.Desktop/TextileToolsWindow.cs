@@ -767,7 +767,7 @@ public sealed class TextileToolsWindow : Window
         }
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
-        Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. İşaretler proje sürümü 6 gerektirir. İşaretli parçayı düzenlemeden önce işaretlerini kaldırın.");
+        Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. Nokta eklendiğinde veya taşındığında işaretler köşelerini izler. İşaretli nokta silinemez; önce işareti kaldırın. Serileme kuralını yeniden kontrol edin.");
         Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
         Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
@@ -822,7 +822,8 @@ public sealed class TextileToolsWindow : Window
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse ? default : new Point2(Number(xText!),Number(yText!));
             var selected=Piece();var sourceId=selected.Id;
-            if(selected.Notches is { Count:>0 })throw new InvalidOperationException("Nokta düzenlemeden önce bu parçanın işaretlerini kaldırın; işaretler otomatik taşınmaz.");
+            if(selected.Notches is not null && operation is (VertexEdit.Midpoint or VertexEdit.Reverse))
+                throw new InvalidOperationException("Bu işlem işaretli konturlarda henüz desteklenmiyor.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
@@ -988,13 +989,13 @@ public sealed class TextileToolsWindow : Window
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
-        if(previous.Notches is { Count:>0 })throw new InvalidOperationException("Konturu değiştirmeden önce köşe işaretlerini kaldırın.");
+        if(previous.Notches is not null && edited.Notches is null)throw new InvalidOperationException("İşaretler korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
         var grainNeedsReview=edited.Grainline is not null && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));
         if(grainNeedsReview)edited.Grainline!.NeedsReview=true;
         CommitToolChange("Kontur noktası düzenlemesi",()=>workspace.Document.Pieces[index]=edited,()=>
-        { RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success("Kontur noktası düzenlendi ve doğrulandı."+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")); });
+        { RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success("Kontur noktası düzenlendi ve doğrulandı."+(edited.Notches is not null ? " Köşe işaretleri korundu; serileme kuralını kontrol edin." : "")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")); });
     }
     private UIElement NestingPanel()
     {

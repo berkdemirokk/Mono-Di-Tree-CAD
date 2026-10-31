@@ -243,16 +243,18 @@ public static class PatternTools
     /// Large contours must be processed off the UI thread; cancellation is cooperative.</summary>
     public static PatternPiece InsertPoint(PatternPiece piece, int afterIndex, Point2 point, CancellationToken cancellationToken)
     {
-        var points = SnapshotPointEdit(piece, cancellationToken);
+        var points = SnapshotPointEdit(piece, cancellationToken,allowNotches:true);
+        var marks = SnapshotNotchIndices(piece,points,cancellationToken);
         Geometry.Validate(point);
         if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
         if (points.Count >= LargeContourValidator.MaximumStoredPoints)
             throw new ArgumentException("Kontur 10.000 saklı nokta sınırını aşamaz.", nameof(piece));
         if (piece.Closed && points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1)
             afterIndex = 0;
+        if(marks is not null)for(var i=0;i<marks.Length;i++)if(marks[i]>afterIndex)marks[i]++;
         points.Insert(afterIndex + 1, point);
         ValidatePointEdit(piece.Closed, points, cancellationToken);
-        return NewPiece(piece, points, "", preserveGrainline:true);
+        return NewPiece(piece, points, "", preserveGrainline:true,notchIndices:marks);
     }
     public static PatternPiece DeletePoint(PatternPiece piece, int index)
         => DeletePoint(piece, index, CancellationToken.None);
@@ -262,9 +264,13 @@ public static class PatternTools
     /// first vertex is used to close the contour.</summary>
     public static PatternPiece DeletePoint(PatternPiece piece, int index, CancellationToken cancellationToken)
     {
-        var points = SnapshotPointEdit(piece, cancellationToken);
+        var points = SnapshotPointEdit(piece, cancellationToken,allowNotches:true);
+        var marks = SnapshotNotchIndices(piece,points,cancellationToken);
         if (index < 0 || index >= points.Count) throw new ArgumentOutOfRangeException(nameof(index));
         var repeatedClosure = piece.Closed && points.Count > 1 && points[0] == points[^1];
+        var effectiveIndex=repeatedClosure && index==points.Count-1 ? 0 : index;
+        if(marks is not null && marks.Contains(effectiveIndex))throw new ArgumentException("İşaretli nokta silinemez; önce işareti kaldırın.");
+        if(marks is not null)for(var i=0;i<marks.Length;i++)if(marks[i]>effectiveIndex)marks[i]--;
         if (repeatedClosure && (index == 0 || index == points.Count - 1))
         {
             points.RemoveAt(points.Count - 1);
@@ -273,15 +279,15 @@ public static class PatternTools
         }
         else points.RemoveAt(index);
         ValidatePointEdit(piece.Closed, points, cancellationToken);
-        return NewPiece(piece, points, "", preserveGrainline:true);
+        return NewPiece(piece, points, "", preserveGrainline:true,notchIndices:marks);
     }
 
     // The caller must not mutate the source during snapshot creation. The edit
     // itself never mutates or retains the caller's point collection.
-    private static List<Point2> SnapshotPointEdit(PatternPiece piece, CancellationToken token)
+    private static List<Point2> SnapshotPointEdit(PatternPiece piece, CancellationToken token,bool allowNotches=false)
     {
         ArgumentNullException.ThrowIfNull(piece);
-        NotchSafety.RequireNoNotches(piece);
+        if(!allowNotches)NotchSafety.RequireNoNotches(piece);
         token.ThrowIfCancellationRequested();
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
@@ -295,6 +301,24 @@ public static class PatternTools
         }
         token.ThrowIfCancellationRequested();
         return points;
+    }
+
+    private static int[]? SnapshotNotchIndices(PatternPiece piece,IReadOnlyList<Point2> points,CancellationToken token)
+    {
+        if(piece.Notches is not { } notches)return null;
+        if(notches.Count<1 || notches.Count>points.Count || notches.Count>LargeContourValidator.MaximumStoredPoints)
+            throw new ArgumentException("İşaret listesi veya kaynak kontur geçersiz.");
+        var result=new int[notches.Count];var seen=new HashSet<int>();
+        for(var i=0;i<notches.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();var mark=notches[i];
+            if(mark is null || mark.VertexIndex<0 || mark.VertexIndex>=points.Count ||
+               (piece.Closed && points.Count>1 && points[0]==points[^1] && mark.VertexIndex==points.Count-1) ||
+               !seen.Add(mark.VertexIndex) || mark.Position!=points[mark.VertexIndex])
+                throw new ArgumentException("İşaret indeksi veya kaynak köşe konumu geçersiz; işlem uygulanmadı.");
+            result[i]=mark.VertexIndex;
+        }
+        return result;
     }
 
     private static void ValidatePointEdit(bool closed, List<Point2> points, CancellationToken token)
@@ -326,7 +350,6 @@ public static class PatternTools
     public static PatternPiece MovePoint(PatternPiece piece, int index, Point2 position, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(piece);
-        NotchSafety.RequireNoNotches(piece);
         cancellationToken.ThrowIfCancellationRequested();
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
@@ -340,6 +363,7 @@ public static class PatternTools
             if ((i & 1023) == 0) cancellationToken.ThrowIfCancellationRequested();
             points.Add(piece.Points[i]);
         }
+        var marks=SnapshotNotchIndices(piece,points,cancellationToken);
         var repeatedClosure = piece.Closed && points.Count > 1 && points[0] == points[^1];
         points[index] = position;
         if (repeatedClosure && (index == 0 || index == points.Count - 1))
@@ -359,7 +383,7 @@ public static class PatternTools
                 throw new ArgumentException("Nokta taşınamadı: açık çizgi sıfır uzunluklu, üst üste binen veya kesişen bir kenar oluşturuyor.");
         }
         cancellationToken.ThrowIfCancellationRequested();
-        return NewPiece(piece, points, "", preserveGrainline:true);
+        return NewPiece(piece, points, "", preserveGrainline:true,notchIndices:marks);
     }
     /// <summary>Samples a circular arc; endpoints are included. The returned contour is an open polyline approximation.</summary>
     public static List<Point2> SampleArc(Point2 center, double radius, double startDegrees, double sweepDegrees, int segments = 64)
@@ -393,13 +417,14 @@ public static class PatternTools
         if(line.Start==line.End)
             throw new ArgumentException("İplik yönünün başlangıç ve bitiş noktaları farklı olmalıdır.",nameof(source));
     }
-    private static PatternPiece NewPiece(PatternPiece source, List<Point2> points, string suffix, bool preserveGrainline=false, bool markGrainlineForReview=false)
+    private static PatternPiece NewPiece(PatternPiece source, List<Point2> points, string suffix, bool preserveGrainline=false, bool markGrainlineForReview=false,int[]? notchIndices=null)
     {
         var name = source.Name + suffix;
         if (name.Length > 1024) throw new ArgumentException("Üretilen parça adı 1024 karakteri aşıyor; kaynak adını kısaltın.");
         var line=preserveGrainline ? source.Grainline?.Clone() : null;
         if(line is not null && (markGrainlineForReview || !source.Points.SequenceEqual(points)))line.NeedsReview=true;
-        return new() { Name = name, Points = points, Closed = source.Closed, Grainline=line };
+        var marks=notchIndices?.Select(index=>new NotchMark { VertexIndex=index,Position=points[index] }).ToList();
+        return new() { Name = name, Points = points, Closed = source.Closed, Grainline=line,Notches=marks };
     }
     private static double Cross(Point2 a, Point2 b) => a.X * b.Y - a.Y * b.X;
 }

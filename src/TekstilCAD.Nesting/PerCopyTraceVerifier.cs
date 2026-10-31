@@ -124,6 +124,7 @@ public static class PerCopyTraceVerifier
                     !ValidText(piece.Metadata.Size) ||
                     piece.Points.Count is < 3 or > NestingEngine.MaximumVerticesPerPiece ||
                     !placed.TryAdd(piece.Id, piece)) return false;
+                NestingEngine.ValidateNotches(piece,cancellationToken);
             }
             if (!string.Equals(result.LayoutFingerprint, NestingSnapshot.ComputeLayoutFingerprint(nesting.Layout, cancellationToken),
                 StringComparison.Ordinal)) return false;
