@@ -65,6 +65,30 @@ public sealed class GradingRuleSet
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
 
+    /// <summary>Verify that a rule and its source changed only by an exactly represented translation.</summary>
+    public bool IsExactTranslationTo(GradingRuleSet current, PatternPiece piece)
+    {
+        if (current is null || piece is null || SourcePieceId != current.SourcePieceId || piece.Id != SourcePieceId ||
+            SourceClosed != current.SourceClosed || piece.Closed != SourceClosed || SourcePoints.Count == 0 ||
+            SourcePoints.Count != current.SourcePoints.Count || Deltas.Count != SourcePoints.Count ||
+            !Deltas.SequenceEqual(current.Deltas) || !current.SourcePoints.SequenceEqual(piece.Points)) return false;
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits = BitConverter.DoubleToInt64Bits(value); var exponent = (int)((bits >> 52) & 0x7ff);
+            var mantissa = bits & 0x000f_ffff_ffff_ffffL;
+            if (exponent != 0) mantissa |= 1L << 52;
+            var units = new System.Numerics.BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -units : units;
+        }
+        if (SourcePoints.Any(p => !p.IsFinite) || current.SourcePoints.Any(p => !p.IsFinite)) return false;
+        var dx = Units(current.SourcePoints[0].X) - Units(SourcePoints[0].X);
+        var dy = Units(current.SourcePoints[0].Y) - Units(SourcePoints[0].Y);
+        for (var i = 1; i < SourcePoints.Count; i++)
+            if (Units(current.SourcePoints[i].X) - Units(SourcePoints[i].X) != dx ||
+                Units(current.SourcePoints[i].Y) - Units(SourcePoints[i].Y) != dy) return false;
+        return true;
+    }
+
     /// <summary>Keep a matching rule attached to a safely translated source contour.</summary>
     public GradingRuleSet? TranslatedFor(PatternPiece source, IReadOnlyList<Point2> translated, double dx, double dy)
     {

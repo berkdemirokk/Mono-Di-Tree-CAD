@@ -72,7 +72,7 @@ public sealed class TextileToolsWindow : Window
     private bool rulesNeedReset;
     private Button? resetRulesButton;
 
-    private sealed record GradeDraft(List<Point2> Points, List<Point2> AnchorPoints, bool Closed, List<GradeRow> Rows, GradingRuleSet? BaselineRule);
+    private sealed record GradeDraft(List<Point2> Points, List<Point2> AnchorPoints, bool Closed, List<GradeRow> Rows, GradingRuleSet? BaselineRule, PatternPiece BaselinePiece);
 
     public TextileToolsWindow(MainWindow workspace)
     {
@@ -328,7 +328,7 @@ public sealed class TextileToolsWindow : Window
             // Persistence changes on explicit Apply.
             draft=new([..piece.Points],draft.AnchorPoints,piece.Closed,draft.Rows.Select((row,index)=>new GradeRow {
                 Index=index,X=piece.Points[index].X,Y=piece.Points[index].Y,Dx=row.Dx,Dy=row.Dy
-            }).ToList(),draft.BaselineRule);
+            }).ToList(),draft.BaselineRule,draft.BaselinePiece);
             gradeDrafts[piece.Id]=draft;
         }
         activeDraft=draft;
@@ -382,11 +382,11 @@ public sealed class TextileToolsWindow : Window
         if(saved is null)return NewDraft(piece);
         return new([..saved.SourcePoints],[..saved.SourcePoints],saved.SourceClosed,saved.SourcePoints.Select((point,index)=>new GradeRow {
             Index=index,X=point.X,Y=point.Y,Dx=MeasurementInput.Format(saved.Deltas[index].X),Dy=MeasurementInput.Format(saved.Deltas[index].Y)
-        }).ToList(),saved.Clone());
+        }).ToList(),saved.Clone(),piece.Clone());
     }
     private GradeDraft NewDraft(PatternPiece piece) => new([..piece.Points],[..piece.Points],piece.Closed,
         piece.Points.Select((point,index)=>new GradeRow { Index=index,X=point.X,Y=point.Y }).ToList(),
-        workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id)?.Clone());
+        workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id)?.Clone(),piece.Clone());
     private bool SavedRuleMatchesDraft(Guid pieceId,GradeDraft draft)
     {
         var current=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==pieceId);
@@ -438,6 +438,29 @@ public sealed class TextileToolsWindow : Window
         gradeDrafts[piece.Id]=NewDraft(piece);ReloadRows();
         Success("Bu kaynağın yeni geometrisi için artışlar sıfırlandı. Yeni ΔX / ΔY değerlerini girin.");
     }
+    private void RebaseMovedGradeDraft()
+    {
+        if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme hücresini tamamlayın; taslak korundu.");
+        if(source.SelectedItem is not PatternPiece selected || !gradeDrafts.TryGetValue(selected.Id,out var draft))
+            throw new InvalidOperationException("Eşlenecek serileme taslağı bulunamadı.");
+        var piece=workspace.Document.Pieces.FirstOrDefault(p=>p.Id==selected.Id);
+        var current=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==selected.Id);
+        var baseline=draft.BaselineRule;
+        if(piece is null || current is null || baseline is null || draft.Closed!=baseline.SourceClosed ||
+           !draft.AnchorPoints.SequenceEqual(baseline.SourcePoints) ||
+           (!draft.Points.SequenceEqual(baseline.SourcePoints) && !draft.Points.SequenceEqual(piece.Points)) || draft.Rows.Count!=piece.Points.Count ||
+           !baseline.IsExactTranslationTo(current,piece))
+            throw new InvalidOperationException("Kaynak ve kayıtlı kuralın yalnızca tam olarak taşındığı doğrulanamadı; taslak değiştirilmedi.");
+        var beforePiece=draft.BaselinePiece.Clone();beforePiece.Points=[..piece.Points];
+        if(!DocumentSession.ContentEquals(new ProjectDocument { Pieces=[beforePiece] },new ProjectDocument { Pieces=[piece.Clone()] }))
+            throw new InvalidOperationException("Kaynağın başka bilgileri de değişti; taslak değiştirilmedi.");
+        var rebased=new GradeDraft([..piece.Points],[..piece.Points],piece.Closed,draft.Rows.Select((row,index)=>new GradeRow {
+            Index=index,X=piece.Points[index].X,Y=piece.Points[index].Y,Dx=row.Dx,Dy=row.Dy
+        }).ToList(),current.Clone(),piece.Clone());
+        gradeDrafts[piece.Id]=rebased;
+        RefreshSources(piece.Id);
+        Success("Taslak taşınan kaynakla eşlendi; girilen artışlar korundu. Projeye uygulamak için artışları kontrol edin.");
+    }
     internal Action<PointPickerWindow>? GradePickerOpenedForVerification { get; set; }
     private void SelectGradePoint()
     {
@@ -487,6 +510,10 @@ public sealed class TextileToolsWindow : Window
         KeyboardNavigation.SetIsTabStop(lowerScroll,true);
         Grid.SetRow(lowerScroll,2);layout.Children.Add(lowerScroll);
         var resetRow=new StackPanel();lower.Children.Add(resetRow);
+
+        var rebase=Button(resetRow,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
+        rebase.Margin=new Thickness(0,0,0,6);rebase.Padding=new Thickness(10,5,10,5);
+        AutomationProperties.SetHelpText(rebase,"Yalnızca kayıtlı kural ve kaynak tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
 
         resetRulesButton=Button(resetRow,"Yeni geometri için artışları sıfırla",ResetRulesForCurrentGeometry,()=>HasPiece()&&rulesNeedReset);
         resetRulesButton.Margin=new Thickness(0,0,0,6);resetRulesButton.Padding=new Thickness(10,5,10,5);resetRulesButton.Visibility=Visibility.Collapsed;

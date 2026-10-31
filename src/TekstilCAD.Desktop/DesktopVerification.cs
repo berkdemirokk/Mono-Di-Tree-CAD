@@ -1143,10 +1143,25 @@ internal static class DesktopVerification
                 SourcePoints=[..source.Points],Deltas=source.Points.Select(_=>new Point2(1,2)).ToList() });
         });
         var beforeMove=studio.Document.Clone();
+        var tools=new TextileToolsWindow(studio);
+        var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+        var draftRow=table.Items.Cast<TextileToolsWindow.GradeRow>().First();draftRow.Dx="7";
         move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
         var movedRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
         Check(movedRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && movedRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
             "Keyboard movement carries matching grading increments with the source",checks);
+        studio.Commit("Parça bilgisi değişti",()=>studio.Document.Pieces.Single(p=>p.Id==source.Id).Name+=" değişti");
+        var rejected=false;
+        try { typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null); }
+        catch(System.Reflection.TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { rejected=true; }
+        Check(rejected && table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7",
+            "Draft rebase rejects other source changes without losing entered values",checks);
+        Invoke(studio,"Undo");
+        typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null);
+        Check(table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7" &&
+            (bool)typeof(TextileToolsWindow).GetMethod("SavedRuleMatchesDraft",PrivateInstance)!.Invoke(tools,[source.Id,typeof(TextileToolsWindow).GetField("activeDraft",PrivateInstance)!.GetValue(tools)])!,
+            "Explicit draft rebase keeps entered values and matches the moved rule",checks);
+        tools.Close();
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);
         Invoke(studio,"Undo");
