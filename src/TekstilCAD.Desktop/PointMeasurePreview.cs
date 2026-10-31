@@ -16,6 +16,7 @@ internal sealed class PointMeasurePreview : FrameworkElement
     private static readonly Brush StartBrush=FrozenBrush(0x39,0xd6,0xc6);
     private static readonly Brush EndBrush=FrozenBrush(0xff,0xc4,0x68);
     private static readonly Brush TextBrush=FrozenBrush(0xff,0xff,0xff);
+    private static readonly Brush MeasurementBrush=FrozenBrush(0xff,0xff,0xff);
     private readonly IReadOnlyList<Point2> points;
     private readonly StreamGeometry? outline;
     private readonly double minX, minY, span, xExtent, yExtent;
@@ -60,7 +61,7 @@ internal sealed class PointMeasurePreview : FrameworkElement
         EndIndex=endIndex>=0 && endIndex<points.Count ? endIndex : -1;
         var a=StartIndex>=0 ? $"A {StartIndex}. nokta" : "A seçilmedi";
         var b=EndIndex>=0 ? $"B {EndIndex}. nokta" : "B seçilmedi";
-        AutomationProperties.SetHelpText(this,$"Önizleme. A halka, B baklava işaretidir. {a}; {b}. Noktayı listelerden veya görsele tıklayarak seçin; yakın noktalar için listeyi kullanın.");
+        AutomationProperties.SetHelpText(this,$"Önizleme. A halka, B baklava işaretidir; kesik çizgi aralarındaki düz mesafeyi gösterir. {a}; {b}. Noktayı listelerden veya görsele tıklayarak seçin; yakın noktalar için listeyi kullanın.");
         InvalidateVisual();
     }
 
@@ -81,6 +82,11 @@ internal sealed class PointMeasurePreview : FrameworkElement
         dc.PushTransform(new MatrixTransform(scale,0,0,scale,x,y));
         dc.DrawGeometry(null,new Pen(OutlineBrush,1.6/scale),outline);
         dc.Pop();
+        if(StartIndex>=0 && EndIndex>=0 && StartIndex!=EndIndex)
+        {
+            var measurementPen=new Pen(MeasurementBrush,1.5) { DashStyle=DashStyles.Dash };
+            dc.DrawLine(measurementPen,Screen(points[StartIndex]),Screen(points[EndIndex]));
+        }
         if(IndividualVerticesVisible)
             foreach(var vertex in points) dc.DrawEllipse(OutlineBrush,null,Screen(vertex),2.5,2.5);
         if(StartIndex>=0)

@@ -7,7 +7,7 @@ using TekstilCAD.Core;
 
 namespace TekstilCAD.Desktop;
 
-/// <summary>Read-only geometric distance between existing vertices of one source piece.</summary>
+/// <summary>Read-only straight and contour distances between existing vertices of one source piece.</summary>
 internal sealed class PointDistanceWindow : Window
 {
     private readonly MainWindow workspace;
@@ -44,7 +44,7 @@ internal sealed class PointDistanceWindow : Window
         var panel=new StackPanel();
         root.Children.Add(new ScrollViewer { Content=panel, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled });
         panel.Children.Add(new TextBlock { Text="İki nokta arası mesafe", FontSize=20, FontWeight=FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text="Kayıtlı kontur noktaları arasındaki düz geometrik mesafedir; fiziksel ölçüm veya kontur boyunca uzunluk değildir.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,6,0,8) });
+        panel.Children.Add(new TextBlock { Text="Kayıtlı kontur noktaları arasında düz geometrik mesafe ve kontur boyunca uzunluk ayrı ayrı gösterilir. Bunlar fiziksel ölçüm değildir.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,6,0,8) });
         var identity=new TextBox { Text=$"Kaynak parça kimliği: {sourceId}", IsReadOnly=true, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetName(identity,"Kaynak parça kimliği"); panel.Children.Add(identity);
         panel.Children.Add(new TextBlock { Text="İndeksler 0'dan başlar. Listede indeks yazarak noktaya ulaşabilirsiniz; koordinatlar mm cinsindedir.", TextWrapping=TextWrapping.Wrap });
@@ -65,7 +65,7 @@ internal sealed class PointDistanceWindow : Window
         StartSelector.SelectedIndex=list.Count>0 ? 0 : -1; EndSelector.SelectedIndex=list.Count>1 ? 1 : list.Count>0 ? 0 : -1;
         AutomationProperties.SetName(Result,"Geometrik mesafe sonucu"); AutomationProperties.SetLiveSetting(Result,AutomationLiveSetting.Polite); panel.Children.Add(Result);
         AutomationProperties.SetName(ContourResult,"Kontur boyunca ölçüm sonucu"); AutomationProperties.SetLiveSetting(ContourResult,AutomationLiveSetting.Polite); panel.Children.Add(ContourResult);
-        panel.Children.Add(new TextBlock { Text="Kalıp önizlemesi · A halka, B baklava işareti", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,12,0,0), FontWeight=FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock { Text="Kalıp önizlemesi · A halka, B baklava · kesik çizgi düz mesafe", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,12,0,0), FontWeight=FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text="Değiştireceğiniz noktayı seçin, ardından kalıp üzerindeki bir noktaya tıklayın. Birbirine yakın noktalar için yukarıdaki listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,6) });
         if(!Preview.IndividualVerticesVisible)panel.Children.Add(new TextBlock { Text="Çok sayıda nokta olduğu için küçük nokta işaretleri gizlendi; kesin seçim için listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6),Foreground=StudioTheme.Muted });
         var pickModes=new WrapPanel();pickModes.Children.Add(PickStart);pickModes.Children.Add(PickEnd);panel.Children.Add(pickModes);

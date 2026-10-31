@@ -7398,6 +7398,22 @@ internal static class DesktopVerification
         Check(asymmetric.HitTestPoint(new Point(70,20))==0 && asymmetric.HitTestPoint(new Point(198,52))==1
             && asymmetric.HitTestPoint(new Point(118,180))==2 && asymmetric.HitTestPoint(new Point(230,116))==3,
             "Asymmetric point preview uses the main canvas Y direction and hit-tests the shown vertices",checks);
+        byte[] PreviewPixels(int endIndex)
+        {
+            var diagonal=new PointMeasurePreview(new PatternPiece { Closed=true,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] }) { Height=200,Margin=new Thickness(0) };
+            diagonal.SetSelection(0,endIndex);
+            diagonal.Measure(new Size(300,200));diagonal.Arrange(new Rect(0,0,300,200));diagonal.UpdateLayout();
+            var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(diagonal);
+            var pixels=new byte[300*200*4];bitmap.CopyPixels(pixels,300*4,0);return pixels;
+        }
+        var beforeLine=PreviewPixels(-1);var afterLine=PreviewPixels(2);
+        var changed=0;
+        for(var py=88;py<112;py++)for(var px=138;px<162;px++)
+        {
+            var at=(py*300+px)*4;
+            if(beforeLine[at]!=afterLine[at] || beforeLine[at+1]!=afterLine[at+1] || beforeLine[at+2]!=afterLine[at+2])changed++;
+        }
+        Check(changed>5,"Point measurement preview renders the selected straight line through the contour interior",checks);
         var safeSource=(string)typeof(TextileToolsWindow).GetMethod("SafeSourceName",PrivateInstance|BindingFlags.Static)!.Invoke(null,["Ön"+char.ConvertFromUtf32(0xE0001)+"😀"])!;
         Check(safeSource=="Ön\\uDB40\\uDC01😀","Textile source names escape invisible supplementary format characters",checks);
     }
