@@ -363,9 +363,13 @@ public class MainWindow : Window
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
         selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center)), "Parçayı merkezinden saat yönünün tersine döndür"));
-        selectionCommands.Add(AddButton(transforms, "90° ters döndür", () => Transform((points,center) => Geometry.Rotate(points,-90,center)), "Parçayı merkezinden saat yönünde döndür"));
+        var rotateClockwise=AddButton(transforms, "90° sağa", () => Transform((points,center) => Geometry.Rotate(points,-90,center)), "Parçayı merkezinden saat yönünde 90 derece döndür");
+        AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
+        selectionCommands.Add(rotateClockwise);
         selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X)), "Parçayı merkezinden geçen dikey eksene göre aynala"));
-        selectionCommands.Add(AddButton(transforms, "Yatay eksende aynala", () => Transform((points,center) => Geometry.Mirror(points,false,center.Y)), "Parçayı merkezinden geçen yatay eksene göre aynala"));
+        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => Transform((points,center) => Geometry.Mirror(points,false,center.Y)), "Parçayı merkezinden geçen yatay eksene göre aynala");
+        AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
+        selectionCommands.Add(mirrorHorizontal);
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);
