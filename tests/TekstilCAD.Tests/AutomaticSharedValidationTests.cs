@@ -9,6 +9,7 @@ public sealed class AutomaticSharedValidationTests
     {
         Points = Enumerable.Range(0, 1000).Select(i => new Point2(
             10 * Math.Cos(i * 2 * Math.PI / 1000), 10 * Math.Sin(i * 2 * Math.PI / 1000))).ToList(),
+        Grainline = new() { Start = new(0, 0), End = new(0, 5) },
         Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = quantity }
     };
 
@@ -33,7 +34,8 @@ public sealed class AutomaticSharedValidationTests
     [Fact]
     public void AutomaticBudgetChargesEveryPlacementAndRotation()
     {
-        var piece = Circle(46);
+        // Candidate validation plus 49 placed contours exceeds the limit before rotation.
+        var piece = Circle(49);
         piece.Closed = false;
         var error = Assert.Throws<ArgumentException>(() => AutomaticPerCopyNesting.Arrange(
             new() { Pieces = [piece] }, [piece.Id],
@@ -53,3 +55,4 @@ public sealed class AutomaticSharedValidationTests
             100, 0, 100, 0, GrainDirectionPolicy.Direction.TwoWay, 90));
     }
 }
+
