@@ -20,9 +20,16 @@ final class ViewerUITests: XCTestCase {
         for _ in 0..<5 where !zoom.isHittable { app.swipeUp() }
         XCTAssertTrue(zoom.isHittable)
         zoom.tap()
+        let sheet = app.sheets.firstMatch
+        let nextInSheet = sheet.buttons["Sonraki parça"]
+        for _ in 0..<5 where !nextInSheet.isHittable { sheet.swipeDown() }
+        XCTAssertTrue(nextInSheet.isHittable)
+        nextInSheet.tap()
+        XCTAssertTrue(sheet.otherElements["Ön kontur önizlemesi"].waitForExistence(timeout: 5))
+        XCTAssertFalse(nextInSheet.isEnabled)
         app.navigationBars["Kontur inceleme"].buttons["Kapat"].tap()
         XCTAssertTrue(largeView.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.otherElements["Kol kontur önizlemesi"].exists)
+        XCTAssertTrue(app.otherElements["Ön kontur önizlemesi"].exists)
     }
 
     func testImportedModelCanBeSavedUnderLibraryNameAndReopened() {

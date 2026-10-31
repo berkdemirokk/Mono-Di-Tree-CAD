@@ -298,6 +298,31 @@ private struct ContentView: View {
                 NavigationStack {
                     GeometryReader { geometry in
                         ScrollView {
+                            HStack {
+                                Button("Önceki parça") {
+                                    guard let current = selectedPiece, current > 0 else { return }
+                                    selectedNotch = nil
+                                    selectedPiece = current - 1
+                                }
+                                .disabled(modelLoad.isLoading || selectedPiece == nil || selectedPiece == 0)
+                                Spacer()
+                                Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                                    .font(.headline).lineLimit(2)
+                                Spacer()
+                                Button("Sonraki parça") {
+                                    let next = selectedPiece.map { $0 + 1 } ?? 0
+                                    guard next < project.pieces.count else { return }
+                                    selectedNotch = nil
+                                    selectedPiece = next
+                                }
+                                .disabled(modelLoad.isLoading || selectedPiece == project.pieces.count - 1)
+                            }
+                            .buttonStyle(.bordered)
+                            .padding(.horizontal)
+                            if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
+                                Text("Bu parça asgari nokta sayısını karşılamıyor; kontur önizlemesi gösterilemiyor.")
+                                    .foregroundStyle(.secondary).padding()
+                            } else {
                             DrawingView(
                                 pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
                                 label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
@@ -305,7 +330,9 @@ private struct ContentView: View {
                                 selectionRevision: notchSelectionRevision,
                                 drawingHeight: max(320, geometry.size.height - 180)
                             )
+                            .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                             .padding()
+                            }
                         }
                     }
                     .navigationTitle("Kontur inceleme")
