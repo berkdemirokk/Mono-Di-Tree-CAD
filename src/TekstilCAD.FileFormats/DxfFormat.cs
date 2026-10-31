@@ -15,7 +15,7 @@ public sealed record DxfLayerMapping(Guid PieceId, string OriginalName, string L
 {
     public bool Changed => !string.Equals(OriginalName, LayerName, StringComparison.Ordinal);
 }
-public enum DxfExportOmissionKind { PieceRole, Size, Material, Quantity, GrainlineUnsupported, GradingRules, NestingSnapshot, ImportProvenance }
+public enum DxfExportOmissionKind { PieceRole, Size, Material, Quantity, GrainlineUnsupported, GradingRules, NestingSnapshot, ImportProvenance, GrainlineReviewState, PieceIdentity }
 /// <summary>An omitted field or unsupported feature; a null PieceId denotes project-level data.</summary>
 public sealed record DxfExportOmission(Guid? PieceId, DxfExportOmissionKind Kind);
 /// <summary>Read-only analysis of a copied project; this does not validate destination, machine use, or third-party interpretation.</summary>

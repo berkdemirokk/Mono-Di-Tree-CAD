@@ -321,6 +321,8 @@ internal static class DesktopVerification
             VerifyExplicitClosureVertexDrag(studio,checks);
             VerifyLargeVertexValidation(studio,checks);
             VerifyAsyncExport(studio,work,checks);
+            VerifyDxfGrainlineReviewExport(studio,work,checks);
+            VerifyDxfGrainlineExportReviewWindow(studio,reportPath,checks);
             VerifyHpglExportCancellation(studio,work,checks);
             VerifyHpglPreparationFlow(studio,work,checks);
             VerifyMachineHpglCancellation(studio,work,checks);
@@ -3566,6 +3568,111 @@ internal static class DesktopVerification
             message.Text=originalMessage;
             viewer.ScrollToTop();
             root.UpdateLayout();
+        }
+    }
+    private static void VerifyDxfGrainlineExportReviewWindow(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Ön beden",Closed=true,Points=[new(0,0),new(20,0),new(0,20)],
+            Metadata=new PieceMetadata { Size="38" },Grainline=new Grainline { Start=new(2,3),End=new(2,8),NeedsReview=true } };
+        var document=new ProjectDocument { Name="İnceleme",Pieces=[piece] };
+        var before=document.Clone();var plan=DxfGrainlineReviewExport.Prepare(document);var item=plan.Items.Single();
+        var window=new DxfGrainlineExportReviewWindow(studio,plan);var root=(FrameworkElement)window.Content;
+        try
+        {
+            Render(window,Path.ChangeExtension(reportPath,".dxf-grain-export-review.png"),980,720);
+            var grid=Descendants<DataGrid>(root).Single(g=>AutomationProperties.GetName(g)=="Tüm parça, kontur ve işaret katmanları");
+            var details=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Seçili parçanın tam katman ve işaret ayrıntıları");
+            var omitted=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="DXF'ye aktarılmayan bilgiler");
+            var warning=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("kesim yolu sayabilir"));
+            var accept=Descendants<Button>(root).Single(b=>Equals(b.Content,"İnceleme dosyasını yaz"));
+            var cancel=Descendants<Button>(root).Single(b=>Equals(b.Content,"İptal et"));
+            Check(grid.Items.Count==1 && grid.SelectedIndex==0 && !string.IsNullOrEmpty(AutomationProperties.GetHelpText(grid)) &&
+                details.Text.Contains(piece.Name) && details.Text.Contains(piece.Id.ToString("D")) &&
+                details.Text.Contains(item.ContourLayer) && details.Text.Contains(item.MarkerLayer!) &&
+                details.Text.Contains("Y 3") && details.Text.Contains("Y 8") && details.Text.Contains("Kontrol bekliyor"),
+                "Review window exposes the selected piece, both layer names, endpoints and review state",checks);
+            Check(omitted.Text.Contains("Beden") && omitted.Text.Contains("İplik yönü kontrol durumu") && omitted.Text.Contains("TekstilCAD parça kimliği") &&
+                warning.Text.Contains("Hedef CAD") && warning.Text.Contains("üretim onayı değildir") && FullyVisible(warning,root),
+                "Review window displays omitted data and the target CAD and cutting warning",checks);
+            Check(cancel.IsCancel && !accept.IsDefault && !accept.IsCancel && DocumentSession.ContentEquals(before,document),
+                "Review window requires explicit confirmation, offers cancellation and leaves source unchanged",checks);
+            bool rejectedNonModal=false;
+            try { cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { rejectedNonModal=true; }
+            Check(rejectedNonModal && DocumentSession.ContentEquals(before,document),"Headless cancel does not modify the source",checks);
+        }
+        finally { window.Close(); }
+    }
+    private static void VerifyDxfGrainlineReviewExport(MainWindow studio,string work,List<string> checks)
+    {
+        var oldContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(20,0),new(0,20)],
+            Grainline=new Grainline { Start=new(2,3),End=new(2,8),NeedsReview=true } };
+        var original=new ProjectDocument { Name="İnceleme",Pieces=[piece] };
+        string Target()=>Path.Combine(work,"grain-review-export-"+Guid.NewGuid().ToString("N")+".dxf");
+        void Reset() { studio.LoadDocument(original);studio.Select(piece.Id); }
+        void Run(string path,ProjectFileVersion expected) { var task=studio.StartDxfGrainlineReviewExportAsync(path,expected);PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            Reset();var before=studio.Document.Clone();var path=Target();var version=ProjectStorage.CaptureVersion(path);var approved=false;
+            studio.ConfirmDxfGrainlineExportForVerification=plan=>
+            {
+                var item=plan.Items.Single();
+                approved=item.PieceId==piece.Id && item.MarkerLayer is not null && item.ContourLayer!=item.MarkerLayer && plan.Matches(before);
+                return true;
+            };
+            Run(path,version);
+            var exported=DxfFormat.Import(path);
+            Check(approved && studio.ExportError is null && File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document) &&
+                exported.Project.Pieces.Count==2 && exported.Project.Pieces.Select(p=>p.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count()==2 &&
+                exported.Project.Pieces.Any(p=>p.Closed) && exported.Project.Pieces.Any(p=>!p.Closed && p.Points.Count==2),
+                "Approved grain review export writes separate contour and marker layers without changing source",checks);
+
+            Reset();before=studio.Document.Clone();path=Target();version=ProjectStorage.CaptureVersion(path);
+            studio.ConfirmDxfGrainlineExportForVerification=_=>false;Run(path,version);
+            Check(studio.ExportWasCancelled && !File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document),
+                "Declining grain review preserves workspace and leaves target absent",checks);
+
+            Reset();path=Target();File.WriteAllText(path,"existing");var existing=File.ReadAllBytes(path);version=ProjectStorage.CaptureVersion(path);
+            bool rejected=false;try { studio.StartDxfGrainlineReviewExportAsync(path,version); } catch(InvalidOperationException) { rejected=true; }
+            Check(rejected && !studio.ExportRunning && File.ReadAllBytes(path).SequenceEqual(existing),
+                "Grain review export refuses a pre-existing destination",checks);
+
+            Reset();before=studio.Document.Clone();path=Target();version=ProjectStorage.CaptureVersion(path);
+            studio.ConfirmDxfGrainlineExportForVerification=_=> { File.WriteAllText(path,"other writer");return true; };Run(path,version);
+            Check(studio.ExportError is not null && File.ReadAllText(path)=="other writer" && DocumentSession.ContentEquals(before,studio.Document),
+                "Grain review export retains destination created after approval capture",checks);
+
+            foreach(var change in new[] { "document","selection","draft" })
+            {
+                Reset();path=Target();version=ProjectStorage.CaptureVersion(path);
+                studio.ConfirmDxfGrainlineExportForVerification=_=>
+                {
+                    if(change=="document")studio.Commit("Change during grain review",()=>studio.Document.Name="Değişti");
+                    else if(change=="selection")studio.Select(null);
+                    else ((TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!).Text="Uygulanmamış taslak";
+                    return true;
+                };
+                Run(path,version);
+                Check(studio.ExportError is not null && !File.Exists(path),$"Grain review export rejects {change} changed during approval",checks);
+            }
+            Reset();path=Target();version=ProjectStorage.CaptureVersion(path);
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+            studio.BeforeGrainlineExportPreparationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            var pending=studio.StartDxfGrainlineReviewExportAsync(path,version);
+            try
+            {
+                PumpUntil(()=>reached.IsSet);
+                bool blocked=false;try { studio.StartDxfGrainlineReviewExportAsync(Target(),ProjectStorage.CaptureVersion(Target())); } catch(InvalidOperationException) { blocked=true; }
+                Invoke(studio,"RequestExportCancellation");release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(blocked && studio.ExportWasCancelled && !File.Exists(path),"Running grain review export blocks a second export and cancellation leaves no target",checks);
+            }
+            finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeGrainlineExportPreparationForVerification=null; }
+        }
+        finally
+        {
+            studio.ConfirmDxfGrainlineExportForVerification=null;studio.BeforeGrainlineExportPreparationForVerification=null;
+            SynchronizationContext.SetSynchronizationContext(oldContext);
         }
     }
     private static void VerifyAsyncExport(MainWindow studio,string work,List<string> checks)
