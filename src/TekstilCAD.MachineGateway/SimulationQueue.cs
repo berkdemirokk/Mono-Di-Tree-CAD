@@ -55,17 +55,23 @@ public sealed class SimulationQueue
     private readonly Dictionary<Guid, string> manifestHashes = [];
     private readonly List<string> recoveryWarnings = [];
     private readonly string spoolDirectory;
+    private readonly bool streamingHistory;
+    public bool IsStreamingHistory => streamingHistory;
+    private Guid lastPreparedId;
+    private string? lastPreparedHash;
     // Instance-scoped hook for deterministic temporary-file ownership tests.
     internal Action<string>? BeforeManifestCommitForVerification { get; set; }
+    internal Action<string>? AfterHistoryCommitForVerification { get; set; }
     private const int MaximumRecoveredJobs = 10_000;
     private const int MaximumManifestBytes = 128 * 1024;
     public IReadOnlyList<SimulationJob> Jobs => jobs.AsReadOnly();
     /// <summary>Read-only startup diagnostics. Recovery never sends, simulates, rewrites or deletes jobs.</summary>
     public IReadOnlyList<string> RecoveryWarnings => recoveryWarnings.AsReadOnly();
-    public SimulationQueue(string spoolDirectory)
+    public SimulationQueue(string spoolDirectory, bool streamingHistory = false)
     {
         this.spoolDirectory = ValidateOutputDirectory(spoolDirectory);
-        RecoverJobs();
+        this.streamingHistory = streamingHistory;
+        if (!streamingHistory) RecoverJobs();
     }
 
     private void RecoverJobs()
@@ -128,6 +134,159 @@ public sealed class SimulationQueue
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         { Warn("Kuyruk klasörü bütünüyle taranamadı: " + ex.Message); }
         jobs.Sort((a, b) => { var date = a.CreatedAt.CompareTo(b.CreatedAt); return date != 0 ? date : a.Id.CompareTo(b.Id); });
+    }
+
+    /// <summary>One observed directory. An error row is retained even for incomplete jobs.</summary>
+    public sealed class HistoryEntry
+    {
+        internal HistoryEntry(SimulationQueue owner, string path, SimulationJob? job, string? error, string? hash)
+        { Owner = owner; Path = path; Job = job; Error = error; ManifestHash = hash; }
+        internal SimulationQueue Owner { get; }
+        public string Path { get; }
+        public SimulationJob? Job { get; }
+        public string? Error { get; }
+        public string? ManifestHash { get; }
+    }
+    public sealed record HistoryPage(IReadOnlyList<HistoryEntry> Entries, bool Complete, string? Error);
+
+    /// <summary>Live, forward-only scan. Additions and removals during enumeration may be missed.
+    /// Restart to observe changes. The caller must serialize queue and session operations.</summary>
+    public sealed class HistoryScanSession : IDisposable
+    {
+        private readonly SimulationQueue owner;
+        private IEnumerator<string>? directories;
+        private readonly List<HistoryEntry> pending = [];
+        private bool complete;
+        private bool disposed;
+        private string? error;
+        internal HistoryScanSession(SimulationQueue owner) { this.owner = owner; }
+        public HistoryPage ReadNextPage(int pageSize = 100, CancellationToken cancellationToken = default)
+        {
+            if (disposed) throw new ObjectDisposedException(nameof(HistoryScanSession));
+            if (pageSize < 1 || pageSize > 1000) throw new ArgumentOutOfRangeException(nameof(pageSize));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!complete && error is null && directories is null)
+            {
+                try
+                {
+                    try
+                    {
+                        if ((File.GetAttributes(owner.spoolDirectory) & FileAttributes.Directory) == 0)
+                            throw new IOException("Kuyruk yolu bir klasör değil.");
+                    }
+                    catch (FileNotFoundException) { complete = true; }
+                    catch (DirectoryNotFoundException) { complete = true; }
+                    if (!complete) directories = Directory.EnumerateDirectories(owner.spoolDirectory).GetEnumerator();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { error = ex.Message; }
+            }
+            while (!complete && error is null && pending.Count < pageSize)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    if (!directories!.MoveNext()) { complete = true; directories.Dispose(); directories = null; break; }
+                    pending.Add(owner.ReadHistoryDirectory(directories.Current));
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                { error = ex.Message; directories?.Dispose(); directories = null; }
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            // A caller may choose a smaller size after cancellation; retain the remainder.
+            var count = Math.Min(pageSize, pending.Count);
+            var entries = pending.GetRange(0, count).ToArray();
+            pending.RemoveRange(0, count);
+            return new HistoryPage(entries, complete && pending.Count == 0, error);
+        }
+        public void Dispose() { if (disposed) return; disposed = true; directories?.Dispose(); directories = null; pending.Clear(); }
+    }
+    public HistoryScanSession StartHistoryScan() => new(this);
+    public HistoryEntry GetHistoryEntry(Guid id)
+    {
+        if (id == Guid.Empty) throw new ArgumentException("Geçerli iş kimliği gerekli.", nameof(id));
+        return ReadHistoryDirectory(Path.Combine(spoolDirectory, id.ToString("N")));
+    }
+    public HistoryEntry GetPreparedHistoryEntry(SimulationJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        var entry = GetHistoryEntry(job.Id);
+        if (entry.Job != job || job.Id != lastPreparedId || lastPreparedHash is null || entry.ManifestHash != lastPreparedHash)
+            throw new InvalidOperationException("Hazırlanan iş kaydı değişti; tekrar hazırlayın.");
+        return entry;
+    }
+    private HistoryEntry ReadHistoryDirectory(string directory)
+    {
+        try
+        {
+            ValidateOutputDirectory(directory);
+            if (!Guid.TryParseExact(Path.GetFileName(directory), "N", out var id)) throw new InvalidDataException("İş klasörü geçerli bir kimlik taşımıyor.");
+            var manifest = Path.Combine(directory, "manifest.json");
+            RejectReparseFile(manifest);
+            using var stream = new FileStream(manifest, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (stream.Length > MaximumManifestBytes) throw new InvalidDataException("İş kaydı boyut sınırını aşıyor.");
+            using var json = JsonDocument.Parse(stream, new JsonDocumentOptions { MaxDepth = 32 });
+            var job = json.RootElement.Deserialize<SimulationJob>(JsonOptions) ?? throw new InvalidDataException("İş kaydı boş.");
+            ValidateRecoveredJob(job, id, directory, manifest);
+            if (json.RootElement.TryGetProperty("Profile", out var profile))
+            {
+                if (profile.TryGetProperty("IsVerified", out var verified) && verified.ValueKind != JsonValueKind.False) throw new InvalidDataException("Simülasyon profili fiziksel doğrulama iddiası taşıyamaz.");
+                if (profile.TryGetProperty("IsSimulator", out var simulator) && simulator.ValueKind != JsonValueKind.True) throw new InvalidDataException("İş yalnız dosya simülatörüne ait olmalıdır.");
+            }
+            stream.Position = 0;
+            var hash = Convert.ToHexString(SHA256.HashData(stream));
+            job = job with { Sha256 = job.Sha256.ToUpperInvariant() };
+            RejectReparseFile(job.OutputPath);
+            var error = !File.Exists(job.OutputPath) ? "Çıktı dosyası eksik; iş yeniden hazırlanmalı." : null;
+            return new HistoryEntry(this, directory, job, error, hash);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or JsonException or InvalidOperationException or NotSupportedException)
+        { return new HistoryEntry(this, directory, null, ex.Message.Length > 2048 ? ex.Message[..2048] : ex.Message, null); }
+    }
+    private SimulationJob RequireHistoryEntry(HistoryEntry entry)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        if (!ReferenceEquals(entry.Owner, this) || entry.Job is null || entry.ManifestHash is null)
+            throw new InvalidOperationException("İş kaydı kullanılamıyor; yeniden tarayın.");
+        var expected = Path.Combine(spoolDirectory, entry.Job.Id.ToString("N"));
+        if (!IsExpectedPath(entry.Path, expected)) throw new InvalidOperationException("İş yolu eşleşmiyor.");
+        return entry.Job;
+    }
+    public HistoryEntry ConfirmHistoryEntry(HistoryEntry entry)
+    {
+        var job = RequireHistoryEntry(entry) with { SourceSnapshotUnconfirmed = false };
+        var writtenHash = SaveManifest(job, entry.ManifestHash);
+        return VerifyCommittedHistoryEntry(job, writtenHash);
+    }
+    public HistoryEntry SimulateHistoryEntry(HistoryEntry entry)
+    {
+        var job = RequireHistoryEntry(entry);
+        try
+        {
+            ValidateOutputDirectory(Path.GetDirectoryName(job.OutputPath)!);
+            RejectReparseFile(job.OutputPath);
+            if (!File.Exists(job.OutputPath) || Checksum(job.OutputPath) != job.Sha256)
+                throw new InvalidDataException("Çıktı dosyası eksik veya özeti değişmiş.");
+            job = job with { Status = JobStatus.Simulated, Error = null };
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException)
+        { job = job with { Status = JobStatus.Failed, Error = ex.Message }; }
+        var writtenHash = SaveManifest(job, entry.ManifestHash);
+        return VerifyCommittedHistoryEntry(job, writtenHash);
+    }
+
+    private HistoryEntry VerifyCommittedHistoryEntry(SimulationJob job, string writtenHash)
+    {
+        try
+        {
+            AfterHistoryCommitForVerification?.Invoke(job.ManifestPath);
+            var observed = GetHistoryEntry(job.Id);
+            if (observed.Job == job && observed.ManifestHash == writtenHash) return observed;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException)
+        {
+            throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt sonrasında doğrulanamadı. Durumu yeniden tarayarak kontrol edin.", ex);
+        }
+        throw new InvalidOperationException("İşlem uygulanmış olabilir; kayıt sonrasında değişti veya doğrulanamadı. Durumu yeniden tarayarak kontrol edin.");
     }
 
     private static void ValidateRecoveredJob(SimulationJob job, Guid directoryId, string directory, string manifest)
@@ -219,7 +378,10 @@ public sealed class SimulationQueue
         var job=new SimulationJob(id,prepared.Source.Name,prepared.Profile,JobFormat.Hpgl,JobStatus.Prepared,output,
             Path.Combine(directory,"manifest.json"),reviewedHash,DateTimeOffset.UtcNow,
             prepared.Source.Pieces.Count,prepared.Source.Pieces.Sum(p=>p.Points.Count)) { SourceSnapshotUnconfirmed=sourceSnapshotUnconfirmed };
-        SaveManifest(job);jobs.Add(job);return job;
+        var writtenHash = SaveManifest(job);
+        if (streamingHistory) { lastPreparedId = job.Id; lastPreparedHash = writtenHash; }
+        else jobs.Add(job);
+        return job;
     }
 
     public SimulationJob Prepare(ProjectDocument document, MachineProfile profile, JobFormat format, bool sourceSnapshotUnconfirmed = false, CancellationToken cancellationToken = default)
@@ -254,8 +416,9 @@ public sealed class SimulationQueue
         var job = new SimulationJob(id, document.Name, profile, format, JobStatus.Prepared, output,
             Path.Combine(directory, "manifest.json"), Checksum(output), DateTimeOffset.UtcNow,
             scaled.Pieces.Count, scaled.Pieces.Sum(p => p.Points.Count)) { SourceSnapshotUnconfirmed = sourceSnapshotUnconfirmed };
-        SaveManifest(job);
-        jobs.Add(job);
+        var writtenHash = SaveManifest(job);
+        if (streamingHistory) { lastPreparedId = job.Id; lastPreparedHash = writtenHash; }
+        else jobs.Add(job);
         return job;
     }
 
@@ -292,7 +455,7 @@ public sealed class SimulationQueue
     private static string Checksum(string path)
     { using var stream = File.OpenRead(path); return Convert.ToHexString(SHA256.HashData(stream)); }
 
-    private void SaveManifest(SimulationJob job)
+    private string SaveManifest(SimulationJob job, string? selectedHash = null)
     {
         ValidateOutputDirectory(Path.GetDirectoryName(job.ManifestPath)!);
         RejectReparseFile(job.ManifestPath);
@@ -303,7 +466,9 @@ public sealed class SimulationQueue
         if (OperatingSystem.IsWindows()) FileIdentity.RejectMultipleLinksForReplacement(lockPath);
         using var manifestLock = new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
         RejectReparseFile(job.ManifestPath);
-        if (manifestHashes.TryGetValue(job.Id, out var expectedHash))
+        var expectedHash = selectedHash;
+        if (expectedHash is null && !streamingHistory) manifestHashes.TryGetValue(job.Id, out expectedHash);
+        if (expectedHash is not null)
         {
             if (!File.Exists(job.ManifestPath) || Checksum(job.ManifestPath) != expectedHash)
                 throw new InvalidOperationException("İş kaydı başka bir işlem tarafından değiştirildi; kuyruğu yeniden açın.");
@@ -330,7 +495,9 @@ public sealed class SimulationQueue
             }
             File.Move(temporary, job.ManifestPath, true);
             committed = true;
-            manifestHashes[job.Id] = Convert.ToHexString(SHA256.HashData(bytes));
+            var writtenHash = Convert.ToHexString(SHA256.HashData(bytes));
+            if (!streamingHistory) manifestHashes[job.Id] = writtenHash;
+            return writtenHash;
         }
         finally
         {

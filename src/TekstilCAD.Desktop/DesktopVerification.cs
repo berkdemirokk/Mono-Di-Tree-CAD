@@ -116,7 +116,7 @@ internal static class DesktopVerification
         Check(message.Text.Contains("deneme hatası") && message.Visibility==Visibility.Visible,
             "Machine history error remains available after an unrelated status update",checks);
         using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
-        studio.MachineQueueFactory=()=> { Interlocked.Increment(ref count);reached.Set();release.Wait();return new SimulationQueue(Path.Combine(work,"lazy-machine-history")); };
+        studio.MachineQueueFactory=()=> { Interlocked.Increment(ref count);reached.Set();release.Wait();return new SimulationQueue(Path.Combine(work,"lazy-machine-history"),streamingHistory:true); };
         var pending=studio.BeginMachineQueueLoadAsync();
         try
         {
@@ -134,7 +134,7 @@ internal static class DesktopVerification
         // Simulate the already-closed state without showing or interacting with a window.
         queueField.SetValue(studio,null);
         using var reachedClosed=new ManualResetEventSlim();using var releaseClosed=new ManualResetEventSlim();
-        studio.MachineQueueFactory=()=> { reachedClosed.Set();releaseClosed.Wait();return new SimulationQueue(Path.Combine(work,"lazy-machine-closed")); };
+        studio.MachineQueueFactory=()=> { reachedClosed.Set();releaseClosed.Wait();return new SimulationQueue(Path.Combine(work,"lazy-machine-closed"),streamingHistory:true); };
         var late=studio.BeginMachineQueueLoadAsync();
         try
         {
@@ -744,8 +744,8 @@ internal static class DesktopVerification
             Check(WarningReachable(hiddenNotice,hiddenRoot) && hiddenNotice.Text.Contains("Diğer ayrıntılar aktarım notlarında"),
                 "DXF review identifies hidden negative-color entities even when ARC is also skipped",checks);
             var textiles = new TextileToolsWindow(studio);
-            var verificationQueue = new SimulationQueue(Path.Combine(work, "spool"));
-            var machine = new MachineCenterWindow(studio, verificationQueue);
+            var verificationQueue = new SimulationQueue(Path.Combine(work, "spool"),streamingHistory:true);
+            var machine = new MachineCenterWindow(studio, verificationQueue); WaitMachineHistory(machine);
             foreach (var window in new Window[] { textiles, machine })
             {
                 var root = (FrameworkElement)window.Content;
@@ -798,7 +798,7 @@ internal static class DesktopVerification
             Invoke(studio,"Undo");
             Check(studio.Document.Pieces.Count==afterSizes,"Undo removes zero-step generated size",checks);
             studio.Select(basePiece.Id);
-            machine=new MachineCenterWindow(studio,verificationQueue);
+            machine=new MachineCenterWindow(studio,verificationQueue); WaitMachineHistory(machine);
             var machineSelection=machine.SelectedPieceIds.ToArray();
             Check(machineSelection.Length==1 && machineSelection[0]==basePiece.Id,"Machine selection explicitly retains the chosen source piece",checks);
             var beforePreparation=JsonSerializer.Serialize(studio.Document);
@@ -817,11 +817,11 @@ internal static class DesktopVerification
             PumpUntil(()=>prepareTask.IsCompleted);
             prepareTask.GetAwaiter().GetResult();
             Check(!(bool)preparingField.GetValue(machine)!,"Machine preparation restores controls after completion",checks);
-            Check(verificationQueue.Jobs.Count == 1 && verificationQueue.Jobs[0].Status == JobStatus.Prepared,
+            Check(HistoryJobs(verificationQueue).Count == 1 && HistoryJobs(verificationQueue)[0].Status == JobStatus.Prepared,
                 "Machine UI command creates a local exchange job", checks);
-            Check(!verificationQueue.Jobs[0].SourceSnapshotUnconfirmed && !new SimulationQueue(Path.Combine(work,"spool")).Jobs[0].SourceSnapshotUnconfirmed,
+            Check(!HistoryJobs(verificationQueue)[0].SourceSnapshotUnconfirmed && !new SimulationQueue(Path.Combine(work,"spool")).Jobs[0].SourceSnapshotUnconfirmed,
                 "Unchanged source confirmation persists in the local job manifest",checks);
-            Check(verificationQueue.Jobs[0].PieceCount==1 && JsonSerializer.Serialize(studio.Document)==beforePreparation,"Machine prepares only selected pieces without mutating the source",checks);
+            Check(HistoryJobs(verificationQueue)[0].PieceCount==1 && JsonSerializer.Serialize(studio.Document)==beforePreparation,"Machine prepares only selected pieces without mutating the source",checks);
             var geometryPreview=(OutputPreview)typeof(MachineCenterWindow).GetField("geometryPreview",PrivateInstance)!.GetValue(machine)!;
             var expectedBounds=TekstilCAD.Core.Geometry.Bounds(basePiece.Points);
             var machinePreviewValid=geometryPreview.HasGeometry && geometryPreview.PathCount==1 && geometryPreview.PreviewBounds is { } actualBounds
@@ -835,11 +835,11 @@ internal static class DesktopVerification
             Check(machinePreviewValid,machinePreviewCheck,checks);
             ((Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(machine)!)
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(verificationQueue.Jobs[0].Status == JobStatus.Simulated, "Machine UI verifies checksum without hardware", checks);
+            Check(HistoryJobs(verificationQueue)[0].Status == JobStatus.Simulated, "Machine UI verifies checksum without hardware", checks);
             Render(machine,Path.ChangeExtension(reportPath,".MachineCenterPrepared.png"),(int)machine.Width,(int)machine.Height);
             // Exercise failure and an edit during preparation in a separate, local-only queue.
-            var asyncQueue=new SimulationQueue(Path.Combine(work,"async-machine-spool"));
-            var asyncMachine=new MachineCenterWindow(studio,asyncQueue);
+            var asyncQueue=new SimulationQueue(Path.Combine(work,"async-machine-spool"),streamingHistory:true);
+            var asyncMachine=new MachineCenterWindow(studio,asyncQueue); WaitMachineHistory(asyncMachine);
             var asyncScale=(TextBox)typeof(MachineCenterWindow).GetField("scale",PrivateInstance)!.GetValue(asyncMachine)!;
             var asyncResult=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(asyncMachine)!;
             var asyncPrepareButton=(Button)typeof(MachineCenterWindow).GetField("prepare",PrivateInstance)!.GetValue(asyncMachine)!;
@@ -849,7 +849,7 @@ internal static class DesktopVerification
             var failedPrepare=(Task)machinePrepare.Invoke(asyncMachine,null)!;
             PumpUntil(()=>failedPrepare.IsCompleted);failedPrepare.GetAwaiter().GetResult();
             Check(asyncResult.Text.StartsWith("İşlem başarısız:") && !(bool)preparingField.GetValue(asyncMachine)!
-                && asyncScale.IsEnabled && !asyncPrepareButton.IsEnabled && asyncQueue.Jobs.Count==0
+                && asyncScale.IsEnabled && !asyncPrepareButton.IsEnabled && HistoryJobs(asyncQueue).Count==0
                 && JsonSerializer.Serialize(studio.Document)==beforeFailure,
                 "Invalid asynchronous machine preparation reports failure, restores controls and leaves source and queue untouched",checks);
             asyncScale.Text="1";
@@ -860,29 +860,29 @@ internal static class DesktopVerification
                 "Machine preparation disables profile editing while work is in progress",checks);
             studio.Commit("Preparation source change",()=>studio.Document.Name=originalProjectName+" değişti");
             PumpUntil(()=>stalePrepare.IsCompleted);stalePrepare.GetAwaiter().GetResult();
-            Check(asyncQueue.Jobs.Count==1 && asyncQueue.Jobs[0].ProjectName==originalProjectName
-                && asyncQueue.Jobs[0].Status==JobStatus.Prepared && asyncResult.Text.Contains("önceki seçim ve proje kopyasından")
+            Check(HistoryJobs(asyncQueue).Count==1 && HistoryJobs(asyncQueue)[0].ProjectName==originalProjectName
+                && HistoryJobs(asyncQueue)[0].Status==JobStatus.Prepared && asyncResult.Text.Contains("önceki seçim ve proje kopyasından")
                 && asyncResult.Text.Contains("Kaynak doğrulanmadı") && asyncResult.Text.Contains("yeniden hazırlayın")
-                && asyncQueue.Jobs[0].SourceSnapshotUnconfirmed
+                && HistoryJobs(asyncQueue)[0].SourceSnapshotUnconfirmed
                 && !(bool)preparingField.GetValue(asyncMachine)! && asyncScale.IsEnabled && !asyncPrepareButton.IsEnabled,
                 "Machine preparation warns about a changed source and keeps the prepared snapshot",checks);
-            var reopenedAsyncQueue=new SimulationQueue(Path.Combine(work,"async-machine-spool"));
-            Check(reopenedAsyncQueue.Jobs.Count==1 && reopenedAsyncQueue.Jobs[0].SourceSnapshotUnconfirmed,
+            var reopenedAsyncQueue=new SimulationQueue(Path.Combine(work,"async-machine-spool"),streamingHistory:true);
+            Check(HistoryJobs(reopenedAsyncQueue).Count==1 && HistoryJobs(reopenedAsyncQueue)[0].SourceSnapshotUnconfirmed,
                 "Unconfirmed source warning survives local queue reload",checks);
             var rejectedStale=(Task)machinePrepare.Invoke(asyncMachine,null)!;
             PumpUntil(()=>rejectedStale.IsCompleted);rejectedStale.GetAwaiter().GetResult();
-            Check(asyncQueue.Jobs.Count==1 && asyncResult.Text.Contains("Kaynak proje değişti") && !asyncPrepareButton.IsEnabled,
+            Check(HistoryJobs(asyncQueue).Count==1 && asyncResult.Text.Contains("Kaynak proje değişti") && !asyncPrepareButton.IsEnabled,
                 "A stale machine selection cannot prepare another job",checks);
             VerifyMachineCompactFooter(asyncMachine,reportPath,"stale-source",checks);
             typeof(MachineCenterWindow).GetMethod("Simulate",PrivateInstance)!.Invoke(asyncMachine,null);
-            Check(asyncQueue.Jobs[0].Status==JobStatus.Simulated && asyncQueue.Jobs[0].SourceSnapshotUnconfirmed
+            Check(HistoryJobs(asyncQueue)[0].Status==JobStatus.Simulated && HistoryJobs(asyncQueue)[0].SourceSnapshotUnconfirmed
                 && asyncResult.Text.Contains("bütünlüğü doğrulandı") && asyncResult.Text.Contains("önceki proje kopyasından")
                 && asyncResult.Text.Contains("yeniden hazırlayın") && asyncResult.Foreground==StudioTheme.Warning
-                && new SimulationQueue(Path.Combine(work,"async-machine-spool")).Jobs[0].SourceSnapshotUnconfirmed,
+                && HistoryJobs(new SimulationQueue(Path.Combine(work,"async-machine-spool"),streamingHistory:true))[0].SourceSnapshotUnconfirmed,
                 "Checksum verification keeps the unconfirmed source warning in the visible result and persisted job",checks);
             VerifyMachineCompactFooter(asyncMachine,reportPath,"stale-verified",checks);
             Invoke(studio,"Undo");
-            Check(!asyncMachine.IsVisible && asyncQueue.Jobs.All(j=>j.OutputPath.StartsWith(work,StringComparison.OrdinalIgnoreCase)),
+            Check(!asyncMachine.IsVisible && HistoryJobs(asyncQueue).All(j=>j.OutputPath.StartsWith(work,StringComparison.OrdinalIgnoreCase)),
                 "Asynchronous machine verification stays hidden and uses isolated local output",checks);
             SynchronizationContext.SetSynchronizationContext(previousMachineContext);
             VerifyHpglPreview(work,checks);
@@ -2036,8 +2036,8 @@ internal static class DesktopVerification
         finally { SynchronizationContext.SetSynchronizationContext(oldPagedContext);pagedReview.Close(); }
         var scaled=document.Clone();foreach(var piece in scaled.Pieces)piece.Points=piece.Points.Select(p=>p*2).ToList();
         var simulated=HpglFormat.Prepare(scaled,20);
-        var queue=new SimulationQueue(Path.Combine(Path.GetDirectoryName(reportPath)!,"hpgl-review-simulator-"+Guid.NewGuid().ToString("N")));
-        var machine=new MachineCenterWindow(studio,queue);
+        var queue=new SimulationQueue(Path.Combine(Path.GetDirectoryName(reportPath)!,"hpgl-review-simulator-"+Guid.NewGuid().ToString("N")),streamingHistory:true);
+        var machine=new MachineCenterWindow(studio,queue); WaitMachineHistory(machine);
         new WindowInteropHelper(machine).EnsureHandle();
         var simulationReview=new HpglReviewWindow(machine,simulated,document.Pieces,2);
         Render(simulationReview,Path.ChangeExtension(reportPath,".hpgl-simulator-review.png"),580,420);
@@ -2383,8 +2383,8 @@ internal static class DesktopVerification
         var withoutHistory=saved.Clone();withoutHistory.NestingSnapshot=null;
         studio.LoadDocument(withoutHistory);
         _=new WindowInteropHelper(studio).EnsureHandle();
-        var machineQueue=new SimulationQueue(Path.Combine(work,"v3-machine-disclosure-spool"));
-        var ordinaryMachine=new MachineCenterWindow(studio,machineQueue);
+        var machineQueue=new SimulationQueue(Path.Combine(work,"v3-machine-disclosure-spool"),streamingHistory:true);
+        var ordinaryMachine=new MachineCenterWindow(studio,machineQueue); WaitMachineHistory(ordinaryMachine);
         try
         {
             Render(ordinaryMachine,Path.Combine(work,"machine-no-nesting-warning.png"),720,540);
@@ -2394,7 +2394,7 @@ internal static class DesktopVerification
         }
         finally { ordinaryMachine.Close(); }
         studio.LoadDocument(saved);
-        var historyMachine=new MachineCenterWindow(studio,machineQueue);
+        var historyMachine=new MachineCenterWindow(studio,machineQueue); WaitMachineHistory(historyMachine);
         try
         {
             Render(historyMachine,Path.Combine(work,"machine-nesting-warning.png"),720,540);
@@ -2736,8 +2736,8 @@ internal static class DesktopVerification
             var virtualDrawing=(ProjectDocument?)virtualPreview.GetType().GetProperty("Drawing")!.GetValue(virtualPreview);
             Check(virtualDrawing?.Pieces.Count==2,"Virtualized list includes offscreen selections in quantity preview",checks);
             virtualWindow.Close();
-            var virtualMachineQueue=new SimulationQueue(Path.Combine(work,"virtual-machine-spool"));
-            var virtualMachine=new MachineCenterWindow(studio,virtualMachineQueue);
+            var virtualMachineQueue=new SimulationQueue(Path.Combine(work,"virtual-machine-spool"),streamingHistory:true);
+            var virtualMachine=new MachineCenterWindow(studio,virtualMachineQueue); WaitMachineHistory(virtualMachine);
             Render(virtualMachine,Path.ChangeExtension(reportPath,".MachineCenter.virtual.png"),1024,640);
             var machineList=(ListBox)typeof(MachineCenterWindow).GetField("choiceList",PrivateInstance)!.GetValue(virtualMachine)!;
             var machineModels=(System.Collections.IList)typeof(MachineCenterWindow).GetField("partChoices",PrivateInstance)!.GetValue(virtualMachine)!;
@@ -2762,8 +2762,8 @@ internal static class DesktopVerification
                 "Machine search retains selected sources hidden among 10000 pieces",checks);
             var virtualMachineTask=(Task)typeof(MachineCenterWindow).GetMethod("Prepare",PrivateInstance)!.Invoke(virtualMachine,null)!;
             PumpUntil(()=>virtualMachineTask.IsCompleted);virtualMachineTask.GetAwaiter().GetResult();
-            Check(virtualMachineQueue.Jobs.Count==1 && virtualMachineQueue.Jobs[0].PieceCount==2
-                && !virtualMachineQueue.Jobs[0].SourceSnapshotUnconfirmed,"Machine output includes selected offscreen piece",checks);
+            Check(HistoryJobs(virtualMachineQueue).Count==1 && HistoryJobs(virtualMachineQueue)[0].PieceCount==2
+                && !HistoryJobs(virtualMachineQueue)[0].SourceSnapshotUnconfirmed,"Machine output includes selected offscreen piece",checks);
             Check(!virtualMachine.IsVisible,"Virtualized machine verification remains hidden",checks);
             virtualMachine.Close();
         }
@@ -3529,6 +3529,39 @@ internal static class DesktopVerification
         }
     }
 
+    private static void WaitMachineHistory(MachineCenterWindow window)
+    {
+        var old=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+        try
+        {
+            var busy=typeof(MachineCenterWindow).GetField("historyBusy",PrivateInstance)!;
+            if((bool)busy.GetValue(window)!)PumpUntil(()=>!(bool)busy.GetValue(window)!);
+            var status=(TextBlock)typeof(MachineCenterWindow).GetField("historyStatus",PrivateInstance)!.GetValue(window)!;
+            if(status.Text.Length==0)
+            {
+                var task=(Task)typeof(MachineCenterWindow).GetMethod("ReadHistory",PrivateInstance)!.Invoke(window,[true])!;
+                PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(old); }
+    }
+
+    // Read fixture jobs from their persisted manifests, using the same bounded page API as the window.
+    private static List<SimulationJob> HistoryJobs(SimulationQueue queue)
+    {
+        using var scan=queue.StartHistoryScan();
+        var jobs=new List<SimulationJob>();
+        while(true)
+        {
+            var page=scan.ReadNextPage();
+            if(page.Error is not null)throw new InvalidOperationException(page.Error);
+            foreach(var entry in page.Entries)
+                jobs.Add(entry.Job ?? throw new InvalidOperationException(entry.Error ?? "İş kaydı okunamadı."));
+            if(page.Complete)return jobs;
+        }
+    }
+
     private static void VerifyMachineDxfSourceConfirmation(MainWindow studio,string work,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
@@ -3543,7 +3576,7 @@ internal static class DesktopVerification
                 studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
                 var original=studio.Document.Clone();
                 var spool=Path.Combine(work,"machine-dxf-source-"+scenario+"-"+Guid.NewGuid().ToString("N"));
-                var queue=new SimulationQueue(spool);var machine=new MachineCenterWindow(studio,queue);
+                var queue=new SimulationQueue(spool,streamingHistory:true);var machine=new MachineCenterWindow(studio,queue); WaitMachineHistory(machine);
                 using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
                 machine.BeforePrepareForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException("DXF preparation boundary not released."); };
                 var task=(Task)typeof(MachineCenterWindow).GetMethod("Prepare",PrivateInstance)!.Invoke(machine,null)!;
@@ -3554,7 +3587,7 @@ internal static class DesktopVerification
                     else if(scenario=="drawing") { studio.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(3,4)])); }
                     else if(scenario=="selection")studio.Select(null);
                     release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
-                    var job=queue.Jobs.Single();var result=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(machine)!;
+                    var job=HistoryJobs(queue).Single();var result=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(machine)!;
                     var expectedUnconfirmed=scenario!="unchanged";
                     Check(job.SourceSnapshotUnconfirmed==expectedUnconfirmed && new SimulationQueue(spool).Jobs.Single().SourceSnapshotUnconfirmed==expectedUnconfirmed
                         && DocumentSession.ContentEquals(original,studio.Document)
@@ -3573,11 +3606,11 @@ internal static class DesktopVerification
         var source=new ProjectDocument { Name="Kuyruk onay hatası",Pieces=[new PatternPiece { Name="Parça",Closed=false,Points=[new(0,0),new(10,0)] }] };
         studio.LoadDocument(source);studio.Select(studio.Document.Pieces[0].Id);
         var before=studio.Document.Clone();var spool=Path.Combine(work,"machine-confirm-conflict");
-        var queue=new SimulationQueue(spool);var machine=new MachineCenterWindow(studio,queue);
+        var queue=new SimulationQueue(spool,streamingHistory:true);var machine=new MachineCenterWindow(studio,queue); WaitMachineHistory(machine);
         byte[]? alteredManifest=null;byte[]? outputBytes=null;
         machine.AfterPrepareForVerification=()=>
         {
-            var prepared=queue.Jobs.Single();outputBytes=File.ReadAllBytes(prepared.OutputPath);
+            var prepared=HistoryJobs(queue).Single();outputBytes=File.ReadAllBytes(prepared.OutputPath);
             File.AppendAllText(prepared.ManifestPath," ");
             alteredManifest=File.ReadAllBytes(prepared.ManifestPath);
         };
@@ -3587,10 +3620,10 @@ internal static class DesktopVerification
         {
             var task=(Task)typeof(MachineCenterWindow).GetMethod("Prepare",PrivateInstance)!.Invoke(machine,null)!;
             PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
-            var job=queue.Jobs.Single();
+            var job=HistoryJobs(queue).Single();
             var grid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(machine)!;
             var result=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(machine)!;
-            Check(job.SourceSnapshotUnconfirmed && grid.Items.Count==1 && grid.SelectedItem is SimulationJob selected && selected.Id==job.Id
+            Check(job.SourceSnapshotUnconfirmed && grid.Items.Count==1 && grid.SelectedItem is SimulationQueue.HistoryEntry { Job: { } selected } && selected.Id==job.Id
                 && result.Foreground==StudioTheme.Warning && result.Text.Contains("İş listede görünüyor") && result.Text.Contains("diskteki durumu doğrulanamadı") && result.Text.Contains("Kaynak doğrulanmadı")
                 && result.Text.Contains("yeniden hazırlayın"),
                 "Manifest confirmation conflict shows the committed unconfirmed job and warning",checks);
@@ -3600,12 +3633,12 @@ internal static class DesktopVerification
                 "Confirmation failure does not retry or change the manifest, output or source",checks);
             Check(new SimulationQueue(spool).Jobs.Single().SourceSnapshotUnconfirmed,
                 "Unconfirmed source survives reopening after the manifest conflict",checks);
-            var missingQueue=new SimulationQueue(Path.Combine(work,"machine-missing-output"));
-            var missingMachine=new MachineCenterWindow(studio,missingQueue);
-            missingMachine.AfterPrepareForVerification=()=>File.Delete(missingQueue.Jobs.Single().OutputPath);
+            var missingQueue=new SimulationQueue(Path.Combine(work,"machine-missing-output"),streamingHistory:true);
+            var missingMachine=new MachineCenterWindow(studio,missingQueue); WaitMachineHistory(missingMachine);
+            missingMachine.AfterPrepareForVerification=()=>File.Delete(HistoryJobs(missingQueue).Single().OutputPath);
             var missingTask=(Task)typeof(MachineCenterWindow).GetMethod("Prepare",PrivateInstance)!.Invoke(missingMachine,null)!;
             PumpUntil(()=>missingTask.IsCompleted);missingTask.GetAwaiter().GetResult();
-            var missingJob=missingQueue.Jobs.Single();
+            var missingJob=HistoryJobs(missingQueue).Single();
             var missingResult=(TextBlock)typeof(MachineCenterWindow).GetField("result",PrivateInstance)!.GetValue(missingMachine)!;
             var missingGrid=(DataGrid)typeof(MachineCenterWindow).GetField("jobs",PrivateInstance)!.GetValue(missingMachine)!;
             Check(!File.Exists(missingJob.OutputPath) && missingGrid.Items.Count==1 && missingResult.Foreground==StudioTheme.Warning
@@ -3613,7 +3646,7 @@ internal static class DesktopVerification
                 && missingResult.Text.Contains("Fiziksel makine testi yapılmadı") && DocumentSession.ContentEquals(before,studio.Document),
                 "Missing prepared output remains a warning instead of a successful preview",checks);
             typeof(MachineCenterWindow).GetMethod("Simulate",PrivateInstance)!.Invoke(missingMachine,null);
-            Check(missingQueue.Jobs.Single().Status==JobStatus.Failed && missingResult.Foreground==StudioTheme.Danger
+            Check(HistoryJobs(missingQueue).Single().Status==JobStatus.Failed && missingResult.Foreground==StudioTheme.Danger
                 && missingResult.Text.Contains("Dosya kontrolü başarısız") && missingResult.Text.Contains("Çıktı önizlemesi okunamadı")
                 && missingResult.Text.Contains("Fiziksel makine testi yapılmadı") && DocumentSession.ContentEquals(before,studio.Document),
                 "Checking a missing output reports both failed integrity and unreadable preview",checks);
@@ -3630,8 +3663,8 @@ internal static class DesktopVerification
             (MachineCenterWindow Window,SimulationQueue Queue,string Spool) Fixture(string label)
             {
                 studio.LoadDocument(source);studio.Select(studio.Document.Pieces[0].Id);
-                var spool=Path.Combine(work,"machine-review-"+label);var queue=new SimulationQueue(spool);
-                var window=new MachineCenterWindow(studio,queue);
+                var spool=Path.Combine(work,"machine-review-"+label);var queue=new SimulationQueue(spool,streamingHistory:true);
+                var window=new MachineCenterWindow(studio,queue); WaitMachineHistory(window);
                 ((ComboBox)typeof(MachineCenterWindow).GetField("format",PrivateInstance)!.GetValue(window)!).SelectedIndex=1;
                 ((TextBox)typeof(MachineCenterWindow).GetField("scale",PrivateInstance)!.GetValue(window)!).Text="2";
                 ((TextBox)typeof(MachineCenterWindow).GetField("units",PrivateInstance)!.GetValue(window)!).Text="20";
@@ -3641,25 +3674,25 @@ internal static class DesktopVerification
             var (rejected,empty,rejectedSpool)=Fixture("rejected");string? shown=null;
             rejected.ConfirmHpglReviewForVerification=(prepared,pieces)=> { shown=prepared.Text;return false; };
             var rejectedTask=Prepare(rejected);PumpUntil(()=>rejectedTask.IsCompleted);rejectedTask.GetAwaiter().GetResult();
-            Check(shown is not null && empty.Jobs.Count==0 && !Directory.Exists(rejectedSpool) && DocumentSession.ContentEquals(source,studio.Document),
+            Check(shown is not null && HistoryJobs(empty).Count==0 && !Directory.Exists(rejectedSpool) && DocumentSession.ContentEquals(source,studio.Document),
                 "Declining machine HPGL review creates no spool or job and preserves the source",checks);
             rejected.Close();
             var (accepted,queue,_)=Fixture("accepted");string? approved=null;
             accepted.ConfirmHpglReviewForVerification=(prepared,pieces)=> { approved=prepared.Text;return pieces.Count==1; };
             var acceptedTask=Prepare(accepted);PumpUntil(()=>acceptedTask.IsCompleted);acceptedTask.GetAwaiter().GetResult();
-            Check(queue.Jobs.Count==1 && approved is not null && File.ReadAllText(queue.Jobs[0].OutputPath)==approved
-                && approved.Contains("400,0") && queue.Jobs[0].Profile.Scale==2 && queue.Jobs[0].Profile.UnitsPerMillimeter==20,
+            Check(HistoryJobs(queue).Count==1 && approved is not null && File.ReadAllText(HistoryJobs(queue)[0].OutputPath)==approved
+                && approved.Contains("400,0") && HistoryJobs(queue)[0].Profile.Scale==2 && HistoryJobs(queue)[0].Profile.UnitsPerMillimeter==20,
                 "Machine writes exactly the reviewed HPGL with captured scale and units",checks);
             accepted.Close();
             var (changed,changedQueue,changedSpool)=Fixture("profile-changed");
             changed.ConfirmHpglReviewForVerification=(_,_)=> { ((TextBox)typeof(MachineCenterWindow).GetField("units",PrivateInstance)!.GetValue(changed)!).Text="21";return true; };
             var changedTask=Prepare(changed);PumpUntil(()=>changedTask.IsCompleted);changedTask.GetAwaiter().GetResult();
-            Check(changedQueue.Jobs.Count==0 && !Directory.Exists(changedSpool),"Profile change invalidates machine HPGL review before file creation",checks);
+            Check(HistoryJobs(changedQueue).Count==0 && !Directory.Exists(changedSpool),"Profile change invalidates machine HPGL review before file creation",checks);
             changed.Close();
             var (stale,staleQueue,staleSpool)=Fixture("project-changed");
             stale.ConfirmHpglReviewForVerification=(_,_)=> { studio.Commit("İnceleme sırasında değişiklik",()=>studio.Document.Name="Değişti");return true; };
             var staleTask=Prepare(stale);PumpUntil(()=>staleTask.IsCompleted);staleTask.GetAwaiter().GetResult();
-            Check(staleQueue.Jobs.Count==0 && !Directory.Exists(staleSpool) && studio.Document.Name=="Değişti",
+            Check(HistoryJobs(staleQueue).Count==0 && !Directory.Exists(staleSpool) && studio.Document.Name=="Değişti",
                 "Project change invalidates machine HPGL review before file creation",checks);
             stale.Close();
             var (cancelled,cancelQueue,cancelSpool)=Fixture("cancel-after-review-preparation");
@@ -3674,7 +3707,7 @@ internal static class DesktopVerification
                 button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(!cancelTask.IsCompleted && !Directory.Exists(cancelSpool),"Machine HPGL cancellation waits for preparation before writing",checks);
                 release.Set();PumpUntil(()=>cancelTask.IsCompleted);cancelTask.GetAwaiter().GetResult();
-                Check(!reviewCalled && cancelQueue.Jobs.Count==0 && !Directory.Exists(cancelSpool) && DocumentSession.ContentEquals(source,studio.Document),
+                Check(!reviewCalled && HistoryJobs(cancelQueue).Count==0 && !Directory.Exists(cancelSpool) && DocumentSession.ContentEquals(source,studio.Document),
                     "Late machine HPGL preparation cancellation discards the report without a job",checks);
             }
             finally { release.Set();PumpUntil(()=>cancelTask.IsCompleted);cancelled.Close(); }
@@ -3695,8 +3728,8 @@ internal static class DesktopVerification
             foreach(var afterCommit in new[] { false,true })
             {
                 var spool=Path.Combine(work,afterCommit?"machine-cancel-after-commit":"machine-cancel-before-commit");
-                var queue=new SimulationQueue(spool);
-                var machine=new MachineCenterWindow(studio,queue);
+                var queue=new SimulationQueue(spool,streamingHistory:true);
+                var machine=new MachineCenterWindow(studio,queue); WaitMachineHistory(machine);
                 machine.ConfirmHpglReviewForVerification=(_,_)=>true;
                 Check(machine.SelectedPieceIds.SequenceEqual(new[] { studio.Document.Pieces[0].Id }),"Machine HPGL fixture selects its source piece",checks);
                 ((ComboBox)typeof(MachineCenterWindow).GetField("format",PrivateInstance)!.GetValue(machine)!).SelectedIndex=1;
@@ -3716,8 +3749,8 @@ internal static class DesktopVerification
                     byte[]? output=null;
                     if(afterCommit)
                     {
-                        Check(queue.Jobs.Count==1,"Machine HPGL job is committed before late cancellation",checks);
-                        output=File.ReadAllBytes(queue.Jobs[0].OutputPath);
+                        Check(HistoryJobs(queue).Count==1,"Machine HPGL job is committed before late cancellation",checks);
+                        output=File.ReadAllBytes(HistoryJobs(queue)[0].OutputPath);
                     }
                     cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                     Check(!cancel.IsEnabled && result.Text.Contains("İptal istendi"),"Machine cancellation reports a request while awaiting its outcome",checks);
@@ -3727,14 +3760,14 @@ internal static class DesktopVerification
                         "Machine HPGL cancellation restores controls and preserves the source",checks);
                     if(afterCommit)
                     {
-                        var job=queue.Jobs.Single();
+                        var job=HistoryJobs(queue).Single();
                         Check(job.Status==JobStatus.Prepared && result.Text.Contains("iş kuyrukta korunuyor")
                             && File.ReadAllBytes(job.OutputPath).SequenceEqual(output!)
                             && File.Exists(job.ManifestPath) && new SimulationQueue(spool).Jobs.Single().Id==job.Id,
                             "Late machine cancellation retains the committed output and persisted job",checks);
                     }
                     else
-                        Check(queue.Jobs.Count==0 && new SimulationQueue(spool).Jobs.Count==0 && result.Text.Contains("hazırlama iptal edildi"),
+                        Check(HistoryJobs(queue).Count==0 && new SimulationQueue(spool).Jobs.Count==0 && result.Text.Contains("hazırlama iptal edildi"),
                             "Early machine cancellation reports cancellation without a queued job",checks);
                 }
                 finally { release.Set();PumpUntil(()=>task.IsCompleted); }
@@ -7540,7 +7573,7 @@ internal static class DesktopVerification
         var first=new PatternPiece { Name="Ön\u202E",Points=[new(0,0),new(10,0),new(0,20)] };
         var second=new PatternPiece { Name="Ön\u202E",Points=[new(0,0),new(30,0),new(0,40)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[first,second] });studio.Select(first.Id);
-        var window=new MachineCenterWindow(studio,new SimulationQueue(Path.Combine(work,"machine-choice-identity")));
+        var window=new MachineCenterWindow(studio,new SimulationQueue(Path.Combine(work,"machine-choice-identity"),streamingHistory:true)); WaitMachineHistory(window);
         Render(window,Path.ChangeExtension(reportPath,".machine-choice-identity.png"),720,540);
         var models=(System.Collections.IList)typeof(MachineCenterWindow).GetField("partChoices",PrivateInstance)!.GetValue(window)!;
         var label=models[0]!.GetType().GetProperty("Label")!;
