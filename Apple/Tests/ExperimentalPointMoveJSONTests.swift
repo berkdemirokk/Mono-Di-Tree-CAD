@@ -166,4 +166,22 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
         let result = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: sourceID, index: 1, to: .init(x: 11.5, y: 0))
         XCTAssertEqual(result, Data(text.replacingOccurrences(of: #""X": 10"#, with: #""X": 11.5"#).utf8))
     }
+
+    func testDesktopVersionSixMarkedClosureMovesOnlyRequiredTokens() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-notch", withExtension: "tcad"))
+        let source = try Data(contentsOf: url)
+        let text = try XCTUnwrap(String(data: source, encoding: .utf8))
+        let newline = text.contains("\r\n") ? "\r\n" : "\n"
+        let vertex = "\"X\": 0," + newline + "          \"Y\": 0"
+        let notch = "\"X\": 0," + newline + "              \"Y\": 0"
+        XCTAssertEqual(text.components(separatedBy: vertex).count, 3)
+        XCTAssertEqual(text.components(separatedBy: notch).count, 2)
+        let expected = text.replacingOccurrences(of: vertex, with: "\"X\": 0," + newline + "          \"Y\": 2.0")
+            .replacingOccurrences(of: notch, with: "\"X\": 0," + newline + "              \"Y\": 2.0")
+        let sourceID = try XCTUnwrap(UUID(uuidString: "c393b219-2be8-41e7-8665-ed900a1cbf5e"))
+        for index in [0, 3] {
+            let result = try ExperimentalPointMoveJSON.moving(source, snapshot: source, pieceID: sourceID, index: index, to: .init(x: 0, y: 2))
+            XCTAssertEqual(result, Data(expected.utf8))
+        }
+    }
 }
