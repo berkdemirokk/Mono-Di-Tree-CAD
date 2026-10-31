@@ -904,6 +904,8 @@ internal static class DesktopVerification
             VerifyDxfLayerReview(studio,reportPath,checks);
             VerifyHpglReviewWindow(studio,reportPath,checks);
             VerifyAsyncDxfImport(studio,work,checks);
+            VerifyDxfGrainlineReview(studio,work,checks);
+            VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
             VerifyDxfSourceCheckWorkflow(studio,work,checks);
             VerifyDxfReviewRetry(studio,work,checks);
@@ -1478,6 +1480,205 @@ internal static class DesktopVerification
             studio.BeforeProjectReadForVerification=null;studio.ConfirmOpenDiscardForVerification=null;
             studio.ConfirmOpenDrawingForVerification=null;studio.ProjectOpenErrorForVerification=null;
             SynchronizationContext.SetSynchronizationContext(previousContext);
+        }
+    }
+    private static void VerifyDxfGrainlineReviewControls(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var contour=new PatternPiece { Name="Ön beden",Closed=true,Points=[new(0,0),new(20,0),new(0,20)] };
+        var otherContour=new PatternPiece { Name="Arka beden",Closed=true,Points=[new(30,0),new(50,0),new(30,20)] };
+        var marker=new PatternPiece { Name="Yön çizgisi",Closed=false,Points=[new(2,3),new(2,8)] };
+        var otherMarker=new PatternPiece { Name="Diğer çizgi",Closed=false,Points=[new(32,3),new(32,8)] };
+        var invalidMarker=new PatternPiece { Name="Çok noktalı",Closed=false,Points=[new(0,0),new(1,1),new(2,2)] };
+        var project=new ProjectDocument { Pieces=[contour,otherContour,marker,otherMarker,invalidMarker] };
+        var before=project.Clone();var import=new DxfImportResult(project,[]) { SourceSha256=new string('A',64),SourceByteLength=123 };
+        var window=new DxfGrainlineReviewWindow(studio,import);
+        var root=(FrameworkElement)window.Content;
+        var contours=(ComboBox)typeof(DxfGrainlineReviewWindow).GetField("contours",PrivateInstance)!.GetValue(window)!;
+        var markers=(ComboBox)typeof(DxfGrainlineReviewWindow).GetField("markers",PrivateInstance)!.GetValue(window)!;
+        var list=(ListBox)typeof(DxfGrainlineReviewWindow).GetField("mappingList",PrivateInstance)!.GetValue(window)!;
+        var status=(TextBlock)typeof(DxfGrainlineReviewWindow).GetField("status",PrivateInstance)!.GetValue(window)!;
+        var apply=(Button)typeof(DxfGrainlineReviewWindow).GetField("apply",PrivateInstance)!.GetValue(window)!;
+        var contourPreview=(DxfPiecePreview)typeof(DxfGrainlineReviewWindow).GetField("contourPreview",PrivateInstance)!.GetValue(window)!;
+        var markerPreview=(DxfPiecePreview)typeof(DxfGrainlineReviewWindow).GetField("markerPreview",PrivateInstance)!.GetValue(window)!;
+        var overlay=(DxfGrainlineOverlayPreview)typeof(DxfGrainlineReviewWindow).GetField("overlay",PrivateInstance)!.GetValue(window)!;
+        var markerDetails=(TextBox)typeof(DxfGrainlineReviewWindow).GetField("markerDetails",PrivateInstance)!.GetValue(window)!;
+        try
+        {
+            Render(window,Path.ChangeExtension(reportPath,".dxf-grain-review.png"),950,800);
+            var add=Descendants<Button>(root).Single(button=>Equals(button.Content,"Seçilen ikiliyi ekle"));
+            var remove=Descendants<Button>(root).Single(button=>Equals(button.Content,"Seçili eşlemeyi kaldır"));
+            Check(contours.Items.Count==2 && markers.Items.Count==2 && contours.SelectedIndex==-1 && markers.SelectedIndex==-1
+                && !apply.IsEnabled && AutomationProperties.GetName(contours)=="Kapalı hedef kontur"
+                && AutomationProperties.GetName(markers)=="İki uçlu açık çizgi" && AutomationProperties.GetLiveSetting(status)==AutomationLiveSetting.Polite,
+                "Grain review shows only eligible candidates with no automatic association",checks);
+            Check(overlay.ContourId is null && overlay.MarkerId is null && !string.IsNullOrWhiteSpace(AutomationProperties.GetName(overlay)),
+                "Combined preview starts empty and has an accessible name",checks);
+            contours.SelectedIndex=0;
+            Check(overlay.ContourId is null && overlay.MarkerId is null && AutomationProperties.GetName(overlay).Contains("seçin"),"One selection alone does not display a partial pair",checks);
+            var source=Descendants<TextBox>(root).Single(box=>AutomationProperties.GetName(box)=="Aktarım kaynağı kimliği");
+            Check(source.Text.Contains(new string('A',64)) && source.Text.Contains("123 bayt")
+                && Descendants<TextBlock>(root).Any(text=>text.Text.Contains("otomatik varsayılmaz") && text.Text.Contains("kontrol bekleyen")),
+                "Grain review explains source identity and explicitly warns about consumed markers",checks);
+            contours.SelectedIndex=0;markers.SelectedIndex=0;
+            Check(overlay.ContourId==contour.Id && overlay.MarkerId==marker.Id &&
+                AutomationProperties.GetName(overlay).Contains(contour.Id.ToString("D")) &&
+                AutomationProperties.GetName(overlay).Contains(marker.Id.ToString("D")) &&
+                AutomationProperties.GetName(overlay).Contains("Y 3") && AutomationProperties.GetName(overlay).Contains("Y 8"),
+                "Combined preview exposes both selected identities and marker endpoints",checks);
+            markers.SelectedIndex=1;
+            Check(overlay.ContourId==contour.Id && overlay.MarkerId==otherMarker.Id && AutomationProperties.GetName(overlay).Contains(otherMarker.Id.ToString("D")),
+                "Changing marker refreshes combined preview identity and accessible description",checks);
+            contours.SelectedIndex=1;
+            Check(overlay.ContourId==otherContour.Id && overlay.MarkerId==otherMarker.Id && AutomationProperties.GetName(overlay).Contains(otherContour.Id.ToString("D")),
+                "Changing contour refreshes combined preview identity and accessible description",checks);
+            markers.SelectedIndex=-1;
+            Check(overlay.ContourId is null && overlay.MarkerId is null,"Clearing either selection removes the entire combined preview",checks);
+            contours.SelectedIndex=0;markers.SelectedIndex=0;
+            var sample=new DxfGrainlineOverlayPreview();sample.ShowPair(contour,marker);
+            sample.Measure(new Size(220,220));sample.Arrange(new Rect(0,0,220,220));sample.UpdateLayout();
+            var bitmap=new RenderTargetBitmap(220,220,96,96,PixelFormats.Pbgra32);bitmap.Render(sample);
+            var pixels=new byte[220*220*4];bitmap.CopyPixels(pixels,220*4,0);
+            bool CrimsonAt(int x,int y) { var i=(y*220+x)*4;return pixels[i+2]>140 && pixels[i+2]>pixels[i+1]*1.5 && pixels[i+2]>pixels[i]*1.5; }
+            Check(CrimsonAt(30,65) && !CrimsonAt(110,65),
+                "Combined preview places marker at its world-coordinate position relative to the contour",checks);
+            Check(contourPreview.DisplayedPieceId==contour.Id && markerPreview.DisplayedPieceId==marker.Id
+                && markerDetails.Text.Contains(marker.Id.ToString("D")) && markerDetails.Text.Contains("Y 3") && markerDetails.Text.Contains("Y 8")
+                && AutomationProperties.GetName(contourPreview).Contains(contour.Id.ToString("D"))
+                && AutomationProperties.GetName(markerPreview).Contains(marker.Id.ToString("D")),
+                "Grain review displays selected contour and marker identity, endpoints and accessible previews",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(list.Items.Count==1 && apply.IsEnabled && status.Text.Contains("1 eşleme"),"Explicit grain pair can be added",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(list.Items.Count==1 && status.Text.Contains("yalnız bir"),"Duplicate grain pair is rejected",checks);
+            contours.SelectedIndex=1;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(list.Items.Count==1 && status.Text.Contains("yalnız bir"),"A marker cannot be used for two contours",checks);
+            contours.SelectedIndex=0;markers.SelectedIndex=1;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(list.Items.Count==1 && status.Text.Contains("yalnız bir"),"A contour cannot use two markers",checks);
+            list.SelectedIndex=0;remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(list.Items.Count==0 && !apply.IsEnabled && window.Selections.Count==0 && DocumentSession.ContentEquals(before,project),
+                "Removing the pair leaves the source and unapplied result untouched",checks);
+            var skip=Descendants<Button>(root).Single(button=>Equals(button.Content,"Eşleme yapmadan devam"));
+            // DialogResult cannot be set on an unshown, non-modal WPF window;
+            // invoking the real handler still exercises its empty-selection branch.
+            bool nonModal=false;
+            try { skip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+            catch(InvalidOperationException) { nonModal=true; }
+            Check(nonModal && window.Selections.Count==0 && DocumentSession.ContentEquals(before,project),
+                "Headless empty-continue handler clears selections without changing the import",checks);
+        }
+        finally { window.Close(); }
+    }
+
+    private static void VerifyDxfGrainlineReview(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"grain-review.dxf");
+        var source=System.Text.Encoding.UTF8.GetBytes("0\nSECTION\n2\nENTITIES\n"+
+            "0\nLWPOLYLINE\n8\nCUT\n90\n3\n70\n1\n10\n0\n20\n0\n10\n20\n20\n0\n10\n0\n20\n20\n"+
+            "0\nLINE\n8\nGRAIN\n10\n2\n20\n2\n11\n2\n21\n8\n0\nENDSEC\n0\nEOF\n");
+        var review=(Button)typeof(MainWindow).GetField("dxfReview",PrivateInstance)!.GetValue(studio)!;
+        DxfImportResult Prepare()
+        {
+            File.WriteAllBytes(path,source);
+            studio.LoadDocument(new ProjectDocument { Name="Mevcut çalışma",Pieces=[new PatternPiece { Name="Eski",Closed=false,Points=[new(0,0),new(1,0)] }] });
+            var task=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>task.IsCompleted);
+            return task.GetAwaiter().GetResult() ?? throw new InvalidOperationException("DXF grain review fixture failed.");
+        }
+        void Run() { var task=studio.ReviewPreparedDxfAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        DxfGrainlineSelection Selection(DxfImportResult input) => new(input.Project.Pieces.Single(p=>p.Closed).Id,input.Project.Pieces.Single(p=>!p.Closed).Id);
+        try
+        {
+            studio.ConfirmDxfReviewForVerification=_=>true;
+            studio.DxfDiscardDecisionForVerification=()=>(true,false);
+            var imported=Prepare();var originalImport=imported.Project.Clone();var prior=studio.Document.Clone();
+            studio.ConfirmDxfGrainlineReviewForVerification=_=>null;Run();
+            Check(DocumentSession.ContentEquals(prior,studio.Document) && review.Visibility==Visibility.Visible && File.ReadAllBytes(path).SequenceEqual(source),
+                "Cancelling grain review preserves workspace and source and offers retry",checks);
+            studio.ConfirmDxfGrainlineReviewForVerification=i=>[Selection(i)];Run();
+            var contour=studio.Document.Pieces.Single();
+            Check(contour.Grainline is { NeedsReview:true } && contour.Grainline.Start==new Point2(2,2) && contour.Grainline.End==new Point2(2,8) &&
+                DocumentSession.ContentEquals(imported.Project,originalImport) && File.ReadAllBytes(path).SequenceEqual(source) &&
+                studio.Document.ImportProvenance?.SourceSha256==Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source)),
+                "Explicit grain selection consumes only copied marker and records review and source identity",checks);
+
+            imported=Prepare();studio.ConfirmDxfGrainlineReviewForVerification=_=>Array.Empty<DxfGrainlineSelection>();Run();
+            Check(studio.Document.Pieces.Count==2 && studio.Document.Pieces.All(p=>p.Grainline is null),
+                "Continuing without grain mapping preserves imported contours and marker",checks);
+
+            foreach(var duplicate in new[] { false,true })
+            {
+                imported=Prepare();prior=studio.Document.Clone();
+                studio.ConfirmDxfGrainlineReviewForVerification=i=>duplicate ? [Selection(i),Selection(i)] : [new DxfGrainlineSelection(i.Project.Pieces.Single(p=>p.Closed).Id,Guid.NewGuid())];
+                Run();
+                Check(DocumentSession.ContentEquals(prior,studio.Document) && review.Visibility==Visibility.Visible && File.ReadAllBytes(path).SequenceEqual(source),
+                    duplicate ? "Duplicate grain marker is rejected with retry and no workspace change" : "Unknown grain marker is rejected with retry and no workspace change",checks);
+            }
+            studio.ConfirmDxfGrainlineReviewForVerification=i=>[Selection(i)];Run();
+            Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Grainline is { NeedsReview:true },
+                "Retry after invalid grain choice applies an explicit valid mapping",checks);
+
+            imported=Prepare();prior=studio.Document.Clone();
+            studio.ConfirmDxfGrainlineReviewForVerification=_=>throw new InvalidOperationException("injected grain review failure");Run();
+            Check(DocumentSession.ContentEquals(prior,studio.Document) && review.Visibility==Visibility.Visible,
+                "Grain review exception retains workspace and allows retry",checks);
+            studio.ConfirmDxfGrainlineReviewForVerification=i=> { studio.Commit("Change during grain review",()=>studio.Document.Name="Yeni çalışma");return [Selection(i)]; };Run();
+            Check(studio.Document.Name=="Yeni çalışma" && File.ReadAllBytes(path).SequenceEqual(source),
+                "Workspace edit during grain review invalidates selection without reverting edit",checks);
+
+            imported=Prepare();prior=studio.Document.Clone();
+            studio.ConfirmDxfGrainlineReviewForVerification=i=> { File.AppendAllText(path," ");return [Selection(i)]; };Run();
+            Check(DocumentSession.ContentEquals(prior,studio.Document) && !File.ReadAllBytes(path).SequenceEqual(source),
+                "Changed DXF source after grain selection is not applied or overwritten",checks);
+
+            foreach(var mutateInPreview in new[] { true,false })
+            {
+                imported=Prepare();prior=studio.Document.Clone();var changed=0;
+                studio.ConfirmDxfReviewForVerification=i=>
+                {
+                    if(mutateInPreview) { i.Project.Pieces[0].Name="Değişmiş hazırlık";changed++; }
+                    return true;
+                };
+                studio.ConfirmDxfGrainlineReviewForVerification=i=>
+                {
+                    if(!mutateInPreview) { i.Project.Pieces[0].Name="Değişmiş hazırlık";changed++; }
+                    return Array.Empty<DxfGrainlineSelection>();
+                };
+                Run();
+                Check(changed==1 && DocumentSession.ContentEquals(prior,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source),
+                    mutateInPreview ? "Changing prepared import during first preview rejects application and preserves source and workspace"
+                                    : "Changing prepared import while continuing without a mapping rejects application and preserves source and workspace",checks);
+                var retryInvoked=false;
+                studio.ConfirmDxfReviewForVerification=_=> { retryInvoked=true;return false; };
+                Run();
+                Check(changed==1 && !retryInvoked && DocumentSession.ContentEquals(prior,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source) && review.Visibility!=Visibility.Visible,
+                    "Retry cannot re-baseline a mutated prepared import",checks);
+            }
+            foreach(var throwAfterMutation in new[] { false,true })
+            {
+                imported=Prepare();prior=studio.Document.Clone();var callbackCount=0;
+                studio.ConfirmDxfReviewForVerification=_=>true;
+                studio.ConfirmDxfGrainlineReviewForVerification=i=>
+                {
+                    callbackCount++;i.Project.Pieces[0].Name="Değişmiş inceleme";
+                    if(throwAfterMutation)throw new InvalidOperationException("injected after mutation");
+                    return null;
+                };
+                Run();
+                Check(callbackCount==1 && DocumentSession.ContentEquals(prior,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source) && review.Visibility!=Visibility.Visible,
+                    throwAfterMutation ? "Mutating prepared import then throwing closes retry and preserves source and workspace"
+                                       : "Mutating prepared import then cancelling closes retry and preserves source and workspace",checks);
+                var previewRetried=false;
+                studio.ConfirmDxfReviewForVerification=_=> { previewRetried=true;return true; };
+                Run();
+                Check(!previewRetried && callbackCount==1 && DocumentSession.ContentEquals(prior,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source) && review.Visibility!=Visibility.Visible,
+                    "Mutated cancelled or failed grain review cannot be re-baselined on retry",checks);
+            }
+        }
+        finally
+        {
+            studio.ConfirmDxfReviewForVerification=null;studio.ConfirmDxfGrainlineReviewForVerification=null;
+            studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous);
         }
     }
     private static void VerifyAsyncDxfImport(MainWindow studio,string work,List<string> checks)

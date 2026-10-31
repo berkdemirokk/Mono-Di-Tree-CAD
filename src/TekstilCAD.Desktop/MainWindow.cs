@@ -132,6 +132,7 @@ public class MainWindow : Window
     internal Action? BeforeDxfSourceCheckForVerification { get; set; }
     internal Action? AfterDxfSourceCheckForVerification { get; set; }
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
+    internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
     internal Func<(bool Accepted,bool Saved)>? DxfDiscardDecisionForVerification { get; set; }
@@ -2001,11 +2002,28 @@ public class MainWindow : Window
         dxfReviewActive=true;
         dxfReview.Visibility=Visibility.Collapsed;
         var applied=false;
+        ProjectDocument? importSnapshot = null;
+        bool PreparedImportMatches()
+        {
+            try { if (importSnapshot is not null && DocumentSession.ContentEquals(importSnapshot, imported.Project)) return true; }
+            catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NullReferenceException)
+            { /* An unstable or malformed copy cannot be approved. */ }
+            // Do not allow a later retry to re-baseline the mutated copy.
+            dxfPreparationStamp = null;
+            dxfReview.Visibility = Visibility.Collapsed;
+            dxfNotice.Text = "Hazırlanan DXF kopyası değişti veya doğrulanamadı; aktarım uygulanmadı. Dosyayı yeniden içe aktarın.";
+            if (!windowClosed) SetStatus(dxfNotice.Text);
+            return false;
+        }
         try
         {
             if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            // Keep an independent baseline before any preview or modal callback.
+            importSnapshot = imported.Project.Clone();
+            if (!PreparedImportMatches()) return;
             var retryPlacements=false;
-            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(imported.Project,imported.Warnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
+            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(importSnapshot.Clone(),imported.Warnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
+            if (!PreparedImportMatches()) return;
             if(retryPlacements) { await RetryPreparedDxfPlacementsAsync(imported);return; }
             if(!accepted) { OfferDxfReviewRetry(imported,"DXF önizlemesi kapatıldı; proje değiştirilmedi.");return; }
             // Enforce the same restriction here, including non-visual callers:
@@ -2018,9 +2036,43 @@ public class MainWindow : Window
                 return;
             }
             if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            IReadOnlyList<DxfGrainlineSelection> grainSelections = Array.Empty<DxfGrainlineSelection>();
+            string? grainFingerprint = null;
+            var hasGrainCandidates = imported.Project.Pieces.Any(p => p.Closed && p.Points.Count >= 3 && p.Grainline is null) &&
+                imported.Project.Pieces.Any(p => !p.Closed && p.Points.Count == 2 && p.Points[0] != p.Points[1] && p.Grainline is null && p.Metadata is null);
+            var grainReviewUnavailable = false;
+            if (hasGrainCandidates && (ConfirmDxfReviewForVerification is null || ConfirmDxfGrainlineReviewForVerification is not null))
+            {
+                // The mapper also validates captured internal metadata, which
+                // is deliberately not exposed to this assembly. Probe its
+                // complete contract before offering this optional review.
+                if (imported.SkippedRelevantInsertEntities is false && imported.ImportedBlockDefinitions is false &&
+                    imported.ImportParameters is not null && imported.SourceSha256 is { Length:64 } && imported.SourceByteLength is >= 0)
+                {
+                    try { grainFingerprint = DxfTextileGrainlineMapping.CaptureFingerprint(imported); }
+                    catch (Exception ex) when (ex is InvalidDataException or ArgumentException) { grainReviewUnavailable = true; }
+                }
+                else grainReviewUnavailable = true;
+            }
+            if (grainFingerprint is not null)
+            {
+                IReadOnlyList<DxfGrainlineSelection>? chosen;
+                if (ConfirmDxfGrainlineReviewForVerification is { } review) chosen = review(imported);
+                else
+                {
+                    var window = new DxfGrainlineReviewWindow(this, imported with { Project = importSnapshot.Clone() });
+                    chosen = window.ShowDialog() == true ? window.Selections : null;
+                }
+                if (!PreparedImportMatches()) return;
+                if (chosen is null) { OfferDxfReviewRetry(imported,"İplik yönü incelemesi iptal edildi; DXF uygulanmadı ve mevcut çalışma korundu.");return; }
+                grainSelections = chosen.ToArray();
+                if (!PreparedImportMatches()) return;
+                if (!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            }
             bool saved,discard;
             if(DxfDiscardDecisionForVerification is { } decision) { var choice=decision();discard=choice.Accepted;saved=choice.Saved; }
             else discard=CanDiscard(out saved);
+            if (!PreparedImportMatches()) return;
             if(!discard) { OfferDxfReviewRetry(imported,"DXF uygulanmadı; mevcut çalışma korundu.");return; }
             // Save or other asynchronous work during the discard dialog can change
             // the live document. Never reuse a stale decision to replace it.
@@ -2029,19 +2081,31 @@ public class MainWindow : Window
             preparedDxfSavedState=allowSaved;
             if(!await VerifyDxfSourceBeforeApplyAsync(imported,allowSaved)) { if(dxfSourceCheckCancelled)OfferDxfReviewRetry(imported,"DXF kaynak kontrolü iptal edildi; proje değiştirilmedi.");return; }
             if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı doğrulamadan sonra değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            if (!PreparedImportMatches()) return;
             // Persist only the verified import snapshot, never an absolute source
             // path. A missing/oversized history fails before replacing the document.
-            var candidate=imported.Project.Clone();
+            var candidate = grainSelections.Count == 0
+                ? importSnapshot.Clone()
+                : DxfTextileGrainlineMapping.Apply(imported with { Project = importSnapshot.Clone() }, grainSelections,
+                    grainFingerprint ?? throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.")).Project;
+            var historyWarnings = imported.Warnings.ToList();
+            if (grainReviewUnavailable)
+                historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
+            if (grainSelections.Count > 0)
+                historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
-                MillimetersPerUnit=preparedDxfFactor, Warnings=[..imported.Warnings], PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };
+                MillimetersPerUnit=preparedDxfFactor, Warnings=historyWarnings, PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };
             history.Validate();candidate.ImportProvenance=history;Validate(candidate);
+            if (!PreparedImportMatches()) return;
             LoadDocumentCore(candidate,true,()=> { applied=true;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false; });
             dxfNotice.Text=$"DXF: {Document.Pieces.Count} parça · 1 birim = {preparedDxfFactor} mm · Kaynak kontrol anından sonra değişmiş olabilir; ölçüleri kontrol edin";
+            if (grainSelections.Count > 0) dxfNotice.Text += " · İplik yönleri kontrol bekliyor; kaynakla karşılaştırın";
+            else if (grainReviewUnavailable) dxfNotice.Text += " · İplik yönü eşlemesi doğrulanamadı; çizgiler ayrı parça olarak korundu";
             SetStatus(dxfNotice.Text);
         }
         catch(Exception ex)
-        { if(!windowClosed) { if(applied)_ = SaveRecoveryAsync(); dxfNotice.Text=applied ? "DXF projeye yüklendi ancak görünüm yenilenemedi. Yeni projeyi kontrol edip farklı adla kaydedin; eski çalışma geri getirilmedi. Ayrıntı: "+ex.Message : "DXF uygulanamadı; mevcut çalışma korundu: "+ex.Message;SetStatus(dxfNotice.Text); } }
+        { if(!windowClosed) { if(applied) { _ = SaveRecoveryAsync(); dxfNotice.Text="DXF projeye yüklendi ancak görünüm yenilenemedi. Yeni projeyi kontrol edip farklı adla kaydedin; eski çalışma geri getirilmedi. Ayrıntı: "+ex.Message; SetStatus(dxfNotice.Text); } else if (PreparedImportMatches()) OfferDxfReviewRetry(imported,"DXF uygulanamadı; mevcut çalışma korundu: "+ex.Message); } }
         finally { dxfReviewActive=false; }
     }
     private bool IsPreparedDxfRetryCurrent(DxfImportResult imported) => IsDxfPreparationCurrent(imported)
