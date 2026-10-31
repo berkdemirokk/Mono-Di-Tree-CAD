@@ -647,6 +647,7 @@ private struct ModelLibrary: View {
 
     var body: some View {
         NavigationStack {
+            let matchingModels = matches
             List {
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
@@ -658,13 +659,13 @@ private struct ModelLibrary: View {
                 } else if models.isEmpty {
                     Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
                         .foregroundStyle(.secondary)
-                } else if matches.isEmpty {
+                } else if matchingModels.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
                         Button("Aramayı temizle") { search = "" }
                     }
                 }
-                ForEach(matches) { model in
+                ForEach(matchingModels) { model in
                     Button {
                         if model.canOpen { open(model.url) }
                         else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
@@ -1126,10 +1127,11 @@ private struct NotchPicker: View {
 
     var body: some View {
         NavigationStack {
+            let matchingPoints = pieces.indices.map { matching(pieces[$0], index: $0) }
             List {
                 ForEach(pieces.indices, id: \.self) { pieceIndex in
                     let piece = pieces[pieceIndex]
-                    let indices = matching(piece, index: pieceIndex)
+                    let indices = matchingPoints[pieceIndex]
                     if !indices.isEmpty {
                         Section(piece.displayName(index: pieceIndex)) {
                             ForEach(indices, id: \.self) { pointIndex in
@@ -1141,7 +1143,7 @@ private struct NotchPicker: View {
                         }
                     }
                 }
-                if pieces.indices.allSatisfy({ matching(pieces[$0], index: $0).isEmpty }) {
+                if matchingPoints.allSatisfy({ $0.isEmpty }) {
                     Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
                 }
             }
@@ -1168,13 +1170,14 @@ private struct PiecePicker: View {
 
     var body: some View {
         NavigationStack {
+            let matches = matchingIndices
             List {
                 selectionRow(title: "Tüm parçalar", index: nil)
-                ForEach(matchingIndices, id: \.self) { index in
+                ForEach(matches, id: \.self) { index in
                     selectionRow(title: pieces[index].displayName(index: index), index: index,
                                  details: pieces[index].selectionDetails(index: index))
                 }
-                if matchingIndices.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if matches.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Eşleşen parça bulunamadı.")
                         .foregroundStyle(.secondary)
                 }
