@@ -60,6 +60,7 @@ private struct ContentView: View {
     @State private var error: String?
     @State private var selectedPiece: Int?
     @State private var drawingRevision = UUID()
+    @State private var notchSelectionRevision = UUID()
     @State private var loadRequest = UUID()
     @State private var isLoading = false
 
@@ -112,6 +113,7 @@ private struct ContentView: View {
                             NotchPicker(pieces: project.pieces) { piece, point in
                                 selectedPiece = piece
                                 selectedNotch = (piece, point)
+                                notchSelectionRevision = UUID()
                                 showingNotches = false
                             }
                         }
@@ -190,7 +192,7 @@ private struct ContentView: View {
                         highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
                         )
                         .frame(height: 320)
-                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
+                        .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")-\(notchSelectionRevision)")
                         .background(Color.secondary.opacity(0.08))
                     } else {
                         Text("Bu projede görüntülenebilir kontur yok.")

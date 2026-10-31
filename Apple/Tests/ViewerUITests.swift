@@ -50,6 +50,31 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists, "The saved library model should finish opening after the picker is cancelled")
     }
 
+    func testSelectingNotchResetsZoomEvenWhenSelectingItAgain() {
+        let fixture = #"[6,{"Name":"İşaret Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        for _ in 0..<2 {
+            picker.tap()
+            let notch = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch
+            XCTAssertTrue(notch.waitForExistence(timeout: 5))
+            notch.tap()
+            let preview = app.otherElements["Kol kontur önizlemesi"]
+            XCTAssertTrue(preview.waitForExistence(timeout: 5))
+            let scroll = app.scrollViews.firstMatch
+            for _ in 0..<6 where !preview.isHittable { scroll.swipeUp() }
+            XCTAssertEqual(preview.value as? String, "Yüzde 100")
+            preview.pinch(withScale: 1.5, velocity: 1)
+            XCTAssertNotEqual(preview.value as? String, "Yüzde 100")
+            for _ in 0..<6 where !picker.isHittable { scroll.swipeDown() }
+            XCTAssertTrue(picker.isHittable)
+        }
+    }
+
     func testViewerCanScrollToContourOnPhone() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
