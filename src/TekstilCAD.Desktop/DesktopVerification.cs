@@ -4670,6 +4670,7 @@ internal static class DesktopVerification
             "DXF options offer limited placed-block mode as explicit opt-in and default to cancel",checks);
         options.Close();
 
+
         const string drawing="0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n"+
             "0\nLAYER\n2\n0\n70\n0\n62\n7\n290\n1\n6\nCONTINUOUS\n"+
             "0\nLAYER\n2\nKESİM\n70\n0\n62\n7\n290\n1\n6\nCONTINUOUS\n"+
@@ -4725,6 +4726,7 @@ internal static class DesktopVerification
         var original=studio.Document.Clone();var selected=studio.SelectedId;
         try
         {
+
             studio.ConfirmDxfLayersForVerification=(_,_)=>false;
             var declined=studio.StartInspectedDxfPreparationAsync(path,1,DxfTextEncoding.Utf8);
             PumpUntil(()=>declined.IsCompleted);
@@ -5059,17 +5061,43 @@ internal static class DesktopVerification
         var encoding=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="DXF metin kodlaması");
         var cancel=Descendants<Button>(root).Single(b=>Equals(b.Content,"Vazgeç"));
         var read=Descendants<Button>(root).Single(b=>Equals(b.Content,"DXF okumayı başlat"));
-        Check(encoding.SelectedIndex==0 && state.Encoding==DxfTextEncoding.Utf8 && encoding.Items.Count==2
-            && encoding.Items[1]?.ToString()=="Türkçe Windows-1254" && cancel.IsDefault && cancel.IsCancel && !read.IsDefault
+        Check(encoding.SelectedIndex==0 && state.Encoding==DxfTextEncoding.Utf8 && encoding.Items.Count==3
+            && encoding.Items[1]?.ToString()=="Türkçe Windows-1254" && encoding.Items[2]?.ToString()=="Batı Avrupa Windows-1252" && cancel.IsDefault && cancel.IsCancel && !read.IsDefault
             && FullyVisible(cancel,root) && FullyVisible(read,root) && Descendants<TextBlock>(root).Any(t=>t.Text.Contains("otomatik tahmin edilmez") && t.Text.Contains("kaynak dosyayı değiştirmez")),
             "DXF options default to UTF-8 and cancellation and explain explicit encoding selection",checks);
         options.Close();
+        var westernState=new MainWindow.DxfOptionsState();var westernOptions=studio.CreateDxfOptionsWindow(westernState);
+        var westernRoot=(FrameworkElement)westernOptions.Content;
+        Render(westernOptions,Path.ChangeExtension(reportPath,".dxf-windows1252-options.png"),440,340);
+        var westernChoice=Descendants<ComboBox>(westernRoot).Single(c=>AutomationProperties.GetName(c)=="DXF metin kodlaması");
+        var westernRead=Descendants<Button>(westernRoot).Single(b=>Equals(b.Content,"DXF okumayı başlat"));
+        westernOptions.Dispatcher.BeginInvoke(new Action(()=> { westernChoice.SelectedIndex=2;westernRead.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }));
+        var westernAccepted=westernOptions.ShowDialog();
+        Check(westernAccepted==true && westernState.Encoding==DxfTextEncoding.Windows1252,
+            "DXF options commit explicit Windows-1252 selection",checks);
         var content="0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n1\n0\nLAYER\n2\nÖn\n70\n0\n62\n7\n0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nLINE\n8\nÖn\n10\n0\n20\n0\n11\n10\n21\n0\n0\nENDSEC\n0\nEOF\n";
         var path=Path.Combine(work,"dxf-turkish-encoding.dxf");File.WriteAllBytes(path,System.Text.Encoding.Latin1.GetBytes(content));var bytes=File.ReadAllBytes(path);
         var source=studio.Document.Clone();var selected=studio.SelectedId;var oldContext=SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
         {
+        var westernPath=Path.Combine(work,"dxf-western-encoding.dxf");
+            File.WriteAllBytes(westernPath,System.Text.Encoding.Latin1.GetBytes(content.Replace("Ön","pièceÐ")));
+            var westernBytes=File.ReadAllBytes(westernPath);
+            var westernPending=studio.StartDxfPreparationAsync(westernPath,1,westernState.Encoding);PumpUntil(()=>westernPending.IsCompleted);
+            var westernImport=westernPending.GetAwaiter().GetResult();
+            Check(westernImport is not null && westernImport.Project.Pieces.Single().Name=="pièceÐ"
+                && File.ReadAllBytes(westernPath).SequenceEqual(westernBytes) && DocumentSession.ContentEquals(source,studio.Document),
+                "Windows-1252 prepares the decoded layer without changing source or workspace",checks);
+            var westernPreview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[westernImport!.Project,westernImport.Warnings,1.0,"dxf-western-encoding.dxf",westernImport.Units])!;
+            Render(westernPreview,Path.ChangeExtension(reportPath,".dxf-windows1252-review.png"),500,380);
+            var westernPreviewRoot=(FrameworkElement)westernPreview.Content;
+            var westernNotice=Descendants<TextBlock>(westernPreviewRoot).Single(t=>t.Text.StartsWith("Windows-1252 seçildi"));
+            var westernCancel=Descendants<Button>(westernPreviewRoot).Single(b=>Equals(b.Content,"Vazgeç"));
+            Check(WarningReachable(westernNotice,westernPreviewRoot) && westernCancel.IsDefault && FullyVisible(westernCancel,westernPreviewRoot)
+                && Descendants<TextBlock>(westernPreviewRoot).Any(t=>t.Text.Contains("Seçilen metin kodlaması: Batı Avrupa Windows-1252")),
+                "Windows-1252 review identifies selected encoding and exposes warning",checks);
+            westernPreview.Close();
             var invalid=studio.StartDxfPreparationAsync(path,1,DxfTextEncoding.Utf8);PumpUntil(()=>invalid.IsCompleted);
             try { invalid.GetAwaiter().GetResult();throw new InvalidOperationException("Invalid UTF-8 unexpectedly accepted."); }
             catch(InvalidDataException) { }

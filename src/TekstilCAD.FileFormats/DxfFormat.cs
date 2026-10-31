@@ -170,7 +170,7 @@ public sealed class DxfBlockPlacementInspection
 }
 
 /// <summary>Text decoding must be explicitly selected; legacy encodings are never guessed.</summary>
-public enum DxfTextEncoding { Utf8, Windows1254 }
+public enum DxfTextEncoding { Utf8, Windows1254, Windows1252 }
 
 /// <summary>ASCII 2D exchange subset. AAMA/ASTM metadata and INSERT transforms are not implemented.</summary>
 public static class DxfFormat
@@ -455,10 +455,10 @@ public static class DxfFormat
         var utf16Bom=length>=2 && ((raw[0]==0xFF && raw[1]==0xFE) || (raw[0]==0xFE && raw[1]==0xFF));
         var utf32BeBom=length>=4 && raw[0]==0 && raw[1]==0 && raw[2]==0xFE && raw[3]==0xFF;
         if(utf16Bom || utf32BeBom)throw new InvalidDataException("DXF UTF-16/UTF-32 BOM içeriyor; bu kodlamalar desteklenmiyor.");
-        if(utf8Bom && encoding!=DxfTextEncoding.Utf8)throw new InvalidDataException("DXF UTF-8 BOM ile seçilen Windows-1254 kodlaması çelişiyor; doğru kodlamayı seçin.");
+        if(utf8Bom && encoding!=DxfTextEncoding.Utf8)throw new InvalidDataException("DXF UTF-8 BOM ile seçilen ANSI kodlaması çelişiyor; doğru kodlamayı seçin.");
         if(utf8Bom)snapshot.Position=3;
         var alsoValidUtf8=false;
-        if(encoding==DxfTextEncoding.Windows1254)
+        if(encoding!=DxfTextEncoding.Utf8)
         {
             // This is a warning only, never a choice or fallback. Scan in
             // bounded chunks so cancellation and memory limits still apply.
@@ -476,8 +476,8 @@ public static class DxfFormat
             catch(DecoderFallbackException) { }
         }
         var decoder=encoding==DxfTextEncoding.Utf8 ? new UTF8Encoding(false,true) :
-            CodePagesEncodingProvider.Instance.GetEncoding(1254,EncoderFallback.ExceptionFallback,DecoderFallback.ExceptionFallback)
-                ?? throw new InvalidOperationException("Windows-1254 kod çözücüsü kullanılamıyor.");
+            CodePagesEncodingProvider.Instance.GetEncoding(encoding==DxfTextEncoding.Windows1254 ? 1254 : 1252,EncoderFallback.ExceptionFallback,DecoderFallback.ExceptionFallback)
+                ?? throw new InvalidOperationException("ANSI kod çözücüsü kullanılamıyor.");
         using var reader = new StreamReader(snapshot, decoder, false, 4096, leaveOpen: true);
         var lines = new List<string>();
         try
@@ -492,7 +492,7 @@ public static class DxfFormat
         catch(DecoderFallbackException ex)
         { throw new InvalidDataException(encoding==DxfTextEncoding.Utf8
             ? "DXF metni geçerli UTF-8 değil. Dosya eski ANSI kodlamasındaysa uygun kodlamayı açıkça seçin veya UTF-8 DXF olarak yeniden dışa aktarın."
-            : "DXF metni seçilen Windows-1254 kodlamasında geçerli değil; kodlamayı doğrulayın.",ex); }
+            : "DXF metni seçilen ANSI kodlamasında geçerli değil; kodlamayı doğrulayın.",ex); }
         var pairs = new List<Pair>();
         for (int i = 0; i < lines.Count; i += 2)
         {
@@ -512,6 +512,7 @@ public static class DxfFormat
         var warnings = new List<string>();
         warnings.Add("ASTM D6673 tarzı alışverişte serileme tablosu ayrı bir ASCII dosyasında olabilir; bu DXF işlemi o dosyayı aramaz veya içe almaz.");
         if(encoding==DxfTextEncoding.Windows1254)warnings.Add("DXF metni kullanıcının seçtiği Windows-1254 (Türkçe ANSI) ile çözüldü; kodlamanın kaynak dosyayla eşleştiğini doğrulayın.");
+        if(encoding==DxfTextEncoding.Windows1252)warnings.Add("DXF metni kullanıcının seçtiği Windows-1252 (Batı Avrupa ANSI) ile çözüldü; kodlamanın kaynak dosyayla eşleştiğini doğrulayın.");
         if(alsoValidUtf8)warnings.Add("Aynı DXF baytları UTF-8 olarak da geçerli; hangi kodlamanın doğru olduğunu kaynak dosyada doğrulayın.");
         var entities = new List<Entity>();
         // Group 102 contains application-private data. Codes in such a group
@@ -1042,8 +1043,8 @@ public static class DxfFormat
                 if (++lineCount > 4096) throw new InvalidDataException("DXF LINE birleştirme sınırı 4096 segmenttir.");
                 var sourceStart=new SourcePoint(e.RequiredCoordinate(10),e.RequiredCoordinate(20));
                 var sourceEnd=new SourcePoint(e.RequiredCoordinate(11),e.RequiredCoordinate(21));
-                var start=new Point2(sourceStart.X.Value*millimetersPerUnit,sourceStart.Y.Value*millimetersPerUnit);
-                var end=new Point2(sourceEnd.X.Value*millimetersPerUnit,sourceEnd.Y.Value*millimetersPerUnit);
+                var start=ScaleSourcePoint(sourceStart,millimetersPerUnit);
+                var end=ScaleSourcePoint(sourceEnd,millimetersPerUnit);
                 try { Geometry.Validate(start);Geometry.Validate(end); }
                 catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("DXF LINE koordinatları ölçek sonrası çalışma sınırlarını aşıyor.",ex); }
                 if(start==end)
@@ -1467,12 +1468,12 @@ public static class DxfFormat
         var nonAscii=utf8Bom;
         for(var i=0;i<length && !nonAscii;i++) { if((i&8191)==0)token.ThrowIfCancellationRequested();nonAscii=raw[i]>=128; }
         if(!nonAscii)return; // ASCII and its Unicode escapes have the same bytes in both encodings.
-        if(modern==true && selected==DxfTextEncoding.Windows1254)
-            warnings.Add("DXF sürüm başlığı UTF-8 bekleyen 2007 veya sonrası; seçilen Windows-1254 farklıdır. Kodlama değiştirilmedi; kaynak dosyayı doğrulayın.");
+        if(modern==true && selected!=DxfTextEncoding.Utf8)
+            warnings.Add($"DXF sürüm başlığı UTF-8 bekleyen 2007 veya sonrası; seçilen Windows-{(selected==DxfTextEncoding.Windows1254 ? 1254 : 1252)} farklıdır. Kodlama değiştirilmedi; kaynak dosyayı doğrulayın.");
         else if(modern==false && selected==DxfTextEncoding.Utf8)
             warnings.Add("DXF sürüm başlığı 2004 veya öncesi, seçilen kodlama UTF-8; ASCII dışı metnin kaynağını doğrulayın. Kodlama değiştirilmedi.");
-        if(modern!=true && selected==DxfTextEncoding.Windows1254 && codepage.Value is { } page && !page.Equals("ANSI_1254",StringComparison.OrdinalIgnoreCase))
-            warnings.Add("DXF kod sayfası başlığı seçilen Windows-1254 ile farklı veya bilinmiyor; başlık kesin kanıt değildir. Kaynağı doğrulayın.");
+        if(modern!=true && selected!=DxfTextEncoding.Utf8 && codepage.Value is { } page && !page.Equals(selected==DxfTextEncoding.Windows1254 ? "ANSI_1254" : "ANSI_1252",StringComparison.OrdinalIgnoreCase))
+            warnings.Add($"DXF kod sayfası başlığı seçilen Windows-{(selected==DxfTextEncoding.Windows1254 ? 1254 : 1252)} ile farklı veya bilinmiyor; başlık kesin kanıt değildir. Kaynağı doğrulayın.");
     }
 
     // $INSUNITS is a HEADER insertion-scale hint, not proof of physical dimensions.
@@ -1841,9 +1842,20 @@ public static class DxfFormat
             throw new InvalidDataException("DXF LINE uçları ayrıştırma veya ölçekleme hassasiyeti nedeniyle birleşti; çizim aktarılmadı.");
         origins[scaled]=source;
     }
+    private static Point2 ScaleSourcePoint(SourcePoint source,double factor)
+    {
+        double Scale(Coordinate coordinate)
+        {
+            var scaled=coordinate.Value*factor;
+            if (scaled == 0 && IsNonzeroDecimal(coordinate.Text))
+                throw new InvalidDataException("DXF koordinatı ayrıştırma veya ölçekleme sırasında sıfıra düştü; geometri aktarılmadı.");
+            return scaled;
+        }
+        return new Point2(Scale(source.X),Scale(source.Y));
+    }
     private static Point2 ScalePolylinePoint(SourcePoint source,double factor,Dictionary<Point2,SourcePoint> scaledOrigins)
     {
-        var scaled=new Point2(source.X.Value*factor,source.Y.Value*factor);
+        var scaled=ScaleSourcePoint(source,factor);
         try { Geometry.Validate(scaled); }
         catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("DXF polilin koordinatları ölçek sonrası çalışma sınırlarını aşıyor.",ex); }
         if(scaledOrigins.TryGetValue(scaled,out var prior) && !SameSourcePoint(prior,source))

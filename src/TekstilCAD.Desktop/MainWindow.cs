@@ -2017,7 +2017,7 @@ public class MainWindow : Window
         DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var cancel=AddButton(actions,"Vazgeç",()=>options.DialogResult=false);cancel.IsCancel=true;cancel.IsDefault=true;
         ComboBox units=null!,encodings=null!,methods=null!;
-        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >1 || methods.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama ve okuma yöntemini seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex==1 ? DxfTextEncoding.Windows1254 : DxfTextEncoding.Utf8;state.UseBlockPlacements=methods.SelectedIndex==1;options.DialogResult=true; });
+        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >2 || methods.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama ve okuma yöntemini seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex switch { 1 => DxfTextEncoding.Windows1254, 2 => DxfTextEncoding.Windows1252, _ => DxfTextEncoding.Utf8 };state.UseBlockPlacements=methods.SelectedIndex==1;options.DialogResult=true; });
         var content=new StackPanel();
         var scroll=new ScrollViewer { Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         KeyboardNavigation.SetIsTabStop(scroll,true);System.Windows.Automation.AutomationProperties.SetName(scroll,"DXF ölçü ve kodlama seçenekleri");root.Children.Add(scroll);
@@ -2025,7 +2025,7 @@ public class MainWindow : Window
         units=new ComboBox { ItemsSource=new[] { "Milimetre · 1 mm", "Santimetre · 10 mm", "İnç · 25,4 mm" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,10) };
         System.Windows.Automation.AutomationProperties.SetName(units,"DXF dosya birimi");content.Children.Add(units);
         content.Children.Add(new TextBlock { Text="Metin kodlaması",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) });
-        encodings=new ComboBox { ItemsSource=new[] { "UTF-8", "Türkçe Windows-1254" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
+        encodings=new ComboBox { ItemsSource=new[] { "UTF-8", "Türkçe Windows-1254", "Batı Avrupa Windows-1252" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
         System.Windows.Automation.AutomationProperties.SetName(encodings,"DXF metin kodlaması");content.Children.Add(encodings);
         content.Children.Add(new TextBlock { Text="Okuma yöntemi",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,4) });
         methods=new ComboBox { ItemsSource=new[] { "Standart aktarım (blok yerleşimleri uygulanmaz)", "Kontrollü aktarım (sınırlı destek)" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
@@ -2465,6 +2465,7 @@ public class MainWindow : Window
         var colorLoss=warnings.Any(w=>w.StartsWith("DXF renk bilgileri projede korunmaz",StringComparison.Ordinal)
             || w.StartsWith("DXF renkleri projede korunmaz",StringComparison.Ordinal));
         var windows1254=warnings.Any(w=>w.StartsWith("DXF metni kullanıcının seçtiği Windows-1254",StringComparison.Ordinal));
+        var windows1252=warnings.Any(w=>w.StartsWith("DXF metni kullanıcının seçtiği Windows-1252",StringComparison.Ordinal));
         var encodingHeaderWarning=warnings.Any(w=>w.StartsWith("DXF sürüm veya kod sayfası başlığı",StringComparison.Ordinal)
             || w.StartsWith("DXF sürüm başlığı",StringComparison.Ordinal) || w.StartsWith("DXF kod sayfası başlığı",StringComparison.Ordinal));
         var unitMismatch=units is { IsReliable:true, MillimetersPerUnit: double declared } && Math.Abs(declared-factor)>Math.Max(1e-12,Math.Abs(declared)*1e-12);
@@ -2511,9 +2512,9 @@ public class MainWindow : Window
             var notice=new TextBlock { Text=message,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
             riskNotices.Children.Add(notice);
         }
-        if(windows1254 || encodingHeaderWarning)
+        if(windows1254 || windows1252 || encodingHeaderWarning)
         {
-            var encodingText=(windows1254 ? "Windows-1254 seçildi; yanlış kodlama harfleri değiştirebilir. " : "")+
+            var encodingText=(windows1254 ? "Windows-1254 seçildi; yanlış kodlama harfleri değiştirebilir. " : windows1252 ? "Windows-1252 seçildi; yanlış kodlama harfleri değiştirebilir. " : "")+
                 (encodingHeaderWarning ? "DXF sürüm veya kod sayfası başlığıyla seçimin uyumu doğrulanamadı. " : "")+"Kaynak dosyanın kodlamasını doğrulayın.";
             var encodingNotice=new TextBlock { Text=encodingText,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
             riskNotices.Children.Add(encodingNotice);
@@ -2582,7 +2583,7 @@ public class MainWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(snapshotDetails,"Okunan DXF kopyasının özeti ve kaynak durumu");
         System.Windows.Automation.AutomationProperties.SetHelpText(snapshotDetails,"Okunmuş kopyanın bayt sayısını ve SHA-256 özetini seçip kopyalayabilirsiniz; güncel dosya durumu doğrulanmaz.");
         body.Children.Add(snapshotDetails);
-        body.Children.Add(new TextBlock { Text=$"Seçilen metin kodlaması: {(windows1254 ? "Türkçe Windows-1254" : "UTF-8")}. Kodlama otomatik tahmin edilmez; kaynak dosya değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
+        body.Children.Add(new TextBlock { Text=$"Seçilen metin kodlaması: {(windows1254 ? "Türkçe Windows-1254" : windows1252 ? "Batı Avrupa Windows-1252" : "UTF-8")}. Kodlama otomatik tahmin edilmez; kaynak dosya değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
         body.Children.Add(new TextBlock { Text=$"{incoming.Pieces.Count} parça · {incoming.Pieces.Sum(p=>p.Points.Count)} nokta\nToplam genişlik × yükseklik: {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm\nDosyada 1 birim = {MeasurementInput.Format(factor)} mm",Margin=new Thickness(0,12,0,12),TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text=$"DXF birim başlığı: {units?.Description ?? "Bilinmiyor"}. Başlık ölçünün doğruluğunu garanti etmez; seçilen ölçek uygulanır. Yukarıdaki veya parça görünümündeki ölçüleri bilinen bir ölçüyle karşılaştırın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) });
         body.Children.Add(new TextBlock { Text="Aktarım notları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
