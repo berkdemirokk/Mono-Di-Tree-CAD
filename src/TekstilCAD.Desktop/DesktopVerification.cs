@@ -4725,9 +4725,11 @@ internal static class DesktopVerification
         using var inventoryStream=new MemoryStream(System.Text.Encoding.UTF8.GetBytes(inventoryDrawing),writable:false);
         var inventoryInspection=DxfFormat.InspectBlockPlacements(inventoryStream,DxfTextEncoding.Utf8);
         var inventoryPicker=studio.CreateDxfLayerSelectionWindow(inventoryInspection,new MainWindow.DxfLayerSelectionState());
+        Render(inventoryPicker,Path.ChangeExtension(reportPath,".dxf-source-inventory.png"),500,380);
         var inventoryRoot=(FrameworkElement)inventoryPicker.Content;
         var inventory=Descendants<TextBlock>(inventoryRoot).Single(t=>AutomationProperties.GetAutomationId(t)=="DxfSourceInventory");
-        Check(inventory.Text.Contains("BLOCKS · SPLINE: 1") && inventory.Text.Contains("ENTITIES · SPLINE: 1")
+        var inventoryScroller=Descendants<ScrollViewer>(inventoryRoot).Single(s=>AutomationProperties.GetName(s)=="DXF katman seçimi ve uyarılar");
+        Check(inventoryScroller.IsAncestorOf(inventory) && inventory.Text.Contains("BLOCKS · SPLINE: 1") && inventory.Text.Contains("ENTITIES · SPLINE: 1")
             && inventory.Text.Contains("parça veya yerleştirme sayısı değildir")
             && Descendants<TextBlock>(inventoryRoot).Any(t=>t.Text.Contains("Kodlama ve destek sınırları")),
             "DXF inspection displays section source counts and preserves support warnings",checks);
