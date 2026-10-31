@@ -43,6 +43,14 @@ public sealed class Grainline
     public Grainline Clone() => new() { Start=Start, End=End, NeedsReview=NeedsReview };
 }
 
+/// <summary>A visual marker anchored to an existing contour vertex, with no cutting depth or machine semantics.</summary>
+public sealed class NotchMark
+{
+    public int VertexIndex { get; set; }
+    public Point2 Position { get; set; }
+    public NotchMark Clone() => new() { VertexIndex=VertexIndex,Position=Position };
+}
+
 public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -54,7 +62,9 @@ public sealed class PatternPiece
     public PieceMetadata? Metadata { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public Grainline? Grainline { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<NotchMark>? Notches { get; set; }
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
 }
 
 public sealed class GradingRuleSet
@@ -124,7 +134,9 @@ public sealed class NestingSnapshot
         // Adding/removing a grainline changes the domain or data and therefore
         // makes a previous snapshot stale rather than silently excluding it.
         var includeGrainlines=document.Pieces.Any(piece=>piece.Grainline is not null);
-        writer.Write(includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
+        var includeNotches=document.Pieces.Any(piece=>piece.Notches is not null);
+        writer.Write(includeNotches ? "TekstilCAD.nesting-layout.v3" : includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
+        if(includeNotches)writer.Write(includeGrainlines);
         writer.Write(document.Pieces.Count);
         foreach(var piece in document.Pieces)
         {
@@ -150,6 +162,19 @@ public sealed class NestingSnapshot
                     writer.Write(BitConverter.DoubleToInt64Bits(grainline.End.X));
                     writer.Write(BitConverter.DoubleToInt64Bits(grainline.End.Y));
                     writer.Write(grainline.NeedsReview);
+                }
+            }
+            if(includeNotches)
+            {
+                writer.Write(piece.Notches is not null);
+                if(piece.Notches is { } marks)
+                {
+                    writer.Write(marks.Count);
+                    foreach(var mark in marks)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();writer.Write(mark.VertexIndex);
+                        writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.X));writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.Y));
+                    }
                 }
             }
         }

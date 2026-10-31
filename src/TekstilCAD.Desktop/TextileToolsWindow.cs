@@ -766,6 +766,9 @@ public sealed class TextileToolsWindow : Window
         }
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
+        Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. İşaretler proje sürümü 6 gerektirir. İşaretli parçayı düzenlemeden önce işaretlerini kaldırın.");
+        Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
+        Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
         Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
@@ -776,6 +779,32 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&p.Points.Count>(p.Closed?3:2));return Scroll(panel);
     }
     private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse }
+    internal void SetVertexNotch(string indexText,bool add)
+    {
+        try
+        {
+            if(toolReviewRequired || vertexMoveBusy || workspace.HasPendingCanvasOrPropertyWork)
+                throw new InvalidOperationException("Önce bekleyen çizimi veya düzenlemeyi tamamlayın.");
+            var piece=Piece();
+            var document=workspace.Document;
+            if(document.Pieces.Count(p=>p.Id==piece.Id)!=1 || !ReferenceEquals(document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece))
+                throw new InvalidOperationException("Seçili parça güncel projeye ait değil. Atölyeyi yeniden açıp parçayı seçin.");
+            if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index) || index<0 || index>=piece.Points.Count)
+                throw new ArgumentException("Geçerli bir nokta indeksi girin.");
+            if(piece.Closed && piece.Points.Count>1 && index==piece.Points.Count-1 && piece.Points[0]==piece.Points[^1]) index=0;
+            var existing=piece.Notches?.Any(n=>n.VertexIndex==index)==true;
+            if(existing==add) { result.Foreground=StudioTheme.Muted;result.Text=add?"Bu köşede zaten işaret var.":"Bu köşede işaret yok.";return; }
+            if(add && ((piece.Notches?.Count ?? 0)>=10_000 || workspace.Document.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0))>=200_000))
+                throw new InvalidOperationException("İşaret sayısı sınırına ulaşıldı.");
+            var updated=piece.Notches?.Select(n=>new NotchMark { VertexIndex=n.VertexIndex, Position=n.Position }).ToList() ?? [];
+            if(add) updated.Add(new NotchMark { VertexIndex=index,Position=piece.Points[index] });
+            else updated.RemoveAll(n=>n.VertexIndex==index);
+            var next=updated.Count==0 ? null : updated;
+            CommitToolChange(add?"Köşe işareti eklendi":"Köşe işareti kaldırıldı",()=>piece.Notches=next,()=>
+            { RefreshSources(piece.Id);workspace.Select(piece.Id);Success(add?"Köşe işareti eklendi; değişiklik geri alınabilir. Kesim derinliği veya yönü tanımlanmadı.":"Köşe işareti kaldırıldı; değişiklik geri alınabilir."); });
+        }
+        catch(Exception ex) { result.Foreground=StudioTheme.Danger;result.Text="İşaret değiştirilemedi: "+ex.Message; }
+    }
     internal Task MoveVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Move,indexText,xText,yText);
     internal Task InsertVertexAsync(string indexText,string xText,string yText) => EditVertexAsync(VertexEdit.Insert,indexText,xText,yText);
     internal Task DeleteVertexAsync(string indexText) => EditVertexAsync(VertexEdit.Delete,indexText,null,null);
@@ -792,6 +821,7 @@ public sealed class TextileToolsWindow : Window
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse ? default : new Point2(Number(xText!),Number(yText!));
             var selected=Piece();var sourceId=selected.Id;
+            if(selected.Notches is { Count:>0 })throw new InvalidOperationException("Nokta düzenlemeden önce bu parçanın işaretlerini kaldırın; işaretler otomatik taşınmaz.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
@@ -957,6 +987,7 @@ public sealed class TextileToolsWindow : Window
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
+        if(previous.Notches is { Count:>0 })throw new InvalidOperationException("Konturu değiştirmeden önce köşe işaretlerini kaldırın.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
         var grainNeedsReview=edited.Grainline is not null && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));

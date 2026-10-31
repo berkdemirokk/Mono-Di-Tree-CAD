@@ -96,6 +96,7 @@ public static class ProductionNestingPlan
         foreach (var p in matches)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if(p.Notches is not null)throw NestingPieceError.Create(p.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.");
             if (p.Metadata?.Role != "Kesim" || p.Metadata.Quantity is not int n || n < 1 || n > 100000)
                 throw NestingPieceError.Create(p.Id,"Parça için kesim rolü ve pozitif adet belirtilmelidir.");
             if (string.IsNullOrWhiteSpace(p.Metadata.Material)) throw NestingPieceError.Create(p.Id,"Parça için malzeme belirtilmelidir.");

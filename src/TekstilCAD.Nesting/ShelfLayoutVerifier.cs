@@ -30,6 +30,7 @@ public static class ShelfLayoutVerifier
         foreach (var piece in pieces)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if(piece?.Notches is not null)throw new InvalidOperationException("Çentik işaretli yerleşim henüz doğrulanamıyor.");
             if (piece?.Points is null || piece.Points.Count < 3 || piece.Points.Count > NestingEngine.MaximumVerticesPerPiece ||
                 (vertices += piece.Points.Count) > MaximumVertices)
                 throw new InvalidOperationException("Invalid contour or layout verification resource limit exceeded.");

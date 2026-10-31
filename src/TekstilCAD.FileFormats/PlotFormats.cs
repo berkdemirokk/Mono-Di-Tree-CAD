@@ -6,8 +6,17 @@ using TekstilCAD.Core;
 
 namespace TekstilCAD.FileFormats;
 
-// Formats which omit grainline semantics reject at the format boundary rather
-// than silently writing an incomplete file. SVG has its own explicit output.
+// Marker semantics are not represented by these exporters. Never silently omit them.
+internal static class NotchExportGuard
+{
+    internal static void EnsureSupported(ProjectDocument project)
+    {
+        if (project.Pieces.Any(piece => piece.Notches is { Count: > 0 }))
+            throw new InvalidDataException("Çentik işaretleri bu çıktı biçimine henüz aktarılamıyor; veri kaybını önlemek için dosya hazırlanmadı.");
+    }
+}
+
+// SVG supports grainline output; other formats reject silent omission.
 internal static class GrainlineExportGuard
 {
     internal static void EnsureSupported(ProjectDocument project)
@@ -26,10 +35,12 @@ public static class SvgFormat
     private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion)
     {
         ProjectStorage.Validate(project);
+        NotchExportGuard.EnsureSupported(project);
         // The caller must not mutate the source while this detached snapshot is
         // captured. All bounds and XML below use exactly this captured content.
         project = project.Clone();
         ProjectStorage.Validate(project);
+        NotchExportGuard.EnsureSupported(project);
         if (project.Pieces.Count == 0)
             throw new InvalidDataException("SVG dışa aktarımı için en az bir parça gerekir.");
         if (project.Pieces.Any(p => p.Points.Count < 2))
@@ -200,6 +211,7 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         ProjectStorage.Validate(project);
         GrainlineExportGuard.EnsureSupported(project);
+        NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();
         // Validate before cloning to bound resource use, then work only on a
         // detached copy. Caller must keep the source stable through capture.
@@ -207,6 +219,7 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         ProjectStorage.Validate(project);
         GrainlineExportGuard.EnsureSupported(project);
+        NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();
         if (project.Pieces.Count == 0)
             throw new InvalidDataException("HPGL dışa aktarımı için en az bir parça gerekir.");

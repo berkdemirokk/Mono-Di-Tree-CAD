@@ -46,7 +46,7 @@ public sealed class DocumentHistory
     }
     private void Push(LinkedList<Entry> target, ProjectDocument document, Guid? selectedId)
     {
-        long points = document.Pieces.Sum(p => (long)p.Points.Count) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
+        long points = document.Pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0)) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
         if (points > maximumPoints)
         {
             CountCapacityDiscard((long)undo.Count + redo.Count + 1);

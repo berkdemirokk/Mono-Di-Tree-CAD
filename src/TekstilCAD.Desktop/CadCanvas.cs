@@ -177,6 +177,8 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Selected;
         if(piece is null)
         { owner.SetStatus("Taşımak için önce proje parçaları listesinden veya kalıp alanından bir parça seçin.");return; }
+        if(piece.Notches is { Count:>0 })
+        { owner.SetStatus("Taşımadan önce parçanın köşe işaretlerini kaldırın; işaretler otomatik taşınmaz.");return; }
         var step=modifiers==ModifierKeys.Control ? .1 : modifiers==ModifierKeys.Shift ? 10 : 1;
         var dx=key==Key.Left ? -step : key==Key.Right ? step : 0;
         var dy=key==Key.Up ? -step : key==Key.Down ? step : 0;
@@ -416,6 +418,8 @@ public sealed class CadCanvas : FrameworkElement
                 return;
             }
             owner.Select(piece?.Id);
+            if(piece?.Notches is { Count:>0 })
+            { owner.SetStatus("İşaretli parça seçildi. Taşımadan önce köşe işaretlerini kaldırın.");return; }
             if(piece is not null) { dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
         }
@@ -727,6 +731,16 @@ public sealed class CadCanvas : FrameworkElement
             var visible=p.Id==dragId && dragPreview is not null ? dragPreview : p.Points;
             var fill=p.Closed ? selected ? (selectedFill ??= B("#304947")) : (normalFill ??= B("#163D40")) : null;
             DrawContour(dc,visible,p.Closed,fill,pen);
+            if(p.Notches is not null)
+            {
+                var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
+                foreach(var notch in p.Notches)
+                {
+                    var point=Screen(notch.Position);
+                    dc.DrawEllipse(null,notchPen,point,7,7);
+                    if(selected)Text(dc,$"İşaret {notch.VertexIndex}",new Point(point.X+8,point.Y-15),notchBrush,11);
+                }
+            }
             var grain=p.Id==dragId && dragPreview is not null ? dragPreviewGrainline : p.Grainline;
             if(grain is not null)
             {

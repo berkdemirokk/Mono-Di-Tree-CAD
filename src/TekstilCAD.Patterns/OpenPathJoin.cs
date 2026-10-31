@@ -23,6 +23,7 @@ public static class OpenPathJoin
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(second);
         cancellationToken.ThrowIfCancellationRequested();
+        NotchSafety.RequireNoNotches(first);NotchSafety.RequireNoNotches(second);
         if (!double.IsFinite(tolerance) || tolerance < 0 || tolerance > 100_000)
             throw new ArgumentOutOfRangeException(nameof(tolerance));
         if (first.Id == Guid.Empty || second.Id == Guid.Empty || first.Id == second.Id)

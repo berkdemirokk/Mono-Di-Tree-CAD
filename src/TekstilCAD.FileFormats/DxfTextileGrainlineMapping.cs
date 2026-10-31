@@ -100,6 +100,8 @@ public static class DxfTextileGrainlineMapping
                 throw new InvalidDataException("DXF iplik yönü seçimi eksik, yinelenmiş veya geçersiz.");
             if(!contour.Closed || contour.Points.Count<3 || contour.Grainline is not null)
                 throw new InvalidDataException("İplik yönü hedefi kapalı kontur olmalı ve mevcut iplik yönü içermemelidir.");
+            if(marker.Notches is not null)
+                throw new InvalidDataException("Çentik işaretli parça iplik yönüne dönüştürülemez; işaretler korunmalıdır.");
             if(marker.Closed || marker.Points.Count!=2 || marker.Points[0]==marker.Points[1] || marker.Grainline is not null || marker.Metadata is not null)
                 throw new InvalidDataException("İplik yönü işareti meta verisiz, iki farklı uçlu açık çizgi olmalıdır.");
         }
@@ -122,6 +124,8 @@ public static class DxfTextileGrainlineMapping
         {
             cancellationToken.ThrowIfCancellationRequested();
             var marker=copies[selection.MarkerId];
+            if(marker.Notches is not null)
+                throw new InvalidDataException("Çentik işaretli parça iplik yönüne dönüştürülemez; işaretler korunmalıdır.");
             var source=sources is not null && sources.TryGetValue(marker.Id,out var found) ? found : null;
             audit.Add(new(selection.ContourId,marker.Id,marker.Name,marker.Points[0],marker.Points[1],source));
             copies[selection.ContourId].Grainline=new Grainline { Start=marker.Points[0],End=marker.Points[1],NeedsReview=true };
