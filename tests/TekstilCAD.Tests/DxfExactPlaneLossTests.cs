@@ -36,6 +36,29 @@ public class DxfExactPlaneLossTests
         Assert.Contains(result.Warnings,w=>w.Contains("3D VERTEX"));
     }
 
+    [Theory]
+    [InlineData(10,"1")]
+    [InlineData(20,"1e-400")]
+    public void NonzeroLegacyHeaderPointSkipsWholePolyline(int code,string value)
+    {
+        var result=Import($"0\nPOLYLINE\n{code}\n{value}\n0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nSEQEND\n");
+        Assert.Single(result.Project.Pieces);
+        Assert.Contains(result.Warnings,w=>w.Contains("3D/elevation/normal"));
+    }
+
+    [Fact]
+    public void ZeroLegacyHeaderPointRemainsSupported()
+    {
+        var result=Import("0\nPOLYLINE\n10\n-0.0\n20\n0\n0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nSEQEND\n");
+        Assert.Equal(2,result.Project.Pieces.Count);
+    }
+
+    [Fact]
+    public void DuplicateLegacyHeaderPointIsRejected()
+    {
+        Assert.Throws<InvalidDataException>(()=>Import("0\nPOLYLINE\n10\n0\n10\n0\n0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nSEQEND\n"));
+    }
+
     [Fact]
     public void EquivalentDecimalDefaultsRemainSupported()
     {

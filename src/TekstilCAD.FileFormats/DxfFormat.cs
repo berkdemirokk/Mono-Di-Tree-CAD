@@ -1520,7 +1520,13 @@ public static class DxfFormat
     private static bool HasUnsupportedPlane(Entity e)
     {
         bool unsupported=false;
-        foreach(var code in new[] { 30,31,38,39,210,220,230 })
+        // Legacy POLYLINE's header point has dummy X/Y components, defined
+        // as zero. A nonzero value cannot safely be discarded as if it were
+        // an ordinary 2D contour. LWPOLYLINE and LINE use 10/20 for vertices.
+        var codes=e.Type=="POLYLINE"
+            ? new[] { 10,20,30,31,38,39,210,220,230 }
+            : new[] { 30,31,38,39,210,220,230 };
+        foreach(var code in codes)
         {
             var values=e.Data.Where(p=>p.Code==code).ToArray();
             if(values.Length>1)throw new InvalidDataException($"DXF {e.Type} için {code} alanı yinelenmiş.");
