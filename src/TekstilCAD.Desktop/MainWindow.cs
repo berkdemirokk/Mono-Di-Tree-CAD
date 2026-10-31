@@ -2518,16 +2518,6 @@ public class MainWindow : Window
             var encodingNotice=new TextBlock { Text=encodingText,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
             riskNotices.Children.Add(encodingNotice);
         }
-        if(unitMismatch)
-        {
-            var unitNotice=new TextBlock { Text=$"Birim uyuşmazlığı: DXF başlığı {units!.Description} bildiriyor; seçiminiz 1 birim = {MeasurementInput.Format(factor)} mm. Ölçüyü kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
-            riskNotices.Children.Add(unitNotice);
-        }
-        if(unitUnknown)
-        {
-            var unitNotice=new TextBlock { Text=$"Birim doğrulanamadı: {units?.Description ?? "başlık yok"}. Seçiminiz 1 birim = {MeasurementInput.Format(factor)} mm. Ölçüyü doğrulayın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) };
-            riskNotices.Children.Add(unitNotice);
-        }
         // Several notices, or one unusually long combined notice, can otherwise
         // consume the entire compact window and hide the piece review.
         var riskTextLength=riskNotices.Children.OfType<TextBlock>().Sum(item=>item.Text.Length);
@@ -2549,11 +2539,20 @@ public class MainWindow : Window
             System.Windows.Automation.AutomationProperties.SetName(blockNotice,blockMessage);
             DockPanel.SetDock(blockNotice,Dock.Top);panel.Children.Add(blockNotice);
         }
+        if(unitMismatch || unitUnknown)
+        {
+            var message=unitMismatch
+                ? $"Birim uyuşmazlığı: başlık {units!.Description}; seçim {MeasurementInput.Format(factor)} mm/birim."
+                : $"Birim doğrulanamadı: {units?.Description ?? "başlık yok"}; seçim {MeasurementInput.Format(factor)} mm/birim.";
+            var unitNotice=new TextBlock { Text=message,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,4) };
+            AutomationProperties.SetName(unitNotice,unitNotice.Text);
+            DockPanel.SetDock(unitNotice,Dock.Top);panel.Children.Add(unitNotice);
+        }
         if(compactRisk)
         {
             var summary=new TextBlock { Text=colorLoss ? "Renkler korunmaz; diğer aktarım uyarılarını aşağıda inceleyin." : "Aktarım uyarıları var; tümünü aşağıda kaydırarak inceleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,3) };
             DockPanel.SetDock(summary,Dock.Top);panel.Children.Add(summary);
-            var riskScroller=new ScrollViewer { Content=riskNotices,MaxHeight=36,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true,Margin=new Thickness(0,0,0,4) };
+            var riskScroller=new ScrollViewer { Content=riskNotices,MaxHeight=unitMismatch || unitUnknown ? 20 : 36,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true,Margin=new Thickness(0,0,0,4) };
             KeyboardNavigation.SetIsTabStop(riskScroller,true);
             System.Windows.Automation.AutomationProperties.SetName(riskScroller,"DXF aktarım uyarıları");
             System.Windows.Automation.AutomationProperties.SetHelpText(riskScroller,"Tüm uyarıları okumak için bu alanı yön tuşlarıyla kaydırın. Uyarıların ayrıntıları aktarım notlarında da bulunur.");
@@ -2585,7 +2584,7 @@ public class MainWindow : Window
         body.Children.Add(snapshotDetails);
         body.Children.Add(new TextBlock { Text=$"Seçilen metin kodlaması: {(windows1254 ? "Türkçe Windows-1254" : "UTF-8")}. Kodlama otomatik tahmin edilmez; kaynak dosya değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
         body.Children.Add(new TextBlock { Text=$"{incoming.Pieces.Count} parça · {incoming.Pieces.Sum(p=>p.Points.Count)} nokta\nToplam genişlik × yükseklik: {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm\nDosyada 1 birim = {MeasurementInput.Format(factor)} mm",Margin=new Thickness(0,12,0,12),TextWrapping=TextWrapping.Wrap });
-        body.Children.Add(new TextBlock { Text=$"DXF birim başlığı: {units?.Description ?? "Bilinmiyor"}. Başlık ölçünün doğruluğunu garanti etmez; seçilen ölçek uygulanır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) });
+        body.Children.Add(new TextBlock { Text=$"DXF birim başlığı: {units?.Description ?? "Bilinmiyor"}. Başlık ölçünün doğruluğunu garanti etmez; seçilen ölçek uygulanır. Yukarıdaki veya parça görünümündeki ölçüleri bilinen bir ölçüyle karşılaştırın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) });
         body.Children.Add(new TextBlock { Text="Aktarım notları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,6) });
         if(warnings.Count==0)body.Children.Add(new TextBlock { Text="Desteklenen geometri için aktarım uyarısı yok.",TextWrapping=TextWrapping.Wrap });
         foreach(var warning in warnings)body.Children.Add(new TextBlock { Text="• "+warning,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });

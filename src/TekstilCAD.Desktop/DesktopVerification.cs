@@ -750,7 +750,9 @@ internal static class DesktopVerification
             var combinedMismatch=Descendants<TextBlock>(combinedRoot).Single(t=>t.Text.StartsWith("Birim uyuşmazlığı:"));
             var combinedCancel=Descendants<Button>(combinedRoot).Single(b=>Equals(b.Content,"Vazgeç"));
             var combinedAccept=Descendants<Button>(combinedRoot).Single(b=>Equals(b.Content,"İçe aktar ve projeyi değiştir"));
-            Check(WarningReachable(combinedLoss,combinedRoot) && WarningReachable(combinedMismatch,combinedRoot)
+            Check(WarningReachable(combinedLoss,combinedRoot) && FullyVisible(combinedMismatch,combinedRoot)
+                && Descendants<TextBlock>(combinedRoot).Any(t=>t.Text.Contains("bilinen bir ölçüyle karşılaştırın"))
+                && !Descendants<ScrollViewer>(combinedRoot).Any(s=>s.IsAncestorOf(combinedMismatch))
                 && FullyVisible(combinedCancel,combinedRoot) && FullyVisible(combinedAccept,combinedRoot)
                 && combinedCancel.IsDefault && !combinedAccept.IsDefault
                 && JsonSerializer.Serialize(studio.Document)==beforeImportReview && studio.SelectedId==preImportSelection
@@ -778,7 +780,8 @@ internal static class DesktopVerification
             var unknownNotice=Descendants<TextBlock>(unknownRoot).Single(t=>t.Text.StartsWith("Birim doğrulanamadı:"));
             var unknownCancel=Descendants<Button>(unknownRoot).Single(b=>Equals(b.Content,"Vazgeç"));
             var unknownAccept=Descendants<Button>(unknownRoot).Single(b=>Equals(b.Content,"İçe aktar ve projeyi değiştir"));
-            Check(WarningReachable(unknownNotice,unknownRoot) && FullyVisible(unknownCancel,unknownRoot)
+            Check(FullyVisible(unknownNotice,unknownRoot) && Descendants<TextBlock>(unknownRoot).Any(t=>t.Text.Contains("bilinen bir ölçüyle karşılaştırın"))
+                && !Descendants<ScrollViewer>(unknownRoot).Any(s=>s.IsAncestorOf(unknownNotice)) && FullyVisible(unknownCancel,unknownRoot)
                 && unknownCancel.IsDefault && !unknownAccept.IsDefault && JsonSerializer.Serialize(studio.Document)==beforeImportReview,
                 "Compact DXF review visibly flags unknown units and defaults to cancellation without changing document",checks);
             var lineTypeReview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[mixed.Project,
