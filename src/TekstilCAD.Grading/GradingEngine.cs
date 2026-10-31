@@ -150,6 +150,23 @@ public static class GradingEngine
         // closing vertex from the source contour.
         if (basePiece.Closed && basePiece.Points[0] != basePiece.Points[^1] && result[0] == result[^1])
             throw new InvalidDataException("Serileme kapanış kenarını sıfıra indirdi; kuralları kontrol edin.");
+        if (grainline is not null && increments.All(p => p == increments[0]))
+        {
+            var delta = increments[0];
+            Point2 Move(Point2 p) => new(GradeCoordinate(p.X, delta.X, steps, 0, "X"),
+                                        GradeCoordinate(p.Y, delta.Y, steps, 0, "Y"));
+            // Check each absolute displacement as well as the line and its
+            // vectors to the contour anchor. A translated short mark can
+            // otherwise change direction or length at large coordinates.
+            var start = Move(grainline.Start);
+            var end = Move(grainline.End);
+            var moved = Geometry.Translate([basePiece.Points[0], grainline.Start, grainline.End],
+                delta.X * steps, delta.Y * steps);
+            if (moved[0] != result[0] || moved[1] != start || moved[2] != end)
+                throw new InvalidDataException("İplik yönü ve kontur aynı konuma güvenle taşınamadı.");
+            grainline.Start = start;
+            grainline.End = end;
+        }
         ValidateContour(result, basePiece.Closed, cancellationToken);
         if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points)) != Math.Sign(Geometry.SignedArea(result)))
             throw new InvalidDataException("Serileme kontur yönünü tersine çevirdi; kuralları kontrol edin.");

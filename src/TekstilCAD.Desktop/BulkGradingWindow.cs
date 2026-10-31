@@ -52,7 +52,7 @@ internal sealed class BulkGradingWindow : Window
         var options=new WrapPanel();options.Children.Add(IncludeSize);options.Children.Add(CopyRole);panel.Children.Add(options);
         panel.Children.Add(new TextBlock { Text="Adet hiçbir zaman kopyalanmaz. Sıfır adım veya sıfır artış, temel kalıpla aynı geometriyi oluşturabilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
         if(this.source.Grainline is not null)
-            panel.Children.Add(new TextBlock { Text="İplik yönü her bedene aynı koordinatlarla aktarılır ve kontrol bekler. Her bedenin konturuyla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
+            panel.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her bedenin konturuyla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         var actions=new WrapPanel();actions.Children.Add(PreviewButton);actions.Children.Add(AddButton);actions.Children.Add(CancelButton);panel.Children.Add(actions);
         AutomationProperties.SetName(PreviewList,"Hesaplanan bedenlerin önizleme listesi");panel.Children.Add(PreviewList);
         panel.Children.Add(new TextBlock { Text="Geometrileri karşılaştırmak için yukarıdan bir beden seçin. Konturlar: kesikli sarı temel kalıp, düz turkuaz seçili beden. İplik yönü çizgileri sarı ve kesikli turkuazdır; üst üste gelebilir. Her bedende konturla ilişkisini kontrol edin. Aynı koordinat ve ölçek kullanılır; ekran çizimi fiziksel ölçü değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0) });
@@ -153,7 +153,7 @@ internal sealed class BulkGradingWindow : Window
                 for(int i=0;i<generated.Count;i++)
                 {
                     cts.Token.ThrowIfCancellationRequested();
-                    ValidateGrainTransfer(source,generated[i]);
+                    ValidateGrainTransfer(source,generated[i],increments,sizes[i].Steps);
                     if(include || (copy && (source.Metadata?.Role is not null || source.Metadata?.Material is not null)))
                         generated[i].Metadata=new PieceMetadata { Size=include?sizes[i].Name:null,Role=copy?source.Metadata?.Role:null,Material=copy?source.Metadata?.Material:null,Quantity=null };
                 }
@@ -189,11 +189,12 @@ internal sealed class BulkGradingWindow : Window
         }
         return result.ToString();
     }
-    internal static void ValidateGrainTransfer(PatternPiece source,PatternPiece generated)
+    internal static void ValidateGrainTransfer(PatternPiece source,PatternPiece generated,IReadOnlyList<Point2> increments,double steps)
     {
         if(source.Grainline is { } line)
         {
-            if(generated.Grainline is not { } result || ReferenceEquals(line,result) || result.Start!=line.Start || result.End!=line.End || !result.NeedsReview)
+            var shift=increments.Count>0 && increments.All(p=>p==increments[0]) ? increments[0]*steps : new Point2(0,0);
+            if(generated.Grainline is not { } result || ReferenceEquals(line,result) || result.Start!=line.Start+shift || result.End!=line.End+shift || !result.NeedsReview)
                 throw new InvalidOperationException("Yeni bedenin iplik yönü beklenen şekilde korunamadı; sonuç projeye eklenmedi.");
         }
         else if(generated.Grainline is not null)

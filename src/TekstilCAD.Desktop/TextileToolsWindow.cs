@@ -473,7 +473,7 @@ public sealed class TextileToolsWindow : Window
         // Keep the table visible when optional fields are expanded. The lower
         // controls scroll as a group so nothing is clipped at the minimum size.
         var lower=new StackPanel();
-        lower.Children.Add(new TextBlock { Text="İplik yönü varsa yeni bedenlere aynı koordinatlarla aktarılır ve kontrol bekler. Her yeni bedende çizginin konturla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
+        lower.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her yeni bedende çizginin konturla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
         var lowerScroll=new ScrollViewer { Content=lower,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(lowerScroll,"Serileme seçenekleri ve işlemleri");
@@ -587,7 +587,7 @@ public sealed class TextileToolsWindow : Window
                     beforeGrade?.Invoke();
                     token.ThrowIfCancellationRequested();
                     var item=GradingEngine.Generate(snapshot,increments,stepCount,sizeName,token);
-                    BulkGradingWindow.ValidateGrainTransfer(snapshot,item);
+                    BulkGradingWindow.ValidateGrainTransfer(snapshot,item,increments,stepCount);
                     if(transferSize || role is not null || material is not null)
                         item.Metadata=new PieceMetadata { Size=transferSize ? sizeName : null,Role=role,Material=material,Quantity=null };
                     token.ThrowIfCancellationRequested();
@@ -614,7 +614,7 @@ public sealed class TextileToolsWindow : Window
                 // The dispatcher cannot process a new cancellation while this commit runs.
                 // A request already received before this point must leave the project untouched.
                 token.ThrowIfCancellationRequested();
-                var grainNotice=generated.Grainline is null ? "" : " İplik yönü aynı koordinatlarla aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
+                var grainNotice=generated.Grainline is null ? "" : " İplik yönü aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
                 AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}");
                 if(generated.Grainline is not null)result.Foreground=StudioTheme.Warning;
                 if(generated.Points.SequenceEqual(snapshot.Points))
@@ -659,7 +659,7 @@ public sealed class TextileToolsWindow : Window
             bool CurrentDraft()=>!windowClosed && !gradeBusy && !offsetBusy && source.SelectedItem is PatternPiece current && current.Id==selected &&
                 activeSourceId==selected && ReferenceEquals(activeDraft,draft) && !rulesNeedReset && draft.Closed==current.Closed && draft.Points.SequenceEqual(current.Points) &&
                 SavedRuleMatchesDraft(selected,draft) && rows.Select(r=>(r.Dx,r.Dy)).SequenceEqual(rowText);
-            new BulkGradingWindow(workspace,this,piece,increments,CurrentDraft,()=> { RefreshSources(selected);Success("Bedenler projeye eklendi. Temel parça ve artış taslağı korundu; projeyi kaydedin."+(piece.Grainline is null ? "" : " İplik yönleri aynı koordinatlarla aktarıldı ve kontrol bekliyor; her bedenin konturuyla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir."));if(piece.Grainline is not null)result.Foreground=StudioTheme.Warning; }).ShowDialog();
+            new BulkGradingWindow(workspace,this,piece,increments,CurrentDraft,()=> { RefreshSources(selected);Success("Bedenler projeye eklendi. Temel parça ve artış taslağı korundu; projeyi kaydedin."+(piece.Grainline is null ? "" : " İplik yönleri aktarıldı ve kontrol bekliyor; her bedenin konturuyla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir."));if(piece.Grainline is not null)result.Foreground=StudioTheme.Warning; }).ShowDialog();
         },()=>HasPiece()&&!rulesNeedReset);
         batch.Margin=new Thickness(0,8,0,0);batch.HorizontalAlignment=HorizontalAlignment.Left;
         AutomationProperties.SetHelpText(batch,"Birden fazla beden ve adım girip hepsini inceleyin; onaylanınca tek işlem olarak eklenir.");
@@ -724,7 +724,7 @@ public sealed class TextileToolsWindow : Window
             var selected=source.SelectedItem as PatternPiece;
             var line=selected?.Grainline;
             var message=line is null ? "" :
-                $"Kaynak iplik yönü · Parça kimliği: {selected!.Id:D} · Başlangıç X {MeasurementInput.Format(line.Start.X)}, Y {MeasurementInput.Format(line.Start.Y)} mm; bitiş X {MeasurementInput.Format(line.End.X)}, Y {MeasurementInput.Format(line.End.Y)} mm. Yeni parçaya aynı koordinatlarla aktarılacak ve yeniden inceleme gerektirecek. Çizginin varlığı fiziksel üretim uygunluğunu doğrulamaz.";
+                $"Kaynak iplik yönü · Parça kimliği: {selected!.Id:D} · Başlangıç X {MeasurementInput.Format(line.Start.X)}, Y {MeasurementInput.Format(line.Start.Y)} mm; bitiş X {MeasurementInput.Format(line.End.X)}, Y {MeasurementInput.Format(line.End.Y)} mm. Tüm noktalar eşit ötelenirse çizgi de ötelenir; aksi halde aynı koordinatlarda kalır. Yeniden inceleme gerektirir. Çizginin varlığı fiziksel üretim uygunluğunu doğrulamaz.";
             if(allowanceGrainHint.Text==message)return;
             allowanceGrainHint.Text=message;
             AutomationProperties.SetName(allowanceGrainHint,message);
