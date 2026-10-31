@@ -80,6 +80,11 @@ internal sealed class ProductionNestingWindow : Window
         advancedControls.Children.Add(fabricLength);advancedControls.Children.Add(grainPolicy);
         var advanced=new Expander { Header="Kumaş boyu ve iplik yönü",Content=advancedControls,Margin=new Thickness(4,0,4,0),FontSize=11 };
         DockPanel.SetDock(advanced,Dock.Top);root.Children.Add(advanced);
+        if(initialSnapshot.Pieces.Any(p=>p.Notches is { Count:>0 }))
+        {
+            var notchNotice=new TextBlock { Text="Köşe işaretleri yerleştirilen kopyalarda aynı nokta indeksini izler ve parçayla taşınır. Her konumu üretimden önce kontrol edin. İşaretli parçalarda DXF ve HPGL dışa aktarma engelleri sürer.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(4) };
+            DockPanel.SetDock(notchNotice,Dock.Top);root.Children.Add(notchNotice);
+        }
         void UpdateAdvancedHeader()
         {
             var lengthSummary=string.IsNullOrWhiteSpace(fabricLength.Text) ? "boy sınırsız" : "boy sınırı girildi";
@@ -530,7 +535,7 @@ internal sealed class ProductionNestingWindow : Window
     }
     internal static string FormatLayoutSaveConfirmation(ProjectDocument layout)
     {
-        var fileVersion=layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
+        var fileVersion=layout.Pieces.Any(p => p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
         return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz. Bu bir makine işi değildir. Devam edilsin mi?";
     }
     internal ProjectFileVersion CaptureLayoutDestination(string path,int version,ProjectDocument layout)

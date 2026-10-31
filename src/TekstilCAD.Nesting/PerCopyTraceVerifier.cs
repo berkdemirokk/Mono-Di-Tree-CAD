@@ -146,6 +146,7 @@ public static class PerCopyTraceVerifier
                     copy.Metadata.Size != rotated.Metadata.Size || copy.Metadata.Material != rotated.Metadata.Material) return false;
                 NestingEngine.ValidateTranslation(rotated, copy.Points, cancellationToken);
                 if (!NestingEngine.GrainlinesEqualAfterTranslation(rotated, copy)) return false;
+                if (!NestingEngine.NotchesEqualAfterTranslation(rotated, copy, cancellationToken)) return false;
                 GrainDirectionPolicy.Validate(copy, direction, toleranceDegrees);
             }
             if (placed.Count != 0) return false;

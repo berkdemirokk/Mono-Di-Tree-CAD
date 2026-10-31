@@ -9,11 +9,11 @@ public static class OrthogonalRotation
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(source);
-        NotchSafety.RequireNoNotches(source);
         if (degrees is not (0 or 90 or 180 or 270))
             throw new ArgumentOutOfRangeException(nameof(degrees));
         if (!source.Closed || source.Points is null)
             throw new ArgumentException("A closed contour is required.", nameof(source));
+        NestingEngine.ValidateNotches(source,cancellationToken);
         Geometry.ValidateContour(source.Points, cancellationToken);
         if (source.Grainline is { } line)
         {
@@ -41,6 +41,15 @@ public static class OrthogonalRotation
         }
         var result = new PatternPiece { Id = source.Id, Name = source.Name, Closed = source.Closed,
             Metadata = source.Metadata?.Clone(), Points = points };
+        if(source.Notches is { } marks)
+        {
+            result.Notches=new List<NotchMark>(marks.Count);
+            foreach(var mark in marks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                result.Notches.Add(new NotchMark { VertexIndex=mark.VertexIndex,Position=points[mark.VertexIndex] });
+            }
+        }
         if (source.Grainline is { } grainline)
         {
             var start = Turn(grainline.Start, degrees);

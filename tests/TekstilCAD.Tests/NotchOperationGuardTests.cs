@@ -32,11 +32,9 @@ public class NotchOperationGuardTests
         Assert.Single(marked.Notches!);
     }
     [Fact]
-    public void GradingAndNestingRejectBeforeCreatingUnmarkedResults()
+    public void NestingRejectsInvalidMarkerBeforeCreatingResults()
     {
-        var p=Closed();var original=p.Clone();var increments=Enumerable.Repeat(new Point2(0,0),p.Points.Count).ToArray();
-        Assert.Throws<ArgumentException>(()=>GradingEngine.Generate(p,increments,1,"M"));
-        Assert.Throws<ArgumentException>(()=>GradingEngine.GenerateSizes(p,increments,Array.Empty<GradeSize>()));
+        var p=Closed();p.Notches![0].Position=new Point2(19,0);var original=p.Clone();
         Assert.Throws<ArgumentException>(()=>OrthogonalRotation.Rotate(p,90));
         Assert.Throws<ArgumentException>(()=>NestingEngine.Arrange([p],100));
         Assert.Throws<ArgumentException>(()=>ProductionNestingPlan.Arrange(new ProjectDocument { Pieces=[p] },[p.Id],100));

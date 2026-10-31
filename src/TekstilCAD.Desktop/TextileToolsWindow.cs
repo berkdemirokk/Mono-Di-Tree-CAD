@@ -589,12 +589,13 @@ public sealed class TextileToolsWindow : Window
                 // A request already received before this point must leave the project untouched.
                 token.ThrowIfCancellationRequested();
                 var grainNotice=generated.Grainline is null ? "" : " İplik yönü aynı koordinatlarla aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
-                AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}");
-                if(generated.Grainline is not null)result.Foreground=StudioTheme.Warning;
+                var notchNotice=generated.Notches is not { Count:>0 } ? "" : " Köşe işaretleri aynı indeksli yeni beden noktalarına aktarıldı; üretimden önce konumlarını kontrol edin. İşaretli parçalarda DXF ve HPGL dışa aktarma engelleri sürer.";
+                AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}{notchNotice}");
+                if(generated.Grainline is not null || generated.Notches is { Count:>0 })result.Foreground=StudioTheme.Warning;
                 if(generated.Points.SequenceEqual(snapshot.Points))
                 {
                     result.Foreground=StudioTheme.Warning;
-                    result.Text=$"{generated.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}";
+                    result.Text=$"{generated.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}{notchNotice}";
                     workspace.SetStatus(result.Text);
                 }
             }
@@ -998,7 +999,7 @@ public sealed class TextileToolsWindow : Window
     private UIElement NestingPanel()
     {
         var panel=Panel(); Note(panel,"Kenar payı dört kenarın her birine uygulanır; sıfır seçilirse pay eklenmez. Boşluk yalnız parçalar arasındadır.");
-        Button(panel,"Adetli pastal önizle…",()=>new ProductionNestingWindow(workspace,this).ShowDialog()); Heading(panel,"Kumaş üzerinde temel yerleşim");Note(panel,"Deterministik raf yöntemi, parçaların çevre kutularını sıralar ve parça yönlerini korur. En düşük fireyi garanti etmez. Tüm parçalar birer kez yerleştirilir; kayıtlı rol ve adet uygulanmaz. Projedeki tüm parçalar kapalı ve geçerli olmalıdır.");
+        Button(panel,"Adetli pastal önizle…",()=>new ProductionNestingWindow(workspace,this).ShowDialog()); Heading(panel,"Kumaş üzerinde temel yerleşim");Note(panel,"Deterministik raf yöntemi, parçaların çevre kutularını sıralar ve parça yönlerini korur. En düşük fireyi garanti etmez. Tüm parçalar birer kez yerleştirilir; kayıtlı rol ve adet uygulanmaz. Projedeki tüm parçalar kapalı ve geçerli olmalıdır. Köşe işaretleri aynı noktayı izleyerek taşınır; konumları üretimden önce kontrol edin. İşaretli parçalarda DXF ve HPGL dışa aktarma engelleri sürer.");
         const string placementImpact="Bu işlem mevcut projedeki tüm parçaların konumlarını değiştirir. Geri alma geçmişi boyut sınırına tabidir; önemli çalışmalarınızı önce farklı adla kaydedin. Kaynak proje konumlarını korumak için Adetli pastal önizlemesini kullanın.";
         var impactNotice=new TextBlock { Text=placementImpact,TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,12) };
         AutomationProperties.SetName(impactNotice,placementImpact);panel.Children.Add(impactNotice);

@@ -375,6 +375,7 @@ internal static class DesktopVerification
             VerifyMachineChoiceIdentity(studio,work,reportPath,checks);
             VerifyNestingCancellation(studio,reportPath,checks);
             VerifyBasicNestingAsync(studio,reportPath,checks);
+            VerifyNotchGradingAndNesting(studio,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
             NotchTransformVerification.Run(studio,checks);
@@ -2952,13 +2953,15 @@ internal static class DesktopVerification
                 "Saving quantity layout preserves source and writes the placed geometry and metadata",checks);
             // The confirmation must describe the actual format selected by storage,
             // including the precedence of DXF history over grainline information.
-            foreach (var expectedFormat in new[] { 3, 4, 5 })
+            foreach (var expectedFormat in new[] { 3, 4, 5, 6 })
             {
                 var candidate=savedLayout.Clone();
                 if (expectedFormat>=4)
                     candidate.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(20,10) };
-                if (expectedFormat==5)
+                if (expectedFormat>=5)
                     candidate.ImportProvenance=new DxfImportProvenance { SourceFileName="source.dxf",SourceSha256=new string('A',64),SourceByteLength=1,MillimetersPerUnit=1 };
+                if (expectedFormat==6)
+                    candidate.Pieces[0].Notches=[new NotchMark { VertexIndex=0,Position=candidate.Pieces[0].Points[0] }];
                 var candidatePath=Path.Combine(work,$"quantity-layout-v{expectedFormat}.tcad");
                 ProjectStorage.Save(candidate,candidatePath);
                 using var candidateJson=JsonDocument.Parse(File.ReadAllBytes(candidatePath));
@@ -7251,6 +7254,51 @@ internal static class DesktopVerification
             }
         }
         finally { canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" });studio.SetTool("Seç");SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
+    private static void VerifyNotchGradingAndNesting(MainWindow studio,List<string> checks)
+    {
+        var old=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var source=new PatternPiece { Name="İşaretli kaynak",Points=[new(40,40),new(60,40),new(60,60),new(40,60)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(60,40) }] };
+        try
+        {
+            studio.LoadDocument(new ProjectDocument { Pieces=[source.Clone()] });studio.Select(source.Id);
+            var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var root=(FrameworkElement)tools.Content;
+                root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+                var rows=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                var row=rows.Items.Cast<TextileToolsWindow.GradeRow>().ElementAt(1);row.Dx="3";row.Dy="2";
+                var before=studio.Document.Clone();var undo=session.UndoCount;
+                Descendants<Button>(root).Single(b=>Equals(b.Content,"Yeni bedeni projeye ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var pending=tools.GradeTaskForVerification ?? throw new InvalidOperationException("Beden hesabı başlamadı.");
+                PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                var generated=studio.Document.Pieces.Single(p=>p.Id!=source.Id);var mark=generated.Notches?.Single();
+                var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                Check(mark is not null && mark.VertexIndex==1 && mark.Position==generated.Points[1] && mark.Position!=source.Points[1]
+                      && session.UndoCount==undo+1 && result.Text.Contains("DXF ve HPGL",StringComparison.Ordinal),
+                    "Single grading transfers notch to same moved vertex and warns about export",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Notched grading undo restores source",checks);
+            }
+            finally { tools.Close(); }
+            studio.LoadDocument(new ProjectDocument { Pieces=[source.Clone()] });studio.Select(source.Id);
+            tools=new TextileToolsWindow(studio);
+            try
+            {
+                var before=studio.Document.Clone();var undo=session.UndoCount;
+                var pending=tools.CalculateBasicNestingAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                var placed=studio.Document.Pieces.Single();var mark=placed.Notches?.Single();
+                Check(mark is not null && mark.VertexIndex==1 && mark.Position==placed.Points[1] && mark.Position!=source.Points[1] && session.UndoCount==undo+1,
+                    "Basic nesting translates notch with same vertex",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Notched nesting undo restores source",checks);
+            }
+            finally { tools.Close(); }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(old); }
     }
 
     private static void VerifyBasicNestingAsync(MainWindow studio,string reportPath,List<string> checks)

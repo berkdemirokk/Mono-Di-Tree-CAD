@@ -110,7 +110,8 @@ internal static class GradeText
 
 public static class GradingEngine
 {
-    /// <summary>Generate a new size without mutating the base contour. A rule is matched by point index.</summary>
+    /// <summary>Generate a new size without mutating the base contour. A rule and any notch marks follow their point indices.
+    /// Marker transfer does not establish physical notch meaning or production accuracy; the caller must review the result.</summary>
     public static PatternPiece Generate(PatternPiece basePiece, IReadOnlyList<Point2> increments, double steps, string sizeName)
         => Generate(basePiece, increments, steps, sizeName, CancellationToken.None);
 
@@ -119,7 +120,6 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
-        NotchSafety.RequireNoNotches(basePiece);
         var grainline = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         if (string.IsNullOrWhiteSpace(sizeName) || sizeName.Trim().Length > 128) throw new ArgumentException("Beden adı gerekli ve en fazla 128 karakter olmalıdır.", nameof(sizeName));
@@ -130,6 +130,7 @@ public static class GradingEngine
         if (!double.IsFinite(steps)) throw new ArgumentOutOfRangeException(nameof(steps));
         if (basePiece.Points is null || basePiece.Points.Count != increments.Count)
             throw new ArgumentException("Her temel kalıp noktası için tam bir X/Y kuralı gereklidir.", nameof(increments));
+        var notchIndices=ValidateNotches(basePiece,cancellationToken);
         ValidateContour(basePiece.Points, basePiece.Closed, cancellationToken);
         // An explicit closing vertex represents the first vertex, not another
         // independent point. Different rules would silently split that vertex.
@@ -155,7 +156,8 @@ public static class GradingEngine
         if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points)) != Math.Sign(Geometry.SignedArea(result)))
             throw new InvalidDataException("Serileme kontur yönünü tersine çevirdi; kuralları kontrol edin.");
         cancellationToken.ThrowIfCancellationRequested();
-        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline };
+        var notches=notchIndices?.Select(index=>new NotchMark { VertexIndex=index,Position=result[index] }).ToList();
+        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline, Notches=notches };
     }
 
     private static double GradeCoordinate(double source, double increment, double steps, int index, string axis)
@@ -179,12 +181,12 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
-        NotchSafety.RequireNoNotches(basePiece);
         _ = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         ArgumentNullException.ThrowIfNull(sizes);
         if (basePiece.Points is null || basePiece.Points.Count != increments.Count)
             throw new ArgumentException("Her nokta için bir kural gereklidir.", nameof(increments));
+        _ = ValidateNotches(basePiece,cancellationToken);
         // Bound total quadratic work before generating any output, including base revalidation.
         if ((long)increments.Count * sizes.Count > 200_000 || (long)increments.Count * increments.Count * sizes.Count > 50_000_000)
             throw new ArgumentException("Serileme grubu çok büyük; daha küçük gruplar kullanın.", nameof(sizes));
@@ -201,6 +203,26 @@ public static class GradingEngine
             generated.Add(Generate(basePiece, increments, size.Steps, size.Name, cancellationToken));
         cancellationToken.ThrowIfCancellationRequested();
         return generated;
+    }
+
+    // Snapshot vertex associations before generating a detached size. This proves
+    // the stored marker references its original vertex, not manufacturing intent.
+    private static int[]? ValidateNotches(PatternPiece source,CancellationToken token)
+    {
+        if(source.Notches is not { } marks)return null;
+        if(source.Points is null || marks.Count<1 || marks.Count>source.Points.Count || marks.Count>10_000)
+            throw new ArgumentException("Çentik listesi veya kaynak kontur geçersiz.",nameof(source));
+        var result=new int[marks.Count];var seen=new HashSet<int>();
+        for(var i=0;i<marks.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();var mark=marks[i];
+            if(mark is null || mark.VertexIndex<0 || mark.VertexIndex>=source.Points.Count ||
+               (source.Closed && source.Points.Count>1 && source.Points[0]==source.Points[^1] && mark.VertexIndex==source.Points.Count-1) ||
+               !seen.Add(mark.VertexIndex) || mark.Position!=source.Points[mark.VertexIndex])
+                throw new ArgumentException("Çentik indeksi veya kaynak köşe konumu geçersiz; serileme uygulanmadı.",nameof(source));
+            result[i]=mark.VertexIndex;
+        }
+        token.ThrowIfCancellationRequested();return result;
     }
 
     // There is no grading rule for the grainline itself. Keep its original world

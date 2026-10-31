@@ -141,6 +141,38 @@ public static class NestingEngine
             SameSpanWithinBudget(Math.Min(a.Start.Y, a.End.Y), Math.Max(a.Start.Y, a.End.Y), Math.Min(b.Start.Y, b.End.Y), Math.Max(b.Start.Y, b.End.Y));
     }
 
+    // Markers have no independent geometry: every position must be exactly the
+    // represented contour vertex, including after a rotation or translation.
+    internal static void ValidateNotches(PatternPiece piece, CancellationToken cancellationToken)
+    {
+        if (piece.Notches is not { } marks) return;
+        var points=piece.Points;
+        if (points is null || marks.Count < 1 || marks.Count > points.Count)
+            throw NestingPieceError.Create(piece.Id,"Çentik işaretleri geçersiz.","pieces");
+        var indices=new HashSet<int>();
+        foreach (var mark in marks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (mark is null || mark.VertexIndex < 0 || mark.VertexIndex >= points.Count ||
+                (piece.Closed && points.Count > 1 && points[0] == points[^1] && mark.VertexIndex == points.Count-1) ||
+                !indices.Add(mark.VertexIndex) || mark.Position != points[mark.VertexIndex])
+                throw NestingPieceError.Create(piece.Id,"Çentik işareti geçerli bir kontur köşesine bağlı değil.","pieces");
+        }
+    }
+
+    internal static bool NotchesEqualAfterTranslation(PatternPiece source, PatternPiece placed, CancellationToken cancellationToken)
+    {
+        ValidateNotches(source,cancellationToken);ValidateNotches(placed,cancellationToken);
+        if(source.Notches is null || placed.Notches is null) return source.Notches is null && placed.Notches is null;
+        if(source.Notches.Count!=placed.Notches.Count) return false;
+        for(int i=0;i<source.Notches.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(source.Notches[i].VertexIndex!=placed.Notches[i].VertexIndex) return false;
+        }
+        return true;
+    }
+
     // Round outward rather than silently shaving off a requested positive gap.
     private static double AddClearance(double value, double clearance)
     {
@@ -179,7 +211,6 @@ public static class NestingEngine
             cancellationToken.ThrowIfCancellationRequested();
             if(piece is null)throw new ArgumentException("Geçersiz parça.",nameof(pieces));
             if(piece.Id==Guid.Empty || !ids.Add(piece.Id))throw new ArgumentException("Her pastal parçasının kimliği benzersiz olmalıdır.",nameof(pieces));
-            if(piece.Notches is not null)throw NestingPieceError.Create(piece.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.",nameof(pieces));
         }
         // Preflight the complete batch before any quadratic intersection traversal.
         long totalVertices = 0, validationWork = 0;
@@ -210,6 +241,7 @@ public static class NestingEngine
                 throw NestingPieceError.Create(piece.Id,$"Kontur sınırı: {MaximumVerticesPerPiece} nokta.",nameof(pieces));
             if (piece.Name is null || piece.Name.Length > 1024)
                 throw NestingPieceError.Create(piece.Id, "Geçersiz parça adı.", nameof(pieces));
+            ValidateNotches(piece,cancellationToken);
 
             if (piece.Points.Any(p => !p.IsFinite || Math.Abs(p.X) > MaximumDimension || Math.Abs(p.Y) > MaximumDimension))
                 throw NestingPieceError.Create(piece.Id,"Koordinatlar çalışma sınırı dışında.",nameof(pieces));
@@ -259,6 +291,8 @@ public static class NestingEngine
                 placed.Points.Add(point);
             }
             ValidateTranslation(entry.Piece, placed.Points, cancellationToken);
+            if(placed.Notches is { } notches)
+                foreach(var notch in notches) { cancellationToken.ThrowIfCancellationRequested();notch.Position=placed.Points[notch.VertexIndex]; }
             if(entry.Piece.Grainline is { } originalGrain)
             {
                 // Apply the exact same operation order used for the contour.

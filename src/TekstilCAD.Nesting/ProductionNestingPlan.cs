@@ -96,7 +96,6 @@ public static class ProductionNestingPlan
         foreach (var p in matches)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(p.Notches is not null)throw NestingPieceError.Create(p.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.");
             if (p.Metadata?.Role != "Kesim" || p.Metadata.Quantity is not int n || n < 1 || n > 100000)
                 throw NestingPieceError.Create(p.Id,"Parça için kesim rolü ve pozitif adet belirtilmelidir.");
             if (string.IsNullOrWhiteSpace(p.Metadata.Material)) throw NestingPieceError.Create(p.Id,"Parça için malzeme belirtilmelidir.");
@@ -110,6 +109,7 @@ public static class ProductionNestingPlan
             copies += n; vertices += (long)n * p.Points.Count; validation += 2L * n * p.Points.Count * p.Points.Count;
             if (copies > NestingEngine.MaximumPieces || vertices > NestingEngine.MaximumTotalVertices || validation > NestingEngine.MaximumValidationWork)
                 throw new ArgumentException("Adetler pastal kaynak sınırlarını aşıyor.");
+            NestingEngine.ValidateNotches(p,cancellationToken);
         }
         var expanded = new List<PatternPiece>((int)copies);
         var mapping = new List<ProductionPlacement>((int)copies);
