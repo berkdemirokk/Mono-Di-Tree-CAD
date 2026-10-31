@@ -1137,6 +1137,16 @@ internal static class DesktopVerification
         Check(peer is not null && peer.GetName()=="Kalıp çalışma alanı" && !string.IsNullOrWhiteSpace(peer.GetHelpText()),"Canvas exposes accessible name and keyboard guidance",checks);
         var source=studio.Selected!;
         var original=studio.Document.Clone();
+        // The earlier precision probe intentionally used decimal fractions. A
+        // one-millimetre move of those coordinates need not have exactly the
+        // same binary displacement at every vertex, so use an exact fixture for
+        // the successful rebase; the separate proof test covers rounded moves.
+        studio.Commit("Tam taşıma testi",()=> {
+            var target=studio.Document.Pieces.Single(p=>p.Id==source.Id);
+            target.Closed=true;target.Points=[new(0,0),new(10,0),new(10,10),new(0,10)];target.Grainline=null;
+        });
+        source=studio.Selected!;
+        var beforeRule=studio.Document.Clone();
         studio.Commit("Serileme testi",()=> {
             studio.Document.GradingRules.RemoveAll(r=>r.SourcePieceId==source.Id);
             studio.Document.GradingRules.Add(new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=source.Closed,
@@ -1164,6 +1174,8 @@ internal static class DesktopVerification
         tools.Close();
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeRule,studio.Document),"Keyboard grading verification removes its test rule",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(original,studio.Document),"Keyboard grading verification restores the original document",checks);
     }
