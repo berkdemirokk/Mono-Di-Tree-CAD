@@ -1,6 +1,100 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testFailedPieceRenameRetainsEditOnlyForSameSelectionUntilCancel() {
+        // The viewer accepts duplicate keys, while the lossless editor rejects them.
+        let fixture = #"{"Name":"Deneme","Name":"Deneme","Pieces":[{"Name":"Ilk","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Diger","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap()
+        app.buttons["Ilk"].tap()
+        let rename = app.buttons["Parça adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        let editor = app.alerts["Parça adını değiştir"]
+        let field = editor.textFields.firstMatch
+        let failure = app.alerts["İşlem tamamlanamadı"]
+
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "Yeni")
+        editor.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        failure.buttons["Tamam"].tap()
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Yeni")
+        editor.buttons["İptal"].tap()
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Ilk")
+
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "Tekrar")
+        editor.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        failure.buttons["Tamam"].tap()
+        let selectedPicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Ilk")).firstMatch
+        XCTAssertTrue(selectedPicker.waitForExistence(timeout: 5))
+        selectedPicker.tap()
+        app.buttons["Diger"].tap()
+        let otherPicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Diger")).firstMatch
+        XCTAssertTrue(otherPicker.waitForExistence(timeout: 5))
+        otherPicker.tap()
+        app.buttons["Ilk"].tap()
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Ilk")
+        editor.buttons["İptal"].tap()
+    }
+
+    func testFailedPieceRenameDraftIsClearedWhenIdenticalModelReopens() {
+        let fixture = #"{"Name":"Deneme","Name":"Deneme","Pieces":[{"Name":"Ilk","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launchEnvironment["TCAD_UI_TEST_FILENAME"] = "Deneme.tcad"
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 5))
+        picker.tap()
+        app.buttons["Ilk"].tap()
+        let rename = app.buttons["Parça adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.tap()
+        let editor = app.alerts["Parça adını değiştir"]
+        let field = editor.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "Yeni")
+        editor.buttons["Yeni kopyayı kaydet"].tap()
+        let failure = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 10))
+        failure.buttons["Tamam"].tap()
+
+        app.buttons["Modellerim"].tap()
+        let saved = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Deneme")).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        saved.tap()
+        XCTAssertTrue(picker.waitForExistence(timeout: 10))
+        picker.tap()
+        app.buttons["Ilk"].tap()
+        XCTAssertTrue(rename.waitForExistence(timeout: 5))
+        rename.tap()
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        XCTAssertEqual(field.value as? String, "Ilk")
+        editor.buttons["İptal"].tap()
+    }
+
     func testPieceRenameExplainsInvalidProjectIdentities() {
         let valid = "11111111-1111-1111-1111-111111111111"
         let cases = [

@@ -79,8 +79,11 @@ private struct ContentView: View {
                         #if DEBUG
                         Button("Parça adını değiştir ve kopya kaydet") {
                             guard let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
+                            // Keep a failed edit available for retry on the same snapshot.
+                            if pieceRenameSnapshot?.data != data || pieceRenameSnapshot?.index != selectedPiece {
+                                editedPieceName = name
+                            }
                             pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
-                            editedPieceName = name
                             showingPieceNameEditor = true
                         }
                         .disabled(isSaving || isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
@@ -113,6 +116,9 @@ private struct ContentView: View {
             }
         }
         .padding()
+        #if DEBUG
+        .onChange(of: selectedPiece) { _ in pieceRenameSnapshot = nil }
+        #endif
         .frame(minWidth: 300, minHeight: 300)
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
@@ -187,6 +193,9 @@ private struct ContentView: View {
                 isLoading = false
                 switch loaded {
                 case .success(let (drawing, data)):
+                    #if DEBUG
+                    pieceRenameSnapshot = nil
+                    #endif
                     showingPieces = false
                     selectedPiece = nil
                     drawingRevision = UUID()
