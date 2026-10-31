@@ -85,4 +85,3 @@ public static class OffsetOrderedIntervalDiagnostic
         return (missing, indices.Length > 0 && travel < from.Count);
     }
 }
-

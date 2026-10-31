@@ -106,5 +106,3 @@ public sealed class OffsetOrderedIntervalDiagnosticTests(ITestOutputHelper log)
         Assert.Contains("do not certify", result.Reason);
     }
 }
-
-
