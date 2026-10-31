@@ -1187,6 +1187,14 @@ internal static class DesktopVerification
             "Mouse movement carries matching grading increments with the source",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Mouse move undo restores geometry and grading rule together",checks);
+        studio.Commit("Eski serileme testi",()=>studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints[0]=new Point2(-1,0));
+        var staleRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).Clone();
+        move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
+        var warning=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+        Check(warning.Text.Contains("serileme kuralı") && studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints),
+            "Keyboard move warns when the existing grading rule cannot follow the contour",checks);
+        Invoke(studio,"Undo");Invoke(studio,"Undo");studio.ClearCanvasError();
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Undo restores the document after a stale-rule warning",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeRule,studio.Document),"Keyboard grading verification removes its test rule",checks);
         Invoke(studio,"Undo");

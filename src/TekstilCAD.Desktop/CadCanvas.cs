@@ -194,7 +194,9 @@ public sealed class CadCanvas : FrameworkElement
             if(translatedRule is not null)
                 owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
         },()=>observedCommits++);
-        owner.ClearCanvasError();
+        if(rule is not null && translatedRule is null)
+            owner.ShowCanvasError("Parça taşındı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
+        else owner.ClearCanvasError();
     }
     private void Safe(Action action, bool restoreDrawingOnFailure = false, Action<string>? reportError = null)
     {
@@ -614,13 +616,15 @@ public sealed class CadCanvas : FrameworkElement
             var snapshot=result.ToList();
             var newGrain=dragVertex>=0 ? dragOriginalGrainline?.Clone() : GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],snapshot[0],dragTranslation.X,dragTranslation.Y);
             if(dragVertex>=0 && newGrain is not null)newGrain.NeedsReview=true;
-            var rule=dragVertex<0 ? owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id) : null;
-            var translatedRule=rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y);
+            var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+            var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) : null;
             owner.CommitObserved(dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
                 piece.Points=snapshot;piece.Grainline=newGrain;
                 if(translatedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
             },()=>observedCommits++);
-            if(dragVertex<0) owner.ClearCanvasError();
+            if(rule is not null && translatedRule is null)
+                owner.ShowCanvasError("Kontur değiştirildi; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
+            else if(dragVertex<0) owner.ClearCanvasError();
         }
         ClearDrag();ReleaseMouseCapture();InvalidateVisual();
     }
