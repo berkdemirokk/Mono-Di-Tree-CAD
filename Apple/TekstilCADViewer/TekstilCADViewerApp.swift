@@ -38,7 +38,16 @@ private struct ContentView: View {
     @State private var editedName = ""
     @State private var showingPieceNameEditor = false
     #if DEBUG
-    @State private var showingPointEditor = false
+    private struct PointEditSnapshot: Identifiable {
+        let id = UUID()
+        let data: Data
+        let piece: Drawing.Piece
+        let pieceID: UUID
+        let index: Int
+        let projectName: String
+        let revision: UUID
+    }
+    @State private var pointEditSnapshot: PointEditSnapshot?
     #endif
     @State private var editedPieceName = ""
     @State private var pieceRenameSnapshot: PieceRenameSnapshot?
@@ -134,14 +143,15 @@ private struct ContentView: View {
                     }
                     if let selectedPiece {
                         #if DEBUG
-                        Button("Deneysel nokta düzenle…") { showingPointEditor = true }
+                        Button("Deneysel nokta düzenle…") {
+                            guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
+                            pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
+                                index: selectedPiece, projectName: project.name, revision: drawingRevision)
+                        }
                             .disabled(isSaving || isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
-                            .sheet(isPresented: $showingPointEditor) {
-                                if let data = sourceData, let id = project.pieces[selectedPiece].id {
-                                    let revision = drawingRevision
-                                    ExperimentalPointEditor(data: data, piece: project.pieces[selectedPiece], pieceID: id, projectName: project.name,
-                                        isCurrent: { sourceData == data && self.selectedPiece == selectedPiece && drawingRevision == revision })
-                                }
+                            .sheet(item: $pointEditSnapshot) { snapshot in
+                                ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
+                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision })
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -846,15 +856,21 @@ private struct ExperimentalPointEditor: View {
     @State private var message = ""
     @State private var working = false
 
-    private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = ""; working = false }
+    private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = "" }
     private func updatePoint() {
         let point = piece.points[pointIndex]
         x = String(point.x); y = String(point.y)
         invalidate()
     }
+    private func coordinate(_ text: String) -> Double? {
+        let token = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        guard let value = Double(token), value.isFinite else { return nil }
+        let mantissa = token.prefix { $0 != "e" && $0 != "E" }
+        guard value != 0 || !mantissa.contains(where: { ("1"..."9").contains(String($0)) }) else { return nil }
+        return value
+    }
     private func makePreview() {
-        guard isCurrent(), let px = Double(x.replacingOccurrences(of: ",", with: ".")),
-              let py = Double(y.replacingOccurrences(of: ",", with: ".")), px.isFinite, py.isFinite else {
+        guard isCurrent(), let px = coordinate(x), let py = coordinate(y) else {
             message = "Geçerli X/Y girin ve açık parçanın değişmediğini doğrulayın."; return
         }
         let request = UUID(); generation = request; candidate = nil; preview = nil; working = true
@@ -868,8 +884,8 @@ private struct ExperimentalPointEditor: View {
                 return (edited, editedPiece)
             }
             DispatchQueue.main.async {
-                guard generation == request else { return }
                 working = false
+                guard generation == request else { return }
                 guard isCurrent() else { message = "Açık model veya seçim değişti; yeniden başlayın."; return }
                 switch result {
                 case .success(let (bytes, edited)): candidate = bytes; preview = edited; message = "Önizleme hazır; kopya henüz kaydedilmedi."
@@ -882,11 +898,11 @@ private struct ExperimentalPointEditor: View {
         NavigationStack {
             Form {
                 Text("DENEYSEL DEBUG · Üretim için doğrulanmadı. Orijinal değiştirilmez; yalnız yeni kopya kaydedilir. v6, işaretler, pastal, geçmiş ve seçili parçanın serileme kuralı desteklenmez. İplik yönü varsa yeniden incelenmelidir.")
-                Picker("Nokta", selection: $pointIndex) {
+                Picker("Nokta", selection: Binding(get: { pointIndex }, set: { pointIndex = $0; updatePoint() })) {
                     ForEach(piece.points.indices, id: \.self) { index in Text("Nokta \(index)").tag(index) }
                 }
-                TextField("X · mm", text: $x)
-                TextField("Y · mm", text: $y)
+                TextField("X · mm", text: Binding(get: { x }, set: { x = $0; invalidate() }))
+                TextField("Y · mm", text: Binding(get: { y }, set: { y = $0; invalidate() }))
                 Button(working ? "Önizleme hazırlanıyor…" : "Önizlemeyi hesapla") { makePreview() }.disabled(working)
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
@@ -906,9 +922,6 @@ private struct ExperimentalPointEditor: View {
             .navigationTitle("Deneysel nokta")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear { updatePoint() }
-            .onChange(of: pointIndex) { _ in updatePoint() }
-            .onChange(of: x) { _ in invalidate() }
-            .onChange(of: y) { _ in invalidate() }
         }
     }
 }

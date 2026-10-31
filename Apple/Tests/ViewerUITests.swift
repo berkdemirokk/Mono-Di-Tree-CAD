@@ -14,7 +14,10 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
         let x = app.textFields["X · mm"]
         XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap()
-        x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "1")
+        x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "1e-999")
+        app.buttons["Önizlemeyi hesapla"].tap()
+        XCTAssertTrue(app.staticTexts["Geçerli X/Y girin ve açık parçanın değişmediğini doğrulayın."].waitForExistence(timeout: 5))
+        x.tap(); x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + "1")
         app.buttons["Önizlemeyi hesapla"].tap()
         XCTAssertTrue(app.staticTexts["Önizleme hazır; kopya henüz kaydedilmedi."].waitForExistence(timeout: 15))
         app.buttons["Yeni kopyayı kaydet"].tap()
