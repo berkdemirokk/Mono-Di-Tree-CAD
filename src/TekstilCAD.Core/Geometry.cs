@@ -75,7 +75,14 @@ public static class Geometry
     {
         Validate(points);
         if (!double.IsFinite(axisCoordinate) || Math.Abs(axisCoordinate) > MaxCoordinate) throw new ArgumentOutOfRangeException(nameof(axisCoordinate));
-        return Map(points, p => verticalAxis ? new(2 * axisCoordinate - p.X, p.Y) : new(p.X, 2 * axisCoordinate - p.Y));
+        var mirrored = Map(points, p => verticalAxis ? new(2 * axisCoordinate - p.X, p.Y) : new(p.X, 2 * axisCoordinate - p.Y));
+        // Reflection is a sign change followed by a translation. Verify that
+        // rounding at a distant axis did not collapse or distort the shape.
+        var reflected = points.Select(p => verticalAxis ? new Point2(-p.X, p.Y) : new Point2(p.X, -p.Y)).ToList();
+        try { TranslationPrecision.Validate(reflected, mirrored); }
+        catch (ArgumentException ex)
+        { throw new ArgumentException("Aynalama sırasında parça şekli sayısal hassasiyetle korunamıyor. Daha küçük koordinatlar kullanın.", nameof(points), ex); }
+        return mirrored;
     }
 
     public static bool PointInPolygon(Point2 point, IReadOnlyList<Point2> polygon)
