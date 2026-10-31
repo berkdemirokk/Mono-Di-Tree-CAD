@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLargeViewDistinguishesSameNamedSizesWhileNavigating() {
+        let fixture = #"{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Metadata":{"Size":"S"}},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":120,"Y":120}],"Metadata":{"Size":"XL"}}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let next = app.buttons["Sonraki parça"]
+        XCTAssertTrue(next.waitForExistence(timeout: 15))
+        next.tap()
+        let largeView = app.buttons["Konturu büyük görünümde incele"]
+        for _ in 0..<5 where !largeView.isHittable { app.swipeUp() }
+        XCTAssertTrue(largeView.isHittable)
+        largeView.tap()
+        let sheet = app.sheets.firstMatch
+        let details = sheet.staticTexts["largePreviewPieceDetails"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertTrue(details.label.contains("Parça 1"))
+        XCTAssertTrue(details.label.contains("Beden: S"))
+        sheet.buttons["Sonraki parça"].tap()
+        XCTAssertTrue(details.label.contains("Parça 2"))
+        XCTAssertTrue(details.label.contains("Beden: XL"))
+    }
+
     func testSelectedPieceCanBeInspectedInLargeView() {
         let fixture = #"{"Name":"İnceleme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]},{"Name":"Ön","Closed":false,"Points":[{"X":0,"Y":0},{"X":30,"Y":60}]}]}"#
         let app = XCUIApplication()

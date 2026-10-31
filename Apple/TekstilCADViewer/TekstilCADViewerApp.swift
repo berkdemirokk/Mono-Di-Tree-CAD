@@ -319,6 +319,14 @@ private struct ContentView: View {
                             }
                             .buttonStyle(.bordered)
                             .padding(.horizontal)
+                            if let selectedPiece {
+                                Text(project.pieces[selectedPiece].selectionDetails(index: selectedPiece))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal)
+                                    .accessibilityIdentifier("largePreviewPieceDetails")
+                            }
                             if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
                                 Text("Bu parça asgari nokta sayısını karşılamıyor; kontur önizlemesi gösterilemiyor.")
                                     .foregroundStyle(.secondary).padding()
