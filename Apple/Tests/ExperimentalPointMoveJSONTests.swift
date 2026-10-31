@@ -115,4 +115,28 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(invalid, snapshot: invalid, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
         }
     }
+
+    func testSelectedGrainlineIsMarkedForReviewWithoutRewritingOtherBytes() throws {
+        let grain = #", "Grainline":{"Start":{"X":1.00,"Y":0,"IsFinite":true},"End":{"X":1,"Y":2},"NeedsReview":false}"#
+        let project = input.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true"# + grain)
+        let bytes = Data(project.utf8)
+        let unchanged = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 4, y: 0))
+        XCTAssertEqual(unchanged, bytes)
+        let result = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0))
+        let expected = project.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":true"#)
+        XCTAssertEqual(result, Data(expected.utf8))
+        let alreadyReviewed = project.replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":true"#)
+        let reviewedBytes = Data(alreadyReviewed.utf8)
+        XCTAssertEqual(try ExperimentalPointMoveJSON.moving(reviewedBytes, snapshot: reviewedBytes, pieceID: id, index: 1, to: .init(x: 5, y: 0)), Data(alreadyReviewed.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).utf8))
+        for bad in [project.replacingOccurrences(of: "[4,", with: "[2,"),
+                    project.replacingOccurrences(of: ",\"NeedsReview\":false", with: ""),
+                    project.replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":1"#),
+                    project.replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":false,"\u004eeedsReview":false"#),
+                    project.replacingOccurrences(of: #""End":{"X":1,"Y":2}"#, with: #""End":{"X":1,"Y":0}"#),
+                    project.replacingOccurrences(of: #""X":1.00"#, with: #""X":1e-999"#),
+                    project.replacingOccurrences(of: #""NeedsReview":false"#, with: #""NeedsReview":false,"Unknown":0"#)] {
+            let invalid = Data(bad.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(invalid, snapshot: invalid, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
+        }
+    }
 }
