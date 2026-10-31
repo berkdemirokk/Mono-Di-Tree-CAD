@@ -17,7 +17,13 @@ enum NotchSearch {
     }
 
     static func matches(query: String, index: Int, x: String, y: String) -> Bool {
-        label(index: index, x: x, y: y).localizedCaseInsensitiveContains(query) ||
-            "\(index) X \(x) Y \(y)".localizedCaseInsensitiveContains(query)
+        let normalizedLabel = normalizeSeparators(label(index: index, x: x, y: y))
+        return normalizedLabel.localizedCaseInsensitiveContains(normalizeSeparators(query))
+    }
+
+    private static func normalizeSeparators(_ text: String) -> String {
+        text.replacingOccurrences(of: "·", with: " ")
+            .split(whereSeparator: { $0.isWhitespace })
+            .joined(separator: " ")
     }
 }
