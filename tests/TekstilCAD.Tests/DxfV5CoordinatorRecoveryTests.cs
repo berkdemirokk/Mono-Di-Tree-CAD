@@ -7,10 +7,11 @@ public sealed class DxfV5CoordinatorRecoveryTests
 {
     private sealed class BlockingWriter(RecoveryStore store) : IRecoveryWriter
     {
-        public readonly ManualResetEventSlim Entered = new(false), Release = new(false);
+        public readonly TaskCompletionSource<bool> Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly ManualResetEventSlim Release = new(false);
         public void Save(ProjectDocument document, IReadOnlyList<RecoveryPropertyDraft> drafts, RecoveryPendingDrawing? drawing)
         {
-            Entered.Set();
+            Entered.TrySetResult(true);
             if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
             store.Save(document, drafts, drawing);
         }
@@ -40,7 +41,7 @@ public sealed class DxfV5CoordinatorRecoveryTests
         try
         {
             var saved = coordinator.SaveAsync(document, drafts, drawing);
-            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(await writer.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5)));
             document.ImportProvenance!.Warnings[0] = "değişti";
             document.ImportProvenance.PieceIds.Clear();
             piece.Points[0] = new(99, 99);
