@@ -1137,16 +1137,41 @@ internal static class DesktopVerification
         Check(peer is not null && peer.GetName()=="Kalıp çalışma alanı" && !string.IsNullOrWhiteSpace(peer.GetHelpText()),"Canvas exposes accessible name and keyboard guidance",checks);
         var source=studio.Selected!;
         var original=studio.Document.Clone();
+        // The earlier precision probe intentionally used decimal fractions. A
+        // one-millimetre move of those coordinates need not have exactly the
+        // same binary displacement at every vertex, so use an exact fixture for
+        // the successful rebase; the separate proof test covers rounded moves.
+        studio.Commit("Tam taşıma testi",()=> {
+            var target=studio.Document.Pieces.Single(p=>p.Id==source.Id);
+            target.Closed=true;target.Points=[new(0,0),new(10,0),new(10,10),new(0,10)];target.Grainline=null;
+        });
+        source=studio.Selected!;
+        var beforeRule=studio.Document.Clone();
         studio.Commit("Serileme testi",()=> {
             studio.Document.GradingRules.RemoveAll(r=>r.SourcePieceId==source.Id);
             studio.Document.GradingRules.Add(new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=source.Closed,
                 SourcePoints=[..source.Points],Deltas=source.Points.Select(_=>new Point2(1,2)).ToList() });
         });
         var beforeMove=studio.Document.Clone();
+        var tools=new TextileToolsWindow(studio);
+        var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+        var draftRow=table.Items.Cast<TextileToolsWindow.GradeRow>().First();draftRow.Dx="7";
         move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
         var movedRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
         Check(movedRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && movedRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
             "Keyboard movement carries matching grading increments with the source",checks);
+        studio.Commit("Parça bilgisi değişti",()=>studio.Document.Pieces.Single(p=>p.Id==source.Id).Name+=" değişti");
+        var rejected=false;
+        try { typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null); }
+        catch(System.Reflection.TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { rejected=true; }
+        Check(rejected && table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7",
+            "Draft rebase rejects other source changes without losing entered values",checks);
+        Invoke(studio,"Undo");
+        typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null);
+        Check(table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7" &&
+            (bool)typeof(TextileToolsWindow).GetMethod("SavedRuleMatchesDraft",PrivateInstance)!.Invoke(tools,[source.Id,typeof(TextileToolsWindow).GetField("activeDraft",PrivateInstance)!.GetValue(tools)])!,
+            "Explicit draft rebase keeps entered values and matches the moved rule",checks);
+        tools.Close();
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);
         var dragSource=studio.Selected!;
@@ -1162,6 +1187,8 @@ internal static class DesktopVerification
             "Mouse movement carries matching grading increments with the source",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Mouse move undo restores geometry and grading rule together",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeRule,studio.Document),"Keyboard grading verification removes its test rule",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(original,studio.Document),"Keyboard grading verification restores the original document",checks);
     }
@@ -3792,8 +3819,10 @@ internal static class DesktopVerification
         var optionsVisible=sizeVisible && copyVisible;
         lowerScroll.ScrollToEnd();lowerScroll.UpdateLayout();
         var createVisible=FullyVisible(button,root);
-        Check(optionsVisible && createVisible && lowerScroll.Focusable && KeyboardNavigation.GetIsTabStop(lowerScroll),
-            $"Expanded grading metadata controls: size={sizeVisible}, copy={copyVisible}, create={createVisible}, offset={lowerScroll.VerticalOffset}, scrollable={lowerScroll.ScrollableHeight}, bounds={BoundsInRoot(lowerScroll,root)}, button={BoundsInRoot(button,root)}, buttonVisible={VisibleBoundsInRoot(button,root)}",checks);
+        var rebaseButton=Descendants<Button>(root).Single(b=>Equals(b.Content,"Taşınan kaynakla taslağı eşleştir"));
+        var rebaseVisible=FullyVisible(rebaseButton,root);
+        Check(optionsVisible && createVisible && rebaseVisible && rebaseButton.Focusable && lowerScroll.Focusable && KeyboardNavigation.GetIsTabStop(lowerScroll),
+            $"Expanded grading metadata controls: size={sizeVisible}, copy={copyVisible}, create={createVisible}, rebase={rebaseVisible}, offset={lowerScroll.VerticalOffset}, scrollable={lowerScroll.ScrollableHeight}, bounds={BoundsInRoot(lowerScroll,root)}, button={BoundsInRoot(button,root)}, buttonVisible={VisibleBoundsInRoot(button,root)}, rebaseBounds={BoundsInRoot(rebaseButton,root)}, rebaseVisibleBounds={VisibleBoundsInRoot(rebaseButton,root)}",checks);
         var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
         var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
         var selector=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
