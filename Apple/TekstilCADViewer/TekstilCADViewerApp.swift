@@ -212,8 +212,9 @@ private struct ContentView: View {
     }
 
     private func exportFileName(_ name: String) -> String {
+        let base = name.lowercased().hasSuffix(".tcad") ? String(name.dropLast(5)) : name
         var stem = ""
-        for character in name {
+        for character in base {
             let part = character == "/" || character == ":" || character.unicodeScalars.contains(where: { CharacterSet.controlCharacters.contains($0) }) ? "_" : String(character)
             if (stem + part).utf8.count > 100 { break }
             stem += part
