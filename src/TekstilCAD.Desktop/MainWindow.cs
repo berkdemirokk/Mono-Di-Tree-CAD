@@ -1851,6 +1851,7 @@ public class MainWindow : Window
         return name;
     }
     private static void EnsureWritableDestination(string path) => ProjectStorage.EnsureWritableDestination(path);
+    internal Func<(bool Accepted,double? ToleranceMm)>? ConfirmDxfBulgeOptionsForVerification { get; set; }
     private async void ImportDxf()
     {
         if(BlockForDxfImport() || BlockForExport())return;
@@ -1860,11 +1861,25 @@ public class MainWindow : Window
         var options=CreateDxfOptionsWindow(optionsState);
         if(options.ShowDialog()!=true)return;
         var factor=optionsState.Factor;
+        double? bulgeTolerance=null;
+        if(!optionsState.UseBlockPlacements)
+        {
+            if(ConfirmDxfBulgeOptionsForVerification is { } confirm)
+            {
+                var choice=confirm();if(!choice.Accepted)return;bulgeTolerance=choice.ToleranceMm;
+            }
+            else
+            {
+                var bulgeOptions=new DxfBulgeOptionsWindow(this);
+                if(bulgeOptions.ShowDialog()!=true)return;
+                bulgeTolerance=bulgeOptions.SelectedToleranceMm;
+            }
+        }
         try
         {
             var imported=optionsState.UseBlockPlacements
                 ? await StartInspectedDxfPreparationAsync(dlg.FileName,factor,optionsState.Encoding)
-                : await StartDxfPreparationAsync(dlg.FileName,factor,optionsState.Encoding);
+                : await StartDxfPreparationWithBulgeAsync(dlg.FileName,factor,optionsState.Encoding,bulgeTolerance);
             if(imported is null || windowClosed)return;
             preparedDxfFactor=factor;preparedDxfSource=Path.GetFileName(dlg.FileName);
             dxfNotice.Text="DXF hazır. Proje henüz değiştirilmedi; önizlemeyi açarak ölçüleri kontrol edin.";
@@ -1976,7 +1991,7 @@ public class MainWindow : Window
         content.Children.Add(new TextBlock { Text="Okuma yöntemi",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,4) });
         methods=new ComboBox { ItemsSource=new[] { "Standart aktarım (blok yerleşimleri uygulanmaz)", "Kontrollü aktarım (sınırlı destek)" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
         System.Windows.Automation.AutomationProperties.SetName(methods,"DXF okuma yöntemi");content.Children.Add(methods);
-        content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge yaylarını yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kodlama otomatik tahmin edilmez. Yanlış seçim harfleri değiştirebilir; kaynak dosyanın kodlamasını kontrol edin. Okuma kaynak dosyayı değiştirmez; proje ancak önizlemede onaylanırsa değiştirilir.",TextWrapping=TextWrapping.Wrap });
         return options;
     }
@@ -2131,6 +2146,11 @@ public class MainWindow : Window
     // both before switching methods and before any later application.
     internal async Task RetryPreparedDxfPlacementsAsync(DxfImportResult imported)
     {
+        if(imported.ImportParameters?.BulgeToleranceMm is not null)
+        {
+            if(!windowClosed) { dxfNotice.Text="Bulge yaklaştırması kontrollü blok aktarımıyla birlikte kullanılamaz. Yöntemi değiştirmek için DXF dosyasını yeniden açın; mevcut çalışma korundu.";SetStatus(dxfNotice.Text); }
+            return;
+        }
         if(windowClosed || DxfImportRunning || !IsPreparedDxfRetryCurrent(imported) ||
             imported.SkippedRelevantInsertEntities is not true || preparedDxfPath is null ||
             preparedDxfEncoding is not { } encoding || !Enum.IsDefined(encoding) ||
@@ -2308,11 +2328,14 @@ public class MainWindow : Window
             if(!windowClosed) { dxfCancel.Visibility=Visibility.Collapsed;if(dxfImportCommand is not null)dxfImportCommand.IsEnabled=true;if(exportCommand is not null)exportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning; }
         }
     }
-    internal async Task<DxfImportResult?> StartDxfPreparationAsync(string path,double factor,DxfTextEncoding encoding=DxfTextEncoding.Utf8)
+    internal Task<DxfImportResult?> StartDxfPreparationAsync(string path,double factor,DxfTextEncoding encoding=DxfTextEncoding.Utf8)
+        =>StartDxfPreparationWithBulgeAsync(path,factor,encoding,null);
+    internal async Task<DxfImportResult?> StartDxfPreparationWithBulgeAsync(string path,double factor,DxfTextEncoding encoding,double? bulgeToleranceMm)
     {
         EnsureNoExport();
         if(DxfImportRunning)throw new InvalidOperationException("DXF okuma sürüyor; işlemin bitmesini bekleyin.");
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        if(bulgeToleranceMm is double requested && (!double.IsFinite(requested) || requested<=0))throw new ArgumentOutOfRangeException(nameof(bulgeToleranceMm));
         var sourcePath=Path.GetFullPath(path);
         var stamp=CaptureDxfPreparationStamp();
         var before=BeforeDxfPreparationForVerification;
@@ -2330,7 +2353,9 @@ public class MainWindow : Window
         SetStatus("DXF arka planda açılıp okunuyor; dosyanın açıldığı andaki içeriği kullanılacak. İşlemin bitmesini bekleyin.");
         try
         {
-            var result=await Task.Run(()=> { before?.Invoke(); cancellation.Token.ThrowIfCancellationRequested(); var imported=PrepareDxfImportCancellable(sourcePath,factor,cancellation.Token,encoding); after?.Invoke(); return imported; });
+            var result=await Task.Run(()=> { before?.Invoke(); cancellation.Token.ThrowIfCancellationRequested(); var imported=bulgeToleranceMm is double tolerance
+                ? PrepareDxfBulgeImportCancellable(sourcePath,factor,encoding,tolerance,cancellation.Token)
+                : PrepareDxfImportCancellable(sourcePath,factor,cancellation.Token,encoding); after?.Invoke(); return imported; });
             cancellation.Token.ThrowIfCancellationRequested();
             if(!DxfStampMatches(stamp))
             { if(!windowClosed) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text); } return null; }
@@ -2363,6 +2388,15 @@ public class MainWindow : Window
         Validate(imported.Project);
         cancellationToken.ThrowIfCancellationRequested();
         if(imported.Project.Pieces.Count == 0) throw new InvalidDataException("Desteklenen geometri bulunamadı; mevcut proje korunuyor.");
+        return imported;
+    }
+    private DxfImportResult PrepareDxfBulgeImportCancellable(string path,double factor,DxfTextEncoding encoding,double toleranceMm,CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
+        var imported=DxfFormat.ImportWithBulgeApproximation(input,Path.GetFileNameWithoutExtension(path),factor,encoding,toleranceMm,cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();Validate(imported.Project);cancellationToken.ThrowIfCancellationRequested();
+        if(imported.Project.Pieces.Count==0)throw new InvalidDataException("Desteklenen geometri bulunamadı; mevcut proje korunuyor.");
         return imported;
     }
     private Window BuildImportPreview(ProjectDocument incoming,IReadOnlyList<string> warnings,double factor,string sourceName,DxfUnitInfo? units)

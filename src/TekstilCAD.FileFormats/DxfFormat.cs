@@ -10,7 +10,8 @@ public sealed record DxfUnitInfo(int? Code, string Description, double? Millimet
 public enum DxfImportMode { General, Controlled }
 /// <summary>Choices used to interpret a completed import. Layer names are approval inputs, not evidence of textile meaning.</summary>
 public sealed record DxfImportParameters(DxfTextEncoding Encoding, double MillimetersPerUnit, DxfImportMode Mode,
-    double? ComponentToleranceMm, ImmutableArray<string> ApprovedLayers);
+    double? ComponentToleranceMm, ImmutableArray<string> ApprovedLayers)
+{ public double? BulgeToleranceMm { get; init; } }
 public sealed record DxfLayerMapping(Guid PieceId, string OriginalName, string LayerName)
 {
     public bool Changed => !string.Equals(OriginalName, LayerName, StringComparison.Ordinal);
@@ -329,6 +330,14 @@ public static class DxfFormat
     public static DxfImportResult Import(Stream input, string projectName, double millimetersPerUnit, DxfTextEncoding encoding, CancellationToken cancellationToken=default)
         => ImportCore(input,projectName,millimetersPerUnit,encoding,null,cancellationToken);
 
+    /// <summary>Explicit experimental 2D bulge import; tolerance is a nominal sampling target, not a production guarantee.</summary>
+    public static DxfImportResult ImportWithBulgeApproximation(Stream input, string projectName, double millimetersPerUnit,
+        DxfTextEncoding encoding, double toleranceMm, CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(toleranceMm) || toleranceMm <= 0) throw new ArgumentOutOfRangeException(nameof(toleranceMm));
+        return ImportCore(input, projectName, millimetersPerUnit, encoding, null, cancellationToken, null, toleranceMm);
+    }
+
     /// <summary>
     /// Opts into the restricted model-space and INSERT importer. The caller explicitly approves
     /// the cutting meaning of each named layer and an absolute, per-coordinate
@@ -409,7 +418,7 @@ public static class DxfFormat
     private sealed record StrictInsertOptions(double ComponentToleranceMm, HashSet<string> ApprovedLayers, string? ExpectedSha256=null, long? ExpectedByteLength=null);
     private static DxfImportResult ImportCore(Stream input, string projectName, double millimetersPerUnit,
         DxfTextEncoding encoding, StrictInsertOptions? strict, CancellationToken cancellationToken,
-        Action<DxfBlockPlacementInspection>? inspectionSink=null)
+        Action<DxfBlockPlacementInspection>? inspectionSink=null, double? bulgeToleranceMm=null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if(!Enum.IsDefined(encoding))throw new ArgumentOutOfRangeException(nameof(encoding));
@@ -744,7 +753,7 @@ public static class DxfFormat
             IEnumerable<int>? childOrdinals=null)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(strictImport && points.Count>=2)
+            if((strictImport || bulgeToleranceMm is not null) && points.Count>=2)
             {
                 if(doc.Pieces.Count>=ProjectStorage.MaximumPieces || points.Count>ProjectStorage.MaximumTotalPoints-acceptedPoints)
                     throw new InvalidDataException("DXF doğrudan ve yerleştirilmiş geometrinin ortak sınırını aşıyor.");
@@ -754,6 +763,39 @@ public static class DxfFormat
             if(!strictImport && points.Count>=2 && sourceSection is not null && sourceLayer is not null && sourceType is not null && ordinals is not null)
                 pieceSources.Add(new DxfPieceSource(doc.Pieces[^1].Id,sourceSection,sourceBlock,sourceLayer,sourceType,ordinals.ToImmutableArray())
                     { ChildSourceOrdinals=childOrdinals?.ToImmutableArray() ?? ImmutableArray<int>.Empty });
+        }
+        long bulgeValidationComparisons = 0;
+        int convertedBulgeSegments = 0, convertedBulgeContours = 0;
+        List<Point2> ApproximateBulge(List<DxfBulgeVertex> vertices, bool closed, List<Point2> originalEndpoints)
+        {
+            if (bulgeToleranceMm is not double tolerance) throw new InvalidDataException("Bulge toleransı eksik.");
+            var remaining=ProjectStorage.MaximumTotalPoints-acceptedPoints;
+            if (remaining<1) throw new InvalidDataException("Bulge toplam nokta sınırını aşıyor.");
+            var generated=DxfBulgeApproximation.Approximate(vertices,closed,millimetersPerUnit,tolerance,remaining,cancellationToken).Points.ToList();
+            var cursor=0;
+            foreach(var endpoint in originalEndpoints)
+            {
+                while(cursor<generated.Count && generated[cursor]!=endpoint) { cancellationToken.ThrowIfCancellationRequested();cursor++; }
+                if(cursor==generated.Count) throw new InvalidDataException("Bulge kaynak ucu korunamadı.");
+                cursor++;
+            }
+            if(generated.Count>Geometry.MaxValidatedContourVertices)throw new InvalidDataException("Bulge kontur doğrulama sınırını aşıyor.");
+            bulgeValidationComparisons += (long)generated.Count * (generated.Count - 1) / 2;
+            if (bulgeValidationComparisons > 50_000_000) throw new InvalidDataException("Bulge toplam doğrulama iş sınırını aşıyor.");
+            try
+            {
+                if(closed) Geometry.ValidateContour(generated,cancellationToken);
+                else if(Geometry.HasSelfIntersections(generated,false,cancellationToken)) throw new InvalidDataException("Bulge açık konturu kesişiyor veya sıfır uzunluk içeriyor.");
+            }
+            catch(ArgumentException ex) { throw new InvalidDataException("Bulge konturu doğrulanamadı.",ex); }
+            int curvedSegments = 0;
+            for (int i=0; i<vertices.Count; i++)
+            {
+                if ((i&255)==0) cancellationToken.ThrowIfCancellationRequested();
+                if (vertices[i].Bulge != 0) curvedSegments++;
+            }
+            if (curvedSegments > 0) { convertedBulgeSegments += curvedSegments; convertedBulgeContours++; }
+            return generated;
         }
         if(strict is not null)
         {
@@ -852,6 +894,14 @@ public static class DxfFormat
             if (e.Type == "SECTION") { section = e.Text(2); continue; }
             if (e.Type == "ENDSEC") { section = ""; block=""; excludedBlockReason=null; excludedBlockCertain=false; continue; }
             if (section is not ("ENTITIES" or "BLOCKS")) continue;
+            if (bulgeToleranceMm is not null && e.Type == "INSERT")
+                throw new InvalidDataException("Bulge incelemesinde INSERT yerleşimleri desteklenmiyor; dosya aktarılmadı.");
+            // Definitions are not model-space placements. Never interpret their
+            // geometry as positioned output in the opt-in importer, including
+            // straight LINE/LWPOLYLINE records or hidden entities.
+            if (bulgeToleranceMm is not null && section == "BLOCKS" &&
+                e.Type is not ("BLOCK" or "ENDBLK" or "SEQEND" or "EOF" or "TEXT" or "MTEXT" or "ATTRIB" or "ATTDEF"))
+                throw new InvalidDataException("Bulge aktarımında blok tanım geometrisi desteklenmiyor; dosya aktarılmadı.");
             // In legacy mode even hidden, paper-space, or nested INSERTs are not
             // expanded. Record this before visibility filtering rather than
             // depending on localized warnings or on whether a contour was kept.
@@ -887,6 +937,8 @@ public static class DxfFormat
             var sourceOrdinal=i;
             void RecordSkipped(string reason,bool knownGeometryReason=true)
             {
+                if (bulgeToleranceMm is not null && knownGeometryReason && e.Type is not ("TEXT" or "MTEXT" or "ATTRIB" or "ATTDEF"))
+                    throw new InvalidDataException("DXF geometrisi güvenle aktarılamadı: " + reason);
                 SummarizeUnsupported(reason);
                 if(knownGeometryReason)skippedGeometryReasons.Add(reason);
                 if(strictImport)return;
@@ -1028,6 +1080,8 @@ public static class DxfFormat
                 if(strictImport && (doc.Pieces.Count>=ProjectStorage.MaximumPieces || declared>ProjectStorage.MaximumTotalPoints-acceptedPoints))
                     throw new InvalidDataException("DXF doğrudan ve yerleştirilmiş geometrinin ortak sınırını aşıyor.");
                 Coordinate? xValue = null;
+                var sourceVertices = new List<DxfBulgeVertex>();
+                var lastBulgeIndex = -1;
                 foreach (var group in e.Data)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1041,13 +1095,26 @@ public static class DxfFormat
                         if (!xValue.HasValue) throw new InvalidDataException("LWPOLYLINE X koordinatı eksik veya Y yinelenmiş.");
                         if (points.Count >= declared) throw new InvalidDataException("LWPOLYLINE bildirilen nokta sayısını aşıyor.");
                         var sourcePoint=new SourcePoint(xValue.Value,ReadCoordinate(group.Value));
+                        if (bulgeToleranceMm is not null && ((sourcePoint.X.Value == 0 && IsNonzeroDecimal(sourcePoint.X.Text)) || (sourcePoint.Y.Value == 0 && IsNonzeroDecimal(sourcePoint.Y.Text))))
+                            throw new InvalidDataException("Polilin kaynak koordinatı sayısal dönüşümde sıfıra düştü.");
                         points.Add(ScalePolylinePoint(sourcePoint,millimetersPerUnit,scaledOrigins));
+                        if (bulgeToleranceMm is not null) sourceVertices.Add(new(new Point2(sourcePoint.X.Value,sourcePoint.Y.Value),0));
                         xValue = null;
+                    }
+                    else if (group.Code == 42 && bulgeToleranceMm is not null)
+                    {
+                        if (xValue.HasValue || sourceVertices.Count == 0 || lastBulgeIndex == sourceVertices.Count-1)
+                            throw new InvalidDataException("LWPOLYLINE bulge köşesi eksik, sırası belirsiz veya yinelenmiş.");
+                        var parsed = ReadCoordinate(group.Value);
+                        if (parsed.Value == 0 && IsNonzeroDecimal(group.Value)) throw new InvalidDataException("Bulge sayısal dönüşümde sıfıra düştü.");
+                        sourceVertices[^1] = sourceVertices[^1] with { Bulge = parsed.Value };
+                        lastBulgeIndex = sourceVertices.Count-1;
                     }
                 }
                 if (xValue.HasValue || points.Count != declared) throw new InvalidDataException("LWPOLYLINE nokta sayısı veya koordinatları uyuşmuyor.");
                 if (HasNonzeroPolylineWidth(e, cancellationToken, 40, 41, 43)) { RecordSkipped("genişlikli LWPOLYLINE (kontur atlandı)"); continue; }
-                if (e.Data.Any(p => p.Code == 42 && IsNonzeroDecimal(p.Value))) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
+                if (bulgeToleranceMm is not null) points = ApproximateBulge(sourceVertices, (lightweightFlags & 1) != 0, points);
+                else if (e.Data.Any(p => p.Code == 42 && IsNonzeroDecimal(p.Value))) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
                 AddPiece(name, points, (lightweightFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal]);
                 blockGeometry |= section == "BLOCKS";
             }
@@ -1096,21 +1163,40 @@ public static class DxfFormat
                 if(excludedVertexReason is not null) { RecordSkipped(excludedVertexReason+" VERTEX (kontur atlandı)");continue; }
                 if (has3D) { RecordSkipped("3D VERTEX (kontur atlandı)"); continue; }
                 if (hasWidth) { RecordSkipped("genişlikli POLYLINE (kontur atlandı)"); continue; }
-                if (hasBulge) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
+                if (hasBulge && bulgeToleranceMm is null) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
                 if (hasFittedVertex || (polylineFlags & (2 | 4)) != 0) { RecordSkipped("eğri/spline POLYLINE (kontur atlandı)"); continue; }
                 var points = new List<Point2>(vertices.Count);
+                var sourceVertices = new List<DxfBulgeVertex>();
                 var scaledOrigins = new Dictionary<Point2,SourcePoint>();
                 foreach (var vertex in vertices)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var sourcePoint=new SourcePoint(vertex.RequiredCoordinate(10),vertex.RequiredCoordinate(20));
+                    if (bulgeToleranceMm is not null && ((sourcePoint.X.Value == 0 && IsNonzeroDecimal(sourcePoint.X.Text)) || (sourcePoint.Y.Value == 0 && IsNonzeroDecimal(sourcePoint.Y.Text))))
+                        throw new InvalidDataException("Polilin kaynak koordinatı sayısal dönüşümde sıfıra düştü.");
                     points.Add(ScalePolylinePoint(sourcePoint,millimetersPerUnit,scaledOrigins));
+                    if (bulgeToleranceMm is not null)
+                    {
+                        var groups=vertex.Data.Where(p=>p.Code==42).ToArray();
+                        var bulge=groups.Length==0 ? 0 : ReadCoordinate(groups[0].Value).Value;
+                        if (groups.Length>0 && bulge==0 && IsNonzeroDecimal(groups[0].Value)) throw new InvalidDataException("Bulge sayısal dönüşümde sıfıra düştü.");
+                        sourceVertices.Add(new(new Point2(sourcePoint.X.Value,sourcePoint.Y.Value),bulge));
+                    }
                 }
+                if (bulgeToleranceMm is not null) points=ApproximateBulge(sourceVertices,(polylineFlags & 1) != 0,points);
                 AddPiece(name, points, (polylineFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal],
                     Enumerable.Range(sourceOrdinal+1,vertices.Count+1));
                 blockGeometry |= section == "BLOCKS";
             }
-            else RecordSkipped(e.Type,knownGeometryReason:false);
+            else
+            {
+                // Text/attributes are non-contour annotations and retain their
+                // existing separate reporting path. Unknown entity types may
+                // contain geometry and cannot be silently dropped in opt-in mode.
+                if (bulgeToleranceMm is not null && e.Type is not ("TEXT" or "MTEXT" or "ATTRIB" or "ATTDEF"))
+                    throw new InvalidDataException("Bulge aktarımında desteklenmeyen DXF varlığı: " + e.Type);
+                RecordSkipped(e.Type,knownGeometryReason:false);
+            }
         }
         var ambiguousLineGroups = 0;
         foreach (var (key, list) in segments)
@@ -1188,8 +1274,13 @@ public static class DxfFormat
             warnings.Add("DXF atlanan veya ek kayıt envanteri kesildi; eksik kayıtlar için özgün dosyaya başvurun.");
         var approvedLayers=strict is null ? ImmutableArray<string>.Empty : strict.ApprovedLayers.ToImmutableArray();
         cancellationToken.ThrowIfCancellationRequested();
+        if (bulgeToleranceMm is not null) ProjectStorage.Validate(doc);
+        if (bulgeToleranceMm is double sampledTolerance)
+            warnings.Add(convertedBulgeSegments > 0
+                ? $"Bulge eğrileri örneklendi: {convertedBulgeContours} kontur, {convertedBulgeSegments} yay; istenen nominal sapma {DisplayFactor(sampledTolerance)} mm. Sayısal/üretim doğruluğu garanti edilmez; kaynağı kontrol edin."
+                : $"Bulge seçeneği etkin; dönüştürülen yay yok. Seçilen nominal sapma {DisplayFactor(sampledTolerance)} mm; kaynağı kontrol edin.");
         var importParameters=new DxfImportParameters(encoding,millimetersPerUnit,strictImport ? DxfImportMode.Controlled : DxfImportMode.General,
-            strict?.ComponentToleranceMm,approvedLayers);
+            strict?.ComponentToleranceMm,approvedLayers) { BulgeToleranceMm = bulgeToleranceMm };
         return new DxfImportResult(doc, warnings) { Units = units, SourceSha256=sourceSha256, SourceByteLength=sourceByteLength, ImportParameters=importParameters,
             SkippedInsertEntities=skippedInsertEntities, SkippedRelevantInsertEntities=skippedRelevantInsertEntities, ImportedBlockDefinitions=blockGeometry, MetadataLoss=metadataLoss, MetadataSources=metadataSources, OpaqueMetadata=opaqueMetadata, Annotations=annotations, SupplementalGeometry=supplementalGeometry,
             AnnotationSnapshotSha256=sourceSha256, AnnotationSnapshotByteLength=sourceByteLength,

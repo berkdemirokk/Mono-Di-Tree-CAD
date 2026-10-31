@@ -246,6 +246,7 @@ internal static class DesktopVerification
             VerifyFitSelectedPiece(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);
             VerifyDxfEncodingChoice(studio,work,reportPath,checks);
+            VerifyDxfBulgeOptions(studio,reportPath,checks);
             VerifyDxfStrictOptions(studio,work,reportPath,checks);
             VerifyDxfPlacementRetry(studio,work,reportPath,checks);
             VerifyDxfDecodedNames(studio,reportPath,checks);
@@ -906,6 +907,7 @@ internal static class DesktopVerification
             VerifyDxfLayerReview(studio,reportPath,checks);
             VerifyHpglReviewWindow(studio,reportPath,checks);
             VerifyAsyncDxfImport(studio,work,checks);
+            VerifyAsyncDxfBulgeImport(studio,work,reportPath,checks);
             VerifyDxfGrainlineReview(studio,work,checks);
             VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
@@ -1682,6 +1684,68 @@ internal static class DesktopVerification
             studio.ConfirmDxfReviewForVerification=null;studio.ConfirmDxfGrainlineReviewForVerification=null;
             studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous);
         }
+    }
+    private static void VerifyAsyncDxfBulgeImport(MainWindow studio,string work,string reportPath,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"async-bulge.dxf");
+        var source=System.Text.Encoding.UTF8.GetBytes("0\nSECTION\n2\nENTITIES\n"+
+            "0\nLWPOLYLINE\n8\nPOS\n90\n2\n70\n0\n10\n0\n20\n0\n42\n1\n10\n10\n20\n0\n"+
+            "0\nLWPOLYLINE\n8\nNEG\n90\n2\n70\n0\n10\n0\n20\n20\n42\n-1\n10\n10\n20\n20\n"+
+            "0\nLINE\n8\nSTRAIGHT\n10\n40\n20\n0\n11\n50\n21\n0\n0\nENDSEC\n0\nEOF\n");
+        File.WriteAllBytes(path,source);
+        studio.LoadDocument(new ProjectDocument { Name="Özgün",Pieces=[new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] }] });
+        var original=studio.Document.Clone();
+        try
+        {
+            var task=studio.StartDxfPreparationWithBulgeAsync(path,1,DxfTextEncoding.Utf8,0.1);
+            PumpUntil(()=>task.IsCompleted);var imported=task.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Bulge fixture was not prepared.");
+            Check(imported.Project.Pieces.Count==3 && imported.Project.Pieces.Single(p=>p.Name=="POS").Points.Count>2 &&
+                imported.Project.Pieces.Single(p=>p.Name=="NEG").Points.Count>2 && imported.Project.Pieces.Single(p=>p.Name=="POS").Points.Any(p=>p.Y<0) &&
+                imported.Project.Pieces.Single(p=>p.Name=="NEG").Points.Any(p=>p.Y>20) &&
+                imported.ImportParameters?.BulgeToleranceMm==0.1 && imported.SourceSha256==Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source)) &&
+                File.ReadAllBytes(path).SequenceEqual(source) && DocumentSession.ContentEquals(original,studio.Document),
+                "Opt-in bulge prepares both directed arcs with captured source hash and tolerance without replacing workspace",checks);
+            var preview=(Window)typeof(MainWindow).GetMethod("BuildImportPreviewCapturedWithState",PrivateInstance)!.Invoke(studio,
+                [imported.Project,imported.Warnings,1.0,"async-bulge.dxf",imported.Units,imported.SourceSha256,imported.SourceByteLength,(Action)(()=>{}),imported.SkippedRelevantInsertEntities])!;
+            try
+            {
+                Render(preview,Path.ChangeExtension(reportPath,".dxf-bulge-import-preview.png"),800,650);
+                Check(Descendants<TextBlock>((FrameworkElement)preview.Content).Any(t=>t.Text.Contains("Bulge") && t.Text.Contains("garanti edilmez")),
+                    "Bulge preview displays the approximation and non-guarantee warning",checks);
+            }
+            finally { preview.Close(); }
+            var legacy=studio.StartDxfPreparationAsync(path,1,DxfTextEncoding.Utf8);PumpUntil(()=>legacy.IsCompleted);
+            var ordinary=legacy.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Legacy fixture was not prepared.");
+            Check(ordinary.ImportParameters?.BulgeToleranceMm is null && ordinary.Project.Pieces.Count==1 && ordinary.Project.Pieces[0].Name=="STRAIGHT" && ordinary.Warnings.Any(w=>w.Contains("bulge",StringComparison.OrdinalIgnoreCase)),
+                "Default DXF mode continues to skip bulge contours and disclose the omission",checks);
+            var bad=Path.Combine(work,"async-invalid-bulge.dxf");File.WriteAllText(bad,System.Text.Encoding.UTF8.GetString(source).Replace("42\n1\n","42\ninvalid\n"));
+            var failed=studio.StartDxfPreparationWithBulgeAsync(bad,1,DxfTextEncoding.Utf8,0.1);PumpUntil(()=>failed.IsCompleted);
+            var rejected=false;try { failed.GetAwaiter().GetResult(); } catch(InvalidDataException) { rejected=true; }
+            Check(rejected && DocumentSession.ContentEquals(original,studio.Document),"Invalid bulge input preserves previous workspace",checks);
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+            studio.BeforeDxfPreparationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            var pending=studio.StartDxfPreparationWithBulgeAsync(path,1,DxfTextEncoding.Utf8,0.1);
+            try
+            {
+                PumpUntil(()=>reached.IsSet);Invoke(studio,"RequestDxfCancellation");release.Set();PumpUntil(()=>pending.IsCompleted);
+                Check(pending.GetAwaiter().GetResult() is null && DocumentSession.ContentEquals(original,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source),
+                    "Cancelled bulge preparation preserves workspace and source",checks);
+            }
+            finally { release.Set();PumpUntil(()=>pending.IsCompleted); }
+            reached.Reset();release.Reset();
+            pending=studio.StartDxfPreparationWithBulgeAsync(path,1,DxfTextEncoding.Utf8,0.1);
+            try
+            {
+                PumpUntil(()=>reached.IsSet);studio.Commit("Edit during bulge preparation",()=>studio.Document.Name="Yeni çalışma");
+                release.Set();PumpUntil(()=>pending.IsCompleted);
+                Check(pending.GetAwaiter().GetResult() is null && studio.Document.Name=="Yeni çalışma" && File.ReadAllBytes(path).SequenceEqual(source),
+                    "Workspace changes invalidate bulge preparation without reverting edits or source",checks);
+            }
+            finally { release.Set();PumpUntil(()=>pending.IsCompleted); }
+        }
+        finally { studio.BeforeDxfPreparationForVerification=null;SynchronizationContext.SetSynchronizationContext(previous); }
     }
     private static void VerifyAsyncDxfImport(MainWindow studio,string work,List<string> checks)
     {
@@ -4790,6 +4854,52 @@ internal static class DesktopVerification
             studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;
             SynchronizationContext.SetSynchronizationContext(oldContext);
         }
+    }
+
+    private static void VerifyDxfBulgeOptions(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var before=studio.Document.Clone();
+        var window=new DxfBulgeOptionsWindow(studio);
+        try
+        {
+            var root=(FrameworkElement)window.Content;
+            Render(window,Path.ChangeExtension(reportPath,".dxf-bulge-options.png"),610,500);
+            Check(window.EnableApproximation.IsChecked==false && !window.ToleranceInput.IsEnabled
+                && window.ToleranceInput.Text=="" && window.SelectedToleranceMm is null
+                && window.TryAccept(out var defaultValue) && defaultValue is null,
+                "DXF bulge option defaults to disabled without a tolerance",checks);
+            Check(AutomationProperties.GetName(window.EnableApproximation).Contains("bulge",StringComparison.OrdinalIgnoreCase)
+                && AutomationProperties.GetName(window.ToleranceInput).Contains("milimetre")
+                && AutomationProperties.GetLiveSetting(window.Error)==AutomationLiveSetting.Assertive
+                && AutomationProperties.GetHelpText(window.ToleranceInput).Contains("üretim toleransı değildir"),
+                "DXF bulge controls and validation expose accessible names and warning",checks);
+            Check(Descendants<TextBlock>(root).Any(text=>text.Text.Contains("parametrik eğri saklanmaz") && text.Text.Contains("kesin geometrik hata sınırı"))
+                && Descendants<TextBlock>(root).Any(text=>text.Text.Contains("BLOCK/INSERT") && text.Text.Contains("3B") && text.Text.Contains("ARC/CIRCLE")),
+                "DXF bulge option explains approximation and unsupported geometry",checks);
+            window.EnableApproximation.IsChecked=true;
+            Check(window.ToleranceInput.IsEnabled,"Opting in enables the tolerance input",checks);
+            foreach(var invalid in new[]{"", "0", "-1", "NaN", "Infinity", "1e999"})
+            {
+                window.ToleranceInput.Text=invalid;
+                Check(!window.TryAccept(out var rejected) && rejected is null && window.Error.Visibility==Visibility.Visible
+                    && window.Error.Text.Contains("Sıfırdan büyük"),$"DXF bulge option rejects invalid tolerance '{invalid}'",checks);
+            }
+            window.ToleranceInput.Text="0,25";
+            Check(window.TryAccept(out var positive) && positive==0.25 && window.Error.Visibility==Visibility.Collapsed,
+                "DXF bulge option accepts an explicitly entered positive millimetre value",checks);
+            window.EnableApproximation.IsChecked=false;
+            Check(!window.ToleranceInput.IsEnabled && window.TryAccept(out var disabled) && disabled is null,
+                "Turning approximation off returns a null tolerance despite previous input",checks);
+            var cancel=Descendants<Button>(root).Single(button=>Equals(button.Content,"Vazgeç"));
+            bool nonModal=false;
+            // This verification window remains hidden: WPF rejects setting a
+            // DialogResult when it has not been opened by ShowDialog.
+            try { cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); }
+            catch(InvalidOperationException) { nonModal=true; }
+            Check(nonModal && cancel.IsCancel && cancel.IsDefault && window.SelectedToleranceMm is null && DocumentSession.ContentEquals(before,studio.Document),
+                "Hidden cancel handler preserves options and project; actual modal closure remains untested",checks);
+        }
+        finally { window.Close(); }
     }
 
     private static void VerifyDxfEncodingChoice(MainWindow studio,string work,string reportPath,List<string> checks)
