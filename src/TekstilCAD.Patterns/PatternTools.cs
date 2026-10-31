@@ -196,6 +196,17 @@ public static class PatternTools
     public static PatternPiece InsertPoint(PatternPiece piece, int afterIndex, Point2 point)
         => InsertPoint(piece, afterIndex, point, CancellationToken.None);
 
+    /// <summary>Reverse an open path without changing any represented coordinates.
+    /// The input and its point collection remain unchanged.</summary>
+    public static PatternPiece ReverseOpenPath(PatternPiece piece,CancellationToken cancellationToken=default)
+    {
+        var points=SnapshotPointEdit(piece,cancellationToken);
+        if(piece.Closed)throw new ArgumentException("Yalnız açık konturun yönü ters çevrilebilir.");
+        ValidatePointEdit(false,points,cancellationToken);
+        points.Reverse();cancellationToken.ThrowIfCancellationRequested();
+        return NewPiece(piece,points,"",preserveGrainline:true);
+    }
+
     /// <summary>Splits the edge after the selected vertex at its exact binary64 midpoint.
     /// Rejects a midpoint that cannot be represented exactly, preserving the original edge.</summary>
     public static PatternPiece InsertEdgeMidpoint(PatternPiece piece,int afterIndex,CancellationToken cancellationToken = default)
@@ -206,7 +217,11 @@ public static class PatternTools
         if(!piece.Closed && afterIndex==points.Count-1)throw new ArgumentException("Açık konturun son noktasından sonra kenar yok.");
         var next=afterIndex+1<points.Count ? afterIndex+1 : 0;
         var a=points[afterIndex];var b=points[next];
-        var midpoint=new Point2(a.X/2+b.X/2,a.Y/2+b.Y/2);
+        // Valid CAD coordinates are bounded, so their sums cannot overflow.
+        // Sum before halving: separate divisions can lose subnormal bits even
+        // when the exact midpoint is representable. The exact check below
+        // still rejects any rounded result.
+        var midpoint=new Point2((a.X+b.X)/2,(a.Y+b.Y)/2);
         static System.Numerics.BigInteger Units(double value)
         {
             var bits=BitConverter.DoubleToInt64Bits(value);var exponent=(int)((bits>>52)&0x7ff);

@@ -29,6 +29,15 @@ public class EdgeMidpointTests
         }
     }
     [Fact]
+    public void PreservesRepresentableSubnormalMidpoint()
+    {
+        var source=new PatternPiece { Closed=false,Points=[new(0,double.Epsilon),new(10,5*double.Epsilon)] };
+        var before=source.Points.ToArray();
+        var result=PatternTools.InsertEdgeMidpoint(source,0);
+        Assert.Equal(new Point2(5,3*double.Epsilon),result.Points[1]);
+        Assert.Equal(before,source.Points);
+    }
+    [Fact]
     public void RejectsMissingEdgeAndUnrepresentableMidpoint()
     {
         var source=new PatternPiece { Closed=false,Points=[new(1,0),new(Math.BitIncrement(1),0)] };

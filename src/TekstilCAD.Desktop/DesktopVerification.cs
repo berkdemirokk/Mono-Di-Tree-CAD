@@ -380,6 +380,7 @@ internal static class DesktopVerification
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
+            VerifyReverseOpenPath(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
             VerifyNestingErrorNavigationLarge(studio,reportPath,checks);
@@ -6961,6 +6962,25 @@ internal static class DesktopVerification
         }
         canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" });studio.SetTool("Seç");
         SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
+
+    private static void VerifyReverseOpenPath(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10)],Metadata=new PieceMetadata { Quantity=2 } };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=[new(1,0),new(0,0),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var task=tools.ReverseOpenPathAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(studio.Document.Pieces[0].Points.SequenceEqual(piece.Points.AsEnumerable().Reverse()) && studio.Document.Pieces[0].Metadata?.Quantity==2 &&
+                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
+                "Reversing an open path preserves geometry, metadata and the original grading rule for review",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Open path reversal is one undo step",checks);
+        }
+        finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyEdgeMidpoint(MainWindow studio,List<string> checks)
