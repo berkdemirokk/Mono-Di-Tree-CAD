@@ -139,6 +139,9 @@ public sealed class HpglPreparedOutput
 
 public static class HpglFormat
 {
+    // Includes the PD prefix and terminating semicolon. This bounds individual
+    // commands; a target may still impose a smaller limit or other restrictions.
+    public const int MaximumPenDownCommandBytes = 128;
     internal readonly record struct PlotPoint(int X, int Y)
     {
         public string Coordinates => X.ToString(CultureInfo.InvariantCulture) + "," + Y.ToString(CultureInfo.InvariantCulture);
@@ -252,13 +255,30 @@ public static class HpglFormat
                 geometryPreviews!.Add(p.Id,new HpglPieceGeometryPreview(p.Id,p.Closed,unitsPerMillimeter,previewPoints));
             }
             b.Append("PU").Append(points[0].Coordinates).Append(";PD");
+            var commandLength = 2;
+            var pairsInCommand = 0;
+            void AppendPenDown(PlotPoint point)
+            {
+                var coordinates = point.Coordinates;
+                var separatorLength = pairsInCommand == 0 ? 0 : 1;
+                if (commandLength + separatorLength + coordinates.Length + 1 > MaximumPenDownCommandBytes)
+                {
+                    b.Append(";PD");
+                    commandLength = 2;
+                    pairsInCommand = 0;
+                    separatorLength = 0;
+                }
+                if (separatorLength != 0) b.Append(',');
+                b.Append(coordinates);
+                commandLength += separatorLength + coordinates.Length;
+                pairsInCommand++;
+            }
             for (var i = 1; i < points.Length; i++)
             {
                 if ((i & 1023) == 0) cancellationToken.ThrowIfCancellationRequested();
-                if (i > 1) b.Append(',');
-                b.Append(points[i].Coordinates);
+                AppendPenDown(points[i]);
             }
-            if (p.Closed) b.Append(',').Append(points[0].Coordinates);
+            if (p.Closed) AppendPenDown(points[0]);
             b.Append(";PU;\n");
         }
         b.Append("SP0;\n");

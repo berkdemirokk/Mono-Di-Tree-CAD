@@ -66,6 +66,7 @@ public static class PlotterHpglPreflight
             else if (state == 3 && command.SequenceEqual("SP0") && contours > 0) state = 6;
             else if (state == 3 && command.StartsWith("PU") && CoordinatesValid(command[2..], maxX, maxY, 1, 1, cancellationToken)) state = 4;
             else if (state == 4 && command.StartsWith("PD") && CoordinatesValid(command[2..], maxX, maxY, 1, int.MaxValue, cancellationToken)) state = 5;
+            else if (state == 5 && command.StartsWith("PD") && CoordinatesValid(command[2..], maxX, maxY, 1, int.MaxValue, cancellationToken)) { }
             else if (state == 5 && command.SequenceEqual("PU")) { state = 3; contours++; }
             else throw new InvalidDataException("HPGL komut sırası veya koordinatlar desteklenmiyor.");
             offset = end + 1;
