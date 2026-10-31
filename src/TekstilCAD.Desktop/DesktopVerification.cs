@@ -8158,6 +8158,16 @@ internal static class DesktopVerification
         closedWindow.EndSelector.SelectedIndex=0;
         Check(closedWindow.ContourResult.Text.Contains("ileri 0 mm") && closedWindow.ContourResult.Text.Contains("ters 0 mm"),"Same contour point produces zero in both directions",checks);
         closedWindow.Close();
+        var explicitClosed=new PatternPiece { Name="Tekrarlı kapanış",Closed=true,Points=[new(0,0),new(3,0),new(3,4),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[explicitClosed] });explicitClosed=studio.Document.Pieces[0];studio.Select(explicitClosed.Id);chosen=explicitClosed.Id;
+        var explicitWindow=new PointDistanceWindow(studio,studio,explicitClosed,()=>chosen);
+        explicitWindow.EndSelector.SelectedIndex=3;
+        Check(explicitWindow.ContourResult.Text.Contains("ileri 0 mm") && explicitWindow.ContourResult.Text.Contains("ters 0 mm") && explicitWindow.ContourResult.Text.Contains("uzunluğu: 12 mm"),"Explicit closing vertex measures zero from first vertex while perimeter remains available",checks);
+        explicitWindow.StartSelector.SelectedIndex=3;explicitWindow.EndSelector.SelectedIndex=0;
+        Check(explicitWindow.ContourResult.Text.Contains("ileri 0 mm") && explicitWindow.ContourResult.Text.Contains("ters 0 mm"),"Explicit closing vertex measures zero in reverse selection order",checks);
+        explicitWindow.EndSelector.SelectedIndex=2;
+        Check(explicitWindow.ContourResult.Text.Contains("ileri 7 mm") && explicitWindow.ContourResult.Text.Contains("ters 5 mm"),"Closing vertex retains correct paths to other vertices",checks);
+        explicitWindow.Close();
         var clickable=new PointMeasurePreview(new PatternPiece { Closed=false,Points=[new(0,0),new(3,0),new(3,4)] });
         clickable.Measure(new Size(400,180));clickable.Arrange(new Rect(0,0,400,180));clickable.UpdateLayout();
         Check(clickable.HitTestPoint(new Point(147.5,20))==0 && clickable.HitTestPoint(new Point(252.5,160))==2 && clickable.HitTestPoint(new Point(0,0))==-1,"Preview picks only a nearby unambiguous contour vertex with increasing Y downwards",checks);

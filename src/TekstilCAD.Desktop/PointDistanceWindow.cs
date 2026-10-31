@@ -144,6 +144,13 @@ internal sealed class PointDistanceWindow : Window
     // Closed contours wrap; open contours use their only connecting direction.
     private double ContourLength(int from,int to,int direction)
     {
+        // A stored closing vertex is the same vertex as index zero, not a
+        // second location that can turn a zero-length measurement into a lap.
+        if(piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1])
+        {
+            if(from==piece.Points.Count-1)from=0;
+            if(to==piece.Points.Count-1)to=0;
+        }
         if(from==to)return 0;
         if(!piece.Closed && ((direction>0 && from>to) || (direction<0 && from<to))) return 0;
         double sum=0,correction=0;
