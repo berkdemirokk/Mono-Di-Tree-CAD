@@ -1,6 +1,26 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testChangingPieceClearsPreviousNotchSelection() {
+        let fixture = #"[6,{"Name":"Seçim","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Ön","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":50}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let notchPicker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(notchPicker.waitForExistence(timeout: 15))
+        notchPicker.tap()
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.tap()
+        let selected = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Seçili köşe işareti: nokta 0")).firstMatch
+        XCTAssertTrue(selected.waitForExistence(timeout: 5))
+        let piecePicker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Gösterilen parça")).firstMatch
+        piecePicker.tap()
+        app.buttons["Ön"].tap()
+        piecePicker.tap()
+        app.buttons["Kol"].tap()
+        XCTAssertFalse(selected.exists)
+    }
+
     func testSelectionIsUnavailableWhileAnotherModelLoads() {
         let fixture = #"[6,{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

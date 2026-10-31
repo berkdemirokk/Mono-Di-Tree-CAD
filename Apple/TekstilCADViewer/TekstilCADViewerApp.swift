@@ -146,7 +146,13 @@ private struct ContentView: View {
                     .disabled(isLoading)
                     .accessibilityHint("Parçaları aramak veya seçmek için açın")
                     .sheet(isPresented: $showingPieces) {
-                        PiecePicker(pieces: project.pieces, selection: $selectedPiece)
+                        PiecePicker(pieces: project.pieces, selection: Binding(
+                            get: { selectedPiece },
+                            set: { newSelection in
+                                if newSelection != selectedPiece { selectedNotch = nil }
+                                selectedPiece = newSelection
+                            }
+                        ))
                     }
                     if let selectedPiece {
                         #if DEBUG
@@ -311,12 +317,14 @@ private struct ContentView: View {
         let request = UUID()
         loadRequest = request
         isLoading = true
+        // Acquire the picker grant while still handling its result. Keep it
+        // alive until the background coordinated read has finished.
+        let access = imported && url.startAccessingSecurityScopedResource()
         DispatchQueue.global(qos: .userInitiated).async {
+            defer { if access { url.stopAccessingSecurityScopedResource() } }
             #if DEBUG && targetEnvironment(simulator)
             if ProcessInfo.processInfo.arguments.contains("--ui-test-open-delay") { Thread.sleep(forTimeInterval: 3) }
             #endif
-            let access = imported && url.startAccessingSecurityScopedResource()
-            defer { if access { url.stopAccessingSecurityScopedResource() } }
             let loaded = Result { () -> (Drawing, Data) in
                 let data = try Drawing.readData(url)
                 return (try Drawing.load(data), data)
