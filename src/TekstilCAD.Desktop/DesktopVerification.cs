@@ -9252,6 +9252,10 @@ internal static class DesktopVerification
             var task=canvas.LargeCompletionTask ?? throw new InvalidOperationException("Large mouse drawing did not start background validation.");
             Check(canvas.LargeCompletionRunning && studio.Document.Pieces.Count==0,
                 "Mouse-entered large polyline validates in background before commit",checks);
+            Click();
+            Check(canvas.LargeCompletionRunning && ReferenceEquals(task,canvas.LargeCompletionTask)
+                && canvas.CapturePendingDrawing()!.Points.SequenceEqual(accepted) && studio.Document.Pieces.Count==0,
+                "Mouse input cannot change or cancel a polyline while its completion is validating",checks);
             PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             Check(!canvas.HasPendingDrawing && studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Points.SequenceEqual(accepted),
                 "Mouse-entered 4097-point polyline commits unchanged after validation",checks);

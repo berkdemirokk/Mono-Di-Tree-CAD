@@ -406,7 +406,7 @@ public sealed class CadCanvas : FrameworkElement
     private Point2 World(Point p,bool snap=true) { var w=new Point2((p.X-offset.X)/scale,(p.Y-offset.Y)/scale); return snap && owner.Snap ? new(Math.Round(w.X),Math.Round(w.Y)) : w; }
     private void Down(object sender,MouseButtonEventArgs e)
     {
-        if(LargeVertexValidationRunning) { owner.SetStatus("Nokta değişikliği doğrulanıyor; bekleyin veya Esc ile iptal edin. Ekranda kayıtlı geometri gösteriliyor.");return; }
+        if(LargeVertexValidationRunning || LargeCompletionRunning) { owner.SetStatus("Doğrulama sürüyor; bekleyin veya Esc ile iptal edin.");return; }
         Focus(); if(e.ChangedButton==MouseButton.Middle) { panStart=e.GetPosition(this);CaptureMouse();return; } if(e.ChangedButton!=MouseButton.Left)return;
         var screenPosition=e.GetPosition(this);
         // Selection is based on what is visibly under the pointer. Grid snapping
