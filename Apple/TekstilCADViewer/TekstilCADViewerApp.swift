@@ -113,7 +113,7 @@ private struct ContentView: View {
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary { url in
                 showingLibrary = false
-                openModel(url, imported: false)
+                openModel(ModelStore.payloadURL(url), imported: false)
             }
         }
         #if DEBUG && targetEnvironment(simulator)
@@ -182,7 +182,7 @@ private struct ContentView: View {
         DispatchQueue.global(qos: .userInitiated).async {
             let result = Result {
                 let copy = try LosslessProjectName.replacing(in: data, with: name)
-                try ModelStore.save(copy, name: name + ".tcad")
+                try ModelStore.saveRenamed(copy, projectName: name)
             }
             DispatchQueue.main.async {
                 isSaving = false
@@ -211,6 +211,21 @@ private struct ContentView: View {
 }
 
 private enum ModelStore {
+    struct Entry: Identifiable {
+        let url: URL
+        let name: String
+        let date: Date?
+        let canOpen: Bool
+        var id: URL { url }
+    }
+    private struct CopyMetadata: Codable {
+        let version: Int
+        let name: String
+    }
+
+    private static let copyExtension = "tcadcopy"
+    private static let payloadName = "project.tcad"
+    private static let metadataName = "metadata.json"
     #if DEBUG && targetEnvironment(simulator)
     private static let testDirectory: URL = {
         let url = FileManager.default.temporaryDirectory
@@ -255,11 +270,55 @@ private enum ModelStore {
         try FileManager.default.moveItem(at: staging, to: destination)
     }
 
-    static func models() throws -> [URL] {
+    static func saveRenamed(_ data: Data, projectName: String) throws {
+        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        let directory = try directory()
+        let id = UUID().uuidString
+        let staging = directory.appendingPathComponent(".\(id).partial", isDirectory: true)
+        let destination = directory.appendingPathComponent("\(id).\(copyExtension)", isDirectory: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: staging) }
+        try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
+        let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
+        try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
+        try FileManager.default.moveItem(at: staging, to: destination)
+    }
+
+    static func payloadURL(_ url: URL) -> URL {
+        url.pathExtension.lowercased() == copyExtension ? url.appendingPathComponent(payloadName) : url
+    }
+
+    private static func metadata(_ url: URL) -> CopyMetadata? {
+        guard url.pathExtension.lowercased() == copyExtension,
+              let data = try? Data(contentsOf: url.appendingPathComponent(metadataName)),
+              let metadata = try? JSONDecoder().decode(CopyMetadata.self, from: data),
+              metadata.version == 1 else { return nil }
+        return metadata
+    }
+
+    static func models() throws -> [Entry] {
         try FileManager.default.contentsOfDirectory(at: directory(), includingPropertiesForKeys: nil,
                                                     options: [])
-            .filter { $0.pathExtension.lowercased() == "tcad" }
-            .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
+            .compactMap { url in
+                let name: String
+                let canOpen: Bool
+                if url.pathExtension.lowercased() == "tcad" {
+                    name = displayName(url)
+                    canOpen = true
+                } else if url.pathExtension.lowercased() == copyExtension {
+                    if let metadata = metadata(url), FileManager.default.fileExists(atPath: payloadURL(url).path) {
+                        name = metadata.name.isEmpty ? "Model" : metadata.name
+                        canOpen = true
+                    } else {
+                        name = "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
+                        canOpen = false
+                    }
+                } else {
+                    return nil
+                }
+                return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen)
+            }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     static func savedDate(_ url: URL) -> Date? {
@@ -269,7 +328,7 @@ private enum ModelStore {
     static func delete(_ url: URL) throws {
         let directory = try directory().standardizedFileURL
         guard url.standardizedFileURL.deletingLastPathComponent() == directory,
-              url.pathExtension.lowercased() == "tcad" else {
+              ["tcad", copyExtension].contains(url.pathExtension.lowercased()) else {
             throw ViewerError.message("Model silinemedi.")
         }
         try FileManager.default.removeItem(at: url)
@@ -286,30 +345,36 @@ private enum ModelStore {
 private struct ModelLibrary: View {
     let open: (URL) -> Void
     @Environment(\.dismiss) private var dismiss
-    @State private var models: [URL] = []
+    @State private var models: [ModelStore.Entry] = []
     @State private var search = ""
     @State private var error: String?
-    @State private var modelToDelete: URL?
+    @State private var modelToDelete: ModelStore.Entry?
+    @State private var isLoading = true
 
-    private var matches: [URL] {
+    private var matches: [ModelStore.Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return models.filter { query.isEmpty || ModelStore.displayName($0).localizedCaseInsensitiveContains(query) }
+        return models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if models.isEmpty {
+                if isLoading {
+                    ProgressView("Modeller yükleniyor…")
+                } else if models.isEmpty {
                     Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
                         .foregroundStyle(.secondary)
                 } else if matches.isEmpty {
                     Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
                 }
-                ForEach(matches, id: \.self) { url in
-                    Button { open(url) } label: {
+                ForEach(matches) { model in
+                    Button {
+                        if model.canOpen { open(model.url) }
+                        else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
+                    } label: {
                         VStack(alignment: .leading) {
-                            Text(ModelStore.displayName(url))
-                            if let date = ModelStore.savedDate(url) {
+                            Text(model.name)
+                            if let date = model.date {
                                 Text("Kaydedildi: \(date.formatted(date: .abbreviated, time: .standard))")
                                     .font(.caption).foregroundStyle(.secondary)
                             }
@@ -317,7 +382,7 @@ private struct ModelLibrary: View {
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                     .swipeActions {
-                        Button("Sil", role: .destructive) { modelToDelete = url }
+                        Button("Sil", role: .destructive) { modelToDelete = model }
                     }
                 }
             }
@@ -325,21 +390,29 @@ private struct ModelLibrary: View {
             .navigationTitle("Modellerim")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear {
-                do { models = try ModelStore.models() }
-                catch { self.error = error.localizedDescription }
+                DispatchQueue.global(qos: .userInitiated).async {
+                    let result = Result { try ModelStore.models() }
+                    DispatchQueue.main.async {
+                        isLoading = false
+                        switch result {
+                        case .success(let entries): models = entries
+                        case .failure(let failure): error = failure.localizedDescription
+                        }
+                    }
+                }
             }
             .alert("Modeli sil?", isPresented: Binding(get: { modelToDelete != nil }, set: { if !$0 { modelToDelete = nil } })) {
                 Button("İptal", role: .cancel) { modelToDelete = nil }
                 Button("Sil", role: .destructive) {
-                    guard let url = modelToDelete else { return }
+                    guard let model = modelToDelete else { return }
                     do {
-                        try ModelStore.delete(url)
-                        models.removeAll { $0 == url }
+                        try ModelStore.delete(model.url)
+                        models.removeAll { $0.id == model.id }
                     } catch { self.error = error.localizedDescription }
                     modelToDelete = nil
                 }
             } message: {
-                Text("\(modelToDelete.map(ModelStore.displayName) ?? "Model") telefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
+                Text("\(modelToDelete?.name ?? "Model") telefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
             }
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }

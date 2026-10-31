@@ -84,6 +84,49 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists)
     }
 
+    func testRenamedCopyWithLongSpecialNameCanBeFoundReopenedAndDeleted() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 15))
+        rename.tap()
+        let alert = app.alerts["Proje adını değiştir"]
+        let field = alert.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        let oldName = field.value as? String ?? ""
+        let name = String(repeating: "A", count: 105) + "/%Son"
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: oldName.count) + name)
+        alert.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-fixture" || $0 == "--ui-test-library-reset" }
+        app.launchEnvironment.removeValue(forKey: "TCAD_UI_TEST_FIXTURE")
+        app.launch()
+        XCTAssertTrue(app.buttons["Modellerim"].waitForExistence(timeout: 15))
+        app.buttons["Modellerim"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10))
+        search.tap()
+        search.typeText("/%Son")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.staticTexts[name].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let saved = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(saved.waitForExistence(timeout: 10))
+        saved.swipeLeft()
+        app.buttons["Sil"].tap()
+        let confirmation = app.alerts["Modeli sil?"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        confirmation.buttons["Sil"].tap()
+        XCTAssertTrue(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].waitForExistence(timeout: 5))
+    }
+
     func testHiddenFilenameIsVisibleAndCanBeRemoved() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()
@@ -95,6 +138,11 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 15))
         save.tap()
         XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-library-reset" }
+        app.launchEnvironment.removeValue(forKey: "TCAD_UI_TEST_FIXTURE")
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Önizlemek için bir .tcad dosyası açın."].waitForExistence(timeout: 15))
         app.buttons["Modellerim"].tap()
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "hidden")).firstMatch
         XCTAssertTrue(row.waitForExistence(timeout: 10))
@@ -109,6 +157,28 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
         confirmation.buttons["Sil"].tap()
         XCTAssertTrue(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].waitForExistence(timeout: 5))
+    }
+    func testLegacyNameThatLooksLikeAnEncodingMarkerIsUnchanged() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launchEnvironment["TCAD_UI_TEST_FILENAME"] = "__tcad_name_v1__%2F.tcad"
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-library-reset" }
+        app.launchEnvironment.removeValue(forKey: "TCAD_UI_TEST_FIXTURE")
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Önizlemek için bir .tcad dosyası açın."].waitForExistence(timeout: 15))
+        app.buttons["Modellerim"].tap()
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "__tcad_name_v1__%2F")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 10))
     }
     func testSearchAndSelectPiece() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
