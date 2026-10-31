@@ -282,6 +282,46 @@ public static class PatternTools
         return InsertPoint(detached,afterIndex,midpoint,cancellationToken);
     }
 
+    /// <summary>Splits the next edge at a distance from the selected vertex. The new
+    /// point is at most 0.000001 mm from the original line and requested distance.</summary>
+    public static PatternPiece InsertPointAtDistance(PatternPiece piece, int afterIndex, double distance, CancellationToken cancellationToken = default)
+    {
+        var points = SnapshotPointEdit(piece, cancellationToken);
+        if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
+        if (piece.Closed && points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1) afterIndex = 0;
+        if (!piece.Closed && afterIndex == points.Count - 1) throw new ArgumentException("Açık konturun son noktasından sonra kenar yok.");
+        var a = points[afterIndex]; var b = points[(afterIndex + 1) % points.Count];
+        var length = Geometry.Distance(a, b);
+        if (!double.IsFinite(distance) || distance <= 0 || distance >= length)
+            throw new ArgumentException("Mesafe sıfırdan büyük ve kenar uzunluğundan küçük olmalıdır.");
+        var fraction = distance / length;
+        var point = new Point2(a.X + (b.X - a.X) * fraction, a.Y + (b.Y - a.Y) * fraction);
+        Geometry.Validate(point);
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits = BitConverter.DoubleToInt64Bits(value); var exponent = (int)((bits >> 52) & 0x7ff);
+            var mantissa = bits & 0x000f_ffff_ffff_ffffL;
+            if (exponent != 0) mantissa |= 1L << 52;
+            var units = new System.Numerics.BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -units : units;
+        }
+        var dx = Units(b.X) - Units(a.X); var dy = Units(b.Y) - Units(a.Y);
+        var px = Units(point.X) - Units(a.X); var py = Units(point.Y) - Units(a.Y);
+        // Compare exact binary64 coordinates as integer multiples of 2^-1074.
+        // This avoids cancellation in the cross product, including at large origins.
+        var tolerance = Units(0.000001); var requested = Units(distance);
+        var edgeSquared = dx * dx + dy * dy; var pointSquared = px * px + py * py;
+        var cross = dx * py - dy * px; var projection = dx * px + dy * py;
+        var lower = System.Numerics.BigInteger.Max(System.Numerics.BigInteger.Zero, requested - tolerance);
+        var upper = requested + tolerance;
+        if (projection <= 0 || projection >= edgeSquared ||
+            cross * cross > tolerance * tolerance * edgeSquared ||
+            pointSquared < lower * lower || pointSquared > upper * upper)
+            throw new ArgumentException("Bu mesafe kenar üzerinde sayısal hassasiyetle temsil edilemiyor; geometri değiştirilmedi.");
+        var detached = piece.Clone(); detached.Points = points;
+        return InsertPoint(detached, afterIndex, point, cancellationToken);
+    }
+
     /// <summary>Inserts into a detached contour. If the final stored point explicitly
     /// repeats the first point, its index identifies that same first vertex.
     /// Large contours must be processed off the UI thread; cancellation is cooperative.</summary>
