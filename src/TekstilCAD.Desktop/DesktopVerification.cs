@@ -821,9 +821,15 @@ internal static class DesktopVerification
             Check(verificationQueue.Jobs[0].PieceCount==1 && JsonSerializer.Serialize(studio.Document)==beforePreparation,"Machine prepares only selected pieces without mutating the source",checks);
             var geometryPreview=(OutputPreview)typeof(MachineCenterWindow).GetField("geometryPreview",PrivateInstance)!.GetValue(machine)!;
             var expectedBounds=TekstilCAD.Core.Geometry.Bounds(basePiece.Points);
-            Check(geometryPreview.HasGeometry && geometryPreview.PathCount==1 && geometryPreview.PreviewBounds is { } actualBounds
-                && Math.Abs(actualBounds.Width-expectedBounds.Width*2)<0.000001 && Math.Abs(actualBounds.Height-expectedBounds.Height*2)<0.000001,
-                "Machine preview uses the prepared file and its actual scaled millimetre bounds",checks);
+            var machinePreviewValid=geometryPreview.HasGeometry && geometryPreview.PathCount==1 && geometryPreview.PreviewBounds is { } actualBounds
+                && Math.Abs(actualBounds.Width-expectedBounds.Width*2)<0.000001 && Math.Abs(actualBounds.Height-expectedBounds.Height*2)<0.000001;
+            var machinePreviewCheck="Machine preview uses the prepared file and its actual scaled millimetre bounds";
+            if(!machinePreviewValid)
+            {
+                var previewSummary=(TextBlock)typeof(MachineCenterWindow).GetField("previewSummary",PrivateInstance)!.GetValue(machine)!;
+                machinePreviewCheck+=$" (previewSummary: {previewSummary.Text}; HasGeometry: {geometryPreview.HasGeometry}; PathCount: {geometryPreview.PathCount})";
+            }
+            Check(machinePreviewValid,machinePreviewCheck,checks);
             ((Button)typeof(MachineCenterWindow).GetField("simulate",PrivateInstance)!.GetValue(machine)!)
                 .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(verificationQueue.Jobs[0].Status == JobStatus.Simulated, "Machine UI verifies checksum without hardware", checks);

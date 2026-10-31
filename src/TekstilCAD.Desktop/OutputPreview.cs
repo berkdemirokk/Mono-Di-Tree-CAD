@@ -77,7 +77,8 @@ internal sealed class OutputPreview : FrameworkElement
             var imported=DxfFormat.Import(bytes,Path.GetFileNameWithoutExtension(job.OutputPath),1);
             if(imported.Warnings.Any(w=>!w.StartsWith("DXF birim başlığı mevcut;",StringComparison.Ordinal)
                 && !w.StartsWith("DXF renk bilgileri projede korunmaz;",StringComparison.Ordinal)
-                && !string.Equals(w,"ASTM D6673 tarzı alışverişte serileme tablosu ayrı bir ASCII dosyasında olabilir; bu DXF işlemi o dosyayı aramaz veya içe almaz.",StringComparison.Ordinal)))
+                && !string.Equals(w,"ASTM D6673 tarzı alışverişte serileme tablosu ayrı bir ASCII dosyasında olabilir; bu DXF işlemi o dosyayı aramaz veya içe almaz.",StringComparison.Ordinal)
+                && !string.Equals(w,"DXF kaynak geometri tanıtıcıları veya nesne bağlantıları projede korunmaz; kaynak kayıt ilişkilerini doğrulayın.",StringComparison.Ordinal)))
                 throw new InvalidDataException("Bu DXF için kayıpsız görsel önizleme desteklenmiyor. Aktarım notları: "+string.Join(" ",imported.Warnings));
             paths=imported.Project.Pieces.Select(p=>new PreviewPath(p.Points.ToArray(),p.Closed)).ToList();
             if(paths.Sum(p=>p.Points.Count)!=job.PointCount)throw new InvalidDataException("Önizleme nokta sayısı iş kaydıyla eşleşmiyor.");
