@@ -1,6 +1,26 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testNotchSearchCombinesPieceAndPoint() {
+        let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"Ön Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":25,"Y":40}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":25,"Y":40}}]},{"Name":"Arka Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":25,"Y":40}],"Notches":[{"VertexIndex":1,"Position":{"X":25,"Y":40}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("on kol nokta 1")
+        let point = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 1")).firstMatch
+        XCTAssertTrue(point.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.exists)
+        point.tap()
+        XCTAssertTrue(app.otherElements["Ön Kol kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
     func testDrawingControlsDoNotCoverContourPreview() {
         let fixture = #"[6,{"Name":"Görünüm","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

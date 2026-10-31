@@ -2,6 +2,24 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testNotchSearchCombinesPieceDetailsAndPointLabel() {
+        func matches(_ query: String, point: Int = 2) -> Bool {
+            NotchSearch.matches(query: query, pieceName: "Ön Kol", details: "Beden: 38",
+                                index: point, x: "12,5", y: "-3")
+        }
+        XCTAssertTrue(matches("on kol nokta 2"))
+        XCTAssertTrue(matches("38 12,5"))
+        XCTAssertTrue(matches("kol · -3"))
+        XCTAssertFalse(matches("arka 12,5"))
+        XCTAssertFalse(matches("kol nokta 9"))
+        XCTAssertFalse(NotchSearch.matches(query: "kol nokta 1", pieceName: "Kol", details: "Parça 1 · Beden 10",
+                                           index: 0, x: "10", y: "1"))
+        XCTAssertFalse(NotchSearch.matches(query: "kol nokta 1", pieceName: "Kol", details: "Parça 1",
+                                           index: 10, x: "0", y: "0"))
+        XCTAssertTrue(NotchSearch.matches(query: "kol nokta 1", pieceName: "Kol", details: "Parça 1",
+                                          index: 1, x: "0", y: "0"))
+        XCTAssertTrue(matches("kol 38"))
+    }
     func testPieceNamesAndDetailsMatchWithoutAccents() {
         XCTAssertTrue(ModelSearch.matches("Ön Beden", query: "on beden"))
         XCTAssertTrue(ModelSearch.matches("Ölçü: Çiçek", query: "olcu"))

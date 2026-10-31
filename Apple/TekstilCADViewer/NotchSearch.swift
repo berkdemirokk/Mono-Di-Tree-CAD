@@ -28,6 +28,24 @@ enum NotchSearch {
         return normalizedLabel.localizedCaseInsensitiveContains(normalizeSeparators(query))
     }
 
+    /// Match words across the piece heading and point label, as displayed in the picker.
+    static func matches(query: String, pieceName: String, details: String, index: Int, x: String, y: String) -> Bool {
+        let searchable = normalizeSeparators("\(pieceName) \(details) \(label(index: index, x: x, y: y))")
+        var remainder = normalizeSeparators(query)
+        // A point number must match the point itself, not a piece number,
+        // size or coordinate that happens to contain the same digits.
+        let pattern = try! NSRegularExpression(pattern: #"\bnokta\s+(\d+)\b"#, options: .caseInsensitive)
+        let range = NSRange(remainder.startIndex..., in: remainder)
+        let pointQueries = pattern.matches(in: remainder, range: range)
+        for match in pointQueries {
+            guard let numberRange = Range(match.range(at: 1), in: remainder),
+                  Int(remainder[numberRange]) == index else { return false }
+        }
+        remainder = pattern.stringByReplacingMatches(in: remainder, range: range, withTemplate: " ")
+        let words = remainder.split(whereSeparator: { $0.isWhitespace })
+        return words.allSatisfy { searchable.localizedStandardContains(String($0)) }
+    }
+
     private static func normalizeSeparators(_ text: String) -> String {
         text.replacingOccurrences(of: "·", with: " ")
             .split(whereSeparator: { $0.isWhitespace })

@@ -1205,11 +1205,11 @@ private struct NotchPicker: View {
 
     private func matching(_ piece: Drawing.Piece, index: Int) -> [Int] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty || ModelSearch.matches(piece.displayName(index: index), query: query) ||
-            ModelSearch.matches(piece.selectionDetails(index: index), query: query) { return piece.notches }
+        if query.isEmpty { return piece.notches }
         return piece.notches.filter { point in
             let p = piece.points[point]
-            return NotchSearch.matches(query: query, index: point, x: p.x.formatted(), y: p.y.formatted())
+            return NotchSearch.matches(query: query, pieceName: piece.displayName(index: index),
+                details: piece.selectionDetails(index: index), index: point, x: p.x.formatted(), y: p.y.formatted())
         }
     }
 
