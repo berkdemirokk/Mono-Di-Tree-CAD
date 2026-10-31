@@ -98,4 +98,21 @@ final class ExperimentalPointMoveJSONTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
         }
     }
+
+    func testOtherPieceGradingRuleIsPreservedExactly() throws {
+        let second = #",{"Id":"22222222-2222-2222-2222-222222222222","Name":"B","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":0}]}"#
+        let rule = #"{"SourcePieceId":"22222222-2222-2222-2222-222222222222","SourceClosed":false,"SourcePoints":[{"X":0.00,"Y":0},{"X":2,"Y":0}],"Deltas":[{"X":0,"Y":0},{"X":1e-1,"Y":0}]}"#
+        let project = input.replacingOccurrences(of: #"]}]}]"#, with: "]}" + second + "]}]")
+            .replacingOccurrences(of: #""GradingRules":[]"#, with: #""GradingRules":["# + rule + "]")
+        let bytes = Data(project.utf8)
+        let result = try ExperimentalPointMoveJSON.moving(bytes, snapshot: bytes, pieceID: id, index: 1, to: .init(x: 5, y: 0))
+        XCTAssertEqual(result, Data(project.replacingOccurrences(of: #""X":4"#, with: #""X":5.0"#).utf8))
+        for bad in [project.replacingOccurrences(of: "22222222-2222-2222-2222-222222222222\",\"SourceClosed", with: "11111111-1111-1111-1111-111111111111\",\"SourceClosed"),
+                    project.replacingOccurrences(of: #""SourceClosed":false"#, with: #""SourceClosed":1"#),
+                    project.replacingOccurrences(of: #""X":1e-1"#, with: #""X":true"#),
+                    project.replacingOccurrences(of: rule, with: rule + "," + rule)] {
+            let invalid = Data(bad.utf8)
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(invalid, snapshot: invalid, pieceID: id, index: 1, to: .init(x: 5, y: 0)))
+        }
+    }
 }

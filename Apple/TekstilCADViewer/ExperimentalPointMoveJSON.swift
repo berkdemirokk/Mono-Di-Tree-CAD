@@ -19,16 +19,18 @@ enum ExperimentalPointMoveJSON {
            [1.0, 2.0, 4.0].contains(v.doubleValue), let body = array[1] as? [String: Any] { project = body; versioned = true; version = v.intValue }
         else if let body = root as? [String: Any] { project = body; versioned = false; version = 0 }
         else { throw Failure.invalid }
-        // Grading snapshots and nesting can describe the old contour. Grainline
+        // A grading snapshot of the edited piece can describe the old contour. Grainline
         // edits must set NeedsReview, so they are rejected rather than copied as
         // if still reviewed. Metadata is independent and is checked below.
         // Unknown fields may also describe geometry dependencies.
         guard Set(project.keys).isSubset(of: ["Name", "Pieces", "GradingRules"]), project["Name"] is String,
               let pieces = project["Pieces"] as? [[String: Any]], pieces.count <= 10_000 else { throw Failure.invalid }
         if versioned && project["GradingRules"] == nil { throw Failure.invalid }
-        if let rules = project["GradingRules"] {
-            guard let rules = rules as? [Any], rules.isEmpty else { throw Failure.invalid }
-        }
+        let rules: [[String: Any]]
+        if let rawRules = project["GradingRules"] {
+            guard let parsed = rawRules as? [[String: Any]], parsed.count <= 10_000 else { throw Failure.invalid }
+            rules = parsed
+        } else { rules = [] }
         guard let projectName = project["Name"] as? String, projectName.utf16.count <= 1024 else { throw Failure.invalid }
         var ids = Set<UUID>(); var selected: Int?; var total = 0
         for (i, piece) in pieces.enumerated() {
@@ -67,6 +69,29 @@ enum ExperimentalPointMoveJSON {
             total += otherPoints.count
             guard total <= 200_000 else { throw Failure.invalid }
             if id == pieceID { selected = i }
+        }
+        // Rules for other pieces are unchanged byte-for-byte. A rule for the
+        // edited piece is rejected until an explicit review workflow exists.
+        var ruleIDs = Set<UUID>(); var rulePointCount = 0
+        for rule in rules {
+            guard Set(rule.keys) == Set(["SourcePieceId", "SourceClosed", "SourcePoints", "Deltas"]),
+                  let rawID = rule["SourcePieceId"] as? String, let id = UUID(uuidString: rawID),
+                  ids.contains(id), id != pieceID, ruleIDs.insert(id).inserted,
+                  let closed = rule["SourceClosed"] as? NSNumber, CFGetTypeID(closed) == CFBooleanGetTypeID(),
+                  let source = rule["SourcePoints"] as? [[String: Any]], let deltas = rule["Deltas"] as? [[String: Any]],
+                  source.count == deltas.count, source.count >= (closed.boolValue ? 3 : 2), source.count <= 10_000 else { throw Failure.invalid }
+            rulePointCount += source.count
+            guard rulePointCount <= 200_000 else { throw Failure.invalid }
+            for point in source + deltas {
+                guard Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                      let x = point["X"] as? NSNumber, CFGetTypeID(x) != CFBooleanGetTypeID(),
+                      let y = point["Y"] as? NSNumber, CFGetTypeID(y) != CFBooleanGetTypeID(),
+                      x.doubleValue.isFinite, y.doubleValue.isFinite,
+                      abs(x.doubleValue) <= 100_000_000, abs(y.doubleValue) <= 100_000_000 else { throw Failure.invalid }
+                if let finite = point["IsFinite"] {
+                    guard let value = finite as? NSNumber, CFGetTypeID(value) == CFBooleanGetTypeID(), value.boolValue else { throw Failure.invalid }
+                }
+            }
         }
         guard let selected, let rawPoints = pieces[selected]["Points"] as? [[String: Any]],
               let flag = pieces[selected]["Closed"] as? NSNumber, CFGetTypeID(flag) == CFBooleanGetTypeID(),
