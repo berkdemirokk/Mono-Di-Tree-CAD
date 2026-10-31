@@ -16,6 +16,8 @@ iPhone ana ekranı kaydırılabilir; önizleme alanındaki sürükleme hareketiy
 
 ## Sınırlar
 
+- Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
+
 Uygulamanın önceki hali GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar ve yeni dışa aktarma akışı henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. Serileme, pastal, kaynak geçmişi, DXF/SVG/HPGL üretim çıktısı, çizim araçları ve cihaz bağlantıları işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
