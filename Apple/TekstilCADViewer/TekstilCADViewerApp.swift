@@ -30,6 +30,7 @@ private struct ContentView: View {
     @State private var selectedNotch: (piece: Int, point: Int)?
     @State private var showingLibrary = false
     @State private var showingExporter = false
+    @State private var showingExportWarning = false
     @State private var exportDocument: ProjectExportDocument?
     @State private var exportName = "Model.tcad"
     @State private var importedData: Data?
@@ -86,7 +87,7 @@ private struct ContentView: View {
                     exportDocument = ProjectExportDocument(data: data)
                     exportName = exportFileName(project.name)
                     saveNotice = nil
-                    showingExporter = true
+                    showingExportWarning = true
                 }.disabled(isSaving || isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
@@ -225,6 +226,12 @@ private struct ContentView: View {
             case .failure(let failure): error = failure.localizedDescription
             }
         }
+        .confirmationDialog("Yüklenmiş kopyayı dışa aktar", isPresented: $showingExportWarning, titleVisibility: .visible) {
+            Button("Hedef seç") { showingExporter = true }
+            Button("Vazgeç", role: .cancel) { exportDocument = nil }
+        } message: {
+            Text("Dışa aktarılan veri, dosyanın açıldığı andaki kopyasıdır. Kaynak başka yerde değişmiş olabilir. Kaynağı korumak için farklı bir dosya adı seçin; aynı hedef seçilirse sonraki değişiklikler üzerine yazılabilir.")
+        }
         .onChange(of: showingExporter) { presented in
             // The system may dismiss without a completion callback on cancel.
             if !presented { exportDocument = nil }
@@ -289,7 +296,7 @@ private struct ContentView: View {
         }
         stem = stem.trimmingCharacters(in: .whitespacesAndNewlines)
         while stem.first == "." { stem.removeFirst() }
-        return (stem.isEmpty ? "Model" : stem) + ".tcad"
+        return (stem.isEmpty ? "Model" : stem) + " - kopya.tcad"
     }
 
     private func openModel(_ url: URL, imported: Bool) {
@@ -763,6 +770,20 @@ private struct Drawing {
     static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
 
     static func readData(_ url: URL) throws -> Data {
+        // File providers can replace or materialize a document while it is
+        // being read. Capture one coordinated snapshot before parsing it.
+        let coordinator = NSFileCoordinator(filePresenter: nil)
+        var coordinationError: NSError?
+        var snapshot: Result<Data, Error>?
+        coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
+            snapshot = Result { try readCoordinatedData(coordinatedURL) }
+        }
+        if let coordinationError { throw coordinationError }
+        guard let snapshot else { throw ViewerError.message("Dosya okuması tamamlanamadı.") }
+        return try snapshot.get()
+    }
+
+    private static func readCoordinatedData(_ url: URL) throws -> Data {
         let limit = 64 * 1024 * 1024
         let file = try FileHandle(forReadingFrom: url)
         defer { try? file.close() }

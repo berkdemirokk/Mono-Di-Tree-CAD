@@ -222,6 +222,12 @@ final class ViewerUITests: XCTestCase {
         let export = app.buttons["Açık modeli dışa aktar…"]
         XCTAssertTrue(export.waitForExistence(timeout: 15))
         export.tap()
+        XCTAssertTrue(app.staticTexts["Dışa aktarılan veri, dosyanın açıldığı andaki kopyasıdır. Kaynak başka yerde değişmiş olabilir. Kaynağı korumak için farklı bir dosya adı seçin; aynı hedef seçilirse sonraki değişiklikler üzerine yazılabilir."].waitForExistence(timeout: 5))
+        app.buttons["Vazgeç"].tap()
+        XCTAssertTrue(export.exists)
+        XCTAssertFalse(app.staticTexts["Model seçilen hedefe dışa aktarıldı."].exists)
+        export.tap()
+        app.buttons["Hedef seç"].tap()
         let cancel = app.buttons["Cancel"]
         XCTAssertTrue(cancel.waitForExistence(timeout: 10))
         cancel.tap()
