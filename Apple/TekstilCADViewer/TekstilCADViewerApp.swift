@@ -33,6 +33,9 @@ private struct ContentView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    if let selectedPiece {
+                        PieceDetails(piece: project.pieces[selectedPiece])
+                    }
                     DrawingView(pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces)
                         .background(Color.secondary.opacity(0.08))
                         .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi")
@@ -116,6 +119,36 @@ private struct Drawing {
     }
 }
 
+private struct PieceDetails: View {
+    let piece: Drawing.Piece
+
+    private var dimensions: (width: Double, height: Double)? {
+        guard let first = piece.points.first else { return nil }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for point in piece.points.dropFirst() {
+            minX = min(minX, point.x); maxX = max(maxX, point.x)
+            minY = min(minY, point.y); maxY = max(maxY, point.y)
+        }
+        return (maxX - minX, maxY - minY)
+    }
+
+    var body: some View {
+        if let dimensions {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Kontur bilgisi").font(.subheadline.bold())
+                Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
+                Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
+                Text("Boyutlar dosyadaki koordinat birimindedir.")
+                    .foregroundStyle(.secondary)
+            }
+            .font(.caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(8)
+            .background(Color.secondary.opacity(0.08))
+            .accessibilityElement(children: .combine)
+        }
+    }
+}
 private struct DrawingView: View {
     let pieces: [Drawing.Piece]
     var body: some View {
