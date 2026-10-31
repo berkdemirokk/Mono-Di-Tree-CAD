@@ -8,11 +8,11 @@ macOS, Xcode ve XcodeGen gereklidir. Terminalde `Apple` dizinine geçip `xcodege
 
 ## Dosya erişimi
 
-macOS uygulamasında App Sandbox açık olduğundan Xcode Signing & Capabilities > App Sandbox > File Access bölümünde User Selected File için Read Only yetkisi (com.apple.security.files.user-selected.read-only) etkinleştirilmelidir. Bu entitlement henüz proje ayarına eklenmedi; Mac üzerinde yapılandırılıp dosya seçiciyle doğrulanmalıdır. iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı erişim kullanılır; dosya paylaşımı veya iCloud Documents yeteneği bu temel görüntüleyici için ayrıca etkinleştirilmiş değildir.
+iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı erişim kullanılır; dosya paylaşımı veya iCloud Documents yeteneği bu temel görüntüleyici için ayrıca etkinleştirilmiş değildir. Mac sürümü bu aşamanın kapsamında değildir.
 
 ## Sınırlar
 
-Bu başlangıç Windows'ta yazıldı; Xcode'da derlenmedi veya iPhone/iPad/Mac üzerinde denenmedi. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz; yalnızca geometriyi önizler. Parça kimliği ve adı, meta veriler, iplik yönü, serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları görüntülenmez veya işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Seçim filtresi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
+Önceki sürüm GitHub'da iOS simülatörü için imzasız derlendi; bu son değişiklikler ve gerçek cihazlar henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz; yalnızca geometriyi önizler. Parça kimliği ve adı, meta veriler, iplik yönü, serileme, pastal, kaynak geçmişi, dışa aktarma, çizim araçları ve cihaz bağlantıları görüntülenmez veya işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Seçim filtresi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
 
 Dağıtım öncesi en azından Xcode derlemesi, gerçek cihaz dosya sağlayıcıları ve masaüstü örnekleriyle uyumluluk, erişilebilirlik ve büyük dosya performansı doğrulanmalıdır.
 
@@ -22,7 +22,7 @@ TestFlight için macOS üzerinde Xcode ve XcodeGen ile projenin üretilmesi, do�
 
 ## GitHub Actions ile derleme kontrolü
 
-`.github/workflows/apple-ci.yml`, Apple kaynakları değiştiğinde veya Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir ve iOS Simulator ile macOS hedeflerini imzasız derler. İş akışı yalnızca derleme kontrolüdür: uygulamayı çalıştırmaz, gerçek cihazı doğrulamaz ve TestFlight'a yüklemez. Bu yapılandırma henüz GitHub üzerinde çalıştırılarak doğrulanmamıştır. Çalışmanın sonucu ve Xcode sürümü Actions günlüklerinde görülebilir.
+`.github/workflows/apple-ci.yml` yalnızca Actions sekmesinden elle başlatıldığında GitHub'ın macOS çalıştırıcısında XcodeGen projesini üretir ve iOS Simulator hedefini imzasız derler. Her değişiklikte otomatik çalışmaz. İş akışı yalnızca derleme kontrolüdür: uygulamayı çalıştırmaz, gerçek cihazı doğrulamaz ve TestFlight'a yüklemez. Yeni yapılandırma henüz çalıştırılmadı; GitHub kullanım kotasını önce kontrol edin.
 
 TestFlight için ayrıca Apple Developer üyeliği, App Store Connect uygulama kaydı, dağıtım imzası ve arşiv/yükleme gerekir. İmzalama ve yükleme otomasyonu bu iş akışında bulunmaz; kimlik bilgilerini kaynak koduna veya günlüklere koymayın. Başvuru: [GitHub macOS çalıştırıcıları](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/customize-runners), [Apple simülatör hedefleri](https://developer.apple.com/documentation/xcode/building-and-running-an-app), [GitHub imzalama belgeleri](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
 

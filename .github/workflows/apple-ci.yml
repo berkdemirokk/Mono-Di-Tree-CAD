@@ -1,14 +1,6 @@
-name: Apple build
+name: iPhone simulator build
 
 on:
-  push:
-    paths:
-      - 'Apple/**'
-      - '.github/workflows/apple-ci.yml'
-  pull_request:
-    paths:
-      - 'Apple/**'
-      - '.github/workflows/apple-ci.yml'
   workflow_dispatch:
 
 permissions:
@@ -33,11 +25,4 @@ jobs:
           -target TekstilCADViewer_iOS
           -configuration Debug
           -destination 'generic/platform=iOS Simulator'
-          CODE_SIGNING_ALLOWED=NO build
-      - name: Build macOS
-        run: >-
-          xcodebuild -project TekstilCADViewer.xcodeproj
-          -target TekstilCADViewer_macOS
-          -configuration Debug
-          -destination 'platform=macOS'
           CODE_SIGNING_ALLOWED=NO build

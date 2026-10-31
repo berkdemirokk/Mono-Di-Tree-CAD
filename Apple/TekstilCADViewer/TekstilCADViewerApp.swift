@@ -12,20 +12,37 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var project: Drawing?
     @State private var error: String?
+    @State private var selectedPiece: Int?
 
     var body: some View {
         VStack(spacing: 12) {
             HStack {
                 Button(".tcad aç") { showingImporter = true }
+                    .accessibilityHint("Önizlemek için bir proje dosyası seçin")
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
             Text("Yalnızca kontur önizlemesi. Düzenleme, kaydetme, serileme, pastal, iplik yönü ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if let project {
-                DrawingView(drawing: project)
-                    .background(Color.secondary.opacity(0.08))
-                    .accessibilityLabel("\(project.pieces.count) parçalı kontur önizlemesi")
+                if project.pieces.contains(where: { $0.points.count > 1 }) {
+                    Picker("Gösterilen parça", selection: $selectedPiece) {
+                        Text("Tüm parçalar").tag(nil as Int?)
+                        ForEach(project.pieces.indices.filter { project.pieces[$0].points.count > 1 }, id: \.self) { index in
+                            Text("Parça \(index + 1)").tag(Optional(index))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    DrawingView(pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces)
+                        .background(Color.secondary.opacity(0.08))
+                        .accessibilityLabel(selectedPiece.map { "Parça \($0 + 1) kontur önizlemesi" } ?? "\(project.pieces.count) parçalı kontur önizlemesi")
+                } else {
+                    Text("Bu projede görüntülenebilir kontur yok.")
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.secondary.opacity(0.08))
+                }
                 Text("\(project.pieces.count) parça • Ölçekli üretim çıktısı değildir")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
@@ -42,7 +59,9 @@ private struct ContentView: View {
                 guard url.pathExtension.lowercased() == "tcad" else { throw ViewerError.message("Lütfen bir .tcad dosyası seçin.") }
                 let access = url.startAccessingSecurityScopedResource()
                 defer { if access { url.stopAccessingSecurityScopedResource() } }
-                project = try Drawing.load(url)
+                let loaded = try Drawing.load(url)
+                selectedPiece = nil
+                project = loaded
             } catch { self.error = error.localizedDescription }
         }
         .alert("Dosya açılamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
@@ -98,10 +117,10 @@ private struct Drawing {
 }
 
 private struct DrawingView: View {
-    let drawing: Drawing
+    let pieces: [Drawing.Piece]
     var body: some View {
         Canvas { context, size in
-            let points = drawing.pieces.flatMap(\.points)
+            let points = pieces.flatMap(\.points)
             guard let first = points.first else { return }
             var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
             for p in points { minX = min(minX, p.x); maxX = max(maxX, p.x); minY = min(minY, p.y); maxY = max(maxY, p.y) }
@@ -112,7 +131,7 @@ private struct DrawingView: View {
             func position(_ p: Drawing.Point) -> CGPoint {
                 CGPoint(x: offsetX + (p.x - minX) * scale, y: Double(size.height) - offsetY - (p.y - minY) * scale)
             }
-            for piece in drawing.pieces {
+            for piece in pieces {
                 guard let first = piece.points.first else { continue }
                 var path = Path()
                 path.move(to: position(first))
