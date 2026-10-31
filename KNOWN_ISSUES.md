@@ -37,7 +37,7 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Çizim araçları için X/Y koordinat girişi vardır; gerçek klavye, ekran okuyucu ve küçük ekranda modal pencere deneyimi henüz kullanıcılarla doğrulanmadı. Eğriler parametrik değil, örneklenmiş çizgilerdir.
 - Kontur noktasını indeks ve X/Y ile ekleme, silme ve taşıma en fazla 10.000 saklı noktada arka planda doğrulanır; büyük gerçek konturlarda süre ve fiziksel klavye/ekran okuyucu deneyimi henüz doğrulanmadı.
 - Kenarın ortasına nokta ekleme, orta nokta ikili sayısal gösterimde tam temsil edilemiyorsa geometriyi değiştirmeden reddeder; var olan serileme kuralına yeni nokta için artış eklemez. Gerçek kullanıcı ve üretim kabul testi yapılmadı.
-- Açık kontur yönü nokta koordinatları korunarak ters çevrilebilir; kaynak serileme kuralı otomatik ters çevrilmez ve yeniden gözden geçirilmelidir. İşlem gerçek kullanıcı ve üretim verileriyle doğrulanmadı.
+- Açık kontur yönü nokta koordinatları korunarak ters çevrilebilir; kaynakla tam eşleşen kayıtlı serileme kuralının nokta ve artımları da ters çevrilir; uygulanmamış taslak veya eski kural varsa kural gözden geçirilmelidir. İşlem gerçek kullanıcı ve üretim verileriyle doğrulanmadı.
 - Genel geometri ±1e8 mm ile, dosyalar 64 MB ile sınırlı. İşlem türüne göre kontur/batch nokta bütçeleri uygulanır.
 - Yazılım imzalama, kurulum/güncelleme, performans ve geniş üretim veri korpusu doğrulaması tamamlanmadı.
 

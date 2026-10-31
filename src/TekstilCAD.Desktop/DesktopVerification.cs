@@ -7124,8 +7124,9 @@ internal static class DesktopVerification
         {
             var task=tools.ReverseOpenPathAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             Check(studio.Document.Pieces[0].Points.SequenceEqual(piece.Points.AsEnumerable().Reverse()) && studio.Document.Pieces[0].Metadata?.Quantity==2 &&
-                JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
-                "Reversing an open path preserves geometry, metadata and the original grading rule for review",checks);
+                studio.Document.GradingRules[0].SourcePoints.SequenceEqual(piece.Points.AsEnumerable().Reverse()) &&
+                studio.Document.GradingRules[0].Deltas.SequenceEqual(rule.Deltas.AsEnumerable().Reverse()) && session.UndoCount==1,
+                "Reversing an open path reorders the matching grading rule in the same undo step",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Open path reversal is one undo step",checks);
         }
         finally { tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }

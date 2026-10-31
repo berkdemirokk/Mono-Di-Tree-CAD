@@ -64,6 +64,17 @@ public sealed class GradingRuleSet
     public List<Point2> SourcePoints { get; set; } = [];
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
+
+    /// <summary>Reorder a rule only when it describes the exact open source contour.</summary>
+    public GradingRuleSet? ReversedFor(PatternPiece source)
+    {
+        if (source.Id != SourcePieceId || source.Closed || SourceClosed ||
+            Deltas.Count != source.Points.Count || !SourcePoints.SequenceEqual(source.Points)) return null;
+        var result = Clone();
+        result.SourcePoints.Reverse();
+        result.Deltas.Reverse();
+        return result;
+    }
 }
 
 /// <summary>Historical mapping to a source piece in another project; it is not a live link.</summary>
