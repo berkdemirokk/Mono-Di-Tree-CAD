@@ -70,6 +70,61 @@ public class DxfNotchPointMappingTests
         var mapped=Apply(import,[Select(import)]);
         Assert.Equal(new Point2(10,0),Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
     }
+    [Theory]
+    [InlineData("0.1","1e-1")]
+    [InlineData("1e-1","0.1000")]
+    public void LineSourceAcceptsExactEquivalentDecimals(string sourceX,string pointX)
+    {
+        var import=Read("0\nLINE\n8\nCUT\n10\n0\n20\n0\n11\n"+sourceX+"\n21\n0\n"+Point(pointX));
+        var mapped=Apply(import,[Select(import)]);
+        Assert.Equal(import.Project.Pieces[0].Points[1],Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
+    }
+    [Fact]
+    public void ReversedLineChainUsesMatchingSourceEndpointAndRejectsDecimalCollision()
+    {
+        var lines="0\nLINE\n8\nCUT\n10\n0\n20\n0\n11\n0.1\n21\n0\n"+
+            "0\nLINE\n8\nCUT\n10\n1\n20\n0\n11\n1e-1\n21\n0\n";
+        var import=Read(lines+Point("0.1"));var piece=Assert.Single(import.Project.Pieces);
+        int index=piece.Points.FindIndex(p=>p==new Point2(.1,0));
+        var selection=Select(import) with { VertexIndex=index };
+        var mapped=Apply(import,[selection]);Assert.Equal(index,Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).VertexIndex);
+        var mismatch=Read(lines+Point("0.100000000000000001"));piece=Assert.Single(mismatch.Project.Pieces);
+        index=piece.Points.FindIndex(p=>p==new Point2(.1,0));
+        Assert.Throws<InvalidDataException>(()=>Apply(mismatch,[Select(mismatch) with { VertexIndex=index }]));
+    }
+    [Theory]
+    [InlineData("0.1","1e-1")]
+    [InlineData("1e-1","0.1000")]
+    public void ClassicPolylineUsesOriginalVertexDecimals(string sourceX,string pointX)
+    {
+        var poly="0\nPOLYLINE\n8\nCUT\n66\n1\n70\n0\n"+
+            "0\nVERTEX\n8\nCUT\n10\n0\n20\n0\n0\nVERTEX\n8\nCUT\n10\n"+sourceX+"\n20\n0\n0\nSEQEND\n";
+        var import=Read(poly+Point(pointX));var mapped=Apply(import,[Select(import)]);
+        Assert.Equal(import.Project.Pieces[0].Points[1],Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
+        var mismatch=Read(poly+Point("0.100000000000000001"));
+        Assert.Throws<InvalidDataException>(()=>Apply(mismatch,[Select(mismatch)]));
+    }
+    [Fact]
+    public void MissingGeometryInventoryRetainsCanonicalFallback()
+    {
+        var import=Read("0\nLINE\n8\nCUT\n10\n0\n20\n0\n11\n10\n21\n0\n"+Point());
+        var truncated=import with { SourceGeometry=new DxfSourceGeometryReport([],true) };
+        var mapped=Apply(truncated,[Select(truncated)]);
+        Assert.Equal(new Point2(10,0),Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
+    }
+    [Fact]
+    public void ExplicitClassicClosureAliasMapsToFirstVertex()
+    {
+        var poly="0\nPOLYLINE\n8\nCUT\n66\n1\n70\n1\n"+
+            "0\nVERTEX\n8\nCUT\n10\n0.1\n20\n0\n"+
+            "0\nVERTEX\n8\nCUT\n10\n10\n20\n0\n"+
+            "0\nVERTEX\n8\nCUT\n10\n10\n20\n10\n"+
+            "0\nVERTEX\n8\nCUT\n10\n1e-1\n20\n0\n0\nSEQEND\n";
+        var import=Read(poly+Point(".1"));var selection=Select(import) with { VertexIndex=3 };
+        var mark=Assert.Single(Assert.Single(Apply(import,[selection]).Project.Pieces).Notches!);
+        Assert.Equal(0,mark.VertexIndex);
+        Assert.Equal(new Point2(.1,0),mark.Position);
+    }
     [Fact]
     public void ReviewExportPointCanBeExplicitlyMappedBackToItsVertex()
     {

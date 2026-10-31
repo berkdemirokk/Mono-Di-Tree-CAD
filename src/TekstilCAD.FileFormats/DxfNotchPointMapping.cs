@@ -92,17 +92,13 @@ public static class DxfNotchPointMapping
             if(matchingVertices!=1)throw new InvalidDataException("İşaret köşesi bulunamadı.");
             var record=pointRecords[selection.PointSourceOrdinal];
             var x=record.Groups.Single(g=>g.Code==10).RawValue;var y=record.Groups.Single(g=>g.Code==20).RawValue;
-            if(sourceByPiece.TryGetValue(piece.Id,out var source) && source.EntityType=="LWPOLYLINE")
+            if(sourceByPiece.TryGetValue(piece.Id,out var source) &&
+               source.EntityType is "LWPOLYLINE" or "POLYLINE" or "LINE" &&
+               import.SourceGeometry is { Truncated:false } && import.ImportParameters.BulgeToleranceMm is null)
             {
                 if(!sourceVertices.TryGetValue(piece.Id,out var originalVertices))
                 {
-                    if(import.ImportParameters.BulgeToleranceMm is not null || source.Section!="ENTITIES" || source.Block is not null ||
-                       source.SourceOrdinals.IsDefault || source.SourceOrdinals.Length!=1 ||
-                       source.InsertPath.IsDefault || !source.InsertPath.IsEmpty || source.ChildSourceOrdinals.IsDefault || !source.ChildSourceOrdinals.IsEmpty ||
-                       !geometryByOrdinal.TryGetValue(source.SourceOrdinals[0],out var geometryRecord) || geometryRecord.Section!="ENTITIES" ||
-                       geometryRecord.Block is not null || geometryRecord.EntityType!="LWPOLYLINE")
-                        throw new InvalidDataException("Konturun doğrudan kaynak köşeleri doğrulanamadı.");
-                    originalVertices=ReadVertices(geometryRecord,piece,cancellationToken);
+                    originalVertices=ReadSourceVertices(source,geometryByOrdinal,piece,cancellationToken);
                     sourceVertices.Add(piece.Id,originalVertices);
                 }
                 // Compare original source decimals, not a rounded double's spelling.
@@ -128,6 +124,99 @@ public static class DxfNotchPointMapping
         if(!string.Equals(DxfTextileGrainlineMapping.CaptureFingerprint(import,cancellationToken),expectedFingerprint,StringComparison.Ordinal))
             throw new InvalidDataException("DXF veya proje işlem sırasında değişti; eşleme uygulanmadı.");
         return new(copy,audit.MoveToImmutable());
+    }
+
+    private static (string X,string Y)[] ReadSourceVertices(DxfPieceSource source,
+        IReadOnlyDictionary<int,DxfSourceGeometryRecord> records,PatternPiece piece,CancellationToken token)
+    {
+        if(source.Section!="ENTITIES" || source.Block is not null || source.SourceOrdinals.IsDefault || source.SourceOrdinals.IsEmpty ||
+           source.InsertPath.IsDefault || !source.InsertPath.IsEmpty || source.ChildSourceOrdinals.IsDefault)
+            throw new InvalidDataException("Konturun doğrudan kaynak köşeleri doğrulanamadı.");
+        DxfSourceGeometryRecord Get(int ordinal,string type)
+        {
+            token.ThrowIfCancellationRequested();
+            if(!records.TryGetValue(ordinal,out var value) || value.Section!="ENTITIES" || value.Block is not null || value.EntityType!=type ||
+               value.Groups.IsDefault || value.GroupOrdinals.IsDefault || value.Groups.Length!=value.GroupOrdinals.Length)
+                throw new InvalidDataException("Kontur kaynak kayıtları eksik veya uyuşmuyor.");
+            for(int i=0;i<value.Groups.Length;i++)
+                if(value.Groups[i] is null || value.Groups[i].GroupOrdinal!=value.GroupOrdinals[i])
+                    throw new InvalidDataException("Kontur kaynak grup sırası geçersiz.");
+            return value;
+        }
+        if(source.EntityType=="LWPOLYLINE")
+        {
+            if(source.SourceOrdinals.Length!=1 || !source.ChildSourceOrdinals.IsEmpty)
+                throw new InvalidDataException("Polilin kaynak ilişkisi belirsiz.");
+            return ReadVertices(Get(source.SourceOrdinals[0],"LWPOLYLINE"),piece,token);
+        }
+        if(source.EntityType=="POLYLINE")
+        {
+            if(source.SourceOrdinals.Length!=1 || source.ChildSourceOrdinals.Length!=piece.Points.Count+1)
+                throw new InvalidDataException("POLYLINE köşe kaynak ilişkisi belirsiz.");
+            var parent=source.SourceOrdinals[0];_ = Get(parent,"POLYLINE");
+            var result=new (string X,string Y)[piece.Points.Count];
+            for(int i=0;i<source.ChildSourceOrdinals.Length;i++)
+            {
+                token.ThrowIfCancellationRequested();var ordinal=source.ChildSourceOrdinals[i];
+                if((long)ordinal!=(long)parent+i+1)throw new InvalidDataException("POLYLINE kaynak sırası belirsiz.");
+                var vertex=Get(ordinal,i==piece.Points.Count ? "SEQEND" : "VERTEX");
+                if(i==piece.Points.Count)continue;
+                var bulges=vertex.Groups.Where(g=>g.Code==42).ToArray();
+                if(bulges.Length>1 || (bulges.Length==1 && !DxfExactDecimal.AreEqual(bulges[0].RawValue,"0",token)))
+                    throw new InvalidDataException("Yaylı POLYLINE köşesi doğrulanamıyor.");
+                result[i]=ReadSourcePoint(vertex,10,20,piece.Points[i]);
+            }
+            return result;
+        }
+        if(!source.ChildSourceOrdinals.IsEmpty)throw new InvalidDataException("LINE kaynak ilişkisi belirsiz.");
+        int count=piece.Points.Count,edges=piece.Closed ? count : count-1;
+        if(count<2 || source.SourceOrdinals.Length!=edges)throw new InvalidDataException("LINE zinciri kaynak sayısı uyuşmuyor.");
+        var endpoints=new Dictionary<(Point2,Point2),((string X,string Y) A,(string X,string Y) B,int Ordinal)>();
+        var seenOrdinals=new HashSet<int>();
+        foreach(var ordinal in source.SourceOrdinals)
+        {
+            token.ThrowIfCancellationRequested();
+            if(!seenOrdinals.Add(ordinal))throw new InvalidDataException("LINE kaynağı yinelenmiş.");
+            var line=Get(ordinal,"LINE");var a=ReadSourcePoint(line,10,20,null);var b=ReadSourcePoint(line,11,21,null);
+            var pa=ParseSourcePoint(a);var pb=ParseSourcePoint(b);
+            if(pa==pb || endpoints.ContainsKey((pa,pb)) || endpoints.ContainsKey((pb,pa)))throw new InvalidDataException("LINE zinciri yinelenmiş veya belirsiz.");
+            endpoints.Add((pa,pb),(a,b,ordinal));
+        }
+        var vertices=new (string X,string Y)?[count];var used=new HashSet<int>();
+        void Assign(int index,(string X,string Y) point)
+        {
+            if(vertices[index] is { } prior && (!DxfExactDecimal.AreEqual(prior.X,point.X,token) || !DxfExactDecimal.AreEqual(prior.Y,point.Y,token)))
+                throw new InvalidDataException("LINE uçları tam ondalık eşleşmiyor; köşe belirsiz.");
+            vertices[index]=point;
+        }
+        for(int i=0;i<edges;i++)
+        {
+            token.ThrowIfCancellationRequested();int j=(i+1)%count;
+            if(endpoints.TryGetValue((piece.Points[i],piece.Points[j]),out var forward))
+            { if(!used.Add(forward.Ordinal))throw new InvalidDataException("LINE zincirinde kaynak yinelendi.");Assign(i,forward.A);Assign(j,forward.B); }
+            else if(endpoints.TryGetValue((piece.Points[j],piece.Points[i]),out var reverse))
+            { if(!used.Add(reverse.Ordinal))throw new InvalidDataException("LINE zincirinde kaynak yinelendi.");Assign(i,reverse.B);Assign(j,reverse.A); }
+            else throw new InvalidDataException("LINE sırası veya bağlantısı kaynakta doğrulanamadı.");
+        }
+        if(used.Count!=source.SourceOrdinals.Length || vertices.Any(v=>v is null))throw new InvalidDataException("LINE zinciri eksik.");
+        return vertices.Select(v=>v!.Value).ToArray();
+    }
+
+    private static (string X,string Y) ReadSourcePoint(DxfSourceGeometryRecord record,int xCode,int yCode,Point2? expected)
+    {
+        var x=record.Groups.Where(g=>g.Code==xCode).ToArray();var y=record.Groups.Where(g=>g.Code==yCode).ToArray();
+        if(x.Length!=1 || y.Length!=1)throw new InvalidDataException("Kaynak nokta eksik veya yinelenmiş.");
+        var point=(x[0].RawValue,y[0].RawValue);var parsed=ParseSourcePoint(point);
+        if(expected is { } target && parsed!=target)throw new InvalidDataException("Kaynak nokta aktarılan köşeyle uyuşmuyor.");
+        return point;
+    }
+    private static Point2 ParseSourcePoint((string X,string Y) point)
+    {
+        if(!double.TryParse(point.X,NumberStyles.Float,CultureInfo.InvariantCulture,out var x) || !double.IsFinite(x) ||
+           !double.TryParse(point.Y,NumberStyles.Float,CultureInfo.InvariantCulture,out var y) || !double.IsFinite(y) ||
+           (x==0 && !DxfExactDecimal.AreEqual(point.X,"0")) || (y==0 && !DxfExactDecimal.AreEqual(point.Y,"0")))
+            throw new InvalidDataException("Kaynak koordinat geçersiz veya sıfıra yuvarlandı.");
+        return new Point2(x,y);
     }
 
     private static (string X,string Y)[] ReadVertices(DxfSourceGeometryRecord record,PatternPiece piece,CancellationToken token)
