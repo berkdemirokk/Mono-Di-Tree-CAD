@@ -1346,6 +1346,12 @@ private struct DrawingView: View {
                             Button("Aşağı") { moveDrawing(width: 0, height: 40, size: geometry.size) }
                         }
                     }
+                    HStack {
+                        Button("Uzaklaştır") { changeZoom(by: 1 / 1.25, size: geometry.size) }
+                            .disabled(zoom <= 0.5)
+                        Button("Yakınlaştır") { changeZoom(by: 1.25, size: geometry.size) }
+                            .disabled(zoom >= 10)
+                    }
                     Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
                     if pieces.contains(where: { $0.grain != nil }) {
                         Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
@@ -1376,6 +1382,11 @@ private struct DrawingView: View {
                     }
             )
         }
+    }
+
+    private func changeZoom(by factor: CGFloat, size: CGSize) {
+        zoom = limitedZoom(zoom * factor)
+        offset = limitedOffset(offset, size: size, scale: zoom)
     }
 
     private func moveDrawing(width: CGFloat, height: CGFloat, size: CGSize) {

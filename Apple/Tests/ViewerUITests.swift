@@ -95,6 +95,28 @@ final class ViewerUITests: XCTestCase {
         }
     }
 
+    func testContourZoomButtonsAndReset() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let zoomIn = app.buttons["Yakınlaştır"]
+        XCTAssertTrue(zoomIn.waitForExistence(timeout: 15))
+        let scroll = app.scrollViews.firstMatch
+        for _ in 0..<6 where !zoomIn.isHittable { scroll.swipeUp() }
+        XCTAssertTrue(zoomIn.isHittable)
+        let preview = app.otherElements["1 parçalı kontur önizlemesi"]
+        XCTAssertEqual(preview.value as? String, "Yüzde 100")
+        zoomIn.tap()
+        XCTAssertEqual(preview.value as? String, "Yüzde 125")
+        app.buttons["Uzaklaştır"].tap()
+        XCTAssertEqual(preview.value as? String, "Yüzde 100")
+        zoomIn.tap()
+        app.buttons["Görünümü sıfırla"].tap()
+        XCTAssertEqual(preview.value as? String, "Yüzde 100")
+    }
+
     func testViewerCanScrollToContourOnPhone() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
