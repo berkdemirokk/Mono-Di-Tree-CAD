@@ -480,9 +480,7 @@ private enum ModelStore {
         let directory = try directory()
         let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).tcad")
         let staging = directory.appendingPathComponent(".\(UUID().uuidString).partial")
-        defer { try? FileManager.default.removeItem(at: staging) }
-        try data.write(to: staging, options: .withoutOverwriting)
-        try FileManager.default.moveItem(at: staging, to: destination)
+        try ModelFilePublisher.publish(data, staging: staging, destination: destination)
     }
 
     static func saveRenamed(_ data: Data, projectName: String) throws {
