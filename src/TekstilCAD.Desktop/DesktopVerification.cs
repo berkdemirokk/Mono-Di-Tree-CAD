@@ -610,7 +610,7 @@ internal static class DesktopVerification
             Render(studio, imagePath, 1440, 900);
             Render(studio, Path.ChangeExtension(reportPath, ".compact.png"), 1024, 640);
             var brand = Descendants<TextBlock>(content).Single(t=>t.Text=="Mono Di Tree CAD");
-            Check(studio.Title.StartsWith("Mono Di Tree CAD",StringComparison.Ordinal) && FullyVisibleInCanvas(brand,content,1024,640)
+            Check(studio.Title.EndsWith(AppPaths.IsIsolatedPreview ? " — Mono Di Tree CAD · Geliştirme Önizlemesi" : " — Mono Di Tree CAD · 0.4 Önizleme",StringComparison.Ordinal) && FullyVisibleInCanvas(brand,content,1024,640)
                 && brand.ActualWidth >= brand.DesiredSize.Width - .5 && brand.ActualHeight >= brand.DesiredSize.Height - .5,
                 "Main window displays the official product name without clipping", checks);
             checks.Add("Offscreen layout and render at 1440x900 and 1024x640");
