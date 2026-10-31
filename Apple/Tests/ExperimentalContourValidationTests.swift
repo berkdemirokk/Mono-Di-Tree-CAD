@@ -58,4 +58,14 @@ final class ExperimentalContourValidationTests: XCTestCase {
         XCTAssertNoThrow(try ExperimentalContourValidation.validate(points, closed: false))
         XCTAssertThrowsError(try ExperimentalContourValidation.validate(points + [p(0, 0)], closed: true))
     }
+
+    func testDetachedPointMovePreservesClosureAndRejectsInvalidResult() throws {
+        let source = [p(0, 0), p(4, 0), p(0, 4), p(0, 0)]
+        let moved = try ExperimentalContourValidation.movingPoint(source, closed: true, index: 3, to: p(1, 1))
+        XCTAssertEqual(moved, [p(1, 1), p(4, 0), p(0, 4), p(1, 1)])
+        XCTAssertEqual(source[0], p(0, 0))
+        XCTAssertThrowsError(try ExperimentalContourValidation.movingPoint(source, closed: true, index: 4, to: p(0, 0)))
+        XCTAssertThrowsError(try ExperimentalContourValidation.movingPoint(source, closed: true, index: 1, to: p(0, 4)))
+        XCTAssertThrowsError(try ExperimentalContourValidation.movingPoint(source, closed: true, index: 1, to: p(.infinity, 0)))
+    }
 }

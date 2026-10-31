@@ -10,6 +10,20 @@ enum ExperimentalContourValidation {
     static let maximumPoints = 4096
     static let maximumCoordinate = 100_000_000.0
 
+    // Detached geometry only: this does not edit or serialize a project.
+    static func movingPoint(_ points: [Point], closed: Bool, index: Int, to position: Point) throws -> [Point] {
+        guard points.indices.contains(index) else { throw Failure.invalid }
+        var result = points
+        let repeatedClosure = closed && points.count > 1 && points[0] == points[points.count - 1]
+        result[index] = position
+        if repeatedClosure && (index == 0 || index == points.count - 1) {
+            result[0] = position
+            result[result.count - 1] = position
+        }
+        try validate(result, closed: closed)
+        return result
+    }
+
     static func validate(_ points: [Point], closed: Bool) throws {
         guard points.count <= maximumPoints, points.count >= (closed ? 3 : 2),
               points.allSatisfy({ $0.x.isFinite && $0.y.isFinite && abs($0.x) <= maximumCoordinate && abs($0.y) <= maximumCoordinate }) else { throw Failure.invalid }
