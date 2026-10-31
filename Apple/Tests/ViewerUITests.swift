@@ -394,7 +394,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(savedModel.waitForExistence(timeout: 10))
         search.typeText("-no-match")
         XCTAssertTrue(app.staticTexts["Eşleşen model bulunamadı."].waitForExistence(timeout: 5))
-        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: "-no-match".count))
+        app.buttons["Aramayı temizle"].tap()
         XCTAssertTrue(savedModel.waitForExistence(timeout: 5))
         savedModel.tap()
         XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 10))

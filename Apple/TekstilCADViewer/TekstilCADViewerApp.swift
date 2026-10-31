@@ -529,7 +529,10 @@ private struct ModelLibrary: View {
                     Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
                         .foregroundStyle(.secondary)
                 } else if matches.isEmpty {
-                    Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
+                        Button("Aramayı temizle") { search = "" }
+                    }
                 }
                 ForEach(matches) { model in
                     Button {
