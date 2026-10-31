@@ -340,6 +340,29 @@ final class ViewerUITests: XCTestCase {
             app.terminate()
         }
     }
+    func testLibraryLoadFailureCanBeRetried() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-library-fail-once"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15))
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+
+        let alert = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 10))
+        alert.buttons["Tamam"].tap()
+        XCTAssertTrue(app.staticTexts["Kayıtlı modeller yüklenemedi."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz."].exists)
+        app.buttons["Tekrar dene"].tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["Kayıtlı modeller yüklenemedi."].exists)
+    }
+
     func testSavedModelCanBeFoundAndReopenedAfterRelaunch() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let data = try Data(contentsOf: fixture)

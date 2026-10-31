@@ -504,6 +504,11 @@ private struct ModelLibrary: View {
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
     @State private var isLoading = true
+    @State private var loadFailed = false
+    @State private var loadID = UUID()
+    #if DEBUG && targetEnvironment(simulator)
+    @State private var didSimulateLoadFailure = false
+    #endif
 
     private var matches: [ModelStore.Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -515,6 +520,11 @@ private struct ModelLibrary: View {
             List {
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
+                } else if loadFailed {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Kayıtlı modeller yüklenemedi.").foregroundStyle(.secondary)
+                        Button("Tekrar dene") { loadModels() }
+                    }
                 } else if models.isEmpty {
                     Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
                         .foregroundStyle(.secondary)
@@ -548,18 +558,8 @@ private struct ModelLibrary: View {
             .searchable(text: $search, prompt: "Model ara")
             .navigationTitle("Modellerim")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
-            .onAppear {
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let result = Result { try ModelStore.models() }
-                    DispatchQueue.main.async {
-                        isLoading = false
-                        switch result {
-                        case .success(let entries): models = entries
-                        case .failure(let failure): error = failure.localizedDescription
-                        }
-                    }
-                }
-            }
+            .onAppear { loadModels() }
+            .onDisappear { loadID = UUID() }
             .alert("Modeli sil?", isPresented: Binding(get: { modelToDelete != nil }, set: { if !$0 { modelToDelete = nil } })) {
                 Button("İptal", role: .cancel) { modelToDelete = nil }
                 Button("Sil", role: .destructive) {
@@ -576,6 +576,42 @@ private struct ModelLibrary: View {
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private func loadModels() {
+        let requestID = UUID()
+        loadID = requestID
+        isLoading = true
+        loadFailed = false
+        models = []
+        #if DEBUG && targetEnvironment(simulator)
+        var simulateFailure = false
+        if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture"),
+           ProcessInfo.processInfo.arguments.contains("--ui-test-library-fail-once"),
+           !didSimulateLoadFailure {
+            didSimulateLoadFailure = true
+            simulateFailure = true
+        }
+        let shouldSimulateFailure = simulateFailure
+        #endif
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                #if DEBUG && targetEnvironment(simulator)
+                if shouldSimulateFailure { throw ViewerError.message("Test yükleme hatası.") }
+                #endif
+                return try ModelStore.models()
+            }
+            DispatchQueue.main.async {
+                guard loadID == requestID else { return }
+                isLoading = false
+                switch result {
+                case .success(let entries): models = entries
+                case .failure(let failure):
+                    loadFailed = true
+                    error = failure.localizedDescription
+                }
+            }
         }
     }
 }
