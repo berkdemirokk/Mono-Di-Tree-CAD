@@ -4,6 +4,7 @@
     sources:
       - path: Tests/LosslessProjectNameTests.swift
       - path: Tests/ExperimentalPieceRenameTests.swift
+      - path: Tests/ContourMeasureTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:

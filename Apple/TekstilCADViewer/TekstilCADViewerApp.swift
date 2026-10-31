@@ -558,13 +558,14 @@ private enum ViewerError: LocalizedError {
 }
 
 private struct Drawing {
-    struct Point { let x: Double; let y: Double }
+    typealias Point = ContourMeasure.Point
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
         let name: String?
         let id: UUID?
         let points: [Point]
         let closed: Bool
+        let contourLength: Double?
         let role: String?
         let size: String?
         let material: String?
@@ -680,6 +681,7 @@ private struct Drawing {
                 else { pieceRenameIdentitiesValid = false }
             }
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
+                                contourLength: ContourMeasure.length(points, closed: closed),
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain))
@@ -777,7 +779,14 @@ private struct PieceDetails: View {
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 Text(piece.grainStatus)
                 Text("En: \(dimensions.width.formatted(.number.precision(.fractionLength(0...2)))) • Boy: \(dimensions.height.formatted(.number.precision(.fractionLength(0...2))))")
-                Text("Boyutlar dosyadaki koordinat birimindedir.")
+                if let length = piece.contourLength {
+                    Text("Yaklaşık kontur uzunluğu: \(length.formatted(.number.precision(.fractionLength(0...2))))")
+                } else {
+                    Text("Kontur uzunluğu hesaplanamadı.")
+                }
+                Text("Uzunluk dosyadaki düz çizgi parçalarının toplamıdır; üretim ölçüsü değildir.")
+                    .foregroundStyle(.secondary)
+                Text("Boyutlar ve uzunluk dosyadaki koordinat birimindedir.")
                     .foregroundStyle(.secondary)
             }
             .font(.caption)

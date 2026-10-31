@@ -1,6 +1,23 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testContourLengthTracksSelectedOpenAndClosedPiece() {
+        let fixture = #"{"Name":"Ölçü","Pieces":[{"Name":"Açık","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]},{"Name":"Kapalı","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "-AppleLanguages", "(en)", "-AppleLocale", "en_US"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15))
+        picker.tap(); app.buttons["Açık"].tap()
+        let openLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 7")).firstMatch
+        XCTAssertTrue(openLength.waitForExistence(timeout: 5))
+        let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Açık")).firstMatch
+        selected.tap(); app.buttons["Kapalı"].tap()
+        let closedLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 12")).firstMatch
+        XCTAssertTrue(closedLength.waitForExistence(timeout: 5))
+    }
+
     func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
