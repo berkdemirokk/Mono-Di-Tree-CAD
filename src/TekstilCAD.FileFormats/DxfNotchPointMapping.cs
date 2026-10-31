@@ -57,6 +57,19 @@ public static class DxfNotchPointMapping
             counts.TryGetValue(point,out var count);counts[point]=count+1;
         }
         var byId=import.Project.Pieces.ToDictionary(p=>p.Id);var ordinals=new HashSet<int>();var targets=new HashSet<(Guid,int)>();
+        var sourceByPiece=new Dictionary<Guid,DxfPieceSource>();
+        foreach(var item in import.PieceSources is { } capturedSources && !capturedSources.IsDefault ? capturedSources : ImmutableArray<DxfPieceSource>.Empty)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!sourceByPiece.TryAdd(item.PieceId,item))throw new InvalidDataException("Parça kaynak kaydı yinelenmiş.");
+        }
+        var geometryByOrdinal=new Dictionary<int,DxfSourceGeometryRecord>();
+        foreach(var item in import.SourceGeometry is { Truncated:false } geometry && !geometry.Records.IsDefault ? geometry.Records : ImmutableArray<DxfSourceGeometryRecord>.Empty)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!geometryByOrdinal.TryAdd(item.SourceOrdinal,item))throw new InvalidDataException("DXF geometri kaynak kaydı yinelenmiş.");
+        }
+        var sourceVertices=new Dictionary<Guid,(string X,string Y)[]>();
         var audit=ImmutableArray.CreateBuilder<DxfNotchPointAudit>(chosen.Length);
         foreach(var selection in chosen)
         {
@@ -79,9 +92,29 @@ public static class DxfNotchPointMapping
             if(matchingVertices!=1)throw new InvalidDataException("İşaret köşesi bulunamadı.");
             var record=pointRecords[selection.PointSourceOrdinal];
             var x=record.Groups.Single(g=>g.Code==10).RawValue;var y=record.Groups.Single(g=>g.Code==20).RawValue;
-            // Equality of rounded coordinates alone can hide distinct decimal inputs.
-            if(!DxfExactDecimal.IsDifferenceWithinTolerance(x,position.X.ToString("G17",CultureInfo.InvariantCulture),0,cancellationToken) ||
-               !DxfExactDecimal.IsDifferenceWithinTolerance(y,position.Y.ToString("G17",CultureInfo.InvariantCulture),0,cancellationToken))
+            if(sourceByPiece.TryGetValue(piece.Id,out var source) && source.EntityType=="LWPOLYLINE")
+            {
+                if(!sourceVertices.TryGetValue(piece.Id,out var originalVertices))
+                {
+                    if(import.ImportParameters.BulgeToleranceMm is not null || source.Section!="ENTITIES" || source.Block is not null ||
+                       source.SourceOrdinals.IsDefault || source.SourceOrdinals.Length!=1 ||
+                       source.InsertPath.IsDefault || !source.InsertPath.IsEmpty || source.ChildSourceOrdinals.IsDefault || !source.ChildSourceOrdinals.IsEmpty ||
+                       !geometryByOrdinal.TryGetValue(source.SourceOrdinals[0],out var geometryRecord) || geometryRecord.Section!="ENTITIES" ||
+                       geometryRecord.Block is not null || geometryRecord.EntityType!="LWPOLYLINE")
+                        throw new InvalidDataException("Konturun doğrudan kaynak köşeleri doğrulanamadı.");
+                    originalVertices=ReadVertices(geometryRecord,piece,cancellationToken);
+                    sourceVertices.Add(piece.Id,originalVertices);
+                }
+                // Compare original source decimals, not a rounded double's spelling.
+                if(!DxfExactDecimal.AreEqual(x,originalVertices[index].X,cancellationToken) ||
+                   !DxfExactDecimal.AreEqual(y,originalVertices[index].Y,cancellationToken))
+                    throw new InvalidDataException("DXF noktasının hassasiyeti köşeyle eşleşmeyi kanıtlamıyor.");
+            }
+            // Historical conservative fallback for line chains and other
+            // non-indexed source forms: require the POINT decimal to equal the
+            // canonical binary64 spelling exactly, in addition to vertex equality.
+            else if(!DxfExactDecimal.AreEqual(x,position.X.ToString("G17",CultureInfo.InvariantCulture),cancellationToken) ||
+                    !DxfExactDecimal.AreEqual(y,position.Y.ToString("G17",CultureInfo.InvariantCulture),cancellationToken))
                 throw new InvalidDataException("DXF noktasının hassasiyeti köşeyle eşleşmeyi kanıtlamıyor.");
             audit.Add(new(selection.PointSourceOrdinal,piece.Id,index,position,approvedPointLayer));
         }
@@ -97,6 +130,32 @@ public static class DxfNotchPointMapping
         return new(copy,audit.MoveToImmutable());
     }
 
+    private static (string X,string Y)[] ReadVertices(DxfSourceGeometryRecord record,PatternPiece piece,CancellationToken token)
+    {
+        if(record.Groups.IsDefault || record.GroupOrdinals.IsDefault || record.Groups.Length!=record.GroupOrdinals.Length)
+            throw new InvalidDataException("Kontur kaynak grupları eksik.");
+        var vertices=new List<(string X,string Y)>();string? x=null;
+        for(int i=0;i<record.Groups.Length;i++)
+        {
+            token.ThrowIfCancellationRequested();var group=record.Groups[i];
+            if(group is null || group.GroupOrdinal!=record.GroupOrdinals[i])throw new InvalidDataException("Kontur kaynak grup sırası geçersiz.");
+            if(group.Code==42 && !DxfExactDecimal.AreEqual(group.RawValue,"0",token))
+                throw new InvalidDataException("Yaylı kaynak konturda köşe eşlemesi desteklenmiyor.");
+            if(group.Code==10) { if(x is not null)throw new InvalidDataException("Kontur köşe sırası geçersiz.");x=group.RawValue; }
+            else if(group.Code==20)
+            {
+                if(x is null || vertices.Count>=piece.Points.Count ||
+                   !double.TryParse(x,NumberStyles.Float,CultureInfo.InvariantCulture,out var px) ||
+                   !double.TryParse(group.RawValue,NumberStyles.Float,CultureInfo.InvariantCulture,out var py) ||
+                   !double.IsFinite(px) || !double.IsFinite(py) || new Point2(px,py)!=piece.Points[vertices.Count])
+                    throw new InvalidDataException("Kontur kaynak köşesiyle aktarılmış geometri eşleşmiyor.");
+                vertices.Add((x,group.RawValue));x=null;
+            }
+        }
+        if(x is not null || vertices.Count!=piece.Points.Count)throw new InvalidDataException("Kontur kaynak köşe sayısı uyuşmuyor.");
+        return vertices.ToArray();
+    }
+
     private static Point2 ReadPoint(DxfSupplementalGeometryRecord record)
     {
         if(record.Groups.IsDefault || !record.Children.IsEmpty)throw new InvalidDataException("DXF nokta kaydı geçersiz.");
@@ -109,6 +168,9 @@ public static class DxfNotchPointMapping
             return value;
         }
         var x=Read(10);var y=Read(20);
+        if((x==0 && !DxfExactDecimal.AreEqual(record.Groups.Single(g=>g.Code==10).RawValue,"0")) ||
+           (y==0 && !DxfExactDecimal.AreEqual(record.Groups.Single(g=>g.Code==20).RawValue,"0")))
+            throw new InvalidDataException("DXF nokta koordinatı sayısal dönüşümde sıfıra düştü.");
         foreach(var code in new[] { 30,39,210,220,230,60,67 })
         {
             var groups=record.Groups.Where(g=>g.Code==code).ToArray();if(groups.Length==0)continue;

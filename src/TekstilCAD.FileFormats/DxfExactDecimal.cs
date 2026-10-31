@@ -15,6 +15,14 @@ internal static class DxfExactDecimal
     private const int MaximumExponentMagnitude = 1024;
     private readonly record struct Rational(BigInteger Numerator, BigInteger Denominator);
 
+    /// <summary>Exact equality of bounded decimal tokens, without binary64 rounding.</summary>
+    internal static bool AreEqual(string left,string right,CancellationToken cancellationToken=default)
+    {
+        var a=Parse(left,cancellationToken);var b=Parse(right,cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        return a.Numerator*b.Denominator==b.Numerator*a.Denominator;
+    }
+
     /// <param name="absoluteTolerance">Maximum absolute error in the source coordinate unit.</param>
     public static bool IsDifferenceWithinTolerance(string left, string right, double absoluteTolerance,
         CancellationToken cancellationToken = default)

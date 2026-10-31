@@ -6,7 +6,7 @@ namespace TekstilCAD.Tests;
 
 public class DxfNotchPointMappingTests
 {
-    private static string Contour(string start="0") => "0\nLWPOLYLINE\n8\nCUT\n90\n3\n70\n1\n10\n"+start+"\n20\n0\n10\n10\n20\n0\n10\n0\n20\n10\n";
+    private static string Contour(string start="0",string target="10") => "0\nLWPOLYLINE\n8\nCUT\n90\n3\n70\n1\n10\n"+start+"\n20\n0\n10\n"+target+"\n20\n0\n10\n0\n20\n10\n";
     private static string Point(string x="10",string layer="MARK",string extra="") => "0\nPOINT\n8\n"+layer+"\n10\n"+x+"\n20\n0\n"+extra;
     private static DxfImportResult Read(string records,double scale=1)
     {
@@ -27,6 +27,48 @@ public class DxfNotchPointMappingTests
         Assert.Equal(1,mark.VertexIndex);Assert.Equal(piece.Points[1],mark.Position);
         Assert.Equal(selection.PointSourceOrdinal,Assert.Single(result.Applied).PointSourceOrdinal);
         Assert.Null(import.Project.Pieces[0].Notches);Assert.True(DocumentSession.ContentEquals(before,import.Project));
+    }
+    [Theory]
+    [InlineData("0.1","0.1")]
+    [InlineData("0.100","1e-1")]
+    [InlineData("1e-1","0.1000")]
+    public void EquivalentOriginalDecimalsMatchWithoutBinaryFormatting(string contourX,string pointX)
+    {
+        var import=Read(Contour(target:contourX)+Point(pointX));
+        var result=Apply(import,[Select(import)]);
+        var piece=Assert.Single(result.Project.Pieces);var mark=Assert.Single(piece.Notches!);
+        Assert.Equal(piece.Points[1],mark.Position);
+        Assert.Null(import.Project.Pieces[0].Notches);
+    }
+    [Fact]
+    public void DistinctDecimalsRoundingToSameDoubleAreRejected()
+    {
+        var import=Read(Contour(target:"0.1")+Point("0.100000000000000001"));
+        Assert.Throws<InvalidDataException>(()=>Apply(import,[Select(import)]));
+    }
+    [Fact]
+    public void EqualNonzeroDecimalsThatUnderflowToZeroAreRejected()
+    {
+        var import=Read(Contour(start:"-10",target:"1e-400")+Point("1e-400"));
+        Assert.Throws<InvalidDataException>(()=>Apply(import,[Select(import)]));
+    }
+    [Fact]
+    public void LegacyLineUsesConservativeCanonicalDecimalFallback()
+    {
+        var import=Read("0\nLINE\n8\nCUT\n10\n0\n20\n0\n11\n10\n21\n0\n"+Point());
+        var mapped=Apply(import,[Select(import)]);
+        Assert.Equal(new Point2(10,0),Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
+        var collision=Read("0\nLINE\n8\nCUT\n10\n0\n20\n0\n11\n10\n21\n0\n"+Point("10.000000000000000001"));
+        Assert.Throws<InvalidDataException>(()=>Apply(collision,[Select(collision)]));
+    }
+    [Fact]
+    public void LegacyPolylineUsesConservativeCanonicalDecimalFallback()
+    {
+        var poly="0\nPOLYLINE\n8\nCUT\n66\n1\n70\n0\n"+
+            "0\nVERTEX\n8\nCUT\n10\n0\n20\n0\n0\nVERTEX\n8\nCUT\n10\n10\n20\n0\n0\nSEQEND\n";
+        var import=Read(poly+Point());
+        var mapped=Apply(import,[Select(import)]);
+        Assert.Equal(new Point2(10,0),Assert.Single(Assert.Single(mapped.Project.Pieces).Notches!).Position);
     }
     [Fact]
     public void ReviewExportPointCanBeExplicitlyMappedBackToItsVertex()
