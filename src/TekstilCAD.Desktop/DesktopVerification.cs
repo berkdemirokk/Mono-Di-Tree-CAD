@@ -1149,6 +1149,19 @@ internal static class DesktopVerification
             "Keyboard movement carries matching grading increments with the source",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);
+        var dragSource=studio.Selected!;
+        typeof(CadCanvas).GetField("dragId",PrivateInstance)!.SetValue(canvas,dragSource.Id);
+        typeof(CadCanvas).GetField("dragVertex",PrivateInstance)!.SetValue(canvas,-1);
+        typeof(CadCanvas).GetField("dragOriginal",PrivateInstance)!.SetValue(canvas,dragSource.Points.ToList());
+        typeof(CadCanvas).GetField("dragOriginalGrainline",PrivateInstance)!.SetValue(canvas,dragSource.Grainline?.Clone());
+        typeof(CadCanvas).GetField("dragTranslation",PrivateInstance)!.SetValue(canvas,new Point2(10,0));
+        typeof(CadCanvas).GetField("dragPreview",PrivateInstance)!.SetValue(canvas,TekstilCAD.Core.Geometry.Translate(dragSource.Points,10,0));
+        typeof(CadCanvas).GetMethod("Up",PrivateInstance)!.Invoke(canvas,[new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left)]);
+        var draggedRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
+        Check(draggedRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && draggedRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
+            "Mouse movement carries matching grading increments with the source",checks);
+        Invoke(studio,"Undo");
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Mouse move undo restores geometry and grading rule together",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(original,studio.Document),"Keyboard grading verification restores the original document",checks);
     }
