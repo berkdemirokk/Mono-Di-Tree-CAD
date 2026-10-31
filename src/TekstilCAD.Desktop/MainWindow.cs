@@ -169,6 +169,10 @@ public class MainWindow : Window
     internal Action? AfterHpglPreparationForVerification { get; set; }
     internal Func<HpglPreparedOutput,IReadOnlyList<PatternPiece>,bool>? ConfirmHpglReviewForVerification { get; set; }
     private CancellationTokenSource? exportCancellation;
+    private CancellationTokenSource? markedTransformCancellation;
+    private Button? cancelMarkedTransform;
+    internal Task? MarkedTransformTaskForVerification { get; private set; }
+    internal Action? BeforeMarkedTransformForVerification { get; set; }
     internal bool IsWindowClosed => windowClosed;
     private readonly DispatcherTimer autosaveTimer = new() { Interval = TimeSpan.FromSeconds(30) };
     private static Brush Panel => StudioTheme.Surface;
@@ -367,8 +371,10 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center))));
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X))));
+        selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center)),"Köşe işaretleri aynı köşelerle döner; büyük konturlar arka planda doğrulanır. Serileme kuralını yeniden kontrol edin."));
+        selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X)),"Köşe işaretleri aynı köşelerle aynalanır; büyük konturlar arka planda doğrulanır. Serileme kuralını yeniden kontrol edin."));
+        cancelMarkedTransform=AddButton(inspector,"İşaretli dönüşüm doğrulamasını iptal et",()=>markedTransformCancellation?.Cancel(),"Hesabı iptal eder; tamamlanmamış sonuç projeye eklenmez.");
+        cancelMarkedTransform.Visibility=Visibility.Collapsed;
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);
@@ -441,7 +447,7 @@ public class MainWindow : Window
             CancelProjectOpen();
             if(recoveryCloseReady)
             {
-                windowClosed=true; canvas.CancelLargeCompletion();canvas.CancelLargeVertexValidation(); areaGeneration++; pendingArea=null; autosaveTimer.Stop();
+                windowClosed=true; markedTransformCancellation?.Cancel();canvas.CancelLargeCompletion();canvas.CancelLargeVertexValidation(); areaGeneration++; pendingArea=null; autosaveTimer.Stop();
                 return;
             }
             e.Cancel=true;
@@ -1420,23 +1426,88 @@ public class MainWindow : Window
     private void Transform(Func<IReadOnlyList<Point2>,Point2,List<Point2>> transform)
     {
         if(!EnsureMainMutationReady())return;
+        if(markedTransformCancellation is not null) { SetStatus("İşaretli dönüşüm doğrulanıyor; bitmesini bekleyin veya iptal edin.");return; }
         if(Selected is not { Points.Count: >0 } piece)return;
-        if(piece.Notches is { Count:>0 }) { SetStatus("Dönüşümden önce köşe işaretlerini kaldırın.");return; }
         if(canvas.LargeVertexValidationRunning || canvas.LargeCompletionRunning)
         { SetStatus("Dönüşüm uygulanmadı · Doğrulamanın bitmesini bekleyin veya Esc ile iptal edin.");return; }
         if(canvas.HasActiveDragPreview)
         { SetStatus("Dönüşüm uygulanmadı · Sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
         if(canvas.HasPendingDrawing)
         { SetStatus("Dönüşüm uygulanmadı · Önce çizimi tamamlayın veya Esc ile iptal edin.");return; }
+        if(piece.Notches is not null && piece.Points.Count>512)
+        {
+            if(HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen alan taslaklarını tamamlayın veya iptal edin.");return; }
+            MarkedTransformTaskForVerification=TransformMarkedAsync(transform,piece);
+            return;
+        }
         var center=Geometry.Bounds(piece.Points).Center;
         var result=transform(piece.Points,center);
+        if(result.Count!=piece.Points.Count)throw new ArgumentException("Dönüşüm nokta sayısını değiştirdi; işlem uygulanmadı.");
         var transformedGrain=GrainlineTransform.Transform(piece.Grainline,piece.Points[0],result[0],points=>transform(points,center));
+        List<NotchMark>? transformedNotches=null;
+        if(piece.Notches is not null)
+        {
+            ProjectStorage.Validate(Document);
+            if(piece.Closed) { LargeContourValidator.Validate(piece.Points);LargeContourValidator.Validate(result); }
+            else { LargeOpenPathValidator.Validate(piece.Points);LargeOpenPathValidator.Validate(result); }
+            transformedNotches=piece.Notches.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex,Position=result[mark.VertexIndex] }).ToList();
+        }
         var committed=false;
-        try { CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain; },()=>committed=true); }
+        try { CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain;piece.Notches=transformedNotches; },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             mainMutationReviewRequired=true;
             throw new InvalidOperationException($"Geometri dönüşümü projeye uygulandı (parça kimliği: {piece.Id:D}) ancak görünüm yenilenemedi. Sonucu ve geri alma geçmişini kontrol edin; işlemi hemen tekrar etmeyin.",ex);
+        }
+    }
+    private async Task TransformMarkedAsync(Func<IReadOnlyList<Point2>,Point2,List<Point2>> transform,PatternPiece piece)
+    {
+        var document=Document;var snapshot=document.Clone();var epoch=projectEpoch;var selected=SelectedId;
+        var original=snapshot.Pieces.Single(p=>p.Id==piece.Id);
+        using var cancellation=new CancellationTokenSource();markedTransformCancellation=cancellation;
+        if(cancelMarkedTransform is not null)cancelMarkedTransform.Visibility=Visibility.Visible;
+        SetStatus("İşaretli kontur arka planda doğrulanıyor; işlem henüz uygulanmadı. İsterseniz doğrulamayı iptal edin.");
+        var committed=false;
+        try
+        {
+            var before=BeforeMarkedTransformForVerification;
+            var prepared=await Task.Run(()=>
+            {
+                before?.Invoke();var token=cancellation.Token;token.ThrowIfCancellationRequested();
+                ProjectStorage.Validate(snapshot);
+                var center=Geometry.Bounds(original.Points).Center;var points=transform(original.Points,center);
+                token.ThrowIfCancellationRequested();
+                if(points.Count!=original.Points.Count)throw new ArgumentException("Dönüşüm nokta sayısını değiştirdi.");
+                var grain=GrainlineTransform.Transform(original.Grainline,original.Points[0],points[0],p=>transform(p,center));
+                if(original.Closed) { LargeContourValidator.Validate(original.Points,token);LargeContourValidator.Validate(points,token); }
+                else { LargeOpenPathValidator.Validate(original.Points,token);LargeOpenPathValidator.Validate(points,token); }
+                var marks=original.Notches!.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex,Position=points[mark.VertexIndex] }).ToList();
+                token.ThrowIfCancellationRequested();return (points,grain,marks);
+            },cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if(windowClosed)return;
+            if(projectEpoch!=epoch || !ReferenceEquals(Document,document) || SelectedId!=selected || HasPendingCanvasOrPropertyWork ||
+               !DocumentSession.ContentEquals(Document,snapshot) || BlockForDxfImport() || BlockForExport())
+            { SetStatus("Proje veya seçim değişti; doğrulanan dönüşüm uygulanmadı.");return; }
+            cancellation.Token.ThrowIfCancellationRequested();
+            var target=Document.Pieces.Single(p=>p.Id==original.Id);
+            CommitObserved("İşaretli kontur dönüştürüldü",()=> { target.Points=prepared.points;target.Grainline=prepared.grain;target.Notches=prepared.marks; },()=>committed=true);
+            SetStatus("İşaretli kontur dönüştürüldü; serileme kuralını ve ölçüleri kontrol edin. İşlem geri alınabilir.");
+        }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested && !committed)
+        { if(!windowClosed)SetStatus("Dönüşüm doğrulaması iptal edildi; proje değiştirilmedi."); }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        {
+            if(!windowClosed)
+            {
+                if(committed)mainMutationReviewRequired=true;
+                ShowCanvasError(committed ? "Dönüşüm projeye uygulandı ancak görünüm yenilenemedi; sonucu ve geri alma geçmişini kontrol edin: "+ex.Message : "Dönüşüm uygulanmadı: "+ex.Message);
+            }
+        }
+        finally
+        {
+            if(ReferenceEquals(markedTransformCancellation,cancellation))markedTransformCancellation=null;
+            if(!windowClosed && cancelMarkedTransform is not null)cancelMarkedTransform.Visibility=Visibility.Collapsed;
         }
     }
     internal Func<PatternPiece,bool>? ConfirmDuplicateForVerification { get; set; }
@@ -1448,8 +1519,6 @@ public class MainWindow : Window
         { SetStatus("Parça çoğaltılmadı · Önce tamamlanmamış çizimi, sürüklemeyi veya alan taslaklarını tamamlayın ya da iptal edin."); return; }
         if(Selected is not { } sourcePiece)
         { SetStatus("Çoğaltmak için önce bir parça seçin.");return; }
-        if(sourcePiece.Notches is { Count:>0 })
-        { SetStatus("Çoğaltmadan önce köşe işaretlerini kaldırın; işaretler henüz kopyalanamıyor.");return; }
         var originalDocument=Document;
         var originalContent=originalDocument.Clone();
         var originalEpoch=projectEpoch;
@@ -1479,14 +1548,15 @@ public class MainWindow : Window
         if(length<sourcePiece.Name.Length && length>0 && char.IsHighSurrogate(sourcePiece.Name[length-1]))length--;
         var duplicate=new PatternPiece { Id=Guid.NewGuid(),Name=sourcePiece.Name[..length]+suffix,
             Points=[..sourcePiece.Points],Closed=sourcePiece.Closed,Metadata=choice.Value.CopyMetadata ? sourcePiece.Metadata?.Clone() : null,
-            Grainline=choice.Value.CopyGrainline ? sourcePiece.Grainline?.Clone() : null };
+            Grainline=choice.Value.CopyGrainline ? sourcePiece.Grainline?.Clone() : null,
+            Notches=sourcePiece.Notches?.Select(mark=>mark.Clone()).ToList() };
         var copiedRule=choice.Value.CopyGrading ? sourceRule!.Clone() : null;
         if(copiedRule is not null)copiedRule.SourcePieceId=duplicate.Id;
         var committed=false;
         try
         {
             CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);if(copiedRule is not null)Document.GradingRules.Add(copiedRule);SelectedId=duplicate.Id; },()=>committed=true);
-            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}; serileme kuralı {(copiedRule is null ? "kopyalanmadı" : "kopyalandı")}. Pastal ve kaynak geçmişi aktarılmadı.");
+            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; {duplicate.Notches?.Count ?? 0} köşe işareti kopyalandı; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}; serileme kuralı {(copiedRule is null ? "kopyalanmadı" : "kopyalandı")}. Pastal ve kaynak geçmişi aktarılmadı.");
         }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {

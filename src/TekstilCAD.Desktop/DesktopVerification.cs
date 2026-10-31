@@ -377,6 +377,7 @@ internal static class DesktopVerification
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
+            NotchTransformVerification.Run(studio,checks);
             VerifyNotchPropertyTranslation(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
@@ -414,6 +415,7 @@ internal static class DesktopVerification
             VerifyPendingExportPreflightGuards(studio,work,checks);
             VerifyFractionalSelectionWithSnap(studio,checks);
             VerifyNearestVertexSelection(studio,checks);
+            VerifyMarkedCanvasTranslation(studio,checks);
             VerifyOpenVertexDrag(studio,checks);
             VerifyExplicitClosureVertexDrag(studio,checks);
             VerifyLargeVertexValidation(studio,checks);
@@ -1380,6 +1382,49 @@ internal static class DesktopVerification
         }
         finally { canvas.CancelDrawing();studio.ClearCanvasError();snap.IsChecked=oldSnap;scaleField.SetValue(canvas,oldScale);offsetField.SetValue(canvas,oldOffset); }
     }
+    private static void VerifyMarkedCanvasTranslation(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var snap=(CheckBox)typeof(MainWindow).GetField("snap",PrivateInstance)!.GetValue(studio)!;
+        var scale=typeof(CadCanvas).GetField("scale",PrivateInstance)!;
+        var offset=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var oldScale=scale.GetValue(canvas);var oldOffset=offset.GetValue(canvas);var oldSnap=snap.IsChecked;
+        var piece=new PatternPiece { Points=[new(0,0),new(100,0),new(100,100),new(0,100)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(100,0) }],
+            Grainline=new Grainline { Start=new(20,20),End=new(20,80),NeedsReview=true } };
+        try
+        {
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);studio.SetTool("Seç");snap.IsChecked=false;
+            var before=studio.Document.Clone();
+            var move=typeof(CadCanvas).GetMethod("MoveSelectionByKeyboard",PrivateInstance)!.CreateDelegate<Action<Key,ModifierKeys>>(canvas);
+            move(Key.Right,ModifierKeys.None);
+            var moved=studio.Document.Pieces.Single();var after=studio.Document.Clone();
+            Check(moved.Notches!.Single().Position==moved.Points[1] && moved.Notches[0].Position==new Point2(101,0) &&
+                moved.Grainline!.Start==new Point2(21,20) && moved.Grainline.NeedsReview && session.UndoCount==1,
+                "Keyboard translates marked contour and grainline together",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Keyboard marked translation supports undo and redo",checks);
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+            var click=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left);var pointer=click.GetPosition(canvas);
+            scale.SetValue(canvas,1.0);offset.SetValue(canvas,new Vector(pointer.X-50,pointer.Y-50));
+            typeof(CadCanvas).GetMethod("Down",PrivateInstance)!.Invoke(canvas,[canvas,click]);
+            Check(canvas.HasActiveDragPreview,"Marked piece interior starts a whole-piece drag",checks);
+            canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y));
+            typeof(CadCanvas).GetMethod("Up",PrivateInstance)!.Invoke(canvas,[click]);
+            moved=studio.Document.Pieces.Single();
+            Check(moved.Notches!.Single().Position==new Point2(110,0) && moved.Notches[0].Position==moved.Points[1] &&
+                moved.Grainline!.Start==new Point2(30,20) && session.UndoCount==1,
+                "Mouse translates marked contour and grainline together",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores a marked mouse drag",checks);
+            studio.Select(piece.Id);pointer=click.GetPosition(canvas);offset.SetValue(canvas,new Vector(pointer.X,pointer.Y));
+            typeof(CadCanvas).GetMethod("Down",PrivateInstance)!.Invoke(canvas,[canvas,click]);
+            Check(!canvas.HasActiveDragPreview && DocumentSession.ContentEquals(before,studio.Document),
+                "Dragging a marked contour vertex remains blocked",checks);
+        }
+        finally { canvas.CancelDrawing();snap.IsChecked=oldSnap;scale.SetValue(canvas,oldScale);offset.SetValue(canvas,oldOffset); }
+    }
+
     private static void VerifyOpenVertexDrag(MainWindow studio,List<string> checks)
     {
         var piece=new PatternPiece { Name="Açık çizgi",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(20,10)] };
