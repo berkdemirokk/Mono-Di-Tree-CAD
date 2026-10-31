@@ -592,6 +592,7 @@ private struct ModelLibrary: View {
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
     @State private var search = ""
+    @State private var sortOrder: SortOrder = .name
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
     @State private var isLoading = true
@@ -601,9 +602,31 @@ private struct ModelLibrary: View {
     @State private var didSimulateLoadFailure = false
     #endif
 
+    private enum SortOrder: String, CaseIterable, Identifiable {
+        case name = "Ada göre"
+        case newest = "En yeni önce"
+        var id: String { rawValue }
+    }
+
     private var matches: [ModelStore.Entry] {
         let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return models.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) || $0.displayIdentity.localizedCaseInsensitiveContains(query) || $0.readableIdentity.localizedCaseInsensitiveContains(query) }
+        return models.filter {
+            query.isEmpty || $0.name.localizedStandardContains(query) ||
+                $0.displayIdentity.localizedCaseInsensitiveContains(query) ||
+                $0.readableIdentity.localizedCaseInsensitiveContains(query)
+        }.sorted { first, second in
+            if sortOrder == .newest {
+                switch (first.date, second.date) {
+                case let (left?, right?) where left != right: return left > right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: break
+                }
+            }
+            let comparison = first.name.localizedStandardCompare(second.name)
+            if comparison != .orderedSame { return comparison == .orderedAscending }
+            return first.displayIdentity < second.displayIdentity
+        }
     }
 
     var body: some View {
@@ -651,7 +674,21 @@ private struct ModelLibrary: View {
             }
             .searchable(text: $search, prompt: "Model ara")
             .navigationTitle("Modellerim")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } }
+                ToolbarItem(placement: .primaryAction) {
+                    Menu {
+                        Picker("Sıralama", selection: $sortOrder) {
+                            ForEach(SortOrder.allCases) { order in
+                                Text(order.rawValue).tag(order)
+                            }
+                        }
+                    } label: {
+                        Label("Sırala", systemImage: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("Modelleri sırala")
+                }
+            }
             .onAppear { loadModels() }
             .onDisappear { loadID = UUID() }
             .alert("Modeli sil?", isPresented: Binding(get: { modelToDelete != nil }, set: { if !$0 { modelToDelete = nil } })) {

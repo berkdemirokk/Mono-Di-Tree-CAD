@@ -1,6 +1,52 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLibrarySearchAndSortCanBeUsedToSelectAModel() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+
+        let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 15))
+        for name in ["Akasya", "Zebra"] {
+            rename.tap()
+            let editor = app.alerts["Proje adını değiştir"]
+            let field = editor.textFields.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 6) + name)
+            editor.buttons["Yeni kopyayı kaydet"].tap()
+            let ready = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: rename)
+            wait(for: [ready], timeout: 10)
+        }
+
+        app.buttons["Modellerim"].tap()
+        let zebra = app.buttons["Zebra"]
+        let akasya = app.buttons["Akasya"]
+        XCTAssertTrue(zebra.waitForExistence(timeout: 10))
+        XCTAssertTrue(akasya.waitForExistence(timeout: 10))
+        let sort = app.buttons["Modelleri sırala"]
+        sort.tap()
+        app.buttons["Ada göre"].tap()
+        XCTAssertLessThan(akasya.frame.minY, zebra.frame.minY)
+        sort.tap()
+        app.buttons["En yeni önce"].tap()
+        XCTAssertLessThan(zebra.frame.minY, akasya.frame.minY)
+        sort.tap()
+        app.buttons["Ada göre"].tap()
+        XCTAssertLessThan(akasya.frame.minY, zebra.frame.minY)
+
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.tap()
+        search.typeText("ZEBRA")
+        XCTAssertTrue(zebra.waitForExistence(timeout: 5))
+        XCTAssertFalse(akasya.exists)
+        zebra.tap()
+        XCTAssertTrue(app.staticTexts["Zebra"].waitForExistence(timeout: 10))
+    }
     func testExperimentalPointSaveRejectsSourceChangeDuringPreparation() {
         let fixture = #"{"Name":"Eski","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10}]}],"GradingRules":[]}"#
         let app = XCUIApplication()
