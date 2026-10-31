@@ -1086,6 +1086,7 @@ public static class DxfFormat
                 Coordinate? xValue = null;
                 var sourceVertices = new List<DxfBulgeVertex>();
                 var lastBulgeIndex = -1;
+                var hasLightweightBulge = false;
                 foreach (var group in e.Data)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -1105,20 +1106,25 @@ public static class DxfFormat
                         if (bulgeToleranceMm is not null) sourceVertices.Add(new(new Point2(sourcePoint.X.Value,sourcePoint.Y.Value),0));
                         xValue = null;
                     }
-                    else if (group.Code == 42 && bulgeToleranceMm is not null)
+                    else if (group.Code == 42)
                     {
-                        if (xValue.HasValue || sourceVertices.Count == 0 || lastBulgeIndex == sourceVertices.Count-1)
+                        if (xValue.HasValue || points.Count == 0 || lastBulgeIndex == points.Count-1)
                             throw new InvalidDataException("LWPOLYLINE bulge köşesi eksik, sırası belirsiz veya yinelenmiş.");
                         var parsed = ReadCoordinate(group.Value);
-                        if (parsed.Value == 0 && IsNonzeroDecimal(group.Value)) throw new InvalidDataException("Bulge sayısal dönüşümde sıfıra düştü.");
-                        sourceVertices[^1] = sourceVertices[^1] with { Bulge = parsed.Value };
-                        lastBulgeIndex = sourceVertices.Count-1;
+                        var nonzero = IsNonzeroDecimal(group.Value);
+                        hasLightweightBulge |= nonzero;
+                        if (bulgeToleranceMm is not null)
+                        {
+                            if (parsed.Value == 0 && nonzero) throw new InvalidDataException("Bulge sayısal dönüşümde sıfıra düştü.");
+                            sourceVertices[^1] = sourceVertices[^1] with { Bulge = parsed.Value };
+                        }
+                        lastBulgeIndex = points.Count-1;
                     }
                 }
                 if (xValue.HasValue || points.Count != declared) throw new InvalidDataException("LWPOLYLINE nokta sayısı veya koordinatları uyuşmuyor.");
                 if (HasNonzeroPolylineWidth(e, cancellationToken, 40, 41, 43)) { RecordSkipped("genişlikli LWPOLYLINE (kontur atlandı)"); continue; }
                 if (bulgeToleranceMm is not null) points = ApproximateBulge(sourceVertices, (lightweightFlags & 1) != 0, points);
-                else if (e.Data.Any(p => p.Code == 42 && IsNonzeroDecimal(p.Value))) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
+                else if (hasLightweightBulge) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
                 AddPiece(name, points, (lightweightFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal]);
                 blockGeometry |= section == "BLOCKS";
             }
