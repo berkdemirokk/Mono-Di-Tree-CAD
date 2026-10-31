@@ -1,3 +1,15 @@
+  TekstilCADViewerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/LosslessProjectNameTests.swift
+    dependencies:
+      - target: TekstilCADViewer_iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.berkdemirokk.monoditreecad.tests
+        SWIFT_VERSION: '5.0'
   TekstilCADViewerUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -18,7 +30,9 @@ schemes:
     build:
       targets:
         TekstilCADViewer_iOS: all
+        TekstilCADViewerTests: [test]
         TekstilCADViewerUITests: [test]
     test:
       targets:
+        - TekstilCADViewerTests
         - TekstilCADViewerUITests

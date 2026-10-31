@@ -14,6 +14,9 @@ private struct ContentView: View {
     @State private var showingPieces = false
     @State private var showingLibrary = false
     @State private var importedData: Data?
+    @State private var sourceData: Data?
+    @State private var showingNameEditor = false
+    @State private var editedName = ""
     @State private var importedName = ""
     @State private var isSaving = false
     @State private var saveNotice = false
@@ -33,7 +36,7 @@ private struct ContentView: View {
                 Spacer()
                 if let project { Text(project.name).font(.headline).lineLimit(1) }
             }
-            Text("Yalnızca proje önizlemesi. Düzenleme, serileme, pastal ve üretim çıktıları desteklenmez.")
+            Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
             if isLoading { ProgressView("Proje açılıyor…") }
             if saveNotice { Text("Model telefona kaydedildi.").font(.caption).foregroundStyle(.secondary) }
@@ -42,6 +45,10 @@ private struct ContentView: View {
                     .disabled(isSaving || isLoading)
             }
             if let project {
+                Button("Proje adını değiştir ve kopya kaydet") {
+                    editedName = project.name
+                    showingNameEditor = true
+                }.disabled(isSaving || isLoading || sourceData == nil)
                 if project.pieces.contains(where: { $0.points.count > 1 }) {
                     Button { showingPieces = true } label: {
                         HStack {
@@ -94,6 +101,11 @@ private struct ContentView: View {
                 openModel(url, imported: true)
             } catch { self.error = error.localizedDescription }
         }
+        .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
+            TextField("Proje adı", text: $editedName)
+            Button("İptal", role: .cancel) {}
+            Button("Yeni kopyayı kaydet") { saveRenamedCopy() }
+        } message: { Text("Yeni bir model kaydedilir; açık dosya değişmez.") }
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary { url in
                 showingLibrary = false
@@ -115,6 +127,7 @@ private struct ContentView: View {
                 selectedPiece = nil
                 drawingRevision = UUID()
                 project = drawing
+                sourceData = data
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
                     importedData = data
                     importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
@@ -148,6 +161,7 @@ private struct ContentView: View {
                     selectedPiece = nil
                     drawingRevision = UUID()
                     project = drawing
+                    sourceData = data
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
                 case .failure(let failure):
@@ -157,6 +171,24 @@ private struct ContentView: View {
         }
     }
 
+    private func saveRenamedCopy() {
+        guard let data = sourceData else { return }
+        let name = editedName
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result {
+                let copy = try LosslessProjectName.replacing(in: data, with: name)
+                try ModelStore.save(copy, name: name + ".tcad")
+            }
+            DispatchQueue.main.async {
+                isSaving = false
+                switch result {
+                case .success: saveNotice = true
+                case .failure(let failure): error = failure.localizedDescription
+                }
+            }
+        }
+    }
     private func saveImportedModel() {
         guard let data = importedData else { return }
         let name = importedName
