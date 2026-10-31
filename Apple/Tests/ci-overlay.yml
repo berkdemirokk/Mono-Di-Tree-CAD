@@ -6,6 +6,7 @@
       - path: Tests/ExperimentalPieceRenameTests.swift
       - path: Tests/ContourMeasureTests.swift
       - path: Tests/ExperimentalContourValidationTests.swift
+      - path: Tests/ExperimentalPointMoveJSONTests.swift
       - path: Tests/MeasurementDisplayTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
