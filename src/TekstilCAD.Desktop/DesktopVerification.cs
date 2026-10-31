@@ -361,6 +361,7 @@ internal static class DesktopVerification
             VerifyOpenPathClosure(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDuplicateOptions(studio,checks);
+            VerifyDuplicateGrading(studio,checks);
             VerifyDeleteShortcutSafety(studio,checks);
             VerifyGradeResetConfirmation(studio,checks);
             VerifyGradingGeometryNotice(studio,reportPath,checks);
@@ -8500,6 +8501,45 @@ internal static class DesktopVerification
         Check(savedAsked==3 && savedTable.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="0" && studio.Document.GradingRules[0].Deltas.SequenceEqual(savedBefore),
             "Confirming grading reset does not alter saved grading increments",checks);
     }
+    private static void VerifyDuplicateGrading(MainWindow studio,List<string> checks)
+    {
+        var source=new PatternPiece { Name="Kaynak",Points=[new(0,0),new(10,0),new(0,10)] };
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(1,1),new(2,2),new(3,3)] };
+        var initial=new ProjectDocument { Pieces=[source],GradingRules=[rule] };
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            var dialog=new DuplicatePieceWindow(studio,source,"Kaynak",rule);
+            Check(dialog.CopyGrading.IsEnabled && !dialog.Options.CopyGrading,"Grading copy requires explicit selection",checks);dialog.Close();
+            foreach(var copyRule in new[] { false,true })
+            {
+                studio.LoadDocument(initial);studio.Select(source.Id);var before=studio.Document.Clone();
+                studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,copyRule);
+                studio.DuplicateSelectedPiece();
+                var copy=studio.Document.Pieces.Single(p=>p.Id!=source.Id);
+                var copied=studio.Document.GradingRules.SingleOrDefault(r=>r.SourcePieceId==copy.Id);
+                Check((copied is not null)==copyRule && studio.Document.GradingRules.Count==(copyRule?2:1) &&
+                    (!copyRule || (copied!.SourcePoints.SequenceEqual(copy.Points) && copied.Deltas.SequenceEqual(rule.Deltas) &&
+                    !ReferenceEquals(copied.SourcePoints,studio.Document.GradingRules[0].SourcePoints) && !ReferenceEquals(copied.Deltas,studio.Document.GradingRules[0].Deltas))) &&
+                    JsonSerializer.Serialize(studio.Document.GradingRules[0])==JsonSerializer.Serialize(before.GradingRules[0]) && session.UndoCount==1,
+                    $"Duplicate grading option {copyRule} preserves source and binds an independent rule to the new identity",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Duplicate and copied grading undo together",checks);
+            }
+            var stale=initial.Clone();stale.Pieces[0].Points[0]=new Point2(-1,0);
+            studio.LoadDocument(stale);studio.Select(source.Id);var staleBefore=studio.Document.Clone();
+            var staleDialog=new DuplicatePieceWindow(studio,stale.Pieces[0],"Kaynak",stale.GradingRules[0]);
+            Check(!staleDialog.CopyGrading.IsEnabled,"A stale grading rule is unavailable in duplicate options",checks);staleDialog.Close();
+            studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,true);studio.DuplicateSelectedPiece();
+            Check(DocumentSession.ContentEquals(staleBefore,studio.Document) && session.UndoCount==0,"A stale grading rule cannot be copied even if requested",checks);
+            studio.LoadDocument(initial);studio.Select(source.Id);
+            studio.ChooseDuplicateForVerification=_=> { studio.Commit("Kural değişikliği",()=>studio.Document.GradingRules[0].Deltas[0]=new Point2(4,4));return new DuplicateOptions(false,false,true); };
+            studio.DuplicateSelectedPiece();
+            Check(studio.Document.Pieces.Count==1 && studio.Document.GradingRules.Count==1 && session.UndoCount==1,
+                "Grading changes during duplicate confirmation reject the pending operation",checks);
+        }
+        finally { studio.ChooseDuplicateForVerification=null;studio.LoadDocument(new ProjectDocument()); }
+    }
+
     private static void VerifyDuplicateOptions(MainWindow studio,List<string> checks)
     {
         var source=new PatternPiece { Name="Ön",Points=[new(0,0),new(10,0),new(0,10)],

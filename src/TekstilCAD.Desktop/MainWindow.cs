@@ -308,7 +308,7 @@ public class MainWindow : Window
         }
         AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
-        selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi aynı konumda kopyalar; parça bilgileri ve iplik yönü isteğe bağlıdır. Serileme ve pastal geçmişi kopyalanmaz."));
+        selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
         tools.Children.Add(Label("GÖRÜNÜM", Muted, 10));
         selectionCommands.Add(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"));
@@ -1434,6 +1434,7 @@ public class MainWindow : Window
         var originalContent=originalDocument.Clone();
         var originalEpoch=projectEpoch;
         var sourceId=sourcePiece.Id;
+        var sourceRule=Document.GradingRules.SingleOrDefault(r=>r.SourcePieceId==sourceId);
         // Bound the input before escaping so control-character escape sequences
         // and surrogate pairs are never truncated midway in the confirmation.
         var previewLength=Math.Min(sourcePiece.Name.Length,20);
@@ -1444,24 +1445,28 @@ public class MainWindow : Window
         else if(ConfirmDuplicateForVerification is { } confirm) choice=confirm(sourcePiece.Clone()) ? new DuplicateOptions(false,true) : null;
         else
         {
-            var dialog=new DuplicatePieceWindow(this,sourcePiece.Clone(),shownName);
+            var dialog=new DuplicatePieceWindow(this,sourcePiece.Clone(),shownName,sourceRule?.Clone());
             choice=dialog.ShowDialog()==true ? dialog.Options : null;
         }
         if(choice is null)return;
         if(HasPendingCanvasOrPropertyWork || recoveryRestoreIncomplete || BlockForDxfImport() || BlockForExport() || projectEpoch!=originalEpoch ||
            !ReferenceEquals(Document,originalDocument) || SelectedId!=sourceId || !DocumentSession.ContentEquals(Document,originalContent))
         { SetStatus("Proje, seçim veya bekleyen çalışma değişti · Parça çoğaltılmadı. Yeniden kontrol edin.");return; }
+        if(choice.Value.CopyGrading && !DuplicatePieceWindow.RuleMatches(sourcePiece,sourceRule))
+        { SetStatus("Kaynak serileme kuralı geometriyle eşleşmiyor veya yok · Parça çoğaltılmadı.");return; }
         const string suffix=" · kopya";
         var length=Math.Min(sourcePiece.Name.Length,1024-suffix.Length);
         if(length<sourcePiece.Name.Length && length>0 && char.IsHighSurrogate(sourcePiece.Name[length-1]))length--;
         var duplicate=new PatternPiece { Id=Guid.NewGuid(),Name=sourcePiece.Name[..length]+suffix,
             Points=[..sourcePiece.Points],Closed=sourcePiece.Closed,Metadata=choice.Value.CopyMetadata ? sourcePiece.Metadata?.Clone() : null,
             Grainline=choice.Value.CopyGrainline ? sourcePiece.Grainline?.Clone() : null };
+        var copiedRule=choice.Value.CopyGrading ? sourceRule!.Clone() : null;
+        if(copiedRule is not null)copiedRule.SourcePieceId=duplicate.Id;
         var committed=false;
         try
         {
-            CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);SelectedId=duplicate.Id; },()=>committed=true);
-            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}. Serileme ve pastal geçmişi kopyalanmadı.");
+            CommitObserved("Parça çoğaltıldı",()=> { Document.Pieces.Add(duplicate);if(copiedRule is not null)Document.GradingRules.Add(copiedRule);SelectedId=duplicate.Id; },()=>committed=true);
+            if(committed)SetStatus($"Parça çoğaltıldı · Kaynak {sourceId:D} · Yeni {duplicate.Id:D}. Aynı konumdalar; üretim bilgisi {(duplicate.Metadata is null ? "kopyalanmadı" : "kopyalandı; adedi kontrol edin")}; iplik yönü {(duplicate.Grainline is null ? "kopyalanmadı" : "kopyalandı")}; serileme kuralı {(copiedRule is null ? "kopyalanmadı" : "kopyalandı")}. Pastal ve kaynak geçmişi aktarılmadı.");
         }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
