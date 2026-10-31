@@ -884,6 +884,7 @@ public static class DxfFormat
         }
         const int maxSkippedPolylines=4096;
         var skippedPolylines=new HashSet<int>();var skippedPolylinesTruncated=false;
+        int skippedFittedModelRecords=0, skippedFittedBlockRecords=0;
         const int maxSkipRecords=4096;
         var skippedRecords=ImmutableArray.CreateBuilder<DxfSkippedSourceRecord>();
         var skippedRecordsTruncated=false;
@@ -1174,7 +1175,7 @@ public static class DxfFormat
                 if (has3D) { RecordSkipped("3D VERTEX (kontur atlandı)"); continue; }
                 if (hasWidth) { RecordSkipped("genişlikli POLYLINE (kontur atlandı)"); continue; }
                 if (hasBulge && bulgeToleranceMm is null) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
-                if (hasFittedVertex || (polylineFlags & (2 | 4)) != 0) { RecordSkipped("eğri/spline POLYLINE (kontur atlandı)"); continue; }
+                if (hasFittedVertex || (polylineFlags & (2 | 4)) != 0) { if(section=="ENTITIES") skippedFittedModelRecords++; else skippedFittedBlockRecords++; RecordSkipped("eğri/spline POLYLINE (kontur atlandı)"); continue; }
                 var points = new List<Point2>(vertices.Count);
                 var sourceVertices = new List<DxfBulgeVertex>();
                 var scaledOrigins = new Dictionary<Point2,SourcePoint>();
@@ -1261,6 +1262,8 @@ public static class DxfFormat
         // unsupported-type summary is truncated or full of vendor types.
         if(skippedPolylines.Count>0)
             warnings.Add($"Atlanan çoklu çizgi: {(skippedPolylinesTruncated ? "en az " : "")}{skippedPolylines.Count}. Önizleme eksik; eksikler giderilip doğrulanmadan üretimde kullanmayın.");
+        if(skippedFittedModelRecords+skippedFittedBlockRecords>0)
+            warnings.Add($"Eğri/spline nedeniyle atlanan POLYLINE kaynak kayıtları: ENTITIES {skippedFittedModelRecords}, BLOCKS {skippedFittedBlockRecords}. Bunlar parça veya yerleştirilmiş blok sayısı değildir; diğer nedenlerle atlanan eğriler dahil olmayabilir.");
         if(skippedGeometryReasons.Count>0)warnings.Add("Atlanan DXF geometrisi: "+string.Join(", ",skippedGeometryReasons.Order(StringComparer.Ordinal)));
         if (blockGeometry) warnings.Add("BLOCK tanım geometrisi doğrudan alındı; INSERT yerleşim/dönüşümleri ve katman görünürlüğü mirası uygulanmaz. AAMA/ASTM beden, çentik ve iplik yönü semantiği doğrulanmadı.");
         if(unknownLayerUsed)warnings.Add("DXF katman görünürlüğü bilinmiyor: katman tablosu veya gerekli durum bilgisi eksik. Görünürlük ve viewport ayarlarını doğrulayın.");

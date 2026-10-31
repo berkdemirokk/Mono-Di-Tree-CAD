@@ -23,4 +23,14 @@ public class DxfCurveFitSafetyTests
         Assert.Single(result.Project.Pieces);
         Assert.Contains(result.Warnings,w=>w.Contains("spline POLYLINE"));
     }
+    [Fact]
+    public void FittedSourceRecordCountsDistinguishModelAndBlockDefinitions()
+    {
+        const string poly="0\nPOLYLINE\n70\n2\n0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nSEQEND\n";
+        var dxf="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nB\n"+poly+"0\nENDBLK\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n"+poly+poly+"0\nLINE\n10\n0\n20\n1\n11\n10\n21\n1\n0\nENDSEC\n0\nEOF\n";
+        using var stream=new MemoryStream(Encoding.UTF8.GetBytes(dxf));
+        var result=DxfFormat.Import(stream,"fit-count");
+        Assert.Single(result.Project.Pieces);
+        Assert.Contains(result.Warnings,w=>w.Contains("ENTITIES 2, BLOCKS 1") && w.Contains("parça veya yerleştirilmiş blok sayısı değildir"));
+    }
 }
