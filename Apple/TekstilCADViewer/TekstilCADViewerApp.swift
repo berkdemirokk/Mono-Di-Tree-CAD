@@ -1,3 +1,4 @@
+import CoreFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -147,6 +148,20 @@ private struct Drawing {
     let name: String
     let pieces: [Piece]
 
+    // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
+    // Check the underlying type before conversion so malformed files cannot turn
+    // true/false into coordinates or numeric values into contour flags.
+    private static func jsonNumber(_ value: Any?) -> Double? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID() else { return nil }
+        return number.doubleValue
+    }
+
+    private static func jsonBoolean(_ value: Any?) -> Bool? {
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) == CFBooleanGetTypeID() else { return nil }
+        return number.boolValue
+    }
     static func load(_ url: URL) throws -> Drawing {
         let values = try url.resourceValues(forKeys: [.fileSizeKey])
         if let size = values.fileSize, size > 64 * 1024 * 1024 { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
@@ -166,11 +181,11 @@ private struct Drawing {
         var pieces: [Piece] = []
         for raw in rawPieces {
             guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
-                  let closed = raw["Closed"] as? Bool else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
+                  let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
             total += rawPoints.count
             guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
             let points: [Point] = try rawPoints.map { point in
-                guard let x = point["X"] as? Double, let y = point["Y"] as? Double,
+                guard let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
                       x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100 else {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }

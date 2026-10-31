@@ -21,6 +21,30 @@ final class ViewerUITests: XCTestCase {
         }
     }
 
+    func testMalformedBooleanAndNumericFieldsShowErrors() {
+        let cases = [
+            ("""
+            {"Name":"Bozuk koordinat","Pieces":[{"Points":[{"X":true,"Y":0},{"X":1,"Y":1}],"Closed":false}]}
+            """, "Geçersiz veya gösterilemeyen koordinat."),
+            ("""
+            {"Name":"Bozuk kontur","Pieces":[{"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Closed":1}]}
+            """, "Parça konturu eksik veya sınır dışında.")
+        ]
+
+        for (fixture, message) in cases {
+            let app = XCUIApplication()
+            app.launchArguments += ["--ui-test-fixture"]
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+            app.launch()
+
+            let alert = app.alerts["Dosya açılamadı"]
+            XCTAssertTrue(alert.waitForExistence(timeout: 15))
+            XCTAssertTrue(alert.staticTexts[message].exists)
+            alert.buttons["Tamam"].tap()
+            XCTAssertTrue(app.staticTexts["Önizlemek için bir .tcad dosyası açın."].exists)
+            app.terminate()
+        }
+    }
     func testSearchAndSelectPiece() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let data = try Data(contentsOf: fixture)
