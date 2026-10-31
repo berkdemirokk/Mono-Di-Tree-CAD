@@ -672,6 +672,7 @@ public static class DxfFormat
         if (lineweightGroups>0 || transparencyGroups>0) warnings.Add("DXF çizgi kalınlığı veya saydamlık meta verileri aktarılmaz; çizgilerin kaynak dosyadaki anlamını doğrulayın.");
         if(hasApplicationData)warnings.Add("DXF 102 uygulama veri grupları aktarılmaz; geometri yalnız ana varlık verilerinden alındı.");
         AddEncodingHeaderWarnings(entities,encoding,raw,(int)length,utf8Bom,warnings,cancellationToken);
+        ValidateContinuousLineType(entities,cancellationToken);
         List<DxfIndexEntity> BuildIndexEntities()
         {
             var indexed=new List<DxfIndexEntity>(entities.Count);
@@ -1546,6 +1547,32 @@ public static class DxfFormat
             17 => new(code, "gigametre", 1e12, true),
             _ => new(code, $"Bilinmeyen veya desteklenmeyen birim kodu {code}", null, false)
         };
+    }
+    // A file may redefine the name CONTINUOUS. Do not turn a patterned
+    // definition into an uninterrupted cutting contour based on its name.
+    private static void ValidateContinuousLineType(IReadOnlyList<Entity> entities,CancellationToken cancellationToken)
+    {
+        var section="";var table="";var seen=false;
+        foreach(var entity in entities)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(entity.Type=="SECTION") { section=entity.Text(2);table="";continue; }
+            if(entity.Type=="ENDSEC") { section="";table="";continue; }
+            if(section!="TABLES")continue;
+            if(entity.Type=="TABLE") { table=entity.Text(2);continue; }
+            if(entity.Type=="ENDTAB") { table="";continue; }
+            if(table!="LTYPE" || entity.Type!="LTYPE")continue;
+            var names=entity.Data.Where(p=>p.Code==2).ToArray();
+            if(!names.Any(p=>p.Value.Trim().Equals("CONTINUOUS",StringComparison.OrdinalIgnoreCase)))continue;
+            var counts=entity.Data.Where(p=>p.Code==73).ToArray();
+            var lengths=entity.Data.Where(p=>p.Code==40).ToArray();
+            if(seen || names.Length!=1 || counts.Length!=1 || lengths.Length!=1 ||
+               !int.TryParse(counts[0].Value,NumberStyles.Integer,CultureInfo.InvariantCulture,out var count) || count!=0 ||
+               Canonicalize(ReadCoordinate(lengths[0].Value))!=new CanonicalDecimal(false,"0",0) ||
+               entity.Data.Any(p=>p.Code is 49 or 74 or 75 or 340))
+                throw new InvalidDataException("DXF CONTINUOUS çizgi tipi sürekli olarak doğrulanamadı; kontur aktarılmadı.");
+            seen=true;
+        }
     }
     private static bool HasUnsupportedPlane(Entity e)
     {
