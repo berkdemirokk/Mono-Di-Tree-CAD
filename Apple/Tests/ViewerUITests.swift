@@ -1,6 +1,24 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testDrawingControlsDoNotCoverContourPreview() {
+        let fixture = #"[6,{"Name":"Görünüm","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let drawing = app.otherElements["1 parçalı kontur önizlemesi"]
+        XCTAssertTrue(drawing.waitForExistence(timeout: 15))
+        let pan = app.buttons["Çizimi taşı"]
+        for _ in 0..<5 where !pan.isHittable { app.swipeUp() }
+        XCTAssertTrue(pan.isHittable)
+        XCTAssertFalse(drawing.frame.intersects(pan.frame))
+        pan.tap()
+        let direction = app.buttons["Sol"]
+        XCTAssertTrue(direction.waitForExistence(timeout: 5))
+        XCTAssertFalse(drawing.frame.intersects(direction.frame))
+    }
+
     func testChangingPieceClearsPreviousNotchSelection() {
         let fixture = #"[6,{"Name":"Seçim","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Ön","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":50}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

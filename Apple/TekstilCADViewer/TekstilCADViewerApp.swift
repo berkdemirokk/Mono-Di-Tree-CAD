@@ -222,7 +222,6 @@ private struct ContentView: View {
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
                         highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
                         )
-                        .frame(height: 320)
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")-\(notchSelectionRevision)")
                         .background(Color.secondary.opacity(0.08))
                     } else {
@@ -1319,6 +1318,7 @@ private struct DrawingView: View {
     @State private var offset: CGSize = .zero
     @State private var showGrain = true
     @State private var panEnabled = false
+    @State private var canvasSize: CGSize = .zero
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
 
@@ -1334,6 +1334,7 @@ private struct DrawingView: View {
     }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
         GeometryReader { geometry in
             let currentZoom = limitedZoom(zoom * pinch)
             let currentOffset = limitedOffset(
@@ -1356,32 +1357,7 @@ private struct DrawingView: View {
                         }
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
-                VStack(alignment: .trailing, spacing: 8) {
-                    Button(panEnabled ? "Taşımayı bitir" : "Çizimi taşı") { panEnabled.toggle() }
-                        .accessibilityHint(panEnabled ? "Sayfayı kaydırmaya dön" : "Çizimi sürüklemek için taşıma modunu aç")
-                    if panEnabled {
-                        HStack {
-                            Button("Sol") { moveDrawing(width: -40, height: 0, size: geometry.size) }
-                            Button("Sağ") { moveDrawing(width: 40, height: 0, size: geometry.size) }
-                            Button("Yukarı") { moveDrawing(width: 0, height: -40, size: geometry.size) }
-                            Button("Aşağı") { moveDrawing(width: 0, height: 40, size: geometry.size) }
-                        }
-                    }
-                    HStack {
-                        Button("Uzaklaştır") { changeZoom(by: 1 / 1.25, size: geometry.size) }
-                            .disabled(zoom <= 0.5)
-                        Button("Yakınlaştır") { changeZoom(by: 1.25, size: geometry.size) }
-                            .disabled(zoom >= 10)
-                    }
-                    Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
-                    if pieces.contains(where: { $0.grain != nil }) {
-                        Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
-                    }
-                }
-                .font(.caption)
-                .padding(8)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
-                .padding(8)
+
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .contentShape(Rectangle())
@@ -1402,6 +1378,34 @@ private struct DrawingView: View {
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
             )
+            .onAppear { canvasSize = geometry.size }
+            .onChange(of: geometry.size) { canvasSize = $0 }
+        }
+        .frame(height: 320)
+                VStack(alignment: .leading, spacing: 8) {
+                    Button(panEnabled ? "Taşımayı bitir" : "Çizimi taşı") { panEnabled.toggle() }
+                        .accessibilityHint(panEnabled ? "Sayfayı kaydırmaya dön" : "Çizimi sürüklemek için taşıma modunu aç")
+                    if panEnabled {
+                        HStack {
+                            Button("Sol") { moveDrawing(width: -40, height: 0, size: canvasSize) }
+                            Button("Sağ") { moveDrawing(width: 40, height: 0, size: canvasSize) }
+                            Button("Yukarı") { moveDrawing(width: 0, height: -40, size: canvasSize) }
+                            Button("Aşağı") { moveDrawing(width: 0, height: 40, size: canvasSize) }
+                        }
+                    }
+                    HStack {
+                        Button("Uzaklaştır") { changeZoom(by: 1 / 1.25, size: canvasSize) }
+                            .disabled(zoom <= 0.5)
+                        Button("Yakınlaştır") { changeZoom(by: 1.25, size: canvasSize) }
+                            .disabled(zoom >= 10)
+                    }
+                    Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
+                    if pieces.contains(where: { $0.grain != nil }) {
+                        Button(showGrain ? "İplik yönlerini gizle" : "İplik yönlerini göster") { showGrain.toggle() }
+                    }
+                }
+                .font(.caption)
+
         }
     }
 
