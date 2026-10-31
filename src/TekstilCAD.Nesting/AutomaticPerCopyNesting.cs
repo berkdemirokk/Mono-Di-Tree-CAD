@@ -173,7 +173,8 @@ public static class AutomaticPerCopyNesting
             // the first layout, which already passed all downstream checks.
             return first;
         }
-        catch (InvalidOperationException error) when (first is not null && NestingEngine.IsLengthExceeded(error))
+        catch (InvalidOperationException error) when (first is not null &&
+            (NestingEngine.IsLengthExceeded(error) || NestingEngine.IsClearancePrecision(error)))
         {
             return first;
         }

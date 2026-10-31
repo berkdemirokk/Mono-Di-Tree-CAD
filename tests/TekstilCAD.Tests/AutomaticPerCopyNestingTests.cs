@@ -179,6 +179,37 @@ public sealed class AutomaticPerCopyNestingTests
             GrainDirectionPolicy.Direction.TwoWay, 90, 100_000_000, 0, 0, 1000));
     }
     [Fact]
+    public void KeepsVerifiedFirstLayoutWhenAlternativeCannotPreserveEdgeMargin()
+    {
+        const double width = 38389624.38411131;
+        const double margin = 1638038.7319391903;
+        const double fabric = 41665701.847989686;
+        PatternPiece Rectangle(double w, double h) => new()
+        {
+            Points = [new(0, 0), new(w, 0), new(w, h), new(0, h)],
+            Grainline = new() { Start = new(0, 0), End = new(0, 100) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 }
+        };
+        var small = Rectangle(100, 1000); var large = Rectangle(width, width - 500);
+        var source = new ProjectDocument { Pieces = [small, large] };
+        var ids = new[] { small.Id, large.Id };
+        var allowed = new Dictionary<Guid, IReadOnlyList<int>> { [small.Id] = [0], [large.Id] = [0, 90] };
+        var firstAngles = new Dictionary<(Guid, int), int> { [(small.Id, 1)] = 0, [(large.Id, 1)] = 90 };
+        var alternateAngles = new Dictionary<(Guid, int), int> { [(small.Id, 1)] = 0, [(large.Id, 1)] = 0 };
+        var first = PerCopyOrthogonalNesting.Arrange(source, ids, firstAngles, fabric, 0, 100_000_000, margin,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.True(PerCopyTraceVerifier.IsValidForConstraints(source, ids, first, firstAngles,
+            GrainDirectionPolicy.Direction.TwoWay, 90, fabric, 0, margin, 100_000_000));
+        var error = Assert.Throws<InvalidOperationException>(() => PerCopyOrthogonalNesting.Arrange(source, ids,
+            alternateAngles, fabric, 0, 100_000_000, margin, GrainDirectionPolicy.Direction.TwoWay, 90));
+        Assert.Equal(true, error.Data["TekstilCAD.Nesting.ClearancePrecision"]);
+
+        var result = AutomaticPerCopyNesting.Arrange(source, ids, allowed, fabric, 0, 100_000_000, margin,
+            GrainDirectionPolicy.Direction.TwoWay, 90);
+        Assert.True(PerCopyTraceVerifier.IsValidForConstraints(source, ids, result, firstAngles,
+            GrainDirectionPolicy.Direction.TwoWay, 90, fabric, 0, margin, 100_000_000));
+    }
+    [Fact]
     public void ReportsWhenLengthRetryWouldExceedWorkBudget()
     {
         PatternPiece Rectangle(int width, int height, bool detailed)

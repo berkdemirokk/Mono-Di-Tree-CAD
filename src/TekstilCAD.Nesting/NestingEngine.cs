@@ -17,6 +17,15 @@ public sealed record NestingResult(ProjectDocument Layout, double UsedLength, do
 /// </summary>
 public static class NestingEngine
 {
+    private const string ClearancePrecisionMarker = "TekstilCAD.Nesting.ClearancePrecision";
+    private static InvalidOperationException ClearancePrecision(string message)
+    {
+        var error = new InvalidOperationException(message);
+        error.Data[ClearancePrecisionMarker] = true;
+        return error;
+    }
+    internal static bool IsClearancePrecision(InvalidOperationException error) => error.Data[ClearancePrecisionMarker] is true;
+
     private const string LengthExceededMarker = "TekstilCAD.Nesting.LengthExceeded";
     private static InvalidOperationException LengthExceeded()
     {
@@ -282,10 +291,10 @@ public static class NestingEngine
                 throw LengthExceeded();
             if (placedBounds.MinX < edgeMargin || !ShelfLayoutVerifier.DifferenceAtLeast(fabricWidth, placedBounds.MaxX, edgeMargin) ||
                 placedBounds.MinY < edgeMargin || !ShelfLayoutVerifier.DifferenceAtLeast(fabricEnd, placedBounds.MaxY, edgeMargin))
-                throw new InvalidOperationException("Kenar payı sayısal hassasiyetle korunamıyor; yerleşim uygulanmadı.");
+                throw ClearancePrecision("Kenar payı sayısal hassasiyetle korunamıyor; yerleşim uygulanmadı.");
             if ((previousMaxX is { } prevX && !ShelfLayoutVerifier.DifferenceAtLeast(placedBounds.MinX, prevX, gap)) ||
                 (previousRowMaxY is { } prevY && !ShelfLayoutVerifier.DifferenceAtLeast(placedBounds.MinY, prevY, gap)))
-                throw new InvalidOperationException("Parça boşluğu sayısal hassasiyetle korunamıyor; yerleşim uygulanmadı.");
+                throw ClearancePrecision("Parça boşluğu sayısal hassasiyetle korunamıyor; yerleşim uygulanmadı.");
             layout.Pieces.Add(placed);
             previousMaxX = placedBounds.MaxX;
             currentRowMaxY = Math.Max(currentRowMaxY, placedBounds.MaxY);
