@@ -31,6 +31,15 @@ public sealed class DocumentHistory
         ClearList(redo);
         Push(undo, before, selectedId);
     }
+    /// <summary>Whether a single snapshot can be retained under this history's point limit.
+    /// Older snapshots can still be evicted to make room.</summary>
+    public bool CanRetainSnapshot(ProjectDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return CountPoints(document) <= maximumPoints;
+    }
+    private static long CountPoints(ProjectDocument document) =>
+        document.Pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0)) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
     public ProjectDocument? Undo(ProjectDocument current) => UndoState(current)?.Document;
     public ProjectDocument? Redo(ProjectDocument current) => RedoState(current)?.Document;
     public DocumentHistoryState? UndoState(ProjectDocument current, Guid? selectedId = null) => Transfer(undo, redo, current, selectedId);
@@ -46,7 +55,7 @@ public sealed class DocumentHistory
     }
     private void Push(LinkedList<Entry> target, ProjectDocument document, Guid? selectedId)
     {
-        long points = document.Pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0)) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
+        long points = CountPoints(document);
         if (points > maximumPoints)
         {
             CountCapacityDiscard((long)undo.Count + redo.Count + 1);

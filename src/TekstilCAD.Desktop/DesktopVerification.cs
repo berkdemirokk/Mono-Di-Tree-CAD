@@ -329,6 +329,7 @@ internal static class DesktopVerification
             VerifyAsyncArea(studio, checks);
             VerifySelectedPieceLimits(studio, reportPath, checks);
             VerifyPropertyDrafts(studio,work,checks);
+            GroupMoveVerification.Run(studio,checks);
             VerifyDraftRemovalConfirmationRace(studio,checks);
             VerifyFitSelectedPiece(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);
@@ -2128,6 +2129,21 @@ internal static class DesktopVerification
                 }
                 finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeDxfFinalMappingForVerification=null; }
             }
+            incoming=Prepare();original=studio.Document;
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                var validationOnUiThread=true;
+                studio.BeforeDxfCandidateValidationForVerification=()=> { validationOnUiThread=studio.Dispatcher.CheckAccess();reached.Set();release.Wait(); };
+                var pending=studio.ReviewPreparedDxfAsync();
+                try
+                {
+                    PumpUntil(()=>reached.IsSet);studio.RequestDxfCancellation();release.Set();
+                    PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(!validationOnUiThread && ReferenceEquals(original,studio.Document) && studio.Document.Pieces.Count==0 && !studio.DxfImportRunning,
+                        "Cancelling detached DXF candidate validation preserves the workspace and validation runs off the UI thread",checks);
+                }
+                finally { release.Set();PumpUntil(()=>pending.IsCompleted);studio.BeforeDxfCandidateValidationForVerification=null; }
+            }
             void CheckFinalMappingStale(string label,Action change,Action verify)
             {
                 using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
@@ -2190,6 +2206,7 @@ internal static class DesktopVerification
         {
             studio.ConfirmDxfReviewForVerification=null;studio.ConfirmDxfNotchReviewForVerification=null;
             studio.BeforeDxfFinalMappingForVerification=null;
+            studio.BeforeDxfCandidateValidationForVerification=null;
             studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous);
         }
     }

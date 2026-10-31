@@ -25,6 +25,8 @@ public sealed class DocumentSession
     public long StoredPointCount => history.StoredPointCount;
     /// <summary>Snapshots discarded for history capacity during this session's lifetime; loading a document does not reset this monotonic counter.</summary>
     public long CapacityDiscardedSnapshots => history.CapacityDiscardedSnapshots;
+    /// <summary>Whether the current document can be retained as one undo snapshot. Older history may still be evicted.</summary>
+    public bool CanRetainCurrentUndoSnapshot => history.CanRetainSnapshot(Document);
 
     public DocumentSession(ProjectDocument? initial = null, int maximumSnapshots = 50, long maximumPoints = 2_000_000)
     {

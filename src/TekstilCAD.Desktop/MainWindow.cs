@@ -138,6 +138,7 @@ public class MainWindow : Window
     internal Action? AfterDxfPreparationForVerification { get; set; }
     internal Action? BeforeDxfSourceCheckForVerification { get; set; }
     internal Action? BeforeDxfFinalMappingForVerification { get; set; }
+    internal Action? BeforeDxfCandidateValidationForVerification { get; set; }
     internal Action? AfterDxfSourceCheckForVerification { get; set; }
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
@@ -414,6 +415,7 @@ public class MainWindow : Window
         pieces.ItemTemplate=new DataTemplate { VisualTree=pieceRows };
         pieces.SelectionChanged += (_, _) => { if (!syncing) { var id=(pieces.SelectedItem as PatternPiece)?.Id; if(id!=SelectedId && (BlockForActiveDrag() || BlockForLargeVertexValidation())) { syncing=true;pieces.SelectedItem=Selected;syncing=false;return; } SelectedId=id; Refresh(); } };
         inspector.Children.Add(pieces);
+        AddButton(inspector,"Birden fazla parçayı taşı…",OpenGroupMove,"Parça listesinden birden fazla parça seçip aynı X/Y kadar taşıyın; işlem tek adımda geri alınır.");
         pieceSearch.TextChanged+=(_,_)=>RefreshPieceSearch();
         AutomationProperties.SetName(selectedPieceIdentity,"Seçili parçanın tam adı ve kimliği");
         AutomationProperties.SetHelpText(selectedPieceIdentity,"Adı ve kimliği seçip kopyalayabilirsiniz. Görünmeyen karakterler Unicode koduyla gösterilir.");
@@ -733,6 +735,7 @@ public class MainWindow : Window
     }
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);
+    internal bool CanRetainCurrentUndoSnapshot => session.CanRetainCurrentUndoSnapshot;
     // Called only after a changed document is committed, before UI refresh can fail.
     internal void CommitObserved(string description, Action action, Action? onCommitted)
     {
@@ -1333,6 +1336,13 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         BuildPieceMetadataDialog()?.ShowDialog();
+    }
+    private void OpenGroupMove()
+    {
+        if(!EnsureMainMutationReady() || BlockForIncompleteRecovery() || BlockForDxfImport() || BlockForExport())return;
+        if(HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
+        if(Document.Pieces.Count<2) { SetStatus("Toplu taşıma için en az iki parça gereklidir.");return; }
+        new GroupMoveWindow(this).ShowDialog();
     }
     private bool EnsureMainMutationReady()
     {
@@ -2264,6 +2274,10 @@ public class MainWindow : Window
             var detachedNotches=notchSelections.ToArray();
             var detachedGrains=grainSelections.ToArray();
             var beforeMapping=BeforeDxfFinalMappingForVerification;
+            var beforeValidation=BeforeDxfCandidateValidationForVerification;
+            var sourceName=preparedDxfSource;var sourceHash=imported.SourceSha256 ?? "";
+            var sourceLength=imported.SourceByteLength ?? -1;var sourceFactor=preparedDxfFactor;
+            var unavailableGrainReview=grainReviewUnavailable;
             using var mappingCancellation=new CancellationTokenSource();
             dxfImportCancellation=mappingCancellation;DxfImportRunning=true;
             dxfCancel.Content="DXF eşlemesini iptal et";
@@ -2287,7 +2301,19 @@ public class MainWindow : Window
                         result=DxfTextileGrainlineMapping.Apply(grainInput,detachedGrains,
                             DxfTextileGrainlineMapping.CaptureFingerprint(grainInput,mappingCancellation.Token),mappingCancellation.Token).Project;
                     }
-                    mappingCancellation.Token.ThrowIfCancellationRequested();return result;
+                    mappingCancellation.Token.ThrowIfCancellationRequested();
+                    var historyWarnings=detachedImport.Warnings.ToList();
+                    if(unavailableGrainReview)
+                        historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
+                    if(detachedGrains.Length>0)
+                        historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
+                    if(detachedNotches.Length>0)
+                        historyWarnings.Add("DXF POINT kayıtları kullanıcı seçimiyle görsel köşe işaretlerine eşlendi. Kaynak katmanı ve kayıt ilişkileri projede saklanmaz; fiziksel çentik veya üretim uygunluğu doğrulanmadı.");
+                    var history=new DxfImportProvenance { SourceFileName=sourceName,SourceSha256=sourceHash,SourceByteLength=sourceLength,
+                        MillimetersPerUnit=sourceFactor,Warnings=historyWarnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };
+                    history.Validate();result.ImportProvenance=history;
+                    beforeValidation?.Invoke();mappingCancellation.Token.ThrowIfCancellationRequested();
+                    Validate(result);mappingCancellation.Token.ThrowIfCancellationRequested();return result;
                 });
                 mappingCancellation.Token.ThrowIfCancellationRequested();
             }
@@ -2303,17 +2329,6 @@ public class MainWindow : Window
             if(!IsPreparedDxfRetryCurrent(imported) || !PreparedImportMatches())return;
             if(!await VerifyDxfSourceBeforeApplyAsync(imported,allowSaved)) { if(dxfSourceCheckCancelled)OfferDxfReviewRetry(imported,"DXF kaynak kontrolü iptal edildi; proje değiştirilmedi.");return; }
             if(!IsPreparedDxfRetryCurrent(imported) || !PreparedImportMatches())return;
-            var historyWarnings = imported.Warnings.ToList();
-            if (grainReviewUnavailable)
-                historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
-            if (grainSelections.Count > 0)
-                historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
-            if(notchSelections.Count>0)
-                historyWarnings.Add("DXF POINT kayıtları kullanıcı seçimiyle görsel köşe işaretlerine eşlendi. Kaynak katmanı ve kayıt ilişkileri projede saklanmaz; fiziksel çentik veya üretim uygunluğu doğrulanmadı.");
-            var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
-                SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
-                MillimetersPerUnit=preparedDxfFactor, Warnings=historyWarnings, PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };
-            history.Validate();candidate.ImportProvenance=history;Validate(candidate);
             if (!PreparedImportMatches()) return;
             LoadDocumentCore(candidate,true,()=> { applied=true;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false; });
             dxfNotice.Text=$"DXF: {Document.Pieces.Count} parça · 1 birim = {preparedDxfFactor} mm · Kaynak kontrol anından sonra değişmiş olabilir; ölçüleri kontrol edin";
