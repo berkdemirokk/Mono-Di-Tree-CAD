@@ -24,6 +24,7 @@ public sealed class GradeRule
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
                 throw new InvalidDataException("Serileme kuralı bir nesne olmalıdır.");
+            ValidateProperties(root, "Name", "BaseSize", "Increments");
             var name = RequiredProperty(root, "Name");
             var baseSize = RequiredProperty(root, "BaseSize");
             var points = RequiredProperty(root, "Increments");
@@ -35,13 +36,23 @@ public sealed class GradeRule
             {
                 if (point.ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Her serileme artımı X ve Y sayıları içermelidir.");
+                ValidateProperties(point, "X", "Y", "IsFinite");
                 ValidateJsonCoordinate(RequiredProperty(point, "X"));
                 ValidateJsonCoordinate(RequiredProperty(point, "Y"));
+                if (point.TryGetProperty("IsFinite", out var finite) && finite.ValueKind != JsonValueKind.True)
+                    throw new InvalidDataException("Serileme artımının geçerlilik bilgisi tutarsız.");
             }
         }
         var rule = JsonSerializer.Deserialize<GradeRule>(json) ?? throw new InvalidDataException("Serileme kuralı boş.");
         rule.Validate();
         return rule;
+    }
+    private static void ValidateProperties(JsonElement obj, params string[] allowed)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in obj.EnumerateObject())
+            if (!allowed.Contains(property.Name, StringComparer.Ordinal) || !seen.Add(property.Name))
+                throw new InvalidDataException($"Serileme kuralında bilinmeyen veya yinelenen alan: {property.Name}.");
     }
     private static void ValidateJsonCoordinate(JsonElement coordinate)
     {
