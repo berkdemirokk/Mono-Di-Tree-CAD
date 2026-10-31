@@ -147,7 +147,7 @@ public static class AutomaticPerCopyNesting
         }
 
         // The estimator uses source order, while the shelf engine sorts by height.
-        // Compare one bounded alternative using the actual verified layout length.
+        // Compare bounded alternatives using the actual verified layout length.
         var alternate = new Dictionary<(Guid, int), int>();
         var alternateUnique = new HashSet<(Guid, int)>();
         bool differs = false;
@@ -163,28 +163,42 @@ public static class AutomaticPerCopyNesting
             extra += 2L * v * v;
             if (alternateUnique.Add((mapping.SourcePieceId, angle))) extra += 2L * v * v;
         }
-        if (!differs) return first ?? throw firstError!;
-        if (extra > NestingEngine.MaximumValidationWork - work)
+        var narrow = new Dictionary<(Guid, int), int>();
+        var narrowUnique = new HashSet<(Guid, int)>();
+        long narrowWork = 0;
+        foreach (var mapping in expansion.Placements)
         {
-            if (first is not null) return first;
-            throw new InvalidOperationException("İlk yerleşim başarısız oldu; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", firstError);
+            cancellationToken.ThrowIfCancellationRequested();
+            var key = (mapping.SourcePieceId, mapping.CopyNumber);
+            var option = candidates[mapping.SourcePieceId].OrderBy(c => c.Width).ThenBy(c => c.Height).First();
+            narrow.Add(key, option.Angle);
+            long v = originals[mapping.SourcePieceId].Points.Count;
+            narrowWork += 2L * v * v;
+            if (narrowUnique.Add((mapping.SourcePieceId, option.Angle))) narrowWork += 2L * v * v;
         }
-        try
+        foreach (var (angles, cost, needed) in new[]
         {
-            var second = PerCopyOrthogonalNesting.Arrange(snapshot, ids, alternate, fabricWidth, gap, maxLength,
-                edgeMargin, direction, toleranceDegrees, cancellationToken);
-            return first is null || second.Plan.Nesting.UsedLength < first.Plan.Nesting.UsedLength ? second : first;
-        }
-        catch (ArgumentException error) when (first is not null && NestingPieceError.TryGet(error, out _, out _))
+            (alternate, extra, differs),
+            (narrow, narrowWork, narrow.Any(pair => chosen[pair.Key] != pair.Value) &&
+                narrow.Any(pair => alternate[pair.Key] != pair.Value))
+        })
         {
-            // A candidate-specific geometry or translation failure cannot invalidate
-            // the first layout, which already passed all downstream checks.
-            return first;
+            if (!needed) continue;
+            if (cost > NestingEngine.MaximumValidationWork - work)
+            {
+                if (first is not null) break;
+                throw new InvalidOperationException("İlk yerleşim başarısız oldu; alternatif açı düzeni doğrulama kaynak sınırı nedeniyle denenemedi.", firstError);
+            }
+            work += cost;
+            try
+            {
+                var result = PerCopyOrthogonalNesting.Arrange(snapshot, ids, angles, fabricWidth, gap, maxLength,
+                    edgeMargin, direction, toleranceDegrees, cancellationToken);
+                if (first is null || result.Plan.Nesting.UsedLength < first.Plan.Nesting.UsedLength) first = result;
+            }
+            catch (ArgumentException error) when (NestingPieceError.TryGet(error, out _, out _)) { firstError ??= error; }
+            catch (InvalidOperationException error) when (NestingEngine.IsLengthExceeded(error) || NestingEngine.IsClearancePrecision(error)) { firstError ??= error; }
         }
-        catch (InvalidOperationException error) when (first is not null &&
-            (NestingEngine.IsLengthExceeded(error) || NestingEngine.IsClearancePrecision(error)))
-        {
-            return first;
-        }
+        return first ?? throw firstError!;
     }
 }
