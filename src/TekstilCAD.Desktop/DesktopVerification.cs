@@ -428,6 +428,7 @@ internal static class DesktopVerification
             VerifyMachineOpenApprovalState(studio,work,checks);
             VerifyAsyncExportPendingPreviews(studio,work,checks);
             VerifyOptionalGradingMetadata(studio,checks);
+            VerifyGradePointPicker(studio,reportPath,checks);
             VerifyAsyncGrading(studio,checks);
             VerifyGradingCancellation(studio,checks);
             VerifyGradingSourceIdentification(studio,checks);
@@ -3589,7 +3590,7 @@ internal static class DesktopVerification
                 var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
                 var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
                 var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
-                var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
+                        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
                 options.IsExpanded=true;root.UpdateLayout();
                 var copy=Descendants<CheckBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynağın rol ve malzemesini kopyala");
                 copy.IsChecked=true;
@@ -3672,7 +3673,14 @@ internal static class DesktopVerification
         _=new WindowInteropHelper(studio).EnsureHandle();
         var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
         root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
-        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
+        var gradeHelp=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Artışları mm olarak girin · Projeye uygulayıp kaydedin"));
+        var pointPickerButton=Descendants<Button>(root).Single(b=>Equals(b.Content,"Konturdan nokta seç…"));
+        gradeHelp.IsExpanded=true;root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
+        var helpText=(TextBlock)gradeHelp.Content;
+        Check(FullyVisible(gradeHelp,root) && FullyVisible(helpText,root) && FullyVisible(pointPickerButton,root) &&
+              pointPickerButton.Focusable && helpText.ActualWidth<=gradeHelp.ActualWidth,
+            $"Expanded grading help and point picker remain visible and reachable at minimum window size: help={FullyVisible(gradeHelp,root)} text={FullyVisible(helpText,root)} button={FullyVisible(pointPickerButton,root)} widths={helpText.ActualWidth}/{gradeHelp.ActualWidth} bounds={BoundsInRoot(gradeHelp,root)} textBounds={BoundsInRoot(helpText,root)} buttonBounds={BoundsInRoot(pointPickerButton,root)}",checks);
+        gradeHelp.IsExpanded=false;root.UpdateLayout();        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
         Check(!options.IsExpanded && FullyVisible(options,root),"Grading optional metadata is collapsed and reachable at compact size",checks);
         options.IsExpanded=true;root.UpdateLayout();
         var sizeOption=Descendants<CheckBox>(root).Single(c=>AutomationProperties.GetName(c)=="Yeni beden adını beden bilgisi olarak ekle");
@@ -8282,6 +8290,31 @@ internal static class DesktopVerification
         finally { picker.Close(); }
     }
 
+    private static void VerifyGradePointPicker(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Serileme",Closed=false,Points=Enumerable.Range(0,10000).Select(i=>new Point2(i,i%2)).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var window=new TextileToolsWindow(studio);
+        window.WindowStartupLocation=WindowStartupLocation.Manual;window.Left=-32000;window.Top=-32000;window.ShowInTaskbar=false;
+        window.Show();
+        Render(window,Path.ChangeExtension(reportPath,".grade-point-picker.png"),930,820);
+        var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(window)!;
+        var row=(TextileToolsWindow.GradeRow)grid.Items[3];row.Dx="2,5";row.Dy="-1";
+        var button=Descendants<Button>((FrameworkElement)window.Content).Single(b=>Equals(b.Content,"Konturdan nokta seç…"));
+        var before=studio.Document.Clone();
+        window.GradePickerOpenedForVerification=picker=> { picker.PointSelector.SelectedIndex=9999;picker.UseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); };
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(grid.SelectedItem is TextileToolsWindow.GradeRow selectedRow && selectedRow.Index==9999 && grid.CurrentCell.Column==grid.Columns[3] && row.Dx=="2,5" && row.Dy=="-1" && DocumentSession.ContentEquals(before,studio.Document),
+            "Grade picker maps a large contour index to the matching row without changing drafts or project: "+((TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(window)!).Text,checks);
+        window.GradePickerOpenedForVerification=picker=>picker.Close();
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(((TextileToolsWindow.GradeRow)grid.SelectedItem).Index==9999 && row.Dx=="2,5", "Cancelling grade point selection preserves row and draft",checks);
+        window.GradePickerOpenedForVerification=picker=> { studio.Document.Pieces[0].Name="Değişti";picker.CheckCurrent();picker.UseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));picker.Close(); };
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(((TextileToolsWindow.GradeRow)grid.SelectedItem).Index==9999 && row.Dx=="2,5", "Stale grade picker cannot change row or draft",checks);
+        window.GradePickerOpenedForVerification=null;
+        window.Hide();window.Close();
+    }
     private static void VerifyMachineChoiceIdentity(MainWindow studio,string work,string reportPath,List<string> checks)
     {
         var first=new PatternPiece { Name="Ön\u202E",Points=[new(0,0),new(10,0),new(0,20)] };

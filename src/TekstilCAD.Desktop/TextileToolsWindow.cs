@@ -432,6 +432,27 @@ public sealed class TextileToolsWindow : Window
         gradeDrafts[piece.Id]=NewDraft(piece);ReloadRows();
         Success("Bu kaynağın yeni geometrisi için artışlar sıfırlandı. Yeni ΔX / ΔY değerlerini girin.");
     }
+    internal Action<PointPickerWindow>? GradePickerOpenedForVerification { get; set; }
+    private void SelectGradePoint()
+    {
+        if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+        var piece=Piece();
+        if(rulesNeedReset || activeDraft is null || activeSourceId!=piece.Id)
+            throw new InvalidOperationException("Önce kaynak geometrisi için artışları güncelleyin.");
+        var draft=activeDraft;
+        var picker=new PointPickerWindow(workspace,this,piece,()=> (source.SelectedItem as PatternPiece)?.Id,
+            grades.SelectedItem is GradeRow selected ? selected.Index : -1);
+        if(GradePickerOpenedForVerification is { } probe) picker.Loaded+=(_,_)=>probe(picker);
+        if(picker.ShowDialog()!=true || picker.SelectedPointIndex is not int index)return;
+        if(activeSourceId!=piece.Id || !ReferenceEquals(activeDraft,draft) || rulesNeedReset ||
+           index<0 || index>=rows.Count || rows[index].Index!=index)
+            throw new InvalidOperationException("Serileme taslağı değişti; nokta seçimi uygulanmadı.");
+        var row=rows[index];grades.SelectedItem=row;
+        grades.CurrentCell=new DataGridCellInfo(row,grades.Columns[3]);
+        grades.ScrollIntoView(row,grades.Columns[3]);grades.Focus();
+        result.Foreground=StudioTheme.Muted;
+        result.Text=$"Nokta {index} seçildi. Tabloda ΔX ve ΔY artışlarını düzenleyebilirsiniz; değerler değiştirilmedi.";
+    }
     private static ScrollViewer Scroll(UIElement content) => new() { Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };
     private UIElement GradePanel()
     {
@@ -439,9 +460,13 @@ public sealed class TextileToolsWindow : Window
         layout.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
         layout.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star),MinHeight=80 });
         layout.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
-        var help=new Expander { Header="Artışları mm olarak girin · Projeye uygulayıp kaydedin",IsExpanded=false,Margin=new Thickness(0,0,0,2) };
-        help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6),MaxHeight=65 };
-        layout.Children.Add(help);
+        var help=new Expander { Header="Artışları mm olarak girin · Projeye uygulayıp kaydedin",IsExpanded=false,Margin=new Thickness(0,0,0,2),MaxWidth=400,HorizontalAlignment=HorizontalAlignment.Left };
+        help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6) };
+        var gradeHeader=new StackPanel { Orientation=Orientation.Horizontal };gradeHeader.Children.Add(help);
+        var pickGradePoint=Button(gradeHeader,"Konturdan nokta seç…",SelectGradePoint,()=>HasPiece()&&!rulesNeedReset);
+        pickGradePoint.Margin=new Thickness(0,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
+        AutomationProperties.SetHelpText(pickGradePoint,"Kontur önizlemesinden bir nokta seçip serileme tablosundaki satırına gidin. Artışlar değiştirilmez.");
+        layout.Children.Add(gradeHeader);
         foreach(var (title,property,readOnly) in new[] { ("Nokta","Index",true),("X · mm","X",true),("Y · mm","Y",true),("ΔX · mm","Dx",false),("ΔY · mm","Dy",false) })
             grades.Columns.Add(new DataGridTextColumn { Header=title,Binding=new Binding(property) { UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged },IsReadOnly=readOnly,Width=new DataGridLength(1,DataGridLengthUnitType.Star) });
         grades.ItemsSource=rows;Grid.SetRow(grades,1);layout.Children.Add(grades);
@@ -456,6 +481,7 @@ public sealed class TextileToolsWindow : Window
         KeyboardNavigation.SetIsTabStop(lowerScroll,true);
         Grid.SetRow(lowerScroll,2);layout.Children.Add(lowerScroll);
         var resetRow=new StackPanel();lower.Children.Add(resetRow);
+
         resetRulesButton=Button(resetRow,"Yeni geometri için artışları sıfırla",ResetRulesForCurrentGeometry,()=>HasPiece()&&rulesNeedReset);
         resetRulesButton.Margin=new Thickness(0,0,0,6);resetRulesButton.Padding=new Thickness(10,5,10,5);resetRulesButton.Visibility=Visibility.Collapsed;
         var fields=new WrapPanel { VerticalAlignment=VerticalAlignment.Bottom };lower.Children.Add(fields);
