@@ -1,0 +1,2 @@
+# The reference is verified byte-for-byte; checkout must not rewrite its line endings.
+tests/TekstilCAD.Tests/Fixtures/wearcad-100mm-square.dxf -text

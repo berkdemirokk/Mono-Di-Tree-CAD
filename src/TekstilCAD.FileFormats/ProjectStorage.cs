@@ -315,6 +315,12 @@ public static class ProjectStorage
                     throw new InvalidDataException("Proje dosyası okunurken 64 MB sınırını aştı.");
                 memory.Write(buffer, 0, count);
             }
+            // The common case is a stable file whose initial length exactly
+            // matches the completed snapshot. Reuse that exact-sized buffer;
+            // otherwise copy only the bytes actually read (e.g. if it changed).
+            if (memory.TryGetBuffer(out var snapshot) && snapshot.Offset == 0 &&
+                snapshot.Array is { } exact && snapshot.Count == exact.Length)
+                return exact;
             return memory.ToArray();
         }
         catch (FileNotFoundException) { return null; }
