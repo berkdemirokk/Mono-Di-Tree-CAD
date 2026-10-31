@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testExperimentalPointPreviewSavesSeparateCopy() {
+        let fixture = #"{"Name":"Deney","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10}]}],"GradingRules":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Deney"].waitForExistence(timeout: 15))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch.tap()
+        app.buttons["Ön"].tap()
+        let edit = app.buttons["Deneysel nokta düzenle…"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5)); edit.tap()
+        let x = app.textFields["X · mm"]
+        XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap()
+        x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "1")
+        app.buttons["Önizlemeyi hesapla"].tap()
+        XCTAssertTrue(app.staticTexts["Önizleme hazır; kopya henüz kaydedilmedi."].waitForExistence(timeout: 15))
+        app.buttons["Yeni kopyayı kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."].waitForExistence(timeout: 10))
+        app.buttons["Kapat"].tap()
+        XCTAssertTrue(app.staticTexts["Deney"].exists)
+        app.buttons["Modellerim"].tap()
+        XCTAssertTrue(app.buttons["Deney · nokta denemesi"].waitForExistence(timeout: 10))
+    }
     func testDesktopSavedSyntheticVersionSixFixture() throws {
         // DesktopVerification.VerifyVertexNotches creates and saves this project.
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-notch", withExtension: "tcad"))

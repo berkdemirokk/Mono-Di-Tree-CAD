@@ -37,6 +37,9 @@ private struct ContentView: View {
     @State private var showingNameEditor = false
     @State private var editedName = ""
     @State private var showingPieceNameEditor = false
+    #if DEBUG
+    @State private var showingPointEditor = false
+    #endif
     @State private var editedPieceName = ""
     @State private var pieceRenameSnapshot: PieceRenameSnapshot?
     @State private var importedName = ""
@@ -131,6 +134,17 @@ private struct ContentView: View {
                     }
                     if let selectedPiece {
                         #if DEBUG
+                        Button("Deneysel nokta düzenle…") { showingPointEditor = true }
+                            .disabled(isSaving || isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+                            .sheet(isPresented: $showingPointEditor) {
+                                if let data = sourceData, let id = project.pieces[selectedPiece].id {
+                                    let revision = drawingRevision
+                                    ExperimentalPointEditor(data: data, piece: project.pieces[selectedPiece], pieceID: id, projectName: project.name,
+                                        isCurrent: { sourceData == data && self.selectedPiece == selectedPiece && drawingRevision == revision })
+                                }
+                            }
+                        Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
+                            .font(.caption).foregroundStyle(.secondary)
                         Button("Parça adını değiştir ve kopya kaydet") {
                             guard let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
                             // Keep a failed edit available for retry on the same snapshot.
@@ -814,6 +828,91 @@ private struct Drawing {
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid)
     }
 }
+
+#if DEBUG
+private struct ExperimentalPointEditor: View {
+    let data: Data
+    let piece: Drawing.Piece
+    let pieceID: UUID
+    let projectName: String
+    let isCurrent: () -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var pointIndex = 0
+    @State private var x = ""
+    @State private var y = ""
+    @State private var generation = UUID()
+    @State private var candidate: Data?
+    @State private var preview: Drawing.Piece?
+    @State private var message = ""
+    @State private var working = false
+
+    private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = ""; working = false }
+    private func updatePoint() {
+        let point = piece.points[pointIndex]
+        x = String(point.x); y = String(point.y)
+        invalidate()
+    }
+    private func makePreview() {
+        guard isCurrent(), let px = Double(x.replacingOccurrences(of: ",", with: ".")),
+              let py = Double(y.replacingOccurrences(of: ",", with: ".")), px.isFinite, py.isFinite else {
+            message = "Geçerli X/Y girin ve açık parçanın değişmediğini doğrulayın."; return
+        }
+        let request = UUID(); generation = request; candidate = nil; preview = nil; working = true
+        let selected = pointIndex
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { () -> (Data, Drawing.Piece) in
+                let edited = try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: pieceID, index: selected, to: .init(x: px, y: py))
+                guard edited != data else { throw ViewerError.message("Nokta konumu değişmedi.") }
+                let drawing = try Drawing.load(edited)
+                guard let editedPiece = drawing.pieces.first(where: { $0.id == pieceID }) else { throw ViewerError.message("Düzenlenen parça okunamadı.") }
+                return (edited, editedPiece)
+            }
+            DispatchQueue.main.async {
+                guard generation == request else { return }
+                working = false
+                guard isCurrent() else { message = "Açık model veya seçim değişti; yeniden başlayın."; return }
+                switch result {
+                case .success(let (bytes, edited)): candidate = bytes; preview = edited; message = "Önizleme hazır; kopya henüz kaydedilmedi."
+                case .failure: message = "Düzenleme güvenle uygulanamadı. Koordinatları, konturu ve desteklenmeyen proje alanlarını kontrol edin."
+                }
+            }
+        }
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text("DENEYSEL DEBUG · Üretim için doğrulanmadı. Orijinal değiştirilmez; yalnız yeni kopya kaydedilir. v6, işaretler, pastal, geçmiş ve seçili parçanın serileme kuralı desteklenmez. İplik yönü varsa yeniden incelenmelidir.")
+                Picker("Nokta", selection: $pointIndex) {
+                    ForEach(piece.points.indices, id: \.self) { index in Text("Nokta \(index)").tag(index) }
+                }
+                TextField("X · mm", text: $x)
+                TextField("Y · mm", text: $y)
+                Button(working ? "Önizleme hazırlanıyor…" : "Önizlemeyi hesapla") { makePreview() }.disabled(working)
+                if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
+                if let preview {
+                    DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil)
+                        .frame(height: 240)
+                    Button("Yeni kopyayı kaydet") {
+                        guard isCurrent(), let candidate else { message = "Açık model veya seçim değişti; kopya kaydedilmedi."; return }
+                        do {
+                            try ModelStore.saveRenamed(candidate, projectName: projectName + " · nokta denemesi")
+                            message = "Deneysel kopya Modellerim bölümüne kaydedildi. Orijinal korunuyor."
+                            self.candidate = nil
+                        } catch { message = "Kopya kaydedilemedi: \(error.localizedDescription)" }
+                    }
+                    .disabled(candidate == nil || working)
+                }
+            }
+            .navigationTitle("Deneysel nokta")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .onAppear { updatePoint() }
+            .onChange(of: pointIndex) { _ in updatePoint() }
+            .onChange(of: x) { _ in invalidate() }
+            .onChange(of: y) { _ in invalidate() }
+        }
+    }
+}
+#endif
 
 private struct NotchPicker: View {
     let pieces: [Drawing.Piece]
