@@ -5,6 +5,47 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Fact]
+    public void MultipleSelectedPointsAreAtomicAndUseOnePiece()
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var original=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var points=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();Assert.Equal(2,points.Length);
+        var first=new DxfPointVertexSelection(points[0].SourceOrdinal,link.PieceId,0);
+        var second=new DxfPointVertexSelection(points[1].SourceOrdinal,link.PieceId,1);
+        var result=DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second],link.BlockHeaderOrdinal!.Value,true);
+        Assert.Equal(new[]{0,1},Assert.Single(result.WorkingCopy.Pieces).Notches!.Select(n=>n.VertexIndex));
+        Assert.Equal(2,result.Assignments.Length);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));Assert.Equal(original,bytes);
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second with { VertexIndex=2 }],link.BlockHeaderOrdinal!.Value,true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,first],link.BlockHeaderOrdinal!.Value,true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),Enumerable.Repeat(first,33).ToArray(),link.BlockHeaderOrdinal!.Value,true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second with { PieceId=Guid.NewGuid() }],link.BlockHeaderOrdinal!.Value,true));
+        var changed=Encoding.ASCII.GetBytes(text.Replace("10\n10\n20\n0\n0\nENDBLK","10\n11\n20\n0\n0\nENDBLK"));
+        using(var unstable=new SwitchOnSecondRewindStream(bytes,changed))
+            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,unstable,[first,second],link.BlockHeaderOrdinal!.Value,true));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second],link.BlockHeaderOrdinal!.Value,true,cancellation.Token));
+        Assert.Equal(original,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+    }
+
+    private sealed class SwitchOnSecondRewindStream(byte[] first,byte[] second) : Stream
+    {
+        private readonly MemoryStream a=new(first),b=new(second);private int rewinds;
+        private MemoryStream Current=>rewinds>=2 ? b : a;
+        public override bool CanRead=>true;public override bool CanSeek=>true;public override bool CanWrite=>false;
+        public override long Length=>Current.Length;
+        public override long Position { get=>Current.Position; set { if(value!=0)throw new NotSupportedException();rewinds++;Current.Position=0; } }
+        public override int Read(byte[] buffer,int offset,int count)=>Current.Read(buffer,offset,count);
+        public override long Seek(long offset,SeekOrigin origin)=>throw new NotSupportedException();
+        public override void Flush() { }
+        public override void SetLength(long value)=>throw new NotSupportedException();
+        public override void Write(byte[] buffer,int offset,int count)=>throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { if(disposing) { a.Dispose();b.Dispose(); } base.Dispose(disposing); }
+    }
+
     [Theory]
     [InlineData("0\nVERTEX\n10\n0\n20\n0\n")]
     [InlineData("0\nSEQEND\n")]

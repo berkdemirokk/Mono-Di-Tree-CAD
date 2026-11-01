@@ -6,10 +6,51 @@ namespace TekstilCAD.FileFormats;
 
 /// <summary>Detached block definition geometry. This is not a placed instance or production approval.</summary>
 public sealed record DxfBlockDefinitionPointResult(ProjectDocument WorkingCopy,int BlockHeaderOrdinal,int PointOrdinal,int VertexOrdinal,string Notice);
+public sealed record DxfBlockDefinitionPointAssignment(int PointOrdinal,int VertexOrdinal,int VertexIndex);
+public sealed record DxfBlockDefinitionPointsResult(ProjectDocument WorkingCopy,int BlockHeaderOrdinal,ImmutableArray<DxfBlockDefinitionPointAssignment> Assignments,string Notice);
 
 /// <summary>Explicitly selects one unplaced block definition and one coincident visual vertex marker.</summary>
 public static class DxfBlockDefinitionPointMapping
 {
+    /// <summary>All-or-nothing batch on one selected piece. Each selection is
+    /// independently revalidated against the same source fingerprint; no partial
+    /// working copy is returned if any selection fails. The caller must keep the
+    /// input stream and import stable until completion.</summary>
+    public static DxfBlockDefinitionPointsResult CreateMany(DxfImportResult import,Stream source,
+        IReadOnlyCollection<DxfPointVertexSelection> selections,int blockHeaderOrdinal,bool acceptUnplacedDefinition,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(import);ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(selections);
+        token.ThrowIfCancellationRequested();
+        if(!source.CanRead || !source.CanSeek || source.Position!=0)throw new InvalidDataException("DXF kaynak akışı baştan okunabilir olmalıdır.");
+        const int maximumSelections=32;
+        var selected=DxfBoundedSelections.Copy(selections,maximumSelections,token);
+        if(selected.Length==0)throw new InvalidDataException("En az bir POINT seçilmelidir.");
+        var points=new HashSet<int>();var vertices=new HashSet<int>();Guid? pieceId=null;
+        foreach(var item in selected)
+        {
+            token.ThrowIfCancellationRequested();
+            if(item is null || (pieceId.HasValue && item.PieceId!=pieceId.Value) || !points.Add(item.SourceOrdinal) || !vertices.Add(item.VertexIndex))
+                throw new InvalidDataException("Seçimler aynı parçaya ait, benzersiz POINT ve köşeler olmalıdır.");
+            pieceId=item.PieceId;
+        }
+        ProjectDocument? copy=null;var assignments=ImmutableArray.CreateBuilder<DxfBlockDefinitionPointAssignment>(selected.Length);
+        string? notice=null;
+        foreach(var item in selected)
+        {
+            token.ThrowIfCancellationRequested();source.Position=0;
+            var verified=Create(import,source,item,blockHeaderOrdinal,acceptUnplacedDefinition,token);
+            copy ??= verified.WorkingCopy;
+            if(assignments.Count>0)
+            {
+                var marker=verified.WorkingCopy.Pieces.Single().Notches!.Single();
+                copy.Pieces.Single().Notches!.Add(marker.Clone());
+            }
+            assignments.Add(new(verified.PointOrdinal,verified.VertexOrdinal,item.VertexIndex));notice=verified.Notice;
+        }
+        token.ThrowIfCancellationRequested();ProjectStorage.Validate(copy!,token);token.ThrowIfCancellationRequested();
+        return new(copy!,blockHeaderOrdinal,assignments.MoveToImmutable(),notice!);
+    }
+
     public static DxfBlockDefinitionPointResult Create(DxfImportResult import,Stream source,
         DxfPointVertexSelection selection,int blockHeaderOrdinal,bool acceptUnplacedDefinition,CancellationToken token=default)
     {
