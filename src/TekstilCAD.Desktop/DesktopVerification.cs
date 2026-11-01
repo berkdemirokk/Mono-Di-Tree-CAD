@@ -8172,6 +8172,21 @@ internal static class DesktopVerification
             remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),
                 "Removing the marker restores operations and leaves the other marker intact",checks);
+            var oldCulture=CultureInfo.CurrentCulture;
+            try
+            {
+                var custom=(CultureInfo)CultureInfo.InvariantCulture.Clone();custom.NumberFormat.PositiveSign="p";CultureInfo.CurrentCulture=custom;
+                index.Text="p1";
+                Check(!add.IsEnabled && !remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled &&
+                    !Find("Sonraki kenarın ortasına nokta ekle").IsEnabled &&
+                    Descendants<TextBlock>(root).Any(t=>t.Text.Contains("arasında mevcut bir nokta indeksi girin")),
+                    "Culture-specific positive sign is rejected consistently without throwing during command refresh",checks);
+                index.Text="+1";
+                Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled &&
+                    Find("Sonraki kenarın ortasına nokta ekle").IsEnabled,
+                    "Invariant positive sign remains accepted consistently under a custom culture",checks);
+            }
+            finally { CultureInfo.CurrentCulture=oldCulture; }
         }
         finally { tools.Close(); }
 

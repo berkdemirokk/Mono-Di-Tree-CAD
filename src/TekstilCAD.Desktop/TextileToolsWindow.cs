@@ -808,7 +808,7 @@ public sealed class TextileToolsWindow : Window
         {
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
             var selected=Piece();var indexBefore=index.Text;var xBefore=px.Text;var yBefore=py.Text;
-            var initial=int.TryParse(indexBefore,out var parsed) ? parsed : -1;
+            var initial=int.TryParse(indexBefore,NumberStyles.Integer,CultureInfo.InvariantCulture,out var parsed) ? parsed : -1;
             var picker=new PointPickerWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id,initial);
             if(picker.ShowDialog()!=true)return;
             picker.CheckCurrent();
@@ -818,12 +818,16 @@ public sealed class TextileToolsWindow : Window
             result.Foreground=StudioTheme.Muted;result.Text=$"{picked} numaralı nokta seçildi. X/Y girişleri değiştirilmedi; taşıma öncesinde kontrol edin.";
         },()=>HasPiece());
         vertexIndexInput=index;vertexXInput=px;vertexYInput=py;
-        bool ValidIndex()=>source.SelectedItem is PatternPiece p&&int.TryParse(index.Text,out var value)&&value>=0&&value<p.Points.Count;
+        bool TryIndex(out int value)
+        {
+            value=-1;
+            return source.SelectedItem is PatternPiece p && int.TryParse(index.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out value) && value>=0 && value<p.Points.Count;
+        }
+        bool ValidIndex()=>TryIndex(out _);
         int LogicalCount(PatternPiece p)=>p.Points.Count-(p.Closed && p.Points.Count>1 && p.Points[0]==p.Points[^1] ? 1 : 0);
         bool SelectedIsMarked()
         {
-            if(!ValidIndex() || source.SelectedItem is not PatternPiece p)return false;
-            var selected=int.Parse(index.Text,CultureInfo.InvariantCulture);
+            if(!TryIndex(out var selected) || source.SelectedItem is not PatternPiece p)return false;
             if(p.Closed && selected==p.Points.Count-1 && LogicalCount(p)<p.Points.Count)selected=0;
             return p.Notches?.Any(mark=>mark.VertexIndex==selected)==true;
         }
@@ -834,7 +838,7 @@ public sealed class TextileToolsWindow : Window
             var selected=Piece();
             var current=workspace.Document.Pieces.FirstOrDefault(p=>p.Id==selected.Id);
             if(!ReferenceEquals(current,selected))throw new InvalidOperationException("Kaynak parça değişti; seçimi yenileyin.");
-            if(!int.TryParse(index.Text,out var pointIndex) || pointIndex<0 || pointIndex>=current.Points.Count)
+            if(!int.TryParse(index.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out var pointIndex) || pointIndex<0 || pointIndex>=current.Points.Count)
                 throw new ArgumentException("Geçerli bir nokta indeksi seçin.");
             var point=current.Points[pointIndex];
             var x=MeasurementInput.Format(point.X);var y=MeasurementInput.Format(point.Y);
@@ -851,7 +855,7 @@ public sealed class TextileToolsWindow : Window
             var piece=source.SelectedItem as PatternPiece;
             var message=piece is null ? "Nokta düzenlemek için önce bir kaynak parça seçin."
                 : piece.Points.Count==0 ? "Seçili parçada düzenlenecek nokta yok."
-                : !int.TryParse(index.Text,out var value) || value<0 || value>=piece.Points.Count
+                : !int.TryParse(index.Text,NumberStyles.Integer,CultureInfo.InvariantCulture,out var value) || value<0 || value>=piece.Points.Count
                     ? $"0 ile {piece.Points.Count-1} arasında mevcut bir nokta indeksi girin."
                 : SelectedIsMarked()
                     ? "Bu köşe işaretli; taşımak veya silmek için önce bu köşenin işaretini kaldırın. Kenara nokta ekleme işareti korur."
@@ -872,15 +876,15 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex()&&SelectedIsMarked());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
-        Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
+        Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>TryIndex(out var value)&&source.SelectedItem is PatternPiece p&&(p.Closed || value<p.Points.Count-1));
         var edgeDistance=Input(panel,"Seçili noktadan mesafe · mm","10");
         edgeDistanceInput=edgeDistance;
         Note(panel,"Mesafe seçili noktadan sonraki kenar boyunca ölçülür. Sayısal yuvarlama nedeniyle yeni noktanın eski kenardan ve istenen mesafeden sapması en fazla 0,000001 mm olabilir. Serileme kurallarını yeniden gözden geçirin.");
-        Button(panel,"Mesafede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeDistanceAsync(index.Text,edgeDistance.Text),()=>ValidIndex()&&IsNumber(edgeDistance.Text,out _)&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
+        Button(panel,"Mesafede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeDistanceAsync(index.Text,edgeDistance.Text),()=>TryIndex(out var value)&&IsNumber(edgeDistance.Text,out _)&&source.SelectedItem is PatternPiece p&&(p.Closed || value<p.Points.Count-1));
         var edgePercentage=Input(panel,"Seçili noktadan kenar yüzdesi · %","50");
         edgePercentageInput=edgePercentage;
         Note(panel,"Yüzde seçili noktadan sonraki kenar boyunca ölçülür; 0 ile 100 arasında olmalıdır. Yeni noktanın kenardan ve hesaplanan mesafeden sapması en fazla 0,000001 mm olabilir. Serileme kurallarını yeniden gözden geçirin.");
-        Button(panel,"Yüzdede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgePercentageAsync(index.Text,edgePercentage.Text),()=>ValidIndex()&&IsNumber(edgePercentage.Text,out var percentage)&&percentage>0&&percentage<100&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
+        Button(panel,"Yüzdede nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgePercentageAsync(index.Text,edgePercentage.Text),()=>TryIndex(out var value)&&IsNumber(edgePercentage.Text,out var percentage)&&percentage>0&&percentage<100&&source.SelectedItem is PatternPiece p&&(p.Closed || value<p.Points.Count-1));
         Note(panel,"Seçili noktadan sonraki kenarda konturdan fiziksel olarak içe doğru V kesilir; bu işlem yalnızca işaret eklemez. Konum 0 ile 1 arasındaki kenar oranıdır; ağız genişliği ve derinlik ayrı ölçülerdir. Konturu ve serileme kurallarını kontrol edin.");
         var notchFraction=Input(panel,"Çentik konumu · kenar oranı","0,5");
         var notchWidth=Input(panel,"Çentik ağız genişliği · mm","6");
