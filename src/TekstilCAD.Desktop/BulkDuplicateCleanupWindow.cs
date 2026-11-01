@@ -41,7 +41,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
         var close=new Button { Content="Kapat",IsCancel=true,Margin=new Thickness(4),Padding=new Thickness(10,6,10,6) };
         actions.Children.Add(preview);actions.Children.Add(apply);actions.Children.Add(cancel);actions.Children.Add(close);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);var body=new StackPanel();scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="Tüm proje parçaları incelenir. Yalnız bitçe aynı bitişik nokta kopyaları kaldırılır. İşaretli, kayıtlı serileme kuralı veya uygulanmamış taslak içeren parçalar atlanır. Diğer geometri hataları kalabilir; sonuç üretim veya DXF uygunluğu onayı değildir. Kaynak dosyalar ve geçmiş değiştirilmez. Önce listeyi inceleyin, sonra açıkça uygulayın.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Tüm proje parçaları incelenir. Yalnız bitçe aynı bitişik nokta kopyaları kaldırılır. İşaretler yalnız indeksleri ve bitleri güvenle korunabiliyorsa eşlenir; işaretler fiziksel çentik değildir. Kayıtlı serileme kuralı veya uygulanmamış taslak içeren parçalar atlanır. Diğer geometri hataları kalabilir; sonuç üretim veya DXF uygunluğu onayı değildir. Kaynak dosyalar ve geçmiş değiştirilmez. Önce listeyi inceleyin, sonra açıkça uygulayın.",TextWrapping=TextWrapping.Wrap });
         AutomationProperties.SetName(report,"Toplu nokta temizleme önizlemesi ve atlanan parçalar");
         report.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));VirtualizingPanel.SetIsVirtualizing(report,true);ScrollViewer.SetCanContentScroll(report,true);body.Children.Add(report);
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);AutomationProperties.SetName(status,"Toplu temizleme durumu");body.Children.Add(status);
@@ -61,11 +61,11 @@ internal sealed class BulkDuplicateCleanupWindow : Window
         ready=null;apply.IsEnabled=false;report.ItemsSource=null;
         if(workspace.HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
         var document=workspace.Document;var copy=document.Clone();var selection=workspace.SelectedId;
-        // Pieces with marks or saved rules are unconditionally skipped. Avoid
+        // Pieces with saved rules are unconditionally skipped. Avoid
         // looking up their drafts (which may scan a large grading-rule list).
         // Document equality still invalidates the preview if either guard changes.
         var protectedRuleIds=copy.GradingRules.Select(r=>r.SourcePieceId).ToHashSet();
-        var drafts=copy.Pieces.Where(p=>p.Notches is null && !protectedRuleIds.Contains(p.Id)).ToDictionary(p=>p.Id,p=>hasDraft(p.Id));
+        var drafts=copy.Pieces.Where(p=>!protectedRuleIds.Contains(p.Id)).ToDictionary(p=>p.Id,p=>hasDraft(p.Id));
         using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);SetStatus("Önizleme hazırlanıyor; proje değiştirilmedi.");
         try
         {
@@ -77,16 +77,24 @@ internal sealed class BulkDuplicateCleanupWindow : Window
                 foreach(var piece in copy.Pieces)
                 {
                     token.ThrowIfCancellationRequested();var label=$"{SafeName(piece.Name)} · {piece.Id:D}";
-                    if(piece.Notches is not null || rules.Contains(piece.Id) || drafts.GetValueOrDefault(piece.Id))
+                    if(rules.Contains(piece.Id) || drafts.GetValueOrDefault(piece.Id))
                     {
-                        var reasons=new List<string>();if(piece.Notches is not null)reasons.Add("işaret var");
+                        var reasons=new List<string>();
                         if(rules.Contains(piece.Id))reasons.Add("serileme kuralı var");if(drafts.GetValueOrDefault(piece.Id))reasons.Add("uygulanmamış serileme taslağı var");
-                        if(piece.Notches is not null || rules.Contains(piece.Id))reasons.Add("taslak durumu ayrıca incelenmedi");
+                        if(rules.Contains(piece.Id))reasons.Add("taslak durumu ayrıca incelenmedi");
                         details.Add(label+" · atlandı: "+string.Join(", ",reasons));continue;
                     }
                     var adjacent=false;for(int i=1;i<piece.Points.Count;i++) { if((i&1023)==0)token.ThrowIfCancellationRequested();if(piece.Points[i]==piece.Points[i-1]) { adjacent=true;break; } }
                     if(!adjacent) { details.Add(label+" · bitişik tekrar yok");continue; }
-                    try { var edited=PatternTools.RemoveConsecutiveDuplicateVertices(piece,token);changes.Add(piece.Id,edited);details.Add(label+$" · {piece.Points.Count-edited.Points.Count} kopya temizlenecek"); }
+                    try
+                    {
+                        var edited=PatternTools.RemoveConsecutiveDuplicateVertices(piece,token);changes.Add(piece.Id,edited);
+                        var markCount=piece.Notches?.Count ?? 0;
+                        var markerSummary=markCount==0 ? "" : $" · {markCount} görsel işaret eşlenecek: "+
+                            string.Join(", ",piece.Notches!.Zip(edited.Notches!).Take(8).Select(pair=>$"{pair.First.VertexIndex}→{pair.Second.VertexIndex}"))+
+                            (markCount>8 ? $" ve {markCount-8} diğer işaret" : "");
+                        details.Add(label+$" · {piece.Points.Count-edited.Points.Count} kopya temizlenecek"+markerSummary);
+                    }
                     catch(ArgumentException ex) { details.Add(label+" · atlandı: "+ex.Message); }
                 }
                 var candidate=copy.Clone();for(int i=0;i<candidate.Pieces.Count;i++)if(changes.TryGetValue(candidate.Pieces[i].Id,out var item))candidate.Pieces[i]=item.Clone();

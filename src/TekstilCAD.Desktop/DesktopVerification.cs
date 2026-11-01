@@ -591,7 +591,7 @@ internal static class DesktopVerification
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
             VerifyExtraClosureCleanup(studio,work,checks);
-            VerifyBulkDuplicateCleanup(studio,checks);
+            VerifyBulkDuplicateCleanup(studio,work,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
@@ -9550,17 +9550,25 @@ internal static class DesktopVerification
         finally { tools.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
-    private static void VerifyBulkDuplicateCleanup(MainWindow studio,List<string> checks)
+    private static void VerifyBulkDuplicateCleanup(MainWindow studio,string work,List<string> checks)
     {
         var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
         {
             PatternPiece Piece(string name)=>new() { Name=name,Points=[new(0,0),new(10,0),new(10,0),new(10,10),new(0,10)] };
             var good=Piece("Temizlenecek");var good2=Piece("İkinci");var marked=Piece("İşaretli");marked.Notches=[new NotchMark { VertexIndex=1,Position=marked.Points[1] }];
-            var graded=Piece("Kurallı");var draft=Piece("Taslaklı");var invalidBits=Piece("Farklı sıfır");
+            var graded=Piece("Kurallı");graded.Notches=[new NotchMark { VertexIndex=1,Position=graded.Points[1] }];
+            var draft=Piece("Taslaklı");var markedDraft=Piece("İşaretli taslak");markedDraft.Notches=[new NotchMark { VertexIndex=1,Position=markedDraft.Points[1] }];var invalidBits=Piece("Farklı sıfır");
             invalidBits.Points[2]=new Point2(10,BitConverter.Int64BitsToDouble(long.MinValue));
             var rule=new GradingRuleSet { SourcePieceId=graded.Id,SourceClosed=true,SourcePoints=graded.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),graded.Points.Count).ToList() };
-            var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits],GradingRules=[rule] };
+            var closure=new PatternPiece { Name="Kapanış işareti",Points=[new(0,0),new(10,0),new(10,10),new(0,10),new(0,0),new(0,0)],
+                Notches=[new NotchMark { VertexIndex=4,Position=new(0,0) }],Grainline=new Grainline { Start=new(1,1),End=new(1,8) } };
+            var collision=closure.Clone();collision.Id=Guid.NewGuid();collision.Name="Çakışan işaretler";
+            collision.Notches!.Insert(0,new NotchMark { VertexIndex=0,Position=new(0,0) });
+            var badMark=Piece("İşaret bit farkı");badMark.Notches=[new NotchMark { VertexIndex=1,Position=new(10,BitConverter.Int64BitsToDouble(long.MinValue)) }];
+            var provenance=new DxfImportProvenance { SourceFileName="sample.dxf",SourceSha256=new string('A',64),SourceByteLength=10,MillimetersPerUnit=1,
+                PieceIds=[good.Id,good2.Id,marked.Id,graded.Id,draft.Id,invalidBits.Id,closure.Id,collision.Id,badMark.Id,markedDraft.Id],Warnings=["Kaynak uyarısı"] };
+            var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits,closure,collision,badMark,markedDraft],GradingRules=[rule],ImportProvenance=provenance };
             studio.LoadDocument(document);studio.Select(good.Id);var before=studio.Document.Clone();
             var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
             var tools=new TextileToolsWindow(studio);var protectedLookups=0;
@@ -9569,11 +9577,12 @@ internal static class DesktopVerification
             toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
             toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="2";
             toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==good.Id);
-            var window=new BulkDuplicateCleanupWindow(studio,studio,id=> { if(id==marked.Id || id==graded.Id)protectedLookups++;return id==draft.Id; },tools.ResetCleanGradeDrafts);
+            var window=new BulkDuplicateCleanupWindow(studio,studio,id=> { if(id==graded.Id)protectedLookups++;return id==draft.Id || id==markedDraft.Id; },tools.ResetCleanGradeDrafts);
             try
             {
                 var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
-                Check(protectedLookups==0 && window.ReadyCountForVerification==2 && window.ReportForVerification.Any(s=>s.Contains("işaret var")) &&
+                Check(protectedLookups==0 && window.ReadyCountForVerification==4 && window.ReportForVerification.Any(s=>s.Contains("görsel işaret eşlenecek")) &&
+                    window.ReportForVerification.Any(s=>s.Contains("4→0")) && window.ReportForVerification.Any(s=>s.Contains("tekil ve bitçe")) &&
                     window.ReportForVerification.Any(s=>s.Contains("serileme kuralı var")) && window.ReportForVerification.Any(s=>s.Contains("serileme taslağı var")) &&
                     window.ReportForVerification.Any(s=>s.Contains("koordinat bitleri farklı")) && DocumentSession.ContentEquals(before,studio.Document),
                     "Bulk duplicate preview reports eligible and each protected skip without editing the project",checks);
@@ -9588,8 +9597,15 @@ internal static class DesktopVerification
                 toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
                 Check(toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="2",
                     "Bulk cleanup retains the skipped piece's unapplied grading draft",checks);
-                Check(after.Pieces[0].Points.Count==4 && after.Pieces[1].Points.Count==4 && after.Pieces.Skip(2).Select(p=>p.Points.Count).SequenceEqual(new[] {5,5,5,5}) && session.UndoCount==1,
+                Check(after.Pieces.Single(p=>p.Id==good.Id).Points.Count==4 && after.Pieces.Single(p=>p.Id==good2.Id).Points.Count==4 &&
+                    after.Pieces.Single(p=>p.Id==marked.Id).Points.Count==4 && after.Pieces.Single(p=>p.Id==marked.Id).Notches!.Single().VertexIndex==1 &&
+                    after.Pieces.Single(p=>p.Id==closure.Id).Notches!.Single().VertexIndex==0 && after.Pieces.Single(p=>p.Id==closure.Id).Grainline is { NeedsReview:true } &&
+                    after.Pieces.Single(p=>p.Id==collision.Id).Points.Count==6 && after.Pieces.Single(p=>p.Id==collision.Id).Notches!.Count==2 &&
+                    after.Pieces.Single(p=>p.Id==badMark.Id).Points.Count==5 && after.Pieces.Single(p=>p.Id==markedDraft.Id).Points.Count==5 && after.ImportProvenance!.SourceSha256==provenance.SourceSha256 &&
+                    after.ImportProvenance.Warnings.SequenceEqual(provenance.Warnings) && session.UndoCount==1,
                     "Bulk duplicate cleanup changes only eligible pieces in one transaction",checks);
+                var saved=Path.Combine(work,$"bulk-marked-clean-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(after,saved);
+                Check(DocumentSession.ContentEquals(after,ProjectStorage.Load(saved)),"Bulk cleanup preserves marked geometry across save and reopen",checks);
                 Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
                     "Bulk duplicate cleanup undo and redo restore all protected pieces",checks);
             }
