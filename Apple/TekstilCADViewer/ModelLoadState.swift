@@ -46,25 +46,30 @@ struct LoadedModelState<Model> {
     private(set) var sourceData: Data?
     private(set) var revision = UUID()
     var load = ModelLoadState()
-    var selectedPiece: Int?
+    var selectedPiece: Int? {
+        didSet { if selectedPiece != oldValue { selectionRevision = UUID() } }
+    }
+    private var selectionRevision = UUID()
 
     #if DEBUG
     struct EditIdentity {
         let revision: UUID
         let loadRequest: UUID
         let selectedPiece: Int
+        let selectionRevision: UUID
     }
 
     /// The identity must be captured from the same value that supplies the
     /// original bytes. Starting or cancelling a load changes its request token.
     func editIdentity() -> EditIdentity? {
         guard !load.isLoading, model != nil, sourceData != nil, let selectedPiece else { return nil }
-        return EditIdentity(revision: revision, loadRequest: load.request, selectedPiece: selectedPiece)
+        return EditIdentity(revision: revision, loadRequest: load.request, selectedPiece: selectedPiece, selectionRevision: selectionRevision)
     }
 
     func isCurrent(_ identity: EditIdentity, data: Data) -> Bool {
         !load.isLoading && model != nil && sourceData == data && revision == identity.revision &&
-            load.request == identity.loadRequest && selectedPiece == identity.selectedPiece
+            load.request == identity.loadRequest && selectedPiece == identity.selectedPiece &&
+            selectionRevision == identity.selectionRevision
     }
     #endif
     /// A successful asynchronous preview can install only while its load is current.

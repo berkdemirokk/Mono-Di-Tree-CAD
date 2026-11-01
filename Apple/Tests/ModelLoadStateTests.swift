@@ -48,6 +48,10 @@ final class ModelLoadStateTests: XCTestCase {
         state.selectedPiece = 1
         XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
         state.selectedPiece = 0
+        XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
+        let refreshed = try XCTUnwrap(state.editIdentity())
+        state.selectedPiece = 0
+        XCTAssertTrue(state.isCurrent(refreshed, data: Data([1])))
         let load = state.load.begin()
         XCTAssertNil(state.editIdentity())
         XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
