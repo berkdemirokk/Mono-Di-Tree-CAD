@@ -58,7 +58,7 @@ final class ModelFilePublisherTests: XCTestCase {
         ]
         for (index, variant) in variants.enumerated() {
             let (encoding, bom, width) = variant
-            let text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width) + "{}]"
+            let text = String(repeating: " ", count: 5000) + "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width) + "{}]"
             var bytes = Data(bom)
             bytes.append(try XCTUnwrap(text.data(using: encoding)))
             XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(bytes))

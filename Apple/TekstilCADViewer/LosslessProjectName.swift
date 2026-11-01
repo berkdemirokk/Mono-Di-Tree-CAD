@@ -4,8 +4,8 @@ import CoreFoundation
 /// Replaces only the root project name token, leaving all other bytes untouched.
 enum LosslessProjectName {
     static let maximumEditBytes = 8 * 1024 * 1024
-    // Only inspect a bounded prefix. The envelope hint permits raw recovery;
-    // it does not establish that the rest of the file is valid JSON.
+    // Scan the existing, at-most-64-MB snapshot without creating a decoded
+    // copy. The envelope hint permits raw recovery; it is not validation.
     static func isOversizedVersionSix(_ data: Data) -> Bool {
         guard data.count > maximumEditBytes, data.count <= 64 * 1024 * 1024 else { return false }
         return hasVersionSixPrefix(data)
@@ -29,7 +29,7 @@ enum LosslessProjectName {
     private static func hasVersionSixPrefix(_ data: Data) -> Bool {
         return data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
-            let limit = min(bytes.count, 4096)
+            let limit = bytes.count
             var i = 0, width = 1
             var littleEndian = false
             if bytes.starts(with: [0xff, 0xfe, 0x00, 0x00]) { i = 4; width = 4; littleEndian = true }

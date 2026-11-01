@@ -51,7 +51,7 @@ final class LosslessProjectNameTests: XCTestCase {
         XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6,".utf8), count: limit)))
         XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample(Array("[ 6 ,".utf8), count: limit + 1)))
         XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample([0xef, 0xbb, 0xbf] + Array("\n[6,".utf8), count: limit + 1)))
-        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6.0,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(Data(repeating: 32, count: limit + 1)))
         XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[5,".utf8), count: limit + 1)))
         let encodings: [(String.Encoding, [UInt8])] = [
             (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
@@ -64,9 +64,12 @@ final class LosslessProjectNameTests: XCTestCase {
             XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(decimal, count: limit + 1)))
             let other = bom + Array("[60,".data(using: encoding)!)
             XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(other, count: limit + 1)))
+            let late = bom + Array((String(repeating: " ", count: 5000) + "[ \n 6 ,").data(using: encoding)!)
+            XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample(late, count: limit + 1)))
         }
         let tooLate = Array(String(repeating: " ", count: 4095).utf8) + Array("[6,".utf8)
-        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(tooLate, count: limit + 1)))
+        XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample(tooLate, count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6.0,".utf8), count: limit + 1)))
         XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6,".utf8), count: 64 * 1024 * 1024 + 1)))
         XCTAssertFalse(LosslessProjectName.requiresVersionSixRawRecovery(sample(Array("[6,".utf8), count: 64 * 1024 * 1024 + 1)))
     }

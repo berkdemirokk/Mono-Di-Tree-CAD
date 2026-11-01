@@ -515,6 +515,7 @@ private struct ContentView: View {
                     let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
                     let utf16 = ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-utf16be")
                     let expansion = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-utf16-expansion")
+                    let leading = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-long-header") ? String(repeating: " ", count: 5000) : ""
                     let width = utf16 ? 2 : 1
                     let text: String
                     if expansion {
@@ -524,9 +525,9 @@ private struct ContentView: View {
                             let mark = index == 0 ? #", "Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]"# : ""
                             return #"{"Id":"\#(id)","Name":"\#(name)","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]\#(mark)}"#
                         }.joined(separator: ",")
-                        text = #"[6,{"Name":"Büyük","Pieces":[\#(pieces)],"GradingRules":[]}]"#
+                        text = leading + #"[6,{"Name":"Büyük","Pieces":[\#(pieces)],"GradingRules":[]}]"#
                     } else {
-                        text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
+                        text = leading + "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
                             + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
                     }
                     var large = utf16 ? Data([0xfe, 0xff]) : Data()
