@@ -9136,6 +9136,12 @@ internal static class DesktopVerification
         var window=new DesignRequestWindow(studio);
         try
         {
+            typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
+            var blankRoot=(FrameworkElement)window.Content;blankRoot.Measure(new Size(480,420));blankRoot.Arrange(new Rect(0,0,480,420));blankRoot.UpdateLayout();
+            Check(window.StatusForVerification.Text.Contains("Açıklama veya referans görseli gereklidir") &&
+                FullyVisible(window.StatusViewportForVerification,blankRoot),
+                "Empty request save reports its validation error at minimum size",checks);
+            typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
             var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
             window.LoadForVerification(input);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
@@ -9147,7 +9153,7 @@ internal static class DesktopVerification
             foreach(var size in new[] { new Size(480,420),new Size(900,700) })
             {
                 themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
-                var requestBody=(StackPanel)Descendants<ScrollViewer>(themeRoot).First().Content;
+                var requestBody=(StackPanel)window.BodyScrollerForVerification.Content;
                 var advanced=(StackPanel)requestBody.Children.OfType<Expander>().Single().Content;
                 var labels=requestBody.Children.OfType<Label>().Concat(advanced.Children.OfType<Label>()).ToArray();
                 Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,DesignRequestWindow.Ink)),
@@ -9164,7 +9170,25 @@ internal static class DesktopVerification
                 AutomationProperties.GetHelpText(b).Contains("kalıp oluşturulmaz")),
                 "All four visual model cards remain keyboard accessible and clearly describe their non-pattern scope",checks);
             root.Measure(new Size(480,420));root.Arrange(new Rect(0,0,480,420));root.UpdateLayout();
-            var modelScroller=Descendants<ScrollViewer>(root).First();
+            var modelScroller=window.BodyScrollerForVerification;
+            window.ChatInputForVerification.Text="gönderilmemiş";
+            typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
+            foreach(var offset in new[] { 0d,100000d })
+            {
+                modelScroller.ScrollToVerticalOffset(offset);root.Measure(new Size(480,420));root.Arrange(new Rect(0,0,480,420));root.UpdateLayout();
+                Check(FullyVisible(window.StatusViewportForVerification,root) && window.StatusForVerification.Text.Contains("mesajı gönderin veya silin") &&
+                    window.ChatInputForVerification.Text=="gönderilmemiş" && AutomationProperties.GetLiveSetting(window.StatusForVerification)==AutomationLiveSetting.Polite,
+                    "Unsent request save feedback stays visible and preserves input at minimum size, scroll offset "+offset,checks);
+            }
+            window.ChatInputForVerification.Clear();
+            var longStatus=new string('x',1000);
+            typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[longStatus]);
+            root.Measure(new Size(480,420));root.Arrange(new Rect(0,0,480,420));root.UpdateLayout();
+            Check(window.StatusForVerification.Text==longStatus && window.StatusViewportForVerification.ActualHeight<=72 &&
+                window.StatusViewportForVerification.ScrollableHeight>0 && window.StatusViewportForVerification.Focusable &&
+                AutomationProperties.GetName(window.StatusViewportForVerification)=="İşlem durumu" && FullyVisible(window.StatusViewportForVerification,root),
+                "Long request feedback is preserved in a bounded visible scroll area",checks);
+            typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
             foreach(var card in new[] { straight,aline,wrap,shirt })
             {
                 var y=card.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;

@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
@@ -22,7 +23,9 @@ internal sealed class DesignRequestWindow : Window
     private string? suggestedMeasurement;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
-    private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
+    private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Foreground=Ink,Margin=new Thickness(8,4,8,4) };
+    private readonly ScrollViewer statusViewport=new() { MaxHeight=72,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Visibility=Visibility.Collapsed,Focusable=true };
+    private readonly ScrollViewer bodyScroller=new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     private DesignReference? reference;
     private bool dirty,loading,preservingLastModel;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
@@ -34,6 +37,9 @@ internal sealed class DesignRequestWindow : Window
     internal TextBox ReviewForVerification=>measurementReview;
     internal TextBox ChatInputForVerification=>chatInput;
     internal TextBox ConversationForVerification=>conversation;
+    internal TextBlock StatusForVerification=>status;
+    internal ScrollViewer StatusViewportForVerification=>statusViewport;
+    internal ScrollViewer BodyScrollerForVerification=>bodyScroller;
     internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
@@ -43,7 +49,10 @@ internal sealed class DesignRequestWindow : Window
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string text,Action action) { var b=new Button { Content=text,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };b.Click+=(_,_)=>action();actions.Children.Add(b);return b; }
         Action("İstek aç…",Open);var save=Action("Yeni istek dosyası kaydet…",Save);save.Background=Accent;save.Foreground=Surface;save.BorderBrush=Accent;save.FontWeight=FontWeights.SemiBold;Action("Kapat",Close);
-        var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
+        AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
+        AutomationProperties.SetName(statusViewport,"İşlem durumu");
+        statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);
+        var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
         body.Children.Add(new TextBlock { Text="Modelini ve isteğini anlat",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
         body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan yazın. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
         body.Children.Add(new TextBlock { Text="01  ·  MODEL FİKRİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
@@ -66,8 +75,8 @@ internal sealed class DesignRequestWindow : Window
             button.Click+=(_,_)=>
             {
                 var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
-                if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { status.Text="Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.";return; }
-                prompt.AppendText(addition);SetLastModel(button);chatInput.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
+                if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; }
+                prompt.AppendText(addition);SetLastModel(button);chatInput.Focus();SetStatus("Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.");
             };
             modelCards.Add((button,caption));models.Children.Add(button);
         }
@@ -85,7 +94,6 @@ internal sealed class DesignRequestWindow : Window
         var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
         send.Background=Accent;send.Foreground=Surface;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
-        AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var editBody=new StackPanel();body.Children.Add(new Expander { Header="İstek ve ölçüleri düzenle",Content=editBody,Margin=new Thickness(0,8,0,8) });
         editBody.Children.Add(new Label { Foreground=Ink,Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
@@ -102,6 +110,14 @@ internal sealed class DesignRequestWindow : Window
 
         prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;
     }
+    private void SetStatus(string message)
+    {
+        status.Text=message;
+        statusViewport.Visibility=string.IsNullOrEmpty(message) ? Visibility.Collapsed : Visibility.Visible;
+        statusViewport.ScrollToTop();
+        if(UIElementAutomationPeer.FromElement(status) is { } peer)
+            peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
     private void SetLastModel(Button? selected)
     {
         foreach(var (button,caption) in modelCards)
@@ -117,16 +133,16 @@ internal sealed class DesignRequestWindow : Window
     private void SendMessage()
     {
         var message=chatInput.Text;
-        if(string.IsNullOrWhiteSpace(message)) { status.Text="Göndermek için bir mesaj yazın.";return; }
+        if(string.IsNullOrWhiteSpace(message)) { SetStatus("Göndermek için bir mesaj yazın.");return; }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
         var answerLabel=suggestedMeasurement is not null && System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)) ? suggestedMeasurement : null;
         var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
-        { status.Text="Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.";return; }
+        { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
         preservingLastModel=true;
         try { prompt.AppendText(addition); }
         finally { preservingLastModel=false; }
-        chatInput.Clear();chatInput.Focus();status.Text=answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.";
+        chatInput.Clear();chatInput.Focus();SetStatus(answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.");
     }
     private void InsertMeasurementLabel()
     {
@@ -136,9 +152,9 @@ internal sealed class DesignRequestWindow : Window
         if(chatInput.Text.EndsWith(text,StringComparison.Ordinal)) { chatInput.Focus();return; }
         var addition=(chatInput.Text.Length==0 ? "" : "\n")+text;
         if((long)chatInput.Text.Length+addition.Length+addition.Count(c=>c=='\n')>chatInput.MaxLength)
-        { status.Text="Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.";return; }
+        { SetStatus("Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.");return; }
         chatInput.AppendText(addition);chatInput.CaretIndex=chatInput.Text.Length;chatInput.Focus();
-        status.Text="Ölçü etiketi eklendi. Değeri ve birimi siz yazın.";
+        SetStatus("Ölçü etiketi eklendi. Değeri ve birimi siz yazın.");
     }
     private void UpdateMeasurementShortcut(DressMeasurementReview review)
     {
@@ -217,26 +233,26 @@ internal sealed class DesignRequestWindow : Window
             using var bytes=new MemoryStream();var buffer=new byte[81920];int count;
             while((count=file.Read(buffer))>0) { if(bytes.Length+count>DesignRequestStorage.MaximumReferenceBytes)throw new InvalidDataException("Görsel 8 MiB sınırını aşıyor.");bytes.Write(buffer,0,count); }
             var data=bytes.ToArray();var type=data.Length>=8 && data.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10}) ? "image/png" : "image/jpeg";
-            var candidate=new DesignReference(Path.GetFileName(dialog.FileName),type,data);DesignRequestStorage.Validate(new DesignRequest("", "",candidate));reference=candidate;dirty=true;UpdateReference();status.Text="Görsel isteğe eklendi; kaynak dosya değiştirilmedi.";
+            var candidate=new DesignReference(Path.GetFileName(dialog.FileName),type,data);DesignRequestStorage.Validate(new DesignRequest("", "",candidate));reference=candidate;dirty=true;UpdateReference();SetStatus("Görsel isteğe eklendi; kaynak dosya değiştirilmedi.");
         }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { status.Text="Görsel eklenemedi; önceki seçim korundu: "+ex.Message; }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("Görsel eklenemedi; önceki seçim korundu: "+ex.Message); }
     }
     private void Open()
     {
         if(!ConfirmDiscard())return;
         var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
-        try { var loaded=DesignRequestStorage.Load(dialog.FileName);Apply(loaded);status.Text="İstek açıldı; proje ve çizim değiştirilmedi."; }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { status.Text="İstek açılamadı; mevcut alanlar korundu: "+ex.Message; }
+        try { var loaded=DesignRequestStorage.Load(dialog.FileName);Apply(loaded);SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."); }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
     }
     private void Save()
     {
-        if(!string.IsNullOrEmpty(chatInput.Text)) { status.Text="Kaydetmeden önce mesajı gönderin veya silin; mevcut mesaj korunuyor.";return; }
+        if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Kaydetmeden önce mesajı gönderin veya silin; mevcut mesaj korunuyor.");return; }
         try { DesignRequestStorage.Validate(Capture()); }
-        catch(InvalidDataException ex) { status.Text=ex.Message;return; }
+        catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
-        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;status.Text="İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."; }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { status.Text="İstek kaydedilemedi; alanlar korundu: "+ex.Message; }
+        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."); }
+        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
 }
