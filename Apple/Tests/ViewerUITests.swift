@@ -1,6 +1,47 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testUnknownVersionSixNotchCanBeKeptAsUnvalidatedRawData() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-unknown-v6-notch"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(#"{"Name":"Önceki","Pieces":[]}"#.utf8).base64EncodedString()
+        app.launch()
+        let warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons["Modellerim"].tap()
+        let raw = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ham kayıt:")).firstMatch
+        XCTAssertTrue(raw.waitForExistence(timeout: 10)); raw.tap()
+        XCTAssertTrue(app.alerts["Ham kopyayı kurtar?"].waitForExistence(timeout: 5))
+    }
+
+    func testVersionSixRejectsUnknownGeometryAndNotchSemantics() {
+        let base = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Ön","Closed":true,"Points":[{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":4}],"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0}}]}],"GradingRules":[]}]"#
+        let invalid = [
+            base.replacingOccurrences(of: #""Name":"İşaretli""#, with: #""Name":"İşaretli","GeometryMode":"other""#),
+            base.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true,"Curves":[]"#),
+            base.replacingOccurrences(of: #"{"X":0,"Y":4}"#, with: #"{"X":0,"Y":4,"Curve":1}"#),
+            base.replacingOccurrences(of: #""VertexIndex":1"#, with: #""VertexIndex":1,"Depth":2"#),
+            base.replacingOccurrences(of: #""Position":{"X":4,"Y":0}"#, with: #""Position":{"X":4,"Y":0,"Z":1}"#),
+            base.replacingOccurrences(of: #"{"X":0,"Y":4}"#, with: #"{"X":0,"Y":100000001}"#),
+            base.replacingOccurrences(of: #""Closed":true"#, with: #""Closed":true,"Metadata":{"Size":"M","Mode":"other"}"#)
+        ]
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        for input in invalid {
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(input.utf8).base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15))
+            XCTAssertFalse(app.otherElements["1 parçalı kontur önizlemesi"].exists)
+            app.terminate()
+        }
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(base.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.otherElements["1 parçalı kontur önizlemesi"].waitForExistence(timeout: 15))
+    }
+
     func testInvalidV6ImportCanBeCancelledOrKeptAsRawWithoutReplacingCurrentModel() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import"]

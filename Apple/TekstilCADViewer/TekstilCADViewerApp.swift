@@ -540,6 +540,12 @@ private struct ContentView: View {
                     try Data("[6,{\"Name\":\"kesik\"".utf8).write(to: invalidURL)
                     openModel(invalidURL, imported: true)
                 }
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-unknown-v6-notch") {
+                    let unknownURL = FileManager.default.temporaryDirectory.appendingPathComponent("İşaret-\(UUID().uuidString).tcad")
+                    let unknown = #"[6,{"Name":"İşaretli","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0},"Depth":2}]}],"GradingRules":[]}]"#
+                    try Data(unknown.utf8).write(to: unknownURL)
+                    openModel(unknownURL, imported: true)
+                }
             } catch { self.error = error.localizedDescription }
         }
         #endif
@@ -1517,6 +1523,9 @@ private struct Drawing {
                 let validationData = try LosslessProjectName.versionSixValidationData(data)
                 try LosslessProjectName.validateUniqueKeys(validationData)
             } catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları, kodlamayı ve 8 MB doğrulama sınırını kontrol edin.") }
+            guard Set(object.keys).isSubset(of: ["Name", "Pieces", "GradingRules", "NestingSnapshot", "ImportProvenance"]) else {
+                throw ViewerError.message("Sürüm 6 projede tanınmayan alanlar var; dosya önizlenmedi.")
+            }
         } else {
             // JSONSerialization keeps only one value for a repeated key, while
             // desktop rejects duplicates. Scan decoded bytes but keep the
@@ -1540,13 +1549,20 @@ private struct Drawing {
         var pieceRenameIdentitiesValid = true
         var pieceIDs = Set<UUID>()
         for raw in rawPieces {
+            if formatVersion == 6 && !Set(raw.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]) {
+                throw ViewerError.message("Sürüm 6 parçada tanınmayan alanlar var; kontur önizlenmedi.")
+            }
             guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
                   let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
             total += rawPoints.count
             guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
             let points: [Point] = try rawPoints.map { point in
+                if formatVersion == 6 && !Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]) {
+                    throw ViewerError.message("Kontur noktasında tanınmayan alan var; önizleme güvenli değil.")
+                }
                 guard let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
                       x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100,
+                      (formatVersion != 6 || (abs(x) <= 100_000_000 && abs(y) <= 100_000_000)),
                       (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }
@@ -1559,9 +1575,11 @@ private struct Drawing {
                 guard totalNotches <= 200_000 else { throw ViewerError.message("Köşe işareti sayısı sınırı aşıldı.") }
                 var seen = Set<Int>()
                 for mark in marks {
-                    guard let n = mark["VertexIndex"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
+                    guard Set(mark.keys) == Set(["VertexIndex", "Position"]),
+                          let n = mark["VertexIndex"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
                           !["f", "d"].contains(String(cString: n.objCType)), n.doubleValue >= 0, n.doubleValue < Double(points.count),
-                          let position = mark["Position"] as? [String: Any], let x = jsonNumber(position["X"]), let y = jsonNumber(position["Y"]),
+                          let position = mark["Position"] as? [String: Any], Set(position.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                          let x = jsonNumber(position["X"]), let y = jsonNumber(position["Y"]),
                           x.isFinite, y.isFinite, abs(x) <= 100_000_000, abs(y) <= 100_000_000,
                           (position["IsFinite"] == nil || jsonBoolean(position["IsFinite"]) == true) else { throw ViewerError.message("Köşe işareti konumu veya indeksi geçersiz.") }
                     let index = n.intValue
@@ -1571,6 +1589,9 @@ private struct Drawing {
                 }
             }
             let metadata = raw["Metadata"] as? [String: Any]
+            if formatVersion == 6, let metadata, !Set(metadata.keys).isSubset(of: ["Role", "Size", "Material", "Quantity"]) {
+                throw ViewerError.message("Parça bilgisinde tanınmayan alan var; dosya önizlenmedi.")
+            }
             let quantityNumber = metadata?["Quantity"] as? NSNumber
             let quantity: Int? = quantityNumber.flatMap { number in
                 guard CFGetTypeID(number) != CFBooleanGetTypeID(), number.doubleValue.isFinite,
@@ -1580,6 +1601,16 @@ private struct Drawing {
             }
             let grainStatus: String
             var parsedGrain: Grain?
+            if formatVersion == 6, let grain = raw["Grainline"] as? [String: Any] {
+                guard Set(grain.keys).isSubset(of: ["Start", "End", "NeedsReview"]) else {
+                    throw ViewerError.message("İplik yönünde tanınmayan alan var; dosya önizlenmedi.")
+                }
+                for key in ["Start", "End"] {
+                    if let point = grain[key] as? [String: Any], !Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]) {
+                        throw ViewerError.message("İplik yönü noktasında tanınmayan alan var; dosya önizlenmedi.")
+                    }
+                }
+            }
             if let grain = raw["Grainline"] as? [String: Any],
                let start = grain["Start"] as? [String: Any], let end = grain["End"] as? [String: Any],
                let sx = jsonNumber(start["X"]), let sy = jsonNumber(start["Y"]),
@@ -1588,6 +1619,7 @@ private struct Drawing {
                (start["IsFinite"] == nil || jsonBoolean(start["IsFinite"]) == true),
                (end["IsFinite"] == nil || jsonBoolean(end["IsFinite"]) == true),
                [sx, sy, ex, ey].allSatisfy({ abs($0) < 1e100 }),
+               (formatVersion != 6 || [sx, sy, ex, ey].allSatisfy({ abs($0) <= 100_000_000 })),
                (sx != ex || sy != ey), let review = jsonBoolean(grain["NeedsReview"]) {
                 grainStatus = review ? "İplik yönü: Kontrol bekliyor" : "İplik yönü: Kayıtlı"
                 parsedGrain = Grain(start: Point(x: sx, y: sy), end: Point(x: ex, y: ey), needsReview: review)

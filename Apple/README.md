@@ -18,6 +18,8 @@ Kontur önizlemesinde Y koordinatı masaüstü tuvaliyle aynı yönde aşağı d
 
 Sürüm 6 önizlemesi için hem kaynak dosya hem doğrulamada kullanılan geçici UTF-8 metin en fazla 8 MB olabilir. BOM'lu UTF-16/UTF-32 girdiler için geçici dönüşüm yapılır; saklama ve dışa aktarma özgün baytları kullanır. Başlığı ilk 4096 baytta tanınan büyük v6 dosyaları tam JSON ayrıştırmasından önce ham kurtarmaya yönlendirilir. Dosyanın okunması başarılı olup önizlemesi başka bir nedenle başarısız olursa da en fazla 64 MB'lık doğrulanmamış ham kurtarma kaydı önerilir; ilk 4096 baytta tanınmayan büyük dosyalar başarısızlıktan önce JSON ayrıştırması gerektirebilir. Bu kodlama ve kurtarma yolları Apple ortamında henüz doğrulanmadı.
 
+Sürüm 6'da proje, parça, kontur noktası, işaret, işaret konumu, gösterilen parça bilgisi veya iplik yönü için tanınmayan alan varsa yanlış geometri veya işaret sunmamak amacıyla önizleme reddedilir. Bu denetim masaüstündeki tüm proje, serileme, geçmiş ve üretim doğrulamalarının yerini tutmaz; dosya seçiciden açılan uygun boyuttaki reddedilmiş veri isteğe bağlı ham kurtarma kaydı olarak korunabilir.
+
 Modellerim ekranında her kaydın yanındaki model işlemleri menüsünden kayıtlı kopya silinebilir; silme işleminden önce kayıt kimliğiyle onay istenir. Bu menü ve erişilebilirlik davranışı henüz Mac, simülatör veya cihazda doğrulanmadı.
 
 Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme arasında eşzamanlı değişiklik yarışı henüz giderilmedi. Silme akışı Mac veya cihazda doğrulanmadı.
