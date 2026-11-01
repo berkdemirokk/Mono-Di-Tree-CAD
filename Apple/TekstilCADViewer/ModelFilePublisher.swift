@@ -16,6 +16,7 @@ enum ModelFilePublisher {
     }
 
     static func publish(_ data: Data, staging: URL, destination: URL,
+                        beforePayloadCreation: (() throws -> Void)? = nil,
                         beforePublish: (() throws -> Void)? = nil) throws {
         guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -23,8 +24,29 @@ enum ModelFilePublisher {
         // Even rmdir could remove someone else's empty replacement directory.
         // Keep the directory on both success and failure.
         let directoryIdentity = try identity(staging)
+        let directoryFD = staging.path.withCString { open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) }
+        guard directoryFD >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        defer { close(directoryFD) }
+        var openedDirectory = stat()
+        guard fstat(directoryFD, &openedDirectory) == 0,
+              sameFile(directoryIdentity, openedDirectory) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        try beforePayloadCreation?()
+        // Create only inside the already opened directory, never through its
+        // potentially replaced pathname. O_EXCL also rejects existing names.
+        let payloadFD = "model.tcad".withCString {
+            openat(directoryFD, $0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
+        }
+        guard payloadFD >= 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let output = FileHandle(fileDescriptor: payloadFD, closeOnDealloc: true)
+        try output.write(contentsOf: data)
+        try output.close()
         let payload = staging.appendingPathComponent("model.tcad")
-        try data.write(to: payload, options: .withoutOverwriting)
         let payloadIdentity = try identity(payload)
         try beforePublish?()
         guard sameFile(directoryIdentity, try identity(staging)),
