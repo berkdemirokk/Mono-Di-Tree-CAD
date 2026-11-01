@@ -56,8 +56,8 @@ internal sealed class ProductionNestingWindow : Window
     private ChoiceItem? markedErrorChoice;
     private readonly TextBlock mapping = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4) };
     private readonly Preview preview = new() { MinHeight=240 };
-    private readonly ComboBox highlight = new() { Margin=new Thickness(4), MinWidth=180 };
-    private sealed record PlacementChoice(Guid Id, string Label) { public override string ToString()=>Label; }
+    private readonly ComboBox highlight = new() { Margin=new Thickness(4), MinWidth=180, IsTextSearchEnabled=true };
+    private sealed record PlacementChoice(Guid Id, string Label,string SearchLabel) { public override string ToString()=>Label; }
     private readonly Button calculate = new() { Content="Adetli pastalı hesapla", Padding=new Thickness(12,7,12,7), Margin=new Thickness(4) };
     private readonly Button cancelCalculation = new() { Content="Hesabı iptal et", Padding=new Thickness(12,7,12,7), Margin=new Thickness(4), IsEnabled=false, Visibility=Visibility.Collapsed };
     private CancellationTokenSource? calculationCancellation;
@@ -170,7 +170,8 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         AutomationProperties.SetLiveSetting(mapping,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(highlight,"Çizimde vurgulanacak yerleşim");
-        AutomationProperties.SetHelpText(highlight,"Listeden bir kopya seçin; konumu ve boyutları metin olarak gösterilir.");
+        AutomationProperties.SetHelpText(highlight,"Listeden bir kopya seçin veya parça adını yazın; konumu ve boyutları metin olarak gösterilir.");
+        TextSearch.SetTextPath(highlight,nameof(PlacementChoice.SearchLabel));
         var placementText=new FrameworkElementFactory(typeof(TextBlock));
         placementText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);
         placementText.SetValue(FrameworkElement.MaxWidthProperty,260d);
@@ -470,8 +471,9 @@ internal sealed class ProductionNestingWindow : Window
                 {
                     token.ThrowIfCancellationRequested();
                     var source=sources[placement.SourcePieceId];var bounds=dimensions[placement.SourcePieceId];
-                    var label=$"{index+1}. {SafeChoiceText(source.Name,60)} · kopya {placement.CopyNumber}\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
-                    return new PlacementChoice(placement.PlacedPieceId,label);
+                    var safeName=SafeChoiceText(source.Name,60);
+                    var label=$"{index+1}. {safeName} · kopya {placement.CopyNumber}\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
+                    return new PlacementChoice(placement.PlacedPieceId,label,safeName);
                 }).ToArray();
                 token.ThrowIfCancellationRequested();
                 return (Plan:result,Geometry:geometry,Choices:placementChoices);

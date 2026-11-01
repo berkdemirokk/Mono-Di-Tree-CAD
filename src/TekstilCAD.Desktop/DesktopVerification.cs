@@ -9143,6 +9143,10 @@ internal static class DesktopVerification
                 && labels.Count(s=>s.Contains(b.Id.ToString("D")) && s.Contains("30 × 40 mm"))==2
                 && labels.All(s=>s.Contains("\\u202E") && !s.Contains('\u202E')),
                 "Placement selector distinguishes both copies of duplicate source names",checks);
+            var searchLabels=highlight.Items.Cast<object>().Select(item=>(string)item.GetType().GetProperty("SearchLabel")!.GetValue(item)!).ToArray();
+            Check(highlight.IsTextSearchEnabled && TextSearch.GetTextPath(highlight)=="SearchLabel" &&
+                searchLabels.All(text=>text.StartsWith("Aynı",StringComparison.Ordinal) && text.Contains("\\u202E") && !text.Contains('\u202E')),
+                "Placement selector searches safe source names instead of ordinal prefixes",checks);
             highlight.SelectedIndex=2;
             var preview=typeof(ProductionNestingWindow).GetField("preview",PrivateInstance)!.GetValue(window)!;
             var highlighted=(Guid?)preview.GetType().GetProperty("HighlightId")!.GetValue(preview);
