@@ -57,6 +57,8 @@ public sealed class PatternPiece
     public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone() };
 }
 
+// Rotation names describe mathematical Y-up coordinates. On the Y-down
+// canvas RotateLeft appears clockwise; UI labels must use screen direction.
 public enum OrthogonalGradingTransform { RotateLeft, RotateRight, MirrorVertical, MirrorHorizontal }
 
 public sealed class GradingRuleSet

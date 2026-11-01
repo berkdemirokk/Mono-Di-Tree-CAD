@@ -363,8 +363,8 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        selectionCommands.Add(AddButton(transforms, "90° döndür", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünün tersine döndür"));
-        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünde 90 derece döndür");
+        selectionCommands.Add(AddButton(transforms, "90° sola", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünün tersine döndür"));
+        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünde 90 derece döndür");
         AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
         selectionCommands.Add(rotateClockwise);
         selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));

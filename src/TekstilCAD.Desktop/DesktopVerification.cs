@@ -6909,7 +6909,7 @@ internal static class DesktopVerification
         var source=new PatternPiece { Points=[new(0,0),new(20,0),new(0,10)] };
         var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,0),new(2,0),new(0,2)] };
         foreach(var (label,expected) in new[] {
-            ("90° döndür",new Point2(0,2)),("90° sağa",new Point2(0,-2)),
+            ("90° sola",new Point2(0,-2)),("90° sağa",new Point2(0,2)),
             ("Aynala",new Point2(-2,0)),("Yatay aynala",new Point2(2,0)) })
         {
             studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
@@ -6930,6 +6930,21 @@ internal static class DesktopVerification
         Check(studio.Document.GradingRules[0].SourcePoints.SequenceEqual(stale.SourcePoints) && warning.Text.Contains("serileme kuralı"),
             "Mirror retains and warns about a stale grading rule",checks);
         studio.ClearCanvasError();
+        var asymmetric=new PatternPiece { Points=[new(0,0),new(20,0),new(20,5),new(15,5),new(15,10),new(0,10)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[asymmetric] });studio.Select(asymmetric.Id);
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var screen=typeof(CadCanvas).GetMethod("Screen",PrivateInstance)!;
+        Point Screen(Point2 p)=>(Point)screen.Invoke(canvas,[p])!;
+        var pivot=Screen(new Point2(10,5));var beforePoint=Screen(asymmetric.Points[2]);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"90° sağa")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var clockwise=Screen(studio.Document.Pieces.Single().Points[2]);
+        Check(beforePoint.X>pivot.X && Math.Abs(beforePoint.Y-pivot.Y)<0.01 && Math.Abs(clockwise.X-pivot.X)<0.01 && clockwise.Y>pivot.Y,
+            "Right rotation moves an asymmetric right-hand vertex downward on the Y-down canvas",checks);
+        Invoke(studio,"Undo");
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"90° sola")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var anticlockwise=Screen(studio.Document.Pieces.Single().Points[2]);
+        Check(Math.Abs(anticlockwise.X-pivot.X)<0.01 && anticlockwise.Y<pivot.Y,
+            "The opposite rotation moves the same vertex upward on the Y-down canvas",checks);
     }
 
     private static void VerifyBatchTransforms(MainWindow studio,List<string> checks)
@@ -6951,8 +6966,8 @@ internal static class DesktopVerification
         var piece=new PatternPiece { Name="Dönüşüm sınaması",Points=points };
         studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
         var root=(FrameworkElement)studio.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
-        var compactButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"90° sağa")||Equals(b.Content,"Yatay aynala")).ToArray();
-        Check(compactButtons.Length==2 && compactButtons.All(button=>
+        var compactButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"90° sağa")||Equals(b.Content,"90° sola")||Equals(b.Content,"Yatay aynala")).ToArray();
+        Check(compactButtons.Length==3 && compactButtons.All(button=>
         {
             var text=new FormattedText((string)button.Content,System.Globalization.CultureInfo.CurrentUICulture,
                 button.FlowDirection,new Typeface(button.FontFamily,button.FontStyle,button.FontWeight,button.FontStretch),
@@ -6962,11 +6977,11 @@ internal static class DesktopVerification
                 && button.ToolTip is string tip && !string.IsNullOrWhiteSpace(tip);
         }),"New transform labels fit at minimum window size and expose descriptive accessible names and tooltips",checks);
         var center=TekstilCAD.Core.Geometry.Bounds(points).Center;
-        var expectedRotate=TekstilCAD.Core.Geometry.Rotate(points,90,center);
-        Descendants<Button>(root).Single(b=>Equals(b.Content,"90° döndür")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var expectedRotate=TekstilCAD.Core.Geometry.Rotate(points,-90,center);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"90° sola")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedRotate) && Enumerable.Range(0,pointCount).All(i=>
-            Math.Abs(studio.Document.Pieces[0].Points[i].X+points[i].Y)<1e-8 && Math.Abs(studio.Document.Pieces[0].Points[i].Y-points[i].X)<1e-8),
-            "Batch rotation matches analytic 90-degree coordinates for 10000 points",checks);
+            Math.Abs(studio.Document.Pieces[0].Points[i].X-points[i].Y)<1e-8 && Math.Abs(studio.Document.Pieces[0].Points[i].Y+points[i].X)<1e-8),
+            "Batch rotation matches analytic counterclockwise-screen coordinates for 10000 points",checks);
         Invoke(studio,"Undo");Check(studio.Document.Pieces[0].Points.SequenceEqual(points),"Undo restores the pre-rotation contour",checks);
         Invoke(studio,"Redo");Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedRotate),"Redo restores the rotated 10000-point contour",checks);
         Invoke(studio,"Undo");
@@ -6976,7 +6991,7 @@ internal static class DesktopVerification
             Math.Abs(studio.Document.Pieces[0].Points[i].X+points[i].X)<1e-8 && Math.Abs(studio.Document.Pieces[0].Points[i].Y-points[i].Y)<1e-8),
             "Batch mirroring matches analytic coordinates for 10000 points",checks);
         Invoke(studio,"Undo");Check(studio.Document.Pieces[0].Points.SequenceEqual(points),"Undo restores the pre-mirror contour",checks);
-        var expectedReverse=TekstilCAD.Core.Geometry.Rotate(points,-90,center);
+        var expectedReverse=TekstilCAD.Core.Geometry.Rotate(points,90,center);
         Descendants<Button>(root).Single(b=>Equals(b.Content,"90° sağa")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(studio.Document.Pieces[0].Points.SequenceEqual(expectedReverse),"Reverse rotation applies clockwise coordinates",checks);
         Invoke(studio,"Undo");
@@ -6995,7 +7010,7 @@ internal static class DesktopVerification
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
-        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° döndür")||Equals(b.Content,"90° sağa")||Equals(b.Content,"Yatay aynala")).ToArray();
+        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° sola")||Equals(b.Content,"90° sağa")||Equals(b.Content,"Yatay aynala")).ToArray();
         studio.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
         foreach(var button in transformButtons)button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(canvas.HasPendingDrawing && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
