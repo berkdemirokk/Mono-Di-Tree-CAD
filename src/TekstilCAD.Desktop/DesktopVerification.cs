@@ -123,6 +123,71 @@ internal static class DesktopVerification
         }
         finally { closure.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyContourPathExtraction(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var source=new PatternPiece { Name="Kalıp",Points=[new(0,0),new(10,0),new(10,10),new(0,10),new(0,0)],
+            Metadata=new PieceMetadata { Quantity=2 },Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) },new NotchMark { VertexIndex=2,Position=new(10,10) }] };
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=Enumerable.Repeat(new Point2(1,2),source.Points.Count).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;var before=studio.Document.Clone();
+        var window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
+        try
+        {
+            window.StartForVerification.Text="3";window.EndForVerification.Text="1";
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(window.ApplyForVerification.IsEnabled && window.StatusForVerification.Contains("kapanıştan geçer") && window.StatusForVerification.Contains("kaynakta kalan 1") &&
+                DocumentSession.ContentEquals(before,studio.Document),"Contour interval preview reports wrapping and omitted markers without editing the source",checks);
+            window.CommitForVerification();var after=studio.Document.Clone();
+            Check(after.Pieces.Count==2 && !after.Pieces[1].Closed && after.Pieces[1].Points.SequenceEqual(new[] { new Point2(0,10),new Point2(0,0),new Point2(10,0) }) &&
+                after.Pieces[1].Notches!.Single().VertexIndex==1 && after.Pieces[1].Metadata is null && after.GradingRules.Count==1 && session.UndoCount==1,
+                "Contour interval creates an independent open path while preserving source and grading",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Contour interval creation is one undoable and redoable change",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(source.Id);window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
+        try
+        {
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            studio.Commit("Kaynak değişti",()=>studio.Document.Name="Yeni ad");var changed=studio.Document.Clone();var undo=session.UndoCount;window.CommitForVerification();
+            Check(DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==undo && window.StatusForVerification.Contains("değişti"),
+                "Contour interval rejects a stale project",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(source.Id);window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
+        try
+        {
+            studio.Document.Pieces[0].Points[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);var changed=studio.Document.Clone();
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(!window.ApplyForVerification.IsEnabled && DocumentSession.ContentEquals(changed,studio.Document) && window.StatusForVerification.Contains("yeniden açın"),
+                "Contour interval rejects a bit-only source change before preview",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(source.Id);window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? pending=null;var wasClosed=false;
+            try
+            {
+                window.BeforeExtractionForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                pending=window.CalculateForVerification();PumpUntil(()=>reached.IsSet);window.Close();wasClosed=true;release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Cancelled contour interval validation preserves source and history",checks);
+            }
+            finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }if(!wasClosed)window.Close(); }
+        }
+        var limited=before.Clone();for(var i=limited.Pieces.Count;i<ProjectStorage.MaximumPieces;i++)limited.Pieces.Add(new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] });
+        studio.LoadDocument(limited);studio.Select(source.Id);var limitBefore=studio.Document.Clone();window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
+        try
+        {
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(!window.ApplyForVerification.IsEnabled && window.StatusForVerification.Contains("parça listesi") && DocumentSession.ContentEquals(limitBefore,studio.Document) && session.UndoCount==0,
+                "Contour interval preflight rejects a full project without mutation",checks);
+        }
+        finally { window.Close(); }
+        SynchronizationContext.SetSynchronizationContext(previous);
+    }
+
     private static void VerifyOpenPathSplit(MainWindow studio,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
@@ -936,6 +1001,7 @@ internal static class DesktopVerification
             VerifyOpenPathClosure(studio,checks);
             VerifyOpenPathClosureGrading(studio,checks);
             VerifyOpenPathSplit(studio,checks);
+            VerifyContourPathExtraction(studio,checks);
             VerifyOpenPathProductionInformation(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDuplicateOptions(studio,checks);

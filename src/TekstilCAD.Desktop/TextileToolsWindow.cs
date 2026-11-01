@@ -888,6 +888,12 @@ public sealed class TextileToolsWindow : Window
             new PointDistanceWindow(workspace,this,Piece(),()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
         },()=>HasPiece());
         Button(panel,"İki dikiş kenarını karşılaştır…",()=>new SeamLengthComparisonWindow(workspace,this,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
+        Button(panel,"Kapalı konturdan açık kenar çıkar…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
+            var selected=Piece();new ContourPathExtractionWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
+            RefreshSources((source.SelectedItem as PatternPiece)?.Id);
+        },()=>source.SelectedItem is PatternPiece { Closed:true,Points.Count:>=3 });
         Button(panel,"Açık konturu kapat…",()=>
         {
             if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme tablosundaki hücreyi tamamlayın.");
