@@ -49,13 +49,14 @@ public static class ProjectStorage
             RejectDuplicateProperties(root);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException("Sürümlü projede serileme listesi eksik veya geçersiz; dosya açılmadı.");
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 ValidateSerializedGrainlines(root[1], version);
+                ValidateSerializedNotches(root[1],version);
                 if (version < 3 && root[1].TryGetProperty("NestingSnapshot", out _))
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
@@ -66,6 +67,7 @@ public static class ProjectStorage
             {
                 ValidateSerializedIdentityAndPoints(root);
                 ValidateSerializedGrainlines(root, 0);
+                ValidateSerializedNotches(root,0);
                 ValidateSerializedImportProvenance(root, 0);
                 if (HasSerializedMetadata(root)) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 if (root.TryGetProperty("NestingSnapshot", out _)) throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
@@ -108,6 +110,7 @@ public static class ProjectStorage
             if (present) throw new InvalidDataException("DXF kaynak geçmişi için sürüm 5 gereklidir; dosya açılmadı.");
             return;
         }
+        if(version>=6 && !present)return;
         if (!present || provenance.ValueKind != JsonValueKind.Object ||
             !provenance.TryGetProperty("SourceFileName", out var name) || name.ValueKind != JsonValueKind.String ||
             !provenance.TryGetProperty("SourceSha256", out var sha) || sha.ValueKind != JsonValueKind.String ||
@@ -120,6 +123,29 @@ public static class ProjectStorage
             if (warning.ValueKind != JsonValueKind.String) throw new InvalidDataException("DXF kaynak uyarısı geçersiz.");
         foreach (var id in ids.EnumerateArray())
             if (id.ValueKind != JsonValueKind.String || !id.TryGetGuid(out _)) throw new InvalidDataException("DXF kaynak parça kimliği geçersiz.");
+    }
+    private static void ValidateSerializedNotches(JsonElement project,int version)
+    {
+        if(!project.TryGetProperty("Pieces",out var pieces) || pieces.ValueKind!=JsonValueKind.Array)return;
+        var found=false;
+        foreach(var piece in pieces.EnumerateArray())
+        {
+            if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("Notches",out var marks))continue;
+            if(version<6)throw new InvalidDataException("Çentik işaretleri için sürüm 6 gereklidir.");
+            found=true;
+            if(marks.ValueKind!=JsonValueKind.Array || marks.GetArrayLength() is <1 or >MaximumPointsPerPiece)
+                throw new InvalidDataException("Çentik listesi eksik veya geçersiz.");
+            foreach(var mark in marks.EnumerateArray())
+            {
+                if(mark.ValueKind!=JsonValueKind.Object || !mark.TryGetProperty("VertexIndex",out var index) || index.ValueKind!=JsonValueKind.Number || !index.TryGetInt32(out _) ||
+                   !mark.TryGetProperty("Position",out var point) || point.ValueKind!=JsonValueKind.Object ||
+                   !point.TryGetProperty("X",out var x) || x.ValueKind!=JsonValueKind.Number || !x.TryGetDouble(out var px) || !double.IsFinite(px) ||
+                   !point.TryGetProperty("Y",out var y) || y.ValueKind!=JsonValueKind.Number || !y.TryGetDouble(out var py) || !double.IsFinite(py) ||
+                   (point.TryGetProperty("IsFinite",out var finite) && finite.ValueKind!=JsonValueKind.True))
+                    throw new InvalidDataException("Çentik konumu veya indeksi eksik ya da geçersiz.");
+            }
+        }
+        if(version==6 && !found)throw new InvalidDataException("Sürüm 6 çentik işareti içermiyor.");
     }
     // The field is never valid in older formats, even as null. In v4 absence is
     // distinct from an explicitly malformed/null value; each existing object and
@@ -283,7 +309,9 @@ public static class ProjectStorage
     // Array shape makes old ProjectDocument readers reject rather than drop rules.
     internal static string SerializeProject(ProjectDocument project)
     {
-        var text = project.ImportProvenance is not null
+        var text = project.Pieces.Any(p=>p.Notches is not null)
+            ? JsonSerializer.Serialize<object[]>([6, project], Options)
+            : project.ImportProvenance is not null
             ? JsonSerializer.Serialize<object[]>([5, project], Options)
             : project.Pieces.Any(p => p.Grainline is not null)
             ? JsonSerializer.Serialize<object[]>([4, project], Options)
@@ -339,7 +367,7 @@ public static class ProjectStorage
         project.ImportProvenance?.Validate();
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
         if (project.Pieces is null || project.Pieces.Count > MaximumPieces) throw new InvalidDataException("Geçersiz parça listesi.");
-        var ids = new HashSet<Guid>(); long total = 0;
+        var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
         {
             if (piece is null || piece.Points is null || piece.Points.Count > MaximumPointsPerPiece || piece.Points.Count < (piece.Closed ? 3 : 2))
@@ -356,6 +384,21 @@ public static class ProjectStorage
                 try { Geometry.Validate(grainline.Start); Geometry.Validate(grainline.End); }
                 catch (ArgumentOutOfRangeException ex) { throw new InvalidDataException("İplik yönü koordinatları CAD çalışma sınırları içinde olmalıdır.", ex); }
                 if (grainline.Start == grainline.End) throw new InvalidDataException("İplik yönünün iki ucu farklı olmalıdır.");
+            }
+            if(piece.Notches is { } marks)
+            {
+                if(marks.Count<1 || marks.Count>MaximumPointsPerPiece || (totalNotches+=marks.Count)>MaximumTotalPoints)
+                    throw new InvalidDataException("Çentik sayısı geçersiz veya sınırı aşıyor.");
+                var indices=new HashSet<int>();
+                foreach(var mark in marks)
+                {
+                    if(mark is null || mark.VertexIndex<0 || mark.VertexIndex>=piece.Points.Count ||
+                       (piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && mark.VertexIndex==piece.Points.Count-1) ||
+                       !indices.Add(mark.VertexIndex) || mark.Position!=piece.Points[mark.VertexIndex])
+                        throw new InvalidDataException("Çentik indeksi veya kaynak kontur konumu geçersiz.");
+                    try { Geometry.Validate(mark.Position); }
+                    catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("Çentik koordinatı geçersiz.",ex); }
+                }
             }
             if (piece.Id == Guid.Empty || !ids.Add(piece.Id)) throw new InvalidDataException("Parça kimlikleri benzersiz ve dolu olmalıdır.");
             total += piece.Points.Count;

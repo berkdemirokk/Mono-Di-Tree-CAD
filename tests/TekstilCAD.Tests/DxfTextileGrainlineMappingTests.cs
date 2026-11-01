@@ -1,5 +1,6 @@
 using System.Text;
 using TekstilCAD.FileFormats;
+using TekstilCAD.Core;
 
 namespace TekstilCAD.Tests;
 
@@ -37,6 +38,40 @@ public class DxfTextileGrainlineMappingTests
         Assert.Equal(import.SourceSha256,result.SourceContext.SourceSha256);
         Assert.Equal(2,import.Project.Pieces.Count);
         Assert.Null(contour.Grainline);
+    }
+
+    [Fact]
+    public void NotchedMarkerCannotBeConsumedAsGrainline()
+    {
+        var import=Read();
+        var contour=Assert.Single(import.Project.Pieces,p=>p.Closed);
+        var marker=Assert.Single(import.Project.Pieces,p=>!p.Closed);
+        marker.Notches=[new NotchMark { VertexIndex=0,Position=marker.Points[0] }];
+        var before=import.Project.Clone();
+        var fingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(import);
+        var error=Assert.Throws<InvalidDataException>(()=>
+            DxfTextileGrainlineMapping.Apply(import,[new(contour.Id,marker.Id)],fingerprint));
+        Assert.Contains("Çentik",error.Message);
+        Assert.True(DocumentSession.ContentEquals(before,import.Project));
+        Assert.Single(marker.Notches);
+        Assert.Null(contour.Grainline);
+    }
+
+    [Fact]
+    public void GrainlineCanBeAddedToNotchedContourWithoutChangingMarks()
+    {
+        var import=Read();
+        var contour=Assert.Single(import.Project.Pieces,p=>p.Closed);
+        var marker=Assert.Single(import.Project.Pieces,p=>!p.Closed);
+        contour.Notches=[new NotchMark { VertexIndex=1,Position=contour.Points[1] }];
+        var fingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(import);
+        var result=DxfTextileGrainlineMapping.Apply(import,[new(contour.Id,marker.Id)],fingerprint);
+        var mapped=Assert.Single(result.Project.Pieces);
+        var mark=Assert.Single(mapped.Notches!);
+        Assert.Equal(1,mark.VertexIndex);
+        Assert.Equal(contour.Points[1],mark.Position);
+        Assert.NotNull(mapped.Grainline);
+        Assert.Single(contour.Notches);
     }
 
     [Fact]

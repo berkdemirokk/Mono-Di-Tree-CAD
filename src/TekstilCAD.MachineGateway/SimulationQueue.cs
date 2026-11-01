@@ -165,17 +165,24 @@ public sealed class SimulationQueue
         else if (recoveryWarnings.Count == 200) recoveryWarnings.Add("Ek kuyruk uyarıları sınır nedeniyle gösterilmiyor.");
     }
 
+    private static void RejectNotches(ProjectDocument document)
+    {
+        if (document.Pieces.Any(piece => piece.Notches is { Count: > 0 }))
+            throw new InvalidDataException("Çentik işaretleri simülasyon çıktısına henüz aktarılamıyor; iş hazırlanmadı.");
+    }
+
     /// <summary>
     /// Captures the selected source and prepares scaled HPGL without creating files.
     /// The caller must prevent source mutation during capture. This queue is not
     /// thread-safe; serialize its operations and review only the returned output.
     /// </summary>
+
     public PreparedHpglJob PrepareHpglReview(ProjectDocument document,MachineProfile profile,CancellationToken cancellationToken=default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentNullException.ThrowIfNull(profile);profile.Validate();ProjectStorage.Validate(document);
+        ArgumentNullException.ThrowIfNull(profile);profile.Validate();ProjectStorage.Validate(document);RejectNotches(document);
         cancellationToken.ThrowIfCancellationRequested();
-        var source=document.Clone();ProjectStorage.Validate(source);cancellationToken.ThrowIfCancellationRequested();
+        var source=document.Clone();ProjectStorage.Validate(source);RejectNotches(source);cancellationToken.ThrowIfCancellationRequested();
         if(source.Pieces.Count==0)throw new InvalidDataException("Üretim simülasyonu için çizim gerekli.");
         var scaled=source.Clone();
         foreach(var piece in scaled.Pieces)
@@ -227,6 +234,7 @@ public sealed class SimulationQueue
         ArgumentNullException.ThrowIfNull(profile);
         profile.Validate();
         ProjectStorage.Validate(document);
+        RejectNotches(document);
         if (!Enum.IsDefined(format)) throw new ArgumentOutOfRangeException(nameof(format));
         if (document.Pieces.Count == 0 || document.Pieces.All(p => p.Points.Count < 2))
             throw new InvalidDataException("Üretim simülasyonu için çizim gerekli.");
@@ -234,6 +242,7 @@ public sealed class SimulationQueue
         var hpglCancellation = format == JobFormat.Hpgl ? cancellationToken : CancellationToken.None;
         hpglCancellation.ThrowIfCancellationRequested();
         var scaled = document.Clone();
+        RejectNotches(scaled);
         foreach (var piece in scaled.Pieces)
         {
             for (var i = 0; i < piece.Points.Count; i++)

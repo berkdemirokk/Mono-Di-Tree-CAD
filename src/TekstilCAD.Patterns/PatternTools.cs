@@ -399,6 +399,7 @@ public static class PatternTools
     private static List<Point2> SnapshotPointEdit(PatternPiece piece, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        NotchSafety.RequireNoNotches(piece);
         token.ThrowIfCancellationRequested();
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
@@ -443,6 +444,7 @@ public static class PatternTools
     public static PatternPiece MovePoint(PatternPiece piece, int index, Point2 position, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        NotchSafety.RequireNoNotches(piece);
         cancellationToken.ThrowIfCancellationRequested();
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
@@ -497,6 +499,7 @@ public static class PatternTools
     private static void ValidateSource(PatternPiece piece)
     {
         ArgumentNullException.ThrowIfNull(piece);
+        NotchSafety.RequireNoNotches(piece);
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
         // Editing must not copy or quadratically inspect unbounded input.

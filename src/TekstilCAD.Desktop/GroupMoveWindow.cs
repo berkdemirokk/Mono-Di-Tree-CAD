@@ -86,6 +86,7 @@ internal sealed class GroupMoveWindow : Window
         var document=workspace.Document;var snapshot=document.Clone();var selected=workspace.SelectedId;var selectionRevision=revision;
         var set=ids.ToHashSet();var sources=snapshot.Pieces.Where(p=>set.Contains(p.Id)).ToArray();
         if(sources.Length!=ids.Length) { status.Text="Seçili parçalar artık mevcut değil; pencereyi yeniden açın.";return; }
+        if(sources.Any(p=>p.Notches is not null)) { status.Text="İşaretli parçalar birlikte taşınamaz; işaretlerin kaybolmasını önlemek için işlem uygulanmadı.";return; }
         using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);status.Text="Parçalar arka planda doğrulanıyor; proje henüz değiştirilmedi.";
         var committed=false;
         try

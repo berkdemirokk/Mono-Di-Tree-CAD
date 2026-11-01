@@ -9,6 +9,7 @@ public static class OrthogonalRotation
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(source);
+        NotchSafety.RequireNoNotches(source);
         if (degrees is not (0 or 90 or 180 or 270))
             throw new ArgumentOutOfRangeException(nameof(degrees));
         if (!source.Closed || source.Points is null)

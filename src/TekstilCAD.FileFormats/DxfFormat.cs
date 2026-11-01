@@ -2085,8 +2085,10 @@ public static class DxfFormat
         ArgumentNullException.ThrowIfNull(project);
         cancellationToken.ThrowIfCancellationRequested();
         ProjectStorage.ValidateForDxfExport(project);
+        NotchExportGuard.EnsureSupported(project);
         var copy=project.Clone();
         ProjectStorage.ValidateForDxfExport(copy);
+        NotchExportGuard.EnsureSupported(copy);
         cancellationToken.ThrowIfCancellationRequested();
         var fingerprint=NestingSnapshot.ComputeLayoutFingerprint(copy,cancellationToken);
         var layers=PlanLayers(copy).ToImmutableArray();
@@ -2126,6 +2128,7 @@ public static class DxfFormat
     {
         var layers = PlanLayers(project);
         GrainlineExportGuard.EnsureSupported(project);
+        NotchExportGuard.EnsureSupported(project);
         if(layers.Count==0)throw new InvalidDataException("DXF dışa aktarımı için en az bir parça gerekir.");
         // Handles are deterministic within this file and never shared by two
         // emitted records. The 0 owner is the root table owner, not a new handle.

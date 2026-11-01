@@ -482,6 +482,8 @@ internal static class DesktopVerification
             VerifyNestingCancellation(studio,reportPath,checks);
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
+            VerifyVertexNotches(studio,work,checks);
+            VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
@@ -7759,6 +7761,78 @@ internal static class DesktopVerification
                 "Undo restores rotated contour and grainline together",checks);
         }
         finally { canvas.CancelDrawing();SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+
+    private static void VerifyNotchSaveCompatibility(MainWindow studio,string work,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Kaydetme testi",Points=[new(0,0),new(10,0),new(0,10)] };
+        var path=Path.Combine(work,"notch-compatibility-source.tcad");
+        ProjectStorage.Save(new ProjectDocument { Pieces=[piece] },path);
+        var original=File.ReadAllBytes(path);studio.OpenProjectFile(path);studio.Select(piece.Id);
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            tools.SetVertexNotch("0",true);
+            var prompts=0;
+            studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==1 && File.ReadAllBytes(path).SequenceEqual(original),"Notch upgrade cancellation preserves old file",checks);
+            studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            using var saved=JsonDocument.Parse(File.ReadAllBytes(path));
+            Check(prompts==2 && saved.RootElement.ValueKind==JsonValueKind.Array && saved.RootElement[0].GetInt32()==6,
+                "Approved notch upgrade writes version 6",checks);
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==2,"Saving already upgraded file does not repeat compatibility prompt",checks);
+        }
+        finally { studio.ChooseCompatibilityForVerification=null;tools.Close(); }
+    }
+
+    private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var piece=new PatternPiece { Name="İşaret testi", Points=[new(0,0),new(10,0),new(0,10),new(0,0)] };
+        canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var before=studio.Document.Clone();var count=session.UndoCount;
+            tools.SetVertexNotch("3",true);
+            var marked=studio.Document.Clone();var mark=studio.Document.Pieces.Single().Notches?.Single();
+            Check(mark is not null && mark.VertexIndex==0 && mark.Position==piece.Points[0] && session.UndoCount==count+1,
+                "Notch normalizes repeated closure and records one undo",checks);
+            tools.SetVertexNotch("0",true);
+            Check(session.UndoCount==count+1 && DocumentSession.ContentEquals(marked,studio.Document),"Duplicate notch is a no-op",checks);
+            var path=Path.Combine(work,"desktop-synthetic-notch-verification.tcad");
+            ProjectStorage.Save(studio.Document,path);
+            var saved=File.ReadAllText(path);
+            using var json=JsonDocument.Parse(saved);
+            Check(json.RootElement.ValueKind==JsonValueKind.Array && json.RootElement[0].GetInt32()==6 && DocumentSession.ContentEquals(marked,ProjectStorage.Load(path)),
+                "Notch survives version 6 save and reload",checks);
+            tools.MoveVertexAsync("1","11","0").GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(marked,studio.Document),"Notched geometry edit is rejected",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(marked,studio.Document),
+                "Notch add supports undo and redo",checks);
+            tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
+            tools.SetVertexNotch("3",false);
+            Check(studio.Document.Pieces.Single().Notches is null && session.Undo() && DocumentSession.ContentEquals(marked,studio.Document),
+                "Notch removal normalizes closure and can be undone",checks);
+            var detached=studio.Document.Pieces.Single().Clone();
+            var source=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
+            source.ItemsSource=new[] { detached };source.SelectedItem=detached;
+            var stable=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
+            tools.SetVertexNotch("0",true);
+            var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            Check(result.Text.Contains("güncel projeye ait değil",StringComparison.Ordinal) && DocumentSession.ContentEquals(stable,studio.Document)
+                  && session.UndoCount==undo && session.RedoCount==redo,
+                "Stale detached selection is rejected before duplicate notch no-op",checks);
+            tools.SetVertexNotch("1",false);
+            Check(result.Text.Contains("güncel projeye ait değil",StringComparison.Ordinal) && DocumentSession.ContentEquals(stable,studio.Document)
+                  && session.UndoCount==undo && session.RedoCount==redo,
+                "Stale detached selection is rejected before absent notch no-op",checks);
+        }
+        finally { tools.Close(); }
     }
 
     private static void VerifyNumericVertexMove(MainWindow studio,List<string> checks)

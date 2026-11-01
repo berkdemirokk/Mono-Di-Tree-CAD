@@ -175,6 +175,8 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Selected;
         if(piece is null)
         { owner.SetStatus("Taşımak için önce proje parçaları listesinden veya kalıp alanından bir parça seçin.");return; }
+        if(piece.Notches is { Count:>0 })
+        { owner.SetStatus("Taşımadan önce parçanın köşe işaretlerini kaldırın; işaretler otomatik taşınmaz.");return; }
         var step=modifiers==ModifierKeys.Control ? .1 : modifiers==ModifierKeys.Shift ? 10 : 1;
         var dx=key==Key.Left ? -step : key==Key.Right ? step : 0;
         var dy=key==Key.Up ? -step : key==Key.Down ? step : 0;
@@ -466,6 +468,8 @@ public sealed class CadCanvas : FrameworkElement
                 return;
             }
             owner.Select(piece?.Id);
+            if(piece?.Notches is { Count:>0 })
+            { owner.SetStatus("İşaretli parça seçildi. Taşımadan önce köşe işaretlerini kaldırın.");return; }
             if(piece is not null) { dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
         }
@@ -641,6 +645,8 @@ public sealed class CadCanvas : FrameworkElement
         var result=dragPreview;
         if(piece is not null && dragOriginal is not null && (!piece.Points.SequenceEqual(dragOriginal) || !GrainlineTransform.Same(piece.Grainline,dragOriginalGrainline)))
             throw new InvalidOperationException("Sürükleme sırasında parça değişti. İşlemi yeniden başlatın.");
+        if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null)
+        { ClearDrag();ReleaseMouseCapture();InvalidateVisual();owner.ShowCanvasError("İşaretli parça değiştirilemez; işlem uygulanmadı.");return; }
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal))
         {
             foreach(var p in result) Geometry.Validate(p);
@@ -674,6 +680,7 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
         if(piece is null || piece.Closed!=closed || !piece.Points.SequenceEqual(original) || owner.SelectedId!=id || owner.ActiveTool!="Seç")
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
+        NotchSafety.RequireNoNotches(piece);
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
         ValidateClosingEdgePreserved(original,proposed,closed);
@@ -693,7 +700,7 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.ActiveTool!="Seç" || owner.SelectedId!=id || !ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Proje veya seçim değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
             var current=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
-            if(current is null || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
+            if(current is null || current.Notches is not null || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
             { owner.SetStatus("Parça değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
             // Check and commit without yielding to avoid applying a stale worker result.
             owner.CommitObserved("Büyük parçanın noktası taşındı",()=>
@@ -797,6 +804,16 @@ public sealed class CadCanvas : FrameworkElement
             var visible=p.Id==dragId && dragPreview is not null ? dragPreview : p.Points;
             var fill=p.Closed ? selected ? (selectedFill ??= B("#304947")) : (normalFill ??= B("#163D40")) : null;
             DrawContour(dc,visible,p.Closed,fill,pen);
+            if(p.Notches is not null)
+            {
+                var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
+                foreach(var notch in p.Notches)
+                {
+                    var point=Screen(notch.Position);
+                    dc.DrawEllipse(null,notchPen,point,7,7);
+                    if(selected)Text(dc,$"İşaret {notch.VertexIndex}",new Point(point.X+8,point.Y-15),notchBrush,11);
+                }
+            }
             var grain=p.Id==dragId && dragPreview is not null ? dragPreviewGrainline : p.Grainline;
             if(grain is not null)
             {

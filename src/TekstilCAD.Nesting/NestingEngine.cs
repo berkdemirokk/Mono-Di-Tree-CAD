@@ -192,6 +192,7 @@ public static class NestingEngine
             cancellationToken.ThrowIfCancellationRequested();
             if(piece is null)throw new ArgumentException("Geçersiz parça.",nameof(pieces));
             if(piece.Id==Guid.Empty || !ids.Add(piece.Id))throw new ArgumentException("Her pastal parçasının kimliği benzersiz olmalıdır.",nameof(pieces));
+            if(piece.Notches is not null)throw NestingPieceError.Create(piece.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.",nameof(pieces));
         }
         // Bound copies before taking detached snapshots. The caller must not mutate
         // input while it is being copied; all later work uses only snapshots.

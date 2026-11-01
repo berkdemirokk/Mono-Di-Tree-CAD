@@ -42,8 +42,10 @@ public static class DxfGrainlineReviewExport
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
         ProjectStorage.ValidateForDxfExport(source);
+        NotchExportGuard.EnsureSupported(source);
         var snapshot = source.Clone();
         ProjectStorage.ValidateForDxfExport(snapshot);
+        NotchExportGuard.EnsureSupported(snapshot);
         if (!DocumentSession.ContentEquals(snapshot, source)) throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
         var analysis = DxfFormat.AnalyzeExport(snapshot,cancellationToken);
         if (analysis.Layers.Length == 0) throw new InvalidDataException("DXF için en az bir parça gereklidir.");

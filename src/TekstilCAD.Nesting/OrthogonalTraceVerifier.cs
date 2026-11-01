@@ -139,7 +139,7 @@ public static class OrthogonalTraceVerifier
         foreach (var piece in layout)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (piece is null || piece.Id == Guid.Empty || sourceIds.Contains(piece.Id) || piece.Points is null ||
+            if (piece is null || piece.Notches is not null || piece.Id == Guid.Empty || sourceIds.Contains(piece.Id) || piece.Points is null ||
                 piece.Name is null || piece.Name.Length > 1024 || !ValidMetadata(piece.Metadata) ||
                 piece.Points.Count > NestingEngine.MaximumVerticesPerPiece || !placed.TryAdd(piece.Id, piece)) return false;
         }

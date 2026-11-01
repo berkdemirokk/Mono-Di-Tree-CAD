@@ -14,6 +14,7 @@ public static class OpenPathClosure
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
+        NotchSafety.RequireNoNotches(source);
         if(!double.IsFinite(tolerance) || tolerance<0 || tolerance>100_000)throw new ArgumentOutOfRangeException(nameof(tolerance));
         if(source.Id==Guid.Empty || source.Name is null || source.Name.Length>1024)throw new ArgumentException("Kaynak kimliği veya adı geçersiz.");
         if(source.Closed || source.Points is null || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints)

@@ -78,6 +78,16 @@ internal static class GroupMoveVerification
                 checks.Add("An invalid member rejects the entire group translation");
             }
             finally { window.Close(); }
+            Reset();studio.Document.Pieces[0].Notches=[new NotchMark { VertexIndex=0,Position=studio.Document.Pieces[0].Points[0] }];
+            before=studio.Document.Clone();window=Open();
+            try
+            {
+                window.XForVerification.Text="1";Wait(window.ApplyForVerification());
+                if(!DocumentSession.ContentEquals(before,studio.Document) || session.UndoCount!=0 || !window.StatusForVerification.Contains("İşaretli"))
+                    throw new InvalidOperationException("A marked member must reject the whole group move without changing history.");
+                checks.Add("Group move rejects marked pieces atomically");
+            }
+            finally { window.Close();a.Notches=null; }
             foreach(var cancel in new[] { false,true })
             {
                 Reset();window=Open();using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();

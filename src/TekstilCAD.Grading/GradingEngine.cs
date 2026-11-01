@@ -119,6 +119,7 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
+        NotchSafety.RequireNoNotches(basePiece);
         var grainline = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         if (string.IsNullOrWhiteSpace(sizeName) || sizeName.Trim().Length > 128) throw new ArgumentException("Beden adı gerekli ve en fazla 128 karakter olmalıdır.", nameof(sizeName));
@@ -212,6 +213,7 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
+        NotchSafety.RequireNoNotches(basePiece);
         _ = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         ArgumentNullException.ThrowIfNull(sizes);
