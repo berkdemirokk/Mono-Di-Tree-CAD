@@ -2364,6 +2364,15 @@ internal static class DesktopVerification
                 Check(escaped=="A\\u2028B\\u2029C","Block review escapes Unicode line and paragraph separators",checks);
             }
             Check(Descendants<DxfPiecePreview>(root).Count()==1 && AutomationProperties.GetName(Descendants<ScrollViewer>(root).First()).Contains("Blok tanımı"),"Block review provides a named scroll area and contour preview",checks);
+            block.SelectedIndex=0;point.SelectedIndex=0;piece.SelectedIndex=0;confirmation.IsChecked=true;
+            indexText.Text="1";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(vertex.SelectedIndex==1 && indexText.Text=="1","Valid Go selects the requested vertex and retains its index",checks);
+            try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
+            Check(window.Selection?.VertexIndex==1,"Valid Go applies the requested vertex",checks);
+            vertex.SelectedIndex=2;
+            Check(indexText.Text=="" && vertex.SelectedIndex==2,"Manual vertex choice clears the old search index",checks);
+            try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
+            Check(window.Selection?.VertexIndex==2,"Manual vertex choice applies the selected vertex",checks);
         }
         finally { window.Close(); }
         var links=import.PieceSources!.Value;var link=links.Single(p=>p.EntityType=="POLYLINE");

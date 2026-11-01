@@ -65,10 +65,16 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             preview.ShowPiece(piece);
             vertices.ItemsSource=piece.Points.Select((p,i)=>new VertexChoice(i,$"{i} · X {p.X:R} · Y {p.Y:R} mm")).ToArray();
         };
-        vertices.SelectionChanged+=(_,_)=>preview.SelectVertex((vertices.SelectedItem as VertexChoice)?.Index);
+        bool changingText=false,changingSelection=false,selectingBySearch=false;
+        vertices.SelectionChanged+=(_,_)=>
+        {
+            preview.SelectVertex((vertices.SelectedItem as VertexChoice)?.Index);
+            if(!changingSelection && !selectingBySearch)
+            { changingText=true;try { indexText.Clear(); } finally { changingText=false; } }
+        };
         var indexRow=new WrapPanel();
-        indexText.TextChanged+=(_,_)=> { vertices.SelectedIndex=-1;SetStatus(""); };
-        var go=new Button { Content="Köşeye git",Margin=new Thickness(4) };go.Click+=(_,_)=> { if(int.TryParse(indexText.Text,out var index) && index>=0 && index<vertices.Items.Count) { vertices.SelectedIndex=index;SetStatus(""); } else { vertices.SelectedIndex=-1;SetStatus("Geçerli bir köşe indeksi girin."); } };indexRow.Children.Add(indexText);indexRow.Children.Add(go);body.Children.Add(indexRow);
+        indexText.TextChanged+=(_,_)=> { if(changingText)return;changingSelection=true;try { vertices.SelectedIndex=-1; } finally { changingSelection=false; } SetStatus(""); };
+        var go=new Button { Content="Köşeye git",Margin=new Thickness(4) };go.Click+=(_,_)=> { if(int.TryParse(indexText.Text,out var index) && index>=0 && index<vertices.Items.Count) { selectingBySearch=true;try { vertices.SelectedIndex=index; } finally { selectingBySearch=false; } SetStatus(""); } else { changingSelection=true;try { vertices.SelectedIndex=-1; } finally { changingSelection=false; } SetStatus("Geçerli bir köşe indeksi girin."); } };indexRow.Children.Add(indexText);indexRow.Children.Add(go);body.Children.Add(indexRow);
         var confirm=new CheckBox { Content="Bunun yerleştirilmemiş blok tanımı olduğunu anladım",Margin=new Thickness(0,12,0,8) };body.Children.Add(confirm);
         apply.Click+=(_,_)=>
         {
