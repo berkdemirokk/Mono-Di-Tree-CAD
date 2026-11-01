@@ -48,6 +48,9 @@ private struct ContentView: View {
     @State private var rawImport: RawImport?
     @State private var showingRawImport = false
     @State private var rawSaveNeedsRetry = false
+    @State private var rawExportDocument: ProjectExportDocument?
+    @State private var showingRawExportWarning = false
+    @State private var showingRawExporter = false
     #if DEBUG && targetEnvironment(simulator)
     @State private var didSimulateRawSaveFailure = false
     #endif
@@ -114,6 +117,12 @@ private struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
                     .disabled(isSaving || modelLoad.isLoading)
+                Button("Ham kopyayı dışa aktar…") {
+                    guard let rawImport else { return }
+                    rawExportDocument = ProjectExportDocument(data: rawImport.data)
+                    showingRawExportWarning = true
+                }
+                .disabled(isSaving || modelLoad.isLoading)
                 #if DEBUG && targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
                     Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
@@ -502,6 +511,23 @@ private struct ContentView: View {
         .onChange(of: showingExporter) { presented in
             // The system may dismiss without a completion callback on cancel.
             if !presented { exportDocument = nil }
+        }
+        .confirmationDialog("Ham kopyayı dışa aktar", isPresented: $showingRawExportWarning, titleVisibility: .visible) {
+            Button("Hedef seç") { showingRawExporter = true }
+            Button("Vazgeç", role: .cancel) { rawExportDocument = nil }
+        } message: {
+            Text("Bu dosya doğrulanmadı ve bozuk olabilir. Bellekteki özgün baytlar dışa aktarılır. Kaynağı korumak için farklı bir ad ve hedef seçin; aynı hedef üzerine yazılabilir. Ham kopya siz vazgeçene kadar bellekte kalır.")
+        }
+        .fileExporter(isPresented: $showingRawExporter, document: rawExportDocument, contentType: .data, defaultFilename: "Kurtarılan-ham-model.tcad") { result in
+            rawExportDocument = nil
+            switch result {
+            case .success: saveNotice = "Ham kopya dışa aktarıldı; içerik doğrulanmadı."
+            case .failure(let failure):
+                if !isFilePickerCancellation(failure) { error = failure.localizedDescription }
+            }
+        }
+        .onChange(of: showingRawExporter) { presented in
+            if !presented { rawExportDocument = nil }
         }
         .alert("Kayıtlı model adı", isPresented: $showingLibraryNameEditor) {
             TextField("Model adı", text: $libraryName)

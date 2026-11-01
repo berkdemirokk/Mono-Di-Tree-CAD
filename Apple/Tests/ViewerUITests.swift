@@ -64,6 +64,11 @@ final class ViewerUITests: XCTestCase {
         let retry = app.buttons["Ham kopyayı yeniden kaydet…"]
         XCTAssertTrue(retry.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons["Ham kopyayı dışa aktar…"].tap()
+        let exportWarning = app.buttons["Hedef seç"]
+        XCTAssertTrue(exportWarning.waitForExistence(timeout: 5))
+        app.buttons["Vazgeç"].tap()
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
         app.buttons["Test: seçim iptal"].tap()
         XCTAssertTrue(retry.exists)
         app.buttons["Test: geçersiz seçim"].tap()
