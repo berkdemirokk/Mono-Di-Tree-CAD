@@ -259,12 +259,32 @@ final class ModelFilePublisherTests: XCTestCase {
         let raw = "Ön\u{202e}model\nA"
         let entry = ModelStore.Entry(url: URL(fileURLWithPath: "/models/test.tcad"), name: raw, date: nil,
                                      canOpen: true, requiresRecovery: false, identity: nil)
-        XCTAssertEqual(entry.safeName, "Ön\\u202Emodel\\u000AA")
+        XCTAssertEqual(entry.safeName, "Ön\\u{202E}model\\u{A}A")
         XCTAssertEqual(entry.name, raw)
-        let escaped = try XCTUnwrap(ModelStore.filteredModels([entry], query: "\\u202E", newest: false, cancelled: { false }))
+        let escaped = try XCTUnwrap(ModelStore.filteredModels([entry], query: "\\u{202E}", newest: false, cancelled: { false }))
         XCTAssertEqual(escaped.map(\.id), [entry.id])
         let original = try XCTUnwrap(ModelStore.filteredModels([entry], query: "model", newest: false, cancelled: { false }))
         XCTAssertEqual(original.map(\.id), [entry.id])
+    }
+
+    func testLibraryEscapesRemainDistinctAndPreserveJoinersAndEmoji() throws {
+        let bidi = "A\u{202E}B", literal = #"A\u{202E}B"#
+        XCTAssertEqual(ModelStore.safeLabel(bidi), #"A\u{202E}B"#)
+        XCTAssertEqual(ModelStore.safeLabel(literal), #"A\\u{202E}B"#)
+        XCTAssertNotEqual(ModelStore.safeLabel(bidi), ModelStore.safeLabel(literal))
+        let joined = "👩\u{200D}💻 نامه\u{200C}ها"
+        XCTAssertEqual(ModelStore.safeLabel(joined), joined)
+        XCTAssertEqual(ModelStore.safeLabel("A\u{E0001}B"), #"A\u{E0001}B"#)
+        let entries = [ModelStore.Entry(url: URL(fileURLWithPath: "/models/a.tcad"), name: joined, date: nil,
+                                        canOpen: true, requiresRecovery: false, identity: nil),
+                       ModelStore.Entry(url: URL(fileURLWithPath: "/models/b.tcad"), name: bidi, date: nil,
+                                        canOpen: true, requiresRecovery: false, identity: nil)]
+        let emoji = try XCTUnwrap(ModelStore.filteredModels(entries, query: "👩\u{200D}💻", newest: false, cancelled: { false }))
+        XCTAssertEqual(emoji.map(\.id), [entries[0].id])
+        let supplementary = ModelStore.Entry(url: URL(fileURLWithPath: "/models/c.tcad"), name: "A\u{E0001}B", date: nil,
+                                             canOpen: true, requiresRecovery: false, identity: nil)
+        let escaped = try XCTUnwrap(ModelStore.filteredModels([supplementary], query: #"\u{E0001}"#, newest: false, cancelled: { false }))
+        XCTAssertEqual(escaped.map(\.id), [supplementary.id])
     }
 
     func testOpeningSpecialModelFileFailsWithoutWaitingForWriter() throws {

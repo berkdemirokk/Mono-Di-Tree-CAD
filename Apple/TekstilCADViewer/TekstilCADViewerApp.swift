@@ -823,9 +823,19 @@ enum ModelStore {
     static func safeLabel(_ value: String) -> String {
         var result = ""
         for scalar in value.unicodeScalars {
+            if scalar.value == 0x5c {
+                result += "\\\\"
+                continue
+            }
+            // These format characters are needed for ordinary script shaping
+            // and emoji sequences; unlike bidi controls they do not reorder text.
+            if scalar.value == 0x200c || scalar.value == 0x200d {
+                result.unicodeScalars.append(scalar)
+                continue
+            }
             switch scalar.properties.generalCategory {
             case .control, .format, .lineSeparator, .paragraphSeparator:
-                result += String(format: "\\u%04X", scalar.value)
+                result += String(format: "\\u{%X}", scalar.value)
             default:
                 result.unicodeScalars.append(scalar)
             }
