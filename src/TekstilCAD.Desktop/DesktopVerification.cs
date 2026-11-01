@@ -632,6 +632,7 @@ internal static class DesktopVerification
             VerifyDraftErrorIdentity(studio,checks);
             VerifyBatchTransforms(studio,checks);
             VerifyOrthogonalGrading(studio,checks);
+            VerifyHalfTurnWorker(studio,checks);
             VerifyMetadataDialogStaleProject(studio,checks);
             VerifyMetadataDialogPieceIdentity(studio,checks);
             VerifyActiveDragGuards(studio,work,checks);
@@ -8623,6 +8624,59 @@ internal static class DesktopVerification
             Check(completed && studio.Document.Pieces[0].Metadata?.Quantity==30,"Corrected quantity can be applied without reopening the form",checks);
         }
         finally { studio.MetadataDialogSuccessForVerification=null; }
+    }
+    private static void VerifyHalfTurnWorker(MainWindow studio,List<string> checks)
+    {
+        var oldContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            var piece=new PatternPiece { Name="Büyük dönüş",Closed=false,Points=Enumerable.Range(0,4097).Select(i=>new Point2(i,i%2)).ToList(),
+                Grainline=new Grainline { Start=new(0,0),End=new(100,0) } };
+            piece.Notches=[new NotchMark { VertexIndex=1,Position=piece.Points[1] }];
+            var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=piece.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(1,2),piece.Points.Count).ToList() };
+            var document=new ProjectDocument { Pieces=[piece],GradingRules=[rule] };studio.LoadDocument(document);studio.Select(piece.Id);
+            var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            var window=new HalfTurnWindow(studio);
+            try
+            {
+                var task=window.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                var after=studio.Document.Clone();var actual=after.Pieces.Single();var expected=Geometry.Rotate(piece.Points,180,Geometry.Bounds(piece.Points).Center);
+                Check(actual.Points.SequenceEqual(expected) && actual.Notches!.Single().Position==actual.Points[1] &&
+                    actual.Grainline is not null && after.GradingRules.Single().Deltas.All(p=>p==new Point2(-1,-2)) && session.UndoCount==1,
+                    "Large half turn applies geometry, marker, grainline and grading in one transaction",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Large half turn supports atomic undo and redo",checks);
+            }
+            finally { window.Close(); }
+            studio.LoadDocument(document);studio.Select(piece.Id);before=studio.Document.Clone();window=new HalfTurnWindow(studio);
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                Task? task=null;
+                try
+                {
+                    window.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                    task=window.RunForVerification();PumpUntil(()=>reached.IsSet);window.CancelForVerification();release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && window.StatusForVerification.Contains("iptal"),
+                        "Cancelling a large half turn preserves project and history",checks);
+                }
+                finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }window.Close(); }
+            }
+            studio.LoadDocument(document);studio.Select(piece.Id);window=new HalfTurnWindow(studio);
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                Task? task=null;
+                try
+                {
+                    window.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                    task=window.RunForVerification();PumpUntil(()=>reached.IsSet);studio.Commit("Yeni düzenleme",()=>studio.Document.Pieces[0].Name="Güncel");var changed=studio.Document.Clone();var undo=session.UndoCount;
+                    release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==undo && window.StatusForVerification.Contains("değişti"),
+                        "A newer project edit rejects the stale large half turn",checks);
+                }
+                finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }window.Close(); }
+            }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(oldContext); }
     }
     private static void VerifyOrthogonalGrading(MainWindow studio,List<string> checks)
     {
