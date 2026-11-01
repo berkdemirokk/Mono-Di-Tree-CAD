@@ -96,7 +96,15 @@ private struct ContentView: View {
             }
             Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
-            if modelLoad.isLoading { ProgressView("Proje açılıyor…") }
+            if modelLoad.isLoading {
+                ProgressView("Proje açılıyor…")
+                Button("Açmayı iptal et") {
+                    modelReadCancellation?.cancel()
+                    modelLoad.invalidate()
+                    saveNotice = "Model açma iptal edildi."
+                }
+                .accessibilityHint("Önceki açık modeli korur")
+            }
             if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
             if rawSaveNeedsRetry, let rawImport {
                 Text("Kaydedilemeyen ham kopya: \(rawImport.name)")

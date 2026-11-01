@@ -664,6 +664,28 @@ final class ViewerUITests: XCTestCase {
         let enabled = expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: notches)
         wait(for: [enabled], timeout: 10)
     }
+    func testCancellingModelOpenPreservesPreviousModelAfterDelayedRead() {
+        let fixture = #"{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-open-delay"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15)); save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let model = app.buttons["Deneme Modeli"]
+        XCTAssertTrue(model.waitForExistence(timeout: 10)); model.tap()
+        let cancel = app.buttons["Açmayı iptal et"]
+        XCTAssertTrue(cancel.waitForExistence(timeout: 5)); cancel.tap()
+        XCTAssertTrue(app.staticTexts["Model açma iptal edildi."].waitForExistence(timeout: 5))
+        XCTAssertTrue(save.exists)
+        let staleCompletion = expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: save)
+        staleCompletion.isInverted = true
+        wait(for: [staleCompletion], timeout: 4)
+        XCTAssertTrue(save.isEnabled)
+    }
+
     func testCancellingImporterDoesNotCancelModelAlreadyLoading() {
         let fixture = #"{"Name":"Yükleme Testi","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}]}]}"#
         let app = XCUIApplication()
