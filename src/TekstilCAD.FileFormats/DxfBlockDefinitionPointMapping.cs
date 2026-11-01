@@ -128,6 +128,26 @@ public static class DxfBlockDefinitionPointMapping
         var position=new Point2(x*parameters.MillimetersPerUnit,y*parameters.MillimetersPerUnit);
         if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || position!=piece.Points[selection.VertexIndex])
             throw new InvalidDataException("Hedef köşe belirsiz veya ölçek sonrası farklı.");
+        // An explicit source ordinal expresses the user's choice but cannot
+        // distinguish coincident source records geometrically. Refuse either
+        // exact decimal coincidence or collision introduced by binary scaling.
+        foreach(var other in supplemental.Records.Where(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="POINT" && r.SourceOrdinal!=selection.SourceOrdinal))
+        {
+            token.ThrowIfCancellationRequested();
+            if(other.Groups.IsDefault || other.Groups.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 100)))
+                throw new InvalidDataException("Bloktaki diğer POINT kaydı doğrulanamadı.");
+            var ox=Value(other.Groups,10);var oy=Value(other.Groups,20);
+            if(!DxfExactDecimal.AreEqual(Value(other.Groups,30,true),"0",token) ||
+               !double.TryParse(ox,NumberStyles.Float,CultureInfo.InvariantCulture,out var dx) ||
+               !double.TryParse(oy,NumberStyles.Float,CultureInfo.InvariantCulture,out var dy) || !double.IsFinite(dx) || !double.IsFinite(dy))
+                throw new InvalidDataException("Bloktaki diğer POINT koordinatı doğrulanamadı.");
+            var scaledX=dx*parameters.MillimetersPerUnit;var scaledY=dy*parameters.MillimetersPerUnit;
+            if(!double.IsFinite(scaledX) || !double.IsFinite(scaledY) || (dx!=0 && scaledX==0) || (dy!=0 && scaledY==0))
+                throw new InvalidDataException("Bloktaki diğer POINT ölçek sonrası doğrulanamadı.");
+            if((DxfExactDecimal.AreEqual(ox,px,token) && DxfExactDecimal.AreEqual(oy,py,token)) ||
+               (scaledX==position.X && scaledY==position.Y))
+                throw new InvalidDataException("Aynı blokta birden fazla POINT aynı konuma eşleşiyor.");
+        }
         // Inspect every raw LINE, including lines excluded by the contour importer.
         // Unknown 3-D plane semantics or a rounded endpoint collision fail closed.
         foreach(var line in geometry.Records.Where(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="LINE"))

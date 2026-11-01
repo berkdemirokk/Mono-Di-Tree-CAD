@@ -5,6 +5,28 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Theory]
+    [InlineData("0",false)]
+    [InlineData("0.000",false)]
+    [InlineData("1e-400",false)]
+    [InlineData("not-a-number",false)]
+    [InlineData("0",true)]
+    public void CoincidentOrUnverifiablePointIsRejectedOnlyWithinItsBlock(string otherX,bool otherBlock)
+    {
+        const string point="0\nPOINT\n8\nA\n10\n0\n20\n0\n";
+        var extra="0\nPOINT\n8\nA\n10\n"+otherX+"\n20\n0\n";
+        var poly="0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n";
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+poly+point+(otherBlock ? "" : extra)+"0\nENDBLK\n"+
+            (otherBlock ? "0\nBLOCK\n2\nB\n"+extra+"0\nENDBLK\n" : "")+"0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var original=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var selected=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT" && p.BlockHeaderOrdinal==link.BlockHeaderOrdinal);
+        DxfBlockDefinitionPointResult Create()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(selected.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        if(otherBlock)Assert.Single(Assert.Single(Create().WorkingCopy.Pieces).Notches!);
+        else Assert.Throws<InvalidDataException>(()=>Create());
+        Assert.Equal(original,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+    }
+
     [Fact]
     public void MultipleSelectedPointsAreAtomicAndUseOnePiece()
     {
