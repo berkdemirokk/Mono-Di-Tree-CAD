@@ -1257,6 +1257,25 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
     }
 
+    func testPieceSearchCanDistinguishOpenAndClosedContours() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Closed":true,"Points":[{"X":0,"Y":0},{"X":2,"Y":0},{"X":0,"Y":2}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("kapalı kol")
+        let count = app.staticTexts["2 parçadan 1 tanesi gösteriliyor"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        let row = app.buttons["Kol"]
+        XCTAssertTrue((row.value as? String ?? "").contains("Kapalı kontur"))
+        XCTAssertTrue((row.value as? String ?? "").contains("3 nokta"))
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "3 nokta • Kapalı kontur")).firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testPieceSearchShowsResultCountAndCanClearNoMatch() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
         let app = XCUIApplication()
