@@ -233,6 +233,12 @@ public static class PatternTools
         if (length <= Geometry.Epsilon || width / 2 >= Math.Min(alongFraction, 1 - alongFraction) * length)
             throw new ArgumentException("Çentik kenarın dışına taşıyor veya kenar çok kısa.");
         var unit = (b - a) * (1 / length); var center = a + (b - a) * alongFraction;
+        // Compare in the local coordinate frame: comparing center with the
+        // same rounded world-coordinate expression cannot detect lost position.
+        var positionErrorX = (center.X - a.X) - (b.X - a.X) * alongFraction;
+        var positionErrorY = (center.Y - a.Y) - (b.Y - a.Y) * alongFraction;
+        if (Math.Sqrt(positionErrorX * positionErrorX + positionErrorY * positionErrorY) > Math.Min(width, depth) * 1e-9)
+            throw new ArgumentException("Çentik konumu sayısal hassasiyetle temsil edilemiyor.");
         List<Point2> result = [center - unit * (width / 2), center + new Point2(-unit.Y, unit.X) * depth, center + unit * (width / 2)];
         foreach (var point in result) Geometry.Validate(point);
         var apexVector = result[1] - center;

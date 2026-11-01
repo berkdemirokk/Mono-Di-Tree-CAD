@@ -73,4 +73,23 @@ public class IndependentNotchWidthTests
         var localA = new Point2(a.X - origin, a.Y); var localB = new Point2(b.X - origin, b.Y);
         Assert.Equal(3, PatternTools.NotchPoints(localA,localB,.5,4,100/rise).Count);
     }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void RequestedFractionIsCheckedBeforeWorldCoordinateRounding(bool reverse)
+    {
+        const double x = 90_000_000;
+        var points = new List<Point2> { new(x,0),new(x+100,0),new(x+100,100),new(x,100) };
+        if (reverse) points.Reverse();
+        int edge = reverse ? 2 : 0;
+        var source = new PatternPiece { Points = points };
+        var before = points.ToArray();
+        // For one third of this edge, adding the local position to the world
+        // origin loses about 4.97e-9 mm; recomputing the same rounded center
+        // cannot reveal that loss. Width and depth here remain exactly 4 and 1.
+        var error = Assert.Throws<ArgumentException>(() => PatternTools.InsertNotch(source,edge,1.0/3,4,1));
+        Assert.Contains("konumu", error.Message);
+        Assert.Equal(before,source.Points);
+        var valid = PatternTools.InsertNotch(source,edge,.5,4,1);
+        Assert.Equal(7,valid.Points.Count);
+    }
 }
