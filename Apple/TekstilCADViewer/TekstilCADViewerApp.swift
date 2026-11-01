@@ -2697,7 +2697,6 @@ private struct PointDistanceView: View {
                         }
                         if piece.hasMinimumContourPoints, piece.contourBounds != nil {
                             PointDistancePreview(piece: piece, first: a, second: b, pathForward: pathForward)
-                                .frame(height: 180)
                             Text("A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
@@ -2741,7 +2740,64 @@ private struct PointDistancePreview: View {
     let second: Int
     let pathForward: Bool
 
+    @State private var zoom: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var panEnabled = false
+    @State private var canvasSize: CGSize = .zero
+    @GestureState private var pinch: CGFloat = 1
+    @GestureState private var drag: CGSize = .zero
+
+    private func boundedZoom(_ value: CGFloat) -> CGFloat { min(max(value.isFinite ? value : 1, 0.5), 10) }
+    private func boundedOffset(_ value: CGSize, size: CGSize, zoom: CGFloat) -> CGSize {
+        let x = size.width * max(zoom, 1), y = size.height * max(zoom, 1)
+        return CGSize(width: min(max(value.width, -x), x), height: min(max(value.height, -y), y))
+    }
+
     var body: some View {
+        VStack(alignment: .leading) {
+            GeometryReader { geometry in
+                let activeZoom = boundedZoom(zoom * pinch)
+                let activeOffset = boundedOffset(CGSize(width: offset.width + drag.width, height: offset.height + drag.height), size: geometry.size, zoom: activeZoom)
+                drawing
+                    .scaleEffect(activeZoom).offset(activeOffset)
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .contentShape(Rectangle()).clipped()
+                    .gesture(panEnabled ? DragGesture()
+                        .updating($drag) { value, state, _ in state = value.translation }
+                        .onEnded { value in offset = boundedOffset(CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height), size: geometry.size, zoom: zoom) } : nil)
+                    .simultaneousGesture(MagnificationGesture()
+                        .updating($pinch) { value, state, _ in state = value }
+                        .onEnded { value in zoom = boundedZoom(zoom * value); offset = boundedOffset(offset, size: geometry.size, zoom: zoom) })
+                    .accessibilityLabel("Ölçüm önizlemesi")
+                    .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol"). Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
+                    .onAppear { canvasSize = geometry.size }
+                    .onChange(of: geometry.size) { canvasSize = $0 }
+            }.frame(height: 180)
+            HStack {
+                Button("Ölçüm çizimini uzaklaştır") { zoom = boundedZoom(zoom / 1.25) }.disabled(zoom <= 0.5)
+                Button("Ölçüm çizimini yakınlaştır") { zoom = boundedZoom(zoom * 1.25) }.disabled(zoom >= 10)
+            }.font(.caption)
+            HStack {
+                Button(panEnabled ? "Çizim taşımayı bitir" : "Ölçüm çizimini taşı") { panEnabled.toggle() }
+                Button("Ölçüm çizimini sıfırla") { zoom = 1; offset = .zero }
+            }.font(.caption)
+            if panEnabled {
+                HStack {
+                    Button("Sola taşı") { move(x: -40, y: 0) }
+                    Button("Sağa taşı") { move(x: 40, y: 0) }
+                    Button("Yukarı taşı") { move(x: 0, y: -40) }
+                    Button("Aşağı taşı") { move(x: 0, y: 40) }
+                }.font(.caption)
+            }
+        }
+        .onChange(of: zoom) { offset = boundedOffset(offset, size: canvasSize, zoom: $0) }
+    }
+
+    private func move(x: CGFloat, y: CGFloat) {
+        offset = boundedOffset(CGSize(width: offset.width + x, height: offset.height + y), size: canvasSize, zoom: zoom)
+    }
+
+    private var drawing: some View {
         Canvas { context, size in
             guard let bounds = piece.contourBounds,
                   let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)),
@@ -2772,8 +2828,7 @@ private struct PointDistancePreview: View {
             }
         }
         .background(Color.secondary.opacity(0.08))
-        .accessibilityLabel("Ölçüm önizlemesi")
-        .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). İki nokta bir çizgiyle birleştirilir. Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol").")
+
     }
 }
 // A lazy list keeps large contours navigable without creating a picker with
