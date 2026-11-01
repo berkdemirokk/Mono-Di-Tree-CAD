@@ -94,7 +94,19 @@ public static class PatternTools
         // Check local vertices and edge midpoints in both directions, in grid units.
         // This is a conservative sampling check, not a proof of Hausdorff distance.
         if (!LocallyMatchesWithCancellation(path, recovered[0], 8.0, cancellationToken) || !LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken))
-            throw new OffsetLocalDetailUnverifiedException(result[0].Select(p => new Point2(p.X / scale, p.Y / scale)));
+        {
+            // The local check may return false just as cancellation is requested.
+            // Do not replace that cancellation with a validation failure or copy
+            // an entire potentially large boundary without checking the token.
+            var preview = new List<Point2>(result[0].Count);
+            foreach (var p in result[0])
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                preview.Add(new Point2(p.X / scale, p.Y / scale));
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            throw new OffsetLocalDetailUnverifiedException(preview);
+        }
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
         cancellationToken.ThrowIfCancellationRequested();

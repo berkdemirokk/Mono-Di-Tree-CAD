@@ -44,6 +44,28 @@ public sealed class SeamOffsetCancellationTests
         Assert.Equal(original,source.Points);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void UncancelledUnverifiedLobedContourRetainsDetachedPreview(bool reverse)
+    {
+        var source = new PatternPiece { Points = Enumerable.Range(0, 512).Select(i =>
+        {
+            double a = Math.Tau * i / 512, r = 1000 + 200 * Math.Cos(3 * a);
+            return new Point2(r * Math.Cos(a), r * Math.Sin(a));
+        }).ToList() };
+        if (reverse) source.Points.Reverse();
+        var before = source.Points.ToArray();
+        using var cancellation = new CancellationTokenSource();
+        var failure = Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(source, 1, cancellation.Token));
+        Assert.False(failure.Preview.IsDefaultOrEmpty);
+        var preview = failure.Preview.ToArray();
+        Assert.All(preview, p => Assert.True(p.IsFinite));
+        source.Points[0] = new Point2(0, 0);
+        Assert.Equal(preview, failure.Preview.ToArray());
+        Assert.Equal(before.Skip(1), source.Points.Skip(1));
+    }
+
     [Fact]
     public void LocalMatchingHonorsCancellationAndRetainsOriginalThreeArgumentHelper()
     {
