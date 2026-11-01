@@ -1471,6 +1471,7 @@ private struct Drawing {
         let isCollapsed: Bool
         let contourBounds: ContourBounds?
         let role: String?
+        let roleUnreadable: Bool
         let size: String?
         let material: String?
         let quantity: Int?
@@ -1493,7 +1494,7 @@ private struct Drawing {
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
                 return "\(label): \(value)"
             }
-            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : [])
+            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : [])
             return (["Parça \(index + 1)"] + fields + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
     }
@@ -1683,6 +1684,10 @@ private struct Drawing {
             }
             let rawQuantity = metadata?["Quantity"]
             let quantityUnreadable = rawQuantity != nil && !(rawQuantity is NSNull) && quantity == nil
+            let rawRole = metadata?["Role"]
+            let roleText = rawRole as? String
+            let role = roleText == "Kesim" || roleText == "Yardımcı" ? roleText : nil
+            let roleUnreadable = rawRole != nil && !(rawRole is NSNull) && role == nil
             let grainStatus: String
             var parsedGrain: Grain?
             if formatVersion == 6, let grain = raw["Grainline"] as? [String: Any] {
@@ -1722,7 +1727,7 @@ private struct Drawing {
                                 contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
                                 isCollapsed: ContourMeasure.isCollapsed(points),
                                 contourBounds: points.count > 1 ? ContourBounds(points: points) : nil,
-                                role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
+                                role: role, roleUnreadable: roleUnreadable, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
@@ -2089,6 +2094,7 @@ private struct PieceDetails: View {
                 Text("Kontur bilgisi").font(.subheadline.bold())
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
                 if let role = piece.role, !role.isEmpty { Text("Rol: \(role)") }
+                if piece.roleUnreadable { Text("Parça türü okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if let size = piece.size, !size.isEmpty { Text("Beden: \(size)") }
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
