@@ -2805,6 +2805,8 @@ public class MainWindow : Window
             notes.Add("Serileme kuralları çıktı dosyasına aktarılmaz; oluşturulmuş parçalar geometri olarak alınır.");
         if(Document.NestingSnapshot is not null)
             notes.Add("Pastal geçmişindeki kumaş ölçüleri, boşluk ve kenar payı ile kaynak–kopya eşleşmesi çıktı dosyasına aktarılmaz.");
+        if(Document.ImportProvenance is not null)
+            notes.Add("DXF içe aktarımındaki kaynak dosya adı, SHA-256 özeti, birim seçimi ve uyarı geçmişi çıktı dosyasına aktarılmaz; kaynak .tcad projesini saklayın.");
         return notes.Count==0 ? null : string.Join("\n",notes);
     }
     private void EnsurePropertyDraftsApplied()

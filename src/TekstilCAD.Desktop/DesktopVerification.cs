@@ -3205,6 +3205,19 @@ internal static class DesktopVerification
         var gradingNotice=studio.OutputLossNotice();
         Check(gradingNotice is not null && gradingNotice.Contains("Serileme kuralları") && !gradingNotice.Contains("Parça rolü"),
             "Grading-only output notice explains grading loss",checks);
+        studio.Commit("DXF kaynak geçmişi",()=>studio.Document.ImportProvenance=new DxfImportProvenance {
+            SourceFileName="kaynak.dxf",SourceSha256=new string('A',64),SourceByteLength=100,MillimetersPerUnit=1,
+            Warnings=["Önceki aktarım uyarısı"],PieceIds=[piece.Id] });
+        var withHistory=studio.OutputLossNotice();
+        Check(withHistory is not null && withHistory.Contains("Serileme kuralları") && withHistory.Contains("SHA-256") &&
+            withHistory.Contains("birim seçimi") && withHistory.Contains("uyarı geçmişi") && withHistory.Contains(".tcad"),
+            "Output notice reports omitted DXF source history together with other omitted data",checks);
+        studio.Commit("Kuralı kaldır",()=>studio.Document.GradingRules.Clear());
+        var historyOnly=studio.OutputLossNotice();
+        Check(historyOnly is not null && historyOnly.Contains("kaynak dosya adı") && !historyOnly.Contains("Serileme kuralları"),
+            "DXF source history alone triggers an output loss notice",checks);
+        studio.Commit("Doğrulama geçmişini kaldır",()=>studio.Document.ImportProvenance=null);
+        Check(studio.OutputLossNotice() is null,"Output notice clears after omitted source history is removed",checks);
 
         studio.Select(piece.Id);
         var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
