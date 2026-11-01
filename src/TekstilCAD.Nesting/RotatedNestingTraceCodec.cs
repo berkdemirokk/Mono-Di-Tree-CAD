@@ -87,7 +87,14 @@ public static class RotatedNestingTraceCodec
             if(!allowed.Contains(property.Name) || !seen.Add(property.Name))throw new InvalidDataException("Döndürme izinde bilinmeyen veya yinelenen alan var.");
         if(required.Any(name=>!seen.Contains(name)))throw new InvalidDataException("Döndürme izinde zorunlu alan eksik.");
     }
-    private static void Point(JsonElement value) { Fields(value,["X","Y"]);Number(value.GetProperty("X"));Number(value.GetProperty("Y")); }
+    private static void Point(JsonElement value)
+    {
+        // ProjectStorage historically includes the computed read-only field;
+        // accept it only when it agrees with the required finite coordinates.
+        Fields(value,["X","Y"],["IsFinite"]);Number(value.GetProperty("X"));Number(value.GetProperty("Y"));
+        if(value.TryGetProperty("IsFinite",out var finite) && finite.ValueKind!=JsonValueKind.True)
+            throw new InvalidDataException("Döndürme izi noktasının sonluluk alanı geçersiz.");
+    }
     private static void Array(JsonElement value,int min,int max) { if(value.ValueKind!=JsonValueKind.Array || value.GetArrayLength()<min || value.GetArrayLength()>max)throw new InvalidDataException("Döndürme izi liste sınırı geçersiz."); }
     private static void String(JsonElement value,int max) { if(value.ValueKind!=JsonValueKind.String || value.GetString() is not { } s || s.Length>max)throw new InvalidDataException("Döndürme izi metni geçersiz."); }
     private static void NullableString(JsonElement value,int max) { if(value.ValueKind!=JsonValueKind.Null)String(value,max); }
