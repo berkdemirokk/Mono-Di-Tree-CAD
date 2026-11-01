@@ -10026,19 +10026,37 @@ internal static class DesktopVerification
         var window=new PointDistanceWindow(studio,studio,source,()=>chosen);
         Render(window,Path.ChangeExtension(reportPath,".point-distance.png"),510,390);
         Check(window.Result.Text.Contains("Düz mesafe: 5 mm") && window.Result.Text.Contains("ΔX: 3 mm") && window.Result.Text.Contains("ΔY: 4 mm"),"Point measurement computes 3-4-5 distance and signed components",checks);
+        Check(AutomationProperties.GetName(window.Result).Contains(window.Result.Text) &&
+            AutomationProperties.GetName(window.ContourResult).Contains(window.ContourResult.Text) &&
+            AutomationProperties.GetLiveSetting(window.Result)==AutomationLiveSetting.Polite &&
+            AutomationProperties.GetLiveSetting(window.ContourResult)==AutomationLiveSetting.Polite,
+            "Point measurement exposes current straight and contour results in live automation names",checks);
         Check(window.Preview.StartIndex==0 && window.Preview.EndIndex==1 && AutomationProperties.GetHelpText(window.Preview).Contains("A 0") && AutomationProperties.GetHelpText(window.Preview).Contains("B 1"),"Measurement preview identifies selected points accessibly",checks);
         Check(window.ContourResult.Text.Contains("ileri 5 mm") && window.ContourResult.Text.Contains("ters 5 mm"),"Closed contour measurement reports both paths",checks);
         Check(FullyVisible(window.Result,(FrameworkElement)window.Content),"Point measurement result stays fully visible at minimum window size",checks);
         Render(window,Path.ChangeExtension(reportPath,".point-preview.png"),670,720);
         Check(FullyVisible(window.Preview,(FrameworkElement)window.Content),"Measurement contour preview is fully visible in a larger window",checks);
-        window.StartSelector.SelectedIndex=1; window.EndSelector.SelectedIndex=0;
+        var request=(Action<int>)typeof(PointMeasurePreview).GetField("PointRequested",PrivateInstance)!.GetValue(window.Preview)!;
+        request(-2);
+        Check(window.PickStatus.Text.Contains("birden fazla") && AutomationProperties.GetName(window.PickStatus).Contains(window.PickStatus.Text),
+            "Ambiguous point selection is exposed in the live automation name",checks);
+        window.StartSelector.SelectedIndex=1;
+        Check(window.PickStatus.Text.Length==0 && AutomationProperties.GetName(window.PickStatus)=="Önizleme seçimi durumu",
+            "Selecting from the list clears the previous ambiguity visually and accessibly",checks);
+        window.EndSelector.SelectedIndex=0;
         Check(window.Result.Text.Contains("Düz mesafe: 5 mm") && window.Result.Text.Contains("ΔX: -3 mm") && window.Result.Text.Contains("ΔY: -4 mm"),"Point measurement preserves component direction when reversed",checks);
+        Check(AutomationProperties.GetName(window.Result).Contains(window.Result.Text) && AutomationProperties.GetName(window.ContourResult).Contains(window.ContourResult.Text),
+            "Changed measurement values replace previous automation text",checks);
         window.StartSelector.SelectedIndex=0; window.EndSelector.SelectedIndex=2;
         Check(window.Result.Text.Contains("Düz mesafe: 0 mm") && window.EndSelector.SelectedItem!.ToString()!.Contains("kapanış noktası"),"Point measurement handles repeated closing vertex",checks);
         window.EndSelector.SelectedIndex=0;
         Check(window.Result.Text.Contains("Düz mesafe: 0 mm") && DocumentSession.ContentEquals(before,studio.Document),"Measuring one point is zero and leaves the document unchanged",checks);
         chosen=null; window.CheckCurrent();
         Check(window.IsStale && !window.StartSelector.IsEnabled && !window.PickStart.IsEnabled && !window.PickEnd.IsEnabled && window.PickStatus.Text=="" && window.ContourResult.Text=="" && window.Preview.Visibility==Visibility.Collapsed && window.Result.Text.Contains("geçersiz"),"Point measurement invalidates stale source selection",checks);
+        Check(AutomationProperties.GetName(window.Result).Contains("geçersiz") &&
+            AutomationProperties.GetName(window.ContourResult)=="Kontur boyunca ölçüm sonucu" &&
+            AutomationProperties.GetName(window.PickStatus)=="Önizleme seçimi durumu",
+            "Stale point measurement replaces accessible results and clears old selection text",checks);
         window.Close();
         chosen=source.Id;
         var propertyX=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;

@@ -81,15 +81,14 @@ internal sealed class PointDistanceWindow : Window
             CheckCurrent(); if(IsStale)return;
             if(index<0)
             {
-                PickStatus.Text=index==-2 ? "Bu konumda birden fazla yakın nokta var; istediğiniz indeksi listeden seçin." : "Yakında nokta bulunamadı; bir kontur noktasına daha yakın tıklayın.";
+                SetPickStatus(index==-2 ? "Bu konumda birden fazla yakın nokta var; istediğiniz indeksi listeden seçin." : "Yakında nokta bulunamadı; bir kontur noktasına daha yakın tıklayın.");
             }
             else
             {
                 var isStart=PickStart.IsChecked==true;
                 (isStart ? StartSelector : EndSelector).SelectedIndex=index;
-                PickStatus.Text=$"{(isStart ? "A" : "B")} noktası {index} olarak seçildi.";
+                SetPickStatus($"{(isStart ? "A" : "B")} noktası {index} olarak seçildi.");
             }
-            if(UIElementAutomationPeer.CreatePeerForElement(PickStatus) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
         };
         monitor.Tick+=(_,_)=>CheckCurrent(); Loaded+=(_,_)=>monitor.Start(); Closed+=(_,_)=>monitor.Stop();
         Calculate();
@@ -109,7 +108,7 @@ internal sealed class PointDistanceWindow : Window
         if(IsStale)return;
         if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,originalDocument) || workspace.SelectedId!=originalSelection || selectedSource()!=sourceId || !DocumentSession.ContentEquals(snapshot,workspace.Document))
         {
-            IsStale=true; monitor.Stop(); StartSelector.IsEnabled=false; EndSelector.IsEnabled=false; PickStart.IsEnabled=false; PickEnd.IsEnabled=false; PickStatus.Text="";
+            IsStale=true; monitor.Stop(); StartSelector.IsEnabled=false; EndSelector.IsEnabled=false; PickStart.IsEnabled=false; PickEnd.IsEnabled=false; SetPickStatus("");
             Result.Foreground=StudioTheme.Warning;
             SetResult("Proje, seçim veya bekleyen çalışma değişti; mesafe sonucu geçersiz. Pencereyi kapatıp güncel kaynakla yeniden açın."); SetContourResult(""); Preview.Visibility=Visibility.Collapsed;
         }
@@ -118,6 +117,7 @@ internal sealed class PointDistanceWindow : Window
     private void Calculate()
     {
         CheckCurrent(); if(IsStale)return;
+        SetPickStatus("");
         if(StartSelector.SelectedItem is not PointChoice a || EndSelector.SelectedItem is not PointChoice b)
         { SetResult("Mesafe için iki nokta seçin."); SetContourResult(""); Preview.SetSelection(StartSelector.SelectedIndex,EndSelector.SelectedIndex); return; }
         try
@@ -169,13 +169,22 @@ internal sealed class PointDistanceWindow : Window
     {
         if(ContourResult.Text==text)return;
         ContourResult.Text=text;
+        AutomationProperties.SetName(ContourResult,text.Length==0 ? "Kontur boyunca ölçüm sonucu" : "Kontur boyunca ölçüm sonucu: "+text);
         if(UIElementAutomationPeer.CreatePeerForElement(ContourResult) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
     private void SetResult(string text)
     {
         if(Result.Text==text)return;
         Result.Text=text;
+        AutomationProperties.SetName(Result,text.Length==0 ? "Geometrik mesafe sonucu" : "Geometrik mesafe sonucu: "+text);
         if(UIElementAutomationPeer.CreatePeerForElement(Result) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    private void SetPickStatus(string text)
+    {
+        if(PickStatus.Text==text)return;
+        PickStatus.Text=text;
+        AutomationProperties.SetName(PickStatus,text.Length==0 ? "Önizleme seçimi durumu" : "Önizleme seçimi durumu: "+text);
+        if(UIElementAutomationPeer.CreatePeerForElement(PickStatus) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
 
     private sealed record PointChoice(int Index, Point2 Point, string Label);
