@@ -3,6 +3,14 @@ import XCTest
 
 final class ModelLoadStateTests: XCTestCase {
     #if DEBUG
+    func testExportAttemptRejectsLateCallbackFromEarlierAttempt() {
+        let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let old = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: Data([1]))
+        let current = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: Data([2]))
+        XCTAssertFalse(current.matches(old.id))
+        XCTAssertTrue(current.matches(current.id))
+        XCTAssertNotEqual(old.bytes, current.bytes)
+    }
     func testBriefSavedSnapshotTracksLaterChangesIncludingImage() {
         func draft(_ description: String, image: Data? = nil) -> ExperimentalDesignBrief.Draft {
             .init(style: .describe, description: description, bust: "", waist: "", hips: "", length: "",

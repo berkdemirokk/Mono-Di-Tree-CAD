@@ -2383,6 +2383,19 @@ private struct DressStyleSketch: Shape {
         return path
     }
 }
+/// A distinct view captures one attempt even if a previous system callback is late.
+private struct DesignBriefExportBridge: View {
+    let attempt: ExperimentalDesignBrief.ExportAttempt
+    @Binding var isPresented: Bool
+    let completed: (UUID, Result<URL, Error>) -> Void
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0)
+            .fileExporter(isPresented: $isPresented, document: ProjectExportDocument(data: attempt.bytes), contentType: .json,
+                          defaultFilename: "kalip-istegi.tcad-request.json") { result in
+                completed(attempt.id, result)
+            }
+    }
+}
 private struct ExperimentalDesignBriefView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var style = ExperimentalDesignBrief.DressStyle.describe
@@ -2398,8 +2411,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var imageName: String?
     @State private var selectingImage = false
     @State private var exporting = false
-    @State private var exportDocument: ProjectExportDocument?
-    @State private var pendingDraft: ExperimentalDesignBrief.Draft?
+    @State private var exportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var savedDraft: ExperimentalDesignBrief.Draft?
     @State private var message = ""
 
@@ -2411,12 +2423,10 @@ private struct ExperimentalDesignBriefView: View {
     private var requestPrompt: String { draft.prompt }
     private var requestMeasurements: String { draft.measurements }
     private func prepareExport() {
-        pendingDraft = nil
         do {
             let candidate = draft
             let data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName)
-            pendingDraft = candidate
-            exportDocument = ProjectExportDocument(data: data)
+            exportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
             exporting = true
         } catch {
             message = "Tarif veya görsel gereklidir; metinlerin her biri en fazla 16.384 UTF-16 birimi, görsel en fazla 8 MiB olmalıdır."
@@ -2539,15 +2549,22 @@ private struct ExperimentalDesignBriefView: View {
                     if !isFilePickerCancellation(error) { message = "Görsel okunamadı veya PNG/JPEG değil veya 8 MiB sınırını aşıyor; önceki seçim korundu." }
                 }
             }
-            .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json,
-                          defaultFilename: "kalip-istegi.tcad-request.json") { result in
-                switch result {
-                case .success:
-                    savedDraft = pendingDraft; pendingDraft = nil
-                    message = "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
-                case .failure(let error):
-                    pendingDraft = nil
-                    if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
+            .background {
+                if let attempt = exportAttempt {
+                    DesignBriefExportBridge(attempt: attempt, isPresented: $exporting) { id, result in
+                        guard let current = exportAttempt, current.matches(id) else { return }
+                        exportAttempt = nil
+                        switch result {
+                        case .success:
+                            savedDraft = current.draft
+                            message = current.draft == draft
+                                ? "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
+                                : "Önceki içerik kaydedildi; sonraki değişiklikler henüz kaydedilmedi."
+                        case .failure(let error):
+                            if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
+                        }
+                    }
+                    .id(attempt.id)
                 }
             }
         }

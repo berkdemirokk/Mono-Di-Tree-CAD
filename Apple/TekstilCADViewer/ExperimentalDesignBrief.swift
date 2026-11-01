@@ -57,6 +57,12 @@ enum ExperimentalDesignBrief {
             ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
         }
     }
+    struct ExportAttempt: Identifiable {
+        let id = UUID()
+        let draft: Draft
+        let bytes: Data
+        func matches(_ callbackID: UUID) -> Bool { id == callbackID }
+    }
     /// Selection describes an intended style; no pattern geometry is implied.
     static func prompt(style: DressStyle, description: String) -> String {
         guard style != .describe else { return description }
