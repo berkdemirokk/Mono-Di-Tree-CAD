@@ -1061,6 +1061,9 @@ final class ViewerUITests: XCTestCase {
         app.launch()
         let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "2 parçanın tüm noktaları üst üste geliyor")).firstMatch
         XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch.tap()
+        app.buttons["Normal"].tap()
+        XCTAssertTrue(warning.exists)
     }
 
     func testInsufficientContoursRemainSearchableButAreNotDrawnOrMeasured() {

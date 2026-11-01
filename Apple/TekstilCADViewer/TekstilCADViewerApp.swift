@@ -145,12 +145,12 @@ private struct ContentView: View {
                     Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if project.pieces.contains(where: { !$0.hasMinimumContourPoints }) {
-                    Text("\(project.pieces.filter { !$0.hasMinimumContourPoints }.count) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
+                if project.insufficientContourCount > 0 {
+                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                if project.pieces.contains(where: { ContourMeasure.isCollapsed($0.points) }) {
-                    Text("Uyarı: \(project.pieces.filter { ContourMeasure.isCollapsed($0.points) }.count) parçanın tüm noktaları üst üste geliyor. Bu konturların geometrisini masaüstünde kontrol edin.")
+                if project.collapsedContourCount > 0 {
+                    Text("Uyarı: \(project.collapsedContourCount) parçanın tüm noktaları üst üste geliyor. Bu konturların geometrisini masaüstünde kontrol edin.")
                         .font(.caption).foregroundStyle(.orange)
                 }
                 if project.pieces.contains(where: { !$0.notches.isEmpty }) {
@@ -1492,6 +1492,8 @@ private struct Drawing {
     let pieceRenameIdentitiesValid: Bool
     let formatVersion: Int
     let hasNonUTF8BOM: Bool
+    let insufficientContourCount: Int
+    let collapsedContourCount: Int
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -1710,7 +1712,9 @@ private struct Drawing {
         }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
-                       formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data))
+                       formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data),
+                       insufficientContourCount: pieces.filter { !$0.hasMinimumContourPoints }.count,
+                       collapsedContourCount: pieces.filter { ContourMeasure.isCollapsed($0.points) }.count)
     }
 }
 
