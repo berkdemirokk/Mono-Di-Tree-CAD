@@ -2361,8 +2361,13 @@ struct Drawing {
 #if DEBUG
 private struct ExperimentalDesignBriefView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var style = ExperimentalDesignBrief.DressStyle.describe
     @State private var description = ""
-    @State private var measurements = ""
+    @State private var bust = ""
+    @State private var waist = ""
+    @State private var hips = ""
+    @State private var length = ""
+    @State private var otherMeasurements = ""
     @State private var image: Data?
     @State private var imageName: String?
     @State private var selectingImage = false
@@ -2370,9 +2375,13 @@ private struct ExperimentalDesignBriefView: View {
     @State private var exportDocument: ProjectExportDocument?
     @State private var message = ""
 
+    private var requestPrompt: String { ExperimentalDesignBrief.prompt(style: style, description: description) }
+    private var requestMeasurements: String {
+        ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
+    }
     private func prepareExport() {
         do {
-            let data = try ExperimentalDesignBrief.make(prompt: description, measurements: measurements, image: image, imageName: imageName)
+            let data = try ExperimentalDesignBrief.make(prompt: requestPrompt, measurements: requestMeasurements, image: image, imageName: imageName)
             exportDocument = ProjectExportDocument(data: data)
             exporting = true
         } catch {
@@ -2383,18 +2392,33 @@ private struct ExperimentalDesignBriefView: View {
         NavigationStack {
             Form {
                 Text("Kadın elbise tarifinizi, açıkça bildiğiniz ölçüleri ve isteğe bağlı örneği masaüstünde incelenmek üzere hazırlayın. Bu dosya kalıp üretmez ve verileri otomatik göndermez. Üretim için ayrıca onaylı kalıp gerekir.")
-                Section("Elbise tarifi") { TextEditor(text: $description).frame(minHeight: 100) }
-                Section("Ölçüler ve birimler") {
-                    TextEditor(text: $measurements).frame(minHeight: 80)
-                    Text("Örneğin: göğüs 92 cm, bel 72 cm, basen 98 cm, elbise boyu 110 cm. Yalnız bildiğiniz ölçüleri girin; eksikler tamamlanmaz.").font(.caption)
+                Section("1 · Nasıl bir elbise istiyorsunuz?") {
+                    Picker("Model tarifi", selection: $style) {
+                        ForEach(ExperimentalDesignBrief.DressStyle.allCases) { style in Text(style.rawValue).tag(style) }
+                    }
+                    Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. İsterseniz ayrıntıları kendi sözlerinizle yazın.").font(.caption)
+                    TextEditor(text: $description).frame(minHeight: 100)
                 }
-                Section("Örnek görsel · isteğe bağlı") {
+                Section("2 · Bildiğiniz ölçüler neler?") {
+                    Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
+                    TextField("Göğüs · ör. 92 cm", text: $bust)
+                    TextField("Bel · ör. 72 cm", text: $waist)
+                    TextField("Basen · ör. 98 cm", text: $hips)
+                    TextField("Elbise boyu · ör. 110 cm", text: $length)
+                    Text("Ek ölçüler veya notlar").font(.caption)
+                    TextEditor(text: $otherMeasurements).frame(minHeight: 70)
+                }
+                Section("3 · Örnek görsel · isteğe bağlı") {
                     Button("Dosyalardan görsel seç") { selectingImage = true }
                     if let imageName {
                         Text("Seçilen: \(ModelStore.safeLabel(imageName))")
                         Button("Görseli kaldır") { image = nil; self.imageName = nil }
                     }
                     Text("Seçilen görsel özgün baytlarıyla, içerebileceği konum ve diğer bilgiler dahil dosyaya eklenir. PNG veya JPEG, en fazla 8 MiB.").font(.caption)
+                }
+                Section("4 · İsteğinizi gözden geçirin") {
+                    Text(requestPrompt.isEmpty ? "Henüz model veya tarif yok." : requestPrompt)
+                    Text(requestMeasurements.isEmpty ? "Henüz ölçü girilmedi." : requestMeasurements)
                 }
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
                 Button("İstek dosyasını kaydet…") { prepareExport() }

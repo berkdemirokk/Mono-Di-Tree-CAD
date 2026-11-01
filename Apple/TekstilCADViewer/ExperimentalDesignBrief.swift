@@ -27,6 +27,30 @@ enum ExperimentalDesignBrief {
             else { try box.encodeNil(forKey: .reference) }
         }
     }
+    enum DressStyle: String, CaseIterable, Identifiable {
+        case describe = "Tarif edeceğim"
+        case straight = "Düz elbise"
+        case aline = "A kesim elbise"
+        case wrap = "Anvelop elbise"
+        case shirt = "Gömlek elbise"
+        var id: String { rawValue }
+    }
+
+    /// Selection describes an intended style; no pattern geometry is implied.
+    static func prompt(style: DressStyle, description: String) -> String {
+        guard style != .describe else { return description }
+        return "Seçilen elbise modeli: \(style.rawValue)\n" + description
+    }
+
+    /// Preserve exactly what the user entered, including units and unknowns.
+    static func measurements(bust: String, waist: String, hips: String, length: String, other: String) -> String {
+        let items = [("Göğüs", bust), ("Bel", waist), ("Basen", hips), ("Elbise boyu", length)]
+        var lines = items.compactMap { label, value -> String? in
+            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "\(label): \(value)"
+        }
+        if !other.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { lines.append(other) }
+        return lines.joined(separator: "\n")
+    }
     static func make(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
         guard prompt.utf16.count <= maxTextUnits, measurements.utf16.count <= maxTextUnits else { throw Error.invalidText }
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil else { throw Error.missingContent }

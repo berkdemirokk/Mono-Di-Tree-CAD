@@ -3,6 +3,16 @@ import XCTest
 
 final class ModelLoadStateTests: XCTestCase {
     #if DEBUG
+    func testDressStyleAndOnlyEnteredMeasurementsAreCarriedIntoRequest() throws {
+        let prompt = ExperimentalDesignBrief.prompt(style: .aline, description: "Uzun kollu")
+        let measures = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "", hips: "  ", length: "110 cm", other: "Omuz: 38 cm")
+        let data = try ExperimentalDesignBrief.make(prompt: prompt, measurements: measures, image: nil, imageName: nil)
+        let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
+        XCTAssertEqual(brief.prompt, "Seçilen elbise modeli: A kesim elbise\nUzun kollu")
+        XCTAssertEqual(brief.measurements, "Göğüs: 92 cm\nElbise boyu: 110 cm\nOmuz: 38 cm")
+        XCTAssertEqual(ExperimentalDesignBrief.prompt(style: .describe, description: "Kendi tarifim"), "Kendi tarifim")
+        XCTAssertEqual(ExperimentalDesignBrief.measurements(bust: "", waist: "", hips: "", length: "", other: ""), "")
+    }
     func testDesignBriefPreservesUserTextAndReferenceBytes() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
         let bytes = try ExperimentalDesignBrief.make(prompt: "Mavi ceket\nCepli", measurements: "Göğüs 92 cm", image: image, imageName: "ornek.png")
