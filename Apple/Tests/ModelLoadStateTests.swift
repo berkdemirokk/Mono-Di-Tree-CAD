@@ -3,6 +3,20 @@ import XCTest
 
 final class ModelLoadStateTests: XCTestCase {
     #if DEBUG
+    func testOldExporterCannotDismissNewAttempt() {
+        var presentation = ExperimentalDesignBrief.ExportPresentation()
+        let old = UUID(), current = UUID()
+        presentation.begin(old)
+        XCTAssertTrue(presentation.isPresented(for: old))
+        presentation.setPresented(false, for: old)
+        presentation.begin(current)
+        XCTAssertTrue(presentation.isPresented(for: current))
+        presentation.setPresented(false, for: old)
+        XCTAssertTrue(presentation.isPresented(for: current))
+        XCTAssertFalse(presentation.isPresented(for: old))
+        presentation.setPresented(false, for: current)
+        XCTAssertFalse(presentation.isPresented(for: current))
+    }
     func testExportAttemptRejectsLateCallbackFromEarlierAttempt() {
         let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let old = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: Data([1]))

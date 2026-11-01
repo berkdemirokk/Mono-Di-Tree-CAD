@@ -63,6 +63,16 @@ enum ExperimentalDesignBrief {
         let bytes: Data
         func matches(_ callbackID: UUID) -> Bool { id == callbackID }
     }
+    struct ExportPresentation {
+        private(set) var currentID: UUID?
+        private var presented = false
+        mutating func begin(_ id: UUID) { currentID = id; presented = true }
+        func isPresented(for id: UUID) -> Bool { currentID == id && presented }
+        mutating func setPresented(_ value: Bool, for id: UUID) {
+            guard currentID == id else { return }
+            presented = value
+        }
+    }
     /// Selection describes an intended style; no pattern geometry is implied.
     static func prompt(style: DressStyle, description: String) -> String {
         guard style != .describe else { return description }

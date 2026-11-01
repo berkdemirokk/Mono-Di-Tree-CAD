@@ -2410,7 +2410,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var image: Data?
     @State private var imageName: String?
     @State private var selectingImage = false
-    @State private var exporting = false
+    @State private var exportPresentation = ExperimentalDesignBrief.ExportPresentation()
     @State private var exportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var savedDraft: ExperimentalDesignBrief.Draft?
     @State private var message = ""
@@ -2426,8 +2426,9 @@ private struct ExperimentalDesignBriefView: View {
         do {
             let candidate = draft
             let data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName)
-            exportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
-            exporting = true
+            let attempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
+            exportAttempt = attempt
+            exportPresentation.begin(attempt.id)
         } catch {
             message = "Tarif veya görsel gereklidir; metinlerin her biri en fazla 16.384 UTF-16 birimi, görsel en fazla 8 MiB olmalıdır."
         }
@@ -2551,7 +2552,9 @@ private struct ExperimentalDesignBriefView: View {
             }
             .background {
                 if let attempt = exportAttempt {
-                    DesignBriefExportBridge(attempt: attempt, isPresented: $exporting) { id, result in
+                    DesignBriefExportBridge(attempt: attempt, isPresented: Binding(
+                        get: { exportPresentation.isPresented(for: attempt.id) },
+                        set: { exportPresentation.setPresented($0, for: attempt.id) })) { id, result in
                         guard let current = exportAttempt, current.matches(id) else { return }
                         exportAttempt = nil
                         switch result {
