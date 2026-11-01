@@ -1220,7 +1220,16 @@ private struct Drawing {
 
     private static func readCoordinatedData(_ url: URL) throws -> Data {
         let limit = 64 * 1024 * 1024
-        let file = try FileHandle(forReadingFrom: url)
+        // A FIFO named .tcad can block indefinitely when opened normally.
+        // Open without waiting and validate the opened object before reading.
+        let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NONBLOCK) }
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            close(descriptor)
+            throw ViewerError.message("Yalnızca normal proje dosyaları açılabilir.")
+        }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
         var data = Data()
         while true {

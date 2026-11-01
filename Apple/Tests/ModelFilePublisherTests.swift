@@ -12,6 +12,25 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testOpeningSpecialModelFileFailsWithoutWaitingForWriter() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fifo = root.appendingPathComponent("waiting.tcad")
+        XCTAssertEqual(fifo.path.withCString { mkfifo($0, 0o600) }, 0)
+        let regular = root.appendingPathComponent("normal.tcad")
+        let bytes = Data("model".utf8)
+        try bytes.write(to: regular)
+        let entries = try ModelStore.models(in: root)
+        let special = try XCTUnwrap(entries.first { $0.url == fifo })
+        XCTAssertThrowsError(try ModelStore.readListedPayload(special))
+        var info = stat()
+        XCTAssertEqual(fifo.path.withCString { lstat($0, &info) }, 0)
+        XCTAssertEqual(info.st_mode & S_IFMT, S_IFIFO)
+        let ordinary = try XCTUnwrap(entries.first { $0.url == regular })
+        XCTAssertEqual(try ModelStore.readListedPayload(ordinary), bytes)
+    }
+
     func testSpecialMetadataFilesDoNotBlockLibraryOrFollowLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
