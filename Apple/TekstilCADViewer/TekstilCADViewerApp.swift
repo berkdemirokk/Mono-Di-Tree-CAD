@@ -1090,7 +1090,8 @@ private struct Drawing {
             guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
             let points: [Point] = try rawPoints.map { point in
                 guard let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]),
-                      x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100 else {
+                      x.isFinite, y.isFinite, abs(x) < 1e100, abs(y) < 1e100,
+                      (point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true) else {
                     throw ViewerError.message("Geçersiz veya gösterilemeyen koordinat.")
                 }
                 return Point(x: x, y: y)
@@ -1128,6 +1129,8 @@ private struct Drawing {
                let sx = jsonNumber(start["X"]), let sy = jsonNumber(start["Y"]),
                let ex = jsonNumber(end["X"]), let ey = jsonNumber(end["Y"]),
                sx.isFinite, sy.isFinite, ex.isFinite, ey.isFinite,
+               (start["IsFinite"] == nil || jsonBoolean(start["IsFinite"]) == true),
+               (end["IsFinite"] == nil || jsonBoolean(end["IsFinite"]) == true),
                [sx, sy, ex, ey].allSatisfy({ abs($0) < 1e100 }),
                (sx != ex || sy != ey), let review = jsonBoolean(grain["NeedsReview"]) {
                 grainStatus = review ? "İplik yönü: Kontrol bekliyor" : "İplik yönü: Kayıtlı"

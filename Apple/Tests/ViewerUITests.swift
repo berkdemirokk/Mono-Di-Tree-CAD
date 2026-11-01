@@ -1,6 +1,36 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testInvalidFiniteFlagDoesNotProduceAContourPreview() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        for value in ["false", "null", "1", "\"true\""] {
+            let fixture = #"[5,{"Name":"Kontur","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0,"IsFinite":\#(value)},{"X":10,"Y":20}]}],"GradingRules":[]}]"#
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15), "Invalid IsFinite value: \(value)")
+            XCTAssertFalse(app.otherElements["1 parçalı kontur önizlemesi"].exists)
+            app.terminate()
+        }
+        let valid = #"[5,{"Name":"Kontur","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0,"IsFinite":true},{"X":10,"Y":20}]}],"GradingRules":[]}]"#
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(valid.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.otherElements["1 parçalı kontur önizlemesi"].waitForExistence(timeout: 15))
+    }
+
+    func testInvalidGrainEndpointFlagIsNotShownAsValidGrainline() {
+        let fixture = #"[5,{"Name":"İplik","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Grainline":{"Start":{"X":0,"Y":0,"IsFinite":false},"End":{"X":1,"Y":1},"NeedsReview":false}}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let next = app.buttons["Sonraki parça"]
+        XCTAssertTrue(next.waitForExistence(timeout: 15))
+        next.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "İplik yönü: Okunamadı")).firstMatch.exists)
+        XCTAssertFalse(app.buttons["İplik yönlerini gizle"].exists)
+    }
+
     func testLargeViewDistinguishesSameNamedSizesWhileNavigating() {
         let fixture = #"{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":100}],"Metadata":{"Size":"S"}},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":120,"Y":120}],"Metadata":{"Size":"XL"}}]}"#
         let app = XCUIApplication()
