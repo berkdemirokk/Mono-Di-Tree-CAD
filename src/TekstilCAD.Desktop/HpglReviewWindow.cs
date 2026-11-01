@@ -30,6 +30,7 @@ internal sealed class HpglReviewWindow : Window
         public override string ToString()=> $"Nokta {Sample.SourceVertexIndex+1} · "+(Sample.SourceSign!=0 && Sample.PlotSign==0 ? "düzleşen" : Sample.SourceSign==0 ? "yeni dönüş" : "yönü değişen");
     }
     internal TextBlock PageStatus { get; } = new() { Text="Parça seçin.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
+    internal TextBlock BoundsSummary { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
     internal CheckBox ChangedOnlyFilter { get; } = new() { Content="Yalnız değişen parçaları göster",Margin=new Thickness(0,5,0,4) };
     internal Button MoreSamplesButton { get; } = new() { Content="Seçili parçayı ayrıntılı incele",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),IsEnabled=false };
     internal Button CancelReviewButton { get; } = new() { Content="İncelemeyi iptal et",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),Visibility=Visibility.Collapsed };
@@ -69,6 +70,7 @@ internal sealed class HpglReviewWindow : Window
         var root=new Grid { Margin=new Thickness(16) };
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });Content=root;
         var description=new TextBlock { TextWrapping=TextWrapping.Wrap,Text=
@@ -84,11 +86,17 @@ internal sealed class HpglReviewWindow : Window
         KeyboardNavigation.SetIsTabStop(descriptionViewer,true);AutomationProperties.SetName(descriptionViewer,"HPGL incelemesinin kapsamı ve sınırlamaları");
         AutomationProperties.SetHelpText(descriptionViewer,"Tam kapsam ve uyarılar için bu alanı yön tuşlarıyla kaydırın.");
         Grid.SetRow(descriptionViewer,0);root.Children.Add(descriptionViewer);
+        var bounds=prepared.Bounds;
+        BoundsSummary.Text=$"HPGL sınırı: X {bounds.MinX}…{bounds.MaxX}, Y {bounds.MinY}…{bounds.MaxY} birim. "+
+            (bounds.HasNegativeCoordinates ? "Negatif koordinat; cihaz alanını kontrol edin." : "Cihaz doğrulanmadı.");
+        BoundsSummary.Foreground=bounds.HasNegativeCoordinates ? StudioTheme.Warning : StudioTheme.Text;
+        AutomationProperties.SetName(BoundsSummary,"Hazırlanan HPGL çıktı koordinat sınırları");
+        Grid.SetRow(BoundsSummary,1);root.Children.Add(BoundsSummary);
         var actions=new StackPanel { Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         CancelButton.Click+=(_,_)=>DialogResult=false;ExportButton.Click+=(_,_)=>DialogResult=true;
-        actions.Children.Add(CancelButton);actions.Children.Add(ExportButton);Grid.SetRow(actions,3);root.Children.Add(actions);
+        actions.Children.Add(CancelButton);actions.Children.Add(ExportButton);Grid.SetRow(actions,4);root.Children.Add(actions);
         SelectedDetails.IsReadOnly=true;SelectedDetails.AcceptsReturn=true;SelectedDetails.TextWrapping=TextWrapping.Wrap;
-        SelectedDetails.MinHeight=48;SelectedDetails.MaxHeight=70;SelectedDetails.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;
+        SelectedDetails.MinHeight=48;SelectedDetails.MaxHeight=48;SelectedDetails.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;
         SelectedDetails.Margin=new Thickness(0,8,0,0);
         AutomationProperties.SetName(SelectedDetails,"Seçili parçanın dönüş incelemesi ayrıntıları");
         AutomationProperties.SetHelpText(SelectedDetails,"Tam ad ve kimlik ile birden başlayan kaynak nokta numaralarını seçip kopyalayabilirsiniz. Uzun ayrıntıyı kaydırın.");
@@ -104,7 +112,7 @@ internal sealed class HpglReviewWindow : Window
         AutomationProperties.SetName(comparisonMode,"Karşılaştırma görünümü ve yakınlaştırma düzeyi");AutomationProperties.SetLiveSetting(comparisonMode,AutomationLiveSetting.Polite);
         comparisonActions.Children.Add(SampleSelector);comparisonActions.Children.Add(ShowWholeButton);comparisonActions.Children.Add(ZoomOutButton);comparisonActions.Children.Add(ZoomInButton);comparisonActions.Children.Add(ResetZoomButton);comparisonActions.Children.Add(comparisonMode);
         DockPanel.SetDock(comparisonActions,Dock.Top);comparisonPanel.Children.Add(comparisonActions);
-        var legend=new TextBlock { Text="Kaynak: kesik / üçgen. HPGL: düz / daire. İşaretler semboliktir; fiziksel ölçüm değildir. Yakınlaştırmada görünüm dışı çizgiler kırpılır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,3) };
+        var legend=new TextBlock { Text="Kaynak: kesik/üçgen; HPGL: düz/daire. Ölçüm değildir; görünüm kırpılabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,3) };
         DockPanel.SetDock(legend,Dock.Top);comparisonPanel.Children.Add(legend);
         AutomationProperties.SetName(GeometryText,"Kaynak ve HPGL örnek koordinatları");
         AutomationProperties.SetHelpText(GeometryText,"Sayfadaki dönüşler için kaynak ve yuvarlanmış HPGL koordinatlarını milimetre cinsinden okuyun ve kopyalayın.");
@@ -154,7 +162,7 @@ internal sealed class HpglReviewWindow : Window
         var statusRow=new Grid();statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });statusRow.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
         filterStatus.Margin=new Thickness(0,0,12,0);filterStatus.MaxWidth=190;statusRow.Children.Add(filterStatus);
         AutomationProperties.SetName(PageStatus,"HPGL örnek sayfası durumu");AutomationProperties.SetLiveSetting(PageStatus,AutomationLiveSetting.Polite);
-        Grid.SetColumn(PageStatus,1);statusRow.Children.Add(PageStatus);filterPanel.Children.Add(statusRow);Grid.SetRow(filterPanel,1);root.Children.Add(filterPanel);
+        Grid.SetColumn(PageStatus,1);statusRow.Children.Add(PageStatus);filterPanel.Children.Add(statusRow);Grid.SetRow(filterPanel,2);root.Children.Add(filterPanel);
         var gridArea=new Grid();gridArea.Children.Add(ReportsGrid);
         var empty=new TextBlock { Text="Gösterilecek parça yok. Tüm parçaları görmek için filtreyi kaldırın.",TextWrapping=TextWrapping.Wrap,
             HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(12),IsHitTestVisible=false,Visibility=Visibility.Collapsed };
@@ -177,7 +185,7 @@ internal sealed class HpglReviewWindow : Window
         ZoomInButton.Click+=(_,_)=> { GeometryComparison.SetZoom(GeometryComparison.ZoomFactorForVerification*2);UpdateZoomControls(); };
         ZoomOutButton.Click+=(_,_)=> { GeometryComparison.SetZoom(GeometryComparison.ZoomFactorForVerification/2);UpdateZoomControls(); };
         ResetZoomButton.Click+=(_,_)=> { GeometryComparison.SetZoom(1);UpdateZoomControls(); };
-        Grid.SetRow(detailsTabs,2);root.Children.Add(detailsTabs);
+        Grid.SetRow(detailsTabs,3);root.Children.Add(detailsTabs);
         SelectedDetails.Text="Parça seçerek ayrıntıları inceleyin.";
         void ApplyFilter()
         {

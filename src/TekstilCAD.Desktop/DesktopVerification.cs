@@ -3958,6 +3958,16 @@ internal static class DesktopVerification
         var prepared=HpglFormat.Prepare(document,40);var review=new HpglReviewWindow(studio,prepared,document.Pieces);
         Render(review,Path.ChangeExtension(reportPath,".hpgl-review-compact.png"),580,420);
         var root=(FrameworkElement)review.Content;var rows=review.ReportsGrid.Items.Cast<object>().ToArray();
+        Check(review.BoundsSummary.Text.Contains("X 0…1200") && review.BoundsSummary.Text.Contains("Y 0…400") &&
+            review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),
+            "Compact HPGL review exposes full encoded bounds without claiming machine compatibility",checks);
+        var negativeDocument=new ProjectDocument { Pieces=[new PatternPiece { Name="negatif",Closed=false,Points=[new(-1,0),new(1,1)] }] };
+        var negativeReview=new HpglReviewWindow(studio,HpglFormat.Prepare(negativeDocument,40),negativeDocument.Pieces);
+        var negativeRoot=(FrameworkElement)negativeReview.Content;negativeRoot.Measure(new Size(580,420));negativeRoot.Arrange(new Rect(0,0,580,420));negativeRoot.UpdateLayout();
+        Check(negativeReview.BoundsSummary.Text.Contains("X -40…40") && negativeReview.BoundsSummary.Text.Contains("Negatif koordinat") &&
+            FullyVisible(negativeReview.BoundsSummary,negativeRoot) && FullyVisible(negativeReview.ExportButton,negativeRoot),
+            "Compact HPGL review visibly warns about encoded negative coordinates",checks);
+        negativeReview.Close();
         Check(rows.Length==2 && review.ReportsGrid.IsReadOnly && prepared.TurnReviews[0].FlattenedTurns>0 && prepared.TurnReviews[1].ChangedTurns==0
             && AutomationProperties.GetName(review.ReportsGrid)=="HPGL parça dönüş raporları",
             "HPGL review displays every piece and reports detected flattened turns",checks);
@@ -9136,6 +9146,8 @@ internal static class DesktopVerification
         var window=new DesignRequestWindow(studio);
         try
         {
+            Check(window.CreateDrawingNotes() is null && window.StatusForVerification.Text.Contains("kaydedin") && DocumentSession.ContentEquals(before,studio.Document),
+                "An unsaved new design request cannot become drawing notes",checks);
             typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
             var blankRoot=(FrameworkElement)window.Content;blankRoot.Measure(new Size(480,420));blankRoot.Arrange(new Rect(0,0,480,420));blankRoot.UpdateLayout();
             Check(window.StatusForVerification.Text.Contains("Açıklama veya referans görseli gereklidir") &&
@@ -9146,6 +9158,29 @@ internal static class DesktopVerification
             window.LoadForVerification(input);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "Design request loads text and exact image bytes independently",checks);
+            var notes=window.CreateDrawingNotes();
+            Check(notes is not null && ReferenceEquals(notes.Owner,studio) && notes.DescriptionForVerification.IsReadOnly && notes.DescriptionForVerification.Text==input.Prompt &&
+                notes.MeasurementsForVerification.IsReadOnly && notes.MeasurementsForVerification.Text==input.Measurements && notes.ReferenceForVerification.IsReadOnly &&
+                notes.ReferenceForVerification.Text.Contains("örnek.png") && notes.ReferenceForVerification.Text.Contains("yorumlanmıyor") &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "Saved request creates independent read-only drawing notes without editing the CAD project",checks);
+            var notesRoot=(FrameworkElement)notes!.Content;notesRoot.Measure(new Size(360,360));notesRoot.Arrange(new Rect(0,0,360,360));notesRoot.UpdateLayout();
+            Check(new[] { notes.DescriptionForVerification,notes.MeasurementsForVerification,notes.ReferenceForVerification }.All(x=>x.Focusable && FullyVisible(x,notesRoot)),
+                "Drawing notes fields stay visible and keyboard reachable at minimum size",checks);
+            window.ChatInputForVerification.Text="gönderilmemiş";
+            Check(window.CreateDrawingNotes() is null && window.ChatInputForVerification.Text=="gönderilmemiş" && window.StatusForVerification.Text.Contains("mesajı gönderin"),
+                "Unsent chat blocks drawing notes while preserving the message",checks);
+            window.ChatInputForVerification.Clear();window.PromptForVerification.Text="Kaydedilmemiş değişiklik";
+            Check(window.CreateDrawingNotes() is null && window.PromptForVerification.Text=="Kaydedilmemiş değişiklik" && notes.DescriptionForVerification.Text==input.Prompt,
+                "Modified request blocks drawing notes and an earlier snapshot remains unchanged",checks);
+            notes.Close();window.LoadForVerification(input);
+            var unusual=new DesignRequest(new string('x',DesignRequestStorage.MaximumTextLength),new string('y',DesignRequestStorage.MaximumTextLength),new("görsel\u202E\U000E0001👗.png","image/png",[137,80,78,71,13,10,26,10]));
+            var longNotes=new RequestNotesWindow(studio,unusual);
+            Check(longNotes.DescriptionForVerification.Text==unusual.Prompt && longNotes.MeasurementsForVerification.Text==unusual.Measurements &&
+                longNotes.ReferenceForVerification.Text.Contains("\\u202E") && longNotes.ReferenceForVerification.Text.Contains("\\U000E0001") &&
+                longNotes.ReferenceForVerification.Text.Contains("👗") && !longNotes.ReferenceForVerification.Text.Contains('\u202E'),
+                "Drawing notes preserve long source text and escape misleading filename controls",checks);
+            longNotes.Close();
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
                 "Dress request reports explicitly stated chest and asks for missing measurements",checks);

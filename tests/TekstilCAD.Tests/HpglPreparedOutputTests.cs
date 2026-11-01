@@ -5,6 +5,31 @@ namespace TekstilCAD.Tests;
 
 public sealed class HpglPreparedOutputTests
 {
+    [Fact]
+    public void OutputBoundsCoverEveryEncodedPieceAndRemainACapturedSnapshot()
+    {
+        var project=new ProjectDocument { Pieces=[
+            new PatternPiece { Name="bir",Closed=false,Points=[new(-0.026,2),new(5,3)] },
+            new PatternPiece { Name="iki",Closed=false,Points=[new(1,-4),new(8,9)] }
+        ] };
+        var output=HpglFormat.Prepare(project,40);
+        Assert.Equal(new HpglOutputBounds(-1,-160,320,360),output.Bounds);
+        Assert.True(output.Bounds.HasNegativeCoordinates);
+        Assert.Contains("PU-1,80;PD200,120",output.Text);
+        Assert.Contains("PU40,-160;PD320,360",output.Text);
+        project.Pieces[0].Points[0]=new(2,2);
+        Assert.Equal(-1,output.Bounds.MinX);
+    }
+
+    [Fact]
+    public void NegativeSourceRoundedToZeroIsNotARecordedNegativeCoordinate()
+    {
+        var project=new ProjectDocument { Pieces=[new PatternPiece { Name="çizgi",Closed=false,Points=[new(-0.01,0),new(1,1)] }] };
+        var output=HpglFormat.Prepare(project,40);
+        Assert.Equal(new HpglOutputBounds(0,0,40,40),output.Bounds);
+        Assert.False(output.Bounds.HasNegativeCoordinates);
+        Assert.Contains("PU0,0;PD40,40",output.Text);
+    }
     private static string Target(string file)
     {
         var root=new DirectoryInfo(AppContext.BaseDirectory);

@@ -27,7 +27,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly ScrollViewer statusViewport=new() { MaxHeight=72,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Visibility=Visibility.Collapsed,Focusable=true };
     private readonly ScrollViewer bodyScroller=new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     private DesignReference? reference;
-    private bool dirty,loading,preservingLastModel;
+    private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
@@ -55,6 +55,9 @@ internal sealed class DesignRequestWindow : Window
         var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
         body.Children.Add(new TextBlock { Text="Modelini ve isteğini anlat",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
         body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan yazın. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
+        var drawingNotes=new Button { Content="Kaydedilmiş notlarla çizime geç",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,8) };
+        AutomationProperties.SetHelpText(drawingNotes,"Kaydedilmiş isteğin salt okunur notlarını ana çizim penceresiyle birlikte açar. Kalıp oluşturmaz.");
+        drawingNotes.Click+=(_,_)=>OpenDrawingNotes();body.Children.Add(drawingNotes);
         body.Children.Add(new TextBlock { Text="01  ·  MODEL FİKRİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         body.Children.Add(new TextBlock { Text="Kartlar tarife fikir ekler; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         var models=new WrapPanel { Margin=new Thickness(0,0,0,6) };body.Children.Add(models);
@@ -117,6 +120,22 @@ internal sealed class DesignRequestWindow : Window
         statusViewport.ScrollToTop();
         if(UIElementAutomationPeer.FromElement(status) is { } peer)
             peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    internal RequestNotesWindow? CreateDrawingNotes()
+    {
+        if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Çizime geçmeden önce mesajı gönderin veya silin ve isteği kaydedin; mesaj korundu.");return null; }
+        if(!hasSavedRequest || dirty) { SetStatus("Çizime geçmeden önce isteği yeni bir dosyaya kaydedin; mevcut alanlar korundu.");return null; }
+        if(Owner is not Window owner) { SetStatus("Ana çizim penceresi bulunamadı; istek korundu.");return null; }
+        return new RequestNotesWindow(owner,Capture());
+    }
+    private void OpenDrawingNotes()
+    {
+        var notes=CreateDrawingNotes();if(notes is null)return;
+        var owner=notes.Owner!;bool closed=false;EventHandler markClosed=(_,_)=>closed=true;Closed+=markClosed;
+        Close();
+        if(!closed) { Closed-=markClosed;return; }
+        // Opening after the modal dialog unwinds lets the owner receive input.
+        _=owner.Dispatcher.BeginInvoke(new Action(()=> { if(owner.IsLoaded)notes.Show(); }));
     }
     private void SetLastModel(Button? selected)
     {
@@ -217,7 +236,7 @@ internal sealed class DesignRequestWindow : Window
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;RefreshConversation(); }
+        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
@@ -252,7 +271,7 @@ internal sealed class DesignRequestWindow : Window
         catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
-        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."); }
+        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
 }

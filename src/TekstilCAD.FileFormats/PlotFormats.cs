@@ -90,6 +90,11 @@ public static class SvgFormat
 
 /// <summary>A captured source coordinate in output millimetres and its actual integer HPGL coordinate.</summary>
 public readonly record struct HpglPreviewPoint(double SourceX,double SourceY,int PlotX,int PlotY);
+/// <summary>Extents of the actual integer coordinates written in a prepared file, not a device compatibility check.</summary>
+public readonly record struct HpglOutputBounds(int MinX,int MinY,int MaxX,int MaxY)
+{
+    public bool HasNegativeCoordinates=>MinX<0 || MinY<0;
+}
 
 /// <summary>Immutable bounded geometry for one piece; source coordinates already include any simulator scale.</summary>
 public sealed class HpglPieceGeometryPreview
@@ -110,10 +115,11 @@ public sealed class HpglPreparedOutput
     private readonly Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes;
     private readonly Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews;
     internal HpglPreparedOutput(string text,double units,IReadOnlyList<HpglTurnReview.Report> reviews,
-        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews)
-    { Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews; }
+        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews,HpglOutputBounds bounds)
+    { Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews;Bounds=bounds; }
     public string Text { get; }
     public double UnitsPerMillimeter { get; }
+    public HpglOutputBounds Bounds { get; }
     /// <summary>Informational only; not a guarantee of geometry or machine compatibility.</summary>
     public IReadOnlyList<HpglTurnReview.Report> TurnReviews { get; }
 
@@ -249,6 +255,7 @@ public static class HpglFormat
         var reviews=new List<HpglTurnReview.Report>();var remainingSamples=100;
         var reviewIndexes=includeReviews ? new Dictionary<Guid,HpglTurnReview.Index>(project.Pieces.Count) : null;
         var geometryPreviews=includeReviews ? new Dictionary<Guid,HpglPieceGeometryPreview>(project.Pieces.Count) : null;
+        var minX=int.MaxValue;var minY=int.MaxValue;var maxX=int.MinValue;var maxY=int.MinValue;
         foreach (var p in project.Pieces.Where(p => p.Points.Count >= 2))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -257,6 +264,8 @@ public static class HpglFormat
             {
                 if ((i & 1023) == 0) cancellationToken.ThrowIfCancellationRequested();
                 points[i] = Quantize(p.Points[i],unitsPerMillimeter);
+                minX=Math.Min(minX,points[i].X);minY=Math.Min(minY,points[i].Y);
+                maxX=Math.Max(maxX,points[i].X);maxY=Math.Max(maxY,points[i].Y);
             }
             ValidateQuantizedContour(p, points, cancellationToken);
             if(includeReviews)
@@ -302,7 +311,7 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         var text=b.ToString();cancellationToken.ThrowIfCancellationRequested();
         cancellationToken.ThrowIfCancellationRequested();
-        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews);
+        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews,new HpglOutputBounds(minX,minY,maxX,maxY));
     }
 
     private static void ValidateQuantizedContour(PatternPiece piece, PlotPoint[] points, CancellationToken cancellationToken)
