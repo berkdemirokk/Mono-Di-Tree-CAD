@@ -4,6 +4,19 @@ import XCTest
 final class ContourMeasureTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testComparisonReportIncludesOnlySpansBoundToTheirSelectedPieces() throws {
+        let json = #"[5,{"Name":"Test","Pieces":[{"Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":0}]},{"Name":"B","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":0}]}]}]"#
+        let drawing = try Drawing.load(Data(json.utf8))
+        let first = ContourMeasure.SpanSelection(pieceIndex: 0, start: "0", end: "1")
+        let second = ContourMeasure.SpanSelection(pieceIndex: 1, start: "0", end: "1")
+        let report = try XCTUnwrap(PieceComparisonReport.make(pieces: drawing.pieces, projectName: drawing.name, first: 0, second: 1, firstSpan: first, secondSpan: second, locale: Locale(identifier: "en_US")))
+        XCTAssertTrue(report.contains("Birinci aralık: 0 → 1 · açık kontur · yaklaşık 100 mm"))
+        XCTAssertTrue(report.contains("İkinci aralık: 0 → 1 · açık kontur · yaklaşık 50 mm"))
+        XCTAssertTrue(report.contains("Aralık farkı (ikinci − birinci): -50 mm"))
+        let stale = try XCTUnwrap(PieceComparisonReport.make(pieces: drawing.pieces, projectName: drawing.name, first: 1, second: 1, firstSpan: first, secondSpan: second))
+        XCTAssertTrue(stale.contains("Birinci aralık: seçilmedi veya hesaplanamadı"))
+        XCTAssertTrue(stale.contains("Aralık farkı (ikinci − birinci): hesaplanamadı"))
+    }
     func testComparisonReportIdentifiesPiecesAndStatesItsLimits() throws {
         let json = #"[5,{"Name":"Test","Pieces":[{"Name":"Ön\u202EKol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":200}]},{"Name":"Arka","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":100}]}]}]"#
         let drawing = try Drawing.load(Data(json.utf8))

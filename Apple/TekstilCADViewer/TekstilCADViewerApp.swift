@@ -2672,7 +2672,9 @@ private struct PieceDetails: View {
 }
 // Plain text only: this is not a project file or a production approval.
 enum PieceComparisonReport {
-    static func make(pieces: [Drawing.Piece], projectName: String, first: Int, second: Int, locale: Locale = .current) -> String? {
+    static func make(pieces: [Drawing.Piece], projectName: String, first: Int, second: Int,
+                     firstSpan: ContourMeasure.SpanSelection? = nil, secondSpan: ContourMeasure.SpanSelection? = nil,
+                     locale: Locale = .current) -> String? {
         guard pieces.indices.contains(first), pieces.indices.contains(second) else { return nil }
         func format(_ number: Double?) -> String {
             guard let number, let value = MeasurementDisplay.format(number, locale: locale) else { return "hesaplanamadı" }
@@ -2693,14 +2695,27 @@ enum PieceComparisonReport {
         let a = pieces[first], b = pieces[second]
         let projectPrefix = projectName.prefix(256)
         let projectLabel = ModelStore.safeLabel(String(projectPrefix)) + (projectPrefix.endIndex == projectName.endIndex ? "" : "…")
-        let lines = ["PARÇA KARŞILAŞTIRMASI · YALNIZCA BİLGİ", "Proje: \(projectLabel)", ""] + pieceLines(first, "Birinci") + [""] + pieceLines(second, "İkinci") + ["",
+        var lines = ["PARÇA KARŞILAŞTIRMASI · YALNIZCA BİLGİ", "Proje: \(projectLabel)", ""] + pieceLines(first, "Birinci") + [""] + pieceLines(second, "İkinci") + ["",
             first == second ? "Uyarı: Aynı parça iki kez seçildi." : "İki farklı dosya sırası karşılaştırıldı.",
             "Yaklaşık farklar (ikinci − birinci):",
             "En: \(format(ContourMeasure.difference(first: width(a), second: width(b))))",
             "Boy: \(format(ContourMeasure.difference(first: height(a), second: height(b))))",
             "Toplam kontur uzunluğu: \(format(ContourMeasure.difference(first: a.contourLength, second: b.contourLength)))", "",
             "Değerler dosyadaki düz çizgilerden hesaplanır ve en fazla 6 anlamlı basamağa yuvarlanır. Açık ve kapalı konturların toplamları farklı anlam taşır. Bu metin proje dosyası, dikiş uyumu veya üretime uygunluk doğrulaması değildir."]
-        return lines.joined(separator: "\n")
+        if firstSpan != nil || secondSpan != nil {
+            func describe(_ span: ContourMeasure.SpanSelection?, piece: Drawing.Piece, index: Int, title: String) -> (String, Double?) {
+                guard let span, let start = Int(span.start), let end = Int(span.end),
+                      let length = span.length(points: piece.points, closed: piece.closed, pieceIndex: index) else {
+                    return ("\(title): seçilmedi veya hesaplanamadı", nil)
+                }
+                let direction = piece.closed ? (span.forward ? "ileri" : "geri") : "açık kontur"
+                return ("\(title): \(start) → \(end) · \(direction) · yaklaşık \(format(length))", length)
+            }
+            let left = describe(firstSpan, piece: a, index: first, title: "Birinci aralık")
+            let right = describe(secondSpan, piece: b, index: second, title: "İkinci aralık")
+            lines.insert(contentsOf: ["Seçili kontur aralıkları:", left.0, right.0,
+                                     "Aralık farkı (ikinci − birinci): \(format(ContourMeasure.difference(first: left.1, second: right.1)))", ""], at: lines.count - 1)
+        }        return lines.joined(separator: "\n")
     }
 }
 // A read-only comparison of the currently loaded snapshot, not a production check.
@@ -2755,7 +2770,7 @@ private struct PieceComparisonView: View {
                         Text("Aynı parça iki kez seçildi; farklar sıfır olabilir.").foregroundStyle(.secondary)
                     }
 
-                    if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second) {
+                    if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second, firstSpan: firstSpan, secondSpan: secondSpan) {
                         Button("Karşılaştırma özetini önizle…") { reportPreview = ReportPreview(text: report) }
                     }
                     Section("Seçilen kontur aralıkları") {
@@ -2774,7 +2789,7 @@ private struct PieceComparisonView: View {
                             Text("İkinci aralık: \(secondSpan.start) → \(secondSpan.end)\(b.closed ? (secondSpan.forward ? " · ileri" : " · geri") : "") · yaklaşık \(value) mm")
                         } else { Text("İkinci aralık seçilmedi veya hesaplanamadı.") }
                         Text("Aralık farkı (ikinci − birinci): \(difference(firstLength, secondLength))")
-                        Text("Aralıklar dosyadaki köşeler arasında düz çizgileri izler; dikiş uyumu doğrulanmaz. Paylaşım özeti yalnız toplam kontur bilgilerini içerir.")
+                        Text("Aralıklar dosyadaki köşeler arasında düz çizgileri izler; dikiş uyumu doğrulanmaz. Paylaşım özeti seçili aralıkları ve uyarıları da içerir.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Section("Yaklaşık fark: ikinci − birinci") {
