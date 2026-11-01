@@ -376,7 +376,8 @@ internal sealed class ProductionNestingWindow : Window
         var piece=preview.Drawing?.Pieces.FirstOrDefault(p=>p.Id==selected?.Id);
         if (piece is null || piece.Points.Count==0) { mapping.Text=""; Announce(mapping); return; }
         var bounds=TekstilCAD.Core.Geometry.Bounds(piece.Points);
-        mapping.Text=$"{selected!.Label} · Kumaş solundan {MeasurementInput.Format(bounds.MinX)} mm, üstünden {MeasurementInput.Format(bounds.MinY)} mm · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm. Çizimde kesik ve kalın çizgiyle gösterilir.";
+        var markCount=piece.Notches?.Count ?? 0;
+        mapping.Text=$"{selected!.Label} · Kumaş solundan {MeasurementInput.Format(bounds.MinX)} mm, üstünden {MeasurementInput.Format(bounds.MinY)} mm · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm. Çizimde kesik ve kalın çizgiyle gösterilir. Köşe işareti: {markCount}."+(markCount>0 && preview.MarkersSuppressed ? " İşaretler önizleme sınırı nedeniyle gösterilmiyor." : "");
         Announce(mapping);
     }
     private void InvalidatePreview()
@@ -493,7 +494,9 @@ internal sealed class ProductionNestingWindow : Window
                 ? $"Dört kenarda {MeasurementInput.Format(planned.Nesting.EdgeMargin)} mm pay; kesik iç çerçeve kullanılabilir alanı gösterir."
                 : "Kenar payı 0 mm; kesik iç çerçeve yok.";
             var grainDescription=grainMode switch { 1 => "İplik yönü tek yön (+Y) için doğrulandı.", 2 => "İplik yönü çift yön (±Y) için doğrulandı.", _ => "İplik yönü denetlenmedi." };
-            var markNotice=planned.Nesting.Layout.Pieces.Any(p=>p.Notches is { Count:>0 }) ? " Köşe işaretleri kopyalarda korunur ancak bu önizlemede gösterilmez; kayıt sonrası kontrol edin. Fiziksel çentik değildir." : "";
+            var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
+                ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
+                : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
             SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
@@ -599,10 +602,14 @@ internal sealed class ProductionNestingWindow : Window
     {
         private ProjectDocument? drawing;
         private StreamGeometry? geometry;
+        private Point[] markers=[];
+        internal int MarkerCount { get; private set; }
+        internal bool MarkersSuppressed { get; private set; }
+        private const int MaximumVisibleMarkers=500;
         private Guid? highlightId;
         public Guid? HighlightId { get=>highlightId; set { highlightId=value; InvalidateVisual(); } }
         private double fabricWidth, usedLength, edgeMargin;
-        public ProjectDocument? Drawing { get=>drawing;set { drawing=value;geometry=null;edgeMargin=0;InvalidateVisual(); } }
+        public ProjectDocument? Drawing { get=>drawing;set { drawing=value;geometry=null;edgeMargin=0;markers=[];MarkerCount=0;MarkersSuppressed=false;AutomationProperties.SetHelpText(this,"Önizleme yok; önce pastalı hesaplayın.");InvalidateVisual(); } }
         internal static StreamGeometry BuildGeometry(ProjectDocument value) => BuildGeometryCancellable(value,CancellationToken.None);
         internal static StreamGeometry BuildGeometryCancellable(ProjectDocument value,CancellationToken cancellationToken)
         {
@@ -626,7 +633,14 @@ internal sealed class ProductionNestingWindow : Window
         public void SetDrawing(ProjectDocument value,double widthMm,double lengthMm,double marginMm,StreamGeometry cached)
         {
             if(!cached.IsFrozen)throw new ArgumentException("Önizleme geometrisi dondurulmuş olmalıdır.",nameof(cached));
-            drawing=value;geometry=cached;fabricWidth=widthMm;usedLength=lengthMm;edgeMargin=marginMm;InvalidateVisual();
+            drawing=value;geometry=cached;fabricWidth=widthMm;usedLength=lengthMm;edgeMargin=marginMm;
+            MarkerCount=value.Pieces.Sum(p=>p.Notches?.Count ?? 0);MarkersSuppressed=MarkerCount>MaximumVisibleMarkers;
+            markers=MarkersSuppressed ? [] : value.Pieces.SelectMany(p=>p.Notches ?? []).Select(m=>new Point(m.Position.X,m.Position.Y)).ToArray();
+            var markerHelp=MarkersSuppressed
+                ? $"{MarkerCount} köşe işareti 500 sınırı nedeniyle çizilmiyor. Fiziksel çentik ve üretim uygunluğu doğrulanmaz."
+                : $"Köşe işaretleri sarı halkalardır; {MarkerCount} işaret üst üste gelebilir. Ekran fiziksel ölçü değildir, işaretler fiziksel çentik değildir.";
+            AutomationProperties.SetHelpText(this,"Dış çerçeve kumaşı, kesik iç çerçeve kenar payını gösterir. "+markerHelp);
+            InvalidateVisual();
         }
         protected override void OnRender(DrawingContext dc)
         {
@@ -652,6 +666,8 @@ internal sealed class ProductionNestingWindow : Window
                 using(var context=selectedGeometry.Open()) { context.BeginFigure(new Point(selected.Points[0].X,selected.Points[0].Y),false,selected.Closed); context.PolyLineTo(selected.Points.Skip(1).Select(p=>new Point(p.X,p.Y)).ToArray(),true,false); }
                 selectedGeometry.Freeze(); var selectedPen=new Pen(Brushes.Orange,3/scale) { DashStyle=DashStyles.Dash }; dc.DrawGeometry(null,selectedPen,selectedGeometry);
             }
+            var markerPen=new Pen(Brushes.Yellow,2/scale);
+            foreach(var mark in markers)dc.DrawEllipse(null,markerPen,mark,5/scale,5/scale);
             dc.Pop();
         }
     }

@@ -3861,6 +3861,24 @@ internal static class DesktopVerification
             setDrawing.Invoke(guidePreview,[drawing!,1500d,100d,0d,buildGeometry.Invoke(null,[drawing!])!]);
             guidePreview.InvalidateVisual();guidePreview.UpdateLayout();guideBitmap.Render(guidePreview);
             Check(Guides(guidePreview).Length==0,"Zero margin renders no inset guide",checks);
+            var markedPiece=new PatternPiece { Points=[new(10,10),new(100,10),new(100,80),new(10,80)],
+                Notches=[new NotchMark { VertexIndex=2,Position=new(100,80) }] };
+            var markedLayout=new ProjectDocument { Pieces=[markedPiece] };
+            setDrawing.Invoke(guidePreview,[markedLayout,150d,100d,0d,buildGeometry.Invoke(null,[markedLayout])!]);
+            guidePreview.UpdateLayout();guideBitmap.Render(guidePreview);
+            var rings=GeometryDrawings(VisualTreeHelper.GetDrawing(guidePreview)).Where(g=>g.Pen?.Brush is SolidColorBrush b && b.Color==Colors.Yellow).ToArray();
+            Check(rings.Length==1 && rings[0].Geometry is EllipseGeometry ring && ring.Center==new Point(100,80) &&
+                AutomationProperties.GetHelpText(guidePreview).Contains("sarı halkalar"),
+                "Quantity preview draws the placed marker at its actual model coordinate",checks);
+            var densePoints=Enumerable.Range(0,501).Select(i=>new Point2(i,10)).ToList();
+            var dense=new PatternPiece { Closed=false,Points=densePoints,Notches=densePoints.Select((p,i)=>new NotchMark { VertexIndex=i,Position=p }).ToList() };
+            var denseLayout=new ProjectDocument { Pieces=[dense] };
+            setDrawing.Invoke(guidePreview,[denseLayout,550d,100d,0d,buildGeometry.Invoke(null,[denseLayout])!]);
+            guidePreview.UpdateLayout();guideBitmap.Render(guidePreview);
+            Check(!GeometryDrawings(VisualTreeHelper.GetDrawing(guidePreview)).Any(g=>g.Pen?.Brush is SolidColorBrush b && b.Color==Colors.Yellow) &&
+                AutomationProperties.GetHelpText(guidePreview).Contains("500 sınırı"),"Quantity preview suppresses and explains oversized marker sets",checks);
+            guidePreview.GetType().GetProperty("Drawing")!.SetValue(guidePreview,null);
+            Check(AutomationProperties.GetHelpText(guidePreview).Contains("Önizleme yok"),"Invalidating quantity preview clears marker guidance",checks);
             marginInput.Text="-1";
             var invalidMargin=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>invalidMargin.IsCompleted);
             Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && (double)preview.GetType().GetField("edgeMargin",PrivateInstance)!.GetValue(preview)! == 0
