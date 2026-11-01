@@ -1828,6 +1828,10 @@ private struct NotchPicker: View {
                                 Button(NotchSearch.label(index: pointIndex, x: point.x.formatted(), y: point.y.formatted())) {
                                     select(pieceIndex, pointIndex)
                                 }
+                                .accessibilityValue("\(piece.displayName(index: pieceIndex)) · \(piece.selectionDetails(index: pieceIndex))")
+                                .accessibilityHint(piece.hasMinimumContourPoints
+                                    ? "İşareti seç ve parçanın konturunda göster."
+                                    : "İşareti seç. Parçada yeterli nokta olmadığından kontur gösterilemez.")
                             }
                         } header: {
                             VStack(alignment: .leading) {

@@ -1,6 +1,27 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testNotchRowsExposePieceAndSizeForIdenticalCoordinates() {
+        let fixture = #"[6,{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Metadata":{"Size":"S"},"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":20,"Y":20}],"Metadata":{"Size":"XL"},"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let marks = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0"))
+        XCTAssertTrue(marks.element(boundBy: 1).waitForExistence(timeout: 10))
+        XCTAssertEqual(marks.count, 2)
+        let first = marks.element(boundBy: 0), second = marks.element(boundBy: 1)
+        XCTAssertEqual(first.label, second.label)
+        XCTAssertTrue((first.value as? String ?? "").contains("Beden: S"))
+        XCTAssertTrue((second.value as? String ?? "").contains("Beden: XL"))
+        XCTAssertTrue((second.value as? String ?? "").contains("Parça 2"))
+        second.tap()
+        let selected = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Beden: XL")).firstMatch
+        XCTAssertTrue(selected.waitForExistence(timeout: 5))
+    }
+
     func testUnknownVersionSixNotchCanBeKeptAsUnvalidatedRawData() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-unknown-v6-notch"]
