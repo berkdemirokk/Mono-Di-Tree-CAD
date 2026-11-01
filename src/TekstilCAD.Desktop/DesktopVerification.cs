@@ -3881,6 +3881,31 @@ internal static class DesktopVerification
             rotation.SelectedIndex=2;
             Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
                 "Changing automatic candidate set invalidates old preview",checks);
+            var angle0=(CheckBox)typeof(ProductionNestingWindow).GetField("angle0",PrivateInstance)!.GetValue(window)!;
+            var angle90=(CheckBox)typeof(ProductionNestingWindow).GetField("angle90",PrivateInstance)!.GetValue(window)!;
+            var angle180=(CheckBox)typeof(ProductionNestingWindow).GetField("angle180",PrivateInstance)!.GetValue(window)!;
+            var angle270=(CheckBox)typeof(ProductionNestingWindow).GetField("angle270",PrivateInstance)!.GetValue(window)!;
+            rotation.SelectedIndex=4;angle0.IsChecked=false;angle90.IsChecked=false;Calculate();
+            Check(!save.IsEnabled && status.Text.Contains("En az bir aday açı") && DocumentSession.ContentEquals(before,studio.Document),
+                "Empty custom angle selection is rejected without changing source",checks);
+            angle180.IsChecked=true;Calculate();
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
+                "Custom candidate set rejects a source whose grain has no allowed angle",checks);
+            angle270.IsChecked=true;Calculate();
+            var custom=(ProjectDocument?)preview.GetType().GetProperty("Drawing")!.GetValue(preview);
+            var customCopies=custom?.NestingSnapshot?.RotationTrace?.Copies;
+            Check(customCopies is { Count:2 } && customCopies.Any(c=>c.SourcePieceId==a.Id && c.Degrees==180) &&
+                customCopies.Any(c=>c.SourcePieceId==b.Id && c.Degrees==270) && save.IsEnabled &&
+                status.Text.Contains("180°") && status.Text.Contains("270°") && status.Text.Contains("adaylar ve deneme politikası saklanmaz") &&
+                DocumentSession.ContentEquals(before,studio.Document),"Custom angles apply to every selected source and preserve verified copy trace",checks);
+            var customVersion=(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
+            var customPath=Path.Combine(work,$"custom-angle-layout-{Guid.NewGuid():N}.tcad");
+            var customExpected=window.CaptureLayoutDestination(customPath,customVersion,custom!);
+            var customSave=window.StartSaveLayoutAsync(customPath,customVersion,custom!,customExpected);PumpUntil(()=>customSave.IsCompleted);customSave.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(custom!,ProjectStorage.Load(customPath)),"Custom candidate placement reopens with its verified v7 trace",checks);
+            angle180.IsChecked=false;
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
+                "Changing an individual candidate invalidates custom preview",checks);
         }
         finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
