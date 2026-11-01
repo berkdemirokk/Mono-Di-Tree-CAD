@@ -2555,6 +2555,15 @@ internal static class DesktopVerification
             var summary=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("sınırına sığmıyor") && AutomationProperties.GetName(t)==t.Text);
             Check(included.Items.Count==0 && summary.Text.Contains("hiçbir parça eklenmedi") && DocumentSession.ContentEquals(manyBefore,manyImport.Project),
                 "Bulk selection exceeding 32 rejects the entire request without changing the source",checks);
+            var fitting=Descendants<Button>(root).Single(b=>Equals(b.Content,"Bloktan sığan adayları ekle"));
+            fitting.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var partial=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("aday seçilmeden kaldı") && AutomationProperties.GetName(t)==t.Text);
+            Check(included.Items.Count==32 && partial.Text.Contains("32 aday kaynak sırasıyla") && partial.Text.Contains("1 aday seçilmeden kaldı") &&
+                AutomationProperties.GetHelpText(fitting).Contains("kaynak sırasıyla") && DocumentSession.ContentEquals(manyBefore,manyImport.Project),
+                "Explicit capacity-limited selection reports remaining candidates and preserves source",checks);
+            fitting.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==32 && partial.Text.Contains("0 aday kaynak sırasıyla") && partial.Text.Contains("1 aday seçilmeden kaldı"),
+                "Repeated capacity-limited selection does not exceed limit or duplicate choices",checks);
         }
         finally { manyWindow.Close(); }
         var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
