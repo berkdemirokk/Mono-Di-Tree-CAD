@@ -34,6 +34,9 @@ internal static class DesktopVerification
     private static bool PreviewEndDirection(FrameworkElement preview,Color color,bool downward)
     {
         preview.Measure(new Size(300,200));preview.Arrange(new Rect(0,0,300,200));preview.UpdateLayout();
+        // Tab selection and InvalidateVisual schedule WPF drawing work on the
+        // dispatcher; layout alone does not guarantee OnRender has run.
+        preview.Dispatcher.Invoke(()=> { },DispatcherPriority.ContextIdle);preview.UpdateLayout();
         var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(preview);
         static IEnumerable<GeometryDrawing> Drawings(Drawing? drawing)
         {
@@ -4974,6 +4977,7 @@ internal static class DesktopVerification
                 && status.Text.Contains("Yükseklik: 10 mm") && status.Text.Contains("min X 0 mm") && status.Text.Contains("max Y 10 mm")
                 && !status.Text.Contains("Başlangıç:") && status.Text.Contains(closed.Id.ToString("D")) && summary.Text=="Kapalı · 20 × 10 mm",
                 "DXF selected closed piece shows distinct geometry and actual scaled bounds",checks);
+            Render(window,Path.ChangeExtension(reportPath,".dxf-piece-closed.png"),500,380);
             Check(PreviewEndDirection(view,Colors.DeepSkyBlue,downward:true),"DXF piece preview matches the Y-down drawing canvas",checks);
             var a=new Point2(99999990.125,-99999990.5);var b=new Point2(99999990.25,-99999990.0);
             var distant=new PatternPiece { Name="Uzak açık çizgi",Closed=false,Points=[a,b] };
