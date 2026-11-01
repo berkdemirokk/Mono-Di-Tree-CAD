@@ -42,17 +42,17 @@ Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa
 
 `ExperimentalV7Contours`, çıkarılan parça baytlarından sınırlı bir kontur dönüşümü denemesidir; üretim okuyucusuna bağlı değildir. Deneysel belge, çağıranın bellekte tuttuğu en fazla 64 MB özgün `Data` ile `Drawing` adayını birlikte tutabilir; fedilen baytlarla eşleşme SHA-256 ile denetlenir. Bu ek bellek gerektirir; dosyayı doğrulamaz veya gerçek cihazda bellek güvenliği kanıtlamaz. Parça düzeyinde kimlik, nokta, işaret ve desteklenen bilgi alanlarını kontrol eder; v7 geçmişi veya masaüstü parmak izleri bütünüyle doğrulanmaz. Bu aday üretimde kullanılmaz ve 8 MB sınırını artırmak için yeterli değildir.
 
-Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, masaüstünün deterministik kopya kimliklerini, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Nokta ve iplik yönü için çeyrek dönüş sonrası tam öteleme vektörlerini ihtiyatla karşılaştırır; masaüstünde toleransla kabul edilen bazı geçerli dosyaları reddedebilir. Parmak izlerini yeniden hesaplamaz, işaretlerin signed-zero bitlerini doğrulamaz ve üretim geometrisini kanıtlamaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
+Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, masaüstünün deterministik kopya kimliklerini, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Nokta ve iplik yönü için çeyrek dönüş sonrası tam öteleme vektörlerini ihtiyatla karşılaştırır; masaüstünde toleransla kabul edilen bazı geçerli dosyaları reddedebilir. Tarihsel parmak izi karşılaştırması ve signed-zero token bitleri deneysel olarak uygulanır; Apple ve tüm ondalık dönüşüm durumlarında doğrulanmamıştır. Üretim geometrisini kanıtlamaz; önizleme adayı kaydetme veya kurtarma yetkisi vermez.
 
 Deneysel karşılaştırma kapalı kontur, iplik yönünün kontrol edilmiş olması ve seçilen tek/çift yön ile açı toleransına uymasını da arar. Bu, tarihsel verinin tam masaüstü doğrulaması değildir.
 
-Deneysel yerleşim ayrıca parça çevre kutularının kumaş sınırında ve istenen aralıkta olduğunu denetler; olası çift sayısı iki milyonu aşarsa reddeder. Bu kutu kontrolü kontur topolojisini veya fiziksel üretim uygunluğunu kanıtlamaz; kaynak parmak izi ve signed-zero işaret bitleri henüz yeniden doğrulanmaz.
+Deneysel yerleşim ayrıca parça çevre kutularının kumaş sınırında ve istenen aralıkta olduğunu denetler; olası çift sayısı iki milyonu aşarsa reddeder. Bu kutu kontrolü kontur topolojisini veya fiziksel üretim uygunluğunu kanıtlamaz.
 
 Deneysel tarihsel konturlar için ayrıca sınırlı ve ihtiyatlı basit kontur taraması vardır; çakışan, tekrarlı veya sayısal olarak belirsiz kenarlar reddedilir. Bu tarama geçerli bazı konturları da reddedebilir ve masaüstü geometrisiyle tam eşdeğerlik veya üretim güvenliği kanıtı değildir. Toplam tarama bütçesi 50 milyon nokta-kare işlemidir.
 
-`ExperimentalV7Fingerprint`, masaüstünün tarihsel parça özeti kodlaması için bağımsız bir denemedir. Nokta ve işaret koordinatlarını açık IEEE-754 bitleri olarak ister; JSON'dan bu bitleri çıkarmaz ve akış okuyucusuna bağlı değildir. Masaüstü fixture özeti ve signed-zero farkı için testler tanımlıdır; Apple'da henüz çalıştırılmamıştır.
+`ExperimentalV7Fingerprint`, masaüstünün tarihsel parça özeti kodlaması için bağımsız bir denemedir. Deneysel akış, tarihsel parça JSON'undan sayısal token'ları ayrı çıkarıp açık IEEE-754 bitleriyle bu hesaplamaya bağlar. Masaüstü fixture özeti ve signed-zero farkı için testler tanımlıdır; Apple'da henüz çalıştırılmamıştır.
 
-`ExperimentalJSONDoubleBits`, tek bir tam ASCII JSON sayı token'ını sınırlı ve iptal edilebilir biçimde binary64 bitlerine dönüştüren ayrı bir denemedir; `-0` işaretini korur ve sıfıra yuvarlanan sıfır dışı sayıları reddeder. Girdi byte'larından pointer saklamaz. Henüz belge akışından token çıkarımına veya parmak izi doğrulamasına bağlı değildir; tüm ondalıkların masaüstüyle aynı yuvarlandığı doğrulanmamıştır.
+`ExperimentalJSONDoubleBits`, tek bir tam ASCII JSON sayı token'ını sınırlı ve iptal edilebilir biçimde binary64 bitlerine dönüştüren ayrı bir denemedir; `-0` işaretini korur ve sıfıra yuvarlanan sıfır dışı sayıları reddeder. Girdi byte'larından pointer saklamaz. Tüm ondalıkların masaüstüyle aynı yuvarlandığı ve büyük dosyadaki performans henüz doğrulanmamıştır.
 
 ## Sınırlar
 

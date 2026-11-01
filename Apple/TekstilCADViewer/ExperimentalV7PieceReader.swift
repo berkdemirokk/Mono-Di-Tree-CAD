@@ -26,6 +26,7 @@ struct ExperimentalV7PieceReader {
     private var scopedNumberIsTrace = false
     private var snapshotNumbers: [String: UInt64] = [:], traceNumbers: [String: UInt64] = [:]
     private var snapshotFingerprint: String?, traceFingerprint: String?
+    private var traceSourceFingerprint: String?
     private var grainDirection: String?
     private struct Mapping: Equatable { let source: UUID; let number: Int; let placed: UUID }
     private var placementMappings: [Mapping] = [], traceMappings: [Mapping] = []
@@ -37,6 +38,8 @@ struct ExperimentalV7PieceReader {
     private var sourceOrder: [UUID] = []
     private var sourceQuantities: [UUID: Int] = [:]
     private var sourceGeometry: [UUID: Drawing.Piece] = [:], historyGeometry: [UUID: Drawing.Piece] = [:]
+    private var sourceFingerprintPieces: [ExperimentalV7Fingerprint.Piece] = []
+    private var historyFingerprintPieces: [ExperimentalV7Fingerprint.Piece] = []
     private var selectionIDs = Set<UUID>()
     private var expectingPiecesArray = false
     private var inPieces = false, foundPieces = false
@@ -81,7 +84,7 @@ struct ExperimentalV7PieceReader {
                   traceKeys == Set(["Schema", "Algorithm", "TransformConvention", "SourceFingerprint", "LayoutFingerprint", "SourcePieces", "LayoutPieces", "Selections", "Copies", "FabricWidth", "Gap", "EdgeMargin", "UsedLength", "MaxLength", "GrainDirection", "ToleranceDegrees"]),
                   !placementMappings.isEmpty, placementMappings == traceMappings,
                   !sourceIDs.isEmpty, selectionIDs == sourceIDs, historyIDs.count == traceMappings.count,
-                  let fingerprint = snapshotFingerprint, fingerprint == traceFingerprint,
+                  let fingerprint = snapshotFingerprint, fingerprint == traceFingerprint, let sourceFingerprint = traceSourceFingerprint,
                   ["FabricWidth", "UsedLength", "Gap", "EdgeMargin"].allSatisfy({ snapshotNumbers[$0] != nil && snapshotNumbers[$0] == traceNumbers[$0] }),
                   let direction = grainDirection, let toleranceBits = traceNumbers["ToleranceDegrees"],
                   traceMappings.allSatisfy({ sourceIDs.contains($0.source) && historyIDs.contains($0.placed) }) else { throw Failure.invalid }
@@ -122,6 +125,8 @@ struct ExperimentalV7PieceReader {
                 }
             }
             guard index == traceMappings.count else { throw Failure.invalid }
+            guard try ExperimentalV7Fingerprint.hash(sourceFingerprintPieces, cancelled: cancelled) == sourceFingerprint,
+                  try ExperimentalV7Fingerprint.hash(historyFingerprintPieces, cancelled: cancelled) == fingerprint else { throw Failure.invalid }
             try ExperimentalV7Layout.verify(Array(historyGeometry.values), width: width, length: length,
                                             gap: gap, margin: margin, cancelled: cancelled)
             finished = true
@@ -231,6 +236,7 @@ struct ExperimentalV7PieceReader {
                         grainDirection = value
                     case "SourceFingerprint", "LayoutFingerprint":
                         guard value.utf8.count == 64, value.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }) else { throw Failure.invalid }
+                        if key == "SourceFingerprint" { traceSourceFingerprint = value }
                         if key == "LayoutFingerprint" {
                             if traceActive { traceFingerprint = value } else { snapshotFingerprint = value }
                         }
@@ -338,14 +344,17 @@ struct ExperimentalV7PieceReader {
                     topologyWork += Int64(item.points.count) * Int64(item.points.count)
                     guard topologyWork <= 50_000_000 else { throw Failure.limit }
                     try ExperimentalV7Topology.verify(item, cancelled: cancelled)
+                    let bitPiece = try ExperimentalV7BitPiece.parse(Data(token), cancelled: cancelled)
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity
                         sourceOrder.append(id)
                         sourceGeometry[id] = item
+                        sourceFingerprintPieces.append(bitPiece)
                     } else {
                         guard item.quantity == 1, historyIDs.insert(id).inserted else { throw Failure.invalid }
                         historyGeometry[id] = item
+                        historyFingerprintPieces.append(bitPiece)
                     }
                     historicalPoints += item.points.count; historicalMarks += item.notches.count
                     guard historicalPoints <= 200_000, historicalMarks <= 200_000 else { throw Failure.limit }
@@ -394,18 +403,19 @@ struct ExperimentalV7PieceReader {
         failure = true
         pieces = []; piece = nil; mappingToken = nil; keyToken = nil; nameToken = nil; scopedStringToken = nil; scopedNumberToken = nil
         sourceGeometry = [:]; historyGeometry = [:]; sourceQuantities = [:]; sourceOrder = []
+        sourceFingerprintPieces = []; historyFingerprintPieces = []
         sourceIDs = []; historyIDs = []; selectionIDs = []; rotationAngles = [:]
         placementMappings = []; traceMappings = []
         stack = []; rootKeys = []; snapshotKeys = []; traceKeys = []
         validator = ExperimentalJSONStream(); projectName = nil; potentialKey = nil; rootValueKey = nil; scopedValue = nil
         scopedStringKey = nil; scopedNumberKey = nil; snapshotNumbers = [:]; traceNumbers = [:]
-        snapshotFingerprint = nil; traceFingerprint = nil; grainDirection = nil
+        snapshotFingerprint = nil; traceFingerprint = nil; traceSourceFingerprint = nil; grainDirection = nil
         topologyWork = 0
     }
 
     #if DEBUG
     var retainedEntriesForTesting: Int {
-        pieces.count + (piece == nil ? 0 : 1) + (mappingToken == nil ? 0 : 1) + sourceGeometry.count + historyGeometry.count +
+        pieces.count + (piece == nil ? 0 : 1) + (mappingToken == nil ? 0 : 1) + sourceGeometry.count + historyGeometry.count + sourceFingerprintPieces.count + historyFingerprintPieces.count +
         sourceQuantities.count + sourceOrder.count + sourceIDs.count + historyIDs.count + selectionIDs.count + rotationAngles.count +
         placementMappings.count + traceMappings.count
     }

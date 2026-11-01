@@ -4,11 +4,18 @@ import XCTest
 
 final class ExperimentalV7PieceReaderTests: XCTestCase {
     private var minimalSnapshot: String {
-        let hash = String(repeating: "A", count: 64)
         // Guid constructed by the desktop from SHA-256 bytes for this source/copy.
         let source = "11111111-1111-1111-1111-111111111111", placed = "05465454-9f9e-9b46-87d3-3e3ecb12fb73"
+        func fingerprint(_ id: String) -> String {
+            func p(_ x: Double, _ y: Double) -> ExperimentalV7Fingerprint.Point { .init(x: x.bitPattern, y: y.bitPattern) }
+            let value = ExperimentalV7Fingerprint.Piece(id: UUID(uuidString: id)!, name: "A", closed: true,
+                points: [p(0, 0), p(1, 0), p(0, 1)], metadata: .init(role: "Kesim", size: nil, material: "Pamuk", quantity: 1),
+                grain: .init(start: p(0, 0), end: p(0, 1), needsReview: false), marks: nil)
+            return try! ExperimentalV7Fingerprint.hash([value])
+        }
+        let sourceHash = fingerprint(source), hash = fingerprint(placed)
         func piece(_ id: String) -> String { "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":0},{\"X\":0,\"Y\":1}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":{\"X\":0,\"Y\":0},\"End\":{\"X\":0,\"Y\":1},\"NeedsReview\":false}}" }
-        return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\"}],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(hash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[\(piece(source))],\"LayoutPieces\":[\(piece(placed))],\"Selections\":[\"\(source)\"],\"Copies\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\",\"Degrees\":0}],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
+        return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\"}],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(sourceHash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[\(piece(source))],\"LayoutPieces\":[\(piece(placed))],\"Selections\":[\"\(source)\"],\"Copies\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\",\"Degrees\":0}],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
     }
     private func extract(_ data: Data, chunk: Int) throws -> [Data] {
         var reader = ExperimentalV7PieceReader()
@@ -194,6 +201,12 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
             for (x, y) in zip(a.points, b.points) { XCTAssertEqual(x.x, y.x); XCTAssertEqual(x.y, y.y) }
         }
         XCTAssertEqual(bytes, before)
+        var text = try XCTUnwrap(String(data: bytes, encoding: .utf8))
+        let sourceStart = try XCTUnwrap(text.range(of: "\"SourcePieces\""))
+        let marker = try XCTUnwrap(text.range(of: "\"X\": -0", range: sourceStart.lowerBound..<text.endIndex))
+        let zero = text.index(marker.upperBound, offsetBy: -2)
+        text.remove(at: zero)
+        XCTAssertThrowsError(try extract(Data(text.utf8), chunk: 97), "Changing only signed-zero bits must invalidate the source fingerprint")
     }
     func testExperimentalDocumentKeepsExactlyTheFedBytesAndFlagsDifferentIDs() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))

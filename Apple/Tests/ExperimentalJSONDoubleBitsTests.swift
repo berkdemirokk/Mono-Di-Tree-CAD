@@ -47,4 +47,13 @@ final class ExperimentalJSONDoubleBitsTests: XCTestCase {
         XCTAssertEqual(try ExperimentalJSONDoubleBits.parse(token), (-0.0 as Double).bitPattern)
         XCTAssertEqual(bytes, before)
     }
+    func testPieceJSONCarriesNegativeZeroIntoDesktopGoldenHash() throws {
+        let json = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"","Closed":true,"Points":[{"X":0,"Y":0},{"X":2,"Y":0},{"X":0,"Y":2}],"Notches":[{"VertexIndex":0,"Position":{"X":-0,"Y":0}}]}"#
+        let input = Data(json.utf8), before = input
+        let piece = try ExperimentalV7BitPiece.parse(input)
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([piece]), "2C986126E3E97F06E57FE292F6CDAAD617F595498C29E7320D448CFC70C5E716")
+        XCTAssertEqual(piece.marks?.first?.position.x, (-0.0 as Double).bitPattern)
+        XCTAssertEqual(input, before)
+        XCTAssertThrowsError(try ExperimentalV7BitPiece.parse(input, cancelled: { true }))
+    }
 }
