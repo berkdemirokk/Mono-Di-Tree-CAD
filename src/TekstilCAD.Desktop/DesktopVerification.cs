@@ -2325,7 +2325,8 @@ internal static class DesktopVerification
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
             "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
             "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n"+
-            "0\nBLOCK\n2\nB\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n30\n20\n0\n0\nVERTEX\n10\n40\n20\n0\n0\nVERTEX\n10\n30\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n30\n20\n0\n0\nLINE\n8\nL\n10\n100\n20\n100\n11\n120\n21\n100\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+            "0\nBLOCK\n2\nB\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n30\n20\n0\n0\nVERTEX\n10\n40\n20\n0\n0\nVERTEX\n10\n30\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n30\n20\n0\n0\nLINE\n8\nL\n10\n100\n20\n100\n11\n120\n21\n100\n0\nENDBLK\n"+
+            "0\nBLOCK\n2\nC\n0\nPOLYLINE\n8\nA\n70\n0\n0\nVERTEX\n10\n200\n20\n0\n0\nVERTEX\n10\n210\n20\n0\n0\nVERTEX\n10\n220\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n200\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
         var import=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(text)),"test");var before=import.Project.Clone();
         var window=new DxfBlockDefinitionReviewWindow(studio,import);
         try
@@ -2465,7 +2466,7 @@ internal static class DesktopVerification
             points.SelectedIndex=-1;
             Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
-            Check(queue.Items.Count==0 && status.Text.Contains("yalnız POLYLINE"),"LINE chains cannot receive unsupported POINT mappings",checks);
+            Check(queue.Items.Count==0 && status.Text.Contains("yalnız kapalı POLYLINE"),"LINE chains cannot receive unsupported POINT mappings",checks);
             Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili parçayı ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(included.Items.Count==1 && included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("LINE") &&
                 included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("işaretsiz"),
@@ -2479,10 +2480,46 @@ internal static class DesktopVerification
                 DocumentSession.ContentEquals(before,import.Project),"Accepting an unmarked LINE chain preserves the source",checks);
         }
         finally { lineWindow.Close(); }
+        var openPolylineWindow=new DxfBlockDefinitionReviewWindow(studio,import);
+        try
+        {
+            var root=(FrameworkElement)openPolylineWindow.Content;Render(openPolylineWindow,Path.Combine(work,"block-open-polyline-minimum.png"),500,380);
+            var blocks=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var pieces=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok parçası");
+            var points=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
+            var vertices=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
+            var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
+            var queue=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            blocks.SelectedIndex=2;pieces.SelectedIndex=0;points.SelectedIndex=0;vertices.SelectedIndex=0;
+            var selectedLabel=(string)pieces.SelectedItem!.GetType().GetProperty("Label")!.GetValue(pieces.SelectedItem)!;
+            var openPiece=import.Project.Pieces.Single(p=>!p.Closed && p.Points.Count==3);
+            Check(selectedLabel.Contains("POLYLINE") && selectedLabel.Contains("açık") && Descendants<DxfPiecePreview>(root).Single().DisplayedPieceId==openPiece.Id,
+                "Open POLYLINE is identified and previewed without closing it",checks);
+            Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
+            Check(queue.Items.Count==0 && status.Text.Contains("yalnız kapalı POLYLINE"),"Open POLYLINE cannot receive a POINT mapping",checks);
+            Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili parçayı ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==1 && included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("işaretsiz"),
+                "Open POLYLINE may be explicitly selected without markers",checks);
+            Descendants<CheckBox>(root).Single().IsChecked=true;
+            try { Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
+            Check(openPolylineWindow.SelectedPieces.Count==1 && openPolylineWindow.SelectedPieces[0].PieceId==openPiece.Id && openPolylineWindow.Selections.Count==0 &&
+                DocumentSession.ContentEquals(before,import.Project),"Accepting open POLYLINE keeps source unchanged",checks);
+        }
+        finally { openPolylineWindow.Close(); }
         var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
         var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
         var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
-        var secondLink=links.Where(p=>p.EntityType=="POLYLINE").Skip(1).Single();
+        var secondLink=links.Where(p=>p.EntityType=="POLYLINE").Skip(1).First();
+        var openPolyline=import.Project.Pieces.Single(p=>!p.Closed && p.Points.Count==3);
+        var openLink=links.Single(p=>p.PieceId==openPolyline.Id);
+        var openProject=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
+            [new(openLink.BlockHeaderOrdinal!.Value,openLink.PieceId)],"source.dxf",true);
+        var openPath=Path.Combine(work,$"block-open-polyline-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(openProject.WorkingCopy,openPath);
+        var openLoaded=ProjectStorage.Load(openPath);
+        Check(openLoaded.Pieces.Count==1 && !openLoaded.Pieces[0].Closed && openLoaded.Pieces[0].Notches is null &&
+            openLoaded.Pieces[0].Points.SequenceEqual(openPolyline.Points) && DocumentSession.ContentEquals(openProject.WorkingCopy,openLoaded) &&
+            DocumentSession.ContentEquals(before,import.Project),"Open unmarked POLYLINE geometry and source history survive save and reopen",checks);
         var lineLink=links.Single(p=>p.EntityType=="LINE");
         var lineProject=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
             [new(lineLink.BlockHeaderOrdinal!.Value,lineLink.PieceId)],"source.dxf",true);
