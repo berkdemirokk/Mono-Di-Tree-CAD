@@ -447,9 +447,10 @@ public static class PatternTools
         if (piece.Notches is not null)
         {
             // v6 marks identify vertices; only unmarked vertices may move.
-            var (_,marks)=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            var marks=piece.Notches.Select(mark=>mark.Clone()).ToList();
             var markedIndex=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && index==piece.Points.Count-1 ? 0 : index;
-            if(marks!.Any(mark=>mark.VertexIndex==markedIndex))
+            if(marks.Any(mark=>mark.VertexIndex==markedIndex))
                 throw new ArgumentException("Çentik işaretli köşe taşınamaz; önce işareti gözden geçirin.",nameof(index));
             var detached=piece.Clone();detached.Notches=null;
             var moved=MovePoint(detached,index,position,cancellationToken);

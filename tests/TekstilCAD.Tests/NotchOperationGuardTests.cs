@@ -35,6 +35,26 @@ public class NotchOperationGuardTests
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>PatternTools.MovePoint(source,0,new(-1,0),cancellation.Token));
     }
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(0, true)]
+    [InlineData(4, false)]
+    [InlineData(4, true)]
+    public void MovingUnmarkedRepeatedClosurePreservesExactMarkerZeroBits(int closureIndex,bool negative)
+    {
+        var zero=negative ? BitConverter.Int64BitsToDouble(long.MinValue) : 0d;
+        var source=Closed();source.Points.Add(source.Points[0]);
+        source.Notches=[new NotchMark { VertexIndex=1,Position=new Point2(20,zero) },
+                        new NotchMark { VertexIndex=3,Position=new Point2(zero,20) }];
+        var result=PatternTools.MovePoint(source,closureIndex,new(-1,0));
+        Assert.Equal(new Point2(-1,0),result.Points[0]);Assert.Equal(result.Points[0],result.Points[^1]);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(zero),BitConverter.DoubleToInt64Bits(result.Notches![0].Position.Y));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(zero),BitConverter.DoubleToInt64Bits(result.Notches[1].Position.X));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(zero),BitConverter.DoubleToInt64Bits(source.Notches![0].Position.Y));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>PatternTools.MovePoint(source,closureIndex,new(-1,0),cancellation.Token));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(zero),BitConverter.DoubleToInt64Bits(source.Notches[1].Position.X));
+    }
     [Fact]
     public void RepeatedClosingVertexCannotMoveWhenItsFirstVertexIsMarked()
     {
