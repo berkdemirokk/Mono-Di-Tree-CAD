@@ -24,7 +24,16 @@ public static class OpenPathJoin
     /// The returned piece has a new identity and no project-level references.
     /// </summary>
     public static OpenPathJoinResult Join(PatternPiece first, PatternPiece second, double tolerance,
-        CancellationToken cancellationToken = default, bool omitSourceProductionData = false)
+        CancellationToken cancellationToken = default, bool omitSourceProductionData = false) =>
+        JoinCore(first,second,tolerance,null,null,cancellationToken,omitSourceProductionData);
+
+    /// <summary>Joins exactly the explicitly chosen original endpoint indices; no closest-endpoint inference is made.</summary>
+    public static OpenPathJoinResult JoinSelected(PatternPiece first,PatternPiece second,int firstEndpointIndex,int secondEndpointIndex,double tolerance,
+        CancellationToken cancellationToken=default,bool omitSourceProductionData=false) =>
+        JoinCore(first,second,tolerance,firstEndpointIndex,secondEndpointIndex,cancellationToken,omitSourceProductionData);
+
+    private static OpenPathJoinResult JoinCore(PatternPiece first,PatternPiece second,double tolerance,int? firstEndpointIndex,int? secondEndpointIndex,
+        CancellationToken cancellationToken,bool omitSourceProductionData)
     {
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(second);
@@ -49,21 +58,35 @@ public static class OpenPathJoin
         var a = first.Points.ToArray(); var b = second.Points.ToArray();
         LargeOpenPathValidator.Validate(a, cancellationToken);
         LargeOpenPathValidator.Validate(b, cancellationToken);
-        var candidates = new List<(bool ReverseA, bool ReverseB, double Distance)>();
-        foreach (var reverseA in new[] { false, true })
-        foreach (var reverseB in new[] { false, true })
+        (bool ReverseA,bool ReverseB,double Distance) match;
+        if(firstEndpointIndex is int ai && secondEndpointIndex is int bi)
         {
-            var endA = reverseA ? a[0] : a[^1];
-            var startB = reverseB ? b[^1] : b[0];
-            var distance = Geometry.Distance(endA, startB);
-            if (EndpointTolerance.Contains(endA, startB, tolerance)) candidates.Add((reverseA, reverseB, distance));
+            if((ai!=0 && ai!=a.Length-1) || (bi!=0 && bi!=b.Length-1))
+                throw new ArgumentException("Her parça için yalnız başlangıç veya bitiş noktası seçilebilir.");
+            if(!EndpointTolerance.Contains(a[ai],b[bi],tolerance))throw new ArgumentException("Seçilen uçlar toleransı aşıyor.");
+            match=(ai==0,bi==b.Length-1,Geometry.Distance(a[ai],b[bi]));
         }
-        if (candidates.Count != 1)
-            throw new ArgumentException(candidates.Count == 0 ? "Tolerans içinde uç bulunamadı." : "Birden fazla uç eşleşiyor; seçim belirsiz.");
-        var match = candidates[0];
+        else
+        {
+            var candidates = new List<(bool ReverseA, bool ReverseB, double Distance)>();
+            foreach (var reverseA in new[] { false, true })
+            foreach (var reverseB in new[] { false, true })
+            {
+                var endA = reverseA ? a[0] : a[^1];
+                var startB = reverseB ? b[^1] : b[0];
+                var distance = Geometry.Distance(endA, startB);
+                if (EndpointTolerance.Contains(endA, startB, tolerance)) candidates.Add((reverseA, reverseB, distance));
+            }
+            if (candidates.Count != 1)
+                throw new ArgumentException(candidates.Count == 0 ? "Tolerans içinde uç bulunamadı." : "Birden fazla uç eşleşiyor; seçim belirsiz.");
+            match = candidates[0];
+        }
         if (match.ReverseA) Array.Reverse(a);
         if (match.ReverseB) Array.Reverse(b);
         var shared = a[^1] == b[0];
+        if(firstEndpointIndex is not null && shared &&
+           (BitConverter.DoubleToInt64Bits(a[^1].X)!=BitConverter.DoubleToInt64Bits(b[0].X) || BitConverter.DoubleToInt64Bits(a[^1].Y)!=BitConverter.DoubleToInt64Bits(b[0].Y)))
+            throw new ArgumentException("Ortak uçların koordinat bitleri farklı; kaynak nokta kaybını önlemek için birleştirilmedi.");
         var resultCount = (long)a.Length + b.Length - (shared ? 1 : 0);
         if (resultCount > LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Birleşik kontur nokta sınırını aşıyor.");

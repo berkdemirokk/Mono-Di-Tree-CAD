@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using TekstilCAD.Core;
+using TekstilCAD.FileFormats;
 using TekstilCAD.Patterns;
 
 namespace TekstilCAD.Desktop;
@@ -13,6 +14,11 @@ internal sealed class OpenPathJoinWindow : Window
     private readonly MainWindow workspace;
     private readonly ComboBox first = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
     private readonly ComboBox second = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
+    private readonly CheckBox explicitEndpoints=new() { Content="Uçları kendim seçeceğim",Margin=new Thickness(0,6,0,4) };
+    private readonly TextBlock firstEndpointLabel=new() { Text="Birinci parçanın birleştirilecek ucu",Visibility=Visibility.Collapsed };
+    private readonly TextBlock secondEndpointLabel=new() { Text="İkinci parçanın birleştirilecek ucu",Visibility=Visibility.Collapsed };
+    private readonly ComboBox firstEndpoint=new() { Margin=new Thickness(0,4,0,8),Visibility=Visibility.Collapsed };
+    private readonly ComboBox secondEndpoint=new() { Margin=new Thickness(0,4,0,8),Visibility=Visibility.Collapsed };
     private readonly TextBox tolerance = new() { Text="0", MinWidth=120, Margin=new Thickness(0,4,0,8) };
     private readonly CheckBox omitProductionData = new() { Content="Üretim bilgisi ve iplik yönü sonuca aktarılmadan devam et", IsChecked=false, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock message = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,8,0,8) };
@@ -21,12 +27,16 @@ internal sealed class OpenPathJoinWindow : Window
     private readonly Button apply = new() { Content="Yeni parça olarak ekle", Padding=new Thickness(12,7,12,7), IsEnabled=false, Margin=new Thickness(0,0,8,0) };
     private CancellationTokenSource? cancellation;
     private OpenPathJoinResult? proposal;
-    private PatternPiece? beforeFirst, beforeSecond;
-    private ProjectDocument? document;
+    private PatternPiece? beforeFirst, beforeSecond,displayedFirst,displayedSecond;
+    private ProjectDocument? document,documentSnapshot;
     private bool closed;
+    internal Action? BeforeJoinForVerification { get; set; }
     internal Task CalculateForVerification() => CalculateAsync();
     internal void ApplyForVerification() => Apply();
     internal TextBox ToleranceForVerification => tolerance;
+    internal CheckBox ExplicitEndpointsForVerification=>explicitEndpoints;
+    internal ComboBox FirstEndpointForVerification=>firstEndpoint;
+    internal ComboBox SecondEndpointForVerification=>secondEndpoint;
     internal Button ApplyButtonForVerification => apply;
     internal string MessageForVerification => message.Text;
 
@@ -46,8 +56,11 @@ internal sealed class OpenPathJoinWindow : Window
         body.Children.Add(new TextBlock { Text="İki açık konturu seçin. Kaynaklar, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir açık parça olarak eklenir. Köşe işaretleri aynı koordinatlara kopyalanır; iki işaret tek birleşim noktasına düşerse işlem reddedilir. Üretim bilgisi veya iplik yönü varsa bunlar yalnız açık onayla sonuca aktarılmadan bırakılabilir.", TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Birinci açık parça" }); body.Children.Add(first);
         body.Children.Add(new TextBlock { Text="İkinci açık parça" }); body.Children.Add(second);
+        body.Children.Add(explicitEndpoints);
+        body.Children.Add(firstEndpointLabel);body.Children.Add(firstEndpoint);body.Children.Add(secondEndpointLabel);body.Children.Add(secondEndpoint);
+        AutomationProperties.SetName(firstEndpoint,"Birinci parçanın seçilen ucu");AutomationProperties.SetName(secondEndpoint,"İkinci parçanın seçilen ucu");
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" }); body.Children.Add(tolerance);
-        body.Children.Add(new TextBlock { Text="Uçlar eşit değilse yerleri değiştirilmez; aralarına düz bir köprü eklenir. Birden fazla olası eşleşme veya kesişen sonuç reddedilir.", TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Uçlar eşit değilse yerleri değiştirilmez; aralarına düz bir köprü eklenir. Elle seçimde yalnız seçilen uçlar kullanılır; görüntülenen koordinatlar yuvarlanabilir, indeksleri kontrol edin. Otomatik modda birden fazla olası eşleşme veya kesişen sonuç reddedilir.", TextWrapping=TextWrapping.Wrap });
         body.Children.Add(omitProductionData);
         body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview); body.Children.Add(message);
@@ -62,7 +75,26 @@ internal sealed class OpenPathJoinWindow : Window
         }
         if(first.Items.Count>0)first.SelectedIndex=0;
         if(second.Items.Count>1)second.SelectedIndex=1;
-        first.SelectionChanged+=(_,_)=>InvalidateProposal(); second.SelectionChanged+=(_,_)=>InvalidateProposal();
+        void UpdateEndpoints()
+        {
+            PatternPiece? Update(ComboBox parts,ComboBox endpoints)
+            {
+                endpoints.Items.Clear();PatternPiece? displayed=null;
+                if(parts.SelectedItem is Choice choice && workspace.Document.Pieces.FirstOrDefault(p=>p.Id==choice.Id) is { } piece && piece.Points.Count>=2)
+                {
+                    displayed=piece.Clone();var start=piece.Points[0];var end=piece.Points[^1];
+                    endpoints.Items.Add($"Başlangıç · 0 · X {MeasurementInput.Format(start.X)} / Y {MeasurementInput.Format(start.Y)} mm");
+                    endpoints.Items.Add($"Bitiş · {piece.Points.Count-1} · X {MeasurementInput.Format(end.X)} / Y {MeasurementInput.Format(end.Y)} mm");
+                }
+                endpoints.SelectedIndex=-1;return displayed;
+            }
+            displayedFirst=Update(first,firstEndpoint);displayedSecond=Update(second,secondEndpoint);InvalidateProposal();
+        }
+        first.SelectionChanged+=(_,_)=>UpdateEndpoints(); second.SelectionChanged+=(_,_)=>UpdateEndpoints();
+        firstEndpoint.SelectionChanged+=(_,_)=>InvalidateProposal();secondEndpoint.SelectionChanged+=(_,_)=>InvalidateProposal();
+        void ModeChanged() { firstEndpointLabel.Visibility=secondEndpointLabel.Visibility=firstEndpoint.Visibility=secondEndpoint.Visibility=explicitEndpoints.IsChecked==true ? Visibility.Visible : Visibility.Collapsed;UpdateEndpoints(); }
+        explicitEndpoints.Checked+=(_,_)=>ModeChanged();explicitEndpoints.Unchecked+=(_,_)=>ModeChanged();
+        UpdateEndpoints();
         tolerance.TextChanged+=(_,_)=>InvalidateProposal();
         omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();
         calculate.Click+=async (_,_)=>await CalculateAsync(); apply.Click+=(_,_)=>Apply();
@@ -71,7 +103,7 @@ internal sealed class OpenPathJoinWindow : Window
 
     private void InvalidateProposal()
     {
-        cancellation?.Cancel(); proposal=null; beforeFirst=null; beforeSecond=null; document=null;
+        cancellation?.Cancel(); proposal=null; beforeFirst=null; beforeSecond=null; document=null;documentSnapshot=null;
         apply.IsEnabled=false; preview.Points=null; preview.Bridge=null; preview.Notches=null; preview.InvalidateVisual(); message.Text="Önizleme hesaplanmadı.";
     }
 
@@ -84,20 +116,29 @@ internal sealed class OpenPathJoinWindow : Window
         { message.Text="Kimlikleri farklı iki açık parça seçin."; return; }
         if(!MeasurementInput.TryParseMillimeters(tolerance.Text,out var gap) || gap<0 || gap>100000)
         { message.Text="0 ile 100000 mm arasında geçerli bir tolerans girin."; return; }
-        var currentDocument=workspace.Document;
+        var explicitChoice=explicitEndpoints.IsChecked==true;
+        if(explicitChoice && (firstEndpoint.SelectedIndex is <0 or >1 || secondEndpoint.SelectedIndex is <0 or >1)) { message.Text="Her iki parça için uç seçin.";return; }
+        var firstSide=firstEndpoint.SelectedIndex;var secondSide=secondEndpoint.SelectedIndex;
+        var currentDocument=workspace.Document;var fullSnapshot=currentDocument.Clone();
         var one=currentDocument.Pieces.SingleOrDefault(p=>p.Id==a.Id);
         var two=currentDocument.Pieces.SingleOrDefault(p=>p.Id==b.Id);
         if(one is null || two is null) { message.Text="Kaynak parça bulunamadı."; return; }
+        if(explicitChoice && (displayedFirst is null || displayedSecond is null ||
+           !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[one,two] },new ProjectDocument { Pieces=[displayedFirst,displayedSecond] })))
+        { message.Text="Gösterilen uçlar eski; parçaları yeniden seçin ve uçları kontrol edin.";return; }
         var oneCopy=one.Clone(); var twoCopy=two.Clone(); var omit=omitProductionData.IsChecked==true;
         using var tokenSource=new CancellationTokenSource(); cancellation=tokenSource;
         calculate.IsEnabled=false; message.Text="Konturlar doğrulanıyor; kapatmak hesabı iptal eder.";
         try
         {
-            var result=await Task.Run(()=>OpenPathJoin.Join(oneCopy,twoCopy,gap,tokenSource.Token,omit),tokenSource.Token);
+            var result=await Task.Run(()=> { BeforeJoinForVerification?.Invoke();tokenSource.Token.ThrowIfCancellationRequested();var joined=explicitChoice
+                ? OpenPathJoin.JoinSelected(oneCopy,twoCopy,firstSide==0 ? 0 : oneCopy.Points.Count-1,secondSide==0 ? 0 : twoCopy.Points.Count-1,gap,tokenSource.Token,omit)
+                : OpenPathJoin.Join(oneCopy,twoCopy,gap,tokenSource.Token,omit);
+                var candidate=fullSnapshot.Clone();candidate.Pieces.Add(joined.Piece);ProjectStorage.Validate(candidate,tokenSource.Token);return joined; },tokenSource.Token);
             if(closed || tokenSource.IsCancellationRequested)return;
-            if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy))
+            if(!ReferenceEquals(workspace.Document,currentDocument) || !DocumentSession.ContentEquals(workspace.Document,fullSnapshot) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın."; return; }
-            proposal=result; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;
+            proposal=result; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;documentSnapshot=fullSnapshot;
             preview.Points=result.Piece.Points;preview.Notches=result.Piece.Notches;
             // Reuse the exact endpoint decision made by the join operation;
             // rounded display distances can identify a different candidate set.
@@ -107,7 +148,7 @@ internal sealed class OpenPathJoinWindow : Window
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }
-        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or ArithmeticException)
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or ArithmeticException or System.IO.InvalidDataException)
         { if(!closed)message.Text="Önizleme oluşturulamadı: "+ex.Message; }
         finally { if(ReferenceEquals(cancellation,tokenSource))cancellation=null; if(!closed)calculate.IsEnabled=true; }
     }
@@ -120,9 +161,10 @@ internal sealed class OpenPathJoinWindow : Window
 
     private void Apply()
     {
-        if(proposal is null || beforeFirst is null || beforeSecond is null || !ReferenceEquals(document,workspace.Document) ||
+        if(proposal is null || beforeFirst is null || beforeSecond is null || documentSnapshot is null || !ReferenceEquals(document,workspace.Document) || !DocumentSession.ContentEquals(workspace.Document,documentSnapshot) ||
            workspace.HasPendingCanvasOrPropertyWork || !SameCurrent(beforeFirst) || !SameCurrent(beforeSecond))
         { InvalidateProposal(); message.Text="Proje veya kaynak değişti; önizlemeyi yeniden hesaplayın."; return; }
+        if(!workspace.CanRetainCurrentUndoSnapshot) { message.Text="Proje geri alma sınırını aşıyor; sonuç eklenmedi.";return; }
         var generated=proposal.Piece.Clone(); var committed=false;
         apply.IsEnabled=false;
         try

@@ -269,6 +269,74 @@ internal static class DesktopVerification
         }
         finally { window.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyExplicitOpenPathJoin(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var first=new PatternPiece { Name="A",Closed=false,Points=[new(0,0),new(10,0)],Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+        var second=new PatternPiece { Name="B",Closed=false,Points=[new(0,1),new(10,1)],Notches=[new NotchMark { VertexIndex=1,Position=new(10,1) }] };
+        var rule=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=false,SourcePoints=[..first.Points],Deltas=[new(1,2),new(3,4)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second],GradingRules=[rule] });studio.Select(first.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var window=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            void Preview() { var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            window.ToleranceForVerification.Text="11";Preview();
+            Check(!window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("belirsiz"),"Automatic join rejects multiple possible endpoints",checks);
+            window.ExplicitEndpointsForVerification.IsChecked=true;Preview();
+            Check(!window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("uç seçin"),"Explicit join requires two chosen endpoints",checks);
+            window.FirstEndpointForVerification.SelectedIndex=1;window.SecondEndpointForVerification.SelectedIndex=0;Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Explicit endpoints produce a detached preview",checks);
+            window.FirstEndpointForVerification.SelectedIndex=0;
+            Check(!window.ApplyButtonForVerification.IsEnabled,"Changing an endpoint invalidates the preview",checks);
+            window.FirstEndpointForVerification.SelectedIndex=1;Preview();window.ApplyForVerification();var after=studio.Document.Clone();
+            Check(after.Pieces.Count==3 && after.Pieces[2].Points.SequenceEqual(new[] { new Point2(0,0),new Point2(10,0),new Point2(0,1),new Point2(10,1) }) &&
+                after.Pieces[2].Notches!.Select(m=>m.VertexIndex).SequenceEqual(new[] { 0,3 }) && after.GradingRules.Count==1 && session.UndoCount==1,
+                "Explicit endpoints add the intended bridge while preserving sources and marks",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Explicit join is one undoable and redoable edit",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(first.Id);window=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            window.ToleranceForVerification.Text="11";window.ExplicitEndpointsForVerification.IsChecked=true;
+            window.FirstEndpointForVerification.SelectedIndex=1;window.SecondEndpointForVerification.SelectedIndex=0;
+            studio.Document.Pieces[0].Points[0]=new Point2(0,BitConverter.Int64BitsToDouble(long.MinValue));var changed=studio.Document.Clone();
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(!window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("uçlar eski") && DocumentSession.ContentEquals(changed,studio.Document),
+                "Explicit endpoint selection rejects stale displayed source bits",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(first.Id);window=new OpenPathJoinWindow(studio,studio);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? pending=null;var wasClosed=false;
+            try
+            {
+                window.ToleranceForVerification.Text="11";window.ExplicitEndpointsForVerification.IsChecked=true;
+                window.FirstEndpointForVerification.SelectedIndex=1;window.SecondEndpointForVerification.SelectedIndex=0;
+                window.BeforeJoinForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                pending=window.CalculateForVerification();PumpUntil(()=>reached.IsSet);window.Close();wasClosed=true;release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Cancelled explicit join leaves both sources unchanged",checks);
+            }
+            finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }if(!wasClosed)window.Close(); }
+        }
+        var limited=before.Clone();
+        for(var i=limited.Pieces.Count;i<ProjectStorage.MaximumPieces;i++)limited.Pieces.Add(new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] });
+        studio.LoadDocument(limited);studio.Select(first.Id);var limitBefore=studio.Document.Clone();window=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            window.ToleranceForVerification.Text="11";window.ExplicitEndpointsForVerification.IsChecked=true;
+            window.FirstEndpointForVerification.SelectedIndex=1;window.SecondEndpointForVerification.SelectedIndex=0;
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(!window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("parça listesi") &&
+                DocumentSession.ContentEquals(limitBefore,studio.Document) && session.UndoCount==0,"Explicit join preflight rejects a full project before apply",checks);
+        }
+        finally { window.Close(); }
+        SynchronizationContext.SetSynchronizationContext(previous);
+    }
+
     private static void VerifyOpenPathJoin(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Ön",Closed=false,Points=[new(0,0),new(10,0)] };
@@ -648,6 +716,7 @@ internal static class DesktopVerification
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
+            VerifyExplicitOpenPathJoin(studio,checks);
             VerifyOpenPathJoinExactEndpoints(studio,checks);
             VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);
