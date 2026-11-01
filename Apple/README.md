@@ -36,6 +36,8 @@ Sürüm 7 döndürmeli pastal dosyalarında görünür konturlar ve işaretler �
 
 Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa telefon ayrıca uyarır. Kimliklerin eşleşmesi, geometrinin değişmediğini veya geçmişin doğruluğunu kanıtlamaz.
 
+`ExperimentalJSONStream` üretime bağlı olmayan ilk artımlı UTF-8 JSON yapı denetimi denemesidir; belgeyi veya v7 izini yorumlamaz. Parçalı girdide anahtar yinelemesini, sözdizimini ve sınırlı kaynak kullanımını denetler; UTF-16/32 ve BOM dönüşümü henüz yoktur. 8 MB önizleme sınırını değiştirmez. Apple derlemesi, performans ve cihaz belleği henüz doğrulanmamıştır.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

@@ -20,6 +20,7 @@
         buildPhase: resources
       - path: Tests/MeasurementDisplayTests.swift
       - path: Tests/NotchSearchTests.swift
+      - path: Tests/ExperimentalJSONStreamTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:
