@@ -84,7 +84,10 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         points.SelectionChanged+=(_,_ )=>
         {
             if(!changingPointSelection && !selectingPointBySearch)
-            { changingPointText=true;try { pointOrdinalText.Clear(); } finally { changingPointText=false; } }
+            {
+                changingPointText=true;try { pointOrdinalText.Clear(); } finally { changingPointText=false; }
+                if(points.SelectedItem is PointChoice selected)SetStatus($"POINT kaydı {selected.Ordinal} seçildi; koordinatı ve katmanı inceleyin. Henüz eşleme eklenmedi.");
+            }
         };
         pointOrdinalText.TextChanged+=(_,_ )=>
         {
