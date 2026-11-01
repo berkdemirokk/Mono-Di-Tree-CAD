@@ -8221,11 +8221,46 @@ internal static class DesktopVerification
                     batch.Ready[0].Notches![0].Position==new Point2(9,0) && batch.Ready[1].Notches![0].Position==new Point2(11,0) &&
                     batch.Status.Text.Contains("önizlemede gösterilir") && DocumentSession.ContentEquals(before,studio.Document),
                     "Marked batch preview maps each size and reports visible markers",checks);
+                var first=batch.MarkComparison.Items.Cast<string>().Single();
+                Check(first.Contains("Nokta 1:") && first.Contains("temel X 10") && first.Contains("beden X 9") &&
+                    VirtualizingPanel.GetIsVirtualizing(batch.MarkComparison),"Marked comparison exposes indexed coordinates in a virtualized keyboard list",checks);
+                batch.PreviewList.SelectedIndex=1;
+                var second=batch.MarkComparison.Items.Cast<string>().Single();
+                Check(second.Contains("Nokta 1:") && second.Contains("beden X 11") && second!=first,
+                    "Selecting another size replaces the marked-coordinate comparison",checks);
+                batch.Entries.Text="S; -1\nL; 2";
+                Check(batch.MarkComparison.Items.Count==0 && batch.Ready is null,"Editing batch inputs clears stale marked coordinates",checks);
+                using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+                {
+                    try
+                    {
+                        batch.BeforeBulkCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                        task=batch.CalculateAsync();PumpUntil(()=>reached.IsSet);
+                        batch.CancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));release.Set();
+                        PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                        Check(batch.MarkComparison.Items.Count==0 && batch.Ready is null && DocumentSession.ContentEquals(before,studio.Document),
+                            "Cancelled marked grading leaves no stale coordinate list or document change",checks);
+                    }
+                    finally { release.Set();batch.BeforeBulkCalculationForVerification=null; }
+                }
+                batch.Entries.Text="S; -1\nL; 1";task=batch.CalculateAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(batch.MarkComparison.Items.Count==1,"Recalculation restores the current marked comparison",checks);
                 batch.AddReady();
                 Check(added && studio.Document.Pieces.Count==3 && studio.Document.Pieces.Skip(1).All(p=>p.Notches![0].Position==p.Points[1]) &&
                     session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Marked grade batch commits and undoes atomically",checks);
             }
             finally { batch.Close(); }
+            live=studio.Document.Pieces.Single();
+            var stale=new BulkGradingWindow(studio,studio,live,[new(0,0),new(1,0),new(1,1),new(0,1)],()=>true,()=>{});
+            try
+            {
+                stale.Entries.Text="L; 1";var task=stale.CalculateAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(stale.MarkComparison.Items.Count==1,"Current marked preview offers coordinate comparison",checks);
+                studio.Document.Name="Değişen proje";var changed=studio.Document.Clone();stale.AddReady();
+                Check(stale.MarkComparison.Items.Count==0 && stale.Ready is null && DocumentSession.ContentEquals(changed,studio.Document),
+                    "Stale marked preview clears comparison and cannot commit",checks);
+            }
+            finally { stale.Close(); }
         }
         finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
     }

@@ -32,6 +32,8 @@ internal sealed class BulkGradingWindow : Window
     internal TextBlock Status { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     internal BulkGradePreview GeometryPreview { get; } = new();
     internal TextBlock ChangeSummary { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0),Foreground=StudioTheme.Text };
+    internal ListBox MarkComparison { get; } = new() { Height=130,Margin=new Thickness(0,4,0,0) };
+    private readonly Expander markComparisonSection=new() { Header="Köşe işaretlerini koordinatlarla karşılaştır",Margin=new Thickness(0,6,0,0),Visibility=Visibility.Collapsed };
     internal Action? BeforeBulkCalculationForVerification { get; set; }
     internal Task? Calculation { get; private set; }
     internal IReadOnlyList<PatternPiece>? Ready => ready;
@@ -61,6 +63,13 @@ internal sealed class BulkGradingWindow : Window
         AutomationProperties.SetName(ChangeSummary,"Seçili bedenin karşılaştırma ve iplik yönü özeti");
         AutomationProperties.SetLiveSetting(ChangeSummary,AutomationLiveSetting.Polite);panel.Children.Add(ChangeSummary);
         panel.Children.Add(GeometryPreview);
+        var markPanel=new StackPanel();
+        markPanel.Children.Add(new TextBlock { Text="Her satır aynı indeksli temel ve seçili beden işaretinin X/Y konumlarını mm olarak gösterir. Sayılar gösterim için biçimlendirilir ve yuvarlanabilir. İşaretler fiziksel çentik veya üretim onayı değildir.",TextWrapping=TextWrapping.Wrap });
+        AutomationProperties.SetName(MarkComparison,"Temel ve seçili beden köşe işareti koordinatları");
+        AutomationProperties.SetHelpText(MarkComparison,"Ok tuşlarıyla işaret satırlarını gezin; her satır nokta indeksi ve iki konumu içerir.");
+        VirtualizingPanel.SetIsVirtualizing(MarkComparison,true);VirtualizingPanel.SetVirtualizationMode(MarkComparison,VirtualizationMode.Recycling);
+        ScrollViewer.SetCanContentScroll(MarkComparison,true);markPanel.Children.Add(MarkComparison);
+        markComparisonSection.Content=markPanel;panel.Children.Add(markComparisonSection);
         AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);AutomationProperties.SetName(Status,"Toplu beden durumu");
         var statusProperty=DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty,typeof(TextBlock));
         EventHandler announceStatus=(_,_)=> { if(UIElementAutomationPeer.CreatePeerForElement(Status) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged); };
@@ -84,14 +93,25 @@ internal sealed class BulkGradingWindow : Window
     private void InvalidatePreview()
     {
         var hadPreview=ready is not null;
-        ready=null;readyText=null;AddButton.IsEnabled=false;PreviewList.ItemsSource=null;GeometryPreview.Clear();SetChangeSummary("");
+        ready=null;readyText=null;AddButton.IsEnabled=false;PreviewList.ItemsSource=null;GeometryPreview.Clear();ClearMarkComparison();SetChangeSummary("");
         if(hadPreview) { Status.Foreground=StudioTheme.Warning;Status.Text="Girdiler değişti; bedenleri yeniden hesaplayın."; }
     }
     private void UpdateGeometryPreview()
     {
+        ClearMarkComparison();
         if(ready is null || PreviewList.SelectedIndex<0 || PreviewList.SelectedIndex>=ready.Count) { GeometryPreview.Clear();SetChangeSummary("");return; }
         if(!Current()) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Proje veya artışlar değişti; önizleme geçersiz. Pencereyi kapatıp yeniden açın.";return; }
         var item=ready[PreviewList.SelectedIndex];GeometryPreview.SetPieces(source,item,SafeName(item.Name));
+        if(source.Notches is { Count:>0 } marks && item.Notches is { } gradedMarks)
+        {
+            var byIndex=gradedMarks.ToDictionary(mark=>mark.VertexIndex);
+            if(byIndex.Count==marks.Count && marks.All(mark=>byIndex.ContainsKey(mark.VertexIndex)))
+            {
+                static string Coordinate(Point2 p)=>$"X {MeasurementInput.Format(p.X)}, Y {MeasurementInput.Format(p.Y)} mm";
+                MarkComparison.ItemsSource=marks.Select(mark=>$"Nokta {mark.VertexIndex}: temel {Coordinate(mark.Position)}; seçili beden {Coordinate(byIndex[mark.VertexIndex].Position)}").ToArray();
+                markComparisonSection.Visibility=Visibility.Visible;
+            }
+        }
         var grainSummary=item.Grainline is null ? "İplik yönü yok."
             : item.Grainline.NeedsReview ? "İplik yönü var; konturla ilişkisi kontrol bekliyor."
             : "İplik yönü var; kontrol beklemiyor.";
@@ -110,6 +130,7 @@ internal sealed class BulkGradingWindow : Window
         SetChangeSummary(selectedSummary+(changed==0 ? "Temel kalıpla aynı geometri; değişen nokta: 0, en büyük yer değiştirme: 0 mm."
             : $"Değişen nokta: {changed} / {source.Points.Count}. En büyük düz yer değiştirme: {MeasurementInput.Format(maximum)} mm."));
     }
+    private void ClearMarkComparison() { MarkComparison.ItemsSource=null;markComparisonSection.Visibility=Visibility.Collapsed; }
     private void SetChangeSummary(string message)
     {
         if(ChangeSummary.Text==message)return;
