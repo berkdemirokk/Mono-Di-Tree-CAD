@@ -6518,9 +6518,13 @@ internal static class DesktopVerification
             "Save As rescues open document to a separate path after its source was removed",checks);
         var copy=Path.Combine(work,"new-copy-success.tcad");
         var rescueBytes=File.ReadAllBytes(rescue);
+        var beforeCopy=studio.Document.Clone();
+        name.Text="Yalnız kopyaya alınan taslak";
         studio.SaveNewCopyTo(copy);
-        Check(ProjectStorage.Load(copy).Pieces.Single().Name=="Korunan taslak" && File.ReadAllBytes(rescue).SequenceEqual(rescueBytes),
-            "New copy creates a separate project and preserves the original",checks);
+        var activePath=(string?)typeof(MainWindow).GetField("filePath",PrivateInstance)!.GetValue(studio);
+        Check(ProjectStorage.Load(copy).Pieces.Single().Name=="Yalnız kopyaya alınan taslak" && File.ReadAllBytes(rescue).SequenceEqual(rescueBytes)
+            && string.Equals(activePath,rescue,StringComparison.OrdinalIgnoreCase) && DocumentSession.ContentEquals(beforeCopy,studio.Document) && name.Text=="Yalnız kopyaya alınan taslak",
+            "New copy preserves the open path, original project and pending draft",checks);
     }
     private static void VerifyDxfPiecePreview(MainWindow studio,string work,string reportPath,List<string> checks)
     {

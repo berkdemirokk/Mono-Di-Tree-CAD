@@ -253,7 +253,7 @@ public class MainWindow : Window
         projectOpenCancel.Visibility=Visibility.Collapsed;
         var saveButton = AddButton(files, "Kaydet", Save, "Kaydet · Ctrl+S", projectSaveAction:true); saveButton.Background = StudioTheme.Accent; saveButton.Foreground = StudioTheme.Background;
         AddButton(files, "Farklı kaydet…", SaveAs, "Farklı kaydet · Ctrl+Shift+S", projectSaveAction:true);
-        AddButton(files, "Yeni adla kaydet…", SaveNewCopy, "Yeni bir dosya oluşturarak kaydet", projectSaveAction:true);
+        AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
@@ -1890,12 +1890,18 @@ public class MainWindow : Window
     }
     internal void SaveNewCopyTo(string path)
     {
+        EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
         var expected=CaptureSaveAsDestination(path,true);
         if(expected.Sha256 is not null)
             throw new IOException("Bu adla bir dosya zaten var; üzerine yazılmadı. Yeni bir ad seçin.");
-        // The missing-version token commits with fail-if-exists, including when
-        // another process creates the destination after this capture.
-        SaveAsTo(path,expected,true);
+        var changes=ValidatePropertyDrafts(Document,propertyDrafts.Keys);
+        var candidate=Document.Clone();
+        ApplyDraftChanges(candidate,changes);
+        Validate(candidate);
+        // A missing-version token commits with fail-if-exists even if another
+        // process creates the destination after the snapshot was captured.
+        ProjectStorage.SaveIfUnchanged(candidate,path,expected);
+        SetStatus("Güvenli proje kopyası oluşturuldu: "+path+" · Açık proje ve taslaklar değişmedi.");
     }
     private void SaveAs() => SaveAsCore(false);
     private void SaveAsCore(bool compatibilityAcknowledged)
