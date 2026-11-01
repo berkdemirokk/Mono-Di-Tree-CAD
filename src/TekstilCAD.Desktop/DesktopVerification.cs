@@ -8337,6 +8337,11 @@ internal static class DesktopVerification
             Descendants<TabControl>(root).Single().SelectedIndex=1;
             root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
             var index=(TextBox)typeof(TextileToolsWindow).GetField("vertexIndexInput",PrivateInstance)!.GetValue(tools)!;
+            var liveResult=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            _=UIElementAutomationPeer.CreatePeerForElement(liveResult);
+            Check(AutomationProperties.GetName(liveResult).Contains(liveResult.Text) &&
+                AutomationProperties.GetLiveSetting(liveResult)==AutomationLiveSetting.Polite,
+                "Workshop initial result has current live automation text",checks);
             Button Find(string text)=>Descendants<Button>(root).Single(b=>Equals(b.Content,text));
             var add=Find("Seçili noktaya işaret ekle");var remove=Find("Seçili noktanın işaretini kaldır");
             var move=Find("Seçilen indeksteki noktayı taşı");var delete=Find("Seçilen indeksteki noktayı sil");
@@ -8351,9 +8356,18 @@ internal static class DesktopVerification
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled && studio.Selected!.Notches!.Count==2,
                 "Adding a marker immediately updates the available operations",checks);
+            Check(liveResult.Text.Contains("işareti eklendi") && AutomationProperties.GetName(liveResult).Contains(liveResult.Text),
+                "Marker addition exposes its current result through automation",checks);
             remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),
                 "Removing the marker restores operations and leaves the other marker intact",checks);
+            Check(liveResult.Text.Contains("işareti kaldırıldı") && AutomationProperties.GetName(liveResult).Contains(liveResult.Text) &&
+                !AutomationProperties.GetName(liveResult).Contains("işareti eklendi"),
+                "Marker removal replaces the previous accessible result",checks);
+            tools.SetVertexNotch("999",true);
+            Check(liveResult.Text.Contains("değiştirilemedi") && AutomationProperties.GetName(liveResult).Contains(liveResult.Text) &&
+                !AutomationProperties.GetName(liveResult).Contains("işareti kaldırıldı"),
+                "A workshop failure replaces the previous success in automation",checks);
             var oldCulture=CultureInfo.CurrentCulture;
             try
             {
