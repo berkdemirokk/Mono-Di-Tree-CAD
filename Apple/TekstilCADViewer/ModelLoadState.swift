@@ -45,16 +45,28 @@ struct LoadedModelState<Model> {
     private(set) var model: Model?
     private(set) var sourceData: Data?
     private(set) var revision = UUID()
-    var load = ModelLoadState()
+    var load = ModelLoadState() {
+        didSet {
+            #if DEBUG
+            if load.request != oldValue.request { pointEditSnapshot = nil }
+            #endif
+        }
+    }
     var selectedPiece: Int? {
         didSet {
-            if selectedPiece != oldValue { selectionRevision = UUID(); selectedNotch = nil }
+            if selectedPiece != oldValue {
+                selectionRevision = UUID(); selectedNotch = nil
+                #if DEBUG
+                pointEditSnapshot = nil
+                #endif
+            }
         }
     }
     var selectedNotch: (piece: Int, point: Int)?
     private var selectionRevision = UUID()
 
     #if DEBUG
+    var pointEditSnapshot: PointEditSnapshot?
     struct EditIdentity {
         let revision: UUID
         let loadRequest: UUID
@@ -86,6 +98,9 @@ struct LoadedModelState<Model> {
         self.sourceData = data
         self.selectedPiece = selectedPiece
         self.selectedNotch = nil
+        #if DEBUG
+        pointEditSnapshot = nil
+        #endif
         revision = UUID()
     }
 }

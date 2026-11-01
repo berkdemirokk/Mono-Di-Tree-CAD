@@ -76,6 +76,30 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertNil(state.selectedNotch)
         XCTAssertEqual(state.selectedPiece, 1)
     }
+    #if DEBUG
+    func testPointEditorSnapshotInvalidatesWithSelectionOrLoadChange() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-point", withExtension: "tcad"))
+        let data = try Data(contentsOf: url), drawing = try Drawing.load(data)
+        let piece = try XCTUnwrap(drawing.pieces.first), id = try XCTUnwrap(piece.id)
+        var state = LoadedModelState<Drawing>()
+        state.install(drawing, data: data, selectedPiece: 0)
+        func makeSnapshot(_ state: LoadedModelState<Drawing>) throws -> PointEditSnapshot {
+            PointEditSnapshot(data: data, piece: piece, pieceID: id, index: 0,
+                              projectName: drawing.name, identity: try XCTUnwrap(state.editIdentity()))
+        }
+        state.pointEditSnapshot = try makeSnapshot(state)
+        state.selectedPiece = 1
+        XCTAssertNil(state.pointEditSnapshot)
+        state.selectedPiece = 0
+        state.pointEditSnapshot = try makeSnapshot(state)
+        _ = state.load.begin()
+        XCTAssertNil(state.pointEditSnapshot)
+        state.load.invalidate()
+        state.pointEditSnapshot = try makeSnapshot(state)
+        state.install(drawing, data: data, selectedPiece: 0)
+        XCTAssertNil(state.pointEditSnapshot)
+    }
+    #endif
     func testInstallingModelReplacesSelectionWithMatchedOrDefaultSelection() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]), selectedPiece: 2)

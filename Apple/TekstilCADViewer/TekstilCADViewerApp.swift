@@ -46,6 +46,17 @@ private enum ModelLibrarySortOrder: String, CaseIterable, Identifiable {
     case newest = "En yeni önce"
     var id: String { rawValue }
 }
+#if DEBUG
+struct PointEditSnapshot: Identifiable {
+    let id = UUID()
+    let data: Data
+    let piece: Drawing.Piece
+    let pieceID: UUID
+    let index: Int
+    let projectName: String
+    let identity: LoadedModelState<Drawing>.EditIdentity
+}
+#endif
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPendingRawNotice = false
@@ -89,18 +100,7 @@ private struct ContentView: View {
     @State private var showingNameEditor = false
     @State private var editedName = ""
     @State private var showingPieceNameEditor = false
-    #if DEBUG
-    private struct PointEditSnapshot: Identifiable {
-        let id = UUID()
-        let data: Data
-        let piece: Drawing.Piece
-        let pieceID: UUID
-        let index: Int
-        let projectName: String
-        let identity: LoadedModelState<Drawing>.EditIdentity
-    }
-    @State private var pointEditSnapshot: PointEditSnapshot?
-    #endif
+
     @State private var editedPieceName = ""
     @State private var pieceRenameSnapshot: PieceRenameSnapshot?
     @State private var importedName = ""
@@ -344,11 +344,11 @@ private struct ContentView: View {
                         Button("Deneysel nokta düzenle…") {
                             guard let data = sourceData, let id = project.pieces[selectedPiece].id,
                                   let identity = loadedModel.editIdentity() else { return }
-                            pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
+                            loadedModel.pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
                                 index: selectedPiece, projectName: project.name, identity: identity)
                         }
                             .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
-                            .sheet(item: $pointEditSnapshot) { snapshot in
+                            .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { loadedModel.pointEditSnapshot = $0 })) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
                                     isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
                                     invalidateForTesting: { loadedModel.load.invalidate() })
