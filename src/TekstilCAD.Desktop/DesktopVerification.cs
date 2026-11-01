@@ -599,6 +599,7 @@ internal static class DesktopVerification
             VerifyNestingErrorNavigationLarge(studio,reportPath,checks);
             VerifyPointDistance(studio,reportPath,checks);
             VerifySeamLengthComparison(studio,checks);
+            VerifySeamSourceIdentity(studio,checks);
             VerifyPointPicker(studio,reportPath,checks);
             VerifyBulkGrading(studio,reportPath,checks);
             VerifyBulkPreviewDirection(checks);
@@ -10037,6 +10038,29 @@ internal static class DesktopVerification
         }
         finally { boundaryWindow.Close(); }
         studio.LoadDocument(Fixture());
+    }
+
+    private static void VerifySeamSourceIdentity(MainWindow studio,List<string> checks)
+    {
+        var first=new PatternPiece { Id=Guid.Parse("12345678-1111-4111-8111-111111111111"),Name="Ön\u202E\n"+new string('A',150),Closed=false,Points=[new(0,0),new(10,0)] };
+        var second=new PatternPiece { Id=Guid.Parse("12345678-2222-4222-8222-222222222222"),Name=first.Name,Closed=false,Points=[new(0,0),new(0,12)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second] });studio.Select(first.Id);var before=studio.Document.Clone();
+        var window=new SeamLengthComparisonWindow(studio,studio,()=>first.Id);
+        try
+        {
+            var side=typeof(SeamLengthComparisonWindow).GetField("first",PrivateInstance)!.GetValue(window)!;
+            var selector=(ComboBox)side.GetType().GetField("Piece",PrivateInstance)!.GetValue(side)!;
+            var identity=(TextBox)side.GetType().GetField("Identity",PrivateInstance)!.GetValue(side)!;
+            var choice=selector.Items[0];var label=(string)choice.GetType().GetProperty("Label")!.GetValue(choice)!;
+            Check(label.StartsWith("12345678 · ",StringComparison.Ordinal) && label.Contains("\\u202E") && label.Contains("\\u000A") &&
+                !label.Contains('\u202E') && !label.Contains('\n') && label.Length<=91 && label.EndsWith('…') &&
+                identity.IsReadOnly && identity.Text==first.Id.ToString("D") && Equals(identity.ToolTip,identity.Text) && AutomationProperties.GetName(identity).Contains("tam parça kimliği"),
+                "Seam source selection uses bounded escaped names and exposes the complete selected identity",checks);
+            selector.SelectedIndex=1;
+            Check(identity.Text==second.Id.ToString("D") && DocumentSession.ContentEquals(before,studio.Document),
+                "Seam source identity distinguishes duplicate names and colliding short IDs without changing the project",checks);
+        }
+        finally { window.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
     private static void VerifyPointDistance(MainWindow studio,string reportPath,List<string> checks)
