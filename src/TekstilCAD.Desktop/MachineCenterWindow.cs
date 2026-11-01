@@ -100,7 +100,7 @@ public sealed class MachineCenterWindow : Window
         body.Children.Add(new TextBlock { Text="ÜRETİM HAZIRLIĞI",FontSize=11,FontWeight=FontWeights.SemiBold,Foreground=StudioTheme.Accent });
         body.Children.Add(new TextBlock { Text="Dosya hazırlama (simülasyon)",FontSize=28,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,6,0,6) });
         body.Children.Add(new TextBlock { Text="Yerel dosya hazırlama ve bütünlük kontrolü",Foreground=StudioTheme.Muted,Margin=new Thickness(0,0,0,18) });
-        var notice=new TextBlock { Text="SİMÜLATÖR  ·  Fiziksel bağlantı kurulmaz. Makine uyumluluğu doğrulanmadı.",Foreground=StudioTheme.Warning,TextWrapping=TextWrapping.Wrap };
+        var notice=new TextBlock { Text="SİMÜLATÖR  ·  Fiziksel bağlantı kurulmaz. Makine uyumluluğu doğrulanmadı. Tuvalde Y aşağı artar; dosyadaki koordinatları Y yukarı gösteren hedefte görünüm dikey ters olabilir. Yönü hedefte kontrol edin.",Foreground=StudioTheme.Warning,TextWrapping=TextWrapping.Wrap };
         body.Children.Add(Card(notice));
         if(openingSnapshot.NestingSnapshot is not null)
         {

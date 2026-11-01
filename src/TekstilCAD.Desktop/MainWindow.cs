@@ -2957,6 +2957,7 @@ public class MainWindow : Window
     internal const string HpglPreflightMessage = "Bu aktarım tüm proje parçalarını 40 birim/mm ile bir HPGL dosyasına yazar. "+
         "Dosya koordinat adımı 0,025 mm'dir; koordinatlar tam sayıya yuvarlanır. Bu değer fiziksel makine hassasiyeti değildir.\n\n"+
         "Küçük çentikler veya yön değişimleri yuvarlama sırasında düzleşebilir. Dosyayı üretimden önce kontrol edin.\n\n"+
+        "Tuvalde Y aşağı artar; HPGL koordinatları aynı işaretle yazılır. Y ekseni yukarı olan cihazda görünüm dikey ters olabilir; hedefte yönü kontrol edin.\n\n"+
         "Fiziksel makine uyumluluğu ve kalibrasyon doğrulanmadı. Farklı birim/mm değerlerini fiziksel bağlantı kurmayan Makine simülatöründe deneyebilirsiniz.\n\nDosyayı hazırlamak istiyor musunuz?";
     internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm)
     {

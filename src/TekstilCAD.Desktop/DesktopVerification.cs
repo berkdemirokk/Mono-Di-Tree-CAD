@@ -4122,7 +4122,8 @@ internal static class DesktopVerification
             && File.ReadAllBytes(declinedPath).SequenceEqual(declinedBytes) && DocumentSession.ContentEquals(mismatchDocument,studio.Document)
             && shown is not null && shown.Contains("40 birim/mm") && shown.Contains("0,025 mm") && shown.Contains("tam sayıya yuvarlanır")
             && shown.Contains("kalibrasyon doğrulanmadı") && shown.Contains("Makine simülatöründe") && shown.Contains("fiziksel makine hassasiyeti değildir")
-            && shown.Contains("Küçük çentikler") && shown.Contains("düzleşebilir") && shown.Contains("üretimden önce kontrol edin"),
+            && shown.Contains("Küçük çentikler") && shown.Contains("düzleşebilir") && shown.Contains("üretimden önce kontrol edin")
+            && shown.Contains("Y aşağı artar") && shown.Contains("dikey ters olabilir"),
             "Declining HPGL preflight preserves source and target and shows coordinate and machine limitations before writing",checks);
         var approvedPath=Path.Combine(work,"hpgl-preflight-approved.plt");
         var approvedVersion=ProjectStorage.CaptureVersion(approvedPath);var approvedSeen=false;
