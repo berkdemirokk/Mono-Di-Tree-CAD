@@ -450,6 +450,11 @@ internal static class DesktopVerification
         studio.LoadDocument(new ProjectDocument { Name="Kapatma doğrulaması",Pieces=[a],GradingRules=[rule] });
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var initial=studio.Document.Clone();var window=new OpenPathClosureWindow(studio,studio);
+        var preferredWindow=new OpenPathClosureWindow(studio,studio,preferredSourceId:a.Id);
+        var missingWindow=new OpenPathClosureWindow(studio,studio,preferredSourceId:Guid.NewGuid());
+        try { Check(preferredWindow.SelectedSourceForVerification==a.Id && missingWindow.SelectedSourceForVerification is null,
+            "Closure preselects the requested source and never substitutes an unrelated open piece",checks); }
+        finally { preferredWindow.Close();missingWindow.Close(); }
         try
         {
             void Preview() { var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
@@ -9292,12 +9297,14 @@ internal static class DesktopVerification
             var savedSegment=canvas.Points.ToArray();
             var proposal=new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) };
             Check(canvas.SetPathSuggestion(savedSegment[^2],savedSegment[^1],proposal),"Photo path can be prepared for draft confirmation",checks);
-            var pendingWarning=false;trace.ConfirmForVerification=message=> { pendingWarning=message.Contains("Uygulanmamış mavi öneri");return false; };trace.TryApply();
-            Check(pendingWarning && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
+            Guid? closureRequested=null;trace.OpenClosureForVerification=id=>closureRequested=id;trace.ReviewClosureForVerification.IsChecked=true;
+            var pendingWarning=false;var closureNotice=false;trace.ConfirmForVerification=message=> { pendingWarning=message.Contains("Uygulanmamış mavi öneri");closureNotice=message.Contains("fotoğraf geçmişi açık kaynakta kalır");return false; };trace.TryApply();
+            Check(pendingWarning && closureNotice && closureRequested is null && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Draft confirmation discloses an unaccepted photo path and leaves the project unchanged on cancellation",checks);
             Check(canvas.ApplyPathSuggestion(),"Reviewed photo path is explicitly accepted",checks);
             trace.ConfirmForVerification=_=>true;trace.TryApply();
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
+            Check(closureRequested==draft.Id,"Photo draft requests closure review for the exact newly added source",checks);
             Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(110,10),new Point2(110,90),new Point2(100,100) }) && session.UndoCount==1,
                 "Confirmed photo trace with accepted path adds one scaled open draft",checks);
             var provenance=AssertSingle(added.PhotoTraceHistory!);
@@ -9342,6 +9349,21 @@ internal static class DesktopVerification
                 "Photo evidence uses version eight without embedding reference image bytes",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
                 "Manual photo draft participates in undo and redo",checks);
+            var closureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
+            var photoClosure=new OpenPathClosureWindow(workspace,workspace,preferredSourceId:closureRequested);
+            try
+            {
+                photoClosure.ToleranceForVerification.Text="150";var closureTask=photoClosure.CalculateForVerification();
+                PumpUntil(()=>closureTask.IsCompleted);closureTask.GetAwaiter().GetResult();
+                Check(photoClosure.SelectedSourceForVerification==draft.Id && photoClosure.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(added,workspace.Document),
+                    "Photo closure review previews the exact source without modifying the project",checks);
+                photoClosure.ApplyForVerification();
+                Check(workspace.Document.Pieces.Count==2 && workspace.Document.Pieces[1].Closed && workspace.Document.Pieces[1].Points.SequenceEqual(draft.Points) &&
+                    workspace.Document.PhotoTraceHistory is { Count:1 } && workspace.Document.PhotoTraceHistory[0].PieceId==draft.Id,
+                    "Photo closure adds a separate closed piece while retaining the original photo history",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(added,workspace.Document),"Undo removes the separate photo closure without erasing its source history",checks);
+            }
+            finally { photoClosure.Close();SynchronizationContext.SetSynchronizationContext(closureContext); }
             var file=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-trace-"+Guid.NewGuid().ToString("N")+".tcad");
             try { ProjectStorage.Save(added,file);Check(DocumentSession.ContentEquals(added,ProjectStorage.Load(file)),"Manual photo draft persists as ordinary open geometry",checks); }
             finally { if(File.Exists(file))File.Delete(file); }

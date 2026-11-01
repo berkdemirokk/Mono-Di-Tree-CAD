@@ -34,8 +34,9 @@ internal sealed class OpenPathClosureWindow : Window
     internal Button ApplyButtonForVerification=>apply;
     internal CheckBox CopyRuleForVerification=>copyRule;
     internal string MessageForVerification=>message.Text;
+    internal Guid? SelectedSourceForVerification=>(source.SelectedItem as Choice)?.Id;
 
-    internal OpenPathClosureWindow(MainWindow workspace,Window owner,Func<PatternPiece,GradingRuleSet?,bool>? hasDraft=null)
+    internal OpenPathClosureWindow(MainWindow workspace,Window owner,Func<PatternPiece,GradingRuleSet?,bool>? hasDraft=null,Guid? preferredSourceId=null)
     {
         this.workspace=workspace;this.hasDraft=hasDraft; Owner=owner; Title="Açık konturu kapat"; Width=760;Height=760;MinWidth=500;MinHeight=500;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
@@ -57,7 +58,8 @@ internal sealed class OpenPathClosureWindow : Window
         AutomationProperties.SetName(preview,"Kapalı kontur ve kapanış kenarı önizlemesi");AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
         foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))
         { var safeName=CadCanvas.CanvasPieceLabel(p.Name);source.Items.Add(new Choice(p.Id,$"{p.Id:D} · {safeName}",safeName)); }
-        if(source.Items.Count>0)source.SelectedIndex=0;
+        if(preferredSourceId is Guid preferred)source.SelectedItem=source.Items.Cast<Choice>().FirstOrDefault(item=>item.Id==preferred);
+        else if(source.Items.Count>0)source.SelectedIndex=0;
         source.SelectionChanged+=(_,_)=>InvalidateProposal();tolerance.TextChanged+=(_,_)=>InvalidateProposal();
         omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();
         copyRule.Checked+=(_,_)=>InvalidateProposal();copyRule.Unchecked+=(_,_)=>InvalidateProposal();

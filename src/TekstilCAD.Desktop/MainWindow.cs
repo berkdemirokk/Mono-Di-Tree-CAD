@@ -1392,8 +1392,9 @@ public class MainWindow : Window
             return "Proje, seçim veya bekleyen çalışma değişti. Taslak eklenmedi; güncel projeyle yeniden başlayın.";
         return null;
     }
-    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points,PhotoTraceProvenance history)
+    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points,PhotoTraceProvenance history,out Guid? addedId)
     {
+        addedId=null;
         ArgumentNullException.ThrowIfNull(history);
         if(PhotoTraceProblem(stamp) is { } problem) { SetStatus(problem);return false; }
         var copied=points.ToList();LargeOpenPathValidator.Validate(copied);
@@ -1408,7 +1409,16 @@ public class MainWindow : Window
         try { CommitObserved("Fotoğraftan açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());(Document.PhotoTraceHistory ??= []).Add(captured.Clone());SelectedId=piece.Id; },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         { mainMutationReviewRequired=true;SetStatus("Taslak eklendi ancak görünüm yenilenemedi; projeyi kontrol edin. İşlem geri alınabilir.");return true; }
+        if(committed)addedId=piece.Id;
         return committed;
+    }
+
+    internal void OpenPhotoTraceClosure(Guid id)
+    {
+        if(mainMutationReviewRequired || windowClosed || recoveryClosing || recoveryRestoreIncomplete || DxfImportRunning || ExportRunning || HasPendingCanvasOrPropertyWork ||
+           !Document.Pieces.Any(piece=>piece.Id==id && !piece.Closed))
+        { SetStatus("Kapatma incelemesi açılamadı; açık taslağı kontrol edin ve Tekstil araçlarından yeniden deneyin.");return; }
+        new OpenPathClosureWindow(this,this,preferredSourceId:id).ShowDialog();
     }
 
     // The window holds only a detached drawing; this stamp must be rechecked

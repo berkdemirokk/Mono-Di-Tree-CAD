@@ -23,7 +23,9 @@ internal sealed class PhotoTraceWindow : Window
     internal PhotoTraceCanvas CanvasForVerification { get; } = new();
     internal TextBox LengthForVerification { get; } = new() { Width=85,MaxLength=32 };
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };
+    internal CheckBox ReviewClosureForVerification { get; } = new() { Content="Kapatmayı incele",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
     internal Func<string,bool>? ConfirmForVerification { get; set; }
+    internal Action<Guid>? OpenClosureForVerification { get; set; }
     internal Func<BitmapSource,Point,Point,CancellationToken,IReadOnlyList<Point>?>? ComputePathForVerification { get; set; }
     private bool allowClose,closed;
     private CancellationTokenSource? pathCancellation;
@@ -67,11 +69,13 @@ internal sealed class PhotoTraceWindow : Window
         PathAction("Yolu uygula","Kesikli öneriyi son iki nokta arasına ekler; önceden seçilen uçları korur.",()=> { if(!CanvasForVerification.ApplyPathSuggestion())StatusForVerification.Text="Uygulanabilir yol önerisi yok."; });
         PathAction("Yolu geri al","Son uygulanan yolu tek adımda kaldırır; başka nokta değişikliği yapılmamış olmalıdır.",()=> { if(!CanvasForVerification.UndoPath())StatusForVerification.Text="Geri alınacak son yol yok."; });
         PathAction("Aramayı iptal et","Süren yol aramasına iptal isteği gönderir.",CancelPathSuggestion);
+        AutomationProperties.SetHelpText(ReviewClosureForVerification,"Taslak eklendikten sonra ayrı kapanış incelemesini açar. Kapalı parça otomatik eklenmez; fotoğraf geçmişi açık kaynakta kalır.");pathActions.Children.Add(ReviewClosureForVerification);
         AutomationProperties.SetName(StatusForVerification,"Fotoğraf taslağı durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
         CanvasForVerification.Image=image;CanvasForVerification.SetSourceAspect(this.sourceWidth,this.sourceHeight);
         CanvasForVerification.PointsChanged+=(_,_)=> { DraftRevision++;UpdateStatus(); };
         LengthForVerification.TextChanged+=(_,_)=>DraftRevision++;xInput.TextChanged+=(_,_)=>DraftRevision++;yInput.TextChanged+=(_,_)=>DraftRevision++;
+        ReviewClosureForVerification.Checked+=(_,_)=>DraftRevision++;ReviewClosureForVerification.Unchecked+=(_,_)=>DraftRevision++;
         UpdateStatus();root.Children.Add(CanvasForVerification);
         Closing+=OnClosing;
         workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
@@ -110,6 +114,8 @@ internal sealed class PhotoTraceWindow : Window
         {
             var p=CanvasForVerification.Points;
             if(p.Count<4) { StatusForVerification.Text="İki referans ucu ve en az iki çizgi noktası seçin.";return; }
+            var reviewClosure=ReviewClosureForVerification.IsChecked==true;
+            if(reviewClosure && p.Count<5) { StatusForVerification.Text="Kapanışı incelemek için en az üç çizgi noktası seçin.";return; }
             if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0) { StatusForVerification.Text="Fotoğraf kaynak kimliği bulunamadı; taslak eklenmedi.";return; }
             if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm) || mm<=0) { StatusForVerification.Text="Bilinen mesafeyi pozitif milimetre olarak girin.";return; }
             var referenceStart=new Point2(p[0].X,p[0].Y);var referenceEnd=new Point2(p[1].X,p[1].Y);
@@ -121,13 +127,15 @@ internal sealed class PhotoTraceWindow : Window
             var distance=Math.Sqrt(Math.Pow(p[1].X-p[0].X,2)+Math.Pow(p[1].Y-p[0].Y,2));
             var pendingSuggestion=CanvasForVerification.PathSuggestion is not null || CanvasForVerification.EdgeSuggestion is not null
                 ? "\n\nUygulanmamış mavi öneri çizgiye dahil edilmeyecek." : "";
-            var question=$"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin.\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Perspektif, gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Fotoğraf özeti, boyutlar, işaretler ve mesafe proje biçimi 8 ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion} Devam edilsin mi?";
+            var closureNotice=reviewClosure ? "\n\nArdından kapanış incelemesi açılacak. Kapalı parça ayrıca onaylanır; fotoğraf geçmişi açık kaynakta kalır." : "";
+            var question=$"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin.\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Perspektif, gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Fotoğraf özeti, boyutlar, işaretler ve mesafe proje biçimi 8 ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice} Devam edilsin mi?";
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
-            if(!workspace.ApplyPhotoTrace(stamp,trace,history)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
+            if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
             allowClose=true;Close();
+            if(reviewClosure && addedId is Guid id) { if(OpenClosureForVerification is { } open)open(id);else workspace.OpenPhotoTraceClosure(id); }
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException or OverflowException)
         { StatusForVerification.Text="Taslak eklenemedi: "+ex.Message; }
