@@ -256,7 +256,7 @@ public class MainWindow : Window
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
-        notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; POINT işaretleri üretim veya kesim komutu değildir.");
+        notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; köşe POINT ve varsa iplik yönü LINE işaretleri üretim veya kesim komutu değildir.");
         var textile = CommandGroup(commandArea, "TEKSTİL");
         AddButton(textile, "Tekstil araçları…", OpenTextileTools, "Serileme, dikiş payı, nokta düzenleme ve temel pastal");
         var machineControls=new StackPanel();textile.Children.Add(machineControls);
@@ -2971,7 +2971,7 @@ public class MainWindow : Window
             EnsureWritableDestination(path);EnsureExportDoesNotReplaceOpenProject(path);token.ThrowIfCancellationRequested();exportCancel.IsEnabled=false;
             var wasEnabled=IsEnabled;IsEnabled=false;
             try { await Task.Run(()=>DxfNotchReviewExport.Write(plan,path,expected,token)); } finally { if(!windowClosed)IsEnabled=wasEnabled; }
-            exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="İnceleme DXF yazıldı; POINT işaretlerini hedefte kontrol edin. Üretim çıktısı değildir.";exportNotice.ToolTip=path;SetStatus(exportNotice.Text);
+            exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="İnceleme DXF yazıldı; POINT işaretlerini ve varsa iplik yönü çizgilerini hedefte kontrol edin. Üretim çıktısı değildir.";exportNotice.ToolTip=path;SetStatus(exportNotice.Text);
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { ExportWasCancelled=true;exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="DXF incelemesi iptal edildi; dosya yazılmadı.";SetStatus(exportNotice.Text); }
         catch(ProjectConflictException) { ExportError="Hedef oluşturuldu veya değişti; dosya yazılmadı.";exportNotice.Foreground=StudioTheme.Danger;exportNotice.Text=ExportError;SetStatus(ExportError); }

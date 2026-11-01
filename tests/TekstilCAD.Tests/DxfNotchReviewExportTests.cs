@@ -38,7 +38,7 @@ public class DxfNotchReviewExportTests
         finally { if(File.Exists(path))File.Delete(path); }
     }
     [Fact]
-    public void NormalExportsStayBlockedAndGrainlineIsNotSilentlyOmitted()
+    public void NormalExportsStayBlockedEvenWhenCombinedReviewIsSupported()
     {
         var project=Project();var path=PathForTest();
         try
@@ -48,7 +48,48 @@ public class DxfNotchReviewExportTests
             Assert.Throws<InvalidDataException>(()=>HpglFormat.Prepare(project));
             Assert.False(File.Exists(path));
             project.Pieces[0].Grainline=new Grainline { Start=new(0,0),End=new(0,5) };
-            Assert.Throws<InvalidDataException>(()=>DxfNotchReviewExport.Prepare(project,false));Assert.False(File.Exists(path));
+            Assert.Single(DxfNotchReviewExport.Prepare(project,false).Grainlines);Assert.False(File.Exists(path));
+            Assert.Throws<InvalidDataException>(()=>DxfFormat.Export(project,path));
+            Assert.Throws<InvalidDataException>(()=>HpglFormat.Prepare(project));Assert.False(File.Exists(path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+    [Theory]
+    [InlineData(false,"3","8")]
+    [InlineData(true,"-3","-8")]
+    public void CombinedReviewKeepsAllMarkersAndReportsGrainlineLoss(bool flip,string y1,string y2)
+    {
+        var project=Project();project.Pieces[0].Grainline=new Grainline { Start=new(2,3),End=new(4,8),NeedsReview=true };
+        project.Pieces[1].Grainline=new Grainline { Start=new(12,21),End=new(15,24),NeedsReview=false };
+        var before=project.Clone();var plan=DxfNotchReviewExport.Prepare(project,flip);var path=PathForTest();
+        try
+        {
+            Assert.Equal(3,plan.Items.Length);Assert.Equal(2,plan.Grainlines.Length);
+            Assert.True(plan.Grainlines[0].NeedsReview);Assert.False(plan.Grainlines[1].NeedsReview);
+            Assert.Equal(4,plan.Grainlines.Select(g=>g.MarkerLayer).Concat(plan.Items.Select(i=>i.MarkerLayer).Distinct()).Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Equal(2,plan.Omissions.Count(o=>o.Kind==DxfExportOmissionKind.GrainlineReviewState));
+            Assert.DoesNotContain(plan.Omissions,o=>o.Kind==DxfExportOmissionKind.GrainlineUnsupported);
+            var text=Write(plan,path);Assert.Equal(2,text.Split("\nLINE\n").Length-1);Assert.Equal(3,text.Split("\nPOINT\n").Length-1);
+            Assert.Contains($"8\n{plan.Grainlines[0].MarkerLayer}\n100\nAcDbLine\n10\n2\n20\n{y1}\n30\n0\n11\n4\n21\n{y2}\n31\n0\n",text);
+            Assert.True(DocumentSession.ContentEquals(before,project));Assert.True(plan.Matches(before));
+            project.Pieces[0].Grainline!.NeedsReview=false;Assert.False(plan.Matches(project));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+    [Fact]
+    public void CombinedReviewAvoidsCollisionWithContourAndDoesNotOverwrite()
+    {
+        var project=Project();var piece=project.Pieces[0];
+        project.Pieces[1].Name="TCD_GRAIN_"+piece.Id.ToString("N");
+        piece.Grainline=new Grainline { Start=new(2,3),End=new(4,8) };
+        var before=project.Clone();var plan=DxfNotchReviewExport.Prepare(project,false);
+        Assert.False(string.Equals(project.Pieces[1].Name,plan.Grainlines.Single().MarkerLayer,StringComparison.OrdinalIgnoreCase));
+        var path=PathForTest();
+        try
+        {
+            var expected=ProjectStorage.CaptureVersion(path);File.WriteAllText(path,"korunan");
+            Assert.Throws<ProjectConflictException>(()=>DxfNotchReviewExport.Write(plan,path,expected));
+            Assert.Equal("korunan",File.ReadAllText(path));Assert.True(DocumentSession.ContentEquals(before,project));
         }
         finally { if(File.Exists(path))File.Delete(path); }
     }

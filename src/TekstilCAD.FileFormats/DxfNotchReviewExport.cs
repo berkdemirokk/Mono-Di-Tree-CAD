@@ -7,6 +7,7 @@ using TekstilCAD.Core;
 namespace TekstilCAD.FileFormats;
 
 public sealed record DxfNotchReviewItem(Guid PieceId,string PieceName,string ContourLayer,string MarkerLayer,int VertexIndex,Point2 Position);
+public sealed record DxfNotchGrainReviewItem(Guid PieceId,string PieceName,string ContourLayer,string MarkerLayer,Point2 Start,Point2 End,bool NeedsReview);
 
 /// <summary>Detached inspection data, not a machine-ready or textile-standard export.</summary>
 public sealed class DxfNotchReviewPlan
@@ -14,11 +15,12 @@ public sealed class DxfNotchReviewPlan
     private readonly ProjectDocument source;
     internal string Text { get; }
     public ImmutableArray<DxfNotchReviewItem> Items { get; }
+    public ImmutableArray<DxfNotchGrainReviewItem> Grainlines { get; }
     public ImmutableArray<DxfExportOmission> Omissions { get; }
     public bool FlipY { get; }
     public string Sha256 { get; }
-    internal DxfNotchReviewPlan(ProjectDocument source,string text,ImmutableArray<DxfNotchReviewItem> items,ImmutableArray<DxfExportOmission> omissions,bool flipY)
-    { this.source=source;Text=text;Items=items;Omissions=omissions;FlipY=flipY;Sha256=Convert.ToHexString(SHA256.HashData(new UTF8Encoding(false,true).GetBytes(text))); }
+    internal DxfNotchReviewPlan(ProjectDocument source,string text,ImmutableArray<DxfNotchReviewItem> items,ImmutableArray<DxfNotchGrainReviewItem> grainlines,ImmutableArray<DxfExportOmission> omissions,bool flipY)
+    { this.source=source;Text=text;Items=items;Grainlines=grainlines;Omissions=omissions;FlipY=flipY;Sha256=Convert.ToHexString(SHA256.HashData(new UTF8Encoding(false,true).GetBytes(text))); }
     public bool Matches(ProjectDocument current)=>current is not null && DocumentSession.ContentEquals(source,current);
 }
 
@@ -32,7 +34,6 @@ public static class DxfNotchReviewExport
         ArgumentNullException.ThrowIfNull(source);cancellationToken.ThrowIfCancellationRequested();ProjectStorage.ValidateForDxfExport(source);
         var snapshot=source.Clone();ProjectStorage.ValidateForDxfExport(snapshot);
         if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
-        if(snapshot.Pieces.Any(p=>p.Grainline is not null))throw new InvalidDataException("İplik yönü bu inceleme çıktısına aktarılmıyor; işaretli projede veri kaybını önlemek için çıktı hazırlanmadı.");
         var markerCount=snapshot.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0));
         if(markerCount==0)throw new InvalidDataException("İncelenecek köşe işareti bulunamadı.");
         if(markerCount>MaxMarkers)throw new InvalidDataException("İnceleme çıktısı en fazla 10.000 köşe işaretini destekler; proje değiştirilmedi.");
@@ -61,11 +62,22 @@ public static class DxfNotchReviewExport
             markerLayers[i]=layer;
             foreach(var mark in marks) { cancellationToken.ThrowIfCancellationRequested();items.Add(new(piece.Id,piece.Name,analysis.Layers[i].LayerName,layer,mark.VertexIndex,mark.Position)); }
         }
+        var grainlines=ImmutableArray.CreateBuilder<DxfNotchGrainReviewItem>();
+        for(int i=0;i<snapshot.Pieces.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var piece=snapshot.Pieces[i];
+            if(piece.Grainline is not { } grain)continue;
+            var baseName="TCD_GRAIN_"+piece.Id.ToString("N");var layer=baseName;var suffix=1;
+            while(!used.Add(layer)) { cancellationToken.ThrowIfCancellationRequested();layer=baseName+"_"+(suffix++).ToString(CultureInfo.InvariantCulture); }
+            grainlines.Add(new(piece.Id,piece.Name,analysis.Layers[i].LayerName,layer,grain.Start,grain.End,grain.NeedsReview));
+        }
         var layers=new List<string> { "0" };layers.AddRange(analysis.Layers.Select(x=>x.LayerName).Where(x=>!string.Equals(x,"0",StringComparison.OrdinalIgnoreCase)));
         layers.AddRange(markerLayers.Where(x=>x is not null).Select(x=>x!));
+        layers.AddRange(grainlines.Select(x=>x.MarkerLayer));
         ulong next=0x10;string Handle()=>(next++).ToString("X",CultureInfo.InvariantCulture);
         var ltype=Handle();var continuous=Handle();var layerTable=Handle();var layerHandles=layers.Select(_=>Handle()).ToArray();
         var contourHandles=snapshot.Pieces.Select(_=>Handle()).ToArray();var markerHandles=items.Select(_=>Handle()).ToArray();
+        var grainHandles=grainlines.Select(_=>Handle()).ToArray();
         // PDMODE 34 requests a circle and cross; negative PDSIZE is a
         // viewport-relative percentage, not a physical cutting dimension.
         var b=new StringBuilder("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$PDMODE\n70\n34\n9\n$PDSIZE\n40\n-2\n9\n$HANDSEED\n5\n");
@@ -90,10 +102,20 @@ public static class DxfNotchReviewExport
             b.Append("0\nPOINT\n5\n").Append(markerHandles[i]).Append("\n100\nAcDbEntity\n8\n").Append(item.MarkerLayer).Append("\n100\nAcDbPoint\n10\n").Append(Number(item.Position.X)).Append("\n20\n").Append(Number(Y(item.Position.Y))).Append("\n30\n0\n");
             if(b.Length>MaxBytes)throw new InvalidDataException("DXF boyut sınırını aşıyor.");
         }
+        for(int i=0;i<grainlines.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var line=grainlines[i];
+            b.Append("0\nLINE\n5\n").Append(grainHandles[i]).Append("\n100\nAcDbEntity\n8\n").Append(line.MarkerLayer)
+             .Append("\n100\nAcDbLine\n10\n").Append(Number(line.Start.X)).Append("\n20\n").Append(Number(Y(line.Start.Y)))
+             .Append("\n30\n0\n11\n").Append(Number(line.End.X)).Append("\n21\n").Append(Number(Y(line.End.Y))).Append("\n31\n0\n");
+            if(b.Length>MaxBytes)throw new InvalidDataException("DXF boyut sınırını aşıyor.");
+        }
         b.Append("0\nENDSEC\n0\nEOF\n");var text=b.ToString();if(new UTF8Encoding(false,true).GetByteCount(text)>MaxBytes)throw new InvalidDataException("DXF boyut sınırını aşıyor.");
         cancellationToken.ThrowIfCancellationRequested();if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
-        var omissions=analysis.Omissions.AddRange(snapshot.Pieces.Select(p=>new DxfExportOmission(p.Id,DxfExportOmissionKind.PieceIdentity)));
-        return new(snapshot,text,items.ToImmutable(),omissions,flipY);
+        var omissions=analysis.Omissions.Where(o=>o.Kind!=DxfExportOmissionKind.GrainlineUnsupported).ToImmutableArray()
+            .AddRange(grainlines.Select(g=>new DxfExportOmission(g.PieceId,DxfExportOmissionKind.GrainlineReviewState)))
+            .AddRange(snapshot.Pieces.Select(p=>new DxfExportOmission(p.Id,DxfExportOmissionKind.PieceIdentity)));
+        return new(snapshot,text,items.ToImmutable(),grainlines.ToImmutable(),omissions,flipY);
     }
     public static void Write(DxfNotchReviewPlan plan,string path,ProjectFileVersion expected,CancellationToken cancellationToken=default)
     {
