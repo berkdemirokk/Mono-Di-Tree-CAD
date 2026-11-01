@@ -3470,19 +3470,28 @@ public class MainWindow : Window
             if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; DXF dışa aktarımını yeniden başlatın.");
         }
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
+        double? hpglUnits=null;
+        if(dlg.FilterIndex==3)
+        {
+            var unitsDialog=new HpglUnitsWindow(this);
+            if(unitsDialog.ShowDialog()!=true)return;
+            hpglUnits=unitsDialog.SelectedUnitsPerMm ?? throw new InvalidOperationException("HPGL birimi seçilmedi.");
+            if(!DocumentSession.ContentEquals(snapshot,Document))throw new InvalidOperationException("Proje birim seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
+        }
         _ = StartExportAfterPreflight(snapshot,dlg.FileName,dlg.FilterIndex,targetVersion,
-            message=>MessageBox.Show(this,message,"Dışa aktarım bilgisi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            message=>MessageBox.Show(this,message,"Dışa aktarım bilgisi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes,hpglUnits:hpglUnits);
     }
-    internal const string HpglPreflightMessage = "Bu aktarım tüm proje parçalarını 40 birim/mm ile bir HPGL dosyasına yazar. "+
-        "Dosya koordinat adımı 0,025 mm'dir; koordinatlar tam sayıya yuvarlanır. Bu değer fiziksel makine hassasiyeti değildir.\n\n"+
+    internal static string HpglPreflightMessage(double units) => $"Bu aktarım tüm proje parçalarını {MeasurementInput.Format(units).Replace('.',',')} birim/mm ile bir HPGL dosyasına yazar. "+
+        $"Dosya koordinat adımı {MeasurementInput.Format(1/units).Replace('.',',')} mm'dir; koordinatlar tam sayıya yuvarlanır. Bu değer fiziksel makine hassasiyeti değildir.\n\n"+
         "Küçük çentikler veya yön değişimleri yuvarlama sırasında düzleşebilir. Dosyayı üretimden önce kontrol edin.\n\n"+
         "Tuvalde Y aşağı artar; HPGL koordinatları aynı işaretle yazılır. Y ekseni yukarı olan cihazda görünüm dikey ters olabilir; hedefte yönü kontrol edin.\n\n"+
         "Fiziksel makine uyumluluğu ve kalibrasyon doğrulanmadı. Farklı birim/mm değerlerini fiziksel bağlantı kurmayan Makine simülatöründe deneyebilirsiniz.\n\nDosyayı hazırlamak istiyor musunuz?";
-    internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm,Func<bool>? selectedSourceCurrent=null)
+    internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm,Func<bool>? selectedSourceCurrent=null,double? hpglUnits=null)
     {
         ArgumentNullException.ThrowIfNull(confirm);
         if(format==6 && !confirm("Bu seçenek dış dosyadaki Y koordinatlarının işaretini ters çevirir; proje değişmez. Bu bir yansımadır ve kapalı konturların saat yönünü tersine çevirir. Y ekseni yukarı olan CAD programlarında kalıp ekrandaki yönde görünür. Dosyanın koordinatları ve konumu değişeceğinden hedef programda ölçü ve yönü kontrol edin. Devam edilsin mi?")) { SetStatus("DXF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
-        if(format==3 && !confirm(HpglPreflightMessage)) { SetStatus("HPGL dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
+        if(format==3 && !HpglUnitsWindow.IsValidUnits(hpglUnits))throw new InvalidOperationException("Geçerli HPGL birim/mm değeri gereklidir.");
+        if(format==3 && !confirm(HpglPreflightMessage(hpglUnits!.Value))) { SetStatus("HPGL dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==4 && !confirm("PDF tek özel boyutlu sayfada inceleme içindir. Çok sayfalı yazdırma yoktur. Sayısal yuvarlama küçük kontur ayrıntılarını değiştirebilir. Yazıcı ve PDF uygulaması sayfayı ölçekleyebilir; fiziksel ölçüyü bağımsız kontrol edin. İplik yönü içeren parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==5 && !confirm("A4 PDF inceleme sayfalarını dikey yönde ve %100 / gerçek boyutta yazdırın; sayfaya sığdırma ve otomatik ölçeklemeyi kapatın. Her sayfadaki 50 mm kontrol çizgisini ölçün. Sayfaları SATIR ve SUTUN numaralarına göre soldan sağa, yukarıdan aşağıya; gri çerçeveleri kenar kenara getirerek birleştirin. Yazıcı kenarları kırpabilir; birleşimleri ve ölçüleri kontrol edin. Sayısal yuvarlama küçük ayrıntıları değiştirebilir; fiziksel baskı ve üretim uygunluğu doğrulanmadı. İplik yönü kesikli çizgiyle gösterilir; çizginin konturla ilişkisini ve inceleme durumunu kaynak projede kontrol edin. Köşe işaretleri artı simgesiyle yalnız görsel konum olarak gösterilir; simge fiziksel çentik veya kesim komutu değildir. İşaretleri kaynak projeyle kontrol edin. Devam edilsin mi?")) { SetStatus("A4 PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         // Dialogs pump the dispatcher; a drawing, drag or property draft can
@@ -3490,7 +3499,7 @@ public class MainWindow : Window
         EnsurePropertyDraftsApplied();
         if(selectedSourceCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !selectedSourceCurrent())
             throw new InvalidOperationException("Proje veya seçim inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        return StartExportAsync(snapshot,path,format,expected,selectedSourceCurrent);
+        return StartExportAsync(snapshot,path,format,expected,selectedSourceCurrent,hpglUnits);
     }
     private bool BlockForExport()
     {
@@ -3503,11 +3512,12 @@ public class MainWindow : Window
         if (ExportRunning) throw new InvalidOperationException("Dışa aktarım sürüyor. Yeni bir kayıt veya aktarım başlatmadan önce işlemin bitmesini bekleyin.");
         if (DxfImportRunning) throw new InvalidOperationException("DXF okuma sürüyor. Yeni bir kayıt veya aktarım başlatmadan önce işlemin bitmesini bekleyin.");
     }
-    internal Task StartExportAsync(ProjectDocument snapshot, string path, int format, ProjectFileVersion expected,Func<bool>? completionCurrent=null)
+    internal Task StartExportAsync(ProjectDocument snapshot, string path, int format, ProjectFileVersion expected,Func<bool>? completionCurrent=null,double? hpglUnits=null)
     {
         EnsureNoExport();
         ArgumentNullException.ThrowIfNull(snapshot); ArgumentNullException.ThrowIfNull(expected);
         ExportDestination.ValidateExtension(path,format);
+        if(format==3 && !HpglUnitsWindow.IsValidUnits(hpglUnits))throw new InvalidOperationException("Geçerli HPGL birim/mm değeri gereklidir.");
         EnsureWritableDestination(path); EnsureExportDoesNotReplaceOpenProject(path);
         var copy=snapshot.Clone(); Validate(copy);
         DxfPreparationStamp? hpglStamp=null;
@@ -3525,7 +3535,7 @@ public class MainWindow : Window
         if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;
         exportNotice.Foreground=StudioTheme.Muted; exportNotice.Text="Dışa aktarım sürüyor; sonraki düzenlemeler dosyaya dahil değil."; exportNotice.ToolTip=path; exportNotice.Visibility=Visibility.Visible;
         SetStatus(cancellation is null ? "Dosya proje kopyasından hazırlanıyor. Bu aktarım iptal edilemez; başka proje açmak, kaydetmek veya pencereyi kapatmak için bekleyin." : "HPGL proje kopyasından hazırlanıyor. İsterseniz iptal isteği gönderebilirsiniz; sonuç bildirilene kadar bekleyin.");
-        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp,completionCurrent,completionCurrent is null ? null : format==1 ? BeforeSelectedDxfWriteForVerification : BeforeSelectedA4WriteForVerification);
+        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp,completionCurrent,completionCurrent is null ? null : format==1 ? BeforeSelectedDxfWriteForVerification : BeforeSelectedA4WriteForVerification,hpglUnits);
     }
     private void RequestExportCancellation()
     {
@@ -3536,7 +3546,7 @@ public class MainWindow : Window
         exportNotice.Text="İptal istendi; sonuç bekleniyor. Dosya değiştirme işlemi başlamışsa aktarım tamamlanabilir.";
         SetStatus(exportNotice.Text);
     }
-    private async Task RunExportAsync(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,CancellationTokenSource? cancellation,DxfPreparationStamp? hpglStamp,Func<bool>? completionCurrent,Action? beforeSelectedWrite)
+    private async Task RunExportAsync(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,CancellationTokenSource? cancellation,DxfPreparationStamp? hpglStamp,Func<bool>? completionCurrent,Action? beforeSelectedWrite,double? hpglUnits)
     {
         try
         {
@@ -3544,7 +3554,7 @@ public class MainWindow : Window
             {
                 var token=cancellation!.Token;
                 var before=BeforeHpglPreparationForVerification;var after=AfterHpglPreparationForVerification;
-                var prepared=await Task.Run(()=> { before?.Invoke();var value=HpglFormat.Prepare(snapshot,40,token);after?.Invoke();return value; });
+                var prepared=await Task.Run(()=> { before?.Invoke();var value=HpglFormat.Prepare(snapshot,hpglUnits!.Value,token);after?.Invoke();return value; });
                 token.ThrowIfCancellationRequested();
                 if(hpglStamp is null || !DxfStampMatches(hpglStamp) || HasPendingCanvasOrPropertyWork)
                     throw new InvalidOperationException("Proje veya seçim hazırlık sırasında değişti; HPGL dosyası yazılmadı. Yeniden deneyin.");
@@ -3575,8 +3585,9 @@ public class MainWindow : Window
             var stale=(completionCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !completionCurrent()) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
             exportNotice.Text=stale?(completionCurrent is null ? "Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı." : "Dosya hazırlandı; proje veya seçim değiştiği için önceki seçimin kopyası kullanıldı."):"Dosya dışa aktarıldı.";
-            exportNotice.ToolTip=path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"");
-            SetStatus("Dosya dışa aktarıldı: "+path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"")+(stale?(completionCurrent is null ? " · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı." : " · Proje veya seçim değişti; dosya önceki seçimin kopyasından hazırlandı."):""));
+            var unitNotice=format==3 ? " · "+MeasurementInput.Format(hpglUnits!.Value)+" birim/mm; fiziksel makine doğrulanmadı" : "";
+            exportNotice.ToolTip=path+unitNotice;
+            SetStatus("Dosya dışa aktarıldı: "+path+unitNotice+(stale?(completionCurrent is null ? " · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı." : " · Proje veya seçim değişti; dosya önceki seçimin kopyasından hazırlandı."):""));
         }
         catch(OperationCanceledException) when(cancellation?.IsCancellationRequested == true)
         {

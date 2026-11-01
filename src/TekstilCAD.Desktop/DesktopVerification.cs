@@ -6436,7 +6436,7 @@ internal static class DesktopVerification
         var declinedPath=Path.Combine(work,"hpgl-preflight-declined.plt");
         File.WriteAllText(declinedPath,"önceki içerik");var declinedBytes=File.ReadAllBytes(declinedPath);
         var declinedVersion=ProjectStorage.CaptureVersion(declinedPath);string? shown=null;
-        var declined=studio.StartExportAfterPreflight(studio.Document.Clone(),declinedPath,3,declinedVersion,message=> { shown=message;return false; });
+        var declined=studio.StartExportAfterPreflight(studio.Document.Clone(),declinedPath,3,declinedVersion,message=> { shown=message;return false; },hpglUnits:40);
         Check(declined is null && !studio.ExportRunning && ReferenceEquals(previousTask,studio.ExportTask)
             && File.ReadAllBytes(declinedPath).SequenceEqual(declinedBytes) && DocumentSession.ContentEquals(mismatchDocument,studio.Document)
             && shown is not null && shown.Contains("40 birim/mm") && shown.Contains("0,025 mm") && shown.Contains("tam sayıya yuvarlanır")
@@ -6446,7 +6446,7 @@ internal static class DesktopVerification
             "Declining HPGL preflight preserves source and target and shows coordinate and machine limitations before writing",checks);
         var approvedPath=Path.Combine(work,"hpgl-preflight-approved.plt");
         var approvedVersion=ProjectStorage.CaptureVersion(approvedPath);var approvedSeen=false;
-        var approvedTask=studio.StartExportAfterPreflight(studio.Document.Clone(),approvedPath,3,approvedVersion,_=> { approvedSeen=true;return true; });
+        var approvedTask=studio.StartExportAfterPreflight(studio.Document.Clone(),approvedPath,3,approvedVersion,_=> { approvedSeen=true;return true; },hpglUnits:40);
         Check(approvedSeen && approvedTask is not null,"Accepting HPGL preflight starts the export",checks);
         PumpUntil(()=>approvedTask!.IsCompleted);approvedTask!.GetAwaiter().GetResult();
         Check(studio.ExportError is null && File.Exists(approvedPath) && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
@@ -6554,7 +6554,7 @@ internal static class DesktopVerification
         previousTask=studio.ExportTask;
         foreach(var format in new[] { 1,2,3,4,5,6 })
         {
-            try { studio.StartExportAsync(studio.Document.Clone(),mismatchPath,format,mismatchVersion);throw new InvalidOperationException("Mismatched export extension was accepted."); }
+            try { studio.StartExportAsync(studio.Document.Clone(),mismatchPath,format,mismatchVersion,hpglUnits:40);throw new InvalidOperationException("Mismatched export extension was accepted."); }
             catch(InvalidDataException) { }
             Check(!studio.ExportRunning && ReferenceEquals(previousTask,studio.ExportTask) && command.IsEnabled==commandWasEnabled
                 && File.ReadAllBytes(mismatchPath).SequenceEqual(mismatchBytes) && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
@@ -6569,7 +6569,7 @@ internal static class DesktopVerification
             File.WriteAllText(appearedPath,"başka işlem tarafından oluşturuldu");
             var external=File.ReadAllBytes(appearedPath);
             var before=studio.Document.Clone();
-            var appeared=studio.StartExportAsync(before.Clone(),appearedPath,format,absent);
+            var appeared=studio.StartExportAsync(before.Clone(),appearedPath,format,absent,hpglUnits:40);
             PumpUntil(()=>appeared.IsCompleted);appeared.GetAwaiter().GetResult();
             Check(!studio.ExportRunning && studio.ExportError is not null && File.ReadAllBytes(appearedPath).SequenceEqual(external)
                 && DocumentSession.ContentEquals(before,studio.Document),
@@ -6580,7 +6580,7 @@ internal static class DesktopVerification
             var approved=ProjectStorage.CaptureVersion(changedPath);
             File.WriteAllText(changedPath,"başka işlem tarafından değiştirilen sürüm");
             external=File.ReadAllBytes(changedPath);
-            var changed=studio.StartExportAsync(before.Clone(),changedPath,format,approved);
+            var changed=studio.StartExportAsync(before.Clone(),changedPath,format,approved,hpglUnits:40);
             PumpUntil(()=>changed.IsCompleted);changed.GetAwaiter().GetResult();
             Check(!studio.ExportRunning && studio.ExportError is not null && File.ReadAllBytes(changedPath).SequenceEqual(external)
                 && DocumentSession.ContentEquals(before,studio.Document),
@@ -6900,6 +6900,30 @@ internal static class DesktopVerification
     }
     private static void VerifyHpglPreparationFlow(MainWindow studio,string work,List<string> checks)
     {
+        var unitsWindow=new HpglUnitsWindow(studio);
+        var unitsRoot=(FrameworkElement)unitsWindow.Content;
+        Render(unitsWindow,Path.Combine(work,"hpgl-units-compact.png"),460,360);
+        Check(unitsWindow.UnitsInput.Text=="" && unitsWindow.SelectedUnitsPerMm is null
+            && unitsWindow.CancelButton.IsCancel && unitsWindow.CancelButton.IsDefault && !unitsWindow.AcceptButton.IsDefault
+            && unitsWindow.MinWidth<=460 && unitsWindow.MinHeight<=360
+            && FullyVisible(unitsWindow.CancelButton,unitsRoot) && FullyVisible(unitsWindow.AcceptButton,unitsRoot),
+            "HPGL units dialog starts empty with cancellation as the default and visible compact actions",checks);
+        foreach(var invalid in new[] { "", "0", "-1", "NaN", "10001", "1e-320", "1,2.3" })
+        {
+            unitsWindow.UnitsInput.Text=invalid;
+            Check(!HpglUnitsWindow.TryParseUnits(invalid,out _) && !unitsWindow.TryAccept(out _)
+                && unitsWindow.UnitsInput.Text==invalid && unitsWindow.SelectedUnitsPerMm is null && unitsWindow.Error.Visibility==Visibility.Visible,
+                $"HPGL units rejects invalid input '{invalid}' while preserving the entry",checks);
+        }
+        foreach(var (entry,expectedUnits) in new[] { ("20",20d),("40",40d),("20,5",20.5d),("20.5",20.5d) })
+        {
+            unitsWindow.UnitsInput.Text=entry;
+            Check(HpglUnitsWindow.TryParseUnits(entry,out var parsed) && parsed==expectedUnits
+                && unitsWindow.TryAccept(out var acceptedUnits) && acceptedUnits==expectedUnits && unitsWindow.Error.Visibility==Visibility.Collapsed,
+                $"HPGL units accepts '{entry}' consistently",checks);
+        }
+        unitsWindow.UnitsInput.Text="20";
+        Check(unitsWindow.TryAccept(out var chosenUnits) && chosenUnits==20,"HPGL units selection supplies 20 units per millimetre",checks);
         var source=new ProjectDocument { Name="HPGL inceleme",Pieces=[new PatternPiece { Name="Çentik",Points=[new(0,0),new(10,0),new(10,10),new(6,10),new(5,9.99),new(4,10),new(0,10)] }] };
         var oldContext=SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
@@ -6909,25 +6933,46 @@ internal static class DesktopVerification
             studio.LoadDocument(source);var rejectedPath=Target("rejected");var rejectedBytes=File.ReadAllBytes(rejectedPath);
             var original=studio.Document.Clone();var reviewed=false;
             studio.ConfirmHpglReviewForVerification=(prepared,pieces)=> { reviewed=prepared.TurnReviews.Count==pieces.Count && prepared.TurnReviews[0].FlattenedTurns>0;return false; };
-            var rejected=studio.StartExportAsync(original.Clone(),rejectedPath,3,ProjectStorage.CaptureVersion(rejectedPath));
+            var rejected=studio.StartExportAsync(original.Clone(),rejectedPath,3,ProjectStorage.CaptureVersion(rejectedPath),hpglUnits:40);
             PumpUntil(()=>rejected.IsCompleted);rejected.GetAwaiter().GetResult();
             Check(reviewed && studio.ExportWasCancelled && studio.ExportError is null && File.ReadAllBytes(rejectedPath).SequenceEqual(rejectedBytes)
                 && DocumentSession.ContentEquals(original,studio.Document),"Declining prepared HPGL report leaves source and target unchanged",checks);
             studio.LoadDocument(source);var acceptedPath=Target("accepted");string? approvedText=null;
             studio.ConfirmHpglReviewForVerification=(prepared,_)=> { approvedText=prepared.Text;return true; };
-            var accepted=studio.StartExportAsync(studio.Document.Clone(),acceptedPath,3,ProjectStorage.CaptureVersion(acceptedPath));
+            var accepted=studio.StartExportAsync(studio.Document.Clone(),acceptedPath,3,ProjectStorage.CaptureVersion(acceptedPath),hpglUnits:40);
             PumpUntil(()=>accepted.IsCompleted);accepted.GetAwaiter().GetResult();
             Check(studio.ExportError is null && !studio.ExportWasCancelled && approvedText is not null && File.ReadAllText(acceptedPath)==approvedText,
                 "Approved prepared HPGL bytes match the reviewed output",checks);
+            studio.LoadDocument(source);var scaledPath=Target("units20");string? scaledText=null;string? scaledWarning=null;var reviewUnits=0d;
+            studio.ConfirmHpglReviewForVerification=(prepared,_)=> { reviewUnits=prepared.UnitsPerMillimeter;scaledText=prepared.Text;return true; };
+            var scaled=studio.StartExportAfterPreflight(studio.Document.Clone(),scaledPath,3,ProjectStorage.CaptureVersion(scaledPath),
+                message=> { scaledWarning=message;return true; },hpglUnits:chosenUnits);
+            Check(scaled is not null && scaledWarning is not null && scaledWarning.Contains("20 birim/mm") && scaledWarning.Contains("0,05 mm"),
+                "HPGL preflight describes the chosen 20 units per millimetre",checks);
+            PumpUntil(()=>scaled!.IsCompleted);scaled!.GetAwaiter().GetResult();
+            Check(studio.ExportError is null && reviewUnits==20 && scaledText is not null && scaledText.Contains("200,0") && File.ReadAllText(scaledPath)==scaledText,
+                "HPGL review and written coordinates use the selected 20 units per millimetre (10 mm becomes 200)",checks);
+            studio.LoadDocument(source);var scaledRejectedPath=Target("units20-rejected");var scaledRejectedBytes=File.ReadAllBytes(scaledRejectedPath);
+            studio.ConfirmHpglReviewForVerification=(prepared,_)=>prepared.UnitsPerMillimeter!=20;
+            var scaledRejected=studio.StartExportAsync(studio.Document.Clone(),scaledRejectedPath,3,ProjectStorage.CaptureVersion(scaledRejectedPath),hpglUnits:chosenUnits);
+            PumpUntil(()=>scaledRejected.IsCompleted);scaledRejected.GetAwaiter().GetResult();
+            Check(studio.ExportWasCancelled && studio.ExportError is null && File.ReadAllBytes(scaledRejectedPath).SequenceEqual(scaledRejectedBytes),
+                "Declining the 20-unit HPGL review preserves the destination",checks);
+            studio.LoadDocument(source);var scaledStalePath=Target("units20-stale");var scaledStaleBytes=File.ReadAllBytes(scaledStalePath);
+            studio.ConfirmHpglReviewForVerification=(prepared,_)=> { if(prepared.UnitsPerMillimeter==20)studio.Commit("İnceleme sırasında değişiklik",()=>studio.Document.Name="Değişti");return true; };
+            var scaledStale=studio.StartExportAsync(studio.Document.Clone(),scaledStalePath,3,ProjectStorage.CaptureVersion(scaledStalePath),hpglUnits:chosenUnits);
+            PumpUntil(()=>scaledStale.IsCompleted);scaledStale.GetAwaiter().GetResult();
+            Check(studio.ExportError is not null && studio.Document.Name=="Değişti" && File.ReadAllBytes(scaledStalePath).SequenceEqual(scaledStaleBytes),
+                "A stale 20-unit HPGL review preserves the destination",checks);
             studio.LoadDocument(source);var conflictPath=Target("conflict");var expected=ProjectStorage.CaptureVersion(conflictPath);
             studio.ConfirmHpglReviewForVerification=(_,_)=> { File.WriteAllText(conflictPath,"dış değişiklik");return true; };
-            var conflict=studio.StartExportAsync(studio.Document.Clone(),conflictPath,3,expected);
+            var conflict=studio.StartExportAsync(studio.Document.Clone(),conflictPath,3,expected,hpglUnits:40);
             PumpUntil(()=>conflict.IsCompleted);conflict.GetAwaiter().GetResult();
             Check(studio.ExportError is not null && File.ReadAllText(conflictPath)=="dış değişiklik",
                 "HPGL report approval does not overwrite a target changed during review",checks);
             studio.LoadDocument(source);var stalePath=Target("stale");var staleBytes=File.ReadAllBytes(stalePath);
             studio.ConfirmHpglReviewForVerification=(_,_)=> { studio.Commit("İnceleme sırasında değişiklik",()=>studio.Document.Name="Değişti");return true; };
-            var stale=studio.StartExportAsync(studio.Document.Clone(),stalePath,3,ProjectStorage.CaptureVersion(stalePath));
+            var stale=studio.StartExportAsync(studio.Document.Clone(),stalePath,3,ProjectStorage.CaptureVersion(stalePath),hpglUnits:40);
             PumpUntil(()=>stale.IsCompleted);stale.GetAwaiter().GetResult();
             Check(studio.ExportError is not null && File.ReadAllBytes(stalePath).SequenceEqual(staleBytes) && studio.Document.Name=="Değişti",
                 "Changed project invalidates HPGL report and preserves the target",checks);
@@ -6938,7 +6983,7 @@ internal static class DesktopVerification
                 Action pause=()=> { reached.Set();release.Wait(); };
                 if(late)studio.AfterHpglPreparationForVerification=pause;else studio.BeforeHpglPreparationForVerification=pause;
                 var reviewCalled=false;studio.ConfirmHpglReviewForVerification=(_,_)=> { reviewCalled=true;return true; };
-                var pending=studio.StartExportAsync(studio.Document.Clone(),path,3,ProjectStorage.CaptureVersion(path));
+                var pending=studio.StartExportAsync(studio.Document.Clone(),path,3,ProjectStorage.CaptureVersion(path),hpglUnits:40);
                 try
                 {
                     PumpUntil(()=>reached.IsSet);Invoke(studio,"RequestExportCancellation");
@@ -6966,7 +7011,7 @@ internal static class DesktopVerification
         studio.LoadDocument(source); var before=studio.Document.Clone();
         var cancel=(Button)typeof(MainWindow).GetField("exportCancel",PrivateInstance)!.GetValue(studio)!;
         var notice=(TextBlock)typeof(MainWindow).GetField("exportNotice",PrivateInstance)!.GetValue(studio)!;
-        var task=studio.StartExportAsync(before,path,3,ProjectStorage.CaptureVersion(path));
+        var task=studio.StartExportAsync(before,path,3,ProjectStorage.CaptureVersion(path),hpglUnits:40);
         Check(studio.ExportRunning && cancel.Visibility==Visibility.Visible && cancel.IsEnabled,
             "Running HPGL export exposes the cancellation action",checks);
         Invoke(studio,"RequestExportCancellation");
@@ -6982,13 +7027,13 @@ internal static class DesktopVerification
         foreach(var (format,extension) in new[] { (1,"dxf"),(2,"svg") })
         {
             var other=Path.Combine(work,$"no-cancel-{format}.{extension}");
-            var run=studio.StartExportAsync(studio.Document.Clone(),other,format,ProjectStorage.CaptureVersion(other));
+            var run=studio.StartExportAsync(studio.Document.Clone(),other,format,ProjectStorage.CaptureVersion(other),hpglUnits:40);
             Check(cancel.Visibility==Visibility.Collapsed,$"Export format {format} does not offer unsupported cancellation",checks);
             PumpUntil(()=>run.IsCompleted);run.GetAwaiter().GetResult();
             Check(studio.ExportError is null && !studio.ExportWasCancelled,$"Export format {format} completes without cancellation",checks);
         }
         var successPath=Path.Combine(work,"async-hpgl-completed.plt");
-        var done=studio.StartExportAsync(studio.Document.Clone(),successPath,3,ProjectStorage.CaptureVersion(successPath));
+        var done=studio.StartExportAsync(studio.Document.Clone(),successPath,3,ProjectStorage.CaptureVersion(successPath),hpglUnits:40);
         PumpUntil(()=>done.IsCompleted);done.GetAwaiter().GetResult();
         var finished=File.ReadAllBytes(successPath);
         Invoke(studio,"RequestExportCancellation");
@@ -8357,7 +8402,7 @@ internal static class DesktopVerification
                 try
                 {
                     _=studio.StartExportAfterPreflight(snapshot,path,format,version,_=>
-                    { confirmCalled=true;CreatePending();return true; });
+                    { confirmCalled=true;CreatePending();return true; },hpglUnits:40);
                 }
                 catch(InvalidOperationException) { blocked=true; }
                 Check(blocked && !studio.ExportRunning && (format!=3 || confirmCalled)
@@ -10446,7 +10491,7 @@ internal static class DesktopVerification
             {
                 var output=Path.Combine(work,$"grainline-guard.{extension}");File.WriteAllText(output,"önceki dosya");
                 var before=File.ReadAllBytes(output);var expected=ProjectStorage.CaptureVersion(output);
-                var task=studio.StartExportAsync(studio.Document.Clone(),output,format,expected);
+                var task=studio.StartExportAsync(studio.Document.Clone(),output,format,expected,hpglUnits:40);
                 PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
                 Check(studio.ExportError is not null && studio.ExportError.Contains("İplik yönü",StringComparison.OrdinalIgnoreCase)
                     && before.SequenceEqual(File.ReadAllBytes(output)),
