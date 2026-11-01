@@ -4331,6 +4331,9 @@ internal static class DesktopVerification
             root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
             var selector=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
             var detail=(TextBox)typeof(TextileToolsWindow).GetField("sourceIdentity",PrivateInstance)!.GetValue(tools)!;
+            Check(selector.IsTextSearchEnabled && !selector.IsEditable && TextSearch.GetTextPath(selector)==nameof(PatternPiece.Name) &&
+                ((PatternPiece)selector.Items[0]).Name.StartsWith("Aynı",StringComparison.Ordinal),
+                "Grading source dropdown searches piece names without exposing raw names in an editable box",checks);
             var converterType=typeof(TextileToolsWindow).GetNestedType("SourceLabelConverter",BindingFlags.NonPublic)!;
             var converter=(System.Windows.Data.IValueConverter)Activator.CreateInstance(converterType,true)!;
             string Label(PatternPiece piece)=>(string)converter.Convert(piece,typeof(string),null!,System.Globalization.CultureInfo.CurrentCulture);

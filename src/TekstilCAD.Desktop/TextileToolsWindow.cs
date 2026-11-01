@@ -16,7 +16,7 @@ namespace TekstilCAD.Desktop;
 public sealed class TextileToolsWindow : Window
 {
     private readonly MainWindow workspace;
-    private readonly ComboBox source = new() { MinWidth=200, Margin=new Thickness(0,4,0,0) };
+    private readonly ComboBox source = new() { MinWidth=200, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,0) };
     private readonly ObservableCollection<GradeRow> rows = [];
     private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock sourceInfo = new() { TextWrapping=TextWrapping.Wrap, MaxHeight=44, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center };
@@ -90,6 +90,9 @@ public sealed class TextileToolsWindow : Window
         sourceText.SetBinding(TextBlock.TextProperty,new Binding { Converter=new SourceLabelConverter() });
         sourceText.SetValue(TextBlock.TextTrimmingProperty,TextTrimming.CharacterEllipsis);
         source.ItemTemplate=new DataTemplate { VisualTree=sourceText };
+        // The visual template begins with an identity; search the underlying
+        // name while keeping all visible labels escaped by SourceLabelConverter.
+        TextSearch.SetTextPath(source,nameof(PatternPiece.Name));
         var virtualPanel=new FrameworkElementFactory(typeof(VirtualizingStackPanel));
         source.ItemsPanel=new ItemsPanelTemplate(virtualPanel);
         VirtualizingPanel.SetIsVirtualizing(source,true);VirtualizingPanel.SetVirtualizationMode(source,VirtualizationMode.Recycling);
