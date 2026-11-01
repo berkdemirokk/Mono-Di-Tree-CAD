@@ -41,6 +41,24 @@ final class DebugPointCopyStoreTests: XCTestCase {
         }
     }
 
+    func testStaleOrCancelledSnapshotRollsBackWhileCurrentSnapshotCommits() throws {
+        struct Cancelled: Error { }
+        try withDatabase { db in
+            let documentID = UUID(), revision = UUID(), id = UUID()
+            let snapshot = DebugPointCopyStore.Snapshot(documentID: documentID, revision: revision,
+                                                         name: "point", data: Data([0, 255, 4]))
+            XCTAssertThrowsError(try DebugPointCopyStore.saveAuthorized(at: db, id: id, snapshot: snapshot) { _, _ in false })
+            XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
+            XCTAssertThrowsError(try DebugPointCopyStore.saveAuthorized(at: db, id: id, snapshot: snapshot) { _, _ in throw Cancelled() })
+            XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
+            try DebugPointCopyStore.saveAuthorized(at: db, id: id, snapshot: snapshot) { document, version in
+                document == documentID && version == revision
+            }
+            let saved = try XCTUnwrap(ModelStorePrototype.read(at: db, id: id.uuidString))
+            XCTAssertEqual(saved.data, snapshot.data)
+            XCTAssertEqual(saved.name, snapshot.name)
+        }
+    }
     func testOversizeDoesNotCreateDatabase() throws {
         try withDatabase { db in
             XCTAssertThrowsError(try DebugPointCopyStore.save(at: db, name: "large", data: Data(count: DebugPointCopyStore.maximumBytes + 1)))
