@@ -112,7 +112,6 @@ private struct ContentView: View {
     @State private var selectedPiece: Int?
     @State private var showGrain = true
     @State private var notchSelectionRevision = UUID()
-    @State private var modelLoad = ModelLoadState()
     @State private var modelReadCancellation: ModelReadCancellation?
 
     var body: some View {
@@ -129,11 +128,11 @@ private struct ContentView: View {
             }
             Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
-            if modelLoad.isLoading {
+            if loadedModel.load.isLoading {
                 ProgressView("Proje açılıyor…")
                 Button("Açmayı iptal et") {
                     modelReadCancellation?.cancel()
-                    modelLoad.invalidate()
+                    loadedModel.load.invalidate()
                     saveNotice = "Model açma iptal edildi."
                 }
                 .accessibilityHint("Önceki açık modeli korur")
@@ -145,14 +144,14 @@ private struct ContentView: View {
                 Text("Kopya geçici olarak bellekte tutuluyor. Başka bir dosya açmadan önce kopyayı kaydedin veya ham kopyadan vazgeçin; uygulama kapanırsa yeniden seçmeniz gerekir.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
-                    .disabled(isSaving || modelLoad.isLoading)
+                    .disabled(isSaving || loadedModel.load.isLoading)
                 Button("Ham kopyayı dışa aktar…") {
                     guard let rawImport else { return }
                     rawExportDocument = ProjectExportDocument(data: rawImport.data)
                     rawExportName = ModelStore.newRawExportName(source: rawImport.name)
                     showingRawExportWarning = true
                 }
-                .disabled(isSaving || modelLoad.isLoading)
+                .disabled(isSaving || loadedModel.load.isLoading)
                 #if DEBUG && targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity"),
                    let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_EXPECTED_RAW"],
@@ -174,14 +173,14 @@ private struct ContentView: View {
             }
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
-                    .disabled(isSaving || modelLoad.isLoading)
+                    .disabled(isSaving || loadedModel.load.isLoading)
                 Button("Telefona farklı adla kaydet…") {
                     guard let data = importedData else { return }
-                    librarySaveSnapshot = (data, modelLoad.request)
+                    librarySaveSnapshot = (data, loadedModel.load.request)
                     libraryName = project?.name ?? ""
                     showingLibraryNameEditor = true
                 }
-                .disabled(isSaving || modelLoad.isLoading)
+                .disabled(isSaving || loadedModel.load.isLoading)
             }
             if let project {
                 if project.formatVersion == 7 {
@@ -199,10 +198,10 @@ private struct ContentView: View {
                     exportName = exportFileName(project.name)
                     saveNotice = nil
                     showingExportWarning = true
-                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil)
+                }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
-                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion >= 6 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                }.disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 6 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
                 if project.formatVersion >= 6 {
                     Text("Sürüm \(project.formatVersion) projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -231,7 +230,7 @@ private struct ContentView: View {
                     Text("Sürüm \(project.formatVersion) önizlemesinde dosya ve doğrulama metni en fazla 8 MB olabilir. UTF-8 ve BOM'lu UTF-16/UTF-32 desteklenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
-                        .disabled(modelLoad.isLoading)
+                        .disabled(loadedModel.load.isLoading)
                         .sheet(isPresented: $showingNotches) {
                             NotchPicker(pieces: project.pieces) { piece, point in
                                 selectedPiece = piece
@@ -271,7 +270,7 @@ private struct ContentView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .disabled(modelLoad.isLoading)
+                    .disabled(loadedModel.load.isLoading)
                     .accessibilityHint("Parçaları aramak veya seçmek için açın")
                     .sheet(isPresented: $showingPieces) {
                         PiecePicker(pieces: project.pieces, selection: Binding(
@@ -283,7 +282,7 @@ private struct ContentView: View {
                         ))
                     }
                     Button("İki parçayı karşılaştır…") { showingPieceComparison = true }
-                        .disabled(modelLoad.isLoading || project.pieces.count < 2)
+                        .disabled(loadedModel.load.isLoading || project.pieces.count < 2)
                         .sheet(isPresented: $showingPieceComparison) {
                             PieceComparisonView(pieces: project.pieces, projectName: project.name, initialIndex: selectedPiece)
                         }
@@ -293,7 +292,7 @@ private struct ContentView: View {
                             selectedNotch = nil
                             selectedPiece = current - 1
                         }
-                        .disabled(modelLoad.isLoading || selectedPiece == nil || selectedPiece == 0)
+                        .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
                         Spacer()
                         Text(selectedPiece.map { "\($0 + 1) / \(project.pieces.count)" } ?? "Tüm parçalar")
                             .font(.caption).foregroundStyle(.secondary)
@@ -305,7 +304,7 @@ private struct ContentView: View {
                             selectedNotch = nil
                             selectedPiece = next
                         }
-                        .disabled(modelLoad.isLoading || selectedPiece == project.pieces.count - 1)
+                        .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
                     }
                     .buttonStyle(.bordered)
                     if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
@@ -318,7 +317,7 @@ private struct ContentView: View {
                                     notchSelectionRevision = UUID()
                                 }
                             }
-                            .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
+                            .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: false) == nil)
                             Spacer()
                             Button("Sonraki işaret") {
                                 if let point = NotchSearch.adjacent(in: notches, current: current, forward: true) {
@@ -326,14 +325,14 @@ private struct ContentView: View {
                                     notchSelectionRevision = UUID()
                                 }
                             }
-                            .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
+                            .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: notches, current: current, forward: true) == nil)
                         }
                         .buttonStyle(.bordered)
                         .accessibilityHint("Seçili parçanın işaretleri arasında dosya sırasıyla gezinin")
                     }
                     if let selectedPiece {
                         Button("İki nokta arasını ölç…") { showingPointDistance = true }
-                            .disabled(modelLoad.isLoading || project.pieces[selectedPiece].points.count < 2)
+                            .disabled(loadedModel.load.isLoading || project.pieces[selectedPiece].points.count < 2)
                             .sheet(isPresented: $showingPointDistance) {
                                 PointDistanceView(piece: project.pieces[selectedPiece], name: project.pieces[selectedPiece].displayName(index: selectedPiece))
                             }
@@ -341,13 +340,13 @@ private struct ContentView: View {
                         Button("Deneysel nokta düzenle…") {
                             guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
                             pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
-                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: modelLoad.request)
+                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: loadedModel.load.request)
                         }
-                            .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+                            .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: $pointEditSnapshot) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
-                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && modelLoad.request == snapshot.loadRequest && !modelLoad.isLoading },
-                                    invalidateForTesting: { modelLoad.invalidate() })
+                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && loadedModel.load.request == snapshot.loadRequest && !loadedModel.load.isLoading },
+                                    invalidateForTesting: { loadedModel.load.invalidate() })
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -368,7 +367,7 @@ private struct ContentView: View {
                             pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
                             showingPieceNameEditor = true
                         }
-                        .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
                         if project.hasNonUTF8BOM {
                             Text("UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -387,7 +386,7 @@ private struct ContentView: View {
                             .foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else if project.pieces.contains(where: { $0.hasMinimumContourPoints }) {
                         Button("Konturu büyük görünümde incele") { showingFullScreenDrawing = true }
-                            .disabled(modelLoad.isLoading)
+                            .disabled(loadedModel.load.isLoading)
                         DrawingView(
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
@@ -432,7 +431,7 @@ private struct ContentView: View {
                                     selectedNotch = nil
                                     selectedPiece = current - 1
                                 }
-                                .disabled(modelLoad.isLoading || selectedPiece == nil || selectedPiece == 0)
+                                .disabled(loadedModel.load.isLoading || selectedPiece == nil || selectedPiece == 0)
                                 Spacer()
                                 Button { showingLargePiecePicker = true } label: {
                                     HStack(spacing: 4) {
@@ -441,7 +440,7 @@ private struct ContentView: View {
                                         Image(systemName: "chevron.up.chevron.down")
                                     }
                                 }
-                                .disabled(modelLoad.isLoading)
+                                .disabled(loadedModel.load.isLoading)
                                 .accessibilityLabel("Büyük görünümde parça seç")
                                 .accessibilityValue(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
                                 Spacer()
@@ -451,7 +450,7 @@ private struct ContentView: View {
                                     selectedNotch = nil
                                     selectedPiece = next
                                 }
-                                .disabled(modelLoad.isLoading || selectedPiece == project.pieces.count - 1)
+                                .disabled(loadedModel.load.isLoading || selectedPiece == project.pieces.count - 1)
                             }
                             .buttonStyle(.bordered)
                             .padding(.horizontal)
@@ -473,7 +472,7 @@ private struct ContentView: View {
                                             notchSelectionRevision = UUID()
                                         }
                                     }
-                                    .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: false) == nil)
+                                    .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: false) == nil)
                                     Spacer()
                                     Button("Sonraki işaret") {
                                         if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: true) {
@@ -481,7 +480,7 @@ private struct ContentView: View {
                                             notchSelectionRevision = UUID()
                                         }
                                     }
-                                    .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: true) == nil)
+                                    .disabled(loadedModel.load.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: true) == nil)
                                 }
                                 .buttonStyle(.bordered)
                                 .padding(.horizontal)
@@ -711,12 +710,12 @@ private struct ContentView: View {
     }
 
     private func handlePickerFailure(_ failure: Error) {
-        guard modelLoad.rejectPickerFailure(failure) else { return }
+        guard loadedModel.load.rejectPickerFailure(failure) else { return }
         modelReadCancellation?.cancel()
         // A rejected picker result did not open a replacement file. Retain a
         // failed raw-save snapshot explicitly under the new request generation.
         if rawSaveNeedsRetry, let retained = rawImport {
-            rawImport = RawImport(data: retained.data, name: retained.name, request: modelLoad.request, reason: retained.reason)
+            rawImport = RawImport(data: retained.data, name: retained.name, request: loadedModel.load.request, reason: retained.reason)
         }
         error = failure.localizedDescription
     }
@@ -731,7 +730,7 @@ private struct ContentView: View {
         modelReadCancellation?.cancel()
         let cancellation = ModelReadCancellation()
         modelReadCancellation = cancellation
-        let request = modelLoad.begin()
+        let request = loadedModel.load.begin()
         // Acquire the picker grant while still handling its result. Keep it
         // alive until the background coordinated read has finished.
         let access = imported && url.startAccessingSecurityScopedResource()
@@ -761,7 +760,7 @@ private struct ContentView: View {
                 }
             }
             DispatchQueue.main.async {
-                guard modelLoad.finish(request) else { return }
+                guard loadedModel.load.finish(request) else { return }
                 switch loaded {
                 case .success(.preview(let drawing, let data, let matchedIndex)):
                     rawImport = nil
@@ -792,7 +791,7 @@ private struct ContentView: View {
     }
 
     private func saveRawImport() {
-        guard let candidate = rawImport, candidate.request == modelLoad.request, !modelLoad.isLoading else {
+        guard let candidate = rawImport, candidate.request == loadedModel.load.request, !loadedModel.load.isLoading else {
             error = "Seçim değişti veya yükleme sürüyor; dosyayı yeniden seçin."
             return
         }
@@ -899,7 +898,7 @@ private struct ContentView: View {
     private func saveImportedModelWithName() {
         guard let snapshot = librarySaveSnapshot else { return }
         librarySaveSnapshot = nil
-        guard !modelLoad.isLoading, modelLoad.request == snapshot.request,
+        guard !loadedModel.load.isLoading, loadedModel.load.request == snapshot.request,
               importedData == snapshot.data else {
             error = "Açık model değişti. Kaydetmek istediğiniz modeli yeniden seçin."
             return
@@ -914,7 +913,7 @@ private struct ContentView: View {
                 isSaving = false
                 switch result {
                 case .success:
-                    if modelLoad.request == snapshot.request && importedData == snapshot.data {
+                    if loadedModel.load.request == snapshot.request && importedData == snapshot.data {
                         importedData = nil
                         saveNotice = "Model telefona kaydedildi."
                     }
@@ -927,7 +926,7 @@ private struct ContentView: View {
     private func saveImportedModel() {
         guard let data = importedData else { return }
         let name = importedName
-        let request = modelLoad.request
+        let request = loadedModel.load.request
         saveNotice = nil
         isSaving = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -936,7 +935,7 @@ private struct ContentView: View {
                 isSaving = false
                 switch result {
                 case .success:
-                    if modelLoad.request == request && importedData == data {
+                    if loadedModel.load.request == request && importedData == data {
                         importedData = nil
                         saveNotice = "Model telefona kaydedildi."
                     }

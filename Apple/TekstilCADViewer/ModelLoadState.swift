@@ -45,15 +45,11 @@ struct LoadedModelState<Model> {
     private(set) var model: Model?
     private(set) var sourceData: Data?
     private(set) var revision = UUID()
+    var load = ModelLoadState()
 
     mutating func install(_ model: Model, data: Data) {
-        self = LoadedModelState(model: model, sourceData: data, revision: UUID())
-    }
-
-    init() {}
-    private init(model: Model, sourceData: Data, revision: UUID) {
         self.model = model
-        self.sourceData = sourceData
-        self.revision = revision
+        self.sourceData = data
+        revision = UUID()
     }
 }

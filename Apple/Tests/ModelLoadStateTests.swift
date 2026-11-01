@@ -2,6 +2,21 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testInstalledModelKeepsLoadRequestAndRejectsStaleCompletion() {
+        var state = LoadedModelState<Int>()
+        state.install(1, data: Data([1]))
+        let stale = state.load.begin()
+        let current = state.load.begin()
+        XCTAssertFalse(state.load.finish(stale))
+        XCTAssertEqual(state.model, 1)
+        XCTAssertEqual(state.sourceData, Data([1]))
+        XCTAssertTrue(state.load.finish(current))
+        state.install(2, data: Data([2]))
+        XCTAssertEqual(state.load.request, current)
+        XCTAssertFalse(state.load.isLoading)
+        XCTAssertEqual(state.model, 2)
+        XCTAssertEqual(state.sourceData, Data([2]))
+    }
     func testInstallingModelKeepsDrawingBytesAndRevisionTogether() {
         var state = LoadedModelState<Int>()
         let initial = state.revision
