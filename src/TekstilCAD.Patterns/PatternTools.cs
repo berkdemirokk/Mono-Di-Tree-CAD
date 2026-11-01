@@ -273,8 +273,8 @@ public static class PatternTools
         if(piece.Notches is not null)
         {
             _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
-            var detached=piece.Clone();detached.Notches=null;
-            var inserted=InsertEdgeMidpoint(detached,afterIndex,cancellationToken);
+            var unmarkedSource=piece.Clone();unmarkedSource.Notches=null;
+            var inserted=InsertEdgeMidpoint(unmarkedSource,afterIndex,cancellationToken);
             return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
         }
         var points=SnapshotPointEdit(piece,cancellationToken);
@@ -312,8 +312,8 @@ public static class PatternTools
         if(piece.Notches is not null)
         {
             _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
-            var detached=piece.Clone();detached.Notches=null;
-            var inserted=InsertPointAtPercentage(detached,afterIndex,percentage,cancellationToken);
+            var unmarkedSource=piece.Clone();unmarkedSource.Notches=null;
+            var inserted=InsertPointAtPercentage(unmarkedSource,afterIndex,percentage,cancellationToken);
             return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
         }
         var points = SnapshotPointEdit(piece, cancellationToken);
@@ -335,8 +335,8 @@ public static class PatternTools
         if(piece.Notches is not null)
         {
             _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
-            var detached=piece.Clone();detached.Notches=null;
-            var inserted=InsertPointAtDistance(detached,afterIndex,distance,cancellationToken);
+            var unmarkedSource=piece.Clone();unmarkedSource.Notches=null;
+            var inserted=InsertPointAtDistance(unmarkedSource,afterIndex,distance,cancellationToken);
             return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
         }
         var points = SnapshotPointEdit(piece, cancellationToken);
