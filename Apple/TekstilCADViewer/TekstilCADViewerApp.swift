@@ -1927,7 +1927,12 @@ private struct NotchPicker: View {
                     }
                 }
                 if let current, current.groups.allSatisfy({ $0.isEmpty }) {
-                    Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
+                        if !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button("Aramayı temizle") { search = "" }
+                        }
+                    }
                 }
             }
             .searchable(text: $search, prompt: "Parça, beden, nokta veya koordinat ara")

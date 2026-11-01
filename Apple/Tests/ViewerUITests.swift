@@ -548,6 +548,11 @@ final class ViewerUITests: XCTestCase {
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
+        search.typeText("bulunmayan")
+        let clear = app.buttons["Aramayı temizle"]
+        XCTAssertTrue(clear.waitForExistence(timeout: 5)); clear.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch.waitForExistence(timeout: 5))
+        search.tap()
         search.typeText("on kol nokta 1")
         let point = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 1")).firstMatch
         XCTAssertTrue(point.waitForExistence(timeout: 5))
