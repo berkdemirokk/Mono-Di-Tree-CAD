@@ -319,6 +319,26 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertTrue(retry.shouldScan(index: 7, bytes: 20, now: 10, budget: &retryBudget))
         XCTAssertFalse(retry.stalled)
     }
+    func testContentSearchNavigationReturnsToActualPreviousPage() {
+        var navigation = ModelStore.ContentPageNavigation()
+        navigation.advance(to: 3)
+        navigation.advance(to: 8)
+        navigation.advance(to: 8)
+        XCTAssertEqual(navigation.offset, 8)
+        navigation.previous()
+        XCTAssertEqual(navigation.offset, 3)
+        navigation.advance(to: 6)
+        navigation.previous()
+        XCTAssertEqual(navigation.offset, 3)
+        navigation.previous()
+        XCTAssertEqual(navigation.offset, 0)
+        navigation.previous()
+        XCTAssertEqual(navigation.offset, 0)
+        navigation.advance(to: 4)
+        navigation.reset()
+        XCTAssertTrue(navigation.history.isEmpty)
+        XCTAssertEqual(navigation.offset, 0)
+    }
     func testContentSearchPagesResumeAtFirstUnscannedCandidate() {
         var budget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
         var first = ModelStore.ContentPageGate(start: 0)

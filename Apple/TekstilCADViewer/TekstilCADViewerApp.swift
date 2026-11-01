@@ -1220,6 +1220,20 @@ enum ModelStore {
         }
     }
 
+    struct ContentPageNavigation {
+        private(set) var offset = 0
+        private(set) var history: [Int] = []
+        mutating func advance(to next: Int) {
+            guard next > offset else { return }
+            history.append(offset)
+            offset = next
+        }
+        mutating func previous() {
+            guard let prior = history.popLast() else { return }
+            offset = prior
+        }
+        mutating func reset() { offset = 0; history.removeAll() }
+    }
     struct ContentPageGate {
         let start: Int
         private(set) var next: Int?
@@ -1451,7 +1465,7 @@ private struct ModelLibrary: View {
     @State private var sortOrder: SortOrder = .name
     @State private var libraryFilter: ModelStore.LibraryFilter = .all
     @State private var searchContents = false
-    @State private var contentOffset = 0
+    @State private var contentPage = ModelStore.ContentPageNavigation()
     @State private var contentRetry = UUID()
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
@@ -1485,7 +1499,7 @@ private struct ModelLibrary: View {
     }
     private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let stalled: Bool; let evidence: [URL: String] }
     @State private var filterResult: FilterResult?
-    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentOffset, retry: contentRetry) }
+    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentPage.offset, retry: contentRetry) }
 
     var body: some View {
         NavigationStack {
@@ -1510,10 +1524,11 @@ private struct ModelLibrary: View {
                         Button("İçerik aramasını tekrar dene") { contentRetry = UUID() }
                     }
                     if let next = current.next {
-                        Button("Sonraki kayıt grubunda ara") { contentOffset = next }
+                        Button("Sonraki kayıt grubunda ara") { contentPage.advance(to: next) }
                     }
                     if current.key.contentOffset > 0 {
-                        Button("İlk kayıt grubuna dön") { contentOffset = 0 }
+                        Button("Önceki kayıt grubuna dön") { contentPage.previous() }
+                        Button("İlk kayıt grubuna dön") { contentPage.reset() }
                     }
                     if current.skipped > 0 {
                         Text("İçerik aramasında \(current.skipped) kayıt okunamadı veya 8 MB sınırını aşıyor; ad araması devam eder.")
@@ -1633,11 +1648,11 @@ private struct ModelLibrary: View {
                     .accessibilityLabel("Model listesi seçenekleri")
                 }
             }
-            .onChange(of: search) { _ in contentOffset = 0 }
-            .onChange(of: sortOrder) { _ in contentOffset = 0 }
-            .onChange(of: libraryFilter) { _ in contentOffset = 0 }
-            .onChange(of: searchContents) { _ in contentOffset = 0 }
-            .onChange(of: modelsRevision) { _ in contentOffset = 0 }
+            .onChange(of: search) { _ in contentPage.reset() }
+            .onChange(of: sortOrder) { _ in contentPage.reset() }
+            .onChange(of: libraryFilter) { _ in contentPage.reset() }
+            .onChange(of: searchContents) { _ in contentPage.reset() }
+            .onChange(of: modelsRevision) { _ in contentPage.reset() }
             .onAppear { loadModels() }
             .onDisappear { loadCancellation?.cancel(); loadID = UUID(); recoveryID = UUID(); isRecovering = false }
             .alert("Ham kopyayı kurtar?", isPresented: Binding(get: { modelToRecover != nil }, set: { if !$0 { modelToRecover = nil } })) {
