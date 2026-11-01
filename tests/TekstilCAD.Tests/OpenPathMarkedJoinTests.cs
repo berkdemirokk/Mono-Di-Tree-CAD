@@ -7,9 +7,13 @@ public class OpenPathMarkedJoinTests
 {
     [Theory]
     [InlineData(false,false,false)]
+    [InlineData(false,false,true)]
+    [InlineData(false,true,false)]
     [InlineData(false,true,true)]
+    [InlineData(true,false,false)]
     [InlineData(true,false,true)]
     [InlineData(true,true,false)]
+    [InlineData(true,true,true)]
     public void JoinMapsMarksForBothDirectionsAndBridgeModes(bool reverseA,bool reverseB,bool shared)
     {
         var a=new List<Point2> { new(0,0),new(10,0) };
