@@ -2346,6 +2346,10 @@ internal static class DesktopVerification
             Check(vertex.SelectedIndex==-1 && AutomationProperties.GetName(status).Contains("Geçerli bir köşe"),"Invalid vertex search clears old selection and exposes error to accessibility",checks);
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.Selection is null,"Invalid vertex search cannot apply previous vertex",checks);
+            vertex.SelectedIndex=0;indexText.Text="1";
+            Check(vertex.SelectedIndex==-1,"Editing the vertex index invalidates the previous selection",checks);
+            apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Selection is null,"Edited vertex index cannot apply a previous selection without Go",checks);
             vertex.SelectedIndex=0;indexText.Text="0";block.SelectedIndex=-1;
             Check(vertex.SelectedIndex==-1 && indexText.Text=="","Changing block clears the selected vertex and search text",checks);
             block.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;indexText.Text="0";piece.SelectedIndex=-1;
@@ -2353,6 +2357,12 @@ internal static class DesktopVerification
             Check(Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Yerleşim") && t.Text.Contains("fiziksel çentik")),"Block definition review explains placement and marker limitations",checks);
             Check(!import.CapturedWarnings.IsEmpty && Descendants<TextBlock>(root).Any(t=>t.Text.StartsWith("• ")),
                 "Block review displays source import warnings",checks);
+            foreach(var methodName in new[]{"Safe","SafeNotice"})
+            {
+                var method=typeof(DxfBlockDefinitionReviewWindow).GetMethod(methodName,BindingFlags.NonPublic|BindingFlags.Static)!;
+                var escaped=(string)method.Invoke(null,["A\u2028B\u2029C"])!;
+                Check(escaped=="A\\u2028B\\u2029C","Block review escapes Unicode line and paragraph separators",checks);
+            }
             Check(Descendants<DxfPiecePreview>(root).Count()==1 && AutomationProperties.GetName(Descendants<ScrollViewer>(root).First()).Contains("Blok tanımı"),"Block review provides a named scroll area and contour preview",checks);
         }
         finally { window.Close(); }

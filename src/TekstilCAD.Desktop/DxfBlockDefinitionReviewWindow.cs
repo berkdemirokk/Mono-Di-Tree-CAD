@@ -67,6 +67,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         };
         vertices.SelectionChanged+=(_,_)=>preview.SelectVertex((vertices.SelectedItem as VertexChoice)?.Index);
         var indexRow=new WrapPanel();
+        indexText.TextChanged+=(_,_)=> { vertices.SelectedIndex=-1;SetStatus(""); };
         var go=new Button { Content="Köşeye git",Margin=new Thickness(4) };go.Click+=(_,_)=> { if(int.TryParse(indexText.Text,out var index) && index>=0 && index<vertices.Items.Count) { vertices.SelectedIndex=index;SetStatus(""); } else { vertices.SelectedIndex=-1;SetStatus("Geçerli bir köşe indeksi girin."); } };indexRow.Children.Add(indexText);indexRow.Children.Add(go);body.Children.Add(indexRow);
         var confirm=new CheckBox { Content="Bunun yerleştirilmemiş blok tanımı olduğunu anladım",Margin=new Thickness(0,12,0,8) };body.Children.Add(confirm);
         apply.Click+=(_,_)=>
@@ -76,6 +77,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             BlockHeaderOrdinal=b.Header;Selection=new(p.Ordinal,piece.Id,v.Index);DialogResult=true;
         };
     }
-    private static string Safe(string? value)=>string.IsNullOrEmpty(value) ? "(boş)" : string.Concat(value.Take(120).Select(c=>char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Surrogate ? $"\\u{(int)c:X4}" : c.ToString()));
-    private static string SafeNotice(string value)=>string.Concat(value.Select(c=>char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Surrogate ? $"\\u{(int)c:X4}" : c.ToString()));
+    private static bool Escape(char c)=>char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Surrogate or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator;
+    private static string Safe(string? value)=>string.IsNullOrEmpty(value) ? "(boş)" : string.Concat(value.Take(120).Select(c=>Escape(c) ? $"\\u{(int)c:X4}" : c.ToString()));
+    private static string SafeNotice(string value)=>string.Concat(value.Select(c=>Escape(c) ? $"\\u{(int)c:X4}" : c.ToString()));
 }
