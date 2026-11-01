@@ -695,6 +695,12 @@ public sealed class CadCanvas : FrameworkElement
         { ClearDrag();ReleaseMouseCapture();InvalidateVisual();owner.ShowCanvasError("İşaretli parça değiştirilemez; işlem uygulanmadı.");return; }
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal))
         {
+            if(owner.HasPropertyDraftFor(piece.Id))
+            {
+                ClearDrag();ReleaseMouseCapture();InvalidateVisual();
+                owner.SetStatus("Sürükleme uygulanmadı · Bu parçaya ait ad veya konum taslağı sürükleme sırasında oluşturuldu. Taslak ve önceki geometri korundu.");
+                return;
+            }
             foreach(var p in result) Geometry.Validate(p);
             if(dragVertex>=0) ValidateClosingEdgePreserved(dragOriginal,result,piece.Closed);
             if(dragVertex>=0 && result.Count>Geometry.MaxValidatedContourVertices)

@@ -1780,6 +1780,28 @@ internal static class DesktopVerification
             Descendants<Button>((DependencyObject)studio.Content).Single(button=>Equals(button.Content,"90° sağa")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(!studio.Selected!.Points.SequenceEqual(applied.Pieces.Single(p=>p.Id==a.Id).Points) && studio.Selected.Notches is { Count:1 },
                 "Geometry editing resumes with markers preserved once the draft is applied",checks);
+            foreach(var vertex in new[] { true,false })
+            {
+                var piece=new PatternPiece { Points=[new(0,0),new(100,0),new(100,100),new(0,100)],
+                    Notches=[new NotchMark { VertexIndex=1,Position=new(100,0) }] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);studio.SetTool("Seç");
+                var beforeDrag=studio.Document.Clone();var beforeUndo=session.UndoCount;
+                var pointer=click.GetPosition(canvas);var hit=vertex ? new Point2(0,0) : new Point2(50,50);
+                offset.SetValue(canvas,new Vector(pointer.X-hit.X,pointer.Y-hit.Y));
+                down.Invoke(canvas,[canvas,click]);
+                var dragVertex=(int)typeof(CadCanvas).GetField("dragVertex",PrivateInstance)!.GetValue(canvas)!;
+                Check(canvas.HasActiveDragPreview && (vertex ? dragVertex==0 : dragVertex==-1),
+                    $"{(vertex?"Vertex":"Whole-piece")} drag starts before a property draft exists",checks);
+                canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+20));
+                name.Text="Sürükleme sırasında taslak";
+                typeof(CadCanvas).GetMethod("Up",PrivateInstance)!.Invoke(canvas,[click]);
+                Check(!canvas.HasActiveDragPreview && DocumentSession.ContentEquals(beforeDrag,studio.Document) && session.UndoCount==beforeUndo &&
+                    studio.HasPropertyDraftFor(piece.Id) && name.Text=="Sürükleme sırasında taslak" && status.Text.Contains("uygulanmadı"),
+                    $"{(vertex?"Vertex":"Whole-piece")} drag preserves a property draft created before mouse release",checks);
+                Invoke(studio,"ApplyProperties");
+                Check(studio.Selected!.Name=="Sürükleme sırasında taslak" && !studio.HasPropertyDraftFor(piece.Id),
+                    $"Draft created during {(vertex?"vertex":"whole-piece")} drag remains applicable",checks);
+            }
         }
         finally { canvas.CancelDrawing();scale.SetValue(canvas,oldScale);offset.SetValue(canvas,oldOffset);studio.LoadDocument(new ProjectDocument()); }
     }
