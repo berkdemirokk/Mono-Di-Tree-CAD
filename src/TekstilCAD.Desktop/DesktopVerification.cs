@@ -9568,6 +9568,8 @@ internal static class DesktopVerification
         guarded.Notches=[new NotchMark { VertexIndex=0,Position=guarded.Points[0] }];
         project.GradingRules.Add(new GradingRuleSet { SourcePieceId=guarded.Id,SourceClosed=guarded.Closed,
             SourcePoints=guarded.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),guarded.Points.Count).ToList() });
+        var guardedDuplicate=Enumerable.Range(1,guarded.Points.Count-1).First(i=>guarded.Points[i]==guarded.Points[i-1]);
+        project.GradingRules[^1].Deltas[guardedDuplicate]=new Point2(1,0);
         var expected=TekstilCAD.Patterns.PatternTools.RemoveConsecutiveDuplicateVertices(marked);
         var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
