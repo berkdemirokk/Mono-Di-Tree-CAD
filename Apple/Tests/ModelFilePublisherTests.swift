@@ -12,6 +12,58 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testFailedPublishCanExposeRetainedBytesForRawRecovery() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = root.appendingPathComponent(".\(UUID().uuidString).partial")
+        let destination = root.appendingPathComponent("saved.tcad")
+        let bytes = Data("unvalidated input".utf8)
+        XCTAssertThrowsError(try ModelFilePublisher.publish(bytes, staging: staging, destination: destination, beforePublish: {
+            throw CocoaError(.fileWriteNoPermission)
+        }))
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == staging })
+        XCTAssertFalse(entry.canOpen); XCTAssertTrue(entry.requiresRecovery)
+        XCTAssertEqual(try ModelStore.readListedPayload(entry), bytes)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+        XCTAssertEqual(try Data(contentsOf: staging.appendingPathComponent("model.tcad")), bytes)
+    }
+
+    func testIncompleteSavePayloadsAreRecoverableOnlyAsRawBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bytes = Data([0x5b, 0x37, 0x2c, 0xff, 0x00])
+        for payloadName in ["model.tcad", "project.tcad"] {
+            let partial = root.appendingPathComponent(".\(UUID().uuidString).partial", isDirectory: true)
+            try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: false)
+            let payload = partial.appendingPathComponent(payloadName)
+            try bytes.write(to: payload)
+            let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == partial })
+            XCTAssertFalse(entry.canOpen); XCTAssertTrue(entry.requiresRecovery)
+            XCTAssertEqual(try ModelStore.readListedPayload(entry), bytes)
+            XCTAssertThrowsError(try ModelStore.delete(entry, in: root))
+            XCTAssertEqual(try Data(contentsOf: payload), bytes)
+        }
+    }
+
+    func testIncompleteSaveRecoveryRejectsChangedOrAmbiguousPayload() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let partial = root.appendingPathComponent(".\(UUID().uuidString).partial", isDirectory: true)
+        try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: false)
+        let payload = partial.appendingPathComponent("model.tcad")
+        try Data("first".utf8).write(to: payload)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == partial })
+        XCTAssertThrowsError(try ModelStore.readListedPayload(entry, afterRead: {
+            try Data("changed content".utf8).write(to: payload)
+        }))
+        XCTAssertEqual(try Data(contentsOf: payload), Data("changed content".utf8))
+        try Data("other".utf8).write(to: partial.appendingPathComponent("project.tcad"))
+        XCTAssertFalse(try ModelStore.models(in: root).contains { $0.url == partial })
+    }
+
     func testInvalidImportRawCopyKeepsExactBytesAndOriginal() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

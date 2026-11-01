@@ -872,6 +872,7 @@ enum ModelStore {
         let entry: FileIdentity
         let payload: FileIdentity?
         let metadata: FileIdentity?
+        let partialPayloadName: String?
     }
 
     struct Entry: Identifiable {
@@ -888,6 +889,7 @@ enum ModelStore {
         var safeName: String { ModelStore.safeLabel(name) }
         var selectionStatus: String? {
             if canOpen { return nil }
+            if url.pathExtension.lowercased() == "partial" { return "Tamamlanmamış kayıt · Yalnız ham kurtarma" }
             return requiresRecovery ? "Önizlenemiyor · Ham kopya kurtarma denenebilir" : "Açılamıyor · Kayıt kontrol edilmeli"
         }
         var readableIdentity: String {
@@ -1087,6 +1089,15 @@ enum ModelStore {
                         canOpen = false
                         requiresRecovery = false
                     }
+                } else if url.pathExtension.lowercased() == "partial" {
+                    let stem = url.deletingPathExtension().lastPathComponent
+                    guard stem.first == ".", UUID(uuidString: String(stem.dropFirst())) != nil,
+                          let current = initialIdentity,
+                          (current.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR),
+                          let payload = current.payload, (payload.mode & UInt32(S_IFMT)) == UInt32(S_IFREG),
+                          current.partialPayloadName != nil else { return nil }
+                    name = "Tamamlanmamış kayıt (\(stem.dropFirst()))"
+                    canOpen = false; requiresRecovery = true
                 } else {
                     return nil
                 }
@@ -1198,9 +1209,17 @@ enum ModelStore {
     private static func identity(_ url: URL) -> EntryIdentity? {
         guard let entry = fileIdentity(url) else { return nil }
         let isCopy = url.pathExtension.lowercased() == copyExtension
+        let isPartial = url.pathExtension.lowercased() == "partial"
+        var partialName: String?
+        if isPartial && (entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR) {
+            let candidates = ["project.tcad", "model.tcad"].filter { fileIdentity(url.appendingPathComponent($0)) != nil }
+            guard candidates.count == 1 else { return nil }
+            partialName = candidates[0]
+        }
         return EntryIdentity(entry: entry,
-                             payload: isCopy ? fileIdentity(url.appendingPathComponent(payloadName)) : nil,
-                             metadata: isCopy ? fileIdentity(url.appendingPathComponent(metadataName)) : nil)
+                             payload: isCopy ? fileIdentity(url.appendingPathComponent(payloadName)) : partialName.flatMap { fileIdentity(url.appendingPathComponent($0)) },
+                             metadata: isCopy || isPartial ? fileIdentity(url.appendingPathComponent(metadataName)) : nil,
+                             partialPayloadName: partialName)
     }
 
     static func requireCurrent(_ entry: Entry) throws {
@@ -1213,11 +1232,17 @@ enum ModelStore {
     // Filesystem identity checks are not atomic with another writer.
     static func readListedPayload(_ entry: Entry, cancelled: @escaping () -> Bool = { false }, afterRead: (() throws -> Void)? = nil) throws -> Data {
         try requireCurrent(entry)
-        let payload = entry.url.pathExtension.lowercased() == copyExtension ? entry.identity?.payload : entry.identity?.entry
+        let isPartial = entry.url.pathExtension.lowercased() == "partial"
+        let payload = entry.url.pathExtension.lowercased() == copyExtension || isPartial ? entry.identity?.payload : entry.identity?.entry
         guard let payload, (payload.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) else {
             throw ViewerError.message("Kayıt içeriği normal bir dosya değil; açılamadı.")
         }
-        let data = try Drawing.readData(payloadURL(entry.url), expectedIdentity: payload, cancelled: cancelled)
+        let url: URL
+        if isPartial {
+            guard let name = entry.identity?.partialPayloadName else { throw ViewerError.message("Geçici kayıt içeriği belirlenemedi.") }
+            url = entry.url.appendingPathComponent(name)
+        } else { url = payloadURL(entry.url) }
+        let data = try Drawing.readData(url, expectedIdentity: payload, cancelled: cancelled)
         try afterRead?()
         try requireCurrent(entry)
         return data
@@ -1430,7 +1455,9 @@ private struct ModelLibrary: View {
                         if model.canOpen || model.requiresRecovery {
                             Button("Ham kopyayı dışa aktar…") { modelToRecover = model }
                         }
-                        Button("Kayıtlı modeli sil", role: .destructive) { modelToDelete = model }
+                        if model.url.pathExtension.lowercased() != "partial" {
+                            Button("Kayıtlı modeli sil", role: .destructive) { modelToDelete = model }
+                        }
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .frame(width: 44, height: 44)
@@ -1440,7 +1467,9 @@ private struct ModelLibrary: View {
                     .disabled(isRecovering)
                     }
                     .swipeActions {
-                        Button("Sil", role: .destructive) { modelToDelete = model }.disabled(isRecovering)
+                        if model.url.pathExtension.lowercased() != "partial" {
+                            Button("Sil", role: .destructive) { modelToDelete = model }.disabled(isRecovering)
+                        }
                     }
                 }
             }
@@ -1478,7 +1507,9 @@ private struct ModelLibrary: View {
                     prepareRecovery(model)
                 }
             } message: {
-                if modelToRecover?.url.pathExtension.lowercased() == "tcadraw" {
+                if modelToRecover?.url.pathExtension.lowercased() == "partial" {
+                    Text("Bu, tamamlanmamış veya başarısız bir kayıt olabilir; yazma işlemi hâlâ sürüyor olabilir. Ham dosya eksik ya da bozuk olabilir ve geçerli proje olduğu doğrulanmaz. Dosya açılmadan veya değiştirilmeden dışa aktarılır; geçici kayıt silinmez. En fazla 64 MB desteklenir.")
+                } else if modelToRecover?.url.pathExtension.lowercased() == "tcadraw" {
                     Text("Bu ham kayıt önizlenmedi veya proje olarak doğrulanmadı. Dosya değiştirilmeden dışa aktarılır; bozuk olabilir. En fazla 64 MB desteklenir.")
                 } else if modelToRecover?.requiresRecovery == true {
                     Text("Kayıt bilgisi eksik, bozuk, çok büyük veya desteklenmeyen sürümde; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
