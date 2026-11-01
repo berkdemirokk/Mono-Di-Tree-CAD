@@ -2332,8 +2332,19 @@ internal static class DesktopVerification
             studio.ConfirmDxfPointsForVerification=i=>[Choice(i)];Run();
             Check(studio.Document.Pieces.Single().Notches is { Count:1 } marks && marks[0].VertexIndex==2 && marks[0].Position==new Point2(0,20) && imported.Project.Pieces.Single().Notches is null && File.ReadAllBytes(path).SequenceEqual(source),
                 "Explicit POINT mapping applies a detached visual marker",checks);
-            Invoke(studio,"Undo");Check(studio.Document.Pieces.Single().Notches is null,"POINT mapping can be undone after import",checks);
-            Invoke(studio,"Redo");Check(studio.Document.Pieces.Single().Notches is { Count:1 },"POINT mapping can be redone after import",checks);
+            bool HasPointHistory()=>studio.Document.ImportProvenance?.Warnings.Any(w=>w.Contains("POINT kayıtları kullanıcı seçimiyle"))==true;
+            Check(HasPointHistory(),"POINT mapping history appears with committed marks",checks);
+            Invoke(studio,"Undo");Check(studio.Document.Pieces.Single().Notches is null && !HasPointHistory(),"Undo removes POINT marks and their history together",checks);
+            Invoke(studio,"Redo");Check(studio.Document.Pieces.Single().Notches is { Count:1 } && HasPointHistory(),"Redo restores POINT marks and their history together",checks);
+            imported=Prepare();studio.ConfirmDxfPointsForVerification=i=>[Choice(i)];studio.BeforeDxfPointCommitForVerification=()=>throw new InvalidOperationException("injected POINT commit failure");Run();
+            var notice=(TextBlock)typeof(MainWindow).GetField("dxfNotice",PrivateInstance)!.GetValue(studio)!;
+            Check(studio.Document.Pieces.Single().Notches is null && !HasPointHistory() && notice.Text.Contains("yeni proje olarak yüklendi") && notice.Text.Contains("işaretleri uygulanmadı"),
+                "Failed POINT commit leaves imported project without false mark history and explains outcome",checks);
+            studio.BeforeDxfPointCommitForVerification=null;
+            imported=Prepare();studio.AfterCommitBeforeRefreshForVerification=()=>throw new InvalidOperationException("injected post-commit refresh failure");Run();
+            Check(studio.Document.Pieces.Single().Notches is { Count:1 } && HasPointHistory() && !notice.Text.Contains("işaretleri uygulanmadı"),
+                "Post-commit refresh failure does not report applied POINT marks as missing",checks);
+            studio.AfterCommitBeforeRefreshForVerification=null;
             imported=Prepare();before=studio.Document.Clone();studio.ConfirmDxfPointsForVerification=i=>[Choice(i) with { VertexIndex=1 }];Run();
             Check(DocumentSession.ContentEquals(before,studio.Document),"Mismatched POINT and target vertex cannot replace current document",checks);
             imported=Prepare();typeof(MainWindow).GetField("preparedDxfReflectY",PrivateInstance)!.SetValue(studio,true);
@@ -2341,7 +2352,7 @@ internal static class DesktopVerification
             Check(studio.Document.Pieces.Single().Notches is { Count:1 } reflected && reflected[0].Position==new Point2(0,-20) &&
                 reflected[0].Position==studio.Document.Pieces.Single().Points[2],"POINT and target vertex share the selected Y reflection",checks);
         }
-        finally { studio.ConfirmDxfPointsForVerification=null;studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous); }
+        finally { studio.BeforeDxfPointCommitForVerification=null;studio.AfterCommitBeforeRefreshForVerification=null;studio.ConfirmDxfPointsForVerification=null;studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyDxfGrainlineReview(MainWindow studio,string work,List<string> checks)

@@ -143,6 +143,7 @@ public class MainWindow : Window
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfPointVertexSelection>?>? ConfirmDxfPointsForVerification { get; set; }
+    internal Action? BeforeDxfPointCommitForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
     internal Func<(bool Accepted,bool Saved)>? DxfDiscardDecisionForVerification { get; set; }
@@ -2203,6 +2204,7 @@ public class MainWindow : Window
         dxfReviewActive=true;
         dxfReview.Visibility=Visibility.Collapsed;
         var applied=false;
+        var pointCommitRequired=false;var pointCommitted=false;
         var reflectY=preparedDxfReflectY;
         var reviewCopyIntact=true;
         ProjectDocument? importSnapshot = null;
@@ -2351,18 +2353,20 @@ public class MainWindow : Window
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
                 historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
-            if(pointSelections.Count>0)historyWarnings.Add("POINT kayıtları kullanıcı seçimiyle görsel köşe işareti olarak eşlendi; kaynak POINT kimlikleri projede saklanmaz. Fiziksel çentik veya üretim onayı değildir.");
+            const string pointHistory="POINT kayıtları kullanıcı seçimiyle görsel köşe işareti olarak eşlendi; kaynak POINT kimlikleri projede saklanmaz. Fiziksel çentik veya üretim onayı değildir.";
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
                 MillimetersPerUnit=preparedDxfFactor, Warnings=historyWarnings, PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };
             history.Validate();candidate.ImportProvenance=history;Validate(candidate);
-            if(marked is not null) { marked.ImportProvenance=history.Clone();Validate(marked);if(!new DocumentHistory().CanRetainSnapshot(candidate))throw new InvalidOperationException("İşaret eşlemesi geri alma geçmişine sığmıyor; DXF uygulanmadı."); }
+            if(marked is not null) { marked.ImportProvenance=history.Clone();marked.ImportProvenance.Warnings.Add(pointHistory);Validate(marked);if(!new DocumentHistory().CanRetainSnapshot(candidate))throw new InvalidOperationException("İşaret eşlemesi geri alma geçmişine sığmıyor; DXF uygulanmadı."); }
             if (!PreparedImportMatches()) return;
+            pointCommitRequired=marked is not null;
             LoadDocumentCore(candidate,true,()=> { applied=true;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false; });
             if(marked is not null)
             {
                 var marks=marked.Pieces.ToDictionary(p=>p.Id,p=>p.Notches?.Select(n=>n.Clone()).ToList());
-                Commit("DXF POINT görsel işaretleri eklendi",()=> { foreach(var piece in Document.Pieces)piece.Notches=marks[piece.Id]; });
+                BeforeDxfPointCommitForVerification?.Invoke();
+                CommitObserved("DXF POINT görsel işaretleri eklendi",()=> { foreach(var piece in Document.Pieces)piece.Notches=marks[piece.Id];Document.ImportProvenance!.Warnings.Add(pointHistory); },()=>pointCommitted=true);
             }
             dxfNotice.Text=$"DXF: {Document.Pieces.Count} parça · 1 birim = {preparedDxfFactor} mm · Kaynak kontrol anından sonra değişmiş olabilir; ölçüleri kontrol edin";
             if (grainSelections.Count > 0) dxfNotice.Text += " · İplik yönleri kontrol bekliyor; kaynakla karşılaştırın";
@@ -2370,7 +2374,7 @@ public class MainWindow : Window
             SetStatus(dxfNotice.Text);
         }
         catch(Exception ex)
-        { if(!windowClosed) { if(applied) { _ = SaveRecoveryAsync(); dxfNotice.Text="DXF projeye yüklendi ancak görünüm yenilenemedi. Yeni projeyi kontrol edip farklı adla kaydedin; eski çalışma geri getirilmedi. Ayrıntı: "+ex.Message; SetStatus(dxfNotice.Text); } else if (PreparedImportMatches()) OfferDxfReviewRetry(imported,"DXF uygulanamadı; mevcut çalışma korundu: "+ex.Message); } }
+        { if(!windowClosed) { if(applied) { _ = SaveRecoveryAsync(); dxfNotice.Text=pointCommitRequired && !pointCommitted ? "DXF yeni proje olarak yüklendi, ancak onaylanan POINT işaretleri uygulanmadı. Yeni proje açık kaldı; eski çalışma geri getirilmedi. İşaretleri kontrol edip farklı adla kaydedin. Ayrıntı: "+ex.Message : "DXF projeye yüklendi ancak görünüm yenilenemedi. Yeni projeyi kontrol edip farklı adla kaydedin; eski çalışma geri getirilmedi. Ayrıntı: "+ex.Message; SetStatus(dxfNotice.Text); } else if (PreparedImportMatches()) OfferDxfReviewRetry(imported,"DXF uygulanamadı; mevcut çalışma korundu: "+ex.Message); } }
         finally { dxfReviewActive=false; }
     }
     private bool IsPreparedDxfRetryCurrent(DxfImportResult imported) => IsDxfPreparationCurrent(imported)
