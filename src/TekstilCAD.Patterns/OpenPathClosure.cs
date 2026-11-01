@@ -29,7 +29,7 @@ public static class OpenPathClosure
         var points=source.Points.ToArray();
         foreach(var point in points) { cancellationToken.ThrowIfCancellationRequested(); Geometry.Validate(point); }
         var length=Geometry.Distance(points[0],points[^1]);
-        if(length>tolerance)throw new ArgumentException("Uçlar arasındaki mesafe seçilen toleransı aşıyor.");
+        if(!EndpointTolerance.Contains(points[0],points[^1],tolerance))throw new ArgumentException("Uçlar arasındaki mesafe seçilen toleransı aşıyor.");
         LargeContourValidator.Validate(points,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points],

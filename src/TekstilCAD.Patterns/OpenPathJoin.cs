@@ -5,7 +5,13 @@ namespace TekstilCAD.Patterns;
 /// <summary>A detached result. Source IDs and names are retained for the caller's review;
 /// the caller remains responsible for project references, grading rules and provenance.</summary>
 public sealed record OpenPathJoinResult(PatternPiece Piece, Guid FirstSourceId, Guid SecondSourceId,
-    string FirstSourceName, string SecondSourceName, double BridgeLength);
+    string FirstSourceName, string SecondSourceName, double BridgeLength)
+{
+    /// <summary>Zero-based endpoint index in the original first source snapshot.</summary>
+    public int FirstEndpointIndex { get; init; } = -1;
+    /// <summary>Zero-based endpoint index in the original second source snapshot.</summary>
+    public int SecondEndpointIndex { get; init; } = -1;
+}
 
 public static class OpenPathJoin
 {
@@ -50,7 +56,7 @@ public static class OpenPathJoin
             var endA = reverseA ? a[0] : a[^1];
             var startB = reverseB ? b[^1] : b[0];
             var distance = Geometry.Distance(endA, startB);
-            if (distance <= tolerance) candidates.Add((reverseA, reverseB, distance));
+            if (EndpointTolerance.Contains(endA, startB, tolerance)) candidates.Add((reverseA, reverseB, distance));
         }
         if (candidates.Count != 1)
             throw new ArgumentException(candidates.Count == 0 ? "Tolerans içinde uç bulunamadı." : "Birden fazla uç eşleşiyor; seçim belirsiz.");
@@ -84,6 +90,10 @@ public static class OpenPathJoin
         AddMarks(first,match.ReverseA,0);
         AddMarks(second,match.ReverseB,a.Length-(shared ? 1 : 0));
         var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points, Notches=marks.Count==0 ? null : marks };
-        return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance);
+        return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance)
+        {
+            FirstEndpointIndex = match.ReverseA ? 0 : a.Length - 1,
+            SecondEndpointIndex = match.ReverseB ? b.Length - 1 : 0
+        };
     }
 }

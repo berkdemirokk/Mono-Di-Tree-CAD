@@ -17,6 +17,7 @@ public class OpenPathJoinTests
         Assert.Equal(new[] { new Point2(0, 0), new(1, 0), new(1.1, 0), new(2, 0) }, result.Piece.Points);
         Assert.Equal(originalA, a.Points); Assert.Equal(originalB, b.Points);
         Assert.Equal(a.Id, result.FirstSourceId); Assert.Equal(b.Id, result.SecondSourceId);
+        Assert.Equal(0, result.FirstEndpointIndex); Assert.Equal(1, result.SecondEndpointIndex);
         Assert.NotEqual(a.Id, result.Piece.Id); Assert.NotEqual(b.Id, result.Piece.Id);
         Assert.Equal(0.1, result.BridgeLength, 10);
     }
@@ -27,6 +28,26 @@ public class OpenPathJoinTests
         var result = OpenPathJoin.Join(Path(new(0, 0), new(1, 0)), Path(new(1, 0), new(2, 0)), 0);
         Assert.Equal(new[] { new Point2(0, 0), new(1, 0), new(2, 0) }, result.Piece.Points);
         Assert.False(result.Piece.Closed);
+        Assert.Equal(1, result.FirstEndpointIndex); Assert.Equal(0, result.SecondEndpointIndex);
+    }
+
+    [Theory] [InlineData(false, false)] [InlineData(false, true)]
+    [InlineData(true, false)] [InlineData(true, true)]
+    public void ReportsExactSelectedSourceEndpointIndices(bool reverseFirst, bool reverseSecond)
+    {
+        // The second source's far endpoint is just outside the 1 mm circle,
+        // though its rounded double distance is exactly 1 mm.
+        var first = Path(new(0,-10),new(0,0));
+        var second = Path(new(1,0),new(0,10),new(-1,Math.ScaleB(1,-27)));
+        if (reverseFirst) first.Points.Reverse();
+        if (reverseSecond) second.Points.Reverse();
+        var beforeFirst = first.Points.ToArray(); var beforeSecond = second.Points.ToArray();
+        var result = OpenPathJoin.Join(first, second, 1);
+        Assert.Equal(reverseFirst ? 0 : 1, result.FirstEndpointIndex);
+        Assert.Equal(reverseSecond ? 2 : 0, result.SecondEndpointIndex);
+        Assert.Equal(new Point2(0,0), first.Points[result.FirstEndpointIndex]);
+        Assert.Equal(new Point2(1,0), second.Points[result.SecondEndpointIndex]);
+        Assert.Equal(beforeFirst, first.Points); Assert.Equal(beforeSecond, second.Points);
     }
 
     [Fact]
