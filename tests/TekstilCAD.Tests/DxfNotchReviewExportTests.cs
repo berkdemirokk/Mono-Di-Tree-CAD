@@ -1,4 +1,5 @@
 using System.Text;
+using System.Globalization;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 
@@ -73,6 +74,53 @@ public class DxfNotchReviewExportTests
             Assert.Contains($"8\n{plan.Grainlines[0].MarkerLayer}\n100\nAcDbLine\n10\n2\n20\n{y1}\n30\n0\n11\n4\n21\n{y2}\n31\n0\n",text);
             Assert.True(DocumentSession.ContentEquals(before,project));Assert.True(plan.Matches(before));
             project.Pieces[0].Grainline!.NeedsReview=false;Assert.False(plan.Matches(project));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+    [Fact]
+    public void CombinedRecordsUseUniqueHandlesDeclaredLayersAndExactCoordinates()
+    {
+        var project=Project();
+        project.Pieces[0].Grainline=new Grainline { Start=new(2,3),End=new(4,8),NeedsReview=true };
+        project.Pieces[1].Grainline=new Grainline { Start=new(12,21),End=new(15,24) };
+        var before=project.Clone();var plan=DxfNotchReviewExport.Prepare(project,true);var path=PathForTest();
+        try
+        {
+            var lines=Write(plan,path).Split('\n');
+            var records=new List<(string Type,List<(int Code,string Value)> Fields)>();
+            for(int i=0;i+1<lines.Length;i+=2)
+            {
+                int code=int.Parse(lines[i],CultureInfo.InvariantCulture);var value=lines[i+1].TrimEnd('\r');
+                if(code==0)records.Add((value,[]));else if(records.Count>0)records[^1].Fields.Add((code,value));
+            }
+            static string One(List<(int Code,string Value)> fields,int code)=>Assert.Single(fields,p=>p.Code==code).Value;
+            var entities=records.Where(r=>r.Type is "LWPOLYLINE" or "POINT" or "LINE").ToArray();
+            Assert.Equal(2,entities.Count(r=>r.Type=="LWPOLYLINE"));
+            Assert.Equal(3,entities.Count(r=>r.Type=="POINT"));
+            Assert.Equal(2,entities.Count(r=>r.Type=="LINE"));
+            var layers=records.Where(r=>r.Type=="LAYER").Select(r=>One(r.Fields,2)).ToArray();
+            Assert.Equal(layers.Length,layers.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.All(entities,e=>Assert.Contains(layers,l=>string.Equals(l,One(e.Fields,8),StringComparison.OrdinalIgnoreCase)));
+            var handled=records.Where(r=>r.Type is "TABLE" or "LTYPE" or "LAYER" or "LWPOLYLINE" or "POINT" or "LINE")
+                .Select(r=>One(r.Fields,5)).ToArray();
+            Assert.Equal(handled.Length,handled.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.All(handled,h=>Assert.True(ulong.TryParse(h,NumberStyles.HexNumber,CultureInfo.InvariantCulture,out _)));
+            foreach(var item in plan.Items)
+            {
+                var marker=Assert.Single(entities,e=>e.Type=="POINT" && One(e.Fields,8)==item.MarkerLayer &&
+                    double.Parse(One(e.Fields,10),CultureInfo.InvariantCulture)==item.Position.X &&
+                    double.Parse(One(e.Fields,20),CultureInfo.InvariantCulture)==-item.Position.Y);
+                Assert.Equal("0",One(marker.Fields,30));
+            }
+            foreach(var line in plan.Grainlines)
+            {
+                var entity=Assert.Single(entities,e=>e.Type=="LINE" && One(e.Fields,8)==line.MarkerLayer);
+                Assert.Equal(line.Start.X,double.Parse(One(entity.Fields,10),CultureInfo.InvariantCulture));
+                Assert.Equal(-line.Start.Y,double.Parse(One(entity.Fields,20),CultureInfo.InvariantCulture));
+                Assert.Equal(line.End.X,double.Parse(One(entity.Fields,11),CultureInfo.InvariantCulture));
+                Assert.Equal(-line.End.Y,double.Parse(One(entity.Fields,21),CultureInfo.InvariantCulture));
+            }
+            Assert.True(DocumentSession.ContentEquals(before,project));Assert.True(plan.Matches(project));
         }
         finally { if(File.Exists(path))File.Delete(path); }
     }
