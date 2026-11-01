@@ -4,6 +4,21 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testOverlayUsesSharedScaleAndRejectsOverflow() throws {
+        let first = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))
+        let second = try XCTUnwrap(ContourBounds(points: [p(-70, 10), p(-20, 60)]))
+        let bounds = try XCTUnwrap(ContourOverlay.bounds(first, second))
+        let viewport = try XCTUnwrap(ContourViewport(bounds: bounds, width: 232, height: 132))
+        let a0 = viewport.position(try XCTUnwrap(ContourOverlay.aligned(p(100, 20), bounds: first)))
+        let a1 = viewport.position(try XCTUnwrap(ContourOverlay.aligned(p(200, 70), bounds: first)))
+        let b0 = viewport.position(try XCTUnwrap(ContourOverlay.aligned(p(-70, 10), bounds: second)))
+        let b1 = viewport.position(try XCTUnwrap(ContourOverlay.aligned(p(-20, 60), bounds: second)))
+        XCTAssertEqual(a0, b0)
+        XCTAssertEqual(a1.x - a0.x, 2 * (b1.x - b0.x), accuracy: 1e-9)
+        let extreme = try XCTUnwrap(ContourBounds(points: [p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)]))
+        XCTAssertNil(ContourOverlay.bounds(extreme, second))
+        XCTAssertNil(ContourOverlay.aligned(p(Double.greatestFiniteMagnitude, 0), bounds: extreme))
+    }
     func testCombinedPieceAndGrainBoundsMatchAllPoints() throws {
         let groups = [[p(0, 1), p(2, 3)], [p(-20, 9), p(8, -4)], [p(-40, 0), p(60, 0)]]
         let cached = try XCTUnwrap(ContourBounds(combining: groups.compactMap { ContourBounds(points: $0) }))

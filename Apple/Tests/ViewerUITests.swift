@@ -45,6 +45,20 @@ final class ViewerUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["Birinci aralık: 0 → 1 · ileri · yaklaşık 100 mm"].waitForExistence(timeout: 5))
     }
+    func testComparisonOffersSameScaleVisualOverlay() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let compare = app.buttons["İki parçayı karşılaştır…"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 15)); compare.tap()
+        app.swipeUp()
+        let overlay = app.buttons["Parçaları üst üste göster…"]
+        XCTAssertTrue(overlay.waitForExistence(timeout: 5)); overlay.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Aynı ölçekte üst üste parça görünümü"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretime uygunluk doğrulaması değildir")).firstMatch.exists)
+    }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()

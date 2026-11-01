@@ -26,6 +26,21 @@ struct ContourBounds {
     }
 }
 
+// Align each bounding-box minimum at the same origin without scaling either
+// piece independently. Reject overflow instead of drawing misleading geometry.
+enum ContourOverlay {
+    static func bounds(_ first: ContourBounds, _ second: ContourBounds) -> ContourBounds? {
+        let widths = [first.maxX - first.minX, second.maxX - second.minX]
+        let heights = [first.maxY - first.minY, second.maxY - second.minY]
+        guard widths.allSatisfy({ $0.isFinite && $0 >= 0 }), heights.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
+        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: widths.max() ?? 0, y: heights.max() ?? 0)])
+    }
+    static func aligned(_ point: ContourMeasure.Point, bounds: ContourBounds) -> ContourMeasure.Point? {
+        let x = point.x - bounds.minX, y = point.y - bounds.minY
+        guard x.isFinite, y.isFinite else { return nil }
+        return .init(x: x, y: y)
+    }
+}
 // Fits finite model coordinates without multiplying by an enormous scale.
 struct ContourViewport {
     let coordinateScale: Double

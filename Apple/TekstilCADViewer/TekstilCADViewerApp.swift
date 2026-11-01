@@ -2728,6 +2728,7 @@ private struct PieceComparisonView: View {
     @State private var second: Int?
     @State private var choosingFirst = false
     @State private var choosingSecond = false
+    @State private var showingOverlay = false
     @State private var firstSpan = ContourMeasure.SpanSelection()
     @State private var secondSpan = ContourMeasure.SpanSelection()
     private struct ReportPreview: Identifiable { let id = UUID(); let text: String }
@@ -2771,6 +2772,16 @@ private struct PieceComparisonView: View {
                         Text("Aynı parça iki kez seçildi; farklar sıfır olabilir.").foregroundStyle(.secondary)
                     }
 
+                    if a.hasMinimumContourPoints, b.hasMinimumContourPoints,
+                       let firstBounds = a.contourBounds, let secondBounds = b.contourBounds,
+                       ContourOverlay.bounds(firstBounds, secondBounds) != nil {
+                        Button("Parçaları üst üste göster…") { showingOverlay = true }
+                            .sheet(isPresented: $showingOverlay) {
+                                PieceOverlayView(first: a, firstIndex: first, second: b, secondIndex: second)
+                            }
+                    } else {
+                        Text("Bu konturlar üst üste gösterilemiyor.").foregroundStyle(.secondary)
+                    }
                     if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second, firstSpan: firstSpan, secondSpan: secondSpan) {
                         Button("Karşılaştırma özetini önizle…") { reportPreview = ReportPreview(text: report) }
                     }
@@ -2826,6 +2837,52 @@ private struct PieceComparisonView: View {
                     }
                 }
             }
+        }
+    }
+}
+private struct PieceOverlayView: View {
+    let first: Drawing.Piece
+    let firstIndex: Int
+    let second: Drawing.Piece
+    let secondIndex: Int
+    @Environment(\.dismiss) private var dismiss
+    @State private var showFirst = true
+    @State private var showSecond = true
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Her parçanın sınır kutusunun sol üstü aynı noktaya hizalanır; ikisi aynı ölçektedir. Kaynak konumları değiştirilmez.")
+                Text("Yalnızca görsel karşılaştırmadır; dikiş uyumu, çakışma veya üretime uygunluk doğrulaması değildir.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Toggle("Birinci: \(firstIndex + 1). \(first.displayName(index: firstIndex)) · düz çizgi", isOn: $showFirst)
+                Toggle("İkinci: \(secondIndex + 1). \(second.displayName(index: secondIndex)) · kesik çizgi", isOn: $showSecond)
+                Canvas { context, size in
+                    guard let aBounds = first.contourBounds, let bBounds = second.contourBounds,
+                          let bounds = ContourOverlay.bounds(aBounds, bBounds),
+                          let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)) else { return }
+                    func path(_ piece: Drawing.Piece, _ pieceBounds: ContourBounds) -> Path? {
+                        guard let firstPoint = piece.points.first.flatMap({ ContourOverlay.aligned($0, bounds: pieceBounds) }) else { return nil }
+                        var path = Path()
+                        path.move(to: viewport.position(firstPoint))
+                        for point in piece.points.dropFirst() {
+                            guard let aligned = ContourOverlay.aligned(point, bounds: pieceBounds) else { return nil }
+                            path.addLine(to: viewport.position(aligned))
+                        }
+                        if piece.closed { path.closeSubpath() }
+                        return path
+                    }
+                    if showFirst, let path = path(first, aBounds) { context.stroke(path, with: .color(.orange), lineWidth: 2) }
+                    if showSecond, let path = path(second, bBounds) { context.stroke(path, with: .color(.purple), style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.secondary.opacity(0.08))
+                .accessibilityLabel("Aynı ölçekte üst üste parça görünümü")
+                .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). Sol üst sınırlar hizalıdır.")
+            }
+            .padding()
+            .navigationTitle("Parçaları üst üste göster")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }
     }
 }
