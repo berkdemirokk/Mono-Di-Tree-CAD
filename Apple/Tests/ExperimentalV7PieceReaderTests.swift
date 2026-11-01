@@ -3,6 +3,10 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ExperimentalV7PieceReaderTests: XCTestCase {
+    private var minimalSnapshot: String {
+        let hash = String(repeating: "A", count: 64)
+        return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(hash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[],\"LayoutPieces\":[],\"Selections\":[],\"Copies\":[],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
+    }
     private func extract(_ data: Data, chunk: Int) throws -> [Data] {
         var reader = ExperimentalV7PieceReader()
         var offset = 0
@@ -85,7 +89,7 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertEqual(try ExperimentalV7Contours.decode(parts).count, 8_000)
     }
     func testEscapedKeyNestedNamesAndSyntaxFailures() throws {
-        let json = #"[7,{"Name":"Pieces","\u0050ieces":[{"Name":"{[x]}","Points":[]}],"GradingRules":[],"NestingSnapshot":{"Pieces":[{"Name":"hidden"}]}}]"#
+        let json = #"[7,{"Name":"Pieces","\u0050ieces":[{"Name":"{[x]}","Points":[]}],"GradingRules":[],"NestingSnapshot":\#(minimalSnapshot)}]"#
         let parts = try extract(Data(json.utf8), chunk: 2)
         XCTAssertEqual(parts.count, 1)
         XCTAssertTrue(String(decoding: parts[0], as: UTF8.self).contains("{[x]}"))
@@ -97,7 +101,7 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
     }
     func testLongEscapedProjectNameIsNotTreatedAsAKey() throws {
         let name = String(repeating: #"\u0061"#, count: 1_000)
-        let json = "[7,{\"Name\":\"\(name)\",\"Pieces\":[],\"GradingRules\":[],\"NestingSnapshot\":{}}]"
+        let json = "[7,{\"Name\":\"\(name)\",\"Pieces\":[],\"GradingRules\":[],\"NestingSnapshot\":\(minimalSnapshot)}]"
         XCTAssertEqual(try extract(Data(json.utf8), chunk: 23).count, 0)
         var reader = ExperimentalV7PieceReader()
         for byte in json.utf8 { try reader.feed(Data([byte])) }
@@ -134,6 +138,27 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
             for (x, y) in zip(a.points, b.points) { XCTAssertEqual(x.x, y.x); XCTAssertEqual(x.y, y.y) }
         }
         XCTAssertEqual(bytes, before)
+    }
+    func testSnapshotAndTraceHeaderRejectMissingUnknownOrWrongFields() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-four-angle", withExtension: "tcad"))
+        let bytes = try Data(contentsOf: url)
+        let array = try XCTUnwrap(try JSONSerialization.jsonObject(with: bytes) as? [Any])
+        let original = try XCTUnwrap(array[1] as? [String: Any])
+        let originalSnapshot = try XCTUnwrap(original["NestingSnapshot"] as? [String: Any])
+        let originalTrace = try XCTUnwrap(originalSnapshot["RotationTrace"] as? [String: Any])
+        func rejected(_ snapshot: [String: Any]) throws {
+            var body = original; body["NestingSnapshot"] = snapshot
+            let data = try JSONSerialization.data(withJSONObject: [7, body])
+            XCTAssertThrowsError(try extract(data, chunk: 101))
+        }
+        var snapshot = originalSnapshot; snapshot.removeValue(forKey: "Gap"); try rejected(snapshot)
+        snapshot = originalSnapshot; snapshot["Unknown"] = true; try rejected(snapshot)
+        var trace = originalTrace; trace.removeValue(forKey: "Copies")
+        snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; trace["Schema"] = "unknown"
+        snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; trace["SourcePieces"] = "not an array"
+        snapshot["RotationTrace"] = trace; try rejected(snapshot)
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)
