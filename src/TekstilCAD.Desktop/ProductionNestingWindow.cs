@@ -40,6 +40,13 @@ internal sealed class ProductionNestingWindow : Window
         public string DisplayName { get; init; } = "";
         private bool selected;
         private bool navigationTarget;
+        private bool allow0=true,allow90=true,allow180=true,allow270=true;
+        public bool Allow0 { get=>allow0; set=>SetAngle(ref allow0,value,nameof(Allow0)); }
+        public bool Allow90 { get=>allow90; set=>SetAngle(ref allow90,value,nameof(Allow90)); }
+        public bool Allow180 { get=>allow180; set=>SetAngle(ref allow180,value,nameof(Allow180)); }
+        public bool Allow270 { get=>allow270; set=>SetAngle(ref allow270,value,nameof(Allow270)); }
+        private void SetAngle(ref bool field,bool value,string name) { if(field==value)return;field=value;PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(name)); }
+        public int[] AllowedAngles()=>new[] { (allow0,0),(allow90,90),(allow180,180),(allow270,270) }.Where(p=>p.Item1).Select(p=>p.Item2).ToArray();
         public bool IsNavigationTarget { get=>navigationTarget; set { if(navigationTarget==value)return; navigationTarget=value; PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(nameof(IsNavigationTarget))); } }
         public bool IsSelected { get=>selected; set { if(selected==value)return; selected=value; PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(nameof(IsSelected))); } }
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -47,7 +54,7 @@ internal sealed class ProductionNestingWindow : Window
     private readonly TextBox width = new() { Text="1500", Width=110, Margin=new Thickness(4) };
     private readonly TextBox fabricLength = new() { Width=110, Margin=new Thickness(4), ToolTip="Boş bırakılırsa kumaş boyu sınırlandırılmaz." };
     private readonly ComboBox grainPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "İplik yönü denetlenmez", "Tek yön (+Y)", "Çift yön (±Y)" }, SelectedIndex=0 };
-    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa", "Otomatik: 0° / 90°", "Otomatik: dört dik açı", "Otomatik: özel açılar" }, SelectedIndex=0 };
+    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa", "Otomatik: 0° / 90°", "Otomatik: dört dik açı", "Otomatik: özel açılar", "Otomatik: parça açıları" }, SelectedIndex=0 };
     private readonly WrapPanel customAngles = new() { Visibility=Visibility.Collapsed };
     private readonly CheckBox angle0 = new() { Content="0°", IsChecked=true, Margin=new Thickness(5,4,5,4) };
     private readonly CheckBox angle90 = new() { Content="90°", IsChecked=true, Margin=new Thickness(5,4,5,4) };
@@ -94,6 +101,8 @@ internal sealed class ProductionNestingWindow : Window
             AutomationProperties.SetHelpText(choice,"Bu açı tüm seçili parçaların tüm kopyaları için adaydır; iplik yönüne uymayan açı seçilmez.");
         }
         advancedControls.Children.Add(customAngles);
+        var perPieceNotice=new TextBlock { Text="Adayları solda her parça satırında seçin; varsayılan dört açı, gizli seçili parçalar dahil.",TextWrapping=TextWrapping.Wrap,Width=360,Margin=new Thickness(4),Visibility=Visibility.Collapsed };
+        advancedControls.Children.Add(perPieceNotice);
         var advanced=new Expander { Header="Kumaş boyu ve iplik yönü",Content=advancedControls,Margin=new Thickness(4,0,4,0),FontSize=11 };
         DockPanel.SetDock(advanced,Dock.Top);root.Children.Add(advanced);
         void UpdateAdvancedHeader()
@@ -101,14 +110,14 @@ internal sealed class ProductionNestingWindow : Window
             var lengthSummary=string.IsNullOrWhiteSpace(fabricLength.Text) ? "boy sınırsız" : "boy sınırı girildi";
             var grainSummary=grainPolicy.SelectedIndex switch { 1 => "tek yön", 2 => "çift yön", _ => "iplik denetlenmez" };
             var customSummary=string.Join("/",new[] { (angle0,0),(angle90,90),(angle180,180),(angle270,270) }.Where(p=>p.Item1.IsChecked==true).Select(p=>$"{p.Item2}°"));
-            var rotationSummary=rotationPolicy.SelectedIndex switch { 1=>"tüm kopyalar 90°",2=>"otomatik 0°/90°",3=>"otomatik dört dik açı",4=>"özel: "+(customSummary.Length==0 ? "açı seçilmedi" : customSummary),_=>"dönüş yok" };
+            var rotationSummary=rotationPolicy.SelectedIndex switch { 1=>"tüm kopyalar 90°",2=>"otomatik 0°/90°",3=>"otomatik dört dik açı",4=>"özel: "+(customSummary.Length==0 ? "açı seçilmedi" : customSummary),5=>"parça başına adaylar",_=>"dönüş yok" };
             advanced.Header=$"Kumaş boyu ve iplik · {lengthSummary}, {grainSummary}, {rotationSummary}";
         }
         UpdateAdvancedHeader();
         AutomationProperties.SetName(grainPolicy,"İplik yönü doğrulama politikası");
         AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. 90 derece dönüşte yön doğrulaması zorunludur.");
         AutomationProperties.SetName(rotationPolicy,"Kopyaların dönüşü");
-        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa tüm kopyalara uygulanır. Otomatik seçenekler hazır veya sizin seçtiğiniz dik açıları tüm seçili parçalar için dener; en iyi yerleşimi veya her uygun çözümü bulma garantisi yoktur. İplik yönü doğrulanır; ayrı kayıt sürüm 7 gerektirir.");
+        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa tüm kopyalara uygulanır. Otomatik seçenekler ortak veya parça satırlarında ayrı seçilen dik açıları dener; en iyi yerleşimi veya her uygun çözümü bulma garantisi yoktur. İplik yönü doğrulanır; ayrı kayıt sürüm 7 gerektirir.");
         rotationPolicy.ToolTip="Dört dik açı: 0°, 90°, 180°, 270°. Otomatik deneme en iyi veya her uygun sonucu garanti etmez; iplik yönü kontrolü gerekir.";
         AutomationProperties.SetName(width,"Kumaş eni, milimetre"); AutomationProperties.SetName(gap,"Parçalar arası boşluk, milimetre");
         AutomationProperties.SetName(fabricLength,"Kullanılabilir kumaş boyu, milimetre, isteğe bağlı");
@@ -144,8 +153,23 @@ internal sealed class ProductionNestingWindow : Window
         choiceText.SetBinding(TextBlock.TextProperty,new Binding(nameof(ChoiceItem.Label)));
         checkbox.AppendChild(choiceText);
         checkbox.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,new Binding(nameof(ChoiceItem.IsSelected)) { Mode=BindingMode.TwoWay,UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged });
+        var itemPanel=new FrameworkElementFactory(typeof(StackPanel));itemPanel.AppendChild(checkbox);
+        var angleRow=new FrameworkElementFactory(typeof(WrapPanel));
+        var angleLabel=new FrameworkElementFactory(typeof(TextBlock));angleLabel.SetValue(TextBlock.TextProperty,"Aday:");angleLabel.SetValue(FrameworkElement.MarginProperty,new Thickness(4,2,2,5));angleRow.AppendChild(angleLabel);
+        var angleStyle=new Style(typeof(WrapPanel));angleStyle.Setters.Add(new Setter(UIElement.VisibilityProperty,Visibility.Collapsed));
+        var angleTrigger=new DataTrigger { Binding=new Binding(nameof(ComboBox.SelectedIndex)) { Source=rotationPolicy },Value=5 };
+        angleTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty,Visibility.Visible));angleStyle.Triggers.Add(angleTrigger);
+        angleRow.SetValue(FrameworkElement.StyleProperty,angleStyle);
+        foreach(var (property,label) in new[] { (nameof(ChoiceItem.Allow0),"0°"),(nameof(ChoiceItem.Allow90),"90°"),(nameof(ChoiceItem.Allow180),"180°"),(nameof(ChoiceItem.Allow270),"270°") })
+        {
+            var angle=new FrameworkElementFactory(typeof(CheckBox));angle.SetValue(ContentControl.ContentProperty,label);angle.SetValue(FrameworkElement.MarginProperty,new Thickness(4,2,5,5));
+            angle.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,new Binding(property) { Mode=BindingMode.TwoWay,UpdateSourceTrigger=UpdateSourceTrigger.PropertyChanged });
+            angle.SetBinding(AutomationProperties.NameProperty,new Binding(nameof(ChoiceItem.Label)) { StringFormat=$"{{0}} · aday açı {label}" });
+            angle.SetValue(AutomationProperties.HelpTextProperty,"Bu kaynak parçanın tüm kopyaları için adaydır; iplik yönüne uymayan açı kullanılmaz.");angleRow.AppendChild(angle);
+        }
+        itemPanel.AppendChild(angleRow);
         var choiceBorder=new FrameworkElementFactory(typeof(Border),"ErrorNavigationBorder");
-        choiceBorder.SetValue(Border.BorderBrushProperty,Brushes.Transparent);choiceBorder.SetValue(Border.BorderThicknessProperty,new Thickness(2));choiceBorder.SetValue(Border.CornerRadiusProperty,new CornerRadius(4));choiceBorder.AppendChild(checkbox);
+        choiceBorder.SetValue(Border.BorderBrushProperty,Brushes.Transparent);choiceBorder.SetValue(Border.BorderThicknessProperty,new Thickness(2));choiceBorder.SetValue(Border.CornerRadiusProperty,new CornerRadius(4));choiceBorder.AppendChild(itemPanel);
         var choiceTemplate=new DataTemplate { VisualTree=choiceBorder };
         var navigatedTrigger=new DataTrigger { Binding=new Binding(nameof(ChoiceItem.IsNavigationTarget)),Value=true };
         navigatedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty,StudioTheme.Accent,"ErrorNavigationBorder"));choiceTemplate.Triggers.Add(navigatedTrigger);
@@ -173,7 +197,7 @@ internal sealed class ProductionNestingWindow : Window
             var label=$"{SafeChoiceText(p.Name,100)}\nKimlik: {p.Id:D}\nEn × boy: {dimensions}\nRol: {SafeChoiceText(p.Metadata?.Role,40)} · Adet: {p.Metadata?.Quantity?.ToString(CultureInfo.InvariantCulture) ?? "belirtilmedi"}\nMalzeme: {SafeChoiceText(p.Metadata?.Material,60)} · Beden: {SafeChoiceText(p.Metadata?.Size,60)}";
             var displayedName=SafeChoiceText(p.Name,int.MaxValue);
             var choice=new ChoiceItem { Id=p.Id,Label=label,Name=p.Name,DisplayName=displayedName,IsSelected=p.Id==workspace.SelectedId };
-            choice.PropertyChanged+=(_,e)=> { if(e.PropertyName==nameof(ChoiceItem.IsSelected) && !updatingChoices){InvalidatePreview();UpdateChoiceSearchStatus();} }; choiceItems.Add(choice);
+            choice.PropertyChanged+=(_,e)=> { if(e.PropertyName==nameof(ChoiceItem.IsSelected) && !updatingChoices){InvalidatePreview();UpdateChoiceSearchStatus();} else if(rotationPolicy.SelectedIndex==5 && e.PropertyName is (nameof(ChoiceItem.Allow0) or nameof(ChoiceItem.Allow90) or nameof(ChoiceItem.Allow180) or nameof(ChoiceItem.Allow270))) InvalidatePreview(); }; choiceItems.Add(choice);
         }
         choices.Items.Filter=MatchesChoiceSearch;
         CollectionViewSource.GetDefaultView(choiceItems).Refresh();
@@ -206,7 +230,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(preview,"Dış çerçeve kumaş enini ve kullanılan boyu gösterir. Pozitif kenar payında kesik iç çerçeve kullanılabilir alanı gösterir; pay miktarı sonuç metnindedir. Fiziksel baskı ve makine uygunluğu doğrulanmaz.");
         width.TextChanged+=(_,_)=>InvalidatePreview(); fabricLength.TextChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); }; gap.TextChanged+=(_,_)=>InvalidatePreview(); edgeMargin.TextChanged+=(_,_)=>InvalidatePreview();
         grainPolicy.SelectionChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };
-        rotationPolicy.SelectionChanged+=(_,_)=> { customAngles.Visibility=rotationPolicy.SelectedIndex==4 ? Visibility.Visible : Visibility.Collapsed;UpdateAdvancedHeader();InvalidatePreview(); };
+        rotationPolicy.SelectionChanged+=(_,_)=> { customAngles.Visibility=rotationPolicy.SelectedIndex==4 ? Visibility.Visible : Visibility.Collapsed;perPieceNotice.Visibility=rotationPolicy.SelectedIndex==5 ? Visibility.Visible : Visibility.Collapsed;UpdateAdvancedHeader();InvalidatePreview(); };
         foreach(var choice in new[]{angle0,angle90,angle180,angle270})
         { choice.Checked+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };choice.Unchecked+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); }; }
         calculate.Click+=async (_,_)=>await Calculate();
@@ -458,11 +482,14 @@ internal sealed class ProductionNestingWindow : Window
         var ids=choiceItems.Where(c=>c.IsSelected).Select(c=>c.Id).ToArray();
         var grainMode=grainPolicy.SelectedIndex;
         var rotationMode=rotationPolicy.SelectedIndex;
-        if(rotationMode is <0 or >4 || (rotationMode!=0 && grainMode is not (1 or 2)))
+        if(rotationMode is <0 or >5 || (rotationMode!=0 && grainMode is not (1 or 2)))
         { InvalidatePreview();SetStatus("Dönüş için tek veya çift yön iplik kontrolü seçin.");return; }
         var chosenAngles=new[] { (angle0,0),(angle90,90),(angle180,180),(angle270,270) }.Where(p=>p.Item1.IsChecked==true).Select(p=>p.Item2).ToArray();
         if(rotationMode==4 && chosenAngles.Length==0)
         { InvalidatePreview();SetStatus("En az bir aday açı seçin.");return; }
+        var perPieceAngles=rotationMode==5 ? choiceItems.Where(c=>c.IsSelected).ToDictionary(c=>c.Id,c=>(IReadOnlyList<int>)c.AllowedAngles()) : null;
+        if(perPieceAngles is not null && perPieceAngles.Any(p=>p.Value.Count==0))
+        { InvalidatePreview();SetStatus("Seçili her parça için listede en az bir aday açı seçin; aramayla gizlenmiş seçimleri de kontrol edin.");return; }
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
@@ -493,7 +520,7 @@ internal sealed class ProductionNestingWindow : Window
                     else
                     {
                         IReadOnlyList<int> candidateAngles=rotationMode==2 ? [0,90] : rotationMode==3 ? [0,90,180,270] : chosenAngles;
-                        var allowed=ids.ToDictionary(id=>id,_=>candidateAngles);
+                        var allowed=perPieceAngles ?? ids.ToDictionary(id=>id,_=>candidateAngles);
                         rotated=AutomaticPerCopyNesting.Arrange(snapshot,ids,allowed,w,g,length,m,direction,0,token);
                         if(!PerCopyTraceVerifier.IsValidForAllowedAngles(snapshot,ids,rotated,allowed,direction,0,w,g,m,length,token))
                             throw new InvalidOperationException("Otomatik açılar veya kopya izi doğrulanamadı; önizleme hazırlanmadı.");
@@ -565,7 +592,7 @@ internal sealed class ProductionNestingWindow : Window
             var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
                 ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
                 : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
-            var rotationNotice=previewRotation switch { 1=>" Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.",2=>" 0°/90° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",3=>" 0°/90°/180°/270° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",4=>$" Aday açılar: {string.Join(", ",chosenAngles.Select(a=>$"{a}°"))}; tüm seçili parçalara uygulanır. Otomatik deneme en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; adaylar ve deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",_=>"" };
+            var rotationNotice=previewRotation switch { 1=>" Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.",2=>" 0°/90° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",3=>" 0°/90°/180°/270° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",4=>$" Aday açılar: {string.Join(", ",chosenAngles.Select(a=>$"{a}°"))}; tüm seçili parçalara uygulanır. Otomatik deneme en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; adaylar ve deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",5=>" Her parça için listedeki aday açılar denendi; en iyi veya her uygun çözüm garanti edilmez. Kopya açıları sürüm 7'de saklanır; parça adayları ve deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",_=>"" };
             SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}{rotationNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }

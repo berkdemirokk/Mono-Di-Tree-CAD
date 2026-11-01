@@ -3906,6 +3906,28 @@ internal static class DesktopVerification
             angle180.IsChecked=false;
             Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
                 "Changing an individual candidate invalidates custom preview",checks);
+            rotation.SelectedIndex=5;
+            var first=items[0]!;var second=items[1]!;
+            void SetAllowed(object item,string field,bool value)=>item.GetType().GetProperty(field)!.SetValue(item,value);
+            foreach(var field in new[] { "Allow0","Allow90","Allow180","Allow270" }) { SetAllowed(first,field,false);SetAllowed(second,field,false); }
+            SetAllowed(second,"Allow270",true);Calculate();
+            Check(!save.IsEnabled && status.Text.Contains("her parça") && DocumentSession.ContentEquals(before,studio.Document),
+                "Per-piece nesting rejects an empty candidate set without changing source",checks);
+            SetAllowed(first,"Allow180",true);Calculate();
+            var individual=(ProjectDocument?)preview.GetType().GetProperty("Drawing")!.GetValue(preview);
+            var individualCopies=individual?.NestingSnapshot?.RotationTrace?.Copies;
+            Check(individualCopies is { Count:2 } && individualCopies.Any(c=>c.SourcePieceId==a.Id && c.Degrees==180) &&
+                individualCopies.Any(c=>c.SourcePieceId==b.Id && c.Degrees==270) && individual!.Pieces.All(p=>p.Notches is { Count:1 } &&
+                p.Notches[0].Position==p.Points[1]) && save.IsEnabled && status.Text.Contains("adayları ve deneme politikası saklanmaz") &&
+                DocumentSession.ContentEquals(before,studio.Document),"Individual candidate sets preserve marks, grain and copy mapping",checks);
+            var individualVersion=(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
+            var individualPath=Path.Combine(work,$"individual-angles-{Guid.NewGuid():N}.tcad");
+            var individualExpected=window.CaptureLayoutDestination(individualPath,individualVersion,individual!);
+            var individualSave=window.StartSaveLayoutAsync(individualPath,individualVersion,individual!,individualExpected);PumpUntil(()=>individualSave.IsCompleted);individualSave.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(individual!,ProjectStorage.Load(individualPath)),"Individual angle choices retain verified v7 copy trace on reopen",checks);
+            SetAllowed(first,"Allow0",true);
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
+                "Changing one source candidate invalidates per-piece preview",checks);
         }
         finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
