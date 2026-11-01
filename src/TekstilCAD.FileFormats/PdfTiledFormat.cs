@@ -7,7 +7,9 @@ namespace TekstilCAD.FileFormats;
 /// <summary>A4 portrait inspection sheets, ordered across each row from the top left.</summary>
 public static class PdfTiledFormat
 {
-    private const double Scale=72.0/25.4, Margin=10, TileWidth=190, TileHeight=277;
+    // Reserve a 10 mm printable perimeter plus separate 10 mm strips for
+    // labels and calibration; neither strip overlaps the joining frame.
+    private const double Scale=72.0/25.4, Margin=10, FrameY=20, TileWidth=190, TileHeight=257;
     private const int MaximumPages=100;
     private const long MaximumPointPages=2_000_000;
     private static string F(double value)=>value.ToString("0.######",CultureInfo.InvariantCulture);
@@ -34,17 +36,17 @@ public static class PdfTiledFormat
             var body=new StringBuilder();
             // The grey frame is the exact joining edge; only contour ink inside
             // the frame is printed. Neighbouring frames share the same model edge.
-            body.Append($"0.65 G 0.3 w {F(Margin*Scale)} {F(Margin*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re S\n");
-            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(292*Scale)} Td (ROW {row+1}/{rows}  COL {col+1}/{cols}  PAGE {row*cols+col+1}/{pageCount}  PRINT 100 PERCENT) Tj ET\n");
-            body.Append($"0 G 0.5 w {F(10*Scale)} {F(5*Scale)} m {F(60*Scale)} {F(5*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(4*Scale)} Td (50 MM CHECK) Tj ET\n");
-            body.Append($"q {F(Margin*Scale)} {F(Margin*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re W n 0 G 0.5 w 1 J 1 j\n");
+            body.Append($"0.65 G 0.3 w {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re S\n");
+            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (ROW {row+1}/{rows}  COL {col+1}/{cols}  PAGE {row*cols+col+1}/{pageCount}  PRINT 100 PERCENT) Tj ET\n");
+            body.Append($"0 G 0.5 w {F(10*Scale)} {F(15*Scale)} m {F(60*Scale)} {F(15*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(14*Scale)} Td (50 MM CHECK) Tj ET\n");
+            body.Append($"q {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re W n 0 G 0.5 w 1 J 1 j\n");
             foreach(var piece in copy.Pieces)
             {
                 string? first=null,previous=null;
                 foreach(var p in piece.Points)
                 {
                     var x=(Margin+p.X-minX-col*TileWidth)*Scale;
-                    var y=(Margin+TileHeight+row*TileHeight-(p.Y-minY))*Scale;
+                    var y=(FrameY+TileHeight+row*TileHeight-(p.Y-minY))*Scale;
                     var point=F(x)+" "+F(y);
                     if(previous==point)throw new InvalidDataException("A4 PDF koordinat hassasiyeti bir kenarı sıfıra indirdi; çıktı oluşturulmadı.");
                     body.Append(point).Append(first is null ? " m\n" : " l\n");first??=point;previous=point;
