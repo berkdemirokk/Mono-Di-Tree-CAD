@@ -2853,6 +2853,7 @@ private struct PieceOverlayView: View {
     @State private var showSecond = true
     @State private var shiftX = 0.0
     @State private var shiftY = 0.0
+    @State private var shiftStep = 1.0
     @State private var shiftError: String?
     @State private var showingNumericShift = false
     @State private var shiftXText = "0"
@@ -2886,20 +2887,26 @@ private struct PieceOverlayView: View {
                 Toggle("İkinci: \(secondIndex + 1). \(second.displayName(index: secondIndex)) · kesik çizgi", isOn: $showSecond)
                 Text("İkinci parçanın görsel kaydırması: X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") mm")
                     .font(.caption)
+                Picker("Görsel kaydırma adımı", selection: $shiftStep) {
+                    Text("0,5 mm").tag(0.5)
+                    Text("1 mm").tag(1.0)
+                    Text("5 mm").tag(5.0)
+                    Text("10 mm").tag(10.0)
+                }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
-                    Button("İkinciyi sola") { shift(dx: -1, dy: 0) }
-                    Button("İkinciyi sağa") { shift(dx: 1, dy: 0) }
-                    Button("İkinciyi yukarı") { shift(dx: 0, dy: -1) }
-                    Button("İkinciyi aşağı") { shift(dx: 0, dy: 1) }
+                    Button("İkinciyi sola") { shift(dx: -shiftStep, dy: 0) }
+                    Button("İkinciyi sağa") { shift(dx: shiftStep, dy: 0) }
+                    Button("İkinciyi yukarı") { shift(dx: 0, dy: -shiftStep) }
+                    Button("İkinciyi aşağı") { shift(dx: 0, dy: shiftStep) }
                 }.font(.caption)
                 Button("Kaydırmayı sayısal gir…") {
-                    shiftXText = String(Int(shiftX)); shiftYText = String(Int(shiftY))
+                    shiftXText = String(shiftX); shiftYText = String(shiftY)
                     shiftError = nil; showingNumericShift = true
                 }
                 .font(.caption)
                 Button("Görsel hizalamayı sıfırla") { shiftX = 0; shiftY = 0; shiftError = nil }
                     .font(.caption)
-                Text("Her adım 1 mm'dir. Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
+                Text("Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let shiftError { Text(shiftError).font(.caption).foregroundStyle(.secondary) }
                 Canvas { context, size in
@@ -2929,13 +2936,13 @@ private struct PieceOverlayView: View {
             .sheet(isPresented: $showingNumericShift) {
                 NavigationStack {
                     Form {
-                        Text("İkinci parçanın yalnızca görsel kaydırmasını tam milimetre olarak girin (−10.000 ile 10.000). Kaynak dosya değişmez.")
+                        Text("İkinci parçanın yalnızca görsel kaydırmasını tam veya yarım milimetre olarak girin (−10.000 ile 10.000). Ondalık için nokta veya virgül kullanın. Kaynak dosya değişmez.")
                         TextField("X kaydırması (mm)", text: $shiftXText).keyboardType(.numbersAndPunctuation)
                         TextField("Y kaydırması (mm)", text: $shiftYText).keyboardType(.numbersAndPunctuation)
                         if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
                         Button("Görsel kaydırmayı uygula") {
-                            guard let x = ContourOverlay.integerShift(shiftXText), let y = ContourOverlay.integerShift(shiftYText) else {
-                                shiftError = "Her iki eksen için −10.000 ile 10.000 arasında tam sayı girin."
+                            guard let x = ContourOverlay.halfMillimeterShift(shiftXText), let y = ContourOverlay.halfMillimeterShift(shiftYText) else {
+                                shiftError = "Her iki eksen için −10.000 ile 10.000 arasında tam veya yarım milimetre girin."
                                 return
                             }
                             if applyShift(x: x, y: y) { showingNumericShift = false }

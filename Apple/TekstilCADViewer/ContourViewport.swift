@@ -31,12 +31,23 @@ struct ContourBounds {
 enum ContourOverlay {
     // Strictly below 0.001 mm even though that decimal is not exactly binary64.
     static let maximumError = 0.001.nextDown
-    static func integerShift(_ text: String) -> Double? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.utf8.count <= 6, let value = Int(trimmed), (-10_000...10_000).contains(value) else { return nil }
-        return Double(value)
+    // Half-millimetre increments are exactly representable in binary64.
+    // Accept dot or comma, but reject exponents and ambiguous grouping.
+    static func halfMillimeterShift(_ text: String) -> Double? {
+        let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty, input.utf8.count <= 8 else { return nil }
+        let negative = input.first == "-"
+        let unsigned = (input.first == "-" || input.first == "+") ? String(input.dropFirst()) : input
+        let parts = unsigned.replacingOccurrences(of: ",", with: ".").split(separator: ".", omittingEmptySubsequences: false)
+        guard (1...2).contains(parts.count), !parts[0].isEmpty,
+              parts[0].utf8.allSatisfy({ (48...57).contains($0) }), let whole = Int(parts[0]),
+              whole <= 10_000 else { return nil }
+        let fraction = parts.count == 2 ? String(parts[1]) : "0"
+        guard fraction == "0" || fraction == "5" else { return nil }
+        let value = Double(whole) + (fraction == "5" ? 0.5 : 0)
+        guard value <= 10_000 else { return nil }
+        return negative ? -value : value
     }
-
     // TwoSum gives the exact residual of each finite binary64 addition under
     // IEEE round-to-nearest with gradual underflow. The positive accumulator is
     // rounded upward after every nonzero contribution, including all vertices.

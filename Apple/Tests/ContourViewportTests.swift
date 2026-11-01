@@ -4,16 +4,19 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
-    func testNumericOverlayShiftAcceptsOnlyBoundedWholeMillimeters() {
-        XCTAssertEqual(ContourOverlay.integerShift("  -10000  "), -10_000)
-        XCTAssertEqual(ContourOverlay.integerShift("+250"), 250)
-        XCTAssertEqual(ContourOverlay.integerShift("0"), 0)
-        XCTAssertNil(ContourOverlay.integerShift("10001"))
-        XCTAssertNil(ContourOverlay.integerShift("-10001"))
-        XCTAssertNil(ContourOverlay.integerShift("1.5"))
-        XCTAssertNil(ContourOverlay.integerShift("1,5"))
-        XCTAssertNil(ContourOverlay.integerShift("NaN"))
-        XCTAssertNil(ContourOverlay.integerShift(String(repeating: "9", count: 1000)))
+    func testNumericOverlayShiftAcceptsExactlyRepresentableHalfMillimeters() {
+        XCTAssertEqual(ContourOverlay.halfMillimeterShift("  -10000  "), -10_000)
+        XCTAssertEqual(ContourOverlay.halfMillimeterShift("+250"), 250)
+        XCTAssertEqual(ContourOverlay.halfMillimeterShift("-0,5"), -0.5)
+        XCTAssertEqual(ContourOverlay.halfMillimeterShift("9999.5"), 9999.5)
+        XCTAssertEqual(ContourOverlay.halfMillimeterShift("0.0"), 0)
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("10000.5"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("-10001"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("1.25"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("1,5.0"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("1e3"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift("NaN"))
+        XCTAssertNil(ContourOverlay.halfMillimeterShift(String(repeating: "9", count: 1000)))
     }
     func testOverlayBoundAcceptsOrdinaryDecimalsButRejectsLargeAndAccumulatedErrors() throws {
         let ordinaryPoints = [p(-0.1, 0), p(0.3, 1)]
