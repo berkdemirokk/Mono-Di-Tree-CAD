@@ -28,6 +28,11 @@ struct TekstilCADViewerApp: App {
     }
 }
 
+private enum ModelLibrarySortOrder: String, CaseIterable, Identifiable {
+    case name = "Ada göre"
+    case newest = "En yeni önce"
+    var id: String { rawValue }
+}
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
@@ -38,6 +43,10 @@ private struct ContentView: View {
     @State private var showingNotches = false
     @State private var selectedNotch: (piece: Int, point: Int)?
     @State private var showingLibrary = false
+    @State private var librarySearch = ""
+    @State private var librarySortOrder: ModelLibrarySortOrder = .name
+    @State private var libraryFilter: ModelStore.LibraryFilter = .all
+    @State private var librarySearchContents = false
     @State private var showingExporter = false
     @State private var showingExportWarning = false
     @State private var exportDocument: ProjectExportDocument?
@@ -579,7 +588,8 @@ private struct ContentView: View {
         } message: { Text("Yeni bir model kopyası kaydedilir; açık dosya değişmez. Kayıtlı pastal ve içe aktarma geçmişi eski parça adını veya önceki durumu gösterebilir. Parça adı en fazla 1024 UTF-16 birimi olabilir.") }
         #endif
         .sheet(isPresented: $showingLibrary) {
-            ModelLibrary { entry in
+            ModelLibrary(search: $librarySearch, sortOrder: $librarySortOrder,
+                         libraryFilter: $libraryFilter, searchContents: $librarySearchContents) { entry in
                 showingLibrary = false
                 openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry)
             }
@@ -1469,14 +1479,15 @@ enum ModelStore {
 }
 
 private struct ModelLibrary: View {
+    @Binding var search: String
+    @Binding var sortOrder: ModelLibrarySortOrder
+    @Binding var libraryFilter: ModelStore.LibraryFilter
+    @Binding var searchContents: Bool
     let open: (ModelStore.Entry) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
     @State private var modelsRevision = UUID()
-    @State private var search = ""
-    @State private var sortOrder: SortOrder = .name
-    @State private var libraryFilter: ModelStore.LibraryFilter = .all
-    @State private var searchContents = false
+
     @State private var contentPage = ModelStore.ContentPageNavigation()
     @State private var contentRetry = UUID()
     @State private var error: String?
@@ -1494,11 +1505,6 @@ private struct ModelLibrary: View {
     @State private var didSimulateLoadFailure = false
     #endif
 
-    private enum SortOrder: String, CaseIterable, Identifiable {
-        case name = "Ada göre"
-        case newest = "En yeni önce"
-        var id: String { rawValue }
-    }
 
     private struct FilterKey: Hashable {
         let query: String
@@ -1650,7 +1656,7 @@ private struct ModelLibrary: View {
                             }
                         }
                         Picker("Sıralama", selection: $sortOrder) {
-                            ForEach(SortOrder.allCases) { order in
+                            ForEach(ModelLibrarySortOrder.allCases) { order in
                                 Text(order.rawValue).tag(order)
                             }
                         }

@@ -1860,10 +1860,17 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["1 kayıttan 0 tanesi gösteriliyor"].exists)
         app.buttons["Aramayı temizle"].tap()
         XCTAssertTrue(savedModel.waitForExistence(timeout: 5))
-        savedModel.tap()
+        search.tap(); search.typeText("Deneme")
+        XCTAssertTrue(savedModel.waitForExistence(timeout: 5)); savedModel.tap()
         XCTAssertTrue(app.staticTexts["Seçim Testi"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists)
+        app.buttons["Modellerim"].tap()
+        let restoredSearch = app.searchFields.firstMatch
+        XCTAssertTrue(restoredSearch.waitForExistence(timeout: 5))
+        XCTAssertEqual(restoredSearch.value as? String, "Deneme")
+        XCTAssertTrue(savedModel.waitForExistence(timeout: 10))
+
     }
 
     func testLibraryCanSearchPieceMaterial() throws {
