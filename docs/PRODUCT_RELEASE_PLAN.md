@@ -1,6 +1,6 @@
 # Ticari ürün çıkış planı
 
-Hedef: çevrimdışı Windows tekstil CAD ürünü. Görsel tasarım tek başına satışa hazır olma kriteri değildir. Her madde çalışan kod, veri koruma testi ve operatör kabulüyle kapatılır.
+Hedef: 499 USD tek seferlik, çevrimdışı Windows tekstil CAD ürünü. Ücretli servis veya yerel AI gerektirmez. Görsel tasarım tek başına satışa hazır olma kriteri değildir. Her madde çalışan kod, veri koruma testi ve operatör kabulüyle kapatılır. [Rakip ve fiyat kanıtı](COMPETITOR_EVIDENCE_2026-11-01.md), ürünün henüz satışa hazır olduğunu göstermez.
 
 ## Şimdiki doğrulanabilir aşama — 0.2 önizleme
 
@@ -25,11 +25,11 @@ Yerel WPF uygulaması; tutarlı arayüz ve komut durumları; geometri/serileme/t
 - DPI/çoklu ekran/klavye/erişilebilirlik ve gerçek operatör iş akışı kabulü.
 - Hata günlükleri, veri dışa aktarma/yedekleme ve destek tanılama süreci.
 
-## Ticari hizmetler
+## Tek seferlik lisans ve destek
 
-- Lisans etkinleştirme/çevrimdışı süre ve cihaz değişikliği akışı; imza anahtarları yalnızca güvenli sunucuda.
-- Firma/rol/yetki, satış ve abonelik yönetimi; ayrıca yetkilendirilmiş ödeme sağlayıcısı entegrasyonu.
-- Bağımlılık bildirimi, müşteri sözleşmesi/destek süreci ve pilot kullanıcı geri bildirimi.
+- Tek seferlik lisansın kapsamı, çevrimdışı kullanım, cihaz değişikliği ve anahtar kurtarma akışı; anahtar üretimi ve dağıtımı için güvenli işletim modeli.
+- Zorunlu abonelik, ücretli servis veya yerel AI gerektirmeden satış ve destek sürecinin tanımlanması; ödeme entegrasyonu mevcut kabul edilmez.
+- Bağımlılık bildirimi, müşteri sözleşmesi, güncelleme ve destek süresi ile pilot kullanıcı geri bildirimi.
 
 ## Fiziksel makine
 

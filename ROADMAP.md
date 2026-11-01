@@ -7,6 +7,6 @@ Her aşamada kaynak, temiz derleme, otomatik test, gerçek UI kullanımı, kayı
 3. **CAD veri modeli:** Analitik yay/Bézier, pens, çentik metaverisi, katmanlar, çoklu seçim, birleştirme, hassas ölçülendirme ve kontur düzenleme.
 4. **Dosya uyumluluğu:** ASCII DXF alt kümesinden INSERT/bulge desteğine; ölçü/katman/çentik/beden korunumu için kontrollü AAMA/ASTM örnek kümesi. PDF ve HPGL içe aktarımı ayrıca geliştirilmeli.
 5. **Makine merkezi:** Yerel simülasyon sonrası kuyruk kurtarma ve kalibrasyon. Her gerçek model için üretici protokolü, fiziksel test ve ayrı doğrulama kaydı gerekir.
-6. **Ticari hizmet:** Lisans doğrulayıcıdan aktivasyon, güvenilir zaman, iptal, kullanıcı/firma hesabı, rol ve abonelik hizmetine. Canlı ödeme entegrasyonu mevcut değildir.
+6. **Tek seferlik ticari ürün:** 499 USD hedefi için çevrimdışı lisans kullanımı, cihaz değişikliği, anahtar kurtarma, destek ve güncelleme koşullarını tanımla ve doğrula. Zorunlu abonelik veya ücretli servis ekleme; canlı ödeme entegrasyonu mevcut değildir.
 7. **Dağıtım:** Taşınabilir paket, temiz makine testi, imzalı yükleyici/güncelleme, lisans bildirimleri ve kaynak yedek doğrulaması.
-8. **Çok platform ve AI:** Windows doğrulamasından sonra Uno/iPad/macOS/iPhone; macOS/Xcode ortamı kontrolü. AI önerileri çekirdek geometriyle doğrulanmalı, temel kullanım API'ye bağımlı olmamalı.
+8. **Çok platform:** Windows doğrulamasından sonra Uno/iPad/macOS/iPhone; macOS/Xcode ortamı kontrolü. Fotoğraftan kalıp ve temel kullanım için yerel AI veya ücretli API kullanılmaz.
