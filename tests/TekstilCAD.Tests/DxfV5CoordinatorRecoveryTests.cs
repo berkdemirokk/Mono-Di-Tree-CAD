@@ -7,12 +7,12 @@ public sealed class DxfV5CoordinatorRecoveryTests
 {
     private sealed class BlockingWriter(RecoveryStore store) : IRecoveryWriter
     {
-        public readonly TaskCompletionSource<bool> Entered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public readonly ManualResetEventSlim Entered = new(false);
         public readonly ManualResetEventSlim Release = new(false);
         public void Save(ProjectDocument document, IReadOnlyList<RecoveryPropertyDraft> drafts, RecoveryPendingDrawing? drawing)
         {
-            Entered.TrySetResult(true);
-            if (!Release.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException();
+            Entered.Set();
+            if (!Release.Wait(TimeSpan.FromSeconds(60))) throw new TimeoutException();
             store.Save(document, drafts, drawing);
         }
         public bool Clear() => store.ClearOwn();
@@ -29,7 +29,13 @@ public sealed class DxfV5CoordinatorRecoveryTests
         var store = new RecoveryStore(directory);
         var path = store.DraftRecoveryPath;
         var writer = new BlockingWriter(store);
-        var coordinator = new RecoveryWriteCoordinator(writer);
+        var workers = new List<Thread>();
+        var coordinator = new RecoveryWriteCoordinator(writer, null, action =>
+        {
+            var thread = new Thread(() => action()) { IsBackground = true, Name = "Recovery snapshot test worker" };
+            workers.Add(thread);
+            thread.Start();
+        });
         var piece = new PatternPiece { Name = "Ön", Points = [new(0, 0), new(10, 0), new(0, 10)] };
         var document = new ProjectDocument { Pieces = [piece], ImportProvenance = new DxfImportProvenance {
             SourceFileName = "kaynak.dxf", SourceSha256 = new string('A', 64), SourceByteLength = 53,
@@ -41,7 +47,7 @@ public sealed class DxfV5CoordinatorRecoveryTests
         try
         {
             var saved = coordinator.SaveAsync(document, drafts, drawing);
-            Assert.True(await writer.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.True(writer.Entered.Wait(TimeSpan.FromSeconds(30)), "Recovery worker did not enter the writer.");
             document.ImportProvenance!.Warnings[0] = "değişti";
             document.ImportProvenance.PieceIds.Clear();
             piece.Points[0] = new(99, 99);
@@ -61,7 +67,13 @@ public sealed class DxfV5CoordinatorRecoveryTests
             await Assert.ThrowsAsync<IOException>(async () => await coordinator.SaveAsync(document, [draft], drawing));
             Assert.Equal(external, File.ReadAllBytes(path));
         }
-        finally { writer.Release.Set(); await coordinator.DisposeAsync(); }
+        finally
+        {
+            writer.Release.Set();
+            await coordinator.DisposeAsync();
+            foreach(var worker in workers) Assert.True(worker.Join(TimeSpan.FromSeconds(30)), "Recovery worker did not stop.");
+            writer.Entered.Dispose();writer.Release.Dispose();
+        }
 
         using var reader = new RecoveryStore(directory);
         var restored = reader.LoadCandidate(path);

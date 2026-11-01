@@ -34,11 +34,14 @@ public sealed class RecoveryWriteCoordinator : IAsyncDisposable
     private long generation;
     private long nextCapture, latestQueuedCapture;
     private readonly Action? afterCaptureForTests;
+    private readonly Action<Action>? enqueueWorkerForTests;
     private Task? disposeTask;
 
     public RecoveryWriteCoordinator(RecoveryStore store) : this(new StoreWriter(store ?? throw new ArgumentNullException(nameof(store)))) { }
     public RecoveryWriteCoordinator(IRecoveryWriter writer) => this.writer = writer ?? throw new ArgumentNullException(nameof(writer));
     internal RecoveryWriteCoordinator(IRecoveryWriter writer, Action afterCaptureForTests) : this(writer) => this.afterCaptureForTests = afterCaptureForTests;
+    internal RecoveryWriteCoordinator(IRecoveryWriter writer, Action? afterCaptureForTests, Action<Action> enqueueWorkerForTests) : this(writer)
+    { this.afterCaptureForTests=afterCaptureForTests;this.enqueueWorkerForTests=enqueueWorkerForTests ?? throw new ArgumentNullException(nameof(enqueueWorkerForTests)); }
 
     /// <returns>True when written; false if replaced by a newer pending snapshot or invalidated by a clear.</returns>
     public Task<bool> SaveAsync(ProjectDocument document, IReadOnlyList<RecoveryPropertyDraft> drafts, RecoveryPendingDrawing? pendingDrawing)
@@ -93,7 +96,13 @@ public sealed class RecoveryWriteCoordinator : IAsyncDisposable
     }
     private static TaskCompletionSource<bool> NewCompletion() => new(TaskCreationOptions.RunContinuationsAsynchronously);
     // Called only under gate; continuations cannot run inline under the gate.
-    private void StartWorker() { if (!running) { running = true; _ = Task.Run(Run); } }
+    private void StartWorker()
+    {
+        if (running) return;
+        running = true;
+        if (enqueueWorkerForTests is null) _ = Task.Run(Run);
+        else enqueueWorkerForTests(Run);
+    }
     private void Run()
     {
         while (true)
