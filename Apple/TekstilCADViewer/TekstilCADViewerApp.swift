@@ -506,9 +506,13 @@ private struct ContentView: View {
                 }
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-import") {
                     let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
-                    var large = Data("[6,".utf8)
-                    large.append(Data(repeating: 32, count: LosslessProjectName.maximumEditBytes))
-                    large.append(Data(#"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#.utf8))
+                    let utf16 = ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-utf16be")
+                    let width = utf16 ? 2 : 1
+                    let text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
+                        + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+                    var large = utf16 ? Data([0xfe, 0xff]) : Data()
+                    guard let encoded = text.data(using: utf16 ? .utf16BigEndian : .utf8) else { throw ViewerError.message("Test verisi kodlanamadı.") }
+                    large.append(encoded)
                     try large.write(to: largeURL)
                     openModel(largeURL, imported: true)
                 }
@@ -549,7 +553,7 @@ private struct ContentView: View {
                 let data: Data
                 if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
                 else { data = try Drawing.readData(url) }
-                if imported && LosslessProjectName.isOversizedUTF8VersionSix(data) { return .oversizedRaw(data) }
+                if imported && LosslessProjectName.isOversizedVersionSix(data) { return .oversizedRaw(data) }
                 return .preview(try Drawing.load(data), data)
             }
             DispatchQueue.main.async {
@@ -1468,7 +1472,7 @@ private struct Drawing {
 
     static func load(_ data: Data) throws -> Drawing {
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        if LosslessProjectName.isOversizedUTF8VersionSix(data) {
+        if LosslessProjectName.isOversizedVersionSix(data) {
             throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.")
         }
         let root = try JSONSerialization.jsonObject(with: data)

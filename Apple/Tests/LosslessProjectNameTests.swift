@@ -3,18 +3,33 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
-    func testOversizedVersionSixPreflightRecognizesOnlyExactUTF8Envelope() {
+    func testOversizedVersionSixPreflightRecognizesExactEncodedEnvelope() {
         let limit = LosslessProjectName.maximumEditBytes
         func sample(_ prefix: [UInt8], count: Int) -> Data {
             var data = Data(prefix)
             if count > data.count { data.append(Data(repeating: 32, count: count - data.count)) }
             return data
         }
-        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[6,".utf8), count: limit)))
-        XCTAssertTrue(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[ 6 ,".utf8), count: limit + 1)))
-        XCTAssertTrue(LosslessProjectName.isOversizedUTF8VersionSix(sample([0xef, 0xbb, 0xbf] + Array("\n[6,".utf8), count: limit + 1)))
-        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[6.0,".utf8), count: limit + 1)))
-        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[5,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6,".utf8), count: limit)))
+        XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample(Array("[ 6 ,".utf8), count: limit + 1)))
+        XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample([0xef, 0xbb, 0xbf] + Array("\n[6,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6.0,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[5,".utf8), count: limit + 1)))
+        let encodings: [(String.Encoding, [UInt8])] = [
+            (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
+            (.utf32LittleEndian, [0xff, 0xfe, 0x00, 0x00]), (.utf32BigEndian, [0x00, 0x00, 0xfe, 0xff])
+        ]
+        for (encoding, bom) in encodings {
+            let prefix = bom + Array(" \n[ 6 ,".data(using: encoding)!)
+            XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(sample(prefix, count: limit + 1)))
+            let decimal = bom + Array("[6.0,".data(using: encoding)!)
+            XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(decimal, count: limit + 1)))
+            let other = bom + Array("[60,".data(using: encoding)!)
+            XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(other, count: limit + 1)))
+        }
+        let tooLate = Array(String(repeating: " ", count: 4095).utf8) + Array("[6,".utf8)
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(tooLate, count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6,".utf8), count: 64 * 1024 * 1024 + 1)))
     }
 
     private func replace(_ input: String, with name: String = "New") throws -> String {

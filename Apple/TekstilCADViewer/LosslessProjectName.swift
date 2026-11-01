@@ -4,18 +4,32 @@ import CoreFoundation
 /// Replaces only the root project name token, leaving all other bytes untouched.
 enum LosslessProjectName {
     static let maximumEditBytes = 8 * 1024 * 1024
-    // Recognize the normal UTF-8 v6 envelope without parsing or copying the
-    // rest of a large document. This is a size preflight, not validation.
-    static func isOversizedUTF8VersionSix(_ data: Data) -> Bool {
-        guard data.count > maximumEditBytes else { return false }
+    // Only inspect a bounded prefix. The envelope hint permits raw recovery;
+    // it does not establish that the rest of the file is valid JSON.
+    static func isOversizedVersionSix(_ data: Data) -> Bool {
+        guard data.count > maximumEditBytes, data.count <= 64 * 1024 * 1024 else { return false }
         return data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
-            var i = bytes.count >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf ? 3 : 0
-            func next() -> UInt8? {
-                while i < bytes.count && [9, 10, 13, 32].contains(bytes[i]) { i += 1 }
-                guard i < bytes.count else { return nil }
-                defer { i += 1 }
-                return bytes[i]
+            let limit = min(bytes.count, 4096)
+            var i = 0, width = 1
+            var littleEndian = false
+            if bytes.starts(with: [0xff, 0xfe, 0x00, 0x00]) { i = 4; width = 4; littleEndian = true }
+            else if bytes.starts(with: [0x00, 0x00, 0xfe, 0xff]) { i = 4; width = 4 }
+            else if bytes.starts(with: [0xff, 0xfe]) { i = 2; width = 2; littleEndian = true }
+            else if bytes.starts(with: [0xfe, 0xff]) { i = 2; width = 2 }
+            else if bytes.starts(with: [0xef, 0xbb, 0xbf]) { i = 3 }
+            func next() -> UInt32? {
+                while i + width <= limit {
+                    var unit: UInt32 = 0
+                    for offset in 0..<width {
+                        if littleEndian { unit |= UInt32(bytes[i + offset]) << (8 * offset) }
+                        else { unit = (unit << 8) | UInt32(bytes[i + offset]) }
+                    }
+                    i += width
+                    if unit == 9 || unit == 10 || unit == 13 || unit == 32 { continue }
+                    return unit
+                }
+                return nil
             }
             return next() == 91 && next() == 54 && next() == 44
         }

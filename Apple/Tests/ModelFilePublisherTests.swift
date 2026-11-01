@@ -12,6 +12,32 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testEncodedOversizedRawRecoveryPreservesSourceBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let variants: [(String.Encoding, [UInt8], Int)] = [
+            (.utf16BigEndian, [0xfe, 0xff], 2), (.utf32LittleEndian, [0xff, 0xfe, 0, 0], 4)
+        ]
+        for (index, variant) in variants.enumerated() {
+            let (encoding, bom, width) = variant
+            let text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width) + "{}]"
+            var bytes = Data(bom)
+            bytes.append(try XCTUnwrap(text.data(using: encoding)))
+            XCTAssertTrue(LosslessProjectName.isOversizedVersionSix(bytes))
+            let source = root.appendingPathComponent("source-\(index).tcad")
+            let staging = root.appendingPathComponent("staging-\(index)")
+            let destination = root.appendingPathComponent("copy-\(index).tcadraw")
+            try bytes.write(to: source)
+            try ModelFilePublisher.publish(bytes, staging: staging, destination: destination)
+            let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == destination })
+            XCTAssertFalse(entry.canOpen)
+            XCTAssertTrue(entry.requiresRecovery)
+            XCTAssertEqual(try ModelStore.readListedPayload(entry), bytes)
+            XCTAssertEqual(try Data(contentsOf: source), bytes)
+        }
+    }
+
     func testRawLibraryRecordIsRecoverableButNeverOfferedAsPreview() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

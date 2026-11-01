@@ -2,9 +2,18 @@ import XCTest
 
 final class ViewerUITests: XCTestCase {
     func testOversizedV6ImportOffersUnvalidatedRawRecovery() {
+        assertOversizedV6RawRecovery(utf16: false)
+    }
+
+    func testOversizedUTF16V6ImportKeepsPreviousModelAndOffersRawRecovery() {
+        assertOversizedV6RawRecovery(utf16: true)
+    }
+
+    private func assertOversizedV6RawRecovery(utf16: Bool) {
         let fixture = #"{"Name":"Önceki","Pieces":[]}"#
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-large-v6-import"]
+        if utf16 { app.launchArguments.append("--ui-test-large-v6-utf16be") }
         app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
         app.launch()
         let warning = app.alerts["Dosya önizlenemedi"]
