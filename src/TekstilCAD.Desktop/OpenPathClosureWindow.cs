@@ -48,7 +48,7 @@ internal sealed class OpenPathClosureWindow : Window
         body.Children.Add(preview);body.Children.Add(message);
         AutomationProperties.SetName(source,"Kapatılacak açık parça");AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre");
         AutomationProperties.SetName(preview,"Kapalı kontur ve kapanış kenarı önizlemesi");AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
-        foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))source.Items.Add(new Choice(p.Id,$"{p.Name} · {p.Id:D}"));
+        foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))source.Items.Add(new Choice(p.Id,$"{p.Id:D} · {CadCanvas.CanvasPieceLabel(p.Name)}"));
         if(source.Items.Count>0)source.SelectedIndex=0;
         source.SelectionChanged+=(_,_)=>InvalidateProposal();tolerance.TextChanged+=(_,_)=>InvalidateProposal();
         omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();

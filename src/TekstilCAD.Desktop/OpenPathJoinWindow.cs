@@ -56,7 +56,7 @@ internal sealed class OpenPathJoinWindow : Window
         AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
         foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))
         {
-            var label=$"{p.Name} · {p.Id:D}";
+            var label=$"{p.Id:D} · {CadCanvas.CanvasPieceLabel(p.Name)}";
             first.Items.Add(new Choice(p.Id,label)); second.Items.Add(new Choice(p.Id,label));
         }
         if(first.Items.Count>0)first.SelectedIndex=0;

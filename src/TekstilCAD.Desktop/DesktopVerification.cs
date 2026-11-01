@@ -251,6 +251,29 @@ internal static class DesktopVerification
         }
         finally { window.Close(); studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyOpenPathSourceLabels(MainWindow studio,List<string> checks)
+    {
+        var first=new PatternPiece { Name="Ön\u202E\n"+new string('A',150),Closed=false,Points=[new(0,0),new(10,0)] };
+        var second=new PatternPiece { Name="Arka",Closed=false,Points=[new(10,0),new(20,5)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second] });var before=studio.Document.Clone();
+        var join=new OpenPathJoinWindow(studio,studio);var closure=new OpenPathClosureWindow(studio,studio);
+        try
+        {
+            foreach(var (window,field) in new[] { ((object)join,"first"),((object)join,"second"),((object)closure,"source") })
+            {
+                var selector=(ComboBox)window.GetType().GetField(field,PrivateInstance)!.GetValue(window)!;
+                var item=selector.Items[0];var label=item.ToString()!;
+                var id=(Guid)item.GetType().GetProperty("Id")!.GetValue(item)!;
+                Check(id==first.Id && label.StartsWith(first.Id.ToString("D"),StringComparison.Ordinal) &&
+                    label.Contains("\\u202E") && label.Contains("\\u000A") && !label.Contains('\u202E') && !label.Contains('\n') &&
+                    label.Length<=120 && label.EndsWith('…'),
+                    "Open path source selectors show the full identity before a bounded escaped name",checks);
+            }
+            Check(DocumentSession.ContentEquals(before,studio.Document) && studio.Document.Pieces[0].Name==first.Name,
+                "Safe source labels leave original names and project data unchanged",checks);
+        }
+        finally { join.Close();closure.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
+    }
     private static void VerifyHistoryCapacityNotice(MainWindow studio,string reportPath,List<string> checks)
     {
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -504,6 +527,7 @@ internal static class DesktopVerification
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
+            VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);
             VerifyOpenPathProductionInformation(studio,checks);
             VerifyDuplicatePiece(studio,checks);
