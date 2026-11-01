@@ -1030,14 +1030,15 @@ enum ModelStore {
         } catch { return .invalid }
     }
 
-    static func models() throws -> [Entry] {
-        try models(in: directory())
+    static func models(cancelled: () -> Bool = { false }) throws -> [Entry] {
+        try models(in: directory(), cancelled: cancelled)
     }
 
-    static func models(in directory: URL) throws -> [Entry] {
-        try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
-                                                    options: [])
-            .compactMap { url in
+    static func models(in directory: URL, cancelled: () -> Bool = { false }) throws -> [Entry] {
+        if cancelled() { throw CancellationError() }
+        let urls = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [])
+        let entries: [Entry] = try urls.compactMap { url in
+                if cancelled() { throw CancellationError() }
                 let initialIdentity = identity(url)
                 let name: String
                 let canOpen: Bool
@@ -1076,7 +1077,10 @@ enum ModelStore {
                 }
                 return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen, requiresRecovery: requiresRecovery, identity: initialIdentity)
             }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        if cancelled() { throw CancellationError() }
+        let sorted = entries.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        if cancelled() { throw CancellationError() }
+        return sorted
     }
 
     static func savedDate(_ url: URL) -> Date? {
@@ -1305,6 +1309,7 @@ private struct ModelLibrary: View {
     @State private var isLoading = true
     @State private var loadFailed = false
     @State private var loadID = UUID()
+    @State private var loadCancellation: ModelReadCancellation?
     #if DEBUG && targetEnvironment(simulator)
     @State private var didSimulateLoadFailure = false
     #endif
@@ -1417,7 +1422,7 @@ private struct ModelLibrary: View {
                 }
             }
             .onAppear { loadModels() }
-            .onDisappear { loadID = UUID(); recoveryID = UUID(); isRecovering = false }
+            .onDisappear { loadCancellation?.cancel(); loadID = UUID(); recoveryID = UUID(); isRecovering = false }
             .alert("Ham kopyayı kurtar?", isPresented: Binding(get: { modelToRecover != nil }, set: { if !$0 { modelToRecover = nil } })) {
                 Button("İptal", role: .cancel) { modelToRecover = nil }
                 Button("Ham kopyayı dışa aktar") {
@@ -1495,6 +1500,9 @@ private struct ModelLibrary: View {
     }
 
     private func loadModels() {
+        loadCancellation?.cancel()
+        let cancellation = ModelReadCancellation()
+        loadCancellation = cancellation
         let requestID = UUID()
         loadID = requestID
         isLoading = true
@@ -1516,7 +1524,7 @@ private struct ModelLibrary: View {
                 #if DEBUG && targetEnvironment(simulator)
                 if shouldSimulateFailure { throw ViewerError.message("Test yükleme hatası.") }
                 #endif
-                return try ModelStore.models()
+                return try ModelStore.models(cancelled: { cancellation.isCancelled })
             }
             DispatchQueue.main.async {
                 guard loadID == requestID else { return }

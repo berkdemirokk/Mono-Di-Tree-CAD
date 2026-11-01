@@ -255,6 +255,22 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testCancelledLibraryEnumerationReturnsNoPartialListOrFileChanges() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bytes = Data("model".utf8)
+        for index in 0..<10 { try bytes.write(to: root.appendingPathComponent("\(index).tcad")) }
+        var checks = 0
+        XCTAssertThrowsError(try ModelStore.models(in: root, cancelled: {
+            checks += 1
+            return checks >= 4
+        })) { error in XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(checks, 4)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: root.path).count, 10)
+        XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("0.tcad")), bytes)
+    }
+
     func testLibraryLabelsEscapeDirectionalAndLineControlsWithoutChangingIdentity() throws {
         let raw = "Ön\u{202e}model\nA"
         let entry = ModelStore.Entry(url: URL(fileURLWithPath: "/models/test.tcad"), name: raw, date: nil,
