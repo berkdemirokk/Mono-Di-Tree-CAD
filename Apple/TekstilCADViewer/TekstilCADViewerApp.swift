@@ -784,8 +784,12 @@ enum ModelStore {
                     switch (metadata(url), hasPayload) {
                     case (.valid(let metadata), true):
                         name = metadata.name.isEmpty ? "Model" : metadata.name; canOpen = true; requiresRecovery = false
-                    case (.oversized, true):
-                        name = "Kurtarma gerekli (\(url.deletingPathExtension().lastPathComponent))"; canOpen = false; requiresRecovery = true
+                    case (.oversized, true), (.invalid, true):
+                        var info = stat()
+                        let payload = payloadURL(url)
+                        let regular = payload.path.withCString { lstat($0, &info) } == 0 && (info.st_mode & S_IFMT) == S_IFREG
+                        name = regular ? "Kurtarma gerekli (\(url.deletingPathExtension().lastPathComponent))" : "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
+                        canOpen = false; requiresRecovery = regular
                     default:
                         name = "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
                         canOpen = false
@@ -1019,7 +1023,7 @@ private struct ModelLibrary: View {
                     prepareRecovery(model)
                 }
             } message: {
-                Text("Kayıt bilgisi çok büyük; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
+                Text("Kayıt bilgisi eksik, bozuk, çok büyük veya desteklenmeyen sürümde; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
             }
             .fileExporter(isPresented: $showingRecoveryExporter, document: recoveryDocument, contentType: .data, defaultFilename: "Kurtarılan-model.tcad") { result in
                 recoveryDocument = nil

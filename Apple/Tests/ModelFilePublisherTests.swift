@@ -11,6 +11,44 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testInvalidOrMissingMetadataOffersRawRecoveryWithoutChangingSource() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bytes = Data([0, 255, 5, 10])
+        let cases: [(String, Data?)] = [
+            ("future", Data("{\"version\":2,\"name\":\"Future\"}".utf8)),
+            ("corrupt", Data([255, 0, 1])),
+            ("missing", nil)
+        ]
+        for (name, metadata) in cases {
+            let copy = root.appendingPathComponent("\(name).tcadcopy", isDirectory: true)
+            try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+            try bytes.write(to: copy.appendingPathComponent("project.tcad"))
+            if let metadata { try metadata.write(to: copy.appendingPathComponent("metadata.json")) }
+        }
+        let missingPayload = root.appendingPathComponent("no-payload.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: missingPayload, withIntermediateDirectories: false)
+        let directoryPayload = root.appendingPathComponent("directory-payload.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: directoryPayload.appendingPathComponent("project.tcad", isDirectory: true), withIntermediateDirectories: true)
+        let entries = try ModelStore.models(in: root)
+        for (name, metadata) in cases {
+            let copy = root.appendingPathComponent("\(name).tcadcopy", isDirectory: true)
+            let entry = try XCTUnwrap(entries.first { $0.url == copy })
+            XCTAssertFalse(entry.canOpen)
+            XCTAssertTrue(entry.requiresRecovery)
+            XCTAssertEqual(try ModelStore.readListedPayload(entry), bytes)
+            XCTAssertEqual(try Data(contentsOf: copy.appendingPathComponent("project.tcad")), bytes)
+            if let metadata { XCTAssertEqual(try Data(contentsOf: copy.appendingPathComponent("metadata.json")), metadata) }
+        }
+        let absent = try XCTUnwrap(entries.first { $0.url == missingPayload })
+        XCTAssertFalse(absent.canOpen)
+        XCTAssertFalse(absent.requiresRecovery)
+        let directoryEntry = try XCTUnwrap(entries.first { $0.url == directoryPayload })
+        XCTAssertFalse(directoryEntry.canOpen)
+        XCTAssertFalse(directoryEntry.requiresRecovery)
+    }
+
     func testListedModelReadRejectsReplacementBeforeOrDuringRead() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
