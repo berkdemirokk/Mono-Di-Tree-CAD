@@ -2672,7 +2672,14 @@ private struct PointDistanceView: View {
     @State private var second = "1"
     @State private var pathForward = true
     @State private var selectingFirst = true
+    @State private var selectionRevision = UUID()
 
+    private var firstBinding: Binding<String> {
+        Binding(get: { first }, set: { first = $0; selectionRevision = UUID() })
+    }
+    private var secondBinding: Binding<String> {
+        Binding(get: { second }, set: { second = $0; selectionRevision = UUID() })
+    }
     private func validIndex(_ text: String) -> Int? {
         guard let value = Int(text), piece.points.indices.contains(value) else { return nil }
         return value
@@ -2689,10 +2696,10 @@ private struct PointDistanceView: View {
                 Section("Parça") { Text(name) }
                 Section("Nokta indeksleri") {
                     Text("Dosya sırası: 0–\(piece.points.count - 1)")
-                    TextField("İlk nokta indeksi", text: $first).keyboardType(.numberPad)
-                    NavigationLink("İlk noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $first) }
-                    TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
-                    NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $second) }
+                    TextField("İlk nokta indeksi", text: firstBinding).keyboardType(.numberPad)
+                    NavigationLink("İlk noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: firstBinding) }
+                    TextField("İkinci nokta indeksi", text: secondBinding).keyboardType(.numberPad)
+                    NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: secondBinding) }
                     if piece.closed {
                         Picker("Çizimde gösterilen kontur yolu", selection: $pathForward) {
                             Text("İleri").tag(true)
@@ -2704,7 +2711,7 @@ private struct PointDistanceView: View {
                         Text("İkinci nokta B").tag(false)
                     }.pickerStyle(.segmented)
                     if piece.hasMinimumContourPoints, piece.contourBounds != nil {
-                        PointDistancePreview(piece: piece, first: validIndex(first), second: validIndex(second), pathForward: pathForward) { index in
+                        PointDistancePreview(piece: piece, first: validIndex(first), second: validIndex(second), pathForward: pathForward, selectionRevision: selectionRevision) { index in
                             if selectingFirst { first = String(index) } else { second = String(index) }
                         }
                         Text("Çizimde bir köşeye dokunarak seçin. A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
@@ -2750,6 +2757,7 @@ private struct PointDistancePreview: View {
     let first: Int?
     let second: Int?
     let pathForward: Bool
+    let selectionRevision: UUID
     let onSelect: (Int) -> Void
 
     @State private var zoom: CGFloat = 1
@@ -2819,6 +2827,7 @@ private struct PointDistancePreview: View {
         .onChange(of: zoom) { offset = boundedOffset(offset, size: canvasSize, zoom: $0) }
         .onChange(of: first) { _ in hitMessage = nil }
         .onChange(of: second) { _ in hitMessage = nil }
+        .onChange(of: selectionRevision) { _ in hitMessage = nil }
     }
 
     private func reveal(_ index: Int) {
