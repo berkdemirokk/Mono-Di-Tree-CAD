@@ -268,6 +268,9 @@ public static class HpglFormat
                 maxX=Math.Max(maxX,points[i].X);maxY=Math.Max(maxY,points[i].Y);
             }
             ValidateQuantizedContour(p, points, cancellationToken);
+            try { HpglSourceTopology.Validate(p.Points,p.Closed,cancellationToken); }
+            catch(InvalidDataException ex)
+            { throw new InvalidDataException($"“{p.Name}” kaynak konturu HPGL için doğrulanamadı: {ex.Message} Çıktı oluşturulmadı.",ex); }
             if(includeReviews)
             {
                 var (review,index)=HpglTurnReview.AnalyzeWithIndex(p,unitsPerMillimeter,Math.Min(10,remainingSamples),cancellationToken);

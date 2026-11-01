@@ -1,9 +1,9 @@
 namespace TekstilCAD.FileFormats;
 
 /// <summary>
-/// Experimental intersection check in already-quantized plotter units. It is not
-/// connected to HPGL export, does not validate quantization loss or area, and is
-/// not a physical-machine compatibility test. Pair iteration remains quadratic.
+/// Intersection check in already-quantized plotter units used by HPGL export.
+/// It does not by itself validate source topology, quantization loss, area or
+/// physical-machine compatibility. Pair iteration remains quadratic.
 /// </summary>
 public static class HpglIntersectionDiagnostic
 {
