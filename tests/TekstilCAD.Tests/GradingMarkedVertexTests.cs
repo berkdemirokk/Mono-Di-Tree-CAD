@@ -70,8 +70,21 @@ public sealed class GradingMarkedVertexTests
     public void GradedMarkedBatchRoundTripsInVersionSix()
     {
         var source = Source();
+        source.Metadata = new PieceMetadata { Role = "Kesim", Material = "Pamuk", Quantity = 5 };
+        source.Grainline = new Grainline { Start = new(2,2), End = new(2,10) };
         Point2[] increments = [new(0,0),new(2,0),new(2,1),new(0,1),new(0,0)];
-        var generated = GradingEngine.GenerateSizes(source,increments,[new("S",-1),new("L",1)]);
+        var entries = GradeBatchInput.Parse("S;-1;2\nL;1;3");
+        var generated = GradingEngine.GenerateSizes(source,increments,entries.Select(e=>e.Size).ToArray());
+        for (int i = 0; i < generated.Count; i++)
+        {
+            GradeBatchInput.ApplyMetadata(generated[i],source,entries[i],true,true);
+            Assert.Equal(entries[i].Quantity,generated[i].Metadata!.Quantity);
+            Assert.Equal("Pamuk",generated[i].Metadata!.Material);
+            Assert.NotSame(source.Grainline,generated[i].Grainline);
+            Assert.Equal(source.Grainline.Start,generated[i].Grainline!.Start);
+            Assert.Equal(source.Grainline.End,generated[i].Grainline.End);
+            Assert.True(generated[i].Grainline.NeedsReview);
+        }
         var document = new ProjectDocument { Pieces = [source, .. generated] };
         var text = ProjectStorage.SerializeProject(document);
         Assert.Equal(6,(int)JsonNode.Parse(text)!.AsArray()[0]!);
