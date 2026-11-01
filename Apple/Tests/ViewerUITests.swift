@@ -1145,6 +1145,21 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Adet: 0")).firstMatch.exists)
     }
 
+    func testMalformedPieceMetadataIsReportedWhenSelectingAndViewing() {
+        let fixture = #"{"Name":"Üretim","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}],"Metadata":"okunamayan"}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let row = app.buttons["Kol"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("Üretim bilgileri okunamadı"))
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Üretim bilgileri okunamadı; kaynak dosyayı kontrol edin.")).firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
