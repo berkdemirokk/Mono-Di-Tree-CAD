@@ -25,3 +25,5 @@ A single pending edit request can be cancelled under the coordinator lock. Cance
 An oversized result consumes its matching edit request before failing, so retry requires a new request. Cancellation/application tests exercise sequential orderings; they do not prove an actual concurrent race on Apple platforms. Ordering is inferred from the shared-lock implementation.
 
 DEBUG save cancellation is serialized against SQLite COMMIT with a separate one-shot gate: cancellation winning the gate rejects COMMIT and requests rollback; cancellation after COMMIT starts reports false and cannot undo it. It does not interrupt SQLite I/O, is not connected to the app, and has not been tested on Apple platforms.
+
+If a transaction fails while still active and ROLLBACK also fails, RollbackFailure retains both errors. Callers must treat the outcome as uncertain and preserve their original bytes. SQLite may already have ended a transaction on some failures; this prototype cannot infer durable state solely from an error or replace device/power-loss tests.

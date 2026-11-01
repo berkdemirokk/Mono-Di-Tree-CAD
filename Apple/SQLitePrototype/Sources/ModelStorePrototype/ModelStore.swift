@@ -21,6 +21,12 @@ public enum ModelStorePrototype {
         public let message: String
     }
 
+    /// Both the operation and its rollback failed; callers must not assume the
+    /// transaction outcome and should retain their original bytes for recovery.
+    public struct RollbackFailure: Error {
+        public let operationError: Error
+        public let rollbackError: Error
+    }
     private static let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
     private static func bindText(_ statement: OpaquePointer, _ index: Int32, _ value: String) -> Int32 {
@@ -62,8 +68,12 @@ public enum ModelStorePrototype {
             else { try execute(db, "COMMIT") }
             return result
         } catch {
-            try? execute(db, "ROLLBACK")
-            throw error
+            let operationError = error
+            if sqlite3_get_autocommit(db) == 0 {
+                do { try execute(db, "ROLLBACK") }
+                catch { throw RollbackFailure(operationError: operationError, rollbackError: error) }
+            }
+            throw operationError
         }
     }
 
