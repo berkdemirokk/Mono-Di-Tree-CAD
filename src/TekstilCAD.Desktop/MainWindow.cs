@@ -263,6 +263,7 @@ public class MainWindow : Window
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
+        AddButton(exchange,"Seçilen parçaları DXF aktar…",ExportSelectedDxf,"Yalnız seçtiğiniz parçaları ayrı DXF dosyasına aktarır; kaynak proje değişmez.");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
         notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; köşe POINT ve varsa iplik yönü LINE işaretleri üretim veya kesim komutu değildir.");
@@ -3240,6 +3241,50 @@ public class MainWindow : Window
             if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !DxfImportRunning;
         }
     }
+    private sealed record SelectedDxfCapture(ProjectDocument Original,ProjectDocument Snapshot,Guid Epoch,ProjectDocument Output);
+    private SelectedDxfCapture CaptureSelectedDxf(ProjectDocument original,ProjectDocument snapshot,Guid epoch,IReadOnlyCollection<Guid> ids)
+    {
+        if(ids.Count==0 || ids.Count!=ids.Distinct().Count())throw new InvalidOperationException("DXF için en az bir farklı parça seçin.");
+        var chosen=ids.ToHashSet();var selected=snapshot.Pieces.Where(p=>chosen.Contains(p.Id)).Select(p=>p.Clone()).ToList();
+        if(selected.Count!=ids.Count)throw new InvalidOperationException("Seçilen parça bulunamadı; seçimi yenileyin.");
+        var output=new ProjectDocument { Name=snapshot.Name,Pieces=selected };Validate(output);
+        return new(original,snapshot,epoch,output);
+    }
+    private bool SelectedDxfStillCurrent(SelectedDxfCapture capture) => ReferenceEquals(Document,capture.Original) && projectEpoch==capture.Epoch &&
+        !HasPendingCanvasOrPropertyWork && DocumentSession.ContentEquals(Document,capture.Snapshot);
+    private Task? StartSelectedDxf(SelectedDxfCapture capture,string path,ProjectFileVersion expected)
+    {
+        if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
+        return StartExportAfterPreflight(capture.Output,path,1,expected,_=>true,()=>SelectedDxfStillCurrent(capture));
+    }
+    internal Task? StartSelectedDxfForVerification(IReadOnlyCollection<Guid> ids,string path,ProjectFileVersion expected)
+    {
+        EnsureNoExport();EnsurePropertyDraftsApplied();var original=Document;var epoch=projectEpoch;var snapshot=original.Clone();
+        return StartSelectedDxf(CaptureSelectedDxf(original,snapshot,epoch,ids),path,expected);
+    }
+    private void ExportSelectedDxf()
+    {
+        EnsureNoExport();EnsurePropertyDraftsApplied();
+        var original=Document;var epoch=projectEpoch;var snapshot=original.Clone();
+        if(snapshot.Pieces.Count==0) { SetStatus("DXF için en az bir parça gerekir.");return; }
+        var picker=new SelectedDxfExportWindow(this,snapshot);
+        if(picker.ShowDialog()!=true)return;
+        var capture=CaptureSelectedDxf(original,snapshot,epoch,picker.SelectedIds);
+        if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
+        var dialog=new SaveFileDialog { Title=$"Seçilen {capture.Output.Pieces.Count} parça · DXF",Filter="DXF (*.dxf)|*.dxf",DefaultExt=".dxf",AddExtension=true,
+            FileName=SafeFileName(snapshot.Name)+" - seçili.dxf",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
+        ExportDestination.ValidateExtension(dialog.FileName,1);EnsureWritableDestination(dialog.FileName);EnsureExportDoesNotReplaceOpenProject(dialog.FileName);
+        var expected=ProjectStorage.CaptureVersion(dialog.FileName);
+        if(expected.Sha256 is not null && MessageBox.Show(this,"Seçilen dosya DXF çıktısıyla değiştirilsin mi? Aktarım sürerken aynı dosyayı başka uygulamalarda değiştirmeyin.",
+            "Mevcut dosyayı değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
+        var layers=DxfFormat.PlanLayers(capture.Output);
+        if(layers.Any(layer=>layer.Changed) && new DxfLayerReviewWindow(this,layers).ShowDialog()!=true)return;
+        if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
+        _=StartSelectedDxf(capture,dialog.FileName,expected);
+    }
+
     private sealed record SelectedA4Capture(ProjectDocument Original,ProjectDocument Snapshot,Guid Epoch,Guid PieceId,ProjectDocument Output);
     private SelectedA4Capture CaptureSelectedA4()
     {
@@ -3261,6 +3306,7 @@ public class MainWindow : Window
             text=>confirm($"Yalnız seçili parça aktarılır: {SafePieceName(piece.Name)} · {piece.Id:D}. Diğer parçalar, üretim bilgileri, serileme kuralları ve proje geçmişi PDF'e aktarılmaz.\n\n"+text),
             ()=>SelectedA4StillCurrent(capture));
     }
+    internal Action? BeforeSelectedDxfWriteForVerification { get; set; }
     internal Action? BeforeSelectedA4WriteForVerification { get; set; }
     internal Task? StartSelectedA4ForVerification(string path,ProjectFileVersion expected,Func<string,bool> confirm)
         => StartSelectedA4(CaptureSelectedA4(),path,expected,confirm);
@@ -3364,7 +3410,7 @@ public class MainWindow : Window
         if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;
         exportNotice.Foreground=StudioTheme.Muted; exportNotice.Text="Dışa aktarım sürüyor; sonraki düzenlemeler dosyaya dahil değil."; exportNotice.ToolTip=path; exportNotice.Visibility=Visibility.Visible;
         SetStatus(cancellation is null ? "Dosya proje kopyasından hazırlanıyor. Bu aktarım iptal edilemez; başka proje açmak, kaydetmek veya pencereyi kapatmak için bekleyin." : "HPGL proje kopyasından hazırlanıyor. İsterseniz iptal isteği gönderebilirsiniz; sonuç bildirilene kadar bekleyin.");
-        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp,completionCurrent,completionCurrent is null ? null : BeforeSelectedA4WriteForVerification);
+        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp,completionCurrent,completionCurrent is null ? null : format==1 ? BeforeSelectedDxfWriteForVerification : BeforeSelectedA4WriteForVerification);
     }
     private void RequestExportCancellation()
     {
@@ -3413,9 +3459,9 @@ public class MainWindow : Window
             else await Task.Run(()=> { beforeSelectedWrite?.Invoke();switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; case 6: DxfFormat.ExportCanvasOrientation(snapshot,path,expected); break; } });
             var stale=(completionCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !completionCurrent()) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
-            exportNotice.Text=stale?(completionCurrent is null ? "Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı." : "Dosya hazırlandı; proje veya seçim değiştiği için önceki seçili parça kopyası kullanıldı."):"Dosya dışa aktarıldı.";
+            exportNotice.Text=stale?(completionCurrent is null ? "Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı." : "Dosya hazırlandı; proje veya seçim değiştiği için önceki seçimin kopyası kullanıldı."):"Dosya dışa aktarıldı.";
             exportNotice.ToolTip=path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"");
-            SetStatus("Dosya dışa aktarıldı: "+path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"")+(stale?(completionCurrent is null ? " · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı." : " · Proje veya seçim değişti; dosya önceki seçili parça kopyasından hazırlandı."):""));
+            SetStatus("Dosya dışa aktarıldı: "+path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"")+(stale?(completionCurrent is null ? " · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı." : " · Proje veya seçim değişti; dosya önceki seçimin kopyasından hazırlandı."):""));
         }
         catch(OperationCanceledException) when(cancellation?.IsCancellationRequested == true)
         {

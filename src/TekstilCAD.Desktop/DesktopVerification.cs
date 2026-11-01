@@ -1115,6 +1115,7 @@ internal static class DesktopVerification
             VerifyMediumContourWorkers(studio,checks);
             VerifyLargeVertexValidation(studio,checks);
             VerifyAsyncExport(studio,work,checks);
+            VerifySelectedDxfExport(studio,work,checks);
             VerifyDxfGrainlineReviewExport(studio,work,checks);
             VerifyDxfNotchReviewExport(studio,work,checks);
             VerifyDxfNotchReviewWindow(studio,reportPath,checks);
@@ -6273,6 +6274,67 @@ internal static class DesktopVerification
             SynchronizationContext.SetSynchronizationContext(oldContext);
         }
     }
+    private static void VerifySelectedDxfExport(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var first=new PatternPiece { Name="FRONT",Points=[new(0,0),new(10,0),new(0,10)] };
+        var second=new PatternPiece { Name="BACK",Points=[new(30,0),new(40,0),new(30,10)] };
+        var excluded=new PatternPiece { Name="MARKED",Points=[new(60,0),new(70,0),new(60,10)],Notches=[new NotchMark { VertexIndex=1,Position=new(70,0) }] };
+        var project=new ProjectDocument { Pieces=[first,second,excluded] };
+        try
+        {
+            studio.LoadDocument(project);studio.Select(first.Id);var before=studio.Document.Clone();
+            var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            var picker=new SelectedDxfExportWindow(studio,before);
+            try
+            {
+                Check(!picker.ContinueButton.IsEnabled && picker.Choices.Items.Count==3,"Selected DXF requires explicit selection",checks);
+                picker.Choices.SelectedItems.Add(picker.Choices.Items[0]);picker.Choices.SelectedItems.Add(picker.Choices.Items[1]);
+                Check(picker.ContinueButton.IsEnabled && picker.SelectedIds.SequenceEqual(new[] { first.Id,second.Id }) &&
+                    VirtualizingPanel.GetIsVirtualizing(picker.Choices),"Selected DXF selection retains identities in a virtualized list",checks);
+            }
+            finally { picker.Close(); }
+            var path=Path.Combine(work,"selected-subset.dxf");var task=studio.StartSelectedDxfForVerification([first.Id,second.Id],path,ProjectStorage.CaptureVersion(path));
+            Check(task is not null,"Selected DXF begins separate export",checks);PumpUntil(()=>task!.IsCompleted);task!.GetAwaiter().GetResult();
+            var imported=DxfFormat.Import(path,1).Project;
+            var notice=(TextBlock)typeof(MainWindow).GetField("exportNotice",PrivateInstance)!.GetValue(studio)!;
+            Check(studio.ExportError is null && imported.Pieces.Count==2 && imported.Pieces.Any(p=>p.Points.SequenceEqual(first.Points)) &&
+                imported.Pieces.Any(p=>p.Points.SequenceEqual(second.Points)) && notice.Text=="Dosya dışa aktarıldı." &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+                "Selected DXF writes exactly selected geometry, excluding marked source while preserving project",checks);
+            var openPath=Path.Combine(work,"selected-open-project.dxf");ProjectStorage.Save(before,openPath);var openBytes=File.ReadAllBytes(openPath);
+            var fileField=typeof(MainWindow).GetField("filePath",PrivateInstance)!;var previousPath=fileField.GetValue(studio);
+            try
+            {
+                fileField.SetValue(studio,openPath);var refused=false;
+                try { studio.StartSelectedDxfForVerification([first.Id],openPath,ProjectStorage.CaptureVersion(openPath)); }
+                catch(InvalidOperationException) { refused=true; }
+                Check(refused && File.ReadAllBytes(openPath).SequenceEqual(openBytes) && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+                    "Selected DXF cannot overwrite the open project or alter undo",checks);
+            }
+            finally { fileField.SetValue(studio,previousPath); }
+            var guarded=Path.Combine(work,"selected-guarded.dxf");File.WriteAllText(guarded,"original");
+            var guardedTask=studio.StartSelectedDxfForVerification([excluded.Id],guarded,ProjectStorage.CaptureVersion(guarded));
+            PumpUntil(()=>guardedTask!.IsCompleted);guardedTask!.GetAwaiter().GetResult();
+            Check(studio.ExportError is not null && File.ReadAllText(guarded)=="original" && DocumentSession.ContentEquals(before,studio.Document),
+                "Selecting a marked piece still invokes normal DXF guard and preserves target",checks);
+            var stalePath=Path.Combine(work,"selected-dxf-stale.dxf");
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+            try
+            {
+                studio.BeforeSelectedDxfWriteForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                pending=studio.StartSelectedDxfForVerification([first.Id],stalePath,ProjectStorage.CaptureVersion(stalePath));
+                PumpUntil(()=>reached.IsSet);studio.Commit("Başka parça değişti",()=>studio.Document.Pieces[1].Name="Changed");
+                release.Set();PumpUntil(()=>pending!.IsCompleted);pending!.GetAwaiter().GetResult();
+                Check(studio.ExportError is null && notice.Text.Contains("proje veya seçim değişti") &&
+                    DxfFormat.Import(stalePath,1).Project.Pieces.Count==1,
+                    "Selected DXF reports full project changes while writing the captured subset",checks);
+            }
+            finally { release.Set();if(pending is not null){PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();}studio.BeforeSelectedDxfWriteForVerification=null; }
+        }
+        finally { studio.BeforeSelectedDxfWriteForVerification=null;SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
     private static void VerifyAsyncExport(MainWindow studio,string work,List<string> checks)
     {
         var original=new ProjectDocument { Name="Dışa aktarma testi",Pieces=[new PatternPiece { Name="Özgün parça",Points=[new(0,0),new(100,0),new(100,100),new(0,100)] }] };
