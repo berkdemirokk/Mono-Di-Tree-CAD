@@ -348,10 +348,12 @@ private struct ContentView: View {
                                 index: selectedPiece, projectName: project.name, identity: identity)
                         }
                             .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
-                            .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { loadedModel.pointEditSnapshot = $0 })) { snapshot in
+                            .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { _ in })) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
                                     isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
-                                    invalidateForTesting: { loadedModel.load.invalidate() })
+                                    invalidateForTesting: { loadedModel.load.invalidate() },
+                                    onSessionClosed: { loadedModel.closePointEditSession(snapshot.id) })
+                                    .id(snapshot.id)
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -2356,6 +2358,7 @@ private struct ExperimentalPointEditor: View {
     let projectName: String
     let isCurrent: () -> Bool
     let invalidateForTesting: () -> Void
+    let onSessionClosed: () -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var pointIndex = 0
     @State private var x = ""
@@ -2494,7 +2497,7 @@ private struct ExperimentalPointEditor: View {
             .navigationTitle("Deneysel nokta")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .onAppear { updatePoint() }
-            .onDisappear { generation = UUID(); saveGeneration = UUID(); saveActiveID = nil; saving = false; cancellingSave = false }
+            .onDisappear { generation = UUID(); saveGeneration = UUID(); saveActiveID = nil; saving = false; cancellingSave = false; onSessionClosed() }
         }
     }
 }

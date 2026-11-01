@@ -87,6 +87,13 @@ final class ModelLoadStateTests: XCTestCase {
             PointEditSnapshot(data: data, piece: piece, pieceID: id, index: 0,
                               projectName: drawing.name, identity: try XCTUnwrap(state.editIdentity()))
         }
+        let first = try makeSnapshot(state), newer = try makeSnapshot(state)
+        state.pointEditSnapshot = first
+        state.pointEditSnapshot = newer
+        state.closePointEditSession(first.id)
+        XCTAssertEqual(state.pointEditSnapshot?.id, newer.id)
+        state.closePointEditSession(newer.id)
+        XCTAssertNil(state.pointEditSnapshot)
         state.pointEditSnapshot = try makeSnapshot(state)
         state.selectedPiece = 1
         XCTAssertNil(state.pointEditSnapshot)

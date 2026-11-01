@@ -67,6 +67,11 @@ struct LoadedModelState<Model> {
 
     #if DEBUG
     var pointEditSnapshot: PointEditSnapshot?
+    /// A delayed dismissal from an older sheet must not clear a newer session.
+    mutating func closePointEditSession(_ id: UUID) {
+        guard pointEditSnapshot?.id == id else { return }
+        pointEditSnapshot = nil
+    }
     struct EditIdentity {
         let revision: UUID
         let loadRequest: UUID
