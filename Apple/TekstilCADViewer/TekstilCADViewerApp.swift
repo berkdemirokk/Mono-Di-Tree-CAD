@@ -2715,7 +2715,8 @@ enum PieceComparisonReport {
             let right = describe(secondSpan, piece: b, index: second, title: "İkinci aralık")
             lines.insert(contentsOf: ["Seçili kontur aralıkları:", left.0, right.0,
                                      "Aralık farkı (ikinci − birinci): \(format(ContourMeasure.difference(first: left.1, second: right.1)))", ""], at: lines.count - 1)
-        }        return lines.joined(separator: "\n")
+        }
+        return lines.joined(separator: "\n")
     }
 }
 // A read-only comparison of the currently loaded snapshot, not a production check.
