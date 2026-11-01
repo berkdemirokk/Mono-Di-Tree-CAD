@@ -295,11 +295,15 @@ public static class ProjectStorage
             }
         }
     }
-    public static ProjectFileVersion CaptureVersion(string path)
+    public static ProjectFileVersion CaptureVersion(string path) => CaptureVersion(path, CancellationToken.None);
+    public static ProjectFileVersion CaptureVersion(string path, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var full = Path.GetFullPath(path);
-        var bytes = ReadSnapshot(full);
-        return new(full, bytes is null ? null : Convert.ToHexString(SHA256.HashData(bytes)));
+        var bytes = ReadSnapshot(full,cancellationToken);
+        var hash = bytes is null ? null : Convert.ToHexString(SHA256.HashData(bytes));
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(full, hash);
     }
     /// <summary>
     /// Optimistic save coordinated with this library's writers across processes. The token is path-bound.
@@ -329,7 +333,7 @@ public static class ProjectStorage
         cancellationToken.ThrowIfCancellationRequested();
         using var lease = AcquireWriteLease(full);
         EnsureWritableDestination(full);
-        var current = CaptureVersion(full);
+        var current = CaptureVersion(full,cancellationToken);
         if (!string.Equals(current.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
             throw new ProjectConflictException();
         void CheckImmediatelyBeforeCommit()
@@ -338,7 +342,7 @@ public static class ProjectStorage
             // This second snapshot narrows the window for a noncooperating writer,
             // but does not lock the destination through the path-based rename.
             // A writer can still modify or replace it after this check.
-            var latest = CaptureVersion(full);
+            var latest = CaptureVersion(full,cancellationToken);
             if (!string.Equals(latest.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
                 throw new ProjectConflictException();
         }

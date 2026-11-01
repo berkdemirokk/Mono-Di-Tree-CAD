@@ -32,6 +32,7 @@ public sealed class ProjectStorageCancellationTests
             var bytes=File.ReadAllBytes(path);var version=ProjectStorage.CaptureVersion(path);
             using var cancelled=new CancellationTokenSource();cancelled.Cancel();
             Assert.Throws<OperationCanceledException>(()=>ProjectStorage.LoadWithVersion(path,cancelled.Token));
+            Assert.Throws<OperationCanceledException>(()=>ProjectStorage.CaptureVersion(path,cancelled.Token));
             Assert.Throws<OperationCanceledException>(()=>ProjectStorage.SaveIfUnchanged(
                 new ProjectDocument { Name="Replacement" },path,version,cancelled.Token));
             Assert.Equal(bytes,File.ReadAllBytes(path));

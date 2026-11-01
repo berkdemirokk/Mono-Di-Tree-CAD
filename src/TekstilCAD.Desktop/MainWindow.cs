@@ -1751,7 +1751,7 @@ public class MainWindow : Window
             // The prompt may have been open while another application changed
             // the source. Compare the same byte-based version before replacing
             // the workspace; this narrows, but cannot eliminate, later races.
-            var currentVersion=await Task.Run(()=>ProjectStorage.CaptureVersion(loaded.Version.FullPath));
+            var currentVersion=await Task.Run(()=>ProjectStorage.CaptureVersion(loaded.Version.FullPath,cancellation.Token));
             if(!OpenApprovalStillValid(stamp,epoch,generation))
             { if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)SetStatus("Çalışma değişti · Proje açılmadı. Yeniden deneyin.");return; }
             if(!Equals(currentVersion,loaded.Version))
