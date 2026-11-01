@@ -1714,6 +1714,8 @@ final class ViewerUITests: XCTestCase {
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Pamuk")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch.waitForExistence(timeout: 10))
+        let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
+        XCTAssertTrue((result.value as? String ?? "").contains("Eşleşen parça: Arka Beden"))
     }
     func testRenamedCopyWithLongSpecialNameCanBeFoundReopenedAndDeleted() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))

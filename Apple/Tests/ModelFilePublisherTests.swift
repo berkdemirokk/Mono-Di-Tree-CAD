@@ -327,6 +327,15 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: next, cancelled: false))
         XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: first, cancelled: true))
     }
+    func testPieceSearchDoesNotCombineDifferentPieces() {
+        let model = ["Fabrika 42"]
+        let front = ["Ön kol", "M", "Pamuk"]
+        let back = ["Arka beden", "XL", "Yün"]
+        XCTAssertTrue(ModelStore.pieceSearchMatches(query: "42 kol pamuk", modelFields: model, pieceFields: front))
+        XCTAssertFalse(ModelStore.pieceSearchMatches(query: "kol yün", modelFields: model, pieceFields: front))
+        XCTAssertFalse(ModelStore.pieceSearchMatches(query: "kol yün", modelFields: model, pieceFields: back))
+        XCTAssertTrue(ModelStore.pieceSearchMatches(query: "XL yün", modelFields: model, pieceFields: back))
+    }
     func testContentSearchMatchesWordsAcrossModelAndPieceFields() {
         let fields = ["Fabrika 42", "Ön kol", "XL", "Pamuk"]
         XCTAssertTrue(ModelStore.contentSearchMatches(query: "42 kol pamuk", fields: fields))

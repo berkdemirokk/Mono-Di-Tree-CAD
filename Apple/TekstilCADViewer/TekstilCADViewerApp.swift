@@ -1180,6 +1180,10 @@ enum ModelStore {
         }
     }
 
+    // All piece terms must match one piece; model terms may match its record.
+    static func pieceSearchMatches(query: String, modelFields: [String], pieceFields: [String]) -> Bool {
+        contentSearchMatches(query: query, fields: modelFields + pieceFields)
+    }
     private static func fileIdentity(_ url: URL) -> FileIdentity? {
         var info = stat()
         guard url.path.withCString({ lstat($0, &info) }) == 0 else { return nil }
@@ -1406,7 +1410,7 @@ private struct ModelLibrary: View {
         let revision: UUID
         let searchContents: Bool
     }
-    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let limited: Bool }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let limited: Bool; let evidence: [URL: String] }
     @State private var filterResult: FilterResult?
     private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents) }
 
@@ -1477,6 +1481,10 @@ private struct ModelLibrary: View {
                     } label: {
                         VStack(alignment: .leading) {
                             Text(model.safeName)
+                            if let match = current?.evidence[model.id] {
+                                Text("Eşleşen parça: \(match)")
+                                    .font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                            }
                             if let status = model.selectionStatus {
                                 Text(status).font(.caption).foregroundStyle(.secondary)
                             }
@@ -1491,7 +1499,7 @@ private struct ModelLibrary: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(model.safeName)
-                    .accessibilityValue((model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .accessibilityValue((current?.evidence[model.id].map { "Eşleşen parça: \($0), " } ?? "") + (model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
@@ -1592,13 +1600,14 @@ private struct ModelLibrary: View {
                     do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
                 }
                 guard !Task.isCancelled else { return }
-                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Bool)? in
+                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Bool, [URL: String])? in
                     let cancelled = { Task.isCancelled }
                     guard let names = ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
-                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, false) }
+                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, false, [:]) }
                     guard let candidates = ModelStore.filteredModels(snapshot, query: "", newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
                     let named = Set(names.map(\.id))
                     var selected: [ModelStore.Entry] = []
+                    var evidence: [URL: String] = [:]
                     var skipped = 0
                     var limited = false
                     var budget = ModelStore.ContentSearchBudget(start: ProcessInfo.processInfo.systemUptime)
@@ -1614,22 +1623,32 @@ private struct ModelLibrary: View {
                         do {
                             let bytes = try ModelStore.readListedPayload(entry, cancelled: cancelled)
                             let drawing = try Drawing.load(bytes, cancelled: cancelled)
-                            var fields = [entry.name, entry.displayIdentity, entry.readableIdentity]
-                            for piece in drawing.pieces {
+                            let modelFields = [entry.name, entry.displayIdentity, entry.readableIdentity]
+                            for (index, piece) in drawing.pieces.enumerated() {
                                 if cancelled() { return nil }
-                                fields.append(contentsOf: [piece.name, piece.size, piece.material].compactMap { $0 })
+                                let values = [piece.name, piece.size, piece.material].compactMap { $0 }
+                                if ModelStore.pieceSearchMatches(query: request.query, modelFields: modelFields, pieceFields: values) {
+                                    func excerpt(_ value: String) -> String {
+                                        let prefix = value.prefix(120)
+                                        return ModelStore.safeLabel(String(prefix)) + (prefix.endIndex == value.endIndex ? "" : "…")
+                                    }
+                                    let name = piece.name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : excerpt($0) } ?? "Parça \(index + 1)"
+                                    let details = [name, piece.size.map { "Beden: \(excerpt($0))" }, piece.material.map { "Malzeme: \(excerpt($0))" }].compactMap { $0 }
+                                    evidence[entry.id] = details.joined(separator: " · ")
+                                    selected.append(entry)
+                                    break
+                                }
                             }
-                            if ModelStore.contentSearchMatches(query: request.query, fields: fields) { selected.append(entry) }
                         } catch {
                             if cancelled() { return nil }
                             skipped += 1
                         }
                     }
-                    return (selected, skipped, limited)
+                    return (selected, skipped, limited, evidence)
                 }
                 let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
                 guard ModelStore.acceptsSearchResult(request: request, current: filterKey, cancelled: Task.isCancelled), let result else { return }
-                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1, limited: result.2)
+                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1, limited: result.2, evidence: result.3)
             }
         }
     }
