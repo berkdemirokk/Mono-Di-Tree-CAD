@@ -23,6 +23,19 @@ public sealed class DxfPointVertexMappingTests
     }
 
     [Fact]
+    public void DecimalCoordinateUsesImportedScaleAndOptionalReflection()
+    {
+        var text=Encoding.ASCII.GetString(Fixture()).Replace("10\n0\n20\n0\n10\n10", "10\n4662.231\n20\n1\n10\n10");
+        text=text.Replace("0\nPOINT\n8\nA\n10\n0\n20\n0", "0\nPOINT\n8\nA\n10\n4662.2310\n20\n1");
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test",10);
+        var piece=Assert.Single(import.Project.Pieces);var point=Assert.Single(import.SupplementalGeometry!.Records.Where(r=>r.EntityType=="POINT"));
+        var result=DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[new(point.SourceOrdinal,piece.Id,0)],DxfTextileGrainlineMapping.CaptureFingerprint(import),true);
+        var position=Assert.Single(Assert.Single(result.Project.Pieces).Notches!).Position;
+        Assert.Equal(4662.231*10,position.X);Assert.Equal(-10,position.Y);
+        Assert.Null(piece.Notches);
+    }
+
+    [Fact]
     public void ChangedSourceAmbiguousVertexAndUnsupportedPlaneAreRejected()
     {
         var bytes=Fixture();var import=DxfFormat.Import(new MemoryStream(bytes),"test");

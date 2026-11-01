@@ -9,12 +9,12 @@ public sealed record DxfPointVertexSelection(int SourceOrdinal, Guid PieceId, in
 public sealed record DxfPointVertexAudit(int SourceOrdinal, Guid PieceId, int VertexIndex, Point2 Position);
 public sealed record DxfPointVertexResult(ProjectDocument Project, ImmutableArray<DxfPointVertexAudit> Assignments);
 
-/// <summary>Conservative mapping of untransformed integer model-space POINTs at a one-mm scale.
+/// <summary>Conservative mapping of model-space POINTs with optional Y reflection.
 /// Caller must keep the import and source stream unchanged while this method runs.</summary>
 public static class DxfPointVertexMapping
 {
     public static DxfPointVertexResult Apply(DxfImportResult import, Stream source,
-        IReadOnlyCollection<DxfPointVertexSelection> selections, string expectedFingerprint,
+        IReadOnlyCollection<DxfPointVertexSelection> selections, string expectedFingerprint, bool reflectY=false,
         CancellationToken cancellationToken=default)
     {
         ArgumentNullException.ThrowIfNull(import);ArgumentNullException.ThrowIfNull(source);
@@ -26,11 +26,17 @@ public static class DxfPointVertexMapping
         if(check.Status!=DxfSourceSnapshotCheck.Status.MatchesReadBytes || !check.ImportIdentityVerified)
             throw new InvalidDataException("DXF kaynak baytları içe aktarımla eşleşmiyor.");
         if(!string.Equals(DxfTextileGrainlineMapping.CaptureFingerprint(import,cancellationToken),expectedFingerprint,StringComparison.Ordinal) ||
-           import.ImportParameters?.MillimetersPerUnit!=1 || import.Project.GradingRules.Count!=0 || import.Project.NestingSnapshot is not null)
+           import.ImportParameters is null || !double.IsFinite(import.ImportParameters.MillimetersPerUnit) || import.ImportParameters.MillimetersPerUnit<=0 ||
+           import.Project.GradingRules.Count!=0 || import.Project.NestingSnapshot is not null)
             throw new InvalidDataException("DXF geometrisi veya desteklenen ölçek doğrulanamadı.");
         var report=import.SupplementalGeometry;
         if(report is null || report.Truncated || report.Records.IsDefault)
             throw new InvalidDataException("DXF nokta envanteri eksik veya kesilmiş.");
+        if(import.SourceGeometry is null || import.SourceGeometry.Truncated || import.PieceSources is not { } sourceLinks || sourceLinks.IsDefault ||
+           !string.Equals(import.PieceSourcesFingerprint,NestingSnapshot.ComputeLayoutFingerprint(import.Project,cancellationToken),StringComparison.Ordinal))
+            throw new InvalidDataException("DXF köşe kaynağı eksik veya değişmiş.");
+        var sourceRecords=import.SourceGeometry.Records.ToDictionary(r=>r.SourceOrdinal);
+        var links=sourceLinks.ToDictionary(r=>r.PieceId);
         var records=report.Records.Where(r=>r.EntityType=="POINT").ToDictionary(r=>r.SourceOrdinal);
         var selected=DxfBoundedSelections.Copy(selections,ProjectStorage.MaximumPieces,cancellationToken);
         if((long)selected.Length*import.Project.Pieces.Sum(p=>(long)p.Points.Count)>2_000_000)
@@ -38,6 +44,7 @@ public static class DxfPointVertexMapping
         var copy=import.Project.Clone();ProjectStorage.Validate(copy,cancellationToken);
         if(!string.Equals(DxfTextileGrainlineMapping.CaptureFingerprint(import with { Project=copy },cancellationToken),expectedFingerprint,StringComparison.Ordinal))
             throw new InvalidDataException("DXF geometrisi kopyalanırken değişti.");
+        if(reflectY)copy=DxfCanvasImportOrientation.ReflectY(copy);
         var pieces=copy.Pieces.ToDictionary(p=>p.Id);var usedSources=new HashSet<int>();var usedTargets=new HashSet<(Guid,int)>();
         var audit=ImmutableArray.CreateBuilder<DxfPointVertexAudit>();
         foreach(var choice in selected)
@@ -49,16 +56,29 @@ public static class DxfPointVertexMapping
                !pieces.TryGetValue(choice.PieceId,out var piece) || !piece.Closed || choice.VertexIndex<0 || choice.VertexIndex>=piece.Points.Count ||
                (choice.VertexIndex==piece.Points.Count-1 && piece.Points[0]==piece.Points[^1]))
                 throw new InvalidDataException("DXF POINT seçimi veya hedef köşesi geçersiz.");
-            long Coordinate(int code,bool optional=false)
+            double Coordinate(int code,bool optional=false)
             {
                 var values=point.Groups.Where(g=>g.Code==code).ToArray();
                 if(optional && values.Length==0)return 0;
-                if(values.Length!=1 || !long.TryParse(values[0].RawValue.Trim(),NumberStyles.AllowLeadingSign,CultureInfo.InvariantCulture,out var value) || Math.Abs((double)value)>100_000_000)
-                    throw new InvalidDataException("DXF POINT koordinatı tam sayı olarak doğrulanamadı.");
+                if(values.Length!=1 || !double.TryParse(values[0].RawValue.Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out var value) || !double.IsFinite(value) ||
+                   !DxfExactDecimal.AreEqual(values[0].RawValue.Trim(),value.ToString("R",CultureInfo.InvariantCulture),cancellationToken))
+                    throw new InvalidDataException("DXF POINT koordinatı kayıpsız eşlenemedi.");
                 return value;
             }
             var x=Coordinate(10);var y=Coordinate(20);if(Coordinate(30,true)!=0)throw new InvalidDataException("3B POINT desteklenmiyor.");
-            var position=new Point2(x,y);
+            if(!links.TryGetValue(choice.PieceId,out var link) || link.EntityType!="LWPOLYLINE" || link.Section!="ENTITIES" || link.Block is not null ||
+               link.SourceOrdinals.Length!=1 || !sourceRecords.TryGetValue(link.SourceOrdinals[0],out var contour) || contour.Groups.Any(g=>g.Code==42))
+                throw new InvalidDataException("DXF köşe kaynağı desteklenen doğrudan polilin değil.");
+            var rawX=contour.Groups.Where(g=>g.Code==10).ToArray();var rawY=contour.Groups.Where(g=>g.Code==20).ToArray();
+            if(rawX.Length!=piece.Points.Count || rawY.Length!=piece.Points.Count ||
+               !DxfExactDecimal.AreEqual(point.Groups.Single(g=>g.Code==10).RawValue.Trim(),rawX[choice.VertexIndex].RawValue.Trim(),cancellationToken) ||
+               !DxfExactDecimal.AreEqual(point.Groups.Single(g=>g.Code==20).RawValue.Trim(),rawY[choice.VertexIndex].RawValue.Trim(),cancellationToken))
+                throw new InvalidDataException("POINT ve köşe kaynak ondalıkları aynı değil.");
+            var scale=import.ImportParameters.MillimetersPerUnit;
+            var position=new Point2(x*scale,(reflectY ? -y : y)*scale);
+            if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) ||
+               Math.Abs(position.X)>Geometry.MaxCoordinate || Math.Abs(position.Y)>Geometry.MaxCoordinate ||
+               (x!=0 && position.X==0) || (y!=0 && position.Y==0))throw new InvalidDataException("DXF POINT ölçeği güvenli değil.");
             if(piece.Points[choice.VertexIndex]!=position)throw new InvalidDataException("POINT seçilen köşeyle tam eşleşmiyor.");
             int matches=0;
             foreach(var candidate in copy.Pieces) for(int i=0;i<candidate.Points.Count;i++)
