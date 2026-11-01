@@ -6006,6 +6006,7 @@ internal static class DesktopVerification
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var scaleField=typeof(CadCanvas).GetField("scale",PrivateInstance)!;var offsetField=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
         var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        var fit=(Button)typeof(MainWindow).GetField("fitCommand",PrivateInstance)!.GetValue(studio)!;
         canvas.Measure(new Size(600,400));canvas.Arrange(new Rect(0,0,600,400));canvas.UpdateLayout();
         bool Visible(Point2 point)
         {
@@ -6019,16 +6020,20 @@ internal static class DesktopVerification
             {
                 var piece=new PatternPiece { Name="Mevcut",Points=[new(0,0),new(10,0),new(0,10)] };
                 studio.LoadDocument(new ProjectDocument { Pieces=withPiece ? [piece] : [] });studio.SetTool("Çoklu çizgi");
+                Check(fit.IsEnabled==withPiece,"Fit button reflects existing geometry before drawing",checks);
                 var first=new Point2(1000,500);var second=new Point2(1100,550);
-                Check(canvas.AddDrawingPointAt(first) is null && canvas.AddDrawingPointAt(second) is null,"Coordinate drawing fixture creates an unfinished path",checks);
+                Check(canvas.AddDrawingPointAt(first) is null && fit.IsEnabled,"First coordinate enables fit for an unfinished drawing",checks);
+                Check(canvas.AddDrawingPointAt(second) is null,"Coordinate drawing fixture creates an unfinished path",checks);
                 var before=studio.Document.Clone();var pending=canvas.CapturePendingDrawing()!.Points.ToArray();var undo=session.UndoCount;var redo=session.RedoCount;var dirty=session.IsDirty;
-                canvas.Fit();
+                Check(fit.IsEnabled,"Fit button becomes available as soon as an unfinished point exists",checks);
+                fit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(Visible(first) && Visible(second) && (!withPiece || piece.Points.All(Visible)) && status.Text.Contains("tamamlanmamış çizim") &&
                     canvas.CapturePendingDrawing()!.Points.SequenceEqual(pending) && DocumentSession.ContentEquals(before,studio.Document) &&
                     session.UndoCount==undo && session.RedoCount==redo && session.IsDirty==dirty,
                     withPiece ? "Fit frames existing pieces and the unfinished coordinate drawing without changing either" :
                         "Fit frames an unfinished coordinate drawing in an empty project",checks);
                 canvas.CancelDrawing();
+                Check(fit.IsEnabled==withPiece,"Fit button updates when the unfinished drawing is cancelled",checks);
             }
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }

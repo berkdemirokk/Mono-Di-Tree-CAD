@@ -880,7 +880,7 @@ public class MainWindow : Window
         if (exportCommand is not null) exportCommand.IsEnabled = Document.Pieces.Count > 0 && !ExportRunning && !DxfImportRunning;
         if (grainReviewExportCommand is not null) grainReviewExportCommand.IsEnabled = Document.Pieces.Count > 0 && !ExportRunning && !DxfImportRunning;
         if (notchReviewExportCommand is not null) notchReviewExportCommand.IsEnabled = Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !ExportRunning && !DxfImportRunning;
-        if (fitCommand is not null) fitCommand.IsEnabled = Document.Pieces.Any(piece => piece.Points.Count > 0);
+        UpdateFitCommand();
         canvas?.InvalidateVisual();
     }
     private void UpdateHistoryCapacityNotice()
@@ -1017,7 +1017,11 @@ public class MainWindow : Window
         saveState.Foreground = HasUnsavedWork ? StudioTheme.Warning : StudioTheme.Muted;
         saveState.ToolTip = recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
     }
-    internal void PendingDrawingChanged() => UpdateSaveState();
+    internal void PendingDrawingChanged() { UpdateSaveState();UpdateFitCommand(); }
+    private void UpdateFitCommand()
+    {
+        if(fitCommand is not null)fitCommand.IsEnabled=(canvas?.HasPendingDrawing ?? false) || Document.Pieces.Any(piece=>piece.Points.Count>0);
+    }
     private void CapturePropertyDraft()
     {
         if(syncing || Selected is not { Points.Count: >0 } piece)return;
