@@ -98,9 +98,9 @@ internal sealed class OpenPathJoinWindow : Window
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın."; return; }
             proposal=result; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;
             preview.Points=result.Piece.Points;preview.Notches=result.Piece.Notches;
-            var endpointsA=new[] { oneCopy.Points[0],oneCopy.Points[^1] };
-            var endpointsB=new[] { twoCopy.Points[0],twoCopy.Points[^1] };
-            preview.Bridge=(from x in endpointsA from y in endpointsB where TekstilCAD.Core.Geometry.Distance(x,y)<=gap select ((Point2,Point2)?)(x,y)).Single();
+            // Reuse the exact endpoint decision made by the join operation;
+            // rounded display distances can identify a different candidate set.
+            preview.Bridge=(oneCopy.Points[result.FirstEndpointIndex],twoCopy.Points[result.SecondEndpointIndex]);
             preview.InvalidateVisual();
             message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. {result.Piece.Notches?.Count ?? 0} köşe işareti aynı koordinatlara kopyalanır. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
             apply.IsEnabled=true;

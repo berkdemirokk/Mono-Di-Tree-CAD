@@ -252,6 +252,35 @@ internal static class DesktopVerification
         }
         finally { window.Close(); studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyOpenPathJoinExactEndpoints(MainWindow studio,List<string> checks)
+    {
+        var epsilon=Math.ScaleB(1,-26);
+        var first=new PatternPiece { Closed=false,Points=[new(-10,0),new(0,0)],
+            Notches=[new NotchMark { VertexIndex=0,Position=new(-10,0) }] };
+        var second=new PatternPiece { Closed=false,Points=[new(1,0),new(1,epsilon)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(1,epsilon) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second] });var before=studio.Document.Clone();
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var window=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            Check(TekstilCAD.Core.Geometry.Distance(first.Points[1],second.Points[0])==1 && TekstilCAD.Core.Geometry.Distance(first.Points[1],second.Points[1])==1,
+                "Join fixture has two equal rounded endpoint distances",checks);
+            window.ToleranceForVerification.Text="1";
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            var preview=typeof(OpenPathJoinWindow).GetField("preview",PrivateInstance)!.GetValue(window)!;
+            var bridge=((Point2,Point2))preview.GetType().GetProperty("Bridge",PrivateInstance)!.GetValue(preview)!;
+            Check(window.ApplyButtonForVerification.IsEnabled && bridge.Item1==first.Points[1] && bridge.Item2==second.Points[0] &&
+                DocumentSession.ContentEquals(before,studio.Document),
+                "Join preview uses the uniquely exact endpoint pair despite two rounded matches",checks);
+            window.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==3 && studio.Document.Pieces[2].Notches is { Count:2 } && session.UndoCount==1,
+                "Exact-endpoint preview applies the marked joined result once",checks);
+            Invoke(studio,"Undo");Check(DocumentSession.ContentEquals(before,studio.Document),"Exact-endpoint join is undoable",checks);
+        }
+        finally { window.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
+    }
+
     private static void VerifyOpenPathSourceLabels(MainWindow studio,List<string> checks)
     {
         var first=new PatternPiece { Name="Ön\u202E\n"+new string('A',150),Closed=false,Points=[new(0,0),new(10,0)] };
@@ -528,6 +557,7 @@ internal static class DesktopVerification
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
+            VerifyOpenPathJoinExactEndpoints(studio,checks);
             VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);
             VerifyOpenPathProductionInformation(studio,checks);
