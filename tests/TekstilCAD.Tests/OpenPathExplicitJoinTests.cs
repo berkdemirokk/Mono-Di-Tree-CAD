@@ -43,6 +43,20 @@ public class OpenPathExplicitJoinTests
         Assert.Throws<OperationCanceledException>(()=>OpenPathJoin.JoinSelected(a,b,1,0,0,cancelled.Token));
     }
     [Fact]
+    public void AutomaticJoinRejectsNumericallyEqualEndpointsWithDifferentZeroBits()
+    {
+        var z=BitConverter.Int64BitsToDouble(long.MinValue);
+        var first=new PatternPiece { Closed=false,Points=[new(0,0),new(10,z)] };
+        var second=new PatternPiece { Closed=false,Points=[new(10,0),new(20,5)] };
+        var before=new ProjectDocument { Pieces=[first.Clone(),second.Clone()] };
+        var error=Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(first,second,0));
+        Assert.Contains("koordinat bitleri farklı",error.Message);
+        Assert.True(DocumentSession.ContentEquals(before,new ProjectDocument { Pieces=[first,second] }));
+        second.Points[0]=first.Points[1];
+        var joined=OpenPathJoin.Join(first,second,0);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(joined.Piece.Points[1].Y));
+    }
+    [Fact]
     public void RejectsCombinedPathBeyondStoredPointLimit()
     {
         var a=new PatternPiece { Closed=false,Points=Enumerable.Range(0,5001).Select(i=>new Point2(i,0)).ToList() };

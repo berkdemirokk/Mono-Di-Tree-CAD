@@ -84,7 +84,7 @@ public static class OpenPathJoin
         if (match.ReverseA) Array.Reverse(a);
         if (match.ReverseB) Array.Reverse(b);
         var shared = a[^1] == b[0];
-        if(firstEndpointIndex is not null && shared &&
+        if(shared &&
            (BitConverter.DoubleToInt64Bits(a[^1].X)!=BitConverter.DoubleToInt64Bits(b[0].X) || BitConverter.DoubleToInt64Bits(a[^1].Y)!=BitConverter.DoubleToInt64Bits(b[0].Y)))
             throw new ArgumentException("Ortak uçların koordinat bitleri farklı; kaynak nokta kaybını önlemek için birleştirilmedi.");
         var resultCount = (long)a.Length + b.Length - (shared ? 1 : 0);
