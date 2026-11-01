@@ -585,7 +585,7 @@ internal sealed class ProductionNestingWindow : Window
         var rotated=layout.NestingSnapshot?.RotationTrace is not null;
         var fileVersion=rotated ? 7 : layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
         var extra=rotated ? " Kaynak parça geometrisi, kopya açıları ve iplik kısıtları tarihsel izde saklanır; kaynak serileme kuralları aktarılmaz. Desteklemeyen mobil sürümler açamaz." : "";
-        return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz.{extra} Bu bir makine işi veya üretim onayı değildir. Devam edilsin mi?";
+        return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz.{extra} Bu bir makine işi değildir ve üretim onayı değildir. Devam edilsin mi?";
     }
     internal ProjectFileVersion CaptureLayoutDestination(string path,int version,ProjectDocument layout)
     {
