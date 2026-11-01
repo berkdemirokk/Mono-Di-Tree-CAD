@@ -18,6 +18,7 @@ enum ModelFilePublisher {
     // The caller still has to publish the directory. This only anchors writes
     // after opening it; mkdir-to-open and later rename races remain.
     static func writeCopyFiles(_ data: Data, metadata: Data, staging: URL,
+                               beforeVerification: (() throws -> Void)? = nil,
                                afterOpen: (() throws -> Void)? = nil) throws {
         guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
@@ -31,12 +32,42 @@ enum ModelFilePublisher {
             throw CocoaError(.fileWriteUnknown)
         }
         try afterOpen?()
+        var files: [(name: String, bytes: Data, identity: stat)] = []
         for (name, bytes) in [("project.tcad", data), ("metadata.json", metadata)] {
             let file = name.withCString { openat(fd, $0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600) }
             guard file >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
             let handle = FileHandle(fileDescriptor: file, closeOnDealloc: true)
+            var created = stat()
+            guard fstat(file, &created) == 0 else { throw CocoaError(.fileWriteUnknown) }
             try handle.write(contentsOf: bytes)
             try handle.close()
+            files.append((name, bytes, created))
+        }
+        try beforeVerification?()
+        for item in files {
+            let file = item.name.withCString { openat(fd, $0, O_RDONLY | O_NOFOLLOW | O_NONBLOCK) }
+            guard file >= 0 else { throw CocoaError(.fileWriteUnknown) }
+            let handle = FileHandle(fileDescriptor: file, closeOnDealloc: true)
+            defer { try? handle.close() }
+            var opened = stat()
+            guard fstat(file, &opened) == 0, sameFile(item.identity, opened) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            var offset = 0
+            while offset < item.bytes.count {
+                let length = min(64 * 1024, item.bytes.count - offset)
+                guard let chunk = try handle.read(upToCount: length),
+                      chunk == item.bytes.subdata(in: offset..<(offset + length)) else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                offset += length
+            }
+            var named = stat()
+            guard (try handle.read(upToCount: 1) ?? Data()).isEmpty,
+                  item.name.withCString({ fstatat(fd, $0, &named, AT_SYMLINK_NOFOLLOW) }) == 0,
+                  sameFile(item.identity, named) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
         }
         guard sameFile(expected, try identity(staging)) else {
             throw CocoaError(.fileWriteUnknown)

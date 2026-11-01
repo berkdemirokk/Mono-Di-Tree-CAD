@@ -747,6 +747,36 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("project.tcad")), data)
         XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("metadata.json")), metadata)
     }
+    func testCopyVerificationRejectsChangedProjectOrMetadata() throws {
+        for name in ["project.tcad", "metadata.json"] {
+            for replace in [true, false] {
+                let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+                try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+                defer { try? FileManager.default.removeItem(at: root) }
+                let staging = root.appendingPathComponent("staging")
+                let path = staging.appendingPathComponent(name)
+                let changed = Data("changed".utf8)
+                XCTAssertThrowsError(try ModelFilePublisher.writeCopyFiles(
+                    Data("project".utf8), metadata: Data("metadata".utf8), staging: staging,
+                    beforeVerification: {
+                        if replace {
+                            try FileManager.default.moveItem(at: path, to: root.appendingPathComponent("original"))
+                            try changed.write(to: path)
+                        } else {
+                            let handle = try FileHandle(forWritingTo: path)
+                            try handle.truncate(atOffset: 0)
+                            try handle.write(contentsOf: changed)
+                            try handle.close()
+                        }
+                    }))
+                XCTAssertEqual(try Data(contentsOf: path), changed)
+                if replace {
+                    let expected = name == "project.tcad" ? Data("project".utf8) : Data("metadata".utf8)
+                    XCTAssertEqual(try Data(contentsOf: root.appendingPathComponent("original")), expected)
+                }
+            }
+        }
+    }
     func testEmptyReplacementDirectoryIsNotRemoved() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
