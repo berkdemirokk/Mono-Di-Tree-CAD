@@ -71,7 +71,9 @@ public static class DxfBlockDefinitionPointMapping
                 if(candidate.Points[i]==position && ++matches>1)throw new InvalidDataException("Blokta birden fazla köşe eşleşiyor.");
             }
         if(matches!=1)throw new InvalidDataException("Blok köşesi bulunamadı.");
-        piece.Notches=[new NotchMark { VertexIndex=selection.VertexIndex,Position=position }];
+        // The POINT may spell zero with the other sign. Preserve the exact
+        // target vertex bits, as required by the persisted marker contract.
+        piece.Notches=[new NotchMark { VertexIndex=selection.VertexIndex,Position=piece.Points[selection.VertexIndex] }];
         var result=new ProjectDocument { Name=import.Project.Name+" · blok tanımı",Pieces=[piece] };ProjectStorage.Validate(result,token);
         return new(result,blockHeaderOrdinal,selection.SourceOrdinal,vertexOrdinal,"Yerleştirilmemiş blok tanımından çalışma kopyası; fiziksel çentik veya üretim onayı değildir.");
     }

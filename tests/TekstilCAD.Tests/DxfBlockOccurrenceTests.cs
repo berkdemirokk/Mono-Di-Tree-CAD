@@ -5,6 +5,27 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Theory]
+    [InlineData("-0","0")]
+    [InlineData("0","-0")]
+    public void MarkerRetainsTargetSignedZeroAcrossScaledSaveAndLoad(string vertexZero,string pointZero)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n"+vertexZero+"\n20\n1\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n"+pointZero+"\n20\n1\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test",10);
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        var result=DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        var piece=Assert.Single(result.WorkingCopy.Pieces);var marker=Assert.Single(piece.Notches!);
+        Assert.Equal(vertexZero=="-0" ? long.MinValue : 0L,BitConverter.DoubleToInt64Bits(piece.Points[0].X));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(piece.Points[0].X),BitConverter.DoubleToInt64Bits(marker.Position.X));
+        var reopened=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(result.WorkingCopy)));
+        var saved=Assert.Single(reopened.Pieces);var savedMarker=Assert.Single(saved.Notches!);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(piece.Points[0].X),BitConverter.DoubleToInt64Bits(saved.Points[0].X));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(saved.Points[0].X),BitConverter.DoubleToInt64Bits(savedMarker.Position.X));
+    }
+
     [Fact]
     public void ExplicitBlockDefinitionCopiesOnlyMatchingOccurrence()
     {
