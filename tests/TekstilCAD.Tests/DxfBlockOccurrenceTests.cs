@@ -5,6 +5,22 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Theory]
+    [InlineData(0,false)]
+    [InlineData(1,true)]
+    public void ExplicitPlainPolylinePreservesOpenOrClosedSourceState(int flags,bool closed)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n"+flags+"\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var before=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var result=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true);
+        var piece=Assert.Single(result.WorkingCopy.Pieces);Assert.Equal(closed,piece.Closed);
+        Assert.Equal(import.Project.Pieces.Single().Points,piece.Points);Assert.Equal(3,piece.Points.Count);
+        var saved=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(result.WorkingCopy)));
+        Assert.Equal(closed,Assert.Single(saved.Pieces).Closed);Assert.Equal(before,bytes);
+    }
+
     [Fact]
     public void NineSeparateBlockLinesCanBeExplicitlyCopiedWithoutProductionClaim()
     {

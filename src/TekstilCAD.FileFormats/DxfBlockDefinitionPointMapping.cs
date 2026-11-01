@@ -143,7 +143,7 @@ public static class DxfBlockDefinitionPointMapping
                 }
             }
             var piece=fresh.Project.Pieces.Single(p=>p.Id==link.PieceId).Clone();var previous=import.Project.Pieces.Single(p=>p.Id==item.PieceId);piece.Id=previous.Id;
-            if((link.EntityType=="POLYLINE" && (!piece.Closed || link.ChildSourceOrdinals.Length!=piece.Points.Count+1)) || piece.Notches is not null ||
+            if((link.EntityType=="POLYLINE" && link.ChildSourceOrdinals.Length!=piece.Points.Count+1) || piece.Notches is not null ||
                !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[previous] }))
                 throw new InvalidDataException("Kaynak kontur veya köşe sayısı değişmiş.");
             if(link.EntityType=="LINE")ValidateLineChain(piece,link,geometry,parameters.MillimetersPerUnit,token);
