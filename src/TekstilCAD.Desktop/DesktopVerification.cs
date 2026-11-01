@@ -66,6 +66,9 @@ internal static class DesktopVerification
         var bounds=strokes[0].Geometry.Bounds;
         if(bounds.IsEmpty || bounds.Width<10 || bounds.Height<10)throw new InvalidOperationException("Preview contour has no measurable extent.");
         var pixels=new byte[width*height*4];bitmap.CopyPixels(pixels,width*4,0);
+        // The 1.5px DarkBlue path is antialiased against WhiteSmoke; its
+        // strongest pixels can be blended by 25% and still represent the stroke.
+        var colorTolerance=color==Colors.DarkBlue ? 240 : 120;
         int CountNear(double y)
         {
             var count=0;
@@ -73,7 +76,7 @@ internal static class DesktopVerification
                 for(var column=Math.Max(0,(int)Math.Ceiling(bounds.Left+bounds.Width*.2));column<=Math.Min(width-1,(int)Math.Floor(bounds.Right-bounds.Width*.2));column++)
                 {
                     var i=(row*width+column)*4;
-                    if(Math.Abs(pixels[i]-color.B)+Math.Abs(pixels[i+1]-color.G)+Math.Abs(pixels[i+2]-color.R)<120)count++;
+                    if(Math.Abs(pixels[i]-color.B)+Math.Abs(pixels[i+1]-color.G)+Math.Abs(pixels[i+2]-color.R)<colorTolerance)count++;
                 }
             return count;
         }
