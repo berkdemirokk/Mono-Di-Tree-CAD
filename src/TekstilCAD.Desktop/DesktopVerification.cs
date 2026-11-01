@@ -460,6 +460,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
+            VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
             VerifyOpenPathClosure(studio,checks);
@@ -6869,6 +6870,36 @@ internal static class DesktopVerification
         finally { window.Close();canvas.CancelDrawing();studio.ClearCanvasError();studio.SetTool("Seç"); }
     }
 
+    private static void VerifyCoordinatePreviewCursor(MainWindow studio,List<string> checks)
+    {
+        studio.LoadDocument(new ProjectDocument { Name="Koordinat önizlemesi" });
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var cursor=typeof(CadCanvas).GetField("cursor",PrivateInstance)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            foreach(var tool in new[] { "Çizgi","Dikdörtgen","Bézier","Yay","Çoklu çizgi" })
+            {
+                studio.SetTool(tool);cursor.SetValue(canvas,new Point2(-500,-600));
+                var point=new Point2(1234,5678);var before=studio.Document.Clone();var undo=session.UndoCount;
+                var error=canvas.AddDrawingPointAt(point);
+                Check(error is null && canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { point }) &&
+                    (Point2)cursor.GetValue(canvas)! == point && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                    $"{tool} coordinate input anchors the live preview at the accepted point",checks);
+                error=canvas.AddDrawingPointAt(new Point2(double.NaN,0));
+                Check(error is not null && (Point2)cursor.GetValue(canvas)! == point &&
+                    canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { point }) && DocumentSession.ContentEquals(before,studio.Document),
+                    $"{tool} rejected coordinate leaves the preview and draft unchanged",checks);
+                canvas.CancelDrawing();
+            }
+            studio.SetTool("Çoklu çizgi");
+            var first=new Point2(1000,2000);var second=new Point2(1100,2100);
+            canvas.AddDrawingPointAt(first);canvas.AddDrawingPointAt(second);
+            Check((Point2)cursor.GetValue(canvas)! == second && canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { first,second }),
+                "Polyline coordinate preview follows the last accepted point",checks);
+        }
+        finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
+    }
     private static void VerifyCoordinateDrawing(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;

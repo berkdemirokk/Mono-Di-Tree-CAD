@@ -501,6 +501,9 @@ public sealed class CadCanvas : FrameworkElement
         if(error is not null)return error;
         if(beforeCommits==observedCommits && ReferenceEquals(beforeDocument,owner.Document) && before.SequenceEqual(drawing))
             return "Nokta eklenmedi. Önceki noktadan farklı ve seçilen araç için geçerli bir konum girin.";
+        // The mouse may be elsewhere while a coordinate dialog adds a point.
+        // Anchor the live preview to the accepted point until the next mouse move.
+        if(drawing.Count>0) { cursor=drawing[^1];InvalidateVisual(); }
         return null;
     }
     // Shared with mouse input. The caller handles the source's coordinate
