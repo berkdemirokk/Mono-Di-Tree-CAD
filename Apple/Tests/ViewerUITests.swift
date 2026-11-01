@@ -30,7 +30,15 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Parçaları karşılaştır"].waitForExistence(timeout: 5))
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["En: -50 mm"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["Karşılaştırma özetini paylaş…"].exists)
+        let previewButton = app.buttons["Karşılaştırma özetini önizle…"]
+        XCTAssertTrue(previewButton.exists); previewButton.tap()
+        let report = app.staticTexts["comparison-report-preview"]
+        XCTAssertTrue(report.waitForExistence(timeout: 5))
+        XCTAssertTrue(report.label.contains("Proje: Seçim Testi"))
+        XCTAssertTrue(report.label.contains("Dosya sırası: 1 / 2"))
+        XCTAssertTrue(report.label.contains("üretime uygunluk doğrulaması değildir"))
+        XCTAssertTrue(app.buttons["Özeti paylaş…"].exists)
+        app.buttons["Kapat"].tap()
         XCTAssertTrue(app.staticTexts["Boy: -100 mm"].exists)
     }
     func testSelectedPieceShowsStraightLineMeasurement() throws {

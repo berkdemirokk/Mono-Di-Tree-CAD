@@ -2712,6 +2712,8 @@ private struct PieceComparisonView: View {
     @State private var second: Int?
     @State private var choosingFirst = false
     @State private var choosingSecond = false
+    private struct ReportPreview: Identifiable { let id = UUID(); let text: String }
+    @State private var reportPreview: ReportPreview?
 
     init(pieces: [Drawing.Piece], projectName: String, initialIndex: Int?) {
         self.pieces = pieces
@@ -2752,7 +2754,7 @@ private struct PieceComparisonView: View {
                     }
 
                     if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second) {
-                        ShareLink(item: report) { Label("Karşılaştırma özetini paylaş…", systemImage: "square.and.arrow.up") }
+                        Button("Karşılaştırma özetini önizle…") { reportPreview = ReportPreview(text: report) }
                     }
                     Section("Yaklaşık fark: ikinci − birinci") {
                         Text("En: \(difference(a.contourBounds.map { $0.maxX - $0.minX }, b.contourBounds.map { $0.maxX - $0.minX }))")
@@ -2770,6 +2772,23 @@ private struct PieceComparisonView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
             .sheet(isPresented: $choosingFirst) { PiecePicker(pieces: pieces, selection: $first) }
             .sheet(isPresented: $choosingSecond) { PiecePicker(pieces: pieces, selection: $second) }
+            .sheet(item: $reportPreview) { preview in
+                NavigationStack {
+                    ScrollView {
+                        Text(preview.text)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                            .accessibilityIdentifier("comparison-report-preview")
+                            .padding()
+                    }
+                    .navigationTitle("Paylaşım önizlemesi")
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { reportPreview = nil } } }
+                    .safeAreaInset(edge: .bottom) {
+                        ShareLink(item: preview.text) { Label("Özeti paylaş…", systemImage: "square.and.arrow.up") }
+                            .padding().frame(maxWidth: .infinity).background(.regularMaterial)
+                    }
+                }
+            }
         }
     }
 }
