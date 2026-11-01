@@ -694,7 +694,7 @@ public sealed class CadCanvas : FrameworkElement
         if(e.ChangedButton!=MouseButton.Left || dragId is null)return;
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==dragId);
         var result=dragPreview;
-        if(piece is not null && dragOriginal is not null && (!piece.Points.SequenceEqual(dragOriginal) || !GrainlineTransform.Same(piece.Grainline,dragOriginalGrainline)))
+        if(piece is not null && dragOriginal is not null && (!SamePointBits(piece.Points,dragOriginal) || !GrainlineTransform.Same(piece.Grainline,dragOriginalGrainline)))
             throw new InvalidOperationException("Sürükleme sırasında parça değişti. İşlemi yeniden başlatın.");
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null && (dragSourceSnapshot is null || (dragVertex>=0 && !CanDragMarkedVertex(piece,dragVertex))))
         { ClearDrag();ReleaseMouseCapture();InvalidateVisual();owner.ShowCanvasError("İşaretli parça değiştirilemez; işlem uygulanmadı.");return; }
@@ -726,7 +726,7 @@ public sealed class CadCanvas : FrameworkElement
                 }
                 else ValidateDraggedVertex(result,piece.Closed);
             }
-            if(dragSourceSnapshot is not null && !OpenPathSourceSnapshot.Matches(piece,dragSourceSnapshot))
+            if(dragSourceSnapshot is not null && !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[dragSourceSnapshot] }))
                 throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
             var snapshot=result.ToList();
             List<NotchMark>? movedNotches=null;
@@ -758,7 +758,7 @@ public sealed class CadCanvas : FrameworkElement
     {
         if(LargeVertexValidationRunning) { owner.SetStatus("Nokta değişikliği zaten doğrulanıyor; lütfen bekleyin.");return; }
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
-        if(piece is null || piece.Closed!=closed || !piece.Points.SequenceEqual(original) || owner.SelectedId!=id || owner.ActiveTool!="Seç")
+        if(piece is null || piece.Closed!=closed || !SamePointBits(piece.Points,original) || owner.SelectedId!=id || owner.ActiveTool!="Seç")
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
         if(owner.HasPropertyDraftFor(id))
             throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
@@ -787,7 +787,7 @@ public sealed class CadCanvas : FrameworkElement
             if(owner.HasPropertyDraftFor(id))
             { owner.SetStatus("Nokta değişikliği uygulanmadı · Bu parçaya ait ad veya konum taslağı doğrulama sırasında oluşturuldu. Taslak ve önceki geometri korundu.");return; }
             var current=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
-            if(current is null || (markedSource is null ? current.Notches is not null : !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[markedSource] })) || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
+            if(current is null || (markedSource is null ? current.Notches is not null : !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[markedSource] })) || current.Closed!=closed || !SamePointBits(current.Points,source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
             { owner.SetStatus("Parça değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
             var liveRule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);
             var mappedRule=mayMapRule && !owner.OwnedWindows.OfType<TextileToolsWindow>().Any() && ReferenceEquals(liveRule,originalRule) && RuleStillMatches(liveRule,ruleSnapshot) && DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[sourcePiece] })

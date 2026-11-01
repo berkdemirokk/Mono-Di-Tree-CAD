@@ -1740,6 +1740,29 @@ internal static class DesktopVerification
             }
             finally { releaseRule.Set();if(pendingRule is not null) { PumpUntil(()=>pendingRule.IsCompleted);pendingRule.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
         }
+        var bitPiece=new PatternPiece { Name="Büyük bit eşleşmesi",Closed=true,Points=original.ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[bitPiece] });studio.SetTool("Seç");studio.Select(bitPiece.Id);
+        var wrongSourceBits=original.ToArray();wrongSourceBits[0]=new Point2(original[0].X,BitConverter.Int64BitsToDouble(long.MinValue));
+        var bitStartRejected=false;
+        try { canvas.StartLargeVertexValidation(bitPiece.Id,true,wrongSourceBits,valid,0); } catch(InvalidOperationException) { bitStartRejected=true; }
+        Check(bitStartRejected && !canvas.LargeVertexValidationRunning,"Large worker rejects a bit-only mismatch before starting",checks);
+        using(var reachedBits=new ManualResetEventSlim())using(var releaseBits=new ManualResetEventSlim())
+        {
+            Task? pendingBits=null;
+            try
+            {
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reachedBits.Set();if(!releaseBits.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.StartLargeVertexValidation(bitPiece.Id,true,original,valid,0);
+                pendingBits=canvas.LargeVertexValidationTask!;PumpUntil(()=>reachedBits.IsSet);
+                var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+                studio.Document.Pieces[0].Points[0]=new Point2(original[0].X,negativeZero);
+                var changedBits=studio.Document.Clone();releaseBits.Set();PumpUntil(()=>pendingBits.IsCompleted);pendingBits.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(changedBits,studio.Document) && session.UndoCount==0 &&
+                    BitConverter.DoubleToInt64Bits(studio.Document.Pieces[0].Points[0].Y)==long.MinValue,
+                    "Large unmarked worker rejects a bit-only source change without overwriting it",checks);
+            }
+            finally { releaseBits.Set();if(pendingBits is not null) { PumpUntil(()=>pendingBits.IsCompleted);pendingBits.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
         var draftPiece=new PatternPiece { Name="Büyük taslak",Closed=false,Points=original.ToList() };
         studio.LoadDocument(new ProjectDocument { Pieces=[draftPiece] });studio.SetTool("Seç");studio.Select(draftPiece.Id);
         using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
@@ -2132,6 +2155,14 @@ internal static class DesktopVerification
             try { up.Invoke(canvas,[click]); } catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { staleRejected=true; }
             Check(staleRejected && DocumentSession.ContentEquals(newer,studio.Document) && session.UndoCount==priorUndo,
                 "Marked drag rejects a changed source and keeps newer marks",checks);canvas.CancelDrawing();
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.Select(marked.Id);PointAt(50,50,1);down.Invoke(canvas,[canvas,click]);
+            pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+20));
+            var negativeZeroMark=BitConverter.Int64BitsToDouble(long.MinValue);
+            studio.Document.Pieces[0].Notches![0].Position=new Point2(100,negativeZeroMark);
+            var changedMarkBits=studio.Document.Clone();var beforeBitUndo=session.UndoCount;var bitRejected=false;
+            try { up.Invoke(canvas,[click]); } catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { bitRejected=true; }
+            Check(bitRejected && DocumentSession.ContentEquals(changedMarkBits,studio.Document) && session.UndoCount==beforeBitUndo,
+                "Canvas drag rejects a concurrent bit-only marker change",checks);canvas.CancelDrawing();
             studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
             Check(canvas.HasActiveDragPreview,"Dragging an explicitly marked vertex starts",checks);
             before=studio.Document.Clone();undo=session.UndoCount;pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+10));up.Invoke(canvas,[click]);
