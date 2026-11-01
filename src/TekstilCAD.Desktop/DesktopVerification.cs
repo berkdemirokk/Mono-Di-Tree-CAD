@@ -2324,7 +2324,8 @@ internal static class DesktopVerification
         finally { options.Close(); }
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
             "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
-            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n"+
+            "0\nBLOCK\n2\nB\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n30\n20\n0\n0\nVERTEX\n10\n40\n20\n0\n0\nVERTEX\n10\n30\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n30\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
         var import=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(text)),"test");var before=import.Project.Clone();
         var window=new DxfBlockDefinitionReviewWindow(studio,import);
         try
@@ -2387,22 +2388,44 @@ internal static class DesktopVerification
             Check(indexText.Text=="" && vertex.SelectedIndex==1,"Manual vertex choice clears the old search index",checks);
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(queue.Items.Count==2,"Two explicitly selected pairs are queued for one source piece",checks);
+            block.SelectedIndex=1;point.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(queue.Items.Count==3,"A second block and piece can be added without losing prior choices",checks);
+            var secondPieceId=import.Project.Pieces[1].Id;
+            queue.SelectedIndex=2;
+            Check(Descendants<DxfPiecePreview>(root).Single().DisplayedPieceId==secondPieceId && vertex.SelectedIndex==0,
+                "Selecting a queued pair previews its own block and piece",checks);
+            block.SelectedIndex=0;
+            Check(queue.SelectedIndex==-1 && queue.Items.Count==3,"Changing the displayed block clears queue highlight without losing selections",checks);
+            queue.SelectedIndex=0;
+            Check(Descendants<DxfPiecePreview>(root).Single().DisplayedPieceId==import.Project.Pieces[0].Id && block.SelectedIndex==0,
+                "Returning to an earlier pair restores its own preview",checks);
             pointOrdinal.Text="999999";apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(window.Selections.Count==0 && queue.Items.Count==2 && status.Text.Contains("aramasını tamamlayın"),
+            Check(window.Selections.Count==0 && queue.Items.Count==3 && status.Text.Contains("aramasını tamamlayın"),
                 "Pending POINT search prevents applying an older queue without discarding it",checks);
             pointOrdinal.Clear();point.SelectedIndex=0;
-            queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair restores its source POINT and target vertex choices",checks);
+            queue.SelectedIndex=2;queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair restores its source POINT and target vertex choices",checks);
             Check(status.Text.Contains("Yalnız hedef köşe") && status.Text.Contains("POINT koordinatını listeden") && status.Text.Contains("işlem sırasında doğrulanacak"),
                 "Queued-pair preview explicitly distinguishes target vertex from source POINT",checks);
-            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(queue.Items.Count==1,"Selected queued pair can be removed",checks);
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(queue.Items.Count==2,"Selected queued pair can be removed",checks);
             point.SelectedIndex=0;vertex.SelectedIndex=0;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
-            Check(window.Selections.Count==2 && window.Selections.Select(s=>s.VertexIndex).ToHashSet().SetEquals(new[]{0,1}),"Queued pairs are accepted together only after acknowledgment",checks);
+            Check(window.Selections.Count==3 && window.Selections.Select(s=>s.Header).Distinct().Count()==2 && window.Selections.Select(s=>s.Selection.PieceId).Distinct().Count()==2,
+                "Pairs across two blocks are accepted together only after acknowledgment",checks);
         }
         finally { window.Close(); }
-        var links=import.PieceSources!.Value;var link=links.Single(p=>p.EntityType=="POLYLINE");
+        var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
         var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
         var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
+        var secondLink=links.Where(p=>p.EntityType=="POLYLINE").Skip(1).Single();
+        var project=DxfBlockDefinitionPointMapping.CreateProject(import,new MemoryStream(bytes),
+            [new(link.BlockHeaderOrdinal!.Value,link.PieceId,rawPoints[0].SourceOrdinal,0),
+             new(secondLink.BlockHeaderOrdinal!.Value,secondLink.PieceId,rawPoints[2].SourceOrdinal,0)],"source.dxf",true);
+        var projectPath=Path.Combine(work,$"block-project-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(project.WorkingCopy,projectPath);
+        var projectLoaded=ProjectStorage.Load(projectPath);
+        Check(projectLoaded.Pieces.Count==2 && projectLoaded.Pieces.All(p=>p.Notches is { Count:1 }) &&
+            project.Assignments.Length==2 && projectLoaded.ImportProvenance is not null &&
+            DocumentSession.ContentEquals(project.WorkingCopy,projectLoaded) && DocumentSession.ContentEquals(before,import.Project),
+            "Multiple selected block pieces and source history survive v6 save and reopen",checks);
         var batch=DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),
             [new(rawPoints[0].SourceOrdinal,link.PieceId,0),new(rawPoints[1].SourceOrdinal,link.PieceId,1)],link.BlockHeaderOrdinal!.Value,true);
         MainWindow.AttachBlockDefinitionProvenance(batch,import,"source.dxf");

@@ -2038,11 +2038,10 @@ public class MainWindow : Window
             var review=new DxfBlockDefinitionReviewWindow(this,import);
             if(review.ShowDialog()!=true || review.Selections.Count==0)return;
             cancellation.Token.ThrowIfCancellationRequested();
-            var blockOrdinal=review.BlockHeaderOrdinal;var selections=review.Selections.ToArray();
-            SetStatus($"{selections.Length} POINT eşlemesi kaynak üzerinden tek tek doğrulanıyor; büyük dosyalarda uzun sürebilir.");
-            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.CreateMany(import,source,selections,blockOrdinal,true,cancellation.Token); });
+            var selections=review.Selections.Select(s=>new DxfBlockProjectPointSelection(s.Header,s.Selection.PieceId,s.Selection.SourceOrdinal,s.Selection.VertexIndex)).ToArray();
+            SetStatus($"{selections.Length} POINT eşlemesi kaynak üzerinden doğrulanıyor; büyük dosyalarda uzun sürebilir.");
+            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.CreateProject(import,source,selections,Path.GetFileName(path),true,cancellation.Token); });
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
-            AttachBlockDefinitionProvenance(result,import,Path.GetFileName(path));
             var save=new SaveFileDialog { Filter="TekstilCAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",AddExtension=true,OverwritePrompt=false };
             if(save.ShowDialog(this)!=true)return;
             if(!string.Equals(Path.GetExtension(save.FileName),".tcad",StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Çalışma kopyası .tcad uzantısıyla kaydedilmelidir.");
