@@ -98,7 +98,7 @@ internal sealed class OpenPathJoinWindow : Window
             var endpointsB=new[] { twoCopy.Points[0],twoCopy.Points[^1] };
             preview.Bridge=(from x in endpointsA from y in endpointsB where TekstilCAD.Core.Geometry.Distance(x,y)<=gap select ((Point2,Point2)?)(x,y)).Single();
             preview.InvalidateVisual();
-            message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
+            message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }

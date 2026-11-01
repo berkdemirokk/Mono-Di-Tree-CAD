@@ -64,7 +64,7 @@ public static class OpenPathJoin
         points.AddRange(shared ? b.Skip(1) : b);
         LargeOpenPathValidator.Validate(points, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var piece = new PatternPiece { Name = "Birleştirilmiş kontur", Closed = false, Points = points };
+        var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points };
         return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance);
     }
 }

@@ -26,6 +26,6 @@ public static class OpenPathClosure
         if(length>tolerance)throw new ArgumentException("Uçlar arasındaki mesafe seçilen toleransı aşıyor.");
         LargeContourValidator.Validate(points,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(new PatternPiece { Name="Kapatılmış kontur",Closed=true,Points=[..points] },source.Id,source.Name,length);
+        return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points] },source.Id,source.Name,length);
     }
 }

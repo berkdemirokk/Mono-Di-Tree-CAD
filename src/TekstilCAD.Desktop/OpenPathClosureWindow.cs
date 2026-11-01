@@ -75,7 +75,7 @@ internal sealed class OpenPathClosureWindow : Window
             if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(copy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın.";return; }
             proposal=result;before=copy;document=currentDocument;preview.Points=result.Piece.Points;preview.InvalidateVisual();
-            message.Text=$"Kapanış kenarı: {MeasurementInput.Format(result.ClosingLength)} mm. Kaynak projede kalır; sonuca kaynak kuralları, üretim bilgileri veya kaynak geçmişi aktarılmaz. Geri al eklenen sonucu kaldırır.";
+            message.Text=$"Kapanış kenarı: {MeasurementInput.Format(result.ClosingLength)} mm. Kaynak projede kalır; sonuç adı kaynağı belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuca kaynak kuralları, üretim bilgileri veya kaynak geçmişi aktarılmaz. Geri al eklenen sonucu kaldırır.";
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }
