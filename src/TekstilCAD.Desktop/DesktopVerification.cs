@@ -2520,9 +2520,15 @@ internal static class DesktopVerification
             var bulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Tüm aday parçaları ekle"));
             block.SelectedIndex=0;points.SelectedIndex=0;pieces.SelectedIndex=0;vertices.SelectedIndex=0;
             Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var blockBulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili bloktaki adayları ekle"));
+            block.SelectedIndex=1;blockBulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==3 && mappings.Items.Count==1 && AutomationProperties.GetHelpText(blockBulk).Contains("Yalnız seçili bloktaki"),
+                "Block-scoped bulk selection adds only that block and keeps existing POINT mapping",checks);
+            block.SelectedIndex=1;blockBulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==3 && mappings.Items.Count==1,"Repeated block selection preserves queue without duplicates",checks);
             bulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var summary=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("aday işaretsiz eklendi") && AutomationProperties.GetName(t)==t.Text);
-            Check(included.Items.Count==4 && mappings.Items.Count==1 && summary.Text.Contains("3 aday işaretsiz eklendi") &&
+            Check(included.Items.Count==4 && mappings.Items.Count==1 && summary.Text.Contains("1 aday işaretsiz eklendi") &&
                 summary.Text.Contains("POINT eşlemesi eklenmedi") && summary.Text.Contains("üretim parçaları değildir") &&
                 AutomationProperties.GetHelpText(bulk).Contains("hiçbir parça eklenmez"),
                 "Explicit bulk candidate selection keeps existing marker and reports its scope",checks);
@@ -2540,6 +2546,11 @@ internal static class DesktopVerification
             var root=(FrameworkElement)manyWindow.Content;Render(manyWindow,Path.Combine(work,"block-bulk-limit.png"),500,380);
             var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
             var bulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Tüm aday parçaları ekle"));
+            var block=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var blockBulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili bloktaki adayları ekle"));
+            block.SelectedIndex=0;blockBulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==0 && DocumentSession.ContentEquals(manyBefore,manyImport.Project),
+                "Block selection above the limit adds nothing and leaves source unchanged",checks);
             bulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var summary=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("sınırına sığmıyor") && AutomationProperties.GetName(t)==t.Text);
             Check(included.Items.Count==0 && summary.Text.Contains("hiçbir parça eklenmedi") && DocumentSession.ContentEquals(manyBefore,manyImport.Project),

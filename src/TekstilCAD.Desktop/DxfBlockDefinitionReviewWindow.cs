@@ -135,8 +135,10 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var pieceActions=new WrapPanel();var addPiece=new Button { Content="Seçili parçayı ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         var addAllCandidates=new Button { Content="Tüm aday parçaları ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         AutomationProperties.SetHelpText(addAllCandidates,"Tüm bloklardaki henüz seçilmemiş LINE ve POLYLINE adaylarını işaretsiz ekler; POINT eşlemesi yapmaz. 32 işaretsiz parça sınırı aşılırsa hiçbir parça eklenmez. Destek ve üretim uygunluğu bu işlemle doğrulanmaz.");
+        var addBlockCandidates=new Button { Content="Seçili bloktaki adayları ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
+        AutomationProperties.SetHelpText(addBlockCandidates,"Yalnız seçili bloktaki henüz seçilmemiş LINE ve POLYLINE adaylarını işaretsiz ekler; POINT eşlemesi yapmaz. 32 işaretsiz parça sınırı aşılırsa hiçbir parça eklenmez. Uygunluk kaynakta ayrıca doğrulanır.");
         var removePiece=new Button { Content="Listeden parçayı kaldır",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
-        pieceActions.Children.Add(addPiece);pieceActions.Children.Add(addAllCandidates);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
+        pieceActions.Children.Add(addPiece);pieceActions.Children.Add(addBlockCandidates);pieceActions.Children.Add(addAllCandidates);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
         var bulkSummary=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(4,0,4,4) };AutomationProperties.SetName(bulkSummary,"Toplu aday seçimi sonucu");body.Children.Add(bulkSummary);
         includedList.ItemsSource=includedPieces;ScrollViewer.SetHorizontalScrollBarVisibility(includedList,ScrollBarVisibility.Auto);
         AutomationProperties.SetName(includedList,"Çalışma projesine seçilen parçalar ve işaret sayıları");body.Children.Add(includedList);
@@ -152,11 +154,11 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             selected?.SetMarks(mappings.Count(m=>m.Item.Selection.PieceId==id));
         }
         int UnmarkedCount()=>includedPieces.Count(p=>!mappings.Any(m=>m.Item.Selection.PieceId==p.Item.PieceId));
-        addAllCandidates.Click+=(_,_ )=>
+        void AddCandidates(int? blockHeader)
         {
             var byId=import.Project.Pieces.ToDictionary(p=>p.Id);
             var selectedIds=includedPieces.Select(p=>p.Item.PieceId).ToHashSet();
-            var candidates=links.Where(l=>byId.ContainsKey(l.PieceId)).Select(l=>
+            var candidates=links.Where(l=>byId.ContainsKey(l.PieceId) && (!blockHeader.HasValue || l.BlockHeaderOrdinal==blockHeader)).Select(l=>
             {
                 var piece=byId[l.PieceId];
                 return (Block:new BlockChoice(l.BlockHeaderOrdinal!.Value,$"Blok kaydı {l.BlockHeaderOrdinal.Value} · {Safe(l.Block)}"),
@@ -174,6 +176,12 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             foreach(var item in newItems)Include(item.Block,item.Piece);
             bulkSummary.Text=$"{newItems.Length} aday işaretsiz eklendi; {candidates.Length-newItems.Length} önceden seçili parça korundu. POINT eşlemesi eklenmedi. Bunlar doğrulanmış üretim parçaları değildir. {skippedNotice}";
             AutomationProperties.SetName(bulkSummary,bulkSummary.Text);SetStatus(bulkSummary.Text);
+        }
+        addAllCandidates.Click+=(_,_ )=>AddCandidates(null);
+        addBlockCandidates.Click+=(_,_ )=>
+        {
+            if(blocks.SelectedItem is not BlockChoice block) { SetStatus("Önce adayları eklenecek blok tanımını seçin.");return; }
+            AddCandidates(block.Header);
         };
         addPiece.Click+=(_,_)=>
         {
