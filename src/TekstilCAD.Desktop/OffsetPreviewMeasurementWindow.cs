@@ -15,6 +15,8 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
     private readonly Point2[] source,candidate;
     internal Action<TextBlock>? LiveAnnouncementForVerification { get; set; }
     internal ComboBox[] Selectors { get; }=new ComboBox[6];
+    internal TextBox[] IndexInputs { get; }=new TextBox[6];
+    internal Button[] IndexButtons { get; }=new Button[6];
     internal OffsetTriplePreview[] Previews { get; }=new OffsetTriplePreview[2];
     internal TextBlock Result { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,0),Focusable=true };
     internal OffsetPreviewMeasurementWindow(Window owner,IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate)
@@ -54,6 +56,20 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
             var box=new ComboBox { ItemsSource=i<3 ? originalChoices : candidateChoices,DisplayMemberPath=nameof(Choice.Label),IsTextSearchEnabled=true,MaxDropDownHeight=220,HorizontalAlignment=HorizontalAlignment.Stretch };
             box.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));VirtualizingPanel.SetIsVirtualizing(box,true);ScrollViewer.SetCanContentScroll(box,true);
             var field=i;AutomationProperties.SetName(box,labels[i]);box.SelectionChanged+=(_,_)=> { Previews[field/3].SetSelection(field%3,box.SelectedIndex);SetLiveText(Result,"Seçim değişti; ölçümü yenileyin."); };Selectors[i]=box;body.Children.Add(box);
+            var row=new WrapPanel();var input=new TextBox { Width=90,MaxLength=10,Margin=new Thickness(0,4,4,4) };
+            AutomationProperties.SetName(input,labels[i]+" indeksini yazın");
+            var go=new Button { Content="İndekse git",Margin=new Thickness(4) };
+            AutomationProperties.SetName(go,labels[i]+" indeksine git");
+            bool selectingByIndex=false,clearingInput=false;
+            box.SelectionChanged+=(_,_)=> { if(!selectingByIndex && !clearingInput && box.SelectedIndex>=0) { clearingInput=true;try { input.Clear(); } finally { clearingInput=false; } } };
+            input.TextChanged+=(_,_)=> { if(clearingInput)return;box.SelectedIndex=-1;SetLiveText(Result,"İndeks yazıldı; seçmek için İndekse git düğmesini kullanın."); };
+            go.Click+=(_,_)=> {
+                if(!int.TryParse(input.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var index) || index<0 || index>=box.Items.Count)
+                { box.SelectedIndex=-1;SetLiveText(Result,"Geçerli bir nokta indeksi girin; önceki seçim temizlendi.");return; }
+                selectingByIndex=true;try { box.SelectedIndex=index; } finally { selectingByIndex=false; }
+                SetLiveText(Result,$"{labels[field]}: {index}. nokta seçildi; ölçümü yenileyin.");
+            };
+            IndexInputs[i]=input;IndexButtons[i]=go;row.Children.Add(input);row.Children.Add(go);body.Children.Add(row);
         }
         var compare=new Button { Content="Seçili ölçüleri karşılaştır",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,0) };
         compare.Click+=(_,_)=>Compare();body.Children.Add(compare);

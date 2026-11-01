@@ -11651,6 +11651,15 @@ internal static class DesktopVerification
                 try
                 {
                     originalFeature[1]=new(5,-99);candidateFeature[2]=new(5,-99);
+                    measure.IndexInputs[0].Text="2";
+                    measure.IndexButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(measure.Selectors[0].SelectedIndex==2,"Preview index lookup selects the exact source vertex",checks);
+                    measure.IndexInputs[0].Text="999999";
+                    measure.IndexButtons[0].RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(measure.Selectors[0].SelectedIndex==-1 && measure.Result.Text.Contains("önceki seçim temizlendi"),
+                        "Invalid preview index clears the previous selection",checks);
+                    measure.Selectors[0].SelectedIndex=1;
+                    Check(measure.IndexInputs[0].Text.Length==0,"Manual vertex selection clears the old lookup text",checks);
                     int[] chosen=[0,1,2,1,2,3];for(var n=0;n<chosen.Length;n++)measure.Selectors[n].SelectedIndex=chosen[n];
                     Check(measure.Previews[0].Selected.SequenceEqual(new[] { 0,1,2 }) && measure.Previews[1].Selected.SequenceEqual(new[] { 1,2,3 }) &&
                         AutomationProperties.GetHelpText(measure.Previews[0]).Contains("T 1"),"Both visual selectors follow independent index lists and expose selected roles",checks);
