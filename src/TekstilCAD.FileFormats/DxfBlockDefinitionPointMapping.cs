@@ -8,10 +8,74 @@ namespace TekstilCAD.FileFormats;
 public sealed record DxfBlockDefinitionPointResult(ProjectDocument WorkingCopy,int BlockHeaderOrdinal,int PointOrdinal,int VertexOrdinal,string Notice);
 public sealed record DxfBlockDefinitionPointAssignment(int PointOrdinal,int VertexOrdinal,int VertexIndex);
 public sealed record DxfBlockDefinitionPointsResult(ProjectDocument WorkingCopy,int BlockHeaderOrdinal,ImmutableArray<DxfBlockDefinitionPointAssignment> Assignments,string Notice);
+public sealed record DxfBlockProjectPointSelection(int BlockHeaderOrdinal,Guid PieceId,int PointOrdinal,int VertexIndex);
+public sealed record DxfBlockProjectPointAssignment(int BlockHeaderOrdinal,Guid PieceId,int PointOrdinal,int VertexOrdinal,int VertexIndex,string SourceLayer,string PointLayer);
+public sealed record DxfBlockProjectResult(ProjectDocument WorkingCopy,ImmutableArray<DxfBlockProjectPointAssignment> Assignments,string Notice);
 
 /// <summary>Explicitly selects one unplaced block definition and one coincident visual vertex marker.</summary>
 public static class DxfBlockDefinitionPointMapping
 {
+    /// <summary>Builds a detached project from explicitly selected unplaced block
+    /// definitions. Source stream and import must remain stable during the call.
+    /// A failed selection or cancellation never returns a partial project.</summary>
+    public static DxfBlockProjectResult CreateProject(DxfImportResult import,Stream source,
+        IReadOnlyCollection<DxfBlockProjectPointSelection> selections,string sourceFileName,bool acceptUnplacedDefinitions,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(import);ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(selections);ArgumentNullException.ThrowIfNull(sourceFileName);
+        token.ThrowIfCancellationRequested();
+        if(!acceptUnplacedDefinitions || !source.CanRead || !source.CanSeek || source.Position!=0 ||
+           import.ImportParameters is not { Mode:DxfImportMode.General, BulgeToleranceMm:null } parameters || import.CapturedWarnings.IsDefault)
+            throw new InvalidDataException("Blok tanımları onayı, kaynak akışı veya DXF seçenekleri geçersiz.");
+        const int maximumSelections=32;
+        var selected=DxfBoundedSelections.Copy(selections,maximumSelections,token);
+        if(selected.Length==0)throw new InvalidDataException("En az bir POINT seçilmelidir.");
+        var points=new HashSet<int>();var targets=new HashSet<(Guid,int)>();
+        foreach(var item in selected)
+        {
+            token.ThrowIfCancellationRequested();
+            if(item is null || item.BlockHeaderOrdinal<0 || item.PieceId==Guid.Empty || item.VertexIndex<0 ||
+               !points.Add(item.PointOrdinal) || !targets.Add((item.PieceId,item.VertexIndex)))
+                throw new InvalidDataException("POINT ve hedef köşe seçimleri dolu ve benzersiz olmalıdır.");
+        }
+        using var snapshot=new MemoryStream();var buffer=new byte[81920];
+        while(true)
+        {
+            token.ThrowIfCancellationRequested();var count=source.Read(buffer,0,buffer.Length);if(count==0)break;
+            if(snapshot.Length+count>DxfSourceSnapshotCheck.MaximumBytes)throw new InvalidDataException("DXF kaynak sınırını aşıyor.");
+            snapshot.Write(buffer,0,count);
+        }
+        token.ThrowIfCancellationRequested();snapshot.Position=0;
+        var fresh=DxfFormat.Import(snapshot,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
+        var copies=new Dictionary<Guid,PatternPiece>();var assignments=ImmutableArray.CreateBuilder<DxfBlockProjectPointAssignment>(selected.Length);
+        const string notice="Yerleştirilmemiş blok tanımlarından çalışma kopyası; fiziksel çentik, yerleşim veya üretim onayı değildir.";
+        foreach(var item in selected)
+        {
+            token.ThrowIfCancellationRequested();snapshot.Position=0;
+            var verified=CreateCore(import,snapshot,new(item.PointOrdinal,item.PieceId,item.VertexIndex),item.BlockHeaderOrdinal,true,token,fresh);
+            var verifiedPiece=verified.WorkingCopy.Pieces.Single();
+            if(copies.TryGetValue(item.PieceId,out var existing))existing.Notches!.Add(verifiedPiece.Notches!.Single().Clone());
+            else copies.Add(item.PieceId,verifiedPiece);
+            var link=import.PieceSources!.Value.Single(p=>p.PieceId==item.PieceId);
+            var rawPoint=fresh.SupplementalGeometry!.Records.Single(p=>p.SourceOrdinal==item.PointOrdinal && p.EntityType=="POINT");
+            var pointLayers=rawPoint.Groups.Where(g=>g.Code==8).ToArray();
+            if(pointLayers.Length>1)throw new InvalidDataException("POINT katmanı yinelenmiş.");
+            var pointLayer=pointLayers.Length==0 ? "0" : pointLayers[0].RawValue.Trim();
+            if(string.IsNullOrWhiteSpace(pointLayer))throw new InvalidDataException("POINT katmanı boş.");
+            assignments.Add(new(item.BlockHeaderOrdinal,item.PieceId,item.PointOrdinal,verified.VertexOrdinal,item.VertexIndex,link.Layer,pointLayer));
+        }
+        var result=new ProjectDocument { Name=import.Project.Name+" · blok tanımları",Pieces=copies.Values.ToList() };
+        var audit=assignments.MoveToImmutable();
+        var warnings=import.CapturedWarnings.Concat([notice]).Concat(audit.Select(a=>
+            $"Blok {a.BlockHeaderOrdinal}; parça {a.PieceId:D}; POINT {a.PointOrdinal}; VERTEX {a.VertexOrdinal}; köşe {a.VertexIndex}; kontur katmanı {a.SourceLayer}; POINT katmanı {a.PointLayer}." )).ToList();
+        result.ImportProvenance=new DxfImportProvenance { SourceFileName=sourceFileName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
+            MillimetersPerUnit=parameters.MillimetersPerUnit,Warnings=warnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };
+        token.ThrowIfCancellationRequested();ProjectStorage.Validate(result,token);
+        source.Position=0;var finalSource=DxfSourceSnapshotCheck.CheckStream(source,import,token);
+        if(finalSource.Status!=DxfSourceSnapshotCheck.Status.MatchesReadBytes || !finalSource.ImportIdentityVerified)
+            throw new InvalidDataException("DXF kaynağı eşleme sırasında değişti; çalışma kopyası oluşturulmadı.");
+        token.ThrowIfCancellationRequested();return new(result,audit,notice);
+    }
+
     /// <summary>All-or-nothing batch on one selected piece. Each selection is
     /// independently revalidated against one source snapshot; no partial
     /// working copy is returned if any selection fails. The caller must keep the
