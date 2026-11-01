@@ -62,6 +62,25 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalV7Contours.decode([Data(json.utf8)]))
         }
     }
+    func testExactQuarterTurnCheckRejectsAlteredGeometryAndObservesCancellation() throws {
+        func piece(_ id: String, _ points: String, _ start: String, _ end: String) throws -> Drawing.Piece {
+            let firstPoint = points.components(separatedBy: "},")[0] + "}"
+            let json = "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[\(points)],\"Notches\":[{\"VertexIndex\":0,\"Position\":\(firstPoint)}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":\(start),\"End\":\(end),\"NeedsReview\":false}}"
+            return try XCTUnwrap(ExperimentalV7Contours.decode([Data(json.utf8)]).first)
+        }
+        let source = try piece("11111111-1111-1111-1111-111111111111",
+            #"{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":2}"#,
+            #"{"X":1,"Y":0}"#, #"{"X":1,"Y":1}"#)
+        let placed = try piece("22222222-2222-2222-2222-222222222222",
+            #"{"X":10,"Y":20},{"X":10,"Y":24},{"X":8,"Y":20}"#,
+            #"{"X":10,"Y":21}"#, #"{"X":9,"Y":21}"#)
+        XCTAssertTrue(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90))
+        let altered = try piece("22222222-2222-2222-2222-222222222222",
+            #"{"X":10,"Y":20},{"X":10,"Y":25},{"X":8,"Y":20}"#,
+            #"{"X":10,"Y":21}"#, #"{"X":9,"Y":21}"#)
+        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: altered, degrees: 90))
+        XCTAssertThrowsError(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, cancelled: { true }))
+    }
     func testSignedIntegerTokensUseFieldRangeAfterSyntax() throws {
         let template = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":INDEX,"Position":{"X":0,"Y":0}}],"Metadata":{"Role":"Kesim","Quantity":QUANTITY}}"#
         func input(_ index: String, _ quantity: String) -> Data {
@@ -207,6 +226,11 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         var historic = try XCTUnwrap(trace["LayoutPieces"] as? [[String: Any]])
         historic[0]["Id"] = forged; trace["LayoutPieces"] = historic
         snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; historic = try XCTUnwrap(trace["LayoutPieces"] as? [[String: Any]])
+        var points = try XCTUnwrap(historic[0]["Points"] as? [[String: Any]])
+        let oldX = try XCTUnwrap(points[1]["X"] as? NSNumber).doubleValue
+        points[1]["X"] = oldX + 1; historic[0]["Points"] = points; trace["LayoutPieces"] = historic
+        snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)

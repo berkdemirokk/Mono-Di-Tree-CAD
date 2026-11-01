@@ -28,10 +28,12 @@ struct ExperimentalV7PieceReader {
     private var snapshotFingerprint: String?, traceFingerprint: String?
     private struct Mapping: Equatable { let source: UUID; let number: Int; let placed: UUID }
     private var placementMappings: [Mapping] = [], traceMappings: [Mapping] = []
+    private var rotationAngles: [UUID: Int] = [:]
     private var mappingArray: String? = nil, mappingDepth = 0
     private var mappingToken: [UInt8]? = nil
     private var sourceIDs = Set<UUID>(), historyIDs = Set<UUID>(), historicalPoints = 0, historicalMarks = 0
     private var sourceQuantities: [UUID: Int] = [:]
+    private var sourceGeometry: [UUID: Drawing.Piece] = [:], historyGeometry: [UUID: Drawing.Piece] = [:]
     private var selectionIDs = Set<UUID>()
     private var expectingPiecesArray = false
     private var inPieces = false, foundPieces = false
@@ -86,6 +88,9 @@ struct ExperimentalV7PieceReader {
                       Self.desktopCopyID(source: mapping.source, number: mapping.number) == mapping.placed,
                       seenPlaced.insert(mapping.placed).inserted,
                       seenCopies.insert("\(mapping.source.uuidString)#\(mapping.number)").inserted else { throw Failure.invalid }
+                guard let source = sourceGeometry[mapping.source], let placed = historyGeometry[mapping.placed],
+                      let angle = rotationAngles[mapping.placed],
+                      try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: angle, cancelled: cancelled) else { throw Failure.invalid }
                 counts[mapping.source, default: 0] += 1
             }
             guard sourceQuantities.allSatisfy({ counts[$0.key] == $0.value }) else { throw Failure.invalid }
@@ -298,14 +303,19 @@ struct ExperimentalV7PieceReader {
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity
+                        sourceGeometry[id] = item
                     } else {
                         guard item.quantity == 1, historyIDs.insert(id).inserted else { throw Failure.invalid }
+                        historyGeometry[id] = item
                     }
                     historicalPoints += item.points.count; historicalMarks += item.notches.count
                     guard historicalPoints <= 200_000, historicalMarks <= 200_000 else { throw Failure.limit }
                 } else {
-                    let mapping = try decodeMapping(Data(token), trace: array == "Copies", cancelled: cancelled)
-                    if array == "Copies" { traceMappings.append(mapping) } else { placementMappings.append(mapping) }
+                    let decoded = try decodeMapping(Data(token), trace: array == "Copies", cancelled: cancelled)
+                    if array == "Copies" {
+                        guard let angle = decoded.angle, rotationAngles.updateValue(angle, forKey: decoded.mapping.placed) == nil else { throw Failure.invalid }
+                        traceMappings.append(decoded.mapping)
+                    } else { placementMappings.append(decoded.mapping) }
                 }
                 mappingToken = nil
             } else if mappingArray != nil && byte == 93 && stack.count == mappingDepth - 1 {
@@ -323,7 +333,7 @@ struct ExperimentalV7PieceReader {
         }
     }
 
-    private func decodeMapping(_ data: Data, trace: Bool, cancelled: () -> Bool) throws -> Mapping {
+    private func decodeMapping(_ data: Data, trace: Bool, cancelled: () -> Bool) throws -> (mapping: Mapping, angle: Int?) {
         var scanner = ExperimentalJSONStream(maximumBytes: 4096, strictIntegerKeys: true)
         try scanner.feed(data, cancelled: cancelled); try scanner.finish(cancelled: cancelled)
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -332,11 +342,13 @@ struct ExperimentalV7PieceReader {
               let placedText = object["PlacedPieceId"] as? String, let placed = UUID(uuidString: placedText),
               let n = object["CopyNumber"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
               n.intValue >= 1, n.intValue <= 100_000 else { throw Failure.invalid }
+        var angle: Int? = nil
         if trace {
             guard let degrees = object["Degrees"] as? NSNumber, CFGetTypeID(degrees) != CFBooleanGetTypeID(),
                   [0, 90, 180, 270].contains(degrees.intValue) else { throw Failure.invalid }
+            angle = degrees.intValue
         }
-        return Mapping(source: source, number: n.intValue, placed: placed)
+        return (Mapping(source: source, number: n.intValue, placed: placed), angle)
     }
 
     // Guid(ReadOnlySpan<byte>) in the desktop runtime treats its first three
