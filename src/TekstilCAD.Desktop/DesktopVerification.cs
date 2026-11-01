@@ -1875,6 +1875,31 @@ internal static class DesktopVerification
                 studio.Document.ImportProvenance?.SourceSha256==Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(source)),
                 "Explicit grain selection consumes only copied marker and records review and source identity",checks);
 
+            imported=Prepare();originalImport=imported.Project.Clone();
+            typeof(MainWindow).GetField("preparedDxfReflectY",PrivateInstance)!.SetValue(studio,true);
+            var previewCopy=DxfCanvasImportOrientation.ReflectY(imported.Project);
+            var orientationWarning=new List<string> { "Kullanıcı seçimiyle tüm geometride Y işareti ters çevrildi; kaynakla karşılaştırın." };
+            var orientationPreview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[previewCopy,orientationWarning,1d,"grain-review.dxf",imported.Units])!;
+            var orientationRoot=(FrameworkElement)orientationPreview.Content;
+            var previewItems=Descendants<ListBox>(orientationRoot).Single(l=>AutomationProperties.GetName(l)=="İçe alınacak tüm parça adları").Items.Cast<PatternPiece>().ToArray();
+            Check(previewItems.Single(p=>p.Closed).Points[2]==new Point2(0,-20) &&
+                Descendants<TextBlock>(orientationRoot).Any(t=>t.Text.Contains("kontur yönü yansıtıldı",StringComparison.Ordinal)),
+                "Reflected import preview displays the transformed geometry and direction notice",checks);
+            orientationPreview.Close();
+            var reflectedReview=false;
+            studio.ConfirmDxfGrainlineReviewForVerification=i=> {
+                reflectedReview=i.Project.Pieces.Single(p=>!p.Closed).Points.SequenceEqual([new Point2(2,-2),new Point2(2,-8)]);
+                return [Selection(i)];
+            };
+            Run();contour=studio.Document.Pieces.Single();
+            Check(reflectedReview && contour.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(20,0),new Point2(0,-20) }) &&
+                contour.Grainline is { NeedsReview:true } && contour.Grainline.Start==new Point2(2,-2) && contour.Grainline.End==new Point2(2,-8) &&
+                studio.Document.ImportProvenance?.Warnings.Any(w=>w.Contains("Y işareti ters",StringComparison.Ordinal))==true &&
+                DocumentSession.ContentEquals(imported.Project,originalImport) && File.ReadAllBytes(path).SequenceEqual(source),
+                "Reflected DXF review, grain mapping and source provenance use the same transformed geometry",checks);
+            var reflectedPath=Path.Combine(work,"reflected-dxf-project.tcad");Invoke(studio,"SaveTo",reflectedPath);
+            Check(DocumentSession.ContentEquals(ProjectStorage.Load(reflectedPath),studio.Document),"Reflected DXF geometry and provenance survive save and reopen",checks);
+
             imported=Prepare();studio.ConfirmDxfGrainlineReviewForVerification=_=>Array.Empty<DxfGrainlineSelection>();Run();
             Check(studio.Document.Pieces.Count==2 && studio.Document.Pieces.All(p=>p.Grainline is null),
                 "Continuing without grain mapping preserves imported contours and marker",checks);
@@ -4919,8 +4944,9 @@ internal static class DesktopVerification
         Render(options,Path.ChangeExtension(reportPath,".dxf-strict-options.png"),440,340);
         var root=(FrameworkElement)options.Content;
         var method=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="DXF okuma yöntemi");
+        var orientation=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="DXF koordinat yönü");
         var cancel=Descendants<Button>(root).Single(b=>Equals(b.Content,"Vazgeç"));
-        Check(!state.UseBlockPlacements && method.SelectedIndex==0 && method.Items.Count>=2
+        Check(!state.UseBlockPlacements && !state.ReflectY && orientation.SelectedIndex==0 && orientation.Items.Count==2 && method.SelectedIndex==0 && method.Items.Count>=2
             && method.Items.Cast<object>().Any(item=>item.ToString()!.Contains("Kontrollü aktarım"))
             && cancel.IsCancel && cancel.IsDefault && FullyVisible(cancel,root),
             "DXF options offer limited placed-block mode as explicit opt-in and default to cancel",checks);
