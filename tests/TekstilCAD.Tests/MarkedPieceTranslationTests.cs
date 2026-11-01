@@ -20,6 +20,25 @@ public class MarkedPieceTranslationTests
         marks[0].Position=new Point2(0,0);
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[original] },new ProjectDocument { Pieces=[source] }));
     }
+    [Theory]
+    [InlineData(0.00000001, 0)]
+    [InlineData(-0.00000001, 0)]
+    [InlineData(0, 0.00000001)]
+    public void RejectsMarkedMovementWhoseRepresentedDisplacementDiffersMaterially(double dx,double dy)
+    {
+        var source=Marked();source.Points=source.Points.Select(p=>new Point2(p.X+50_000_000,p.Y+50_000_000)).ToList();
+        foreach(var mark in source.Notches!)mark.Position=source.Points[mark.VertexIndex];
+        var original=source.Clone();
+        Assert.ThrowsAny<ArgumentException>(()=>MarkedPieceTranslation.Translate(source,dx,dy));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[original] },new ProjectDocument { Pieces=[source] }));
+    }
+    [Fact]
+    public void OrdinaryFractionalDisplacementsRemainUsable()
+    {
+        var source=Marked();var (points,marks)=MarkedPieceTranslation.Translate(source,.1,-.1);
+        Assert.Equal(points[1],marks![0].Position);
+        Assert.Equal(points[3],marks[1].Position);
+    }
     [Fact]
     public void InvalidOrDuplicateAnchorsAreRejectedWithoutMutation()
     {

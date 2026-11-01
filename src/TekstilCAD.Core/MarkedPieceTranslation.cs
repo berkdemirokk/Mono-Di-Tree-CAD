@@ -1,8 +1,30 @@
+using System.Numerics;
+
 namespace TekstilCAD.Core;
 
 /// <summary>Creates a detached translation and retains visual marks at their exact contour vertices.</summary>
 public static class MarkedPieceTranslation
 {
+    // Exact binary64 integer units, used to measure displacement rather than
+    // subtracting doubles and possibly rounding away the error a second time.
+    private static BigInteger Units(double value)
+    {
+        var bits=BitConverter.DoubleToInt64Bits(value);
+        var exponent=(int)((bits >> 52) & 0x7ff);
+        var mantissa=bits & 0x000f_ffff_ffff_ffffL;
+        if(exponent!=0)mantissa|=1L<<52;
+        var units=new BigInteger(mantissa) << (exponent==0 ? 0 : exponent-1);
+        return bits<0 ? -units : units;
+    }
+
+    // Same 1e-9 relative budget as TranslationPrecision's vector checks.
+    // This is a numeric representation limit, not a manufacturing tolerance.
+    private static bool DisplacementMatches(double source,double target,double requested)
+    {
+        var delta=Units(requested);
+        var error=Units(target)-Units(source)-delta;
+        return BigInteger.Abs(error)*1_000_000_000 <= BigInteger.Abs(delta);
+    }
     public static (List<Point2> Points, List<NotchMark>? Notches) Translate(PatternPiece source, double dx, double dy, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -26,7 +48,7 @@ public static class MarkedPieceTranslation
         for (var i = 0; i < translated.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if ((dx != 0 && translated[i].X == source.Points[i].X) || (dy != 0 && translated[i].Y == source.Points[i].Y))
+            if (!DisplacementMatches(source.Points[i].X, translated[i].X, dx) || !DisplacementMatches(source.Points[i].Y, translated[i].Y, dy))
                 throw new ArgumentException("Taşıma miktarı bir noktada sayısal hassasiyetle temsil edilemiyor.", nameof(source));
         }
         cancellationToken.ThrowIfCancellationRequested();
