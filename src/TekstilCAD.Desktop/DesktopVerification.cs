@@ -1272,6 +1272,7 @@ internal static class DesktopVerification
             VerifyRotatedQuantityPreview(studio,work,checks);
             VerifyAutomaticQuantityPreview(studio,work,checks);
             VerifyFourAngleQuantityPreview(studio,work,checks);
+            VerifyBulkPieceAngles(studio,checks);
             VerifyNestingHistory(studio,work,checks);
             Check(!studio.IsVisible && !textiles.IsVisible && !machine.IsVisible && !reopenedTextiles.IsVisible, "No window shown", checks);
             Check(AppPaths.PrepareProjectsDirectory().StartsWith(work, StringComparison.OrdinalIgnoreCase),
@@ -4328,6 +4329,60 @@ internal static class DesktopVerification
         finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
+    private static void VerifyBulkPieceAngles(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            PatternPiece Piece(string name)=>new() { Name=name,Points=[new(0,0),new(20,0),new(20,10),new(0,10)],
+                Grainline=new Grainline { Start=new(1,1),End=new(1,8) },Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=1 } };
+            var a=Piece("Kol A");var b=Piece("Kol B");var c=Piece("Yaka");var d=Piece("Kol seçilmemiş");
+            studio.LoadDocument(new ProjectDocument { Pieces=[a,b,c,d] });studio.Select(a.Id);var source=studio.Document.Clone();
+            var window=new ProductionNestingWindow(studio,studio);
+            try
+            {
+                var root=(FrameworkElement)window.Content;var choices=(System.Collections.IList)typeof(ProductionNestingWindow).GetField("choiceItems",PrivateInstance)!.GetValue(window)!;
+                var prop=choices[0]!.GetType().GetProperty("IsSelected")!;prop.SetValue(choices[1],true);prop.SetValue(choices[2],true);
+                var rotation=(ComboBox)typeof(ProductionNestingWindow).GetField("rotationPolicy",PrivateInstance)!.GetValue(window)!;
+                var grain=(ComboBox)typeof(ProductionNestingWindow).GetField("grainPolicy",PrivateInstance)!.GetValue(window)!;
+                var query=(TextBox)typeof(ProductionNestingWindow).GetField("choiceSearch",PrivateInstance)!.GetValue(window)!;
+                var action=(Button)typeof(ProductionNestingWindow).GetField("bulkAngles",PrivateInstance)!.GetValue(window)!;
+                var preview=typeof(ProductionNestingWindow).GetField("preview",PrivateInstance)!.GetValue(window)!;
+                var save=(Button)typeof(ProductionNestingWindow).GetField("saveLayout",PrivateInstance)!.GetValue(window)!;
+                int Version()=>(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
+                bool Angle(object item,string name)=>(bool)item.GetType().GetProperty(name)!.GetValue(item)!;
+                rotation.SelectedIndex=0;Check(action.Visibility==Visibility.Collapsed,"Bulk per-piece angles hidden in unrelated mode",checks);
+                rotation.SelectedIndex=5;grain.SelectedIndex=2;root.Measure(new Size(680,520));root.Arrange(new Rect(0,0,680,520));root.UpdateLayout();
+                Check(action.Visibility==Visibility.Visible && action.Focusable && FullyVisible(action,root) && !string.IsNullOrEmpty(AutomationProperties.GetHelpText(action)),
+                    "Bulk angle action is available to keyboard users in per-piece mode",checks);
+                var calculate=(Task)typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!.Invoke(window,null)!;PumpUntil(()=>calculate.IsCompleted);calculate.GetAwaiter().GetResult();
+                Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is not null && save.IsEnabled,
+                    "Bulk angle test starts with a verified preview",checks);
+                query.Text="Kol";var version=Version();
+                Check(window.ApplyShownAngles([a.Id,b.Id],[],version,"Kol",null) is not null && Version()==version && save.IsEnabled,
+                    "Empty batch angle set leaves choices and preview intact",checks);
+                Check(window.ApplyShownAngles([a.Id,b.Id],[0,180],version,"Kol",null) is null && Version()==version+1 && !save.IsEnabled &&
+                    preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null,
+                    "Batch angles invalidate the prior preview exactly once",checks);
+                Check(Angle(choices[0]!,"Allow0") && !Angle(choices[0]!,"Allow90") && Angle(choices[0]!,"Allow180") && !Angle(choices[0]!,"Allow270") &&
+                    !Angle(choices[1]!,"Allow90") && Angle(choices[1]!,"Allow180") && Angle(choices[2]!,"Allow90") && Angle(choices[2]!,"Allow270") &&
+                    Angle(choices[3]!,"Allow90") && Angle(choices[3]!,"Allow270") && DocumentSession.ContentEquals(source,studio.Document),
+                    "Batch angles affect only visible selected identities and preserve source geometry",checks);
+                version=Version();query.Text="Yaka";
+                Check(window.ApplyShownAngles([a.Id,b.Id],[90],version,"Kol",null) is not null && Angle(choices[0]!,"Allow180"),
+                    "Changing the filter after review blocks batch angle application",checks);
+                query.Text="Kol";version=Version();prop.SetValue(choices[1],false);
+                Check(window.ApplyShownAngles([a.Id,b.Id],[90],version,"Kol",null) is not null && Angle(choices[0]!,"Allow180"),
+                    "Changing selection after review blocks batch angle application",checks);
+                prop.SetValue(choices[1],true);version=Version();
+                studio.Commit("Kaynak değişti",()=>studio.Document.Pieces[0].Name="Güncel");var changed=studio.Document.Clone();
+                Check(window.ApplyShownAngles([a.Id,b.Id],[90],version,"Kol",null) is not null && Angle(choices[0]!,"Allow180") &&
+                    DocumentSession.ContentEquals(changed,studio.Document),"Changing the project after review blocks batch angle application",checks);
+            }
+            finally { window.Close(); }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
+    }
     private static void VerifyFourAngleQuantityPreview(MainWindow studio,string work,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));

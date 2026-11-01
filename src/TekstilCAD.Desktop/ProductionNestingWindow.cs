@@ -26,6 +26,7 @@ internal sealed class ProductionNestingWindow : Window
     private readonly TextBox choiceSearch = new() { Margin=new Thickness(4,2,4,3), Padding=new Thickness(7,5,7,5), MinWidth=0, MaxLength=1024 };
     private readonly Button clearChoiceSearch = new() { Content="Temizle", Padding=new Thickness(8,4,8,4), Margin=new Thickness(4,2,4,3) };
     private readonly Button selectShownChoices = new() { Content="Görünenleri seç", Padding=new Thickness(4,3,4,3), Margin=new Thickness(4,0,2,3), FontSize=12 };
+    private readonly Button bulkAngles = new() { Content="Görünen seçililere açı ata…", Padding=new Thickness(6,4,6,4), Margin=new Thickness(4,0,4,4), Visibility=Visibility.Collapsed };
     private readonly Button clearShownChoices = new() { Content="Görünen seçimi kaldır", Padding=new Thickness(4,3,4,3), Margin=new Thickness(2,0,4,3), FontSize=12 };
     private readonly TextBlock choiceSearchStatus = new() { TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,2,4,6) };
     private bool updatingChoices;
@@ -192,6 +193,8 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(selectShownChoices,"Yalnız gösterilen parçaları seçer; arama dışında seçili parçalar korunur.");
         AutomationProperties.SetHelpText(clearShownChoices,"Yalnız gösterilen parçaların seçimini kaldırır; arama dışında seçili parçalar korunur.");
         selectShownChoices.Click+=(_,_)=>SetShownSelection(true);clearShownChoices.Click+=(_,_)=>SetShownSelection(false);
+        AutomationProperties.SetHelpText(bulkAngles,"Yalnız arama sonucunda görünen ve seçili parçalara aynı açı kümesini atar; gizli ve seçilmemiş parçalar korunur.");
+        bulkAngles.Click+=(_,_)=>ChooseShownAngles();searchPanel.Children.Add(bulkAngles);
         choicePanel.Children.Add(choices);
         foreach(var p in workspace.Document.Pieces)
         {
@@ -200,7 +203,7 @@ internal sealed class ProductionNestingWindow : Window
             var label=$"{SafeChoiceText(p.Name,100)}\nKimlik: {p.Id:D}\nEn × boy: {dimensions}\nRol: {SafeChoiceText(p.Metadata?.Role,40)} · Adet: {p.Metadata?.Quantity?.ToString(CultureInfo.InvariantCulture) ?? "belirtilmedi"}\nMalzeme: {SafeChoiceText(p.Metadata?.Material,60)} · Beden: {SafeChoiceText(p.Metadata?.Size,60)}";
             var displayedName=SafeChoiceText(p.Name,int.MaxValue);
             var choice=new ChoiceItem { Id=p.Id,Label=label,Name=p.Name,DisplayName=displayedName,IsSelected=p.Id==workspace.SelectedId };
-            choice.PropertyChanged+=(_,e)=> { if(e.PropertyName==nameof(ChoiceItem.IsSelected) && !updatingChoices){InvalidatePreview();UpdateChoiceSearchStatus();} else if(rotationPolicy.SelectedIndex==5 && e.PropertyName is (nameof(ChoiceItem.Allow0) or nameof(ChoiceItem.Allow90) or nameof(ChoiceItem.Allow180) or nameof(ChoiceItem.Allow270))) InvalidatePreview(); }; choiceItems.Add(choice);
+            choice.PropertyChanged+=(_,e)=> { if(e.PropertyName==nameof(ChoiceItem.IsSelected) && !updatingChoices){InvalidatePreview();UpdateChoiceSearchStatus();} else if(!updatingChoices && rotationPolicy.SelectedIndex==5 && e.PropertyName is (nameof(ChoiceItem.Allow0) or nameof(ChoiceItem.Allow90) or nameof(ChoiceItem.Allow180) or nameof(ChoiceItem.Allow270))) InvalidatePreview(); }; choiceItems.Add(choice);
         }
         choices.Items.Filter=MatchesChoiceSearch;
         CollectionViewSource.GetDefaultView(choiceItems).Refresh();
@@ -233,7 +236,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(preview,"Dış çerçeve kumaş enini ve kullanılan boyu gösterir. Pozitif kenar payında kesik iç çerçeve kullanılabilir alanı gösterir; pay miktarı sonuç metnindedir. Fiziksel baskı ve makine uygunluğu doğrulanmaz.");
         width.TextChanged+=(_,_)=>InvalidatePreview(); fabricLength.TextChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); }; gap.TextChanged+=(_,_)=>InvalidatePreview(); edgeMargin.TextChanged+=(_,_)=>InvalidatePreview();
         grainPolicy.SelectionChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };
-        rotationPolicy.SelectionChanged+=(_,_)=> { customAngles.Visibility=rotationPolicy.SelectedIndex==4 ? Visibility.Visible : Visibility.Collapsed;perPieceNotice.Visibility=rotationPolicy.SelectedIndex==5 ? Visibility.Visible : Visibility.Collapsed;UpdateAdvancedHeader();InvalidatePreview(); };
+        rotationPolicy.SelectionChanged+=(_,_)=> { bulkAngles.Visibility=rotationPolicy.SelectedIndex==5 ? Visibility.Visible : Visibility.Collapsed;customAngles.Visibility=rotationPolicy.SelectedIndex==4 ? Visibility.Visible : Visibility.Collapsed;perPieceNotice.Visibility=rotationPolicy.SelectedIndex==5 ? Visibility.Visible : Visibility.Collapsed;UpdateAdvancedHeader();InvalidatePreview(); };
         foreach(var choice in new[]{angle0,angle90,angle180,angle270})
         { choice.Checked+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };choice.Unchecked+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); }; }
         calculate.Click+=async (_,_)=>await Calculate();
@@ -305,6 +308,60 @@ internal sealed class ProductionNestingWindow : Window
         }
         finally { updatingChoices=false; }
         if(changed){InvalidatePreview();UpdateChoiceSearchStatus();}
+    }
+    private void ChooseShownAngles()
+    {
+        if(closed || busy || savingLayout || rotationPolicy.SelectedIndex!=5)return;
+        var ids=choiceItems.Where(c=>c.IsSelected && MatchesChoiceSearch(c)).Select(c=>c.Id).ToArray();
+        if(ids.Length==0) { SetStatus("Açı atamak için aramada görünen en az bir seçili parça gerekir.");return; }
+        if(workspace.HasPendingCanvasOrPropertyWork || !DocumentSession.ContentEquals(initialSnapshot,workspace.Document))
+        { SetStatus("Proje veya bekleyen çalışma değişti; açı ataması yapılmadı. Pencereyi yeniden açın.");return; }
+        var version=inputsVersion;var query=choiceSearchQuery;var exact=exactChoiceFilter;
+        var dialog=new Window { Owner=this,Title="Görünen seçililere açı ata",Width=490,SizeToContent=SizeToContent.Height,MinWidth=400,WindowStartupLocation=WindowStartupLocation.CenterOwner };
+        StudioTheme.Apply(dialog);var body=new StackPanel { Margin=new Thickness(18) };dialog.Content=body;
+        body.Children.Add(new TextBlock { Text=$"{ids.Length} görünür seçili parçanın aday açıları değiştirilecek. Arama dışında veya seçilmemiş parçalar korunur. İplik yönüne uygunluk hesap sırasında ayrıca denetlenir; en iyi yerleşim garanti edilmez.",TextWrapping=TextWrapping.Wrap });
+        var row=new WrapPanel();body.Children.Add(row);
+        var options=new[] { (Angle:0,Box:new CheckBox { Content="0°",IsChecked=true,Margin=new Thickness(8) }),
+            (Angle:90,Box:new CheckBox { Content="90°",IsChecked=true,Margin=new Thickness(8) }),
+            (Angle:180,Box:new CheckBox { Content="180°",Margin=new Thickness(8) }),
+            (Angle:270,Box:new CheckBox { Content="270°",Margin=new Thickness(8) }) };
+        foreach(var option in options) { AutomationProperties.SetName(option.Box,$"Görünür seçili parçalar için {option.Angle} derece");row.Children.Add(option.Box); }
+        var error=new TextBlock { TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };AutomationProperties.SetLiveSetting(error,AutomationLiveSetting.Polite);body.Children.Add(error);
+        var actions=new WrapPanel();body.Children.Add(actions);
+        var apply=new Button { Content="Seçili parçalara uygula",Margin=new Thickness(4),Padding=new Thickness(9,6,9,6) };
+        var cancel=new Button { Content="Vazgeç",IsCancel=true,Margin=new Thickness(4),Padding=new Thickness(9,6,9,6) };
+        actions.Children.Add(apply);actions.Children.Add(cancel);
+        apply.Click+=(_,_)=>
+        {
+            var angles=options.Where(o=>o.Box.IsChecked==true).Select(o=>o.Angle).ToArray();
+            var issue=ApplyShownAngles(ids,angles,version,query,exact);
+            if(issue is not null) { error.Text=issue;AutomationProperties.SetName(error,issue);Announce(error);return; }
+            dialog.DialogResult=true;
+        };
+        dialog.ShowDialog();
+    }
+    internal string? ApplyShownAngles(IReadOnlyCollection<Guid> approvedIds,IReadOnlyCollection<int> angles,int approvedVersion,string query,Guid? exact)
+    {
+        if(angles.Count==0 || angles.Any(a=>a is not (0 or 90 or 180 or 270)) || angles.Distinct().Count()!=angles.Count)
+            return "En az bir geçerli aday açı seçin; hiçbir parça değiştirilmedi.";
+        if(closed || busy || savingLayout || rotationPolicy.SelectedIndex!=5 || inputsVersion!=approvedVersion ||
+           choiceSearchQuery!=query || exactChoiceFilter!=exact || workspace.HasPendingCanvasOrPropertyWork ||
+           !DocumentSession.ContentEquals(initialSnapshot,workspace.Document))
+            return "Proje, filtre veya seçim değişti; açı ataması yapılmadı. Pencereyi yeniden açıp kontrol edin.";
+        var selected=choiceItems.Where(c=>c.IsSelected && MatchesChoiceSearch(c)).ToArray();
+        if(approvedIds.Count==0 || selected.Length!=approvedIds.Count || !selected.Select(c=>c.Id).ToHashSet().SetEquals(approvedIds))
+            return "Görünür seçim değişti; açı ataması yapılmadı.";
+        var a0=angles.Contains(0);var a90=angles.Contains(90);var a180=angles.Contains(180);var a270=angles.Contains(270);
+        var changed=selected.Any(c=>c.Allow0!=a0 || c.Allow90!=a90 || c.Allow180!=a180 || c.Allow270!=a270);
+        if(changed)
+        {
+            updatingChoices=true;
+            try { foreach(var item in selected) { item.Allow0=a0;item.Allow90=a90;item.Allow180=a180;item.Allow270=a270; } }
+            finally { updatingChoices=false; }
+            InvalidatePreview();
+        }
+        SetStatus(changed ? $"{selected.Length} görünür seçili parçanın açıları güncellendi; pastalı yeniden hesaplayın. Gizli ve seçilmemiş parçalar korundu." : "Seçili parçaların açıları zaten aynı; önizleme değişmedi.");
+        return null;
     }
     private bool MatchesChoiceSearch(object item)
     {
@@ -496,7 +553,7 @@ internal sealed class ProductionNestingWindow : Window
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
-        busy=true; calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;customAngles.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;preview.Drawing=null;highlight.ItemsSource=null;mapping.Text="";SetStatus("Hesaplanıyor…");
+        busy=true; calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;bulkAngles.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;customAngles.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;preview.Drawing=null;highlight.ItemsSource=null;mapping.Text="";SetStatus("Hesaplanıyor…");
         try
         {
             var prepared=await Task.Run(()=>
@@ -613,7 +670,7 @@ internal sealed class ProductionNestingWindow : Window
                 }
             }
         }
-        finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;customAngles.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
+        finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;bulkAngles.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;customAngles.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
     }
     private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
         ReferenceEquals(preview.Drawing,layout) && previewLayoutSnapshot is not null && DocumentSession.ContentEquals(previewLayoutSnapshot,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
@@ -678,7 +735,7 @@ internal sealed class ProductionNestingWindow : Window
         var snapshot=layout.Clone();
         var beforeSave=BeforeLayoutSaveForVerification;
         savingLayout=true;busy=true;
-        calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;customAngles.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;
+        calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;bulkAngles.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;customAngles.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;
         SetStatus("Pastal ayrı proje olarak kaydediliyor; pencereyi kapatmak için işlemin bitmesini bekleyin.");
         try
         {
@@ -695,7 +752,7 @@ internal sealed class ProductionNestingWindow : Window
             savingLayout=false;busy=false;
             if(!closed)
             {
-                calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;customAngles.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;
+                calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;bulkAngles.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;customAngles.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;
                 saveLayout.IsEnabled=IsCurrentLayout(version,layout);
             }
         }
