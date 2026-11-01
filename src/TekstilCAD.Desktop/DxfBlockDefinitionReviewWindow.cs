@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -36,6 +37,11 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var points=new ComboBox { DisplayMemberPath=nameof(PointChoice.Label),Margin=new Thickness(0,5,0,8) };
         var pieces=new ComboBox { DisplayMemberPath=nameof(PieceChoice.Label),Margin=new Thickness(0,5,0,8) };
         var vertices=new ComboBox { DisplayMemberPath=nameof(VertexChoice.Label),Margin=new Thickness(0,5,0,8) };
+        var pointOrdinalText=new TextBox { Width=120,MaxLength=10,Margin=new Thickness(0,4,4,4) };
+        AutomationProperties.SetName(pointOrdinalText,"Kaynak POINT kayıt sırasına git");
+        AutomationProperties.SetHelpText(pointOrdinalText,"Seçili bloktaki kaynak POINT'in sıfırdan başlayan kayıt sırasını girin. Arama eşleme eklemez; sonucu ayrıca seçin ve inceleyin.");
+        var pointSearchRow=new WrapPanel();pointSearchRow.Children.Add(pointOrdinalText);
+        var pointGo=new Button { Content="POINT kaydına git",Margin=new Thickness(4) };pointSearchRow.Children.Add(pointGo);
         var status=new TextBlock { TextWrapping=TextWrapping.Wrap };AutomationProperties.SetName(status,"Blok eşleme durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         void SetStatus(string message)
         {
@@ -44,7 +50,12 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
                 peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
         }
         foreach(var (label,box) in new[]{("Kaynak blok tanımı",blocks),("Kaynak POINT",points),("Hedef POLYLINE parçası",pieces),("Hedef köşe",vertices)})
-        { body.Children.Add(new TextBlock { Text=label,FontWeight=FontWeights.SemiBold });AutomationProperties.SetName(box,label);box.MaxDropDownHeight=220;VirtualizingPanel.SetIsVirtualizing(box,true);VirtualizingPanel.SetVirtualizationMode(box,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(box,true);body.Children.Add(box); }
+        {
+            body.Children.Add(new TextBlock { Text=label,FontWeight=FontWeights.SemiBold });AutomationProperties.SetName(box,label);box.MaxDropDownHeight=220;
+            box.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
+            VirtualizingPanel.SetIsVirtualizing(box,true);VirtualizingPanel.SetVirtualizationMode(box,VirtualizationMode.Recycling);ScrollViewer.SetCanContentScroll(box,true);body.Children.Add(box);
+            if(ReferenceEquals(box,points)) { body.Children.Add(new TextBlock { Text="Kaynak POINT kayıt sırasıyla ara (0'dan başlar)",TextWrapping=TextWrapping.Wrap });body.Children.Add(pointSearchRow); }
+        }
         var preview=new DxfPiecePreview { Height=180 };AutomationProperties.SetName(preview,"Seçilen blok konturu");body.Children.Add(preview);
         body.Children.Add(status);
         var indexText=new TextBox { Width=90,MaxLength=8,Margin=new Thickness(0,4,4,4) };AutomationProperties.SetName(indexText,"Köşe indeksine git");
@@ -53,10 +64,10 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         blocks.ItemsSource=links.GroupBy(p=>p.BlockHeaderOrdinal!.Value).Select(g=>new BlockChoice(g.Key,$"Blok kaydı {g.Key} · {Safe(g.First().Block)}")).ToArray();
         blocks.SelectionChanged+=(_,_)=>
         {
-            points.ItemsSource=null;pieces.ItemsSource=null;vertices.ItemsSource=null;indexText.Clear();SetStatus("");
+            points.ItemsSource=null;pieces.ItemsSource=null;vertices.ItemsSource=null;indexText.Clear();pointOrdinalText.Clear();SetStatus("");
             if(blocks.SelectedItem is not BlockChoice block)return;
             points.ItemsSource=pointRecords.Where(p=>p.BlockHeaderOrdinal==block.Header).Select(p=>new PointChoice(p.SourceOrdinal,
-                $"POINT {p.SourceOrdinal} · X {Safe(p.Groups.FirstOrDefault(g=>g.Code==10)?.RawValue)} · Y {Safe(p.Groups.FirstOrDefault(g=>g.Code==20)?.RawValue)}")).ToArray();
+                $"POINT {p.SourceOrdinal} · X {Safe(p.Groups.FirstOrDefault(g=>g.Code==10)?.RawValue)} · Y {Safe(p.Groups.FirstOrDefault(g=>g.Code==20)?.RawValue)} · Z {Safe(p.Groups.FirstOrDefault(g=>g.Code==30)?.RawValue)} · katman {Safe(p.Groups.FirstOrDefault(g=>g.Code==8)?.RawValue)}")).ToArray();
             var selectedIds=links.Where(p=>p.BlockHeaderOrdinal==block.Header).Select(p=>p.PieceId).ToHashSet();
             pieces.ItemsSource=import.Project.Pieces.Where(p=>selectedIds.Contains(p.Id) && p.Closed).Select(p=>new PieceChoice(p.Id,$"{Safe(p.Name)} · {p.Id:D}")).ToArray();
         };
@@ -69,6 +80,26 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             vertices.ItemsSource=piece.Points.Select((p,i)=>new VertexChoice(i,$"{i} · X {p.X:R} · Y {p.Y:R} mm")).ToArray();
         };
         bool changingText=false,changingSelection=false,selectingBySearch=false;
+        bool changingPointText=false,changingPointSelection=false,selectingPointBySearch=false;
+        points.SelectionChanged+=(_,_ )=>
+        {
+            if(!changingPointSelection && !selectingPointBySearch)
+            { changingPointText=true;try { pointOrdinalText.Clear(); } finally { changingPointText=false; } }
+        };
+        pointOrdinalText.TextChanged+=(_,_ )=>
+        {
+            if(changingPointText)return;
+            changingPointSelection=true;try { points.SelectedIndex=-1; } finally { changingPointSelection=false; }
+            SetStatus(pointOrdinalText.Text.Length==0 ? "" : "Kayıt sırasını yazdınız; POINT kaydına git düğmesiyle seçin. Listedeki eşlemeler değişmedi.");
+        };
+        pointGo.Click+=(_,_ )=>
+        {
+            if(!int.TryParse(pointOrdinalText.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var ordinal) ||
+               points.Items.Cast<PointChoice>().FirstOrDefault(p=>p.Ordinal==ordinal) is not PointChoice found)
+            { changingPointSelection=true;try { points.SelectedIndex=-1; } finally { changingPointSelection=false; }SetStatus("Bu blokta belirtilen POINT kayıt sırası bulunamadı; önceki POINT seçimi temizlendi.");return; }
+            selectingPointBySearch=true;try { points.SelectedItem=found; } finally { selectingPointBySearch=false; }
+            SetStatus($"POINT kaydı {ordinal} seçildi; koordinatı ve katmanı inceleyin. Henüz eşleme eklenmedi.");
+        };
         vertices.SelectionChanged+=(_,_)=>
         {
             preview.SelectVertex((vertices.SelectedItem as VertexChoice)?.Index);
@@ -107,6 +138,8 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var confirm=new CheckBox { Content="Bunun yerleştirilmemiş blok tanımı olduğunu anladım",Margin=new Thickness(0,12,0,8) };body.Children.Add(confirm);
         apply.Click+=(_,_)=>
         {
+            if((pointOrdinalText.Text.Length>0 && points.SelectedItem is null) || (indexText.Text.Length>0 && vertices.SelectedItem is null))
+            { SetStatus("Yazılan POINT veya köşe aramasını tamamlayın ya da temizleyin; listedeki çiftler korunuyor.");return; }
             if(confirm.IsChecked!=true || mappings.Count==0 || blocks.SelectedItem is not BlockChoice b || b.Header!=BlockHeaderOrdinal ||
                pieces.SelectedItem is not PieceChoice piece || piece.Id!=mappings[0].Selection.PieceId)
             { SetStatus("En az bir çifti listeye ekleyin ve açık onay verin.");return; }

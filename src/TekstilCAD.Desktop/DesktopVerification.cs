@@ -2368,6 +2368,17 @@ internal static class DesktopVerification
             var add=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle"));
             var remove=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili çifti kaldır"));
             var queue=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            var pointOrdinal=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Kaynak POINT kayıt sırasına git");
+            var pointGo=Descendants<Button>(root).Single(b=>Equals(b.Content,"POINT kaydına git"));
+            var firstOrdinal=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT").SourceOrdinal;
+            pointOrdinal.Text="999999";pointGo.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(point.SelectedIndex==-1 && status.Text.Contains("bulunamadı") && queue.Items.Count==0,
+                "Invalid POINT ordinal clears earlier source selection without changing the queue",checks);
+            pointOrdinal.Text=firstOrdinal.ToString(CultureInfo.InvariantCulture);pointGo.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(point.SelectedIndex==0 && status.Text.Contains("Henüz eşleme eklenmedi") && queue.Items.Count==0,
+                "Exact POINT ordinal selects the matching source without automatically adding an association",checks);
+            point.SelectedIndex=1;Check(pointOrdinal.Text.Length==0,"Manual POINT selection clears previous ordinal search",checks);
+            point.SelectedIndex=0;
             indexText.Text="0";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(vertex.SelectedIndex==0 && indexText.Text=="0","Valid Go selects the requested vertex and retains its index",checks);
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -2376,6 +2387,10 @@ internal static class DesktopVerification
             Check(indexText.Text=="" && vertex.SelectedIndex==1,"Manual vertex choice clears the old search index",checks);
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(queue.Items.Count==2,"Two explicitly selected pairs are queued for one source piece",checks);
+            pointOrdinal.Text="999999";apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Selections.Count==0 && queue.Items.Count==2 && status.Text.Contains("aramasını tamamlayın"),
+                "Pending POINT search prevents applying an older queue without discarding it",checks);
+            pointOrdinal.Clear();point.SelectedIndex=0;
             queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair restores its source POINT and target vertex choices",checks);
             Check(status.Text.Contains("Yalnız hedef köşe") && status.Text.Contains("POINT koordinatını listeden") && status.Text.Contains("işlem sırasında doğrulanacak"),
                 "Queued-pair preview explicitly distinguishes target vertex from source POINT",checks);
