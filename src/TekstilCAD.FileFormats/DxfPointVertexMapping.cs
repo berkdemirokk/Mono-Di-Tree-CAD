@@ -69,6 +69,9 @@ public static class DxfPointVertexMapping
             if(!links.TryGetValue(choice.PieceId,out var link) || link.EntityType!="LWPOLYLINE" || link.Section!="ENTITIES" || link.Block is not null ||
                link.SourceOrdinals.Length!=1 || !sourceRecords.TryGetValue(link.SourceOrdinals[0],out var contour) || contour.Groups.Any(g=>g.Code==42))
                 throw new InvalidDataException("DXF köşe kaynağı desteklenen doğrudan polilin değil.");
+            var layers=point.Groups.Where(g=>g.Code==8).ToArray();
+            if(layers.Length!=1 || !string.Equals(layers[0].RawValue.Trim(),link.Layer,StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("POINT ve hedef konturun kaynak katmanları eşleşmiyor.");
             var rawX=contour.Groups.Where(g=>g.Code==10).ToArray();var rawY=contour.Groups.Where(g=>g.Code==20).ToArray();
             if(rawX.Length!=piece.Points.Count || rawY.Length!=piece.Points.Count ||
                !DxfExactDecimal.AreEqual(point.Groups.Single(g=>g.Code==10).RawValue.Trim(),rawX[choice.VertexIndex].RawValue.Trim(),cancellationToken) ||

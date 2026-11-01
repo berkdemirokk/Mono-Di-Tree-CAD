@@ -11,6 +11,43 @@ public sealed class DxfPointVertexMappingTests
         "0\nPOINT\n8\nA\n10\n"+point+"\n20\n0\n"+extra+"0\nENDSEC\n0\nEOF\n");
 
     [Fact]
+    public void MultipleExplicitPointsPreserveAllSelectionsAndOriginal()
+    {
+        var text=Encoding.ASCII.GetString(Fixture()).Replace("0\nENDSEC", "0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDSEC");
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var piece=Assert.Single(import.Project.Pieces);var points=import.SupplementalGeometry!.Records.Where(r=>r.EntityType=="POINT").ToArray();
+        Assert.Equal(2,points.Length);var result=DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),
+            [new(points[0].SourceOrdinal,piece.Id,0),new(points[1].SourceOrdinal,piece.Id,1)],DxfTextileGrainlineMapping.CaptureFingerprint(import));
+        Assert.Equal(new[]{0,1},Assert.Single(result.Project.Pieces).Notches!.Select(n=>n.VertexIndex));
+        Assert.Equal(2,result.Assignments.Length);Assert.Null(piece.Notches);
+    }
+
+    [Fact]
+    public void ForeignLayerAndPrecancelledMappingAreRejected()
+    {
+        var text=Encoding.ASCII.GetString(Fixture()).Replace("0\nPOINT\n8\nA", "0\nPOINT\n8\nB");
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var piece=Assert.Single(import.Project.Pieces);var point=Assert.Single(import.SupplementalGeometry!.Records.Where(r=>r.EntityType=="POINT"));
+        var fingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(import);var choice=new DxfPointVertexSelection(point.SourceOrdinal,piece.Id,0);
+        Assert.Throws<InvalidDataException>(()=>DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[choice],fingerprint));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[choice],fingerprint,cancellationToken:cancellation.Token));
+        Assert.Null(piece.Notches);
+    }
+
+    [Fact]
+    public void AFailedSecondSelectionDoesNotApplyFirstToSource()
+    {
+        var text=Encoding.ASCII.GetString(Fixture()).Replace("0\nENDSEC", "0\nPOINT\n8\nA\n10\n10.0000000000000001\n20\n0\n0\nENDSEC");
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var piece=Assert.Single(import.Project.Pieces);var points=import.SupplementalGeometry!.Records.Where(r=>r.EntityType=="POINT").ToArray();
+        Assert.Equal(2,points.Length);
+        Assert.Throws<InvalidDataException>(()=>DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),
+            [new(points[0].SourceOrdinal,piece.Id,0),new(points[1].SourceOrdinal,piece.Id,1)],DxfTextileGrainlineMapping.CaptureFingerprint(import)));
+        Assert.Null(piece.Notches);
+    }
+
+    [Fact]
     public void ExplicitMatchingCreatesDetachedVisualMarkerOnly()
     {
         var bytes=Fixture();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
