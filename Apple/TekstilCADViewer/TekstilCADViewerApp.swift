@@ -1180,6 +1180,10 @@ enum ModelStore {
         }
     }
 
+    static func searchablePieceFields(name: String?, size: String?, material: String?, index: Int) -> [String] {
+        let displayName = name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? "Parça \(index + 1)"
+        return [displayName, size, material].compactMap { $0 }
+    }
     // All piece terms must match one piece; model terms may match its record.
     static func pieceSearchMatches(query: String, modelFields: [String], pieceFields: [String]) -> Bool {
         contentSearchMatches(query: query, fields: modelFields + pieceFields)
@@ -1626,7 +1630,7 @@ private struct ModelLibrary: View {
                             let modelFields = [entry.name, entry.displayIdentity, entry.readableIdentity]
                             for (index, piece) in drawing.pieces.enumerated() {
                                 if cancelled() { return nil }
-                                let values = [piece.name, piece.size, piece.material].compactMap { $0 }
+                                let values = ModelStore.searchablePieceFields(name: piece.name, size: piece.size, material: piece.material, index: index)
                                 if ModelStore.pieceSearchMatches(query: request.query, modelFields: modelFields, pieceFields: values) {
                                     func excerpt(_ value: String) -> String {
                                         let prefix = value.prefix(120)

@@ -327,6 +327,13 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: next, cancelled: false))
         XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: first, cancelled: true))
     }
+    func testPieceSearchIncludesDisplayedFallbackNamesAndOptionalMetadata() {
+        let unnamed = ModelStore.searchablePieceFields(name: nil, size: "M", material: nil, index: 0)
+        let blank = ModelStore.searchablePieceFields(name: "  ", size: nil, material: "Pamuk", index: 1)
+        XCTAssertTrue(ModelStore.pieceSearchMatches(query: "42 parça 1 M", modelFields: ["Fabrika 42"], pieceFields: unnamed))
+        XCTAssertTrue(ModelStore.pieceSearchMatches(query: "parça 2 pamuk", modelFields: [], pieceFields: blank))
+        XCTAssertFalse(ModelStore.pieceSearchMatches(query: "parça 1 pamuk", modelFields: [], pieceFields: unnamed))
+    }
     func testPieceSearchDoesNotCombineDifferentPieces() {
         let model = ["Fabrika 42"]
         let front = ["Ön kol", "M", "Pamuk"]
