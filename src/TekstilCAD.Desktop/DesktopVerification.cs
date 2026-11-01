@@ -4258,14 +4258,26 @@ internal static class DesktopVerification
     private static void ClickAndWaitForGrade(TextileToolsWindow tools,Button button)
     {
         var previous=SynchronizationContext.Current;
+        var beforeHook=tools.BeforeGradeForVerification;var afterHook=tools.AfterGradeBeforeReturnForVerification;
+        var workerStarted=0;var workerFinished=0;
+        tools.BeforeGradeForVerification=()=> { Interlocked.Exchange(ref workerStarted,1);beforeHook?.Invoke(); };
+        tools.AfterGradeBeforeReturnForVerification=()=> { afterHook?.Invoke();Interlocked.Exchange(ref workerFinished,1); };
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(tools.Dispatcher));
         try
         {
+            var elapsed=System.Diagnostics.Stopwatch.StartNew();
             button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var task=tools.GradeTaskForVerification ?? throw new InvalidOperationException("Grading request was not started.");
-            PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            try { PumpUntil(()=>task.IsCompleted); }
+            catch(TimeoutException ex)
+            {
+                ThreadPool.GetAvailableThreads(out var workerAvailable,out var ioAvailable);
+                var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                throw new TimeoutException($"Grading wait timed out after {elapsed.Elapsed.TotalSeconds:0.0}s; task={task.Status}; worker started={Volatile.Read(ref workerStarted)!=0}; worker finished={Volatile.Read(ref workerFinished)!=0}; grade busy={tools.GradeRunningForVerification}; button enabled={button.IsEnabled}; dispatcher shutdown={tools.Dispatcher.HasShutdownStarted}; thread pool available={workerAvailable}/{ioAvailable}; result={status.Text}",ex);
+            }
+            task.GetAwaiter().GetResult();
         }
-        finally { SynchronizationContext.SetSynchronizationContext(previous); }
+        finally { tools.BeforeGradeForVerification=beforeHook;tools.AfterGradeBeforeReturnForVerification=afterHook;SynchronizationContext.SetSynchronizationContext(previous); }
     }
     private static void VerifyGradingSourceIdentification(MainWindow studio,List<string> checks)
     {
