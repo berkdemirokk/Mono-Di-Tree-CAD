@@ -8640,7 +8640,7 @@ internal static class DesktopVerification
             try
             {
                 var task=window.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
-                var after=studio.Document.Clone();var actual=after.Pieces.Single();var expected=Geometry.Rotate(piece.Points,180,Geometry.Bounds(piece.Points).Center);
+                var after=studio.Document.Clone();var actual=after.Pieces.Single();var expected=TekstilCAD.Core.Geometry.Rotate(piece.Points,180,TekstilCAD.Core.Geometry.Bounds(piece.Points).Center);
                 Check(actual.Points.SequenceEqual(expected) && actual.Notches!.Single().Position==actual.Points[1] &&
                     actual.Grainline is not null && after.GradingRules.Single().Deltas.All(p=>p==new Point2(-1,-2)) && session.UndoCount==1,
                     "Large half turn applies geometry, marker, grainline and grading in one transaction",checks);
