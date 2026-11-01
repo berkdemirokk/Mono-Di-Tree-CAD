@@ -153,6 +153,11 @@ public static class PatternTools
             var determinant = Cross(u, v);
             var intersection = q + u * (Cross(r - q, v) / determinant);
             Geometry.Validate(intersection);
+            // Positive allowance must move every convex miter. At large origins,
+            // a tiny normal displacement may round back to the original binary64
+            // coordinate; accepting it would silently return an unoffset corner.
+            if (intersection == b)
+                throw new ArgumentException("Dikiş payı bu koordinatlarda sayısal olarak temsil edilemiyor; işlem uygulanmadı.");
             if (Geometry.Distance(intersection, b) > mm * 1000)
                 throw new ArgumentException("Çok dar köşe güvenli dikiş payı sınırını aşıyor.");
             result.Add(intersection);
