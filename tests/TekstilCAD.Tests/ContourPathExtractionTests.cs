@@ -39,4 +39,41 @@ public class ContourPathExtractionTests
         source=Source(false);source.Points=[new(0,0),new(10,10),new(0,10),new(10,0)];source.Notches=null;
         Assert.Throws<ArgumentException>(()=>ContourPathExtraction.Extract(source,0,2));
     }
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void ExplicitRuleMappingPreservesIndexedIncrementsAcrossClosure(bool repeated)
+    {
+        var source=Source(repeated);
+        var deltas=new List<Point2> { new(0,1),new(1,2),new(2,3),new(3,4) };
+        if(repeated)deltas.Add(deltas[0]);
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=deltas };
+        var result=ContourPathExtraction.Extract(source,3,1);
+        var mapped=ContourPathExtraction.ExtractGrading(source,rule,result)!;
+        Assert.Equal(result.Piece.Id,mapped.SourcePieceId);Assert.False(mapped.SourceClosed);
+        Assert.Equal(new[] { deltas[3],deltas[0],deltas[1] },mapped.Deltas);
+        Assert.Equal(result.Piece.Points,mapped.SourcePoints);
+        mapped.Deltas[0]=new(99,99);Assert.Equal(new Point2(3,4),rule.Deltas[3]);
+    }
+    [Fact]
+    public void RuleMappingUsesCanonicalClosureAliasAndForwardIndices()
+    {
+        var source=Source(true);
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,1),new(1,2),new(2,3),new(3,4),new(0,1)] };
+        var result=ContourPathExtraction.Extract(source,4,2);
+        var mapped=ContourPathExtraction.ExtractGrading(source,rule,result)!;
+        Assert.Equal(new[] { rule.Deltas[0],rule.Deltas[1],rule.Deltas[2] },mapped.Deltas);
+    }
+    [Fact]
+    public void RuleMappingRejectsStaleBitsConflictingClosureAndAlteredResult()
+    {
+        var source=Source(true);
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=Enumerable.Repeat(new Point2(0,0),source.Points.Count).ToList() };
+        var result=ContourPathExtraction.Extract(source,3,1);
+        rule.Deltas[^1]=new Point2(-0.0,0);Assert.Null(ContourPathExtraction.ExtractGrading(source,rule,result));
+        rule.Deltas[^1]=rule.Deltas[0];rule.SourcePoints[0]=new Point2(-0.0,0);Assert.Null(ContourPathExtraction.ExtractGrading(source,rule,result));
+        rule.SourcePoints[0]=source.Points[0];result.Piece.Points[0]=new(1,1);Assert.Null(ContourPathExtraction.ExtractGrading(source,rule,result));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>ContourPathExtraction.ExtractGrading(source,rule,result,cancellation.Token));
+    }
+
 }

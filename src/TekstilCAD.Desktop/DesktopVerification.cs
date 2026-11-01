@@ -146,6 +146,25 @@ internal static class DesktopVerification
                 "Contour interval creation is one undoable and redoable change",checks);
         }
         finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(source.Id);var dirtyDraft=false;
+        window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id,(_,_)=>dirtyDraft);
+        try
+        {
+            window.CopyRulesForVerification.IsChecked=true;window.StartForVerification.Text="3";window.EndForVerification.Text="1";
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(window.ApplyForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Contour rule mapping previews without changing the source",checks);
+            dirtyDraft=true;window.CommitForVerification();
+            Check(DocumentSession.ContentEquals(before,studio.Document) && window.StatusForVerification.Contains("taslağı değişti"),"Contour rule mapping rejects draft changes after preview",checks);
+            dirtyDraft=false;task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();window.CommitForVerification();
+            var after=studio.Document.Clone();var extracted=after.Pieces.Single(p=>p.Id!=source.Id);
+            var copied=after.GradingRules.Single(r=>r.SourcePieceId==extracted.Id);
+            Check(after.GradingRules.Count==2 && copied.SourcePoints.SequenceEqual(extracted.Points) && copied.Deltas.SequenceEqual(new[] { rule.Deltas[3],rule.Deltas[0],rule.Deltas[1] }) &&
+                DocumentSession.ContentEquals(before,new ProjectDocument { Pieces=[after.Pieces[0]],GradingRules=[after.GradingRules.Single(r=>r.SourcePieceId==source.Id)] }),
+                "Contour interval carries saved rule across closure while retaining source",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Contour interval and carried rule undo and redo together",checks);
+        }
+        finally { window.Close(); }
         studio.LoadDocument(before.Clone());studio.Select(source.Id);window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
         try
         {

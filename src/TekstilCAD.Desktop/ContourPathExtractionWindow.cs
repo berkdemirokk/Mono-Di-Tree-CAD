@@ -15,6 +15,8 @@ internal sealed class ContourPathExtractionWindow : Window
     private readonly MainWindow workspace;
     private readonly Func<Guid?> selectedSource;
     private readonly Guid sourceId;
+    private readonly Func<PatternPiece,GradingRuleSet?,bool>? hasDraft;
+    private readonly CheckBox copyRules=new() { Content="Kayıtlı serileme artışlarını açık kenara aktar",Margin=new Thickness(0,8,0,8) };
     private readonly ProjectDocument openingDocument,openingSnapshot;
     private readonly Guid? openingSelection;
     private readonly TextBox start=new() { Text="0",Margin=new Thickness(0,4,0,4) };
@@ -27,7 +29,9 @@ internal sealed class ContourPathExtractionWindow : Window
     private ProjectDocument? document,snapshot;
     private Guid? selected;
     private ContourPathExtractionResult? proposal;
+    private GradingRuleSet? proposalRule;
     private bool closed;
+    internal CheckBox CopyRulesForVerification=>copyRules;
     internal TextBox StartForVerification=>start;
     internal TextBox EndForVerification=>end;
     internal Button ApplyForVerification=>apply;
@@ -36,9 +40,9 @@ internal sealed class ContourPathExtractionWindow : Window
     internal Task CalculateForVerification()=>CalculateAsync();
     internal void CommitForVerification()=>Apply();
 
-    internal ContourPathExtractionWindow(MainWindow workspace,Window owner,PatternPiece source,Func<Guid?> selectedSource)
+    internal ContourPathExtractionWindow(MainWindow workspace,Window owner,PatternPiece source,Func<Guid?> selectedSource,Func<PatternPiece,GradingRuleSet?,bool>? hasDraft=null)
     {
-        this.workspace=workspace;this.selectedSource=selectedSource;sourceId=source.Id;
+        this.workspace=workspace;this.selectedSource=selectedSource;this.hasDraft=hasDraft;sourceId=source.Id;
         openingDocument=workspace.Document;openingSelection=workspace.SelectedId;
         if(selectedSource()!=sourceId || !ReferenceEquals(openingDocument.Pieces.FirstOrDefault(p=>p.Id==sourceId),source) || workspace.HasPendingCanvasOrPropertyWork)
             throw new InvalidOperationException("Kaynak veya bekleyen çalışma değişti; kenar seçimini yeniden başlatın.");
@@ -50,7 +54,8 @@ internal sealed class ContourPathExtractionWindow : Window
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
         body.Children.Add(new TextBlock { Text="Konturdan açık kenar çıkar",FontSize=20,FontWeight=FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text="Başlangıç ve bitiş köşelerini seçin. Kenar, saklanan nokta sırasını ileri izler; bitiş indeksi küçükse kapanıştan geçer. Başlangıç ve bitişi değiştirmek karşı taraftaki aralığı seçer; çıkardığınız kenarın yönünü sonradan ters çevirebilirsiniz. Tekrarlı kapanış son indeksi ilk köşeyle aynıdır. Kaynak parça değişmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
-        body.Children.Add(new TextBlock { Text="Yalnız seçilen aralıktaki görsel köşe işaretleri kopyalanır; diğerleri kaynakta kalır. Yeni açık parçada serileme kuralı, üretim bilgisi, iplik yönü veya kaynak ilişkisi bulunmaz. İşaretler fiziksel çentik değildir; sonucu üretim öncesi inceleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
+        body.Children.Add(new TextBlock { Text="Yalnız seçilen aralıktaki görsel köşe işaretleri kopyalanır; diğerleri kaynakta kalır. Serileme kuralı yalnız açıkça seçilirse ve kaynakla tam eşleşirse aktarılır. Yeni parçada üretim bilgisi, iplik yönü veya kaynak ilişkisi bulunmaz. İşaretler fiziksel çentik değildir; sonucu üretim öncesi inceleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
+        AutomationProperties.SetHelpText(copyRules,"Yalnız kayıtlı kural kaynakla bitçe eşleşiyorsa ve uygulanmamış serileme taslağı yoksa seçilen aralığın artışları kopyalanır.");body.Children.Add(copyRules);
         body.Children.Add(new TextBlock { Text="Kaynak: "+CadCanvas.CanvasPieceLabel(source.Name)+"\nKimlik: "+sourceId.ToString("D"),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
         void AddPoint(string title,TextBox input,string automationName)
         {
@@ -67,11 +72,11 @@ internal sealed class ContourPathExtractionWindow : Window
         }
         AddPoint("Başlangıç indeksi",start,"Kenar başlangıç noktası indeksi");AddPoint("Bitiş indeksi",end,"Kenar bitiş noktası indeksi");
         body.Children.Add(preview);AutomationProperties.SetName(status,"Kenar çıkarma durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        start.TextChanged+=(_,_)=>Invalidate();end.TextChanged+=(_,_)=>Invalidate();calculate.Click+=async (_,_)=>await CalculateAsync();apply.Click+=(_,_)=>Apply();close.Click+=(_,_)=>Close();
+        start.TextChanged+=(_,_)=>Invalidate();end.TextChanged+=(_,_)=>Invalidate();copyRules.Checked+=(_,_)=>Invalidate();copyRules.Unchecked+=(_,_)=>Invalidate();calculate.Click+=async (_,_)=>await CalculateAsync();apply.Click+=(_,_)=>Apply();close.Click+=(_,_)=>Close();
         Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
     private void SetStatus(string text) { status.Text=text;AutomationProperties.SetName(status,text);if(UIElementAutomationPeer.CreatePeerForElement(status) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged); }
-    private void Invalidate() { cancellation?.Cancel();proposal=null;document=null;snapshot=null;apply.IsEnabled=false;preview.Content=null;SetStatus("Önizleme hesaplanmadı."); }
+    private void Invalidate() { cancellation?.Cancel();proposal=null;proposalRule=null;document=null;snapshot=null;apply.IsEnabled=false;preview.Content=null;SetStatus("Önizleme hesaplanmadı."); }
     private bool OpeningCurrent()=> !workspace.IsWindowClosed && !workspace.HasPendingCanvasOrPropertyWork &&
         ReferenceEquals(workspace.Document,openingDocument) && workspace.SelectedId==openingSelection && selectedSource()==sourceId && DocumentSession.ContentEquals(workspace.Document,openingSnapshot);
     private bool Current(ProjectDocument original,ProjectDocument copy,Guid? selection) =>
@@ -85,18 +90,24 @@ internal sealed class ContourPathExtractionWindow : Window
         { SetStatus("Geçerli iki tam sayı indeksi girin.");return; }
         var original=workspace.Document;var copy=original.Clone();var selection=workspace.SelectedId;var source=copy.Pieces.FirstOrDefault(p=>p.Id==sourceId);
         if(source is null) { SetStatus("Kaynak parça bulunamadı.");return; }
+        var carry=copyRules.IsChecked==true;var rule=copy.GradingRules.FirstOrDefault(r=>r.SourcePieceId==sourceId);
+        if(carry && (rule is null || hasDraft is null || hasDraft(source,rule))) { SetStatus("Kayıtlı kural ve kaynakla eşleşen temiz taslak gereklidir; önce taslağı kontrol edin.");return; }
         using var tokenSource=new CancellationTokenSource();cancellation=tokenSource;calculate.IsEnabled=false;SetStatus("Kenar doğrulanıyor; kapatmak hesabı iptal eder.");
         try
         {
-            var result=await Task.Run(()=> { BeforeExtractionForVerification?.Invoke();tokenSource.Token.ThrowIfCancellationRequested();
-                var extracted=ContourPathExtraction.Extract(source,a,b,tokenSource.Token);var candidate=copy.Clone();candidate.Pieces.Add(extracted.Piece);
-                ProjectStorage.Validate(candidate,tokenSource.Token);return extracted; },tokenSource.Token);
+            var calculated=await Task.Run(()=> { BeforeExtractionForVerification?.Invoke();tokenSource.Token.ThrowIfCancellationRequested();
+                var extracted=ContourPathExtraction.Extract(source,a,b,tokenSource.Token);
+                var mapped=carry ? ContourPathExtraction.ExtractGrading(source,rule!,extracted,tokenSource.Token) : null;
+                if(carry && mapped is null)throw new InvalidOperationException("Kayıtlı serileme kuralı kaynak veya kenarla bitçe eşleşmiyor.");
+                var candidate=copy.Clone();candidate.Pieces.Add(extracted.Piece);if(mapped is not null)candidate.GradingRules.Add(mapped);
+                ProjectStorage.Validate(candidate,tokenSource.Token);return (extracted,mapped); },tokenSource.Token);
             if(closed || tokenSource.IsCancellationRequested)return;
-            if(!Current(original,copy,selection)) { SetStatus("Kaynak veya proje değişti; önizlemeyi yenileyin.");return; }
+            var result=calculated.extracted;
+            if(!Current(original,copy,selection) || (carry && hasDraft!(source,rule))) { SetStatus("Kaynak veya proje değişti; önizlemeyi yenileyin.");return; }
             var display=new PointMeasurePreview(result.Piece,showMarkedVertices:true);display.SetSelection(0,result.Piece.Points.Count-1);preview.Content=display;
-            document=original;snapshot=copy;selected=selection;proposal=result;apply.IsEnabled=true;
+            document=original;snapshot=copy;selected=selection;proposal=result;proposalRule=calculated.mapped;apply.IsEnabled=true;
             SetStatus($"Önizleme: {result.StartIndex} → {result.EndIndex}; {(result.CrossesClosure ? "kapanıştan geçer" : "kapanıştan geçmez")}. {result.Piece.Points.Count} nokta, {result.Piece.Notches?.Count ?? 0} görsel işaret; kaynakta kalan {result.OmittedMarks} işaret sonuca aktarılmaz. "+
-                (display.MarkersSuppressed ? "500'den fazla işaret önizlemede gösterilmiyor. " : "")+"Yeni parçada üretim veya serileme bilgisi yoktur.");
+                (display.MarkersSuppressed ? "500'den fazla işaret önizlemede gösterilmiyor. " : "")+(carry ? "Kayıtlı artışlar açık kenara eşlendi; kullanım öncesi kontrol edin. " : "Yeni parçada serileme kuralı yoktur. ")+"Yeni parçada üretim bilgisi yoktur.");
         }
         catch(OperationCanceledException) { if(!closed)SetStatus("İşlem iptal edildi; proje değişmedi."); }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or ArithmeticException or System.IO.InvalidDataException)
@@ -107,11 +118,16 @@ internal sealed class ContourPathExtractionWindow : Window
     {
         if(proposal is null || document is null || snapshot is null || !Current(document,snapshot,selected))
         { Invalidate();SetStatus("Proje veya seçim değişti; önizlemeyi yenileyin.");return; }
+        if(proposalRule is not null && (hasDraft is null || hasDraft(snapshot.Pieces.Single(p=>p.Id==sourceId),snapshot.GradingRules.FirstOrDefault(r=>r.SourcePieceId==sourceId))))
+        { Invalidate();SetStatus("Serileme taslağı değişti; önizlemeyi yenileyin.");return; }
         if(!workspace.CanRetainCurrentUndoSnapshot) { SetStatus("Proje geri alma sınırını aşıyor; işlem uygulanmadı.");return; }
-        var result=proposal.Piece.Clone();var committed=false;apply.IsEnabled=false;
+        var result=proposal.Piece.Clone();
+        var candidate=workspace.Document.Clone();candidate.Pieces.Add(result);if(proposalRule is not null)candidate.GradingRules.Add(proposalRule.Clone());
+        if(!workspace.CanRetainUndoSnapshot(candidate)) { SetStatus("Sonuç yineleme geçmişi sınırını aşıyor; işlem uygulanmadı.");return; }
+        var committed=false;apply.IsEnabled=false;
         try
         {
-            workspace.CommitObserved("Konturdan açık kenar çıkarıldı",()=>workspace.Document.Pieces.Add(result),()=>committed=true);
+            workspace.CommitObserved("Konturdan açık kenar çıkarıldı",()=> { workspace.Document.Pieces.Add(result);if(proposalRule is not null)workspace.Document.GradingRules.Add(proposalRule.Clone()); },()=>committed=true);
             proposal=null;SetStatus("Açık kenar eklendi; kaynak korundu. Geri al ile sonuç kaldırılabilir.");
         }
         catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException))

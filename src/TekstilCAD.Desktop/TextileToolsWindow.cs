@@ -897,7 +897,7 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Kapalı konturdan açık kenar çıkar…",()=>
         {
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
-            var selected=Piece();new ContourPathExtractionWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
+            var selected=Piece();new ContourPathExtractionWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id,HasSnapshotGradeDraft).ShowDialog();
             RefreshSources((source.SelectedItem as PatternPiece)?.Id);
         },()=>source.SelectedItem is PatternPiece { Closed:true,Points.Count:>=3 });
         Button(panel,"Açık konturu kapat…",()=>

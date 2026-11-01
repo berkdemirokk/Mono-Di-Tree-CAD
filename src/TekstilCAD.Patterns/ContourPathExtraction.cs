@@ -34,4 +34,36 @@ public static class ContourPathExtraction
         var result=new PatternPiece { Name="Kontur kenarı · "+source.Id.ToString("N"),Closed=false,Points=path,Notches=marks.Count==0 ? null : marks };
         return new(result,start,end,(source.Notches?.Count ?? 0)-marks.Count,end<start);
     }
+    /// <summary>Copy a bit-matched saved rule to exactly the extracted interval.</summary>
+    public static GradingRuleSet? ExtractGrading(PatternPiece source,GradingRuleSet rule,ContourPathExtractionResult extraction,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(rule);ArgumentNullException.ThrowIfNull(extraction);token.ThrowIfCancellationRequested();
+        var result=extraction.Piece;
+        if(!source.Closed || source.Id==Guid.Empty || result is null || result.Closed || result.Id==Guid.Empty || result.Id==source.Id ||
+           source.Points is null || result.Points is null || rule.SourcePoints is null || rule.Deltas is null ||
+           rule.SourcePieceId!=source.Id || !rule.SourceClosed || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints ||
+           rule.SourcePoints.Count!=source.Points.Count || rule.Deltas.Count!=source.Points.Count)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        var repeated=source.Points[0]==source.Points[^1];var logical=source.Points.Count-(repeated?1:0);
+        if(repeated && (!Bits(source.Points[0],source.Points[^1]) || !Bits(rule.Deltas[0],rule.Deltas[^1])))return null;
+        if(extraction.StartIndex<0 || extraction.EndIndex<0 || extraction.StartIndex>=logical || extraction.EndIndex>=logical || extraction.StartIndex==extraction.EndIndex || extraction.CrossesClosure!=(extraction.EndIndex<extraction.StartIndex))return null;
+        var count=extraction.EndIndex>extraction.StartIndex ? extraction.EndIndex-extraction.StartIndex+1 : logical-extraction.StartIndex+extraction.EndIndex+1;
+        if(result.Points.Count!=count)return null;
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            if((i & 255)==0)token.ThrowIfCancellationRequested();
+            if(!source.Points[i].IsFinite || !rule.Deltas[i].IsFinite || !Bits(source.Points[i],rule.SourcePoints[i]))return null;
+        }
+        var deltas=new List<Point2>(count);
+        for(var i=0;i<count;i++)
+        {
+            if((i & 255)==0)token.ThrowIfCancellationRequested();
+            var index=(extraction.StartIndex+i)%logical;
+            if(!Bits(source.Points[index],result.Points[i]))return null;
+            deltas.Add(rule.Deltas[index]);
+        }
+        token.ThrowIfCancellationRequested();
+        return new GradingRuleSet { SourcePieceId=result.Id,SourceClosed=false,SourcePoints=[..result.Points],Deltas=deltas };
+    }
+
 }
