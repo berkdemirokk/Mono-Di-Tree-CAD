@@ -1478,6 +1478,7 @@ private struct Drawing {
         let quantity: Int?
         let quantityUnreadable: Bool
         let metadataUnreadable: Bool
+        let metadataEmpty: Bool
         let grainStatus: String
         let grain: Grain?
         let notches: [Int]
@@ -1495,7 +1496,7 @@ private struct Drawing {
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
                 return "\(label): \(value)"
             }
-            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
+            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
             return (["Parça \(index + 1)"] + fields + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
     }
@@ -1673,6 +1674,9 @@ private struct Drawing {
             let metadata = raw["Metadata"] as? [String: Any]
             let rawMetadata = raw["Metadata"]
             let metadataUnreadable = rawMetadata != nil && !(rawMetadata is NSNull) && metadata == nil
+            let metadataEmpty = metadata.map { fields in
+                ["Role", "Size", "Material", "Quantity"].allSatisfy { fields[$0] == nil || fields[$0] is NSNull }
+            } ?? false
             if formatVersion == 6, let metadata, !Set(metadata.keys).isSubset(of: ["Role", "Size", "Material", "Quantity"]) {
                 throw ViewerError.message("Parça bilgisinde tanınmayan alan var; dosya önizlenmedi.")
             }
@@ -1739,7 +1743,7 @@ private struct Drawing {
                                 isCollapsed: ContourMeasure.isCollapsed(points),
                                 contourBounds: points.count > 1 ? ContourBounds(points: points) : nil,
                                 role: role, roleUnreadable: roleUnreadable, size: size,
-                                material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable,
+                                material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable, metadataEmpty: metadataEmpty,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
@@ -2112,6 +2116,7 @@ private struct PieceDetails: View {
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 if piece.quantityUnreadable { Text("Adet okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if piece.metadataUnreadable { Text("Üretim bilgileri okunamadı; kaynak dosyayı kontrol edin.") }
+                if piece.metadataEmpty { Text("Üretim bilgileri boş; dosya masaüstünde açılamayabilir. Kaynak dosyayı kontrol edin.") }
                 Text(piece.grainStatus)
                 if let width = MeasurementDisplay.format(dimensions.width), let height = MeasurementDisplay.format(dimensions.height) {
                     Text("Yaklaşık en: \(width) mm • boy: \(height) mm")
