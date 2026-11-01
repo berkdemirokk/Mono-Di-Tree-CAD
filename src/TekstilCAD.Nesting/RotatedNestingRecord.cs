@@ -93,6 +93,7 @@ public sealed class RotatedNestingRecord
         if(trace.Schema!=RotatedNestingTrace.CurrentSchema || trace.Algorithm!=RotatedNestingTrace.CurrentAlgorithm ||
            trace.TransformConvention!=RotatedNestingTrace.CurrentTransform || trace.SourcePieces is null || trace.Selections is null ||
            trace.Copies is null || trace.Copies.Count>NestingEngine.MaximumPieces || layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces ||
+           layout.GradingRules is null || layout.GradingRules.Count!=0 || layout.NestingSnapshot is not null || layout.ImportProvenance is not null ||
            (trace.MaxLength is double limit && !double.IsFinite(limit)) ||
            trace.GrainDirection is not ("OneWay" or "TwoWay"))
             throw new InvalidDataException("Döndürme izi biçimi veya sürümü desteklenmiyor.");
@@ -117,7 +118,7 @@ public sealed class RotatedNestingRecord
     {
         if(piece.Points is null || piece.Points.Count>NestingEngine.MaximumVerticesPerPiece ||
            (vertices+=piece.Points.Count)>NestingEngine.MaximumTotalVertices || piece.Name is null || piece.Name.Length>1024 ||
-           piece.Notches is { } marks && (marks.Count==0 || marks.Count>piece.Points.Count) ||
+           piece.Notches is { } marks && (marks.Count==0 || marks.Count>piece.Points.Count || marks.Any(mark=>mark is null)) ||
            piece.Metadata?.Material is { Length:>128 } || piece.Metadata?.Size is { Length:>128 } || piece.Metadata?.Role is { Length:>128 })
             throw new ArgumentException("Döndürme izi parça sınırını aşıyor.");
     }

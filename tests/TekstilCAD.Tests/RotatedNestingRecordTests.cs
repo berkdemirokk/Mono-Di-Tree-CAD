@@ -45,6 +45,17 @@ public sealed class RotatedNestingRecordTests
     }
 
     [Fact]
+    public void NullMarkerElementsAreRejectedBeforeCloning()
+    {
+        var f=Fixture();f.Source.Pieces[0].Notches![0]=null!;
+        Assert.Throws<ArgumentException>(()=>RotatedNestingRecord.Capture(f.Source,[f.Id],f.Angles,f.Result,
+            GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100));
+        f=Fixture();f.Result.Plan.Nesting.Layout.Pieces[0].Notches![0]=null!;
+        Assert.Throws<ArgumentException>(()=>RotatedNestingRecord.Capture(f.Source,[f.Id],f.Angles,f.Result,
+            GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100));
+    }
+
+    [Fact]
     public void TraceModelRoundTripReverifiesAgainstLayoutAndRejectsTampering()
     {
         var f=Fixture();var original=RotatedNestingRecord.Capture(f.Source,[f.Id],f.Angles,f.Result,
@@ -62,5 +73,11 @@ public sealed class RotatedNestingRecordTests
         Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,badLayout));
         changed=trace.Clone();changed.Schema="unknown";
         Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
+        var historical=layout.Clone();historical.NestingSnapshot=new NestingSnapshot();
+        Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(trace,historical));
+        historical=layout.Clone();historical.ImportProvenance=new DxfImportProvenance();
+        Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(trace,historical));
+        historical=layout.Clone();historical.GradingRules.Add(new GradingRuleSet());
+        Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(trace,historical));
     }
 }

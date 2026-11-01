@@ -5,6 +5,16 @@ namespace TekstilCAD.Tests;
 public sealed class RotatedNestingTraceTests
 {
     [Fact]
+    public void MalformedMutableListsFailBeforeCloneOrComparison()
+    {
+        var bad=new RotatedNestingTrace { SourcePieces=[null!] };
+        Assert.Throws<ArgumentException>(()=>bad.Clone());
+        Assert.Throws<ArgumentException>(()=>RotatedNestingTrace.ContentEquals(bad,new RotatedNestingTrace()));
+        bad=new RotatedNestingTrace { SourcePieces=[new PatternPiece { Points=[new(0,0)],Notches=[null!] }] };
+        Assert.Throws<ArgumentException>(()=>bad.Clone());
+        bad=new RotatedNestingTrace { Copies=null! };Assert.Throws<ArgumentException>(()=>bad.Clone());
+    }
+    [Fact]
     public void CloneOwnsAllMutableEvidenceAndComparesPersistedBits()
     {
         var zero=BitConverter.Int64BitsToDouble(long.MinValue);
