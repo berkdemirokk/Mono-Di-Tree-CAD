@@ -62,26 +62,29 @@ public sealed class DxfBlockOccurrenceTests
         Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),Enumerable.Repeat(first,33).ToArray(),link.BlockHeaderOrdinal!.Value,true));
         Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second with { PieceId=Guid.NewGuid() }],link.BlockHeaderOrdinal!.Value,true));
         var changed=Encoding.ASCII.GetBytes(text.Replace("10\n10\n20\n0\n0\nENDBLK","10\n11\n20\n0\n0\nENDBLK"));
-        using(var unstable=new SwitchOnSecondRewindStream(bytes,changed))
+        using(var unstable=new SwitchOnRewindStream(bytes,changed))
         {
-            var captured=DxfBlockDefinitionPointMapping.CreateMany(import,unstable,[first,second],link.BlockHeaderOrdinal!.Value,true);
-            Assert.Equal(2,captured.Assignments.Length);Assert.Equal(0,unstable.Rewinds);
+            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,unstable,[first,second],link.BlockHeaderOrdinal!.Value,true));
+            Assert.Equal(1,unstable.Rewinds);
         }
         using(var mutated=new MutatingReadStream(bytes,changed))
             Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,mutated,[first,second],link.BlockHeaderOrdinal!.Value,true));
+        using(var midCancellation=new CancellationTokenSource())
+        using(var cancellingStream=new SwitchOnRewindStream(bytes,bytes,midCancellation))
+            Assert.Throws<OperationCanceledException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,cancellingStream,[first,second],link.BlockHeaderOrdinal!.Value,true,midCancellation.Token));
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second],link.BlockHeaderOrdinal!.Value,true,cancellation.Token));
         Assert.Equal(original,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
     }
 
-    private sealed class SwitchOnSecondRewindStream(byte[] first,byte[] second) : Stream
+    private sealed class SwitchOnRewindStream(byte[] first,byte[] second,CancellationTokenSource? cancelOnRewind=null) : Stream
     {
         private readonly MemoryStream a=new(first),b=new(second);private int rewinds;
         public int Rewinds=>rewinds;
-        private MemoryStream Current=>rewinds>=2 ? b : a;
+        private MemoryStream Current=>rewinds>=1 ? b : a;
         public override bool CanRead=>true;public override bool CanSeek=>true;public override bool CanWrite=>false;
         public override long Length=>Current.Length;
-        public override long Position { get=>Current.Position; set { if(value!=0)throw new NotSupportedException();rewinds++;Current.Position=0; } }
+        public override long Position { get=>Current.Position; set { if(value!=0)throw new NotSupportedException();rewinds++;Current.Position=0;cancelOnRewind?.Cancel(); } }
         public override int Read(byte[] buffer,int offset,int count)=>Current.Read(buffer,offset,count);
         public override long Seek(long offset,SeekOrigin origin)=>throw new NotSupportedException();
         public override void Flush() { }

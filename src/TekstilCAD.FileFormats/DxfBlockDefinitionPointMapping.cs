@@ -62,6 +62,13 @@ public static class DxfBlockDefinitionPointMapping
             assignments.Add(new(verified.PointOrdinal,verified.VertexOrdinal,item.VertexIndex));notice=verified.Notice;
         }
         token.ThrowIfCancellationRequested();ProjectStorage.Validate(copy!,token);token.ThrowIfCancellationRequested();
+        // Recheck the same stream after all choices. This detects a changed
+        // source since capture; it cannot lock out a later noncooperating writer.
+        source.Position=0;
+        var finalSource=DxfSourceSnapshotCheck.CheckStream(source,import,token);
+        if(finalSource.Status!=DxfSourceSnapshotCheck.Status.MatchesReadBytes || !finalSource.ImportIdentityVerified)
+            throw new InvalidDataException("DXF kaynağı eşleme sırasında değişti; çalışma kopyası oluşturulmadı.");
+        token.ThrowIfCancellationRequested();
         return new(copy!,blockHeaderOrdinal,assignments.MoveToImmutable(),notice!);
     }
 
