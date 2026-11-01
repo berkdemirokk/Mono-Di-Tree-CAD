@@ -430,6 +430,7 @@ internal static class DesktopVerification
             GroupMoveVerification.Run(studio,checks);
             VerifyDraftRemovalConfirmationRace(studio,checks);
             VerifyFitSelectedPiece(studio,checks);
+            VerifyFitPendingDrawing(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);
             VerifyDxfEncodingChoice(studio,work,reportPath,checks);
             VerifyDxfBulgeOptions(studio,reportPath,checks);
@@ -5786,6 +5787,39 @@ internal static class DesktopVerification
         finally { studio.ConfirmClearPropertyDraftsForVerification=null;studio.LoadDocument(new ProjectDocument { Name="Test temizliği" }); }
     }
 
+    private static void VerifyFitPendingDrawing(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var scaleField=typeof(CadCanvas).GetField("scale",PrivateInstance)!;var offsetField=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        canvas.Measure(new Size(600,400));canvas.Arrange(new Rect(0,0,600,400));canvas.UpdateLayout();
+        bool Visible(Point2 point)
+        {
+            var scale=(double)scaleField.GetValue(canvas)!;var offset=(Vector)offsetField.GetValue(canvas)!;
+            var x=point.X*scale+offset.X;var y=point.Y*scale+offset.Y;
+            return x>=0 && x<=canvas.ActualWidth && y>=0 && y<=canvas.ActualHeight;
+        }
+        try
+        {
+            foreach(var withPiece in new[] { false,true })
+            {
+                var piece=new PatternPiece { Name="Mevcut",Points=[new(0,0),new(10,0),new(0,10)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=withPiece ? [piece] : [] });studio.SetTool("Çoklu çizgi");
+                var first=new Point2(1000,500);var second=new Point2(1100,550);
+                Check(canvas.AddDrawingPointAt(first) is null && canvas.AddDrawingPointAt(second) is null,"Coordinate drawing fixture creates an unfinished path",checks);
+                var before=studio.Document.Clone();var pending=canvas.CapturePendingDrawing()!.Points.ToArray();var undo=session.UndoCount;var redo=session.RedoCount;var dirty=session.IsDirty;
+                canvas.Fit();
+                Check(Visible(first) && Visible(second) && (!withPiece || piece.Points.All(Visible)) && status.Text.Contains("tamamlanmamış çizim") &&
+                    canvas.CapturePendingDrawing()!.Points.SequenceEqual(pending) && DocumentSession.ContentEquals(before,studio.Document) &&
+                    session.UndoCount==undo && session.RedoCount==redo && session.IsDirty==dirty,
+                    withPiece ? "Fit frames existing pieces and the unfinished coordinate drawing without changing either" :
+                        "Fit frames an unfinished coordinate drawing in an empty project",checks);
+                canvas.CancelDrawing();
+            }
+        }
+        finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
+    }
     private static void VerifyFitSelectedPiece(MainWindow studio,List<string> checks)
     {
         var first=new PatternPiece { Name="Seçili",Points=[new(1000,2000),new(1100,2000),new(1000,2050)] };

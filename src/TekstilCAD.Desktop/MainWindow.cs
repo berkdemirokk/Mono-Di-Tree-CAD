@@ -424,7 +424,7 @@ public class MainWindow : Window
         var viewCommands = new StackPanel { Orientation = Orientation.Horizontal }; DockPanel.SetDock(viewCommands, Dock.Right); canvasHeader.Children.Add(viewCommands);
         undoCommand = AddButton(viewCommands, "↶", Undo, "Geri al · Ctrl+Z");
         redoCommand = AddButton(viewCommands, "↷", Redo, "Yinele · Ctrl+Y");
-        fitCommand = AddButton(viewCommands, "Tümünü göster", () => canvas?.Fit(), "Geometriyi çalışma alanına sığdır · F");
+        fitCommand = AddButton(viewCommands, "Tümünü göster", () => canvas?.Fit(), "Parçaları ve tamamlanmamış çizimi çalışma alanına sığdır · F");
         System.Windows.Automation.AutomationProperties.SetName(undoCommand, "Geri al");
         System.Windows.Automation.AutomationProperties.SetName(redoCommand, "Yinele");
         canvasTool.Foreground = Muted; canvasTool.FontSize = 11; canvasTool.VerticalAlignment = VerticalAlignment.Center; canvasHeader.Children.Add(canvasTool);

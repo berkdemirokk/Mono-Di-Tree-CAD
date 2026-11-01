@@ -332,7 +332,18 @@ public sealed class CadCanvas : FrameworkElement
             minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
             maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
         }
-        if(!found) { owner.SetStatus("Gösterilecek parça yok.");return; }
+        // Coordinate entry can put an unfinished contour far from existing
+        // pieces, or be the first drawing in an empty document. Include its
+        // actual points without completing or changing the draft.
+        foreach(var point in drawing)
+        {
+            if(!point.IsFinite)
+            { owner.SetStatus("Çizim koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+            found=true;
+            minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+            maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+        }
+        if(!found) { owner.SetStatus("Gösterilecek parça veya çizim yok.");return; }
         var extentX=maxX-minX;var extentY=maxY-minY;
         if(!double.IsFinite(extentX) || !double.IsFinite(extentY))
         { owner.SetStatus("Proje sınırları hesaplanamadı; görünüm değiştirilmedi.");return; }
@@ -349,6 +360,7 @@ public sealed class CadCanvas : FrameworkElement
         scale=newScale;offset=newOffset;InvalidateVisual();
         owner.SetStatus(extentX*newScale>availableWidth || extentY*newScale>availableHeight
             ? "Proje ortalandı; en düşük yakınlık sınırı nedeniyle tamamı görünmeyebilir."
+            : drawing.Count>0 ? "Parçalar ve tamamlanmamış çizim çalışma alanında gösteriliyor · Proje geometrisi değişmedi."
             : "Tüm parçalar çalışma alanında gösteriliyor · Proje geometrisi değişmedi.");
     }
     /// <summary>Frames the current selection without changing project geometry or history.</summary>
