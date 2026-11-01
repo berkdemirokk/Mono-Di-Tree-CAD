@@ -49,16 +49,24 @@ enum NotchSearch {
     // Scan every group when necessary, but retain at most limit rows. One
     // additional match distinguishes truncation from an exact-size result.
     static func boundedMatches(groups: [[Int]], limit: Int, matches: (Int, Int) -> Bool) -> (groups: [[Int]], hasMore: Bool) {
+        boundedMatchesCancellable(groups: groups, limit: limit, cancelled: { false }, matches: matches)!
+    }
+
+    static func boundedMatchesCancellable(groups: [[Int]], limit: Int, cancelled: () -> Bool,
+                                          matches: (Int, Int) -> Bool) -> (groups: [[Int]], hasMore: Bool)? {
         var result = Array(repeating: [Int](), count: groups.count)
         var count = 0
         for (groupIndex, group) in groups.enumerated() {
-            for point in group where matches(groupIndex, point) {
+            if cancelled() { return nil }
+            for point in group {
+                if cancelled() { return nil }
+                guard matches(groupIndex, point) else { continue }
                 if count >= max(0, limit) { return (result, true) }
                 result[groupIndex].append(point)
                 count += 1
             }
         }
-        return (result, false)
+        return cancelled() ? nil : (result, false)
     }
     /// Returns the neighboring marked point in file order, without wrapping.
     static func adjacent(in points: [Int], current: Int?, forward: Bool) -> Int? {

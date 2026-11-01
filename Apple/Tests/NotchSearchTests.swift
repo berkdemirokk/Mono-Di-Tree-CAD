@@ -2,6 +2,29 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testCancellationStopsScanWithoutReturningPartialResults() {
+        let groups = [Array(0..<100_000)]
+        var visited = 0
+        let result = NotchSearch.boundedMatchesCancellable(groups: groups, limit: 500, cancelled: { visited >= 37 }) { _, _ in
+            visited += 1
+            return false
+        }
+        XCTAssertNil(result)
+        XCTAssertEqual(visited, 37)
+    }
+
+    func testLargeNoMatchScanPerformance() {
+        let groups = Array(repeating: Array(0..<10_000), count: 20)
+        let query = NotchSearch.Query("bulunmayan")
+        measure {
+            let result = NotchSearch.boundedMatchesCancellable(groups: groups, limit: 500, cancelled: { false }) { _, point in
+                query.matches(pieceName: "Ön Kol", details: "Beden: 38", index: point, x: "12", y: "34")
+            }
+            XCTAssertEqual(result?.groups.count, 20)
+            XCTAssertFalse(result?.hasMore ?? true)
+        }
+    }
+
     func testBoundedMatchesKeepsOrderAndSearchesPastVisibleLimit() {
         let groups = [Array(0..<500), [500, 501]]
         let first = NotchSearch.boundedMatches(groups: groups, limit: 500) { _, _ in true }

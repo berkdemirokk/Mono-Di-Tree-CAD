@@ -1419,28 +1419,25 @@ private struct NotchPicker: View {
     let select: (Int, Int) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
+    private struct SearchResult {
+        let query: String
+        let groups: [[Int]]
+        let hasMore: Bool
+    }
+    @State private var result: SearchResult?
 
     var body: some View {
         NavigationStack {
-            let query = NotchSearch.Query(search)
-            let names = pieces.indices.map { pieces[$0].displayName(index: $0) }
-            let details = pieces.indices.map { pieces[$0].selectionDetails(index: $0) }
-            let result = NotchSearch.boundedMatches(groups: pieces.map(\.notches), limit: 500) { pieceIndex, pointIndex in
-                if query.isEmpty { return true }
-                guard query.allows(index: pointIndex) else { return false }
-                let point = pieces[pieceIndex].points[pointIndex]
-                return query.matches(pieceName: names[pieceIndex], details: details[pieceIndex], index: pointIndex,
-                                     x: point.x.formatted(), y: point.y.formatted())
-            }
-            let matchingPoints = result.groups
+            let current = result?.query == search ? result : nil
             List {
-                if result.hasMore {
+                if current == nil { ProgressView("İşaretler aranıyor…") }
+                if current?.hasMore == true {
                     Text("İlk 500 eşleşme gösteriliyor. Diğer işaretleri bulmak için aramayı daraltın.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
-                ForEach(pieces.indices, id: \.self) { pieceIndex in
+                ForEach(current.map { found in found.groups.indices.filter { !found.groups[$0].isEmpty } } ?? [], id: \.self) { pieceIndex in
                     let piece = pieces[pieceIndex]
-                    let indices = matchingPoints[pieceIndex]
+                    let indices = current?.groups[pieceIndex] ?? []
                     if !indices.isEmpty {
                         Section {
                             ForEach(indices, id: \.self) { pointIndex in
@@ -1457,13 +1454,43 @@ private struct NotchPicker: View {
                         }
                     }
                 }
-                if matchingPoints.allSatisfy({ $0.isEmpty }) {
+                if let current, current.groups.allSatisfy({ $0.isEmpty }) {
                     Text("Eşleşen köşe işareti bulunamadı.").foregroundStyle(.secondary)
                 }
             }
             .searchable(text: $search, prompt: "Parça, beden, nokta veya koordinat ara")
             .navigationTitle("Köşe işaretleri")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .task(id: search) {
+                let request = search
+                // Let rapid typing settle without delaying the first unfiltered list.
+                if !request.isEmpty {
+                    do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
+                }
+                guard !Task.isCancelled else { return }
+                let snapshot = pieces
+                let worker = Task.detached(priority: .userInitiated) { () -> SearchResult? in
+                    #if DEBUG && targetEnvironment(simulator)
+                    if ProcessInfo.processInfo.arguments.contains("--ui-test-delay-old-notch-search"), request == "old" {
+                        Thread.sleep(forTimeInterval: 1.5)
+                    }
+                    #endif
+                    let query = NotchSearch.Query(request)
+                    let names = snapshot.indices.map { snapshot[$0].displayName(index: $0) }
+                    let details = snapshot.indices.map { snapshot[$0].selectionDetails(index: $0) }
+                    guard let found = NotchSearch.boundedMatchesCancellable(groups: snapshot.map(\.notches), limit: 500, cancelled: { Task.isCancelled }, matches: { pieceIndex, pointIndex in
+                        if query.isEmpty { return true }
+                        guard query.allows(index: pointIndex) else { return false }
+                        let point = snapshot[pieceIndex].points[pointIndex]
+                        return query.matches(pieceName: names[pieceIndex], details: details[pieceIndex], index: pointIndex,
+                                             x: point.x.formatted(), y: point.y.formatted())
+                    }) else { return nil }
+                    return SearchResult(query: request, groups: found.groups, hasMore: found.hasMore)
+                }
+                let found = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled, search == request, let found else { return }
+                result = found
+            }
         }
     }
 }

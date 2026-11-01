@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSlowOldNotchSearchCannotReplaceNewResults() {
+        let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"old","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":10,"Y":10}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-delay-old-notch-search"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons["Köşe işaretlerini ara ve seç…"]
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("old")
+        let delay = expectation(description: "Allow the old search to start")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { delay.fulfill() }
+        wait(for: [delay], timeout: 2)
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "nokta 1")
+        let point1 = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 1")).firstMatch
+        XCTAssertTrue(point1.waitForExistence(timeout: 5))
+        let point0 = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 0")).firstMatch
+        let stale = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: point0)
+        stale.isInverted = true
+        wait(for: [stale], timeout: 2)
+        XCTAssertTrue(point1.exists)
+    }
+
     func testOversizedMetadataRequiresExplicitRecovery() {
         let fixture = #"{"Name":"Kaynak","Pieces":[]}"#
         let app = XCUIApplication()
