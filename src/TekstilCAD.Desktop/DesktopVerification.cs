@@ -2324,7 +2324,7 @@ internal static class DesktopVerification
         finally { options.Close(); }
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
             "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
-            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
         var import=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(text)),"test");var before=import.Project.Clone();
         var window=new DxfBlockDefinitionReviewWindow(studio,import);
         try
@@ -2338,18 +2338,18 @@ internal static class DesktopVerification
             block.SelectedIndex=0;point.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;
             var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla"));
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(window.Selection is null && DocumentSession.ContentEquals(before,import.Project),"Block definition selection requires explicit unplaced-copy acknowledgment",checks);
+            Check(window.Selections.Count==0 && DocumentSession.ContentEquals(before,import.Project),"Block definition selection requires explicit unplaced-copy acknowledgment",checks);
             var confirmation=Descendants<CheckBox>(root).Single();confirmation.IsChecked=true;
             var indexText=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Köşe indeksine git");
             var go=Descendants<Button>(root).Single(b=>Equals(b.Content,"Köşeye git"));indexText.Text="999999";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
             Check(vertex.SelectedIndex==-1 && AutomationProperties.GetName(status).Contains("Geçerli bir köşe"),"Invalid vertex search clears old selection and exposes error to accessibility",checks);
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(window.Selection is null,"Invalid vertex search cannot apply previous vertex",checks);
+            Check(window.Selections.Count==0,"Invalid vertex search cannot apply previous vertex",checks);
             vertex.SelectedIndex=0;indexText.Text="1";
             Check(vertex.SelectedIndex==-1,"Editing the vertex index invalidates the previous selection",checks);
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(window.Selection is null,"Edited vertex index cannot apply a previous selection without Go",checks);
+            Check(window.Selections.Count==0,"Edited vertex index cannot apply a previous selection without Go",checks);
             vertex.SelectedIndex=0;indexText.Text="0";block.SelectedIndex=-1;
             Check(vertex.SelectedIndex==-1 && indexText.Text=="","Changing block clears the selected vertex and search text",checks);
             block.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;indexText.Text="0";piece.SelectedIndex=-1;
@@ -2365,18 +2365,35 @@ internal static class DesktopVerification
             }
             Check(Descendants<DxfPiecePreview>(root).Count()==1 && AutomationProperties.GetName(Descendants<ScrollViewer>(root).First()).Contains("Blok tanımı"),"Block review provides a named scroll area and contour preview",checks);
             block.SelectedIndex=0;point.SelectedIndex=0;piece.SelectedIndex=0;confirmation.IsChecked=true;
-            indexText.Text="1";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(vertex.SelectedIndex==1 && indexText.Text=="1","Valid Go selects the requested vertex and retains its index",checks);
+            var add=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle"));
+            var remove=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili çifti kaldır"));
+            var queue=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            indexText.Text="0";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(vertex.SelectedIndex==0 && indexText.Text=="0","Valid Go selects the requested vertex and retains its index",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(queue.Items.Count==1,"Duplicate POINT or vertex is not queued twice",checks);
+            point.SelectedIndex=1;vertex.SelectedIndex=1;
+            Check(indexText.Text=="" && vertex.SelectedIndex==1,"Manual vertex choice clears the old search index",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(queue.Items.Count==2,"Two explicitly selected pairs are queued for one source piece",checks);
+            queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair previews its exact point and vertex",checks);
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(queue.Items.Count==1,"Selected queued pair can be removed",checks);
+            point.SelectedIndex=0;vertex.SelectedIndex=0;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
-            Check(window.Selection?.VertexIndex==1,"Valid Go applies the requested vertex",checks);
-            vertex.SelectedIndex=2;
-            Check(indexText.Text=="" && vertex.SelectedIndex==2,"Manual vertex choice clears the old search index",checks);
-            try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
-            Check(window.Selection?.VertexIndex==2,"Manual vertex choice applies the selected vertex",checks);
+            Check(window.Selections.Count==2 && window.Selections.Select(s=>s.VertexIndex).ToHashSet().SetEquals(new[]{0,1}),"Queued pairs are accepted together only after acknowledgment",checks);
         }
         finally { window.Close(); }
         var links=import.PieceSources!.Value;var link=links.Single(p=>p.EntityType=="POLYLINE");
-        var rawPoint=import.SupplementalGeometry!.Records.Single(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
+        var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
+        var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
+        var batch=DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),
+            [new(rawPoints[0].SourceOrdinal,link.PieceId,0),new(rawPoints[1].SourceOrdinal,link.PieceId,1)],link.BlockHeaderOrdinal!.Value,true);
+        MainWindow.AttachBlockDefinitionProvenance(batch,import,"source.dxf");
+        var batchPath=Path.Combine(work,$"block-batch-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(batch.WorkingCopy,batchPath);
+        var batchLoaded=ProjectStorage.Load(batchPath);
+        Check(batchLoaded.Pieces.Single().Notches is { Count:2 } && batchLoaded.ImportProvenance!.Warnings.Count(w=>w.StartsWith("Kaynak POINT"))==2 &&
+            DocumentSession.ContentEquals(batch.WorkingCopy,batchLoaded) && DocumentSession.ContentEquals(before,import.Project),
+            "Multiple verified block markers and each source assignment survive v6 save and reopen",checks);
         var result=DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(rawPoint.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
         MainWindow.AttachBlockDefinitionProvenance(result,import,"source.dxf");
         var savedPath=Path.Combine(work,$"block-copy-{Guid.NewGuid():N}.tcad");var sourcePath=Path.Combine(work,$"block-source-{Guid.NewGuid():N}.dxf");

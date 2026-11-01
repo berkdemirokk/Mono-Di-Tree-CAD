@@ -2036,10 +2036,11 @@ public class MainWindow : Window
             if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault || import.CapturedWarnings.IsDefault)
                 throw new InvalidDataException("Blok kaynak envanteri eksik; çalışma kopyası hazırlanmadı.");
             var review=new DxfBlockDefinitionReviewWindow(this,import);
-            if(review.ShowDialog()!=true || review.Selection is not { } selection)return;
+            if(review.ShowDialog()!=true || review.Selections.Count==0)return;
             cancellation.Token.ThrowIfCancellationRequested();
-            var blockOrdinal=review.BlockHeaderOrdinal;
-            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.Create(import,source,selection,blockOrdinal,true,cancellation.Token); });
+            var blockOrdinal=review.BlockHeaderOrdinal;var selections=review.Selections.ToArray();
+            SetStatus($"{selections.Length} POINT eşlemesi kaynak üzerinden tek tek doğrulanıyor; büyük dosyalarda uzun sürebilir.");
+            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.CreateMany(import,source,selections,blockOrdinal,true,cancellation.Token); });
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
             AttachBlockDefinitionProvenance(result,import,Path.GetFileName(path));
             var save=new SaveFileDialog { Filter="TekstilCAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",AddExtension=true,OverwritePrompt=false };
@@ -2067,6 +2068,16 @@ public class MainWindow : Window
         var provenance=new DxfImportProvenance { SourceFileName=sourceName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
             MillimetersPerUnit=parameters.MillimetersPerUnit,PieceIds=result.WorkingCopy.Pieces.Select(p=>p.Id).ToList(),
             Warnings=import.CapturedWarnings.Concat([result.Notice,$"Kaynak blok başlığı {result.BlockHeaderOrdinal}, POINT {result.PointOrdinal}, VERTEX {result.VertexOrdinal}; bu kimlikler kaynak dosyaya aittir.",$"Kaynak metin kodlaması: {parameters.Encoding}."]).ToList() };
+        provenance.Validate();result.WorkingCopy.ImportProvenance=provenance;ProjectStorage.Validate(result.WorkingCopy);
+    }
+
+    internal static void AttachBlockDefinitionProvenance(DxfBlockDefinitionPointsResult result,DxfImportResult import,string sourceName)
+    {
+        var parameters=import.ImportParameters ?? throw new InvalidDataException("DXF aktarım seçenekleri eksik.");
+        var details=result.Assignments.Select(a=>$"Kaynak POINT {a.PointOrdinal}, VERTEX {a.VertexOrdinal}, hedef köşe {a.VertexIndex}; kimlikler kaynak dosyaya aittir.");
+        var provenance=new DxfImportProvenance { SourceFileName=sourceName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
+            MillimetersPerUnit=parameters.MillimetersPerUnit,PieceIds=result.WorkingCopy.Pieces.Select(p=>p.Id).ToList(),
+            Warnings=import.CapturedWarnings.Concat([result.Notice,$"Kaynak blok başlığı {result.BlockHeaderOrdinal}; kimlik kaynak dosyaya aittir.",$"Kaynak metin kodlaması: {parameters.Encoding}."]).Concat(details).ToList() };
         provenance.Validate();result.WorkingCopy.ImportProvenance=provenance;ProjectStorage.Validate(result.WorkingCopy);
     }
 
