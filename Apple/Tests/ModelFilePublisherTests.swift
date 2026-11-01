@@ -11,6 +11,34 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testCopyDeletionPreservesUnknownFilesAndNestedDirectories() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let payload = copy.appendingPathComponent("project.tcad")
+        let unknown = copy.appendingPathComponent("notes.txt")
+        try Data("model".utf8).write(to: payload)
+        try Data("user notes".utf8).write(to: unknown)
+        XCTAssertThrowsError(try ModelStore.delete(copy, in: root))
+        XCTAssertEqual(try Data(contentsOf: payload), Data("model".utf8))
+        XCTAssertEqual(try Data(contentsOf: unknown), Data("user notes".utf8))
+
+        try FileManager.default.removeItem(at: unknown)
+        let nested = copy.appendingPathComponent("metadata.json", isDirectory: true)
+        try FileManager.default.createDirectory(at: nested, withIntermediateDirectories: false)
+        let inside = nested.appendingPathComponent("data")
+        try Data("keep".utf8).write(to: inside)
+        XCTAssertThrowsError(try ModelStore.delete(copy, in: root))
+        XCTAssertEqual(try Data(contentsOf: inside), Data("keep".utf8))
+
+        try FileManager.default.removeItem(at: nested)
+        try Data("{}".utf8).write(to: copy.appendingPathComponent("metadata.json"))
+        try ModelStore.delete(copy, in: root)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
+    }
+
     func testPublishesExactBytesAndRemovesStagingDirectory() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

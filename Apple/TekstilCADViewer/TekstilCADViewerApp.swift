@@ -762,10 +762,30 @@ enum ModelStore {
     }
 
     static func delete(_ url: URL) throws {
-        let directory = try directory().standardizedFileURL
+        try delete(url, in: directory())
+    }
+
+    static func delete(_ url: URL, in library: URL) throws {
+        let directory = library.standardizedFileURL
         guard url.standardizedFileURL.deletingLastPathComponent() == directory,
               ["tcad", copyExtension].contains(url.pathExtension.lowercased()) else {
             throw ViewerError.message("Model silinemedi.")
+        }
+        if url.pathExtension.lowercased() == copyExtension {
+            let names = try FileManager.default.contentsOfDirectory(atPath: url.path)
+            guard Set(names).isSubset(of: [payloadName, metadataName]) else {
+                throw ViewerError.message("Bu kayıtta tanınmayan dosyalar var; kayıp olmaması için silinmedi.")
+            }
+            // A known entry must be a regular file, never a directory whose
+            // contents recursive deletion would remove.
+            for name in names {
+                var info = stat()
+                let child = url.appendingPathComponent(name)
+                guard child.path.withCString({ lstat($0, &info) }) == 0,
+                      (info.st_mode & S_IFMT) == S_IFREG else {
+                    throw ViewerError.message("Bu kaydın içeriği güvenle silinemedi.")
+                }
+            }
         }
         try FileManager.default.removeItem(at: url)
     }

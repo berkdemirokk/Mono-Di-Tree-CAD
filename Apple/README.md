@@ -18,6 +18,8 @@ Kontur önizlemesinde Y koordinatı masaüstü tuvaliyle aynı yönde aşağı d
 
 Modellerim ekranında her kaydın yanındaki model işlemleri menüsünden kayıtlı kopya silinebilir; silme işleminden önce kayıt kimliğiyle onay istenir. Bu menü ve erişilebilirlik davranışı henüz Mac, simülatör veya cihazda doğrulanmadı.
 
+Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme arasında eşzamanlı değişiklik yarışı henüz giderilmedi. Silme akışı Mac veya cihazda doğrulanmadı.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
