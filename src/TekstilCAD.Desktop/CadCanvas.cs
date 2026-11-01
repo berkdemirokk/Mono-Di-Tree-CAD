@@ -912,6 +912,7 @@ public sealed class CadCanvas : FrameworkElement
                 {
                     var notchPosition=p.Id==dragId && dragVertex<0 && dragPreview is not null && notch.VertexIndex>=0 && notch.VertexIndex<visible.Count ? visible[notch.VertexIndex] : notch.Position;
                     var point=Screen(notchPosition);
+                    if(!MarkerCanAffectViewport(point,RenderSize))continue;
                     dc.DrawEllipse(null,notchPen,point,7,7);
                     if(selected)Text(dc,$"İşaret {notch.VertexIndex}",new Point(point.X+8,point.Y-15),notchBrush,11);
                 }
@@ -942,6 +943,15 @@ public sealed class CadCanvas : FrameworkElement
         dc.DrawRectangle(B("#172234"),null,new Rect(12,12,185,31));Text(dc,$"mm  /  Izgara {step:0.##}  /  {scale*100:0}%",new(22,19),B("#A4B9CC"),11);
         if(IsKeyboardFocused && ActualWidth>4 && ActualHeight>4)
             dc.DrawRectangle(null,new Pen(B("#4DE1C1"),2),new Rect(2,2,ActualWidth-4,ActualHeight-4));
+    }
+    // The ring is 14 DIP across and the label starts 8 DIP to the right.
+    // Leave ample room for the complete indexed label and font overhang so a
+    // partially visible mark is never omitted while panning or zooming.
+    internal static bool MarkerCanAffectViewport(Point point,Size viewport)
+    {
+        const double margin=256;
+        return point.X>=-margin && point.X<=viewport.Width+margin &&
+               point.Y>=-margin && point.Y<=viewport.Height+margin;
     }
     // Display only: preserve the project name while keeping canvas labels bounded
     // and preventing invisible direction controls or line breaks from misleading.

@@ -8685,6 +8685,14 @@ internal static class DesktopVerification
         Check(safeLabel=="Ön\\u202E\\u000A😀" && CadCanvas.CanvasPieceLabel("")=="(boş)"
             && longLabel.Length<=80 && longLabel.EndsWith('…') && !char.IsHighSurrogate(longLabel[^2]),
             "Canvas labels escape control characters and truncate without splitting emoji",checks);
+        var viewport=new Size(500,380);
+        Check(CadCanvas.MarkerCanAffectViewport(new Point(0,0),viewport) &&
+              CadCanvas.MarkerCanAffectViewport(new Point(-7,190),viewport) &&
+              CadCanvas.MarkerCanAffectViewport(new Point(250,385),viewport) &&
+              CadCanvas.MarkerCanAffectViewport(new Point(-100,100),viewport) &&
+              !CadCanvas.MarkerCanAffectViewport(new Point(-1000,100),viewport) &&
+              !CadCanvas.MarkerCanAffectViewport(new Point(2000,100),viewport),
+              "Canvas keeps edge and nearby marker labels while skipping far offscreen marks",checks);
         var oldPointer=new Point2(1,2);var newPointer=new Point2(3,4);
         Check(!CadCanvas.ShouldInvalidatePointerMove(false,false,false,oldPointer,newPointer)
             && !CadCanvas.ShouldInvalidatePointerMove(false,false,true,oldPointer,oldPointer)
