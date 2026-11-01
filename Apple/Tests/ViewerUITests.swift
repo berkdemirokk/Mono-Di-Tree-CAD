@@ -1,6 +1,31 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLargePreviewNavigatesNotchesAndKeepsSelection() {
+        let fixture = #"[6,{"Name":"İşaretler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":10,"Y":20}}]}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let nextPiece = app.buttons["Sonraki parça"]
+        XCTAssertTrue(nextPiece.waitForExistence(timeout: 15)); nextPiece.tap()
+        let large = app.buttons["Konturu büyük görünümde incele"]
+        for _ in 0..<5 where !large.isHittable { app.swipeUp() }
+        XCTAssertTrue(large.isHittable); large.tap()
+        let sheet = app.sheets.firstMatch
+        let next = sheet.buttons["Sonraki işaret"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5)); next.tap()
+        let label = sheet.staticTexts["largePreviewNotchLabel"]
+        XCTAssertTrue(label.waitForExistence(timeout: 5))
+        XCTAssertTrue(label.label.contains("Nokta 0"))
+        next.tap()
+        XCTAssertTrue(label.label.contains("Nokta 1"))
+        XCTAssertFalse(next.isEnabled)
+        app.navigationBars["Kontur inceleme"].buttons["Kapat"].tap()
+        let selected = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Seçili köşe işareti: Nokta 1")).firstMatch
+        XCTAssertTrue(selected.waitForExistence(timeout: 5))
+    }
+
     func testLargePreviewCanSearchAndSelectPiecesWithoutClosing() {
         let fixture = #"[5,{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Metadata":{"Size":"S"}},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":20,"Y":30}],"Metadata":{"Size":"XL"}}],"GradingRules":[]}]"#
         let app = XCUIApplication()

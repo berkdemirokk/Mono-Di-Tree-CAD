@@ -336,6 +336,37 @@ private struct ContentView: View {
                                     .padding(.horizontal)
                                     .accessibilityIdentifier("largePreviewPieceDetails")
                             }
+                            if let selectedPiece, !project.pieces[selectedPiece].notches.isEmpty {
+                                let piece = project.pieces[selectedPiece]
+                                let current = selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil
+                                HStack {
+                                    Button("Önceki işaret") {
+                                        if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: false) {
+                                            selectedNotch = (selectedPiece, point)
+                                            notchSelectionRevision = UUID()
+                                        }
+                                    }
+                                    .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: false) == nil)
+                                    Spacer()
+                                    Button("Sonraki işaret") {
+                                        if let point = NotchSearch.adjacent(in: piece.notches, current: current, forward: true) {
+                                            selectedNotch = (selectedPiece, point)
+                                            notchSelectionRevision = UUID()
+                                        }
+                                    }
+                                    .disabled(modelLoad.isLoading || NotchSearch.adjacent(in: piece.notches, current: current, forward: true) == nil)
+                                }
+                                .buttonStyle(.bordered)
+                                .padding(.horizontal)
+                                if let current {
+                                    let point = piece.points[current]
+                                    Text("Seçili işaret: \(NotchSearch.label(index: current, x: point.x.formatted(), y: point.y.formatted()))")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .padding(.horizontal)
+                                        .accessibilityIdentifier("largePreviewNotchLabel")
+                                }
+                            }
                             if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
                                 Text("Bu parça asgari nokta sayısını karşılamıyor; kontur önizlemesi gösterilemiyor.")
                                     .foregroundStyle(.secondary).padding()
