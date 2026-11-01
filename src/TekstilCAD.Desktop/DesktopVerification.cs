@@ -371,6 +371,7 @@ internal static class DesktopVerification
             VerifyOffsetSourceHint(studio,checks);
             VerifyOffsetSourceContext(studio,checks);
             VerifyOffsetUnverifiedDetailGuidance(studio,checks);
+            VerifySelectedNotchComparison(studio,checks);
             VerifyGradeInputFeedback(studio,checks);
             VerifyGradeApplyConflicts(studio,checks);
             VerifyLayeredPointerSelection(studio,checks);
@@ -9224,6 +9225,59 @@ internal static class DesktopVerification
         }
         finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
+    private static void VerifySelectedNotchComparison(MainWindow studio,List<string> checks)
+    {
+        var sourcePiece=new PatternPiece { Name="Kaynak",Points=[new(0,0),new(100,0),new(100,100),new(60,100),new(50,90),new(40,100),new(0,100)] };
+        var output=new PatternPiece { Name="Aday",Points=[new(60,100),new(50,99.999999),new(40,100)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[sourcePiece,output] });studio.Select(sourcePiece.Id);
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
+        var tools=new TextileToolsWindow(studio);
+        new System.Windows.Interop.WindowInteropHelper(tools).EnsureHandle();
+        var dialog=new SelectedNotchComparisonWindow(studio,tools,sourcePiece);
+        try
+        {
+            var sourceControl=(ScrollViewer)dialog.Content;var panel=(StackPanel)sourceControl.Content;
+            var warning=panel.Children.OfType<TextBlock>().First();
+            var target=(ComboBox)typeof(SelectedNotchComparisonWindow).GetField("target",PrivateInstance)!.GetValue(dialog)!;
+            var indices=(TextBox[])typeof(SelectedNotchComparisonWindow).GetField("indices",PrivateInstance)!.GetValue(dialog)!;
+            var width=(TextBox)typeof(SelectedNotchComparisonWindow).GetField("widthTolerance",PrivateInstance)!.GetValue(dialog)!;
+            var depth=(TextBox)typeof(SelectedNotchComparisonWindow).GetField("depthTolerance",PrivateInstance)!.GetValue(dialog)!;
+            var result=(TextBlock)typeof(SelectedNotchComparisonWindow).GetField("result",PrivateInstance)!.GetValue(dialog)!;
+            var compare=typeof(SelectedNotchComparisonWindow).GetMethod("Compare",PrivateInstance)!;
+            target.SelectedIndex=1;
+            string[] values=["3","4","5","0","1","2"];
+            for(int i=0;i<6;i++)indices[i].Text=values[i];
+            width.Text="0";depth.Text="0.001";compare.Invoke(dialog,null);
+            Check(!dialog.IsVisible && warning.Focusable && AutomationProperties.GetName(warning)==warning.Text &&
+                warning.Text.Contains("üretime uygunluk doğrulanmaz",StringComparison.Ordinal) &&
+                result.Text.Contains("toleransı aşıyor",StringComparison.Ordinal) &&
+                result.Text.Contains("diğer çentikler",StringComparison.Ordinal) &&
+                AutomationProperties.GetLiveSetting(result)==AutomationLiveSetting.Polite &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                "Selected notch comparison reports a near-lost feature without modifying the document",checks);
+            depth.Text="1";
+            Check(result.Text.Contains("yeniden karşılaştırın",StringComparison.Ordinal),
+                "Editing a tolerance invalidates the displayed notch comparison",checks);
+            compare.Invoke(dialog,null);
+            var timer=(DispatcherTimer)typeof(SelectedNotchComparisonWindow).GetField("staleTimer",PrivateInstance)!.GetValue(dialog)!;
+            Check(timer.IsEnabled && result.Text.Contains("toleransı aşıyor",StringComparison.Ordinal),
+                "A valid comparison remains visible while its document is current",checks);
+            var nameInput=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+            nameInput.Text="Kaynak taslağı";
+            PumpUntil(()=>!timer.IsEnabled);
+            Check(result.Text.Contains("eski sonuç geçersiz",StringComparison.Ordinal) && DocumentSession.ContentEquals(before,studio.Document),
+                "A pending property draft automatically expires the displayed notch result",checks);
+            nameInput.Text="Kaynak";compare.Invoke(dialog,null);
+            Check(timer.IsEnabled,"Notch comparison can be repeated after a draft is cleared",checks);
+            studio.Commit("Karşılaştırma kaynağını değiştir",()=>studio.Document.Pieces[0].Points[0]=new Point2(-1,0));
+            var changed=studio.Document.Clone();var changedUndo=session.UndoCount;
+            PumpUntil(()=>!timer.IsEnabled);
+            Check(result.Text.Contains("eski sonuç geçersiz",StringComparison.Ordinal) && DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==changedUndo,
+                "A displayed notch result automatically expires when the document changes",checks);
+        }
+        finally { dialog.Close();tools.Close(); }
+    }
     private static void VerifyOffsetSourceHint(MainWindow studio,List<string> checks)
     {
         var closed=new PatternPiece { Name="Kapalı",Points=[new(0,0),new(10,0),new(0,10)] };
@@ -9871,5 +9925,6 @@ internal static class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
+
 
 

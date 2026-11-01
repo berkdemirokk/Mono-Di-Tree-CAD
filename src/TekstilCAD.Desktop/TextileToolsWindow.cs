@@ -799,6 +799,11 @@ public sealed class TextileToolsWindow : Window
         source.SelectionChanged+=(_,_)=> { UpdateAllowanceHint();UpdateAllowanceGrainHint(); };
         UpdateAllowanceHint();UpdateAllowanceGrainHint();
         Button(panel,"Dikiş payını ayrı parça oluştur",()=>_ = CreateOffsetAsync(allowance.Text),()=>!offsetReviewRequired&&source.SelectedItem is PatternPiece { Closed:true }&&ValidAllowance());
+        Button(panel,"Seçili çentik ölçülerini karşılaştır…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce bekleyen çizimi veya taslağı tamamlayın ya da iptal edin.");
+            new SelectedNotchComparisonWindow(workspace,this,Piece()).ShowDialog();
+        },()=>HasPiece() && workspace.Document.Pieces.Count>0);
         panel.Children.Add(new Separator { Margin=new Thickness(0,18,0,18) });Heading(panel,"Kontur noktaları");Note(panel,"Nokta indeksleri 0'dan başlar. Değişiklik seçili parçaya uygulanır; ana çalışma alanında geri alınabilir. Tekrarlanan kapanış noktasında ilk ve son indeks aynı köşedir; bu köşe birlikte düzenlenir. Ekleme bu köşeden sonra yapılır.");
         var index=Input(panel,"Nokta indeksi / eklenecek noktanın önceki indeksi","0");var px=Input(panel,"Yeni nokta X · mm","0");var py=Input(panel,"Yeni nokta Y · mm","0");
         Button(panel,"Kontur noktası seç…",()=>
