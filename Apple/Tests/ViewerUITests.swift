@@ -15,6 +15,10 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["İlk nokta: X 0, Y 0 mm"].exists)
         XCTAssertTrue(app.staticTexts["İkinci nokta: X 100, Y 0 mm"].exists)
+        app.buttons["İlk noktayı listeden seç"].tap()
+        let point = app.buttons["Nokta 2"]
+        XCTAssertTrue(point.waitForExistence(timeout: 5)); point.tap()
+        XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 200 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "en fazla 6 anlamlı basamağa yuvarlanır")).firstMatch.exists)
         app.buttons["Kapat"].tap()
     }

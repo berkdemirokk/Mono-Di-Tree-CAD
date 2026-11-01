@@ -2684,7 +2684,9 @@ private struct PointDistanceView: View {
                 Section("Nokta indeksleri") {
                     Text("Dosya sırası: 0–\(piece.points.count - 1)")
                     TextField("İlk nokta indeksi", text: $first).keyboardType(.numberPad)
+                    NavigationLink("İlk noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $first) }
                     TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
+                    NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $second) }
                     if let (a, b) = indices {
                         let firstPoint = piece.points[a], secondPoint = piece.points[b]
                         if let ax = MeasurementDisplay.format(firstPoint.x), let ay = MeasurementDisplay.format(firstPoint.y),
@@ -2707,6 +2709,46 @@ private struct PointDistanceView: View {
             .navigationTitle("İki nokta mesafesi")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }
+    }
+}
+// A lazy list keeps large contours navigable without creating a picker with
+// thousands of eager rows. File indices and rounded coordinates are displayed.
+private struct PointIndexPicker: View {
+    let points: [ContourMeasure.Point]
+    @Binding var selected: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    var body: some View {
+        List {
+            if search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                ForEach(points.indices, id: \.self) { index in row(index) }
+            } else if let index = Int(search.trimmingCharacters(in: .whitespacesAndNewlines)), points.indices.contains(index) {
+                row(index)
+            } else {
+                Text("Bu indekste nokta yok.").foregroundStyle(.secondary)
+            }
+        }
+        .searchable(text: $search, prompt: "Nokta indeksi ara")
+        .navigationTitle("Nokta seç")
+    }
+
+    private func row(_ index: Int) -> some View {
+        let point = points[index]
+        let x = MeasurementDisplay.format(point.x) ?? "—"
+        let y = MeasurementDisplay.format(point.y) ?? "—"
+        return Button {
+            selected = String(index)
+            dismiss()
+        } label: {
+            VStack(alignment: .leading) {
+                Text("Nokta \(index)")
+                Text("X \(x), Y \(y) mm · yaklaşık").font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Nokta \(index)")
+        .accessibilityValue("Yaklaşık X \(x), Y \(y) milimetre")
     }
 }
 private struct DrawingView: View {
