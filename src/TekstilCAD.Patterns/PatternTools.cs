@@ -258,6 +258,8 @@ public static class PatternTools
     /// The input and its point collection remain unchanged.</summary>
     public static PatternPiece ReverseOpenPath(PatternPiece piece,CancellationToken cancellationToken=default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)return ReverseMarkedPath(piece,false,cancellationToken);
         var points=SnapshotPointEdit(piece,cancellationToken);
         if(piece.Closed)throw new ArgumentException("Yalnız açık konturun yönü ters çevrilebilir.");
         ValidatePointEdit(false,points,cancellationToken);
@@ -268,6 +270,8 @@ public static class PatternTools
     /// <summary>Reverses a closed contour while retaining its first vertex and closure representation.</summary>
     public static PatternPiece ReverseClosedContour(PatternPiece piece, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)return ReverseMarkedPath(piece,true,cancellationToken);
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (!piece.Closed) throw new ArgumentException("Yalnız kapalı konturun yönü ters çevrilebilir.");
         ValidatePointEdit(true, points, cancellationToken);
@@ -275,6 +279,25 @@ public static class PatternTools
         points.Reverse(1, points.Count - 1 - (repeated ? 1 : 0));
         cancellationToken.ThrowIfCancellationRequested();
         return NewPiece(piece, points, "", preserveGrainline:true);
+    }
+
+    private static PatternPiece ReverseMarkedPath(PatternPiece source,bool closed,CancellationToken token)
+    {
+        _=MarkedPieceTranslation.Translate(source,0,0,token);
+        var detached=source.Clone();detached.Notches=null;
+        var result=closed ? ReverseClosedContour(detached,token) : ReverseOpenPath(detached,token);
+        var count=source.Points.Count;
+        var logicalCount=count-(closed && count>1 && source.Points[0]==source.Points[^1] ? 1 : 0);
+        var marks=new List<NotchMark>(source.Notches!.Count);
+        foreach(var mark in source.Notches)
+        {
+            token.ThrowIfCancellationRequested();
+            var index=closed ? (mark.VertexIndex==0 ? 0 : logicalCount-mark.VertexIndex) : count-1-mark.VertexIndex;
+            if(index<0 || index>=logicalCount || result.Points[index]!=mark.Position)
+                throw new ArgumentException("Köşe işareti ters çevrilen konturla eşleşmedi; işlem uygulanmadı.");
+            marks.Add(new NotchMark { VertexIndex=index,Position=mark.Position });
+        }
+        result.Notches=marks;token.ThrowIfCancellationRequested();return result;
     }
 
     /// <summary>Splits the edge after the selected vertex at its exact binary64 midpoint.

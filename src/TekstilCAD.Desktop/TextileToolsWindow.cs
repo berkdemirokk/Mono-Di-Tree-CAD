@@ -857,7 +857,7 @@ public sealed class TextileToolsWindow : Window
         }
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
-        Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. İşaretler proje sürümü 6 gerektirir. İşaretli parçada işaretsiz köşeler taşınabilir veya silinebilir ve kenarlara nokta eklenebilir; işaretler korunur. İşaretli köşeyi taşımak veya silmek için önce o köşenin işaretini kaldırın. İşaretli parçada V çentik açma ve kontur yönünü ters çevirme henüz desteklenmez.");
+        Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. İşaretler proje sürümü 6 gerektirir. İşaretli parçada işaretsiz köşeler taşınabilir veya silinebilir, kenarlara nokta eklenebilir ve kontur yönü ters çevrilebilir; işaretler korunur. İşaretli köşeyi taşımak veya silmek için önce o köşenin işaretini kaldırın. İşaretli parçada V çentik açma henüz desteklenmez.");
         Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
         Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
@@ -935,7 +935,7 @@ public sealed class TextileToolsWindow : Window
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse or VertexEdit.ReverseClosed ? default : new Point2(Number(xText!),Number(yText!));
             var width=widthText is null ? position.Y * 2 : Number(widthText);
             var selected=Piece();var sourceId=selected.Id;
-            if(selected.Notches is not null && operation is not (VertexEdit.Move or VertexEdit.Delete or VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage))throw new InvalidOperationException("Bu nokta işlemi işaretli parçada henüz desteklenmiyor.");
+            if(selected.Notches is not null && operation is not (VertexEdit.Move or VertexEdit.Delete or VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage or VertexEdit.Reverse or VertexEdit.ReverseClosed))throw new InvalidOperationException("Bu nokta işlemi işaretli parçada henüz desteklenmiyor.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
@@ -1129,10 +1129,14 @@ public sealed class TextileToolsWindow : Window
         if(insertedAfter is not null && (insertedAfter<0 || insertedAfter>=previous.Points.Count || edited.Points.Count!=previous.Points.Count+1))
             throw new InvalidOperationException("Eklenen nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
         var normalizedDeletion=deletedIndex is { } deleteAt && previous.Closed && previous.Points.Count>1 && previous.Points[0]==previous.Points[^1] && deleteAt==previous.Points.Count-1 ? 0 : deletedIndex;
+        var logicalCount=previous.Points.Count-(previous.Closed && previous.Points.Count>1 && previous.Points[0]==previous.Points[^1] ? 1 : 0);
+        int MappedMarkIndex(int oldIndex) => reverseOpenPath
+            ? previous.Closed ? (oldIndex==0 ? 0 : logicalCount-oldIndex) : previous.Points.Count-1-oldIndex
+            : normalizedInsertion is { } at && oldIndex>at ? oldIndex+1 : normalizedDeletion is { } deleted && oldIndex>deleted ? oldIndex-1 : oldIndex;
         if(deletedIndex is not null && (deletedIndex<0 || deletedIndex>=previous.Points.Count || edited.Points.Count!=previous.Points.Count-1))
             throw new InvalidOperationException("Silinen nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
         if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
-           !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==(normalizedInsertion is { } at && pair.First.VertexIndex>at ? pair.First.VertexIndex+1 : normalizedDeletion is { } deleted && pair.First.VertexIndex>deleted ? pair.First.VertexIndex-1 : pair.First.VertexIndex) && pair.First.Position==pair.Second.Position &&
+           !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==MappedMarkIndex(pair.First.VertexIndex) && pair.First.Position==pair.Second.Position &&
                pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position)))
             throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
