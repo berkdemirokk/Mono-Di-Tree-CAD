@@ -35,6 +35,12 @@ public static class DxfBlockDefinitionPointMapping
             p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==oldLink.SourceOrdinals[0]);
         if(link is null || link.ChildSourceOrdinals.Length<2 || selection.VertexIndex<0 || selection.VertexIndex>=link.ChildSourceOrdinals.Length-1)
             throw new InvalidDataException("POLYLINE çocuk sırası doğrulanamadı.");
+        // Legacy LINE chain provenance does not yet carry its owning block
+        // occurrence. Do not claim uniqueness while any LINE in this block
+        // could contribute an untracked coincident endpoint.
+        if(geometry.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="LINE") ||
+           supplemental.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType!="POINT"))
+            throw new InvalidDataException("Bu blokta desteklenmeyen geometrinin köşe eşlemesi doğrulanamıyor.");
         var piece=fresh.Project.Pieces.Single(p=>p.Id==link.PieceId).Clone();piece.Id=oldPiece.Id;
         if(!DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[oldPiece] }) ||
            !piece.Closed || piece.Notches is not null || selection.VertexIndex>=piece.Points.Count ||
@@ -58,8 +64,7 @@ public static class DxfBlockDefinitionPointMapping
            !DxfExactDecimal.AreEqual(px,x.ToString("R",CultureInfo.InvariantCulture),token) || !DxfExactDecimal.AreEqual(py,y.ToString("R",CultureInfo.InvariantCulture),token))
             throw new InvalidDataException("Kaynak koordinatları tam eşleşmiyor.");
         var position=new Point2(x*parameters.MillimetersPerUnit,y*parameters.MillimetersPerUnit);
-        if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || position!=piece.Points[selection.VertexIndex] ||
-           piece.Points.Count(p=>p==position)!=1)
+        if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || position!=piece.Points[selection.VertexIndex])
             throw new InvalidDataException("Hedef köşe belirsiz veya ölçek sonrası farklı.");
         var blockPieceIds=freshLinks.Where(p=>p.BlockHeaderOrdinal==blockHeaderOrdinal).Select(p=>p.PieceId).ToHashSet();
         int matches=0;

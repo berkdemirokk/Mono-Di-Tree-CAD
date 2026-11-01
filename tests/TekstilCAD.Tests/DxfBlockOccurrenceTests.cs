@@ -6,6 +6,35 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ExplicitClosingVertexIsNotAnAmbiguousSecondVertex(bool repeatedInternal)
+    {
+        var duplicate=repeatedInternal ? "0\nVERTEX\n10\n0\n20\n0\n" : "";
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n"+duplicate+"0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nVERTEX\n10\n0\n20\n0\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        DxfBlockDefinitionPointResult Create()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        if(repeatedInternal)Assert.Throws<InvalidDataException>(()=>Create());
+        else Assert.Single(Assert.Single(Create().WorkingCopy.Pieces).Notches!);
+    }
+
+    [Fact]
+    public void LineInSameBlockPreventsUnverifiedUniqueness()
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nLINE\n8\nA\n10\n0\n20\n0\n11\n2\n21\n2\n0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true));
+    }
+
+    [Theory]
     [InlineData("-0","0")]
     [InlineData("0","-0")]
     public void MarkerRetainsTargetSignedZeroAcrossScaledSaveAndLoad(string vertexZero,string pointZero)
