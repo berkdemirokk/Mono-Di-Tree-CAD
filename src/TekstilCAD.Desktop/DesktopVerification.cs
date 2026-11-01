@@ -176,7 +176,7 @@ internal static class DesktopVerification
             var tools=new TextileToolsWindow(studio);
             var callback=(Func<PatternPiece,GradingRuleSet?,bool>)typeof(TextileToolsWindow).GetMethod("HasSnapshotGradeDraft",PrivateInstance)!.CreateDelegate(typeof(Func<PatternPiece,GradingRuleSet?,bool>),tools);
             var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
-            var split=new OpenPathSplitWindow(studio,tools,studio.Selected!,()=>source.Id,callback);
+            var split=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>source.Id,callback);
             try
             {
                 if(mode=="dirty")grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";
