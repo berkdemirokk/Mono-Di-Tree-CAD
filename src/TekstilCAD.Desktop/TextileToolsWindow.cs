@@ -1034,7 +1034,7 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Açık kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseOpenPathAsync(),()=>source.SelectedItem is PatternPiece { Closed:false });
         Note(panel,"Kapalı konturun sonundaki birden fazla aynı kapanış kopyası bir kopyaya indirilebilir. İşlem işaretli veya serileme kuralı/taslağı bulunan parçalarda reddedilir; kaynak dosya değiştirilmez. Kaynak ve pastal geçmişi önceki durumu anlatmaya devam eder. Diğer kontur hataları kalabilir; dışa aktarım veya üretim uygunluğu doğrulanmaz.");
         Button(panel,"Fazla kapanış noktalarını temizle",()=>VertexMoveTaskForVerification=CleanExtraClosureAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
-        Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaret veya serileme kuralı/taslağı bulunan parçalar korunur.");
+        Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaretler yalnız benzersiz ve bitçe tam eşlenebiliyorsa korunur; serileme kuralı/taslağı bulunan parçalar reddedilir.");
         Button(panel,"Bitişik eş noktaları temizle",()=>VertexMoveTaskForVerification=CleanConsecutiveAsync(),()=>HasPiece());
         Button(panel,"Projedeki tekrarları topluca incele…",()=>
         {
@@ -1109,10 +1109,10 @@ public sealed class TextileToolsWindow : Window
             if(operation==VertexEdit.Move && BitConverter.DoubleToInt64Bits(snapshot.Points[index].X)==BitConverter.DoubleToInt64Bits(position.X) &&
                BitConverter.DoubleToInt64Bits(snapshot.Points[index].Y)==BitConverter.DoubleToInt64Bits(position.Y))
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
-            bool ClosureHasUnsafeDependencies()=>snapshot.Notches is not null || document.GradingRules.Any(rule=>rule.SourcePieceId==sourceId) ||
+            bool ClosureHasUnsafeDependencies()=>(operation==VertexEdit.CleanClosure && snapshot.Notches is not null) || document.GradingRules.Any(rule=>rule.SourcePieceId==sourceId) ||
                 (gradeDrafts.TryGetValue(sourceId,out var pendingDraft) && HasUnsavedGradeDraft(sourceId,pendingDraft));
             if((operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive) && ClosureHasUnsafeDependencies())
-                throw new InvalidOperationException("İşaret, kayıtlı serileme kuralı veya uygulanmamış serileme taslağı var; kapanış temizlenmedi.");
+                throw new InvalidOperationException("İşaret veya serileme bilgisi bu işlemle güvenle korunamıyor; tekrarlı noktalar temizlenmedi.");
             var before=BeforeVertexMoveForVerification;var after=AfterVertexMoveForVerification;
             vertexMoveCancellation=new CancellationTokenSource();var token=vertexMoveCancellation.Token;
             vertexMoveBusy=true;started=true;source.IsEnabled=false;grades.IsEnabled=false;
@@ -1309,15 +1309,33 @@ public sealed class TextileToolsWindow : Window
         if(movedIndex is not null && (movedIndex<0 || movedIndex>=previous.Points.Count || edited.Points.Count!=previous.Points.Count))
             throw new InvalidOperationException("Taşınan nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
         var logicalCount=previous.Points.Count-(previous.Closed && previous.Points.Count>1 && previous.Points[0]==previous.Points[^1] ? 1 : 0);
-        int MappedMarkIndex(int oldIndex) => reverseOpenPath
+        static bool SamePointBits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        int[]? cleanupMap=null;
+        if(closureCleanup && previous.Notches is not null)
+        {
+            cleanupMap=new int[previous.Points.Count];var output=-1;
+            for(var i=0;i<previous.Points.Count;i++)
+            {
+                var point=previous.Points[i];
+                if(i==0 || previous.Points[i-1]!=point)output++;
+                else if(!SamePointBits(previous.Points[i-1],point))throw new InvalidOperationException("Tekrar eden noktanın bitleri farklı; işaretler eşlenmedi.");
+                if(output>=edited.Points.Count || !SamePointBits(point,edited.Points[output]))throw new InvalidOperationException("Temizlenmiş geometri kaynakla eşleşmedi.");
+                cleanupMap[i]=output;
+            }
+            if(output+1!=edited.Points.Count)throw new InvalidOperationException("Temizlenmiş nokta sayısı kaynakla eşleşmedi.");
+            if(previous.Closed && edited.Points.Count>1 && edited.Points[0]==edited.Points[^1])
+                for(var i=0;i<cleanupMap.Length;i++)if(cleanupMap[i]==edited.Points.Count-1)cleanupMap[i]=0;
+        }
+        int MappedMarkIndex(int oldIndex) => cleanupMap is not null ? cleanupMap[oldIndex] : reverseOpenPath
             ? previous.Closed ? (oldIndex==0 ? 0 : logicalCount-oldIndex) : previous.Points.Count-1-oldIndex
             : normalizedInsertion is { } at && oldIndex>at ? oldIndex+insertedCount : normalizedDeletion is { } deleted && oldIndex>deleted ? oldIndex-1 : oldIndex;
         if(deletedIndex is not null && (deletedIndex<0 || deletedIndex>=previous.Points.Count || edited.Points.Count!=previous.Points.Count-1))
             throw new InvalidOperationException("Silinen nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
         if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
-           !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==MappedMarkIndex(pair.First.VertexIndex) && (normalizedMove==pair.First.VertexIndex || pair.First.Position==pair.Second.Position) &&
+           !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==MappedMarkIndex(pair.First.VertexIndex) && (normalizedMove==pair.First.VertexIndex || (closureCleanup ? SamePointBits(pair.First.Position,pair.Second.Position) : pair.First.Position==pair.Second.Position)) &&
                pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position &&
-               (normalizedMove!=pair.First.VertexIndex || (BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].X)==BitConverter.DoubleToInt64Bits(pair.Second.Position.X) && BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].Y)==BitConverter.DoubleToInt64Bits(pair.Second.Position.Y))))))
+               ((normalizedMove!=pair.First.VertexIndex && !closureCleanup) || SamePointBits(edited.Points[pair.Second.VertexIndex],pair.Second.Position)))))
             throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();

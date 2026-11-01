@@ -29,15 +29,40 @@ public class ExtraClosureCleanupTests
         Assert.Throws<ArgumentException>(()=>PatternTools.RemoveExtraClosingVertices(source));
     }
     [Fact]
-    public void ConsecutiveCleanupPreservesOtherPointsAndRejectsBitDistinctOrMarkedCopies()
+    public void ConsecutiveCleanupPreservesOtherPointsAndRejectsBitDistinctCopies()
     {
         var source=Source();source.Points.Insert(2,source.Points[1]);var before=source.Clone();
         var edited=PatternTools.RemoveConsecutiveDuplicateVertices(source);
         Assert.Equal(5,edited.Points.Count);Assert.Equal(new Point2(10,0),edited.Points[1]);Assert.Equal(new Point2(10,10),edited.Points[2]);
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
         source.Notches=[new NotchMark { VertexIndex=1,Position=source.Points[1] }];
-        Assert.Throws<ArgumentException>(()=>PatternTools.RemoveConsecutiveDuplicateVertices(source));
+        var marked=PatternTools.RemoveConsecutiveDuplicateVertices(source);
+        Assert.Equal(1,Assert.Single(marked.Notches!).VertexIndex);
         source=Source();source.Points[^1]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+        Assert.Throws<ArgumentException>(()=>PatternTools.RemoveConsecutiveDuplicateVertices(source));
+    }
+    [Fact]
+    public void MarkedCleanupRemapsInteriorAndClosingAliasWithoutMutatingSource()
+    {
+        var source=Source();source.Points.Insert(2,source.Points[1]);
+        source.Notches=[new NotchMark { VertexIndex=2,Position=source.Points[2] },new NotchMark { VertexIndex=5,Position=source.Points[5] }];
+        source.Grainline=new Grainline { Start=new(BitConverter.Int64BitsToDouble(long.MinValue),1),End=new(1,8) };var before=source.Clone();
+        var result=PatternTools.RemoveConsecutiveDuplicateVertices(source);
+        Assert.Equal(new[] { 1,0 },result.Notches!.Select(mark=>mark.VertexIndex));
+        Assert.Equal(source.Notches.Select(mark=>mark.Position),result.Notches.Select(mark=>mark.Position));
+        Assert.True(result.Grainline!.NeedsReview);Assert.Equal(source.Grainline.Start,result.Grainline.Start);Assert.Equal(source.Grainline.End,result.Grainline.End);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(result.Grainline.Start.X));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+    }
+    [Fact]
+    public void MarkedCleanupRejectsCollisionsAndSignedZeroDisagreements()
+    {
+        var source=Source();source.Notches=[new NotchMark { VertexIndex=0,Position=source.Points[0] },new NotchMark { VertexIndex=4,Position=source.Points[4] }];
+        Assert.Throws<ArgumentException>(()=>PatternTools.RemoveConsecutiveDuplicateVertices(source));
+        source=Source();source.Notches=[new NotchMark { VertexIndex=4,Position=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0) }];
+        Assert.Throws<ArgumentException>(()=>PatternTools.RemoveConsecutiveDuplicateVertices(source));
+        source=Source();source.Points[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+        source.Notches=[new NotchMark { VertexIndex=4,Position=source.Points[4] }];
         Assert.Throws<ArgumentException>(()=>PatternTools.RemoveConsecutiveDuplicateVertices(source));
     }
     [Fact]

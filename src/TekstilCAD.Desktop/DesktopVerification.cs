@@ -590,7 +590,7 @@ internal static class DesktopVerification
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
-            VerifyExtraClosureCleanup(studio,checks);
+            VerifyExtraClosureCleanup(studio,work,checks);
             VerifyBulkDuplicateCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
@@ -9630,7 +9630,7 @@ internal static class DesktopVerification
         }
         finally { SynchronizationContext.SetSynchronizationContext(old); }
     }
-    private static void VerifyExtraClosureCleanup(MainWindow studio,List<string> checks)
+    private static void VerifyExtraClosureCleanup(MainWindow studio,string work,List<string> checks)
     {
         var oldContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
@@ -9677,13 +9677,21 @@ internal static class DesktopVerification
                     "Closure cleanup refuses a piece with a saved grading rule",checks);
             }
             finally { tools.Close(); }
-            var markedPiece=piece.Clone();markedPiece.Notches=[new NotchMark { VertexIndex=1,Position=markedPiece.Points[1] }];
+            var markedPiece=piece.Clone();markedPiece.Points.Insert(2,markedPiece.Points[1]);
+            markedPiece.Notches=[new NotchMark { VertexIndex=2,Position=markedPiece.Points[2] },new NotchMark { VertexIndex=5,Position=markedPiece.Points[5] }];
+            markedPiece.Grainline=new Grainline { Start=new(1,1),End=new(1,8) };
             studio.LoadDocument(new ProjectDocument { Pieces=[markedPiece] });studio.Select(piece.Id);guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
             try
             {
-                var blocked=tools.CleanConsecutiveAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
-                Check(DocumentSession.ContentEquals(guarded,studio.Document) && session.UndoCount==0,
-                    "Consecutive cleanup refuses marked pieces without changing their markers",checks);
+                var cleanup=tools.CleanConsecutiveAsync();PumpUntil(()=>cleanup.IsCompleted);cleanup.GetAwaiter().GetResult();
+                var markedAfter=studio.Document.Clone();var item=markedAfter.Pieces.Single();
+                Check(item.Points.Count==5 && item.Notches!.Select(mark=>mark.VertexIndex).SequenceEqual(new[] { 1,0 }) &&
+                    item.Notches.All(mark=>mark.Position==item.Points[mark.VertexIndex]) && item.Grainline is { NeedsReview:true } && session.UndoCount==1,
+                    "Consecutive cleanup remaps interior and closing visual markers atomically",checks);
+                var path=Path.Combine(work,$"clean-marked-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(markedAfter,path);
+                Check(DocumentSession.ContentEquals(markedAfter,ProjectStorage.Load(path)),"Cleaned marked contour survives version 6 save and reopen",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(guarded,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedAfter,studio.Document),
+                    "Marked duplicate cleanup supports atomic undo and redo",checks);
             }
             finally { tools.Close(); }
             studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()] });studio.Select(piece.Id);guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);

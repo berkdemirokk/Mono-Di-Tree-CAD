@@ -550,24 +550,36 @@ public static class PatternTools
     /// <summary>Remove only bit-identical consecutive duplicate points in a detached copy.</summary>
     public static PatternPiece RemoveConsecutiveDuplicateVertices(PatternPiece piece,CancellationToken cancellationToken=default)
     {
-        ArgumentNullException.ThrowIfNull(piece);
-        var points=SnapshotPointEdit(piece,cancellationToken);var cleaned=new List<Point2>(points.Count);
-        foreach(var point in points)
+        ArgumentNullException.ThrowIfNull(piece);cancellationToken.ThrowIfCancellationRequested();
+        if(piece.Notches is not null)_=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+        var detached=piece.Clone();detached.Notches=null;
+        var points=SnapshotPointEdit(detached,cancellationToken);var cleaned=new List<Point2>(points.Count);var mapping=new int[points.Count];
+        static bool SameBits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        for(var i=0;i<points.Count;i++)
         {
-            cancellationToken.ThrowIfCancellationRequested();Geometry.Validate(point);
+            cancellationToken.ThrowIfCancellationRequested();var point=points[i];Geometry.Validate(point);
             if(cleaned.Count>0 && cleaned[^1]==point)
             {
-                if(BitConverter.DoubleToInt64Bits(cleaned[^1].X)!=BitConverter.DoubleToInt64Bits(point.X) ||
-                   BitConverter.DoubleToInt64Bits(cleaned[^1].Y)!=BitConverter.DoubleToInt64Bits(point.Y))
-                    throw new ArgumentException("Bitişik eş noktaların koordinat bitleri farklı; temizleme yapılmadı.",nameof(piece));
-                continue;
+                if(!SameBits(cleaned[^1],point))throw new ArgumentException("Bitişik eş noktaların koordinat bitleri farklı; temizleme yapılmadı.",nameof(piece));
+                mapping[i]=cleaned.Count-1;continue;
             }
-            cleaned.Add(point);
+            mapping[i]=cleaned.Count;cleaned.Add(point);
         }
         if(cleaned.Count==points.Count)throw new ArgumentException("Bitişik eş nokta bulunamadı.",nameof(piece));
-        var logical=cleaned.Count-(piece.Closed && cleaned.Count>1 && cleaned[0]==cleaned[^1] ? 1 : 0);
+        var repeated=piece.Closed && cleaned.Count>1 && cleaned[0]==cleaned[^1];
+        var logical=cleaned.Count-(repeated ? 1 : 0);
         if(logical<(piece.Closed ? 3 : 2))throw new ArgumentException("Temizleme sonrası yeterli nokta kalmıyor.",nameof(piece));
-        cancellationToken.ThrowIfCancellationRequested();var edited=piece.Clone();edited.Points=cleaned;
+        var marks=piece.Notches?.Select(mark=>mark.Clone()).ToList();var used=new HashSet<int>();
+        if(marks is not null)foreach(var mark in marks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var destination=mapping[mark.VertexIndex];
+            if(repeated && destination==cleaned.Count-1)destination=0;
+            if(!used.Add(destination) || !SameBits(mark.Position,cleaned[destination]))
+                throw new ArgumentException("Köşe işaretleri hedefte tekil ve bitçe aynı korunamıyor; temizleme yapılmadı.",nameof(piece));
+            mark.VertexIndex=destination;
+        }
+        cancellationToken.ThrowIfCancellationRequested();var edited=piece.Clone();edited.Points=cleaned;edited.Notches=marks;
         if(edited.Grainline is not null)edited.Grainline.NeedsReview=true;return edited;
     }
     public static PatternPiece DeletePoint(PatternPiece piece, int index)
