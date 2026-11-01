@@ -12,9 +12,10 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Ön Beden"].tap()
         let measure = app.buttons["İki nokta arasını ölç…"]
         XCTAssertTrue(measure.waitForExistence(timeout: 5)); measure.tap()
-        XCTAssertTrue(app.staticTexts["Doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["İlk nokta: X 0, Y 0 mm"].exists)
         XCTAssertTrue(app.staticTexts["İkinci nokta: X 100, Y 0 mm"].exists)
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "en fazla 6 anlamlı basamağa yuvarlanır")).firstMatch.exists)
         app.buttons["Kapat"].tap()
     }
     func testBOMEncodedLegacyModelsExplainUnavailableNameEditing() throws {

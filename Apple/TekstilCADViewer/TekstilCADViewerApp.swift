@@ -2694,14 +2694,14 @@ private struct PointDistanceView: View {
                         }
                         if let distance = ContourMeasure.distance(piece.points, from: a, to: b),
                            let value = MeasurementDisplay.format(distance) {
-                            Text("Doğrusal mesafe: \(value) mm").font(.headline)
+                            Text("Yaklaşık doğrusal mesafe: \(value) mm").font(.headline)
                         } else { Text("Mesafe hesaplanamadı.") }
                     } else {
                         Text("Geçerli iki nokta indeksi girin.").foregroundStyle(.secondary)
                     }
                 }
                 Section {
-                    Text("Bu, iki nokta arasındaki düz mesafedir; kontur boyunca uzunluk veya üretim ölçüsü değildir. Kapalı konturda dosyadaki tekrarlı son nokta ilk noktayla aynı olabilir.")
+                    Text("Koordinatlar ve mesafe en fazla 6 anlamlı basamağa yuvarlanır. Bu, iki nokta arasındaki düz mesafedir; kontur boyunca uzunluk veya üretim ölçüsü değildir. Kapalı konturda dosyadaki tekrarlı son nokta ilk noktayla aynı olabilir.")
                 }
             }
             .navigationTitle("İki nokta mesafesi")

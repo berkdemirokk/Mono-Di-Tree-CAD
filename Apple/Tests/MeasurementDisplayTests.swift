@@ -24,4 +24,9 @@ final class MeasurementDisplayTests: XCTestCase {
         XCTAssertNil(MeasurementDisplay.format(.infinity, locale: turkish))
         XCTAssertNil(MeasurementDisplay.format(.nan, locale: turkish))
     }
+    func testLongDistanceRoundingIsExplicitlyExpected() throws {
+        let formatted = try XCTUnwrap(MeasurementDisplay.format(100_000.1, locale: Locale(identifier: "en_US")))
+        XCTAssertEqual(formatted, "100,000")
+        XCTAssertNotEqual(formatted, "100,000.1")
+    }
 }
