@@ -1174,8 +1174,9 @@ enum ModelStore {
         let start: Int
         private(set) var next: Int?
         init(start: Int) { self.start = start }
+        func includes(_ index: Int) -> Bool { index >= start && next == nil }
         mutating func shouldScan(index: Int, bytes: Int64, now: TimeInterval, budget: inout ContentSearchBudget) -> Bool {
-            guard index >= start, next == nil else { return false }
+            guard includes(index) else { return false }
             guard budget.reserve(bytes: bytes, now: now) else { next = index; return false }
             return true
         }
@@ -1424,6 +1425,7 @@ private struct ModelLibrary: View {
         let filter: ModelStore.LibraryFilter
         let revision: UUID
         let searchContents: Bool
+        let contentOffset: Int
     }
     private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let evidence: [URL: String] }
     @State private var filterResult: FilterResult?
@@ -1640,7 +1642,7 @@ private struct ModelLibrary: View {
                     for (candidateIndex, entry) in candidates.enumerated() {
                         if cancelled() { return nil }
                         if named.contains(entry.id) { selected.append(entry); continue }
-                        if candidateIndex < request.contentOffset { continue }
+                        if !page.includes(candidateIndex) { continue }
                         let identity = entry.url.pathExtension.lowercased() == "tcadcopy" ? entry.identity?.payload : entry.identity?.entry
                         guard entry.canOpen, let identity, identity.size <= 8 * 1024 * 1024 else { skipped += 1; continue }
                         guard page.shouldScan(index: candidateIndex, bytes: identity.size,

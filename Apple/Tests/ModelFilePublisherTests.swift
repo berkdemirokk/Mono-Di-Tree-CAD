@@ -315,8 +315,15 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(first.shouldScan(index: 2, bytes: 20, now: 1, budget: &budget))
         XCTAssertFalse(first.shouldScan(index: 3, bytes: 20, now: 1, budget: &budget))
         XCTAssertEqual(first.next, 2)
+        // Even an unreadable candidate after the boundary belongs to the
+        // next page and must not increase this page's skipped count.
+        var skipped = 0
+        if first.includes(3) { skipped += 1 }
+        XCTAssertEqual(skipped, 0)
         var nextBudget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
         var second = ModelStore.ContentPageGate(start: 2)
+        XCTAssertFalse(second.includes(1))
+        XCTAssertTrue(second.includes(3))
         XCTAssertFalse(second.shouldScan(index: 1, bytes: 20, now: 1, budget: &nextBudget))
         XCTAssertTrue(second.shouldScan(index: 2, bytes: 20, now: 1, budget: &nextBudget))
         XCTAssertTrue(second.shouldScan(index: 3, bytes: 20, now: 1, budget: &nextBudget))
