@@ -436,21 +436,25 @@ public sealed class TextileToolsWindow : Window
     private void RebaseMovedGradeDraft()
     {
         if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme hücresini tamamlayın; taslak korundu.");
+        if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın; serileme taslağı korundu.");
         if(source.SelectedItem is not PatternPiece selected || !gradeDrafts.TryGetValue(selected.Id,out var draft))
             throw new InvalidOperationException("Eşlenecek serileme taslağı bulunamadı.");
         var piece=workspace.Document.Pieces.FirstOrDefault(p=>p.Id==selected.Id);
         var current=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==selected.Id);
         var baseline=draft.BaselineRule;
-        if(piece is null || current is null || baseline is null || draft.Closed!=baseline.SourceClosed ||
-           !draft.AnchorPoints.SequenceEqual(baseline.SourcePoints) || !draft.BaselinePiece.Points.SequenceEqual(baseline.SourcePoints) ||
-           (!draft.Points.SequenceEqual(baseline.SourcePoints) && !draft.Points.SequenceEqual(piece.Points)) || draft.Rows.Count!=piece.Points.Count ||
-           !baseline.IsExactTranslationTo(current,piece))
-            throw new InvalidOperationException("Kaynak ve kayıtlı kuralın yalnızca tam olarak taşındığı doğrulanamadı; taslak değiştirilmedi.");
+        if(piece is null)throw new InvalidOperationException("Kaynak parça bulunamadı; taslak değiştirilmedi.");
+        var anchor=baseline?.SourcePoints ?? draft.BaselinePiece.Points;
+        var ruleMatches=baseline is null ? current is null : current is not null && baseline.IsExactTranslationTo(current,piece);
+        if(!ruleMatches || draft.Closed!=draft.BaselinePiece.Closed || draft.Closed!=piece.Closed ||
+           !draft.AnchorPoints.SequenceEqual(anchor) || !draft.BaselinePiece.Points.SequenceEqual(anchor) ||
+           (!draft.Points.SequenceEqual(anchor) && !draft.Points.SequenceEqual(piece.Points)) || draft.Rows.Count!=piece.Points.Count ||
+           !GradingRuleSet.IsExactPointTranslation(anchor,piece.Points))
+            throw new InvalidOperationException("Kaynağın ve varsa kayıtlı kuralın yalnızca tam olarak taşındığı doğrulanamadı; taslak değiştirilmedi.");
         var beforePiece=draft.BaselinePiece.Clone();beforePiece.Points=[..piece.Points];
         if(beforePiece.Grainline is { } beforeLine && piece.Grainline is { } afterLine)
         {
             if(beforeLine.NeedsReview!=afterLine.NeedsReview ||
-               !GradingRuleSet.IsExactPointTranslation([baseline.SourcePoints[0],beforeLine.Start,beforeLine.End],
+               !GradingRuleSet.IsExactPointTranslation([anchor[0],beforeLine.Start,beforeLine.End],
                    [piece.Points[0],afterLine.Start,afterLine.End]))
                 throw new InvalidOperationException("İplik yönünün kaynakla tam aynı miktarda taşındığı doğrulanamadı; taslak değiştirilmedi.");
             beforePiece.Grainline=afterLine.Clone();
@@ -459,7 +463,7 @@ public sealed class TextileToolsWindow : Window
             throw new InvalidOperationException("Kaynağın başka bilgileri de değişti; taslak değiştirilmedi.");
         var rebased=new GradeDraft([..piece.Points],[..piece.Points],piece.Closed,draft.Rows.Select((row,index)=>new GradeRow {
             Index=index,X=piece.Points[index].X,Y=piece.Points[index].Y,Dx=row.Dx,Dy=row.Dy
-        }).ToList(),current.Clone(),piece.Clone());
+        }).ToList(),current?.Clone(),piece.Clone());
         gradeDrafts[piece.Id]=rebased;
         RefreshSources(piece.Id);
         Success("Taslak taşınan kaynakla eşlendi; girilen artışlar korundu. Projeye uygulamak için artışları kontrol edin.");
@@ -700,7 +704,7 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(batch,"Birden fazla beden ve adım girip hepsini inceleyin; onaylanınca tek işlem olarak eklenir.");
         var rebase=Button(secondaryActions,"Taşınan kaynakla taslağı eşleştir",RebaseMovedGradeDraft,()=>HasPiece());
         rebase.Margin=new Thickness(0,8,0,0);rebase.Padding=new Thickness(10,5,10,5);rebase.HorizontalAlignment=HorizontalAlignment.Left;
-        AutomationProperties.SetHelpText(rebase,"Yalnızca kayıtlı kural ve kaynak tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
+        AutomationProperties.SetHelpText(rebase,"Kaynak ve varsa kayıtlı kural tam olarak birlikte taşındıysa taslak artışlarını koruyarak yeniden eşleştirir.");
         return layout;
     }
     private bool HasUnsavedGradeDraft(Guid pieceId,GradeDraft draft)

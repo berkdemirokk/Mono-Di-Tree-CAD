@@ -1140,6 +1140,7 @@ internal static class DesktopVerification
             VerifyBasicNestingLengthPrecision(studio,checks);
             VerifyNestingAndGrading(studio,checks);
             VerifyDraftDoesNotAutomaticallyRebase(studio,checks);
+            VerifyUnrecordedGradeDraftRebase(studio,checks);
             VerifyBasicNestingGradingRules(studio,checks);
             VerifyConcaveAllowance(studio,checks);
             VerifyProductionPreview(studio,reportPath,work,checks);
@@ -2947,6 +2948,52 @@ internal static class DesktopVerification
             }
         }
         finally { System.Globalization.CultureInfo.CurrentCulture=originalCulture; }
+    }
+    private static void VerifyUnrecordedGradeDraftRebase(MainWindow studio,List<string> checks)
+    {
+        foreach(var scenario in new[] { "exact", "metadata", "deformed", "new-rule", "pending" })
+        {
+            var piece=new PatternPiece { Name="Ön",Points=[new(100,100),new(200,100),new(200,200),new(100,200)],
+                Metadata=new PieceMetadata { Size="M" },Grainline=new Grainline { Start=new(120,110),End=new(120,180) } };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+            var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="7";
+                var current=studio.Document.Pieces.Single();
+                studio.Commit("Kaynak taşıması",()=>
+                {
+                    current.Points=current.Points.Select(p=>new Point2(p.X+10,p.Y+20)).ToList();
+                    current.Grainline!.Start=new(130,130);current.Grainline.End=new(130,200);
+                    if(scenario=="metadata")current.Metadata!.Size="L";
+                    if(scenario=="deformed")current.Points[1]=current.Points[1] with { X=Math.BitIncrement(current.Points[1].X) };
+                    if(scenario=="new-rule")studio.Document.GradingRules.Add(new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..current.Points],Deltas=Enumerable.Repeat(new Point2(0,0),4).ToList() });
+                });
+                typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[piece.Id,true]);
+                Check(grid.IsReadOnly && grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7","Changed geometry retains a read-only unrecorded grading draft",checks);
+                var x=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+                var originalText=x.Text;if(scenario=="pending")x.Text="999";
+                var before=studio.Document.Clone();var rejected=false;
+                try { typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null); }
+                catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { rejected=true; }
+                Check((scenario=="exact" ? !rejected && !grid.IsReadOnly : rejected && grid.IsReadOnly) &&
+                    grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7" && DocumentSession.ContentEquals(before,studio.Document),
+                    $"Unrecorded grading draft rebase {scenario} uses exact source proof and preserves inputs",checks);
+                if(scenario=="pending")x.Text=originalText;
+                if(scenario=="exact")
+                {
+                    var root=(FrameworkElement)tools.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+                    var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula"));
+                    Check(apply.IsEnabled,"Exactly reassociated draft is ready for explicit application",checks);
+                    apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                    Check(studio.Document.GradingRules.Count==1 && studio.Document.GradingRules[0].SourcePoints.SequenceEqual(current.Points) &&
+                        studio.Document.GradingRules[0].Deltas[0].X==7,"Applying reassociated unrecorded draft attaches its values to the moved contour",checks);
+                }
+            }
+            finally { tools.Close(); }
+        }
+        studio.LoadDocument(new ProjectDocument());
     }
     private static void VerifyDraftDoesNotAutomaticallyRebase(MainWindow studio,List<string> checks)
     {
