@@ -606,12 +606,24 @@ private struct ContentView: View {
 }
 
 enum ModelStore {
+    struct FileIdentity: Equatable {
+        let device: Int64, inode: UInt64, size: Int64, mode: UInt32
+        let modifiedSeconds: Int64, modifiedNanoseconds: Int64
+        let changedSeconds: Int64, changedNanoseconds: Int64
+    }
+    struct EntryIdentity: Equatable {
+        let entry: FileIdentity
+        let payload: FileIdentity?
+        let metadata: FileIdentity?
+    }
+
     struct Entry: Identifiable {
         let url: URL
         let name: String
         let date: Date?
         let canOpen: Bool
         let requiresRecovery: Bool
+        let identity: EntryIdentity?
         var id: URL { url }
         // The complete directory entry name distinguishes records in this
         // library; actions continue to use the full URL, never a display ID.
@@ -757,6 +769,7 @@ enum ModelStore {
         try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
                                                     options: [])
             .compactMap { url in
+                let initialIdentity = identity(url)
                 let name: String
                 let canOpen: Bool
                 let requiresRecovery: Bool
@@ -779,13 +792,45 @@ enum ModelStore {
                 } else {
                     return nil
                 }
-                return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen, requiresRecovery: requiresRecovery)
+                let finalIdentity = identity(url)
+                guard let initialIdentity, initialIdentity == finalIdentity else {
+                    return Entry(url: url, name: "Değişen kayıt (\(url.lastPathComponent))", date: nil,
+                                 canOpen: false, requiresRecovery: false, identity: nil)
+                }
+                return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen, requiresRecovery: requiresRecovery, identity: initialIdentity)
             }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
 
     static func savedDate(_ url: URL) -> Date? {
         try? url.resourceValues(forKeys: [.creationDateKey]).creationDate
+    }
+
+    private static func fileIdentity(_ url: URL) -> FileIdentity? {
+        var info = stat()
+        guard url.path.withCString({ lstat($0, &info) }) == 0 else { return nil }
+        return FileIdentity(device: Int64(info.st_dev), inode: UInt64(info.st_ino), size: Int64(info.st_size), mode: UInt32(info.st_mode),
+                            modifiedSeconds: Int64(info.st_mtimespec.tv_sec), modifiedNanoseconds: Int64(info.st_mtimespec.tv_nsec),
+                            changedSeconds: Int64(info.st_ctimespec.tv_sec), changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
+    }
+
+    private static func identity(_ url: URL) -> EntryIdentity? {
+        guard let entry = fileIdentity(url) else { return nil }
+        let isCopy = url.pathExtension.lowercased() == copyExtension
+        return EntryIdentity(entry: entry,
+                             payload: isCopy ? fileIdentity(url.appendingPathComponent(payloadName)) : nil,
+                             metadata: isCopy ? fileIdentity(url.appendingPathComponent(metadataName)) : nil)
+    }
+
+    static func delete(_ entry: Entry, in library: URL) throws {
+        guard let expected = entry.identity, identity(entry.url) == expected else {
+            throw ViewerError.message("Kayıt değişti veya kaldırıldı; model listesini yenileyip tekrar deneyin.")
+        }
+        try delete(entry.url, in: library)
+    }
+
+    static func delete(_ entry: Entry) throws {
+        try delete(entry, in: directory())
     }
 
     static func delete(_ url: URL) throws {
@@ -897,6 +942,7 @@ private struct ModelLibrary: View {
                     Button {
                         if model.canOpen { open(model.url) }
                         else if model.requiresRecovery { modelToRecover = model }
+                        else if model.identity == nil { error = "Kayıt listelenirken değişti. Listeyi kapatıp yeniden açın." }
                         else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
                     } label: {
                         VStack(alignment: .leading) {
@@ -971,7 +1017,7 @@ private struct ModelLibrary: View {
                 Button("Sil", role: .destructive) {
                     guard let model = modelToDelete else { return }
                     do {
-                        try ModelStore.delete(model.url)
+                        try ModelStore.delete(model)
                         models.removeAll { $0.id == model.id }
                     } catch { self.error = error.localizedDescription }
                     modelToDelete = nil

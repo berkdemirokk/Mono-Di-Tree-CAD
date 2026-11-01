@@ -11,6 +11,41 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testDeleteRejectsAReplacedLibraryEntry() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let path = root.appendingPathComponent("model.tcad")
+        let original = root.appendingPathComponent("original.saved")
+        try Data("first".utf8).write(to: path)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == path })
+        try FileManager.default.moveItem(at: path, to: original)
+        let replacement = Data("replacement".utf8)
+        try replacement.write(to: path)
+        XCTAssertThrowsError(try ModelStore.delete(entry, in: root))
+        XCTAssertEqual(try Data(contentsOf: path), replacement)
+        XCTAssertEqual(try Data(contentsOf: original), Data("first".utf8))
+        let current = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == path })
+        try ModelStore.delete(current, in: root)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path.path))
+    }
+
+    func testDeleteRejectsChangedPayloadInsideSameCopy() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let payload = copy.appendingPathComponent("project.tcad")
+        try Data("old".utf8).write(to: payload)
+        try Data("{\"version\":1,\"name\":\"Model\"}".utf8).write(to: copy.appendingPathComponent("metadata.json"))
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == copy })
+        let replacement = Data("new longer content".utf8)
+        try replacement.write(to: payload)
+        XCTAssertThrowsError(try ModelStore.delete(entry, in: root))
+        XCTAssertEqual(try Data(contentsOf: payload), replacement)
+    }
+
     func testOversizedMetadataDoesNotBlockLibraryOrItsPayload() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
