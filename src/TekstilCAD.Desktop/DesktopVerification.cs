@@ -1680,6 +1680,45 @@ internal static class DesktopVerification
             Check(studio.Document.Pieces[0].Points[0]==new Point2(1,0) && studio.Document.Pieces[0].Points[^1]==new Point2(1,0),
                 "Dragging explicit closing vertex keeps both stored endpoints together",checks);
             Invoke(studio,"Undo");Check(DocumentSession.ContentEquals(before,studio.Document),"Undo restores explicit closing vertex",checks);
+            var marked=new PatternPiece { Name="İşaretli sürükleme",Points=[new(0,0),new(100,0),new(100,100),new(0,100)],
+                Grainline=new Grainline { Start=new(20,20),End=new(20,60) },Notches=[new NotchMark { VertexIndex=1,Position=new(100,0) }] };
+            var markedRule=new GradingRuleSet { SourcePieceId=marked.Id,SourceClosed=true,SourcePoints=[..marked.Points],Deltas=[new(1,0),new(1,0),new(1,0),new(1,0)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule] });studio.Select(marked.Id);PointAt(50,50,1);
+            before=studio.Document.Clone();undo=session.UndoCount;down.Invoke(canvas,[canvas,click]);
+            Check(canvas.HasActiveDragPreview && (int)vertexField.GetValue(canvas)! == -1,"Marked piece body starts whole-piece drag",checks);
+            pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+20));up.Invoke(canvas,[click]);
+            var moved=studio.Document.Pieces.Single();
+            Check(moved.Points[1]==new Point2(110,20) && moved.Notches!.Single().Position==moved.Points[1] &&
+                moved.Grainline!.Start==new Point2(30,40) && studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(moved.Points) && session.UndoCount==undo+1,
+                "Whole-piece drag carries marks, grainline and matching grading rule",checks);
+            var after=studio.Document.Clone();
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Marked whole-piece drag supports undo and redo",checks);
+            Invoke(studio,"Undo");PointAt(50,50,1);down.Invoke(canvas,[canvas,click]);pointer=click.GetPosition(canvas);
+            canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+20));canvas.CancelDrawing();
+            Check(!canvas.HasActiveDragPreview && DocumentSession.ContentEquals(before,studio.Document),"Cancelling marked drag leaves the project unchanged",checks);
+            PointAt(50,50,1);down.Invoke(canvas,[canvas,click]);pointer=click.GetPosition(canvas);
+            canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+20));
+            studio.Document.Pieces.Single().Notches![0].VertexIndex=2;studio.Document.Pieces.Single().Notches![0].Position=new Point2(100,100);
+            var newer=studio.Document.Clone();var priorUndo=session.UndoCount;var staleRejected=false;
+            try { up.Invoke(canvas,[click]); } catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { staleRejected=true; }
+            Check(staleRejected && DocumentSession.ContentEquals(newer,studio.Document) && session.UndoCount==priorUndo,
+                "Marked drag rejects a changed source and keeps newer marks",checks);canvas.CancelDrawing();
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
+            Check(!canvas.HasActiveDragPreview,"Individual vertex dragging stays disabled for marked pieces",checks);
+            var far=new PatternPiece { Points=[new(50_000_000,0),new(50_000_100,0),new(50_000_100,100),new(50_000_000,100)],
+                Notches=[new NotchMark { VertexIndex=1,Position=new(50_000_100,0) }] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[far] });studio.Select(far.Id);before=studio.Document.Clone();undo=session.UndoCount;
+            typeof(CadCanvas).GetField("dragId",PrivateInstance)!.SetValue(canvas,far.Id);
+            vertexField.SetValue(canvas,-1);
+            typeof(CadCanvas).GetField("dragOriginal",PrivateInstance)!.SetValue(canvas,far.Points.ToList());
+            typeof(CadCanvas).GetField("dragSourceSnapshot",PrivateInstance)!.SetValue(canvas,far.Clone());
+            typeof(CadCanvas).GetField("dragTranslation",PrivateInstance)!.SetValue(canvas,new Point2(.00000001,0));
+            typeof(CadCanvas).GetField("dragPreview",PrivateInstance)!.SetValue(canvas,far.Points.Select(p=>new Point2(p.X+.00000001,p.Y)).ToList());
+            var precisionRejected=false;
+            try { up.Invoke(canvas,[click]); } catch(TargetInvocationException ex) when(ex.InnerException is ArgumentException) { precisionRejected=true; }
+            Check(precisionRejected && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "Unrepresentable marked drag is rejected without changing project or history",checks);canvas.CancelDrawing();
         }
         finally { canvas.CancelDrawing();studio.ClearCanvasError();snap.IsChecked=oldSnap;scaleField.SetValue(canvas,oldScale);offsetField.SetValue(canvas,oldOffset); }
     }

@@ -30,6 +30,7 @@ public sealed class CadCanvas : FrameworkElement
     private Grainline? dragOriginalGrainline;
     private Grainline? dragPreviewGrainline;
     private Point2 dragTranslation;
+    private PatternPiece? dragSourceSnapshot;
     private CancellationTokenSource? largeCompletionCancellation;
     private CancellationTokenSource? largeVertexCancellation;
     internal Task? LargeVertexValidationTask { get; private set; }
@@ -230,7 +231,7 @@ public sealed class CadCanvas : FrameworkElement
     // Once a mutation has committed, unexpected ordinary UI failures must not
     // escape as if the edit did not happen. Keep catastrophic CLR failures out.
     private static bool IsNonFatal(Exception ex) => ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
-    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragTranslation=default; }
+    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragSourceSnapshot=null;dragTranslation=default; }
     internal void CancelLargeCompletion() => largeCompletionCancellation?.Cancel();
     internal void CancelLargeVertexValidation() => largeVertexCancellation?.Cancel();
     public void CancelDrawing() { CancelLargeCompletion();CancelLargeVertexValidation();var changed=drawing.Count>0;drawing.Clear();ClearDrag();panStart=null;ReleaseMouseCapture();InvalidateVisual();if(changed)owner.PendingDrawingChanged(); }
@@ -466,9 +467,9 @@ public sealed class CadCanvas : FrameworkElement
                 return;
             }
             owner.Select(piece?.Id);
-            if(piece?.Notches is { Count:>0 })
-            { owner.SetStatus("İşaretli parça seçildi. Taşımadan önce köşe işaretlerini kaldırın.");return; }
-            if(piece is not null) { dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
+            if(vertex>=0 && piece?.Notches is not null)
+            { owner.SetStatus("İşaretli parçanın noktası taşınamaz; tüm parçayı seçerek taşıyın.");return; }
+            if(piece is not null) { dragSourceSnapshot=piece.Clone();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
         }
         AddDrawingPointCore(p);
@@ -634,7 +635,8 @@ public sealed class CadCanvas : FrameworkElement
         else
         {
             dragTranslation=new(dragPosition.X-dragOrigin.X,dragPosition.Y-dragOrigin.Y);
-            dragPreview=Geometry.Translate(dragOriginal,dragTranslation.X,dragTranslation.Y);
+            dragPreview=dragSourceSnapshot is null ? Geometry.Translate(dragOriginal,dragTranslation.X,dragTranslation.Y)
+                : MarkedPieceTranslation.Translate(dragSourceSnapshot,dragTranslation.X,dragTranslation.Y).Points;
             dragPreviewGrainline=GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],dragPreview[0],dragTranslation.X,dragTranslation.Y);
         }
     }
@@ -646,7 +648,7 @@ public sealed class CadCanvas : FrameworkElement
         var result=dragPreview;
         if(piece is not null && dragOriginal is not null && (!piece.Points.SequenceEqual(dragOriginal) || !GrainlineTransform.Same(piece.Grainline,dragOriginalGrainline)))
             throw new InvalidOperationException("Sürükleme sırasında parça değişti. İşlemi yeniden başlatın.");
-        if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null)
+        if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null && (dragVertex>=0 || dragSourceSnapshot is null))
         { ClearDrag();ReleaseMouseCapture();InvalidateVisual();owner.ShowCanvasError("İşaretli parça değiştirilemez; işlem uygulanmadı.");return; }
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal))
         {
@@ -658,13 +660,22 @@ public sealed class CadCanvas : FrameworkElement
                 ClearDrag();ReleaseMouseCapture();InvalidateVisual();return;
             }
             if(dragVertex>=0) ValidateDraggedVertex(result,piece.Closed);
+            if(dragSourceSnapshot is not null && !OpenPathSourceSnapshot.Matches(piece,dragSourceSnapshot))
+                throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
             var snapshot=result.ToList();
+            List<NotchMark>? movedNotches=null;
+            if(dragVertex<0)
+            {
+                var verified=MarkedPieceTranslation.Translate(piece,dragTranslation.X,dragTranslation.Y);
+                if(!verified.Points.SequenceEqual(snapshot))throw new InvalidOperationException("Sürükleme önizlemesi doğrulanan ötelemeyle eşleşmiyor.");
+                movedNotches=verified.Notches;
+            }
             var newGrain=dragVertex>=0 ? dragOriginalGrainline?.Clone() : GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],snapshot[0],dragTranslation.X,dragTranslation.Y);
             if(dragVertex>=0 && newGrain is not null)newGrain.NeedsReview=true;
             var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
             var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) : null;
             owner.CommitObserved(dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
-                piece.Points=snapshot;piece.Grainline=newGrain;
+                piece.Points=snapshot;piece.Grainline=newGrain;if(dragVertex<0)piece.Notches=movedNotches;
                 if(translatedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
             },()=>observedCommits++);
             if(rule is not null && translatedRule is null)
@@ -810,7 +821,8 @@ public sealed class CadCanvas : FrameworkElement
                 var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
                 foreach(var notch in p.Notches)
                 {
-                    var point=Screen(notch.Position);
+                    var notchPosition=p.Id==dragId && dragVertex<0 && dragPreview is not null && notch.VertexIndex>=0 && notch.VertexIndex<visible.Count ? visible[notch.VertexIndex] : notch.Position;
+                    var point=Screen(notchPosition);
                     dc.DrawEllipse(null,notchPen,point,7,7);
                     if(selected)Text(dc,$"İşaret {notch.VertexIndex}",new Point(point.X+8,point.Y-15),notchBrush,11);
                 }
