@@ -87,6 +87,19 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 91))
         XCTAssertThrowsError(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 90, cancelled: { true }))
     }
+    func testLayoutBoxBoundsGapAndCancellation() throws {
+        func piece(_ id: String, _ left: Int, _ right: Int) throws -> Drawing.Piece {
+            let json = "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[{\"X\":\(left),\"Y\":0},{\"X\":\(right),\"Y\":0},{\"X\":\(right),\"Y\":10},{\"X\":\(left),\"Y\":10}]}"
+            return try XCTUnwrap(ExperimentalV7Contours.decode([Data(json.utf8)]).first)
+        }
+        let a = try piece("11111111-1111-1111-1111-111111111111", 0, 10)
+        let b = try piece("22222222-2222-2222-2222-222222222222", 11, 21)
+        XCTAssertNoThrow(try ExperimentalV7Layout.verify([a, b], width: 25, length: 10, gap: 1, margin: 0))
+        XCTAssertThrowsError(try ExperimentalV7Layout.verify([a, b], width: 25, length: 10, gap: 2, margin: 0))
+        XCTAssertThrowsError(try ExperimentalV7Layout.verify([a, b], width: 20, length: 10, gap: 0, margin: 0))
+        XCTAssertThrowsError(try ExperimentalV7Layout.verify([a, b], width: 25, length: 10, gap: 0, margin: 0, cancelled: { true }))
+        XCTAssertFalse(ExperimentalV7Geometry.differenceAtLeast(0.3, 0.2, 0.1), "Rounded subtraction must not invent clearance")
+    }
     func testSignedIntegerTokensUseFieldRangeAfterSyntax() throws {
         let template = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":INDEX,"Position":{"X":0,"Y":0}}],"Metadata":{"Role":"Kesim","Quantity":QUANTITY}}"#
         func input(_ index: String, _ quantity: String) -> Data {

@@ -121,6 +121,8 @@ struct ExperimentalV7PieceReader {
                 }
             }
             guard index == traceMappings.count else { throw Failure.invalid }
+            try ExperimentalV7Layout.verify(Array(historyGeometry.values), width: width, length: length,
+                                            gap: gap, margin: margin, cancelled: cancelled)
             finished = true
             return pieces
         } catch { discardPartialState(); throw error }

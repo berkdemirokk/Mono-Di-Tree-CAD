@@ -13,6 +13,12 @@ enum ExperimentalV7Geometry {
         guard high.isFinite, low.isFinite else { return nil }
         return (high, low)
     }
+    static func differenceAtLeast(_ a: Double, _ b: Double, _ clearance: Double) -> Bool {
+        guard clearance.isFinite, clearance >= 0, let difference = exactDifference(a, b) else { return false }
+        if difference.0 > clearance { return true }
+        if difference.0 < clearance { return false }
+        return difference.1 >= 0
+    }
     private static func sameDifference(_ a: Double, _ b: Double, _ c: Double, _ d: Double) -> Bool {
         guard let first = exactDifference(a, b), let second = exactDifference(c, d) else { return false }
         return first.0 == second.0 && first.1 == second.1
