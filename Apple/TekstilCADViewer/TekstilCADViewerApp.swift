@@ -135,6 +135,10 @@ private struct ContentView: View {
                 if project.formatVersion == 7 {
                     Text("Sürüm 7: Yalnız görünür konturlar ve işaretler önizlenir. Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz; masaüstünde kontrol edin. Özgün dosya baytları korunur.")
                         .font(.caption).foregroundStyle(.secondary)
+                    if project.historyPieceIDsDiffer {
+                        Text("Pastal geçmişindeki parça kimlikleri görünür parçalarla eşleşmiyor; geçmiş güncel yerleşimi temsil etmiyor. Masaüstünde yeniden kontrol edin.")
+                            .font(.caption).foregroundStyle(.orange)
+                    }
                 }
                 Button("Açık modeli dışa aktar…") {
                     guard let data = sourceData else { return }
@@ -1645,6 +1649,7 @@ struct Drawing {
     let pieceRenameIdentitiesValid: Bool
     let formatVersion: Int
     let hasNonUTF8BOM: Bool
+    let historyPieceIDsDiffer: Bool
     let insufficientContourCount: Int
     let collapsedContourCount: Int
 
@@ -2017,8 +2022,21 @@ struct Drawing {
         }
         if cancelled() { throw CancellationError() }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
+        var historyPieceIDsDiffer = false
+        if formatVersion == 7, let snapshot = object["NestingSnapshot"] as? [String: Any],
+           let placements = snapshot["Placements"] as? [[String: Any]] {
+            var placedIDs = Set<UUID>()
+            for placement in placements {
+                if cancelled() { throw CancellationError() }
+                guard let text = placement["PlacedPieceId"] as? String, let id = UUID(uuidString: text) else {
+                    throw ViewerError.message("Pastal eşleme kimliği geçersiz.")
+                }
+                placedIDs.insert(id)
+            }
+            historyPieceIDsDiffer = placements.count != pieces.count || placedIDs.count != placements.count || placedIDs != pieceIDs
+        }
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
-                       formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data),
+                       formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data), historyPieceIDsDiffer: historyPieceIDsDiffer,
                        insufficientContourCount: pieces.filter { !$0.hasMinimumContourPoints }.count,
                        collapsedContourCount: pieces.filter { $0.isCollapsed }.count)
     }

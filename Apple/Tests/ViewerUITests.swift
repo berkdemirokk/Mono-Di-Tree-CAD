@@ -179,6 +179,17 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.alerts["Ham kopyayı kurtar?"].waitForExistence(timeout: 5))
     }
 
+    func testStaleDesktopV7WarnsWhenVisiblePieceIDsDiffer() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: url).base64EncodedString()
+        app.launch()
+        let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Pastal geçmişindeki parça kimlikleri görünür parçalarla eşleşmiyor")).firstMatch
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz")).firstMatch.exists)
+    }
+
     func testDesktopVersionSevenShowsUnverifiedTraceWarning() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
         let data = try Data(contentsOf: url)

@@ -34,6 +34,8 @@ Köşe işareti seçicisinde ilk 500 eşleşme listelenir; sonraki işaretler da
 
 Sürüm 7 döndürmeli pastal dosyalarında görünür konturlar ve işaretler önizlenebilir. Döndürme izi, geçmiş-kopya eşleşmeleri ve üretim uygunluğu telefonda doğrulanmaz; kaynak dosya baytları kaydetme ve dışa aktarmada korunur. Dosya veya doğrulama için dönüştürülen metin 8 MB'ı aşarsa önizleme yapılmaz; seçilen en fazla 64 MB dosyanın ham kurtarma kopyası saklanabilir. Sürüm 7'de proje adı, parça adı ve nokta düzenleme desteklenmez. Masaüstünde üretilmiş sentetik fixture eklenmiştir; Apple derlemesi, cihaz davranışı ve gerçek fabrika verileri henüz doğrulanmamıştır.
 
+Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa telefon ayrıca uyarır. Kimliklerin eşleşmesi, geometrinin değişmediğini veya geçmişin doğruluğunu kanıtlamaz.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

@@ -7,6 +7,7 @@ final class ModelLoadStateTests: XCTestCase {
         let data = try Data(contentsOf: url), before = data
         let drawing = try Drawing.load(data)
         XCTAssertEqual(drawing.formatVersion, 7)
+        XCTAssertTrue(drawing.historyPieceIDsDiffer)
         XCTAssertEqual(drawing.pieces.count, 3)
         XCTAssertNil(drawing.pieces[0].grain); XCTAssertNil(drawing.pieces[0].material)
         XCTAssertEqual(drawing.pieces[2].name, "Yeni parça")
@@ -51,9 +52,17 @@ final class ModelLoadStateTests: XCTestCase {
         let before = data
         let drawing = try Drawing.load(data)
         XCTAssertEqual(drawing.formatVersion, 7)
+        XCTAssertFalse(drawing.historyPieceIDsDiffer)
         XCTAssertEqual(drawing.pieces.count, 2)
         XCTAssertTrue(drawing.pieces.allSatisfy { !$0.notches.isEmpty && $0.grain != nil })
         XCTAssertEqual(data, before)
+        let envelope = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [Any])
+        var body = try XCTUnwrap(envelope[1] as? [String: Any])
+        var changedPieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+        changedPieces[0]["Name"] = "Değiştirilmiş"
+        body["Pieces"] = changedPieces
+        XCTAssertFalse(try Drawing.load(JSONSerialization.data(withJSONObject: [7, body])).historyPieceIDsDiffer,
+                       "ID equality does not establish that history is current")
         let invalid = #"[7,{"Name":"Proje","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":9,"Position":{"X":0,"Y":0}}]}],"NestingSnapshot":{"RotationTrace":{}}}]"#
         XCTAssertThrowsError(try Drawing.load(Data(invalid.utf8)))
         XCTAssertTrue(LosslessProjectName.requiresVersionSixRawRecovery(Data(("[7," + String(repeating: " ", count: 8 * 1024 * 1024)).utf8), version: 7))
