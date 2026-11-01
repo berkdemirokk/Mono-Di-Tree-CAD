@@ -47,4 +47,19 @@ public sealed class SeamEdgeComparisonTests
         Assert.Throws<ArgumentOutOfRangeException>(() => ContourMeasurement.MeasurePath(new([], false, 0, 0)));
         Assert.Equal(0, ContourMeasurement.MeasurePath(new(new Point2[10_000], false, 0, 9_999)));
     }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void EaseVerdictUsesExactRepresentedValuesAtToleranceBoundary(bool negative)
+    {
+        double signed = negative ? -1 : 1;
+        double target = Math.ScaleB(negative ? 1 : -1, -54);
+        var comparison = new SeamEdgeComparison(0, 1, signed, 1);
+        var assessment = ContourMeasurement.AssessEase(comparison, target, 1);
+        // The displayed subtraction rounds to ±1, but the exact difference
+        // between the represented values is 1 + 2^-54, outside the tolerance.
+        Assert.Equal(signed, assessment.Deviation);
+        Assert.False(assessment.WithinTolerance);
+        Assert.True(ContourMeasurement.AssessEase(comparison, target, Math.BitIncrement(1)).WithinTolerance);
+        Assert.True(ContourMeasurement.AssessEase(comparison, 0, 1).WithinTolerance);
+    }
 }

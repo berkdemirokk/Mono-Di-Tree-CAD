@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace TekstilCAD.Core;
 
 /// <summary>Direction in stored vertex order for a closed contour.</summary>
@@ -70,7 +72,9 @@ public static class ContourMeasurement
         return new(a, b, difference, Math.Abs(difference));
     }
 
-    /// <summary>Compares a signed target difference with the measured difference and a nonnegative tolerance.</summary>
+    /// <summary>Compares the represented signed target and measured difference
+    /// against a nonnegative tolerance. Deviation is a rounded display value;
+    /// the tolerance decision uses the exact values of its binary64 inputs.</summary>
     public static SeamEaseAssessment AssessEase(SeamEdgeComparison comparison, double expectedDifference, double tolerance)
     {
         ArgumentNullException.ThrowIfNull(comparison);
@@ -79,7 +83,19 @@ public static class ContourMeasurement
         if (!double.IsFinite(tolerance) || tolerance < 0) throw new ArgumentOutOfRangeException(nameof(tolerance));
         var deviation = comparison.SignedDifference - expectedDifference;
         if (!double.IsFinite(deviation)) throw new ArgumentOutOfRangeException(nameof(expectedDifference));
-        return new(expectedDifference, tolerance, deviation, Math.Abs(deviation) <= tolerance);
+        static BigInteger Units(double value)
+        {
+            long bits = BitConverter.DoubleToInt64Bits(value);
+            int exponent = (int)((bits >> 52) & 0x7ff);
+            long fraction = bits & 0x000f_ffff_ffff_ffffL;
+            var mantissa = new BigInteger(exponent == 0 ? fraction : fraction | (1L << 52));
+            var result = mantissa << (exponent == 0 ? 0 : exponent - 1);
+            return bits < 0 ? -result : result;
+        }
+        // Compare the represented values before the subtraction rounds to a
+        // double; e.g. 1 - (-2^-54) rounds to 1 but is strictly greater than 1.
+        bool within = BigInteger.Abs(Units(comparison.SignedDifference) - Units(expectedDifference)) <= Units(tolerance);
+        return new(expectedDifference, tolerance, deviation, within);
     }
 
     /// <summary>
