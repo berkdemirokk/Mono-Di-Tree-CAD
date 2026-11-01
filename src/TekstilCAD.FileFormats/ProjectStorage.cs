@@ -350,7 +350,7 @@ public static class ProjectStorage
         Validate(project,cancellationToken);
         var text = SerializeProject(project,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        using var lease = AcquireWriteLease(full);
+        using var lease = AcquireWriteLease(full,cancellationToken);
         EnsureWritableDestination(full);
         var current = CaptureVersion(full,cancellationToken);
         if (!string.Equals(current.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
@@ -605,7 +605,7 @@ public static class ProjectStorage
         cancellationToken.ThrowIfCancellationRequested();
         EnsureWritableDestination(path);
         var target = Path.GetFullPath(path);
-        using var lease = AcquireWriteLease(target);
+        using var lease = AcquireWriteLease(target,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         AtomicWriteCore(target, text, cancellationToken, beforeCommitForVerification);
     }
@@ -660,7 +660,7 @@ public static class ProjectStorage
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (!string.Equals(target, expectedVersion.FullPath, comparison))
             throw new ArgumentException("Kayıt sürümü farklı bir dosyaya ait.", nameof(expectedVersion));
-        using var lease = AcquireWriteLease(target);
+        using var lease = AcquireWriteLease(target,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         EnsureWritableDestination(target);
         var current = CaptureVersion(target,cancellationToken);
@@ -742,17 +742,32 @@ public static class ProjectStorage
             }
         }
     }
-    private static IDisposable AcquireWriteLease(string fullPath)
+    internal static IDisposable AcquireWriteLease(string fullPath, CancellationToken cancellationToken = default, Action? beforeWaitForVerification = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = OperatingSystem.IsWindows() ? fullPath.ToUpperInvariant() : fullPath;
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(key)));
         var mutex = new Mutex(false, (OperatingSystem.IsWindows() ? @"Global\" : "") + "TekstilCAD.ProjectWrite." + hash);
         try
         {
-            bool acquired;
-            try { acquired = mutex.WaitOne(TimeSpan.FromSeconds(10)); }
-            catch (AbandonedMutexException) { acquired = true; }
-            if (!acquired) throw new IOException("Dosya başka bir oturumda kaydediliyor. Lütfen kısa süre sonra yeniden deneyin.");
+            beforeWaitForVerification?.Invoke();
+            int signaled;
+            try
+            {
+                signaled = cancellationToken.CanBeCanceled
+                    ? WaitHandle.WaitAny([mutex, cancellationToken.WaitHandle], TimeSpan.FromSeconds(10))
+                    : mutex.WaitOne(TimeSpan.FromSeconds(10)) ? 0 : WaitHandle.WaitTimeout;
+            }
+            catch (AbandonedMutexException) { signaled = 0; }
+            if (signaled == 1) cancellationToken.ThrowIfCancellationRequested();
+            if (signaled == WaitHandle.WaitTimeout)
+                throw new IOException("Dosya başka bir oturumda kaydediliyor. Lütfen kısa süre sonra yeniden deneyin.");
+            // A cancellation can race acquisition; release on this same thread.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                mutex.ReleaseMutex();
+                cancellationToken.ThrowIfCancellationRequested();
+            }
             return new WriteLease(mutex);
         }
         catch { mutex.Dispose(); throw; }
