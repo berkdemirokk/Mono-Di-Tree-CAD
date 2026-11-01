@@ -8323,7 +8323,7 @@ internal static class DesktopVerification
             root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
             var guidance=Descendants<TextBlock>(root).Single(t=>t.Text.StartsWith("İşaret yalnız seçili köşeyi",StringComparison.Ordinal)).Text;
             Check(guidance.Contains("işaretsiz köşeler taşınabilir veya silinebilir") && guidance.Contains("işaretler korunur") &&
-                guidance.Contains("İşaretli köşeyi taşımak veya silmek") && guidance.Contains("henüz desteklenmez") &&
+                guidance.Contains("İşaretli köşeyi taşımak veya silmek") && guidance.Contains("V çentik eklenebilir") &&
                 !guidance.Contains("İşaretli parçayı düzenlemeden önce işaretlerini kaldırın"),
                 "Vertex guidance distinguishes mark-preserving edits from protected marked vertices and unsupported operations",checks);
             var before=studio.Document.Clone();var count=session.UndoCount;
@@ -8405,6 +8405,23 @@ internal static class DesktopVerification
                 Check(session.Undo() && DocumentSession.ContentEquals(splitBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(splitAfter,studio.Document),
                     $"Marked {mode} split supports undo and redo",checks);
             }
+            tools.Close();
+            var cutSource=new PatternPiece { Points=[new(0,0),new(20,0),new(20,20),new(0,20),new(0,0)],
+                Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) },new NotchMark { VertexIndex=3,Position=new(0,20) }],
+                Grainline=new Grainline { Start=new(10,5),End=new(10,15) } };
+            var cutRule=new GradingRuleSet { SourcePieceId=cutSource.Id,SourceClosed=true,SourcePoints=[..cutSource.Points],
+                Deltas=Enumerable.Repeat(new Point2(0,0),cutSource.Points.Count).ToList() };
+            studio.LoadDocument(new ProjectDocument { Pieces=[cutSource],GradingRules=[cutRule] });studio.Select(cutSource.Id);
+            var cutBefore=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            var cutTask=tools.InsertNotchAsync("0","0.5","4","2");PumpUntil(()=>cutTask.IsCompleted);cutTask.GetAwaiter().GetResult();
+            var cutAfter=studio.Document.Clone();var cutResult=cutAfter.Pieces.Single();
+            var cutMessage=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            Check(cutResult.Points.Count==8 && cutResult.Notches!.Select(m=>m.VertexIndex).SequenceEqual(new[] { 0,6 }) &&
+                cutResult.Notches.All(m=>cutResult.Points[m.VertexIndex]==m.Position) && cutResult.Grainline is { NeedsReview:true } &&
+                cutAfter.GradingRules.Single().SourcePoints.SequenceEqual(cutBefore.GradingRules.Single().SourcePoints) && cutMessage.Text.Contains("serileme kuralı"),
+                "Physical notch preserves and remaps markers while retaining and flagging the old grading rule",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(cutBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(cutAfter,studio.Document),
+                "Physical notch on a marked contour supports undo and redo",checks);
         }
         finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }

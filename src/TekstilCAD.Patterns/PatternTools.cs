@@ -263,6 +263,26 @@ public static class PatternTools
 
     public static PatternPiece InsertNotch(PatternPiece piece, int afterIndex, double fraction, double width, double depth, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            if(afterIndex<0 || afterIndex>=piece.Points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
+            var normalized=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && afterIndex==piece.Points.Count-1 ? 0 : afterIndex;
+            var source=piece.Clone();source.Notches=null;
+            var result=InsertNotch(source,afterIndex,fraction,width,depth,cancellationToken);
+            if(result.Points.Count!=piece.Points.Count+3)throw new ArgumentException("Çentik nokta eşlemesi geçersiz; işlem uygulanmadı.");
+            static bool SameBits(Point2 a,Point2 b) => BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+            for(var i=0;i<piece.Points.Count;i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if(!SameBits(piece.Points[i],result.Points[i>normalized ? i+3 : i]))
+                    throw new ArgumentException("Kaynak köşeler tam korunamadı; çentik uygulanmadı.");
+            }
+            result.Notches=piece.Notches.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex>normalized ? mark.VertexIndex+3 : mark.VertexIndex,Position=mark.Position }).ToList();
+            if(result.Notches.Any(mark=>result.Points[mark.VertexIndex]!=mark.Position))throw new ArgumentException("Köşe işareti korunamadı; çentik uygulanmadı.");
+            cancellationToken.ThrowIfCancellationRequested();return result;
+        }
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (!piece.Closed) throw new ArgumentException("Çentik için kapalı kontur gereklidir.");
         if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
