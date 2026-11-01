@@ -47,6 +47,10 @@ private struct ContentView: View {
     private enum OpenedModel { case preview(Drawing, Data); case raw(Data, RawImportReason) }
     @State private var rawImport: RawImport?
     @State private var showingRawImport = false
+    @State private var rawSaveNeedsRetry = false
+    #if DEBUG && targetEnvironment(simulator)
+    @State private var didSimulateRawSaveFailure = false
+    #endif
     @State private var showingNameEditor = false
     @State private var editedName = ""
     @State private var showingPieceNameEditor = false
@@ -92,6 +96,14 @@ private struct ContentView: View {
                 .font(.caption).foregroundStyle(.secondary)
             if modelLoad.isLoading { ProgressView("Proje açılıyor…") }
             if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
+            if rawSaveNeedsRetry, let rawImport {
+                Text("Kaydedilemeyen ham kopya: \(rawImport.name)")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                Text("Kopya geçici olarak bellekte tutuluyor; başka dosya seçerseniz veya uygulama kapanırsa yeniden seçmeniz gerekir.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
+                    .disabled(isSaving || modelLoad.isLoading)
+            }
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
                     .disabled(isSaving || modelLoad.isLoading)
@@ -448,7 +460,7 @@ private struct ContentView: View {
             Text("Bu ad Modellerim listesinde görünür; dosyanın içindeki proje adı değişmez. En fazla 1024 UTF-16 birimi kullanın.")
         }
         .alert("Dosya önizlenemedi", isPresented: $showingRawImport) {
-            Button("Vazgeç", role: .cancel) { rawImport = nil }
+            Button("Vazgeç", role: .cancel) { rawImport = nil; rawSaveNeedsRetry = false }
             Button("Ham kopyayı telefona kaydet") { saveRawImport() }
         } message: {
             if case .sizeLimit? = rawImport?.reason {
@@ -571,6 +583,7 @@ private struct ContentView: View {
     private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
         saveNotice = nil
         rawImport = nil
+        rawSaveNeedsRetry = false
         let request = modelLoad.begin()
         // Acquire the picker grant while still handling its result. Keep it
         // alive until the background coordinated read has finished.
@@ -619,21 +632,32 @@ private struct ContentView: View {
     }
 
     private func saveRawImport() {
-        guard let candidate = rawImport, candidate.request == modelLoad.request, !modelLoad.isLoading else {
-            rawImport = nil
-            error = "Seçim değişti; dosyayı yeniden seçin."
+        guard let candidate = rawImport, !modelLoad.isLoading else {
+            error = "Önce dosya yüklemesinin tamamlanmasını bekleyin."
             return
         }
-        rawImport = nil
         saveNotice = nil
         isSaving = true
+        #if DEBUG && targetEnvironment(simulator)
+        let simulateFailure = ProcessInfo.processInfo.arguments.contains("--ui-test-raw-save-fail-once") && !didSimulateRawSaveFailure
+        if simulateFailure { didSimulateRawSaveFailure = true }
+        #endif
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = Result { try ModelStore.saveRaw(candidate.data, name: candidate.name) }
+            let result = Result {
+                #if DEBUG && targetEnvironment(simulator)
+                if simulateFailure { throw ViewerError.message("Test: ham kopya kaydedilemedi.") }
+                #endif
+                try ModelStore.saveRaw(candidate.data, name: candidate.name)
+            }
             DispatchQueue.main.async {
                 isSaving = false
                 switch result {
-                case .success: saveNotice = "Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."
-                case .failure(let failure): error = failure.localizedDescription
+                case .success:
+                    if rawImport?.request == candidate.request { rawImport = nil; rawSaveNeedsRetry = false }
+                    saveNotice = "Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."
+                case .failure(let failure):
+                    if rawImport?.request == candidate.request { rawSaveNeedsRetry = true }
+                    error = failure.localizedDescription
                 }
             }
         }

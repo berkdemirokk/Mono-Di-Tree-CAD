@@ -1,6 +1,29 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testFailedRawSaveCanBeRetriedWithoutSelectingSourceAgain() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(#"{"Name":"Önceki","Pieces":[]}"#.utf8).base64EncodedString()
+        app.launch()
+        let warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        let failure = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 15)); failure.buttons["Tamam"].tap()
+        let retry = app.buttons["Ham kopyayı yeniden kaydet…"]
+        XCTAssertTrue(retry.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        retry.tap()
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."].waitForExistence(timeout: 15))
+        XCTAssertFalse(retry.exists)
+        app.buttons["Modellerim"].tap()
+        let raw = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ham kayıt:")).firstMatch
+        XCTAssertTrue(raw.waitForExistence(timeout: 10))
+    }
+
     func testUnderflowingVersionSixNotchCoordinatesAreNotPreviewed() {
         let app = XCUIApplication()
         app.launchArguments.append("--ui-test-fixture")
