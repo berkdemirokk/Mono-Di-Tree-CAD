@@ -30,6 +30,15 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue((app.descendants(matching: .any)["Ölçüm önizlemesi"].value as? String ?? "").contains("yüzde 100"))
         app.buttons["Geri"].tap()
         XCTAssertTrue((app.descendants(matching: .any)["Ölçüm önizlemesi"].value as? String ?? "").contains("kontur yolu: geri"))
+        let firstIndex = app.textFields["İlk nokta indeksi"]
+        firstIndex.tap()
+        firstIndex.typeText(XCUIKeyboardKey.delete.rawValue + "9999")
+        XCTAssertTrue(app.staticTexts["Geçerli iki nokta indeksi girin."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Yaklaşık doğrusal mesafe: 200 mm"].exists)
+        XCTAssertTrue((app.descendants(matching: .any)["Ölçüm önizlemesi"].value as? String ?? "").contains("İlk nokta seçilmedi"))
+        app.buttons["İlk noktayı listeden seç"].tap()
+        app.buttons["Nokta 0"].tap()
+        XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "en fazla 6 anlamlı basamağa yuvarlanır")).firstMatch.exists)
         app.buttons["Kapat"].tap()
     }

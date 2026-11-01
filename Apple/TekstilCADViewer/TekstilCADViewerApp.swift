@@ -2673,6 +2673,10 @@ private struct PointDistanceView: View {
     @State private var pathForward = true
     @State private var selectingFirst = true
 
+    private func validIndex(_ text: String) -> Int? {
+        guard let value = Int(text), piece.points.indices.contains(value) else { return nil }
+        return value
+    }
     private var indices: (Int, Int)? {
         guard let a = Int(first), let b = Int(second),
               piece.points.indices.contains(a), piece.points.indices.contains(b) else { return nil }
@@ -2689,24 +2693,24 @@ private struct PointDistanceView: View {
                     NavigationLink("İlk noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $first) }
                     TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
                     NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $second) }
-                    if let (a, b) = indices {
-                        if piece.closed {
-                            Picker("Çizimde gösterilen kontur yolu", selection: $pathForward) {
-                                Text("İleri").tag(true)
-                                Text("Geri").tag(false)
-                            }.pickerStyle(.segmented)
-                        }
-                        Picker("Dokunarak seçilecek nokta", selection: $selectingFirst) {
-                            Text("İlk nokta A").tag(true)
-                            Text("İkinci nokta B").tag(false)
+                    if piece.closed {
+                        Picker("Çizimde gösterilen kontur yolu", selection: $pathForward) {
+                            Text("İleri").tag(true)
+                            Text("Geri").tag(false)
                         }.pickerStyle(.segmented)
-                        if piece.hasMinimumContourPoints, piece.contourBounds != nil {
-                            PointDistancePreview(piece: piece, first: a, second: b, pathForward: pathForward) { index in
-                                if selectingFirst { first = String(index) } else { second = String(index) }
-                            }
-                            Text("Çizimde bir köşeye dokunarak seçin. A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
-                                .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Picker("Dokunarak seçilecek nokta", selection: $selectingFirst) {
+                        Text("İlk nokta A").tag(true)
+                        Text("İkinci nokta B").tag(false)
+                    }.pickerStyle(.segmented)
+                    if piece.hasMinimumContourPoints, piece.contourBounds != nil {
+                        PointDistancePreview(piece: piece, first: validIndex(first), second: validIndex(second), pathForward: pathForward) { index in
+                            if selectingFirst { first = String(index) } else { second = String(index) }
                         }
+                        Text("Çizimde bir köşeye dokunarak seçin. A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if let (a, b) = indices {
                         let firstPoint = piece.points[a], secondPoint = piece.points[b]
                         if let ax = MeasurementDisplay.format(firstPoint.x), let ay = MeasurementDisplay.format(firstPoint.y),
                            let bx = MeasurementDisplay.format(secondPoint.x), let by = MeasurementDisplay.format(secondPoint.y) {
@@ -2743,8 +2747,8 @@ private struct PointDistanceView: View {
 // changes their coordinates or the source document.
 private struct PointDistancePreview: View {
     let piece: Drawing.Piece
-    let first: Int
-    let second: Int
+    let first: Int?
+    let second: Int?
     let pathForward: Bool
     let onSelect: (Int) -> Void
 
@@ -2786,7 +2790,7 @@ private struct PointDistancePreview: View {
                         if case .vertex(let index) = hit { onSelect(index) }
                     })
                     .accessibilityLabel("Ölçüm önizlemesi")
-                    .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol"). Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
+                    .accessibilityValue("İlk nokta \(first.map { String($0) } ?? "seçilmedi"), ikinci nokta \(second.map { String($0) } ?? "seçilmedi"). Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol"). Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
                     .onAppear { canvasSize = geometry.size }
                     .onChange(of: geometry.size) { canvasSize = $0 }
             }.frame(height: 180)
@@ -2800,8 +2804,8 @@ private struct PointDistancePreview: View {
                 Button("Ölçüm çizimini sıfırla") { zoom = 1; offset = .zero }
             }.font(.caption)
             HStack {
-                Button("İlk noktayı görünür yap") { reveal(first) }
-                Button("İkinci noktayı görünür yap") { reveal(second) }
+                Button("İlk noktayı görünür yap") { if let first { reveal(first) } }.disabled(first == nil)
+                Button("İkinci noktayı görünür yap") { if let second { reveal(second) } }.disabled(second == nil)
             }.font(.caption)
             if panEnabled {
                 HStack {
@@ -2831,14 +2835,14 @@ private struct PointDistancePreview: View {
         Canvas { context, size in
             guard let bounds = piece.contourBounds,
                   let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)),
-                  piece.points.indices.contains(first), piece.points.indices.contains(second),
                   let beginning = piece.points.first else { return }
             var contour = Path()
             contour.move(to: viewport.position(beginning))
             for point in piece.points.dropFirst() { contour.addLine(to: viewport.position(point)) }
             if piece.closed { contour.closeSubpath() }
             context.stroke(contour, with: .color(.accentColor), lineWidth: 1.5)
-            if ContourMeasure.pathLength(piece.points, from: first, to: second, closed: piece.closed, forward: pathForward) != nil,
+            if let first, let second,
+               ContourMeasure.pathLength(piece.points, from: first, to: second, closed: piece.closed, forward: pathForward) != nil,
                let indices = ContourMeasure.pathIndices(piece.points, from: first, to: second, closed: piece.closed, forward: pathForward),
                let firstIndex = indices.first {
                 var selectedPath = Path()
@@ -2846,15 +2850,20 @@ private struct PointDistancePreview: View {
                 for index in indices.dropFirst() { selectedPath.addLine(to: viewport.position(piece.points[index])) }
                 context.stroke(selectedPath, with: .color(.green), lineWidth: 4)
             }
-            let a = viewport.position(piece.points[first]), b = viewport.position(piece.points[second])
-            var segment = Path()
-            segment.move(to: a); segment.addLine(to: b)
-            context.stroke(segment, with: .color(.orange), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
-            context.draw(Text("A").font(.caption.bold()).foregroundColor(.orange), at: CGPoint(x: a.x + 10, y: a.y - 10))
-            context.draw(Text("B").font(.caption.bold()).foregroundColor(.purple), at: CGPoint(x: b.x + 10, y: b.y + 10))
-            for (position, color, radius) in [(a, Color.orange, CGFloat(7)), (b, Color.purple, CGFloat(4))] {
-                let circle = Path(ellipseIn: CGRect(x: position.x - radius, y: position.y - radius, width: radius * 2, height: radius * 2))
-                context.stroke(circle, with: .color(color), lineWidth: 3)
+            let a = first.map { viewport.position(piece.points[$0]) }
+            let b = second.map { viewport.position(piece.points[$0]) }
+            if let a, let b {
+                var segment = Path()
+                segment.move(to: a); segment.addLine(to: b)
+                context.stroke(segment, with: .color(.orange), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            }
+            if let a {
+                context.draw(Text("A").font(.caption.bold()).foregroundColor(.orange), at: CGPoint(x: a.x + 10, y: a.y - 10))
+                context.stroke(Path(ellipseIn: CGRect(x: a.x - 7, y: a.y - 7, width: 14, height: 14)), with: .color(.orange), lineWidth: 3)
+            }
+            if let b {
+                context.draw(Text("B").font(.caption.bold()).foregroundColor(.purple), at: CGPoint(x: b.x + 10, y: b.y + 10))
+                context.stroke(Path(ellipseIn: CGRect(x: b.x - 4, y: b.y - 4, width: 8, height: 8)), with: .color(.purple), lineWidth: 3)
             }
         }
         .background(Color.secondary.opacity(0.08))
