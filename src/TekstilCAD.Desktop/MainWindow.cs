@@ -1447,9 +1447,13 @@ public class MainWindow : Window
         { SetStatus("Dönüşüm uygulanmadı · Önce çizimi tamamlayın veya Esc ile iptal edin.");return; }
         var center=Geometry.Bounds(piece.Points).Center;
         var result=transform(piece.Points,center);
+        var gradingNeedsReview=!result.SequenceEqual(piece.Points) && Document.GradingRules.Any(r=>r.SourcePieceId==piece.Id);
         var transformedGrain=GrainlineTransform.Transform(piece.Grainline,piece.Points[0],result[0],points=>transform(points,center));
         var committed=false;
-        try { CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain; },()=>committed=true); }
+        try {
+            CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain; },()=>committed=true);
+            if(gradingNeedsReview)ShowCanvasError("Dönüşüm uygulandı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
+        }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             mainMutationReviewRequired=true;

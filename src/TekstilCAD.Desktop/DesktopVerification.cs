@@ -1216,6 +1216,13 @@ internal static class DesktopVerification
         Check(DocumentSession.ContentEquals(beforeStaleMove,studio.Document),"Undo restores coordinate move with stale rule",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Stale grading test restores the matching rule",checks);
+        Func<IReadOnlyList<Point2>,Point2,List<Point2>> rotate=(points,center)=>TekstilCAD.Core.Geometry.Rotate(points,90,center);
+        typeof(MainWindow).GetMethod("Transform",PrivateInstance)!.Invoke(studio,[rotate]);
+        var rotationWarning=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+        Check(rotationWarning.Text.Contains("serileme kuralı") && studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).SourcePoints),
+            "Rotation warns when grading remains attached to the previous contour",checks);
+        Invoke(studio,"Undo");studio.ClearCanvasError();
+        Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Undo restores contour and grading after rotation warning",checks);
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeRule,studio.Document),"Keyboard grading verification removes its test rule",checks);
         Invoke(studio,"Undo");
