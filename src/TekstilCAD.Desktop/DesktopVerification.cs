@@ -3392,7 +3392,6 @@ internal static class DesktopVerification
     private static void VerifyNestingAndGrading(MainWindow studio,List<string> checks)
     {
         var first=new PatternPiece { Name="Ön",Points=[new(300,400),new(400,400),new(400,500),new(300,500)] };
-        first.Notches=[new NotchMark { VertexIndex=1,Position=first.Points[1] }];
         var second=new PatternPiece { Name="Arka",Points=[new(600,400),new(700,400),new(700,500),new(600,500)] };
         var rule=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=true,SourcePoints=[..first.Points],Deltas=Enumerable.Repeat(new Point2(1,2),4).ToList() };
         studio.LoadDocument(new ProjectDocument { Name="Pastal sınaması",Pieces=[first,second],GradingRules=[rule] });
@@ -3460,6 +3459,7 @@ internal static class DesktopVerification
     private static void VerifyBasicNestingGradingRules(MainWindow studio,List<string> checks)
     {
         var first=new PatternPiece { Name="Ön",Points=[new(300,400),new(400,400),new(400,500),new(300,500)] };
+        first.Notches=[new NotchMark { VertexIndex=1,Position=first.Points[1] }];
         var second=new PatternPiece { Name="Arka",Points=[new(600,400),new(700,400),new(700,500),new(600,500)] };
         var firstRule=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=true,SourcePoints=[..first.Points],Deltas=Enumerable.Repeat(new Point2(1,2),4).ToList() };
         var staleRule=new GradingRuleSet { SourcePieceId=second.Id,SourceClosed=true,SourcePoints=[new(599,400),..second.Points.Skip(1)],Deltas=Enumerable.Repeat(new Point2(2,1),4).ToList() };
