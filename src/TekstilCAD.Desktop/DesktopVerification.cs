@@ -9916,7 +9916,7 @@ internal static class DesktopVerification
             tools.Close();
             var deletionPiece=new PatternPiece { Points=[new(0,0),new(20,0),new(20,20),new(0,20)],
                 Grainline=new Grainline { Start=new(3,3),End=new(3,10) },Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
-            var deletionRule=new GradingRuleSet { SourcePieceId=deletionPiece.Id,SourceClosed=true,SourcePoints=[..deletionPiece.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+            var deletionRule=new GradingRuleSet { SourcePieceId=deletionPiece.Id,SourceClosed=true,SourcePoints=[..deletionPiece.Points],Deltas=[new(1,0),new(2,0),new(3,0),new(4,0)] };
             studio.LoadDocument(new ProjectDocument { Pieces=[deletionPiece],GradingRules=[deletionRule] });studio.Select(deletionPiece.Id);tools=new TextileToolsWindow(studio);
             var deletionBefore=studio.Document.Clone();
             var rejected=tools.DeleteVertexAsync("1");PumpUntil(()=>rejected.IsCompleted);rejected.GetAwaiter().GetResult();
@@ -9924,8 +9924,9 @@ internal static class DesktopVerification
             var deletion=tools.DeleteVertexAsync("0");PumpUntil(()=>deletion.IsCompleted);deletion.GetAwaiter().GetResult();
             var deletionAfter=studio.Document.Clone();var deletionMark=deletionAfter.Pieces[0].Notches!.Single();
             Check(deletionMark.VertexIndex==0 && deletionMark.Position==deletionAfter.Pieces[0].Points[0] && deletionAfter.Pieces[0].Grainline!.NeedsReview &&
-                deletionAfter.GradingRules.Single().SourcePoints.SequenceEqual(deletionBefore.GradingRules.Single().SourcePoints),
-                "Unmarked vertex deletion retains markers and keeps the old grading rule for review",checks);
+                deletionAfter.GradingRules.Single().SourcePoints.SequenceEqual(deletionAfter.Pieces[0].Points) &&
+                deletionAfter.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(2,0),new Point2(3,0),new Point2(4,0) }),
+                "Unmarked vertex deletion retains markers and remaps the grading increments",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(deletionBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(deletionAfter,studio.Document),
                 "Unmarked vertex deletion supports undo and redo",checks);
             foreach(var mode in new[] { "midpoint","distance","percentage" })

@@ -211,6 +211,35 @@ public sealed class GradingRuleSet
         return result;
     }
 
+    /// <summary>Remove one vertex and its increment only when the source and result match bit for bit.</summary>
+    public GradingRuleSet? WithVertexDeletionFor(PatternPiece source,PatternPiece edited,int index)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(edited);
+        if(source.Id!=SourcePieceId || edited.Id!=source.Id || source.Closed!=SourceClosed || edited.Closed!=SourceClosed ||
+           SourcePoints is null || Deltas is null || source.Points is null || edited.Points is null ||
+           index<0 || index>=source.Points.Count || SourcePoints.Count!=source.Points.Count ||
+           Deltas.Count!=source.Points.Count || edited.Points.Count!=source.Points.Count-1)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        for(var i=0;i<source.Points.Count;i++)
+            if(!source.Points[i].IsFinite || !Deltas[i].IsFinite || !Bits(SourcePoints[i],source.Points[i]))return null;
+        var repeated=source.Closed && source.Points.Count>1 && source.Points[0]==source.Points[^1];
+        if(repeated && (!Bits(source.Points[0],source.Points[^1]) || !Bits(Deltas[0],Deltas[^1])))return null;
+        if(repeated && index==source.Points.Count-1)index=0;
+        var points=source.Points.ToList();var deltas=Deltas.ToList();
+        if(repeated && index==0)
+        {
+            points.RemoveAt(points.Count-1);deltas.RemoveAt(deltas.Count-1);
+            points.RemoveAt(0);deltas.RemoveAt(0);
+            if(points.Count==0)return null;
+            points.Add(points[0]);deltas.Add(deltas[0]);
+        }
+        else { points.RemoveAt(index);deltas.RemoveAt(index); }
+        if(points.Count!=edited.Points.Count || points.Count-(repeated ? 1 : 0)<(SourceClosed ? 3 : 2))return null;
+        for(var i=0;i<points.Count;i++)if(!Bits(points[i],edited.Points[i]))return null;
+        return new GradingRuleSet { SourcePieceId=SourcePieceId,SourceClosed=SourceClosed,SourcePoints=points,Deltas=deltas };
+    }
+
     /// <summary>Remap a rule only when removed consecutive copies carry bit-identical increments.</summary>
     public GradingRuleSet? WithDuplicateRemovalFor(PatternPiece source,PatternPiece edited,CancellationToken token=default)
     {
