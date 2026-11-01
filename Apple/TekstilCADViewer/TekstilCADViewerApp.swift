@@ -1088,6 +1088,36 @@ enum ModelStore {
                             changedSeconds: Int64(info.st_ctimespec.tv_sec), changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
     }
 
+    // Detect common concurrent in-place changes while reading an imported file.
+    // Metadata checks are not an atomic snapshot against uncoordinated writers.
+    static func readFileSnapshot(_ url: URL, afterFirstChunk: (() throws -> Void)? = nil) throws -> Data {
+        let limit = 64 * 1024 * 1024
+        let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NONBLOCK) }
+        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        var initial = stat()
+        guard fstat(descriptor, &initial) == 0, (initial.st_mode & S_IFMT) == S_IFREG else {
+            close(descriptor)
+            throw ViewerError.message("Yalnızca normal proje dosyaları açılabilir.")
+        }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? file.close() }
+        var data = Data(), didRead = false
+        while true {
+            let remaining = limit + 1 - data.count
+            let chunk = try file.read(upToCount: min(64 * 1024, remaining)) ?? Data()
+            if chunk.isEmpty { break }
+            data.append(chunk)
+            guard data.count <= limit else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+            if !didRead { didRead = true; try afterFirstChunk?() }
+        }
+        var final = stat()
+        guard fstat(descriptor, &final) == 0, fileIdentity(initial) == fileIdentity(final),
+              Int64(data.count) == Int64(final.st_size) else {
+            throw ViewerError.message("Dosya okunurken değişti; yeniden seçin.")
+        }
+        return data
+    }
+
     private static func identity(_ url: URL) -> EntryIdentity? {
         guard let entry = fileIdentity(url) else { return nil }
         let isCopy = url.pathExtension.lowercased() == copyExtension
@@ -1567,27 +1597,7 @@ private struct Drawing {
     }
 
     private static func readCoordinatedData(_ url: URL) throws -> Data {
-        let limit = 64 * 1024 * 1024
-        // A FIFO named .tcad can block indefinitely when opened normally.
-        // Open without waiting and validate the opened object before reading.
-        let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NONBLOCK) }
-        guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-        var info = stat()
-        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
-            close(descriptor)
-            throw ViewerError.message("Yalnızca normal proje dosyaları açılabilir.")
-        }
-        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
-        defer { try? file.close() }
-        var data = Data()
-        while true {
-            let remaining = limit + 1 - data.count
-            let chunk = try file.read(upToCount: min(64 * 1024, remaining)) ?? Data()
-            if chunk.isEmpty { break }
-            data.append(chunk)
-            guard data.count <= limit else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
-        }
-        return data
+        try ModelStore.readFileSnapshot(url)
     }
 
     static func load(_ data: Data) throws -> Drawing {
