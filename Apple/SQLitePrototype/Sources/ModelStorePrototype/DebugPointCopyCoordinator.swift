@@ -27,6 +27,19 @@ public final class DebugPointCopyCoordinator {
         return self.revision
     }
 
+    /// Installs a completed edit only if its source is still current. The caller
+    /// must create `source` before dispatching work; no document is changed on failure.
+    @discardableResult
+    public func applyEdit(source: DebugPointCopyStore.Snapshot, data: Data) throws -> UUID {
+        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
+        lock.lock(); defer { lock.unlock() }
+        guard source.documentID == documentID, source.revision == revision, source.data == self.data else {
+            throw DebugPointCopyStore.Error.staleSnapshot
+        }
+        self.data = data
+        revision = UUID()
+        return revision
+    }
     /// Returns the bytes and revision owned by this coordinator under one lock.
     public func snapshot(name: String) -> DebugPointCopyStore.Snapshot {
         lock.lock(); defer { lock.unlock() }

@@ -58,6 +58,37 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         XCTAssertEqual(after.revision, before.revision)
         XCTAssertEqual(after.data, original)
     }
+    func testLateEditCannotReplaceNewDocumentAndCanSaveTheNewState() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = root.appendingPathComponent("copy.sqlite"), oldID = UUID(), newID = UUID()
+        let coordinator = try DebugPointCopyCoordinator(documentID: oldID, data: Data([1]))
+        let editSource = coordinator.snapshot(name: "old")
+        try coordinator.replaceDocument(documentID: newID, data: Data([2]))
+        let newSource = coordinator.snapshot(name: "new")
+        XCTAssertThrowsError(try coordinator.applyEdit(source: editSource, data: Data([3])))
+        let after = coordinator.snapshot(name: "new")
+        XCTAssertEqual(after.documentID, newID)
+        XCTAssertEqual(after.revision, newSource.revision)
+        XCTAssertEqual(after.data, Data([2]))
+        try coordinator.applyEdit(source: newSource, data: Data([4]))
+        let edited = coordinator.snapshot(name: "edited"), savedID = UUID()
+        XCTAssertNotEqual(edited.revision, newSource.revision)
+        try coordinator.save(at: db, id: savedID, snapshot: edited)
+        XCTAssertEqual(try ModelStorePrototype.read(at: db, id: savedID.uuidString)?.data, Data([4]))
+        XCTAssertThrowsError(try coordinator.applyEdit(source: newSource, data: Data([5])))
+    }
+
+    func testOversizedEditLeavesStateUnchanged() throws {
+        let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1]))
+        let source = coordinator.snapshot(name: "point")
+        XCTAssertThrowsError(try coordinator.applyEdit(source: source, data: Data(count: DebugPointCopyStore.maximumBytes + 1)))
+        let after = coordinator.snapshot(name: "point")
+        XCTAssertEqual(after.documentID, source.documentID)
+        XCTAssertEqual(after.revision, source.revision)
+        XCTAssertEqual(after.data, source.data)
+    }
     func testConcurrentSaveAndChangeLeaveOldSnapshotStale() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
