@@ -1241,6 +1241,11 @@ private struct ModelLibrary: View {
             let current = filterResult?.key == filterKey ? filterResult : nil
             let matchingModels = current?.entries ?? []
             List {
+                if !isLoading && !isRecovering && !loadFailed && !models.isEmpty, let current {
+                    Text("\(current.entries.count) / \(models.count) kayıt gösteriliyor")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .accessibilityLabel("\(models.count) kayıttan \(current.entries.count) tanesi gösteriliyor")
+                }
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
                 } else if isRecovering {

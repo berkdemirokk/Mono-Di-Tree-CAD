@@ -1419,8 +1419,10 @@ final class ViewerUITests: XCTestCase {
         search.typeText("Deneme")
         let savedModel = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
         XCTAssertTrue(savedModel.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["1 kayıttan 1 tanesi gösteriliyor"].waitForExistence(timeout: 5))
         search.typeText("-no-match")
         XCTAssertTrue(app.staticTexts["Eşleşen model bulunamadı."].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["1 kayıttan 0 tanesi gösteriliyor"].exists)
         app.buttons["Aramayı temizle"].tap()
         XCTAssertTrue(savedModel.waitForExistence(timeout: 5))
         savedModel.tap()
