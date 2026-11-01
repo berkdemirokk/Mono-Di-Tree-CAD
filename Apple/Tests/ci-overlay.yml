@@ -24,6 +24,7 @@
       - path: Tests/NotchSearchTests.swift
       - path: Tests/ExperimentalJSONStreamTests.swift
       - path: Tests/ExperimentalV7PieceReaderTests.swift
+      - path: Tests/ExperimentalV7FingerprintTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:

@@ -50,6 +50,8 @@ Deneysel yerleşim ayrıca parça çevre kutularının kumaş sınırında ve is
 
 Deneysel tarihsel konturlar için ayrıca sınırlı ve ihtiyatlı basit kontur taraması vardır; çakışan, tekrarlı veya sayısal olarak belirsiz kenarlar reddedilir. Bu tarama geçerli bazı konturları da reddedebilir ve masaüstü geometrisiyle tam eşdeğerlik veya üretim güvenliği kanıtı değildir. Toplam tarama bütçesi 50 milyon nokta-kare işlemidir.
 
+`ExperimentalV7Fingerprint`, masaüstünün tarihsel parça özeti kodlaması için bağımsız bir denemedir. Nokta ve işaret koordinatlarını açık IEEE-754 bitleri olarak ister; JSON'dan bu bitleri çıkarmaz ve akış okuyucusuna bağlı değildir. Masaüstü fixture özeti ve signed-zero farkı için testler tanımlıdır; Apple'da henüz çalıştırılmamıştır.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
