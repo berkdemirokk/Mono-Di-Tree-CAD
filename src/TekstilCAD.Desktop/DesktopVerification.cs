@@ -9117,10 +9117,16 @@ internal static class DesktopVerification
         var groups=Descendants<Expander>(root).Where(e=>AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
         Check(groups.Length==2 && groups.All(e=>!e.IsExpanded && e.Focusable && !string.IsNullOrWhiteSpace(AutomationProperties.GetHelpText(e))),"Secondary command groups start collapsed and expose keyboard and automation information",checks);
         var primary=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kalıp isteği hazırla…"));
-        Check(primary.IsVisible && primary.IsEnabled,"Design request remains visible as the primary action",checks);
+        // The verification window is deliberately never shown: IsVisible includes the hidden
+        // Window ancestor. Measure the rendered control and its clips instead.
+        foreach(var (width,height,suffix) in new[] { (1024,640,".main-commands-narrow.png"),(1440,900,".main-commands-wide.png") })
+        {
+            Render(studio,Path.ChangeExtension(reportPath,suffix),width,height);
+            Check(primary.IsEnabled && FullyVisible(primary,root),
+                $"Design request is fully visible as the primary action at {width}x{height}",checks);
+        }
         foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
-        Render(studio,Path.ChangeExtension(reportPath,".main-commands-narrow.png"),1024,640);
-        Render(studio,Path.ChangeExtension(reportPath,".main-commands-wide.png"),1440,900);
+
     }
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
