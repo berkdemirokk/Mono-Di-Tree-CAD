@@ -236,9 +236,15 @@ public static class PatternTools
         List<Point2> result = [center - unit * (width / 2), center + new Point2(-unit.Y, unit.X) * depth, center + unit * (width / 2)];
         foreach (var point in result) Geometry.Validate(point);
         var apexVector = result[1] - center;
+        var firstMouth = result[0] - center; var secondMouth = result[2] - center;
+        var halfWidth = width / 2;
         if (result[0] == center || result[2] == center || result[1] == center ||
             Math.Abs(Geometry.Distance(result[0], result[2]) - width) > width * 1e-9 ||
             Math.Abs(Geometry.Distance(center, result[1]) - depth) > depth * 1e-9 ||
+            Math.Abs(Cross(unit, firstMouth)) > halfWidth * 1e-9 ||
+            Math.Abs(Cross(unit, secondMouth)) > halfWidth * 1e-9 ||
+            Math.Abs(unit.X * firstMouth.X + unit.Y * firstMouth.Y + halfWidth) > halfWidth * 1e-9 ||
+            Math.Abs(unit.X * secondMouth.X + unit.Y * secondMouth.Y - halfWidth) > halfWidth * 1e-9 ||
             Math.Abs(unit.X * apexVector.X + unit.Y * apexVector.Y) > depth * 1e-9 ||
             Cross(unit, apexVector) <= 0)
             throw new ArgumentException("Çentik ölçüleri sayısal hassasiyetle temsil edilemiyor.");

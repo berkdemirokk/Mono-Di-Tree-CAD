@@ -58,4 +58,19 @@ public class IndependentNotchWidthTests
         Assert.Throws<ArgumentException>(() => PatternTools.InsertNotch(source, edge, .5, 4, 1));
         Assert.Equal(before, source.Points);
     }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void MouthEndpointsMustRemainOnSelectedEdgeEvenWhenWidthSurvives(bool reverse)
+    {
+        const double origin = 90_000_000;
+        var rise = Math.Sqrt(9900);
+        var a = new Point2(origin, 0); var b = new Point2(origin + 10, rise);
+        if (reverse) (a,b) = (b,a);
+        // The 4 mm mouth still measures within the existing relative width
+        // tolerance, but each endpoint drifts about 2.97e-9 mm off the edge.
+        var error = Assert.Throws<ArgumentException>(() => PatternTools.NotchPoints(a,b,.5,4,100/rise));
+        Assert.Contains("hassasiyet",error.Message);
+        var localA = new Point2(a.X - origin, a.Y); var localB = new Point2(b.X - origin, b.Y);
+        Assert.Equal(3, PatternTools.NotchPoints(localA,localB,.5,4,100/rise).Count);
+    }
 }
