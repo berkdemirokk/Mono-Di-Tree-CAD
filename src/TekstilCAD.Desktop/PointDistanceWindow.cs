@@ -32,6 +32,8 @@ internal sealed class PointDistanceWindow : Window
     internal PointDistanceWindow(MainWindow workspace, Window owner, PatternPiece source, Func<Guid?> selectedSource)
     {
         this.workspace=workspace; this.selectedSource=selectedSource;
+        if(workspace.HasPendingCanvasOrPropertyWork)
+            throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
         originalDocument=workspace.Document; originalSelection=workspace.SelectedId; sourceId=source.Id;
         if (!ReferenceEquals(originalDocument.Pieces.FirstOrDefault(p=>p.Id==source.Id),source) || selectedSource()!=source.Id)
             throw new InvalidOperationException("Kaynak parça değişti; güncel parçayı seçip yeniden deneyin.");
@@ -105,11 +107,11 @@ internal sealed class PointDistanceWindow : Window
     internal void CheckCurrent()
     {
         if(IsStale)return;
-        if(!ReferenceEquals(workspace.Document,originalDocument) || workspace.SelectedId!=originalSelection || selectedSource()!=sourceId || !DocumentSession.ContentEquals(snapshot,workspace.Document))
+        if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,originalDocument) || workspace.SelectedId!=originalSelection || selectedSource()!=sourceId || !DocumentSession.ContentEquals(snapshot,workspace.Document))
         {
             IsStale=true; monitor.Stop(); StartSelector.IsEnabled=false; EndSelector.IsEnabled=false; PickStart.IsEnabled=false; PickEnd.IsEnabled=false; PickStatus.Text="";
             Result.Foreground=StudioTheme.Warning;
-            SetResult("Proje veya seçim değişti; mesafe sonucu geçersiz. Pencereyi kapatıp güncel kaynakla yeniden açın."); SetContourResult(""); Preview.Visibility=Visibility.Collapsed;
+            SetResult("Proje, seçim veya bekleyen çalışma değişti; mesafe sonucu geçersiz. Pencereyi kapatıp güncel kaynakla yeniden açın."); SetContourResult(""); Preview.Visibility=Visibility.Collapsed;
         }
     }
 

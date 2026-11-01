@@ -9095,6 +9095,20 @@ internal static class DesktopVerification
         Check(window.IsStale && !window.StartSelector.IsEnabled && !window.PickStart.IsEnabled && !window.PickEnd.IsEnabled && window.PickStatus.Text=="" && window.ContourResult.Text=="" && window.Preview.Visibility==Visibility.Collapsed && window.Result.Text.Contains("geçersiz"),"Point measurement invalidates stale source selection",checks);
         window.Close();
         chosen=source.Id;
+        var propertyX=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+        propertyX.Text="20";
+        var draftBefore=studio.Document.Clone();var blocked=false;
+        try { _=new PointDistanceWindow(studio,studio,source,()=>chosen); }
+        catch(InvalidOperationException ex) { blocked=ex.Message.Contains("taslak"); }
+        Check(blocked && studio.HasPendingCanvasOrPropertyWork && propertyX.Text=="20" && DocumentSession.ContentEquals(draftBefore,studio.Document),
+            "Point measurement refuses an unapplied position draft and preserves it",checks);
+        propertyX.Text="0";
+        var pendingWindow=new PointDistanceWindow(studio,studio,source,()=>chosen);
+        propertyX.Text="20";pendingWindow.CheckCurrent();
+        Check(pendingWindow.IsStale && !pendingWindow.StartSelector.IsEnabled && pendingWindow.Preview.Visibility==Visibility.Collapsed &&
+            pendingWindow.Result.Text.Contains("bekleyen çalışma") && propertyX.Text=="20" && DocumentSession.ContentEquals(draftBefore,studio.Document),
+            "Point measurement invalidates its result if a position draft appears while open",checks);
+        pendingWindow.Close();propertyX.Text="0";
         var changedWindow=new PointDistanceWindow(studio,studio,source,()=>chosen);
         source.Points[1]=new(6,8); changedWindow.CheckCurrent();
         Check(changedWindow.IsStale && !changedWindow.EndSelector.IsEnabled && changedWindow.Result.Text.Contains("geçersiz"),"Point measurement rejects geometry changed after opening",checks);

@@ -741,7 +741,11 @@ public sealed class TextileToolsWindow : Window
     {
         var panel=Panel();Heading(panel,"İki nokta arası mesafe");
         Note(panel,"Kaynak parçanın mevcut noktaları arasındaki düz geometrik mesafeyi gösterir.");
-        Button(panel,"İki nokta arasını ölç…",()=>new PointDistanceWindow(workspace,this,Piece(),()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
+        Button(panel,"İki nokta arasını ölç…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
+            new PointDistanceWindow(workspace,this,Piece(),()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
+        },()=>HasPiece());
         Button(panel,"İki dikiş kenarını karşılaştır…",()=>new SeamLengthComparisonWindow(workspace,this,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
         Button(panel,"Açık konturu kapat…",()=>
         {
