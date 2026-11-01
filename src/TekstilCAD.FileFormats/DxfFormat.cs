@@ -730,6 +730,8 @@ public static class DxfFormat
             annotationGroupCount+=item.Data.Count;annotationCharacters+=characters;
         }
         var annotations=new DxfAnnotationReport(annotationRecords.ToImmutable(),annotationTruncated);
+        if(annotationRecords.Count>0 || annotationTruncated)
+            warnings.Add("DXF metin ve öznitelik kayıtları otomatik parça adı, beden, malzeme veya çentik anlamına dönüştürülmez; kaynak metinleri ve katman anlamlarını ayrıca doğrulayın.");
         var metadataLoss=new DxfMetadataLossSummary(extendedDataGroups,applicationDataGroups,lineweightGroups,transparencyGroups);
         if (extendedDataGroups>0) warnings.Add("DXF genişletilmiş meta verileri aktarılmaz; çentik/beden/katman semantiğini doğrulayın.");
         if (lineweightGroups>0 || transparencyGroups>0) warnings.Add("DXF çizgi kalınlığı veya saydamlık meta verileri aktarılmaz; çizgilerin kaynak dosyadaki anlamını doğrulayın.");
@@ -819,12 +821,14 @@ public static class DxfFormat
         var doc = new ProjectDocument { Name = projectName };
         var strictImport = strict is not null;
         var acceptedPoints=0;
+        var repeatedClosingContours=0;
         var pieceSources=ImmutableArray.CreateBuilder<DxfPieceSource>();
         void AddPiece(string name, List<Point2> points, bool closed, string? sourceSection=null,
             string? sourceBlock=null, string? sourceLayer=null, string? sourceType=null, IEnumerable<int>? ordinals=null,
             IEnumerable<int>? childOrdinals=null,int? blockHeaderOrdinal=null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if(closed && points.Count>=3 && points[0]==points[^1] && points[0]==points[^2]) repeatedClosingContours++;
             if(points.Count>=2)
             {
                 if(doc.Pieces.Count>=ProjectStorage.MaximumPieces || points.Count>ProjectStorage.MaximumTotalPoints-acceptedPoints)
@@ -1327,6 +1331,8 @@ public static class DxfFormat
         }
         if (ambiguousLineGroups > 0)
             warnings.Add($"Belirsiz LINE bağlantıları: {ambiguousLineGroups} katman/blok grubundaki çizgiler yanlış birleştirmeyi önlemek için ayrı aktarıldı. Bağlantıları kontrol edin.");
+        if(repeatedClosingContours>0)
+            warnings.Add($"{repeatedClosingContours} kapalı konturda başlangıç noktası sonda birden fazla kez yineleniyor. Noktalar korundu; DXF dışa aktarmadan önce kapanışları kontrol edin ve fazla tekrarları giderin.");
         if(opaqueLinesSeparated)warnings.Add("Uygulama veya genişletilmiş verisi bulunan LINE kayıtları anlamları bilinmediği için ayrı aktarıldı; bağlantıları ve kaynak semantiğini kontrol edin.");
         // Keep safety-relevant reasons complete even when the general
         // unsupported-type summary is truncated or full of vendor types.
