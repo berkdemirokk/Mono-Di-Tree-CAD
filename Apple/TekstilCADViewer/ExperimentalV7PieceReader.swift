@@ -344,7 +344,7 @@ struct ExperimentalV7PieceReader {
                     topologyWork += Int64(item.points.count) * Int64(item.points.count)
                     guard topologyWork <= 50_000_000 else { throw Failure.limit }
                     try ExperimentalV7Topology.verify(item, cancelled: cancelled)
-                    let bitPiece = try ExperimentalV7BitPiece.parse(Data(token), cancelled: cancelled)
+                    let bitPiece = try ExperimentalV7BitPiece.parse(Data(token), requireHistoricalSchema: true, cancelled: cancelled)
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity

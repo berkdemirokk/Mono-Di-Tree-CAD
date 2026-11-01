@@ -5,7 +5,8 @@ import Foundation
 /// a pointer into the caller's data. It is not a project parser.
 enum ExperimentalV7BitPiece {
     enum Failure: Error { case invalid, limit, cancelled }
-    static func parse(_ data: Data, cancelled: @escaping () -> Bool = { false }) throws -> ExperimentalV7Fingerprint.Piece {
+    static func parse(_ data: Data, requireHistoricalSchema: Bool = false,
+                      cancelled: @escaping () -> Bool = { false }) throws -> ExperimentalV7Fingerprint.Piece {
         guard data.count <= 512 * 1024 else { throw Failure.limit }
         let pieces = try ExperimentalV7Contours.decode([data], cancelled: cancelled)
         guard let piece = pieces.first, let id = piece.id else { throw Failure.invalid }
@@ -32,6 +33,11 @@ enum ExperimentalV7BitPiece {
         }
         let metadata: ExperimentalV7Fingerprint.Metadata?
         let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        if requireHistoricalSchema {
+            guard let raw, let fields = raw["Metadata"] as? [String: Any],
+                  Set(fields.keys) == Set(["Role", "Size", "Material", "Quantity"]),
+                  raw["Grainline"] is [String: Any] else { throw Failure.invalid }
+        }
         if let value = raw?["Metadata"], !(value is NSNull) {
             metadata = .init(role: piece.role, size: piece.size, material: piece.material,
                              quantity: piece.quantity.flatMap { Int32(exactly: $0) })

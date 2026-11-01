@@ -14,7 +14,7 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
             return try! ExperimentalV7Fingerprint.hash([value])
         }
         let sourceHash = fingerprint(source), hash = fingerprint(placed)
-        func piece(_ id: String) -> String { "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":0},{\"X\":0,\"Y\":1}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":{\"X\":0,\"Y\":0},\"End\":{\"X\":0,\"Y\":1},\"NeedsReview\":false}}" }
+        func piece(_ id: String) -> String { "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":0},{\"X\":0,\"Y\":1}],\"Metadata\":{\"Role\":\"Kesim\",\"Size\":null,\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":{\"X\":0,\"Y\":0},\"End\":{\"X\":0,\"Y\":1},\"NeedsReview\":false}}" }
         return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\"}],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(sourceHash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[\(piece(source))],\"LayoutPieces\":[\(piece(placed))],\"Selections\":[\"\(source)\"],\"Copies\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\",\"Degrees\":0}],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
     }
     private func extract(_ data: Data, chunk: Int) throws -> [Data] {
@@ -298,6 +298,24 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         let oldX = try XCTUnwrap(points[1]["X"] as? NSNumber).doubleValue
         points[1]["X"] = oldX + 1; historic[0]["Points"] = points; trace["LayoutPieces"] = historic
         snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+    }
+    func testHistoricalMetadataCannotSynthesizeMissingNullableField() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let envelope = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [Any])
+        let original = try XCTUnwrap(envelope[1] as? [String: Any])
+        for key in ["SourcePieces", "LayoutPieces"] {
+            var body = original
+            var snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+            var trace = try XCTUnwrap(snapshot["RotationTrace"] as? [String: Any])
+            var pieces = try XCTUnwrap(trace[key] as? [[String: Any]])
+            var metadata = try XCTUnwrap(pieces[0]["Metadata"] as? [String: Any])
+            XCTAssertTrue(metadata["Size"] is NSNull)
+            metadata.removeValue(forKey: "Size")
+            pieces[0]["Metadata"] = metadata; trace[key] = pieces; snapshot["RotationTrace"] = trace; body["NestingSnapshot"] = snapshot
+            let modified = try JSONSerialization.data(withJSONObject: [7, body])
+            XCTAssertThrowsError(try extract(modified, chunk: 61), key)
+        }
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)
