@@ -2780,12 +2780,10 @@ private struct PointDistancePreview: View {
                     .simultaneousGesture(SpatialTapGesture().onEnded { value in
                         guard !panEnabled, let bounds = piece.contourBounds,
                               let viewport = ContourViewport(bounds: bounds, width: Double(geometry.size.width), height: Double(geometry.size.height)) else { return }
-                        switch viewport.vertexHit(points: piece.points, closed: piece.closed, tap: value.location,
-                                                  size: geometry.size, zoom: activeZoom, offset: activeOffset) {
-                        case .vertex(let index): hitMessage = nil; onSelect(index)
-                        case .ambiguous: hitMessage = "Birden fazla yakın nokta var; yakınlaştırın veya listeden seçin."
-                        case .none: hitMessage = "Nokta bulunamadı; bir köşeye dokunun veya listeden seçin."
-                        }
+                        let hit = viewport.vertexHit(points: piece.points, closed: piece.closed, tap: value.location,
+                                                     size: geometry.size, zoom: activeZoom, offset: activeOffset)
+                        hitMessage = hit.selectionNotice
+                        if case .vertex(let index) = hit { onSelect(index) }
                     })
                     .accessibilityLabel("Ölçüm önizlemesi")
                     .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol"). Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
@@ -2815,6 +2813,8 @@ private struct PointDistancePreview: View {
             }
         }
         .onChange(of: zoom) { offset = boundedOffset(offset, size: canvasSize, zoom: $0) }
+        .onChange(of: first) { _ in hitMessage = nil }
+        .onChange(of: second) { _ in hitMessage = nil }
     }
 
     private func reveal(_ index: Int) {

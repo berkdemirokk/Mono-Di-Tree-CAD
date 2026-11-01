@@ -75,7 +75,18 @@ struct ContourViewport {
                 y: offsetY + ((point.y * coordinateScale - minY) / extent) * fitted)
     }
 
-    enum VertexHit: Equatable { case none, ambiguous, vertex(Int) }
+    enum VertexHit: Equatable {
+        case none, ambiguous, vertex(Int)
+        var selectionNotice: String? {
+            switch self {
+            case .none:
+                return "Nokta seçilemedi. Aşağıdaki işaretler ve ölçüler önceki seçime aittir. Bir köşeye dokunun veya listeden seçin."
+            case .ambiguous:
+                return "Birden fazla yakın nokta var; yeni nokta seçilmedi. Aşağıdaki işaretler ve ölçüler önceki seçime aittir. Yakınlaştırın veya listeden seçin."
+            case .vertex: return nil
+            }
+        }
+    }
 
     // Screen-space hit test. Distinct nearby vertices must be selected from
     // the list instead of guessing; a repeated closure aliases vertex zero.

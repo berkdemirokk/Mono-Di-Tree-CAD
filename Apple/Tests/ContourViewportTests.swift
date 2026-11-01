@@ -104,6 +104,14 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertGreaterThan(viewport.position(points[2]).y, viewport.position(points[0]).y)
         XCTAssertLessThan(viewport.position(points[2]).x, viewport.position(points[1]).x)
     }
+    func testUnsuccessfulVertexHitExplainsThatOldMeasurementRemains() {
+        for hit in [ContourViewport.VertexHit.none, .ambiguous] {
+            let notice = hit.selectionNotice ?? ""
+            XCTAssertTrue(notice.contains("önceki seçime aittir"))
+            XCTAssertTrue(notice.contains("listeden seçin"))
+        }
+        XCTAssertNil(ContourViewport.VertexHit.vertex(1).selectionNotice)
+    }
     func testVertexTapRespectsZoomOffsetAndRejectsAmbiguity() throws {
         let points = [p(0, 0), p(100, 0), p(100, 100)]
         let size = CGSize(width: 232, height: 132)
