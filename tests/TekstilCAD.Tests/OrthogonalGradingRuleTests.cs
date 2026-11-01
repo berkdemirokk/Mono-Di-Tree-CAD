@@ -8,6 +8,7 @@ public class OrthogonalGradingRuleTests
     [Theory]
     [InlineData(OrthogonalGradingTransform.RotateLeft)]
     [InlineData(OrthogonalGradingTransform.RotateRight)]
+    [InlineData(OrthogonalGradingTransform.RotateHalf)]
     [InlineData(OrthogonalGradingTransform.MirrorVertical)]
     [InlineData(OrthogonalGradingTransform.MirrorHorizontal)]
     public void GradingThenTransformMatchesTransformThenGrading(OrthogonalGradingTransform operation)
@@ -18,6 +19,7 @@ public class OrthogonalGradingRuleTests
         List<Point2> Apply(IReadOnlyList<Point2> points)=>operation switch {
             OrthogonalGradingTransform.RotateLeft=>Geometry.Rotate(points,90,center),
             OrthogonalGradingTransform.RotateRight=>Geometry.Rotate(points,-90,center),
+            OrthogonalGradingTransform.RotateHalf=>Geometry.Rotate(points,180,center),
             OrthogonalGradingTransform.MirrorVertical=>Geometry.Mirror(points,true,center.X),
             _=>Geometry.Mirror(points,false,center.Y)
         };

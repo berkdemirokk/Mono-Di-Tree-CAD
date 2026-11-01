@@ -1868,7 +1868,7 @@ internal static class DesktopVerification
         try
         {
             name.Text="Korunan ad taslağı";var before=studio.Document.Clone();var undo=session.UndoCount;
-            foreach(var label in new[] { "90° sola","90° sağa","Aynala","Yatay aynala" })
+            foreach(var label in new[] { "90° sola","90° sağa","180° döndür","Aynala","Yatay aynala" })
             {
                 Descendants<Button>((DependencyObject)studio.Content).Single(button=>Equals(button.Content,label)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && name.Text=="Korunan ad taslağı" && status.Text.Contains("taslağını"),
@@ -8631,7 +8631,7 @@ internal static class DesktopVerification
         var source=new PatternPiece { Points=[new(0,0),new(20,0),new(0,10)] };
         var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,0),new(2,0),new(0,2)] };
         foreach(var (label,expected) in new[] {
-            ("90° sola",new Point2(0,-2)),("90° sağa",new Point2(0,2)),
+            ("90° sola",new Point2(0,-2)),("90° sağa",new Point2(0,2)),("180° döndür",new Point2(-2,0)),
             ("Aynala",new Point2(-2,0)),("Yatay aynala",new Point2(2,0)) })
         {
             studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
@@ -8644,7 +8644,7 @@ internal static class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
                 $"{label} grading and geometry undo and redo together",checks);
         }
-        foreach(var label in new[] { "90° sola","90° sağa","Aynala","Yatay aynala" })
+        foreach(var label in new[] { "90° sola","90° sağa","180° döndür","Aynala","Yatay aynala" })
         {
             var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
             var marked=new PatternPiece { Points=[new(negativeZero,negativeZero),new(20,negativeZero),new(20,10),new(0,10),new(negativeZero,negativeZero)],
@@ -8720,8 +8720,8 @@ internal static class DesktopVerification
         var piece=new PatternPiece { Name="Dönüşüm sınaması",Points=points };
         studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
         var root=(FrameworkElement)studio.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
-        var compactButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"90° sağa")||Equals(b.Content,"90° sola")||Equals(b.Content,"Yatay aynala")).ToArray();
-        Check(compactButtons.Length==3 && compactButtons.All(button=>
+        var compactButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"90° sağa")||Equals(b.Content,"90° sola")||Equals(b.Content,"Yatay aynala")||Equals(b.Content,"180° döndür")).ToArray();
+        Check(compactButtons.Length==4 && compactButtons.All(button=>
         {
             var text=new FormattedText((string)button.Content,System.Globalization.CultureInfo.CurrentUICulture,
                 button.FlowDirection,new Typeface(button.FontFamily,button.FontStyle,button.FontWeight,button.FontStretch),
@@ -8764,7 +8764,7 @@ internal static class DesktopVerification
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
-        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° sola")||Equals(b.Content,"90° sağa")||Equals(b.Content,"Yatay aynala")).ToArray();
+        var transformButtons=Descendants<Button>(root).Where(b=>Equals(b.Content,"Aynala")||Equals(b.Content,"90° sola")||Equals(b.Content,"90° sağa")||Equals(b.Content,"Yatay aynala")||Equals(b.Content,"180° döndür")).ToArray();
         studio.SetTool("Çizgi");canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
         foreach(var button in transformButtons)button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(canvas.HasPendingDrawing && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,

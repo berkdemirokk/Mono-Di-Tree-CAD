@@ -384,6 +384,8 @@ public class MainWindow : Window
         var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
         AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
         selectionCommands.Add(mirrorHorizontal);
+        var rotateHalf=AddButton(transforms,"180° döndür",()=>TransformWithGrading((points,center)=>Geometry.Rotate(points,180,center),OrthogonalGradingTransform.RotateHalf),"Parçayı merkezinden 180 derece tek işlemde döndür");
+        AutomationProperties.SetName(rotateHalf,"Parçayı merkezinden 180 derece döndür");selectionCommands.Add(rotateHalf);
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
         inspector.Children.Add(new Border { Background = StudioTheme.Raised, CornerRadius = new CornerRadius(5), Padding = new Thickness(12), Margin = new Thickness(3, 14, 3, 14), Child = metrics });
         snap.Margin = new Thickness(4, 4, 0, 14); inspector.Children.Add(snap);

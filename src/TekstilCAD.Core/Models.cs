@@ -69,7 +69,7 @@ public sealed class PatternPiece
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down
 // canvas RotateLeft appears clockwise; UI labels must use screen direction.
-public enum OrthogonalGradingTransform { RotateLeft, RotateRight, MirrorVertical, MirrorHorizontal }
+public enum OrthogonalGradingTransform { RotateLeft, RotateRight, MirrorVertical, MirrorHorizontal, RotateHalf }
 
 public sealed class GradingRuleSet
 {
@@ -87,6 +87,7 @@ public sealed class GradingRuleSet
         static Point2 Map(Point2 p,OrthogonalGradingTransform op)=>op switch {
             OrthogonalGradingTransform.RotateLeft=>new(-p.Y,p.X),
             OrthogonalGradingTransform.RotateRight=>new(p.Y,-p.X),
+            OrthogonalGradingTransform.RotateHalf=>new(-p.X,-p.Y),
             OrthogonalGradingTransform.MirrorVertical=>new(-p.X,p.Y),
             OrthogonalGradingTransform.MirrorHorizontal=>new(p.X,-p.Y),
             _=>throw new ArgumentOutOfRangeException(nameof(op))
