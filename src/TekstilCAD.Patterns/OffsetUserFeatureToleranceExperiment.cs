@@ -69,4 +69,3 @@ internal static class OffsetUserFeatureToleranceExperiment
         if(bits<0)m=-m;return m<<(e==0?0:e-1);
     }
 }
-

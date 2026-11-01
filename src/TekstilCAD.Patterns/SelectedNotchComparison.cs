@@ -51,4 +51,3 @@ public static class SelectedNotchComparison
         return new(ok,am.Width,bm.Width,am.Depth,bm.Depth);
     }
 }
-

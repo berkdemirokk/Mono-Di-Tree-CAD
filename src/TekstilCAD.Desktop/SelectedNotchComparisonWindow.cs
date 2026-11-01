@@ -109,7 +109,3 @@ internal sealed class SelectedNotchComparisonWindow : Window
     }
     private static string SafeName(string name)=>new(name.Take(80).Select(c=>char.IsControl(c)||char.GetUnicodeCategory(c)==UnicodeCategory.Format?'�':c).ToArray());
 }
-
-
-
-

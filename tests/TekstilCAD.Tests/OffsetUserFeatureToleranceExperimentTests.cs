@@ -56,4 +56,3 @@ public class OffsetUserFeatureToleranceExperimentTests
         Assert.True(Verify(source,candidate,0,1,out _));
     }
 }
-

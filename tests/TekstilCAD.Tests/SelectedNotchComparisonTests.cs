@@ -45,4 +45,3 @@ public class SelectedNotchComparisonTests
         var ex=Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(tiny,tiny,0,1,2,0,1,2,0,0));
         Assert.Contains("temsil",ex.Message);
     }}
-
