@@ -70,6 +70,19 @@ enum ContourOverlay {
         }
     }
 
+    // Exact anchor alignment only; restrict offsets to the same half-mm grid
+    // accepted by numeric entry. The full contour error budget is checked by
+    // the caller before applying the returned visual offset.
+    static func anchorOffset(first: ContourMeasure.Point, firstBounds: ContourBounds,
+                             second: ContourMeasure.Point, secondBounds: ContourBounds) -> (x: Double, y: Double)? {
+        var budget = ErrorBudget()
+        guard let ax = budget.add(first.x, -firstBounds.minX), let ay = budget.add(first.y, -firstBounds.minY),
+              let bx = budget.add(second.x, -secondBounds.minX), let by = budget.add(second.y, -secondBounds.minY),
+              let dx = budget.add(ax, -bx), let dy = budget.add(ay, -by), budget.total == 0,
+              abs(dx) <= 10_000, abs(dy) <= 10_000,
+              (dx * 2).rounded() == dx * 2, (dy * 2).rounded() == dy * 2 else { return nil }
+        return (dx, dy)
+    }
     // This assessment covers normalized bounding coordinates and every point,
     // both axes and both translation stages. It sums absolute residuals across
     // all operations (conservative, including duplicate boundary points).

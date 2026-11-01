@@ -4,6 +4,20 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testAnchorAlignmentRequiresExactBoundedHalfMillimeterOffset() throws {
+        let a = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(10, 10)]))
+        let b = try XCTUnwrap(ContourBounds(points: [p(-10, 0), p(0, 10)]))
+        let target = try XCTUnwrap(ContourOverlay.anchorOffset(first: p(5.5, 2), firstBounds: a,
+                                                               second: p(-9, 0), secondBounds: b))
+        XCTAssertEqual(target.x, 4.5); XCTAssertEqual(target.y, 2)
+        XCTAssertNil(ContourOverlay.anchorOffset(first: p(5.25, 2), firstBounds: a,
+                                                  second: p(-9, 0), secondBounds: b))
+        let decimals = try XCTUnwrap(ContourBounds(points: [p(-0.1, 0), p(0.3, 1)]))
+        XCTAssertNil(ContourOverlay.anchorOffset(first: p(0.3, 0), firstBounds: decimals,
+                                                  second: p(-10, 0), secondBounds: b))
+        XCTAssertNil(ContourOverlay.anchorOffset(first: p(.infinity, 0), firstBounds: a,
+                                                  second: p(-9, 0), secondBounds: b))
+    }
     func testNumericOverlayShiftAcceptsExactlyRepresentableHalfMillimeters() {
         XCTAssertEqual(ContourOverlay.halfMillimeterShift("  -10000  "), -10_000)
         XCTAssertEqual(ContourOverlay.halfMillimeterShift("+250"), 250)

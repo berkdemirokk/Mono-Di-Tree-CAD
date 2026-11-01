@@ -2856,6 +2856,9 @@ private struct PieceOverlayView: View {
     @State private var shiftStep = 1.0
     @State private var shiftError: String?
     @State private var showingNumericShift = false
+    @State private var showingAnchorSelection = false
+    @State private var firstAnchor = ""
+    @State private var secondAnchor = ""
     @State private var shiftXText = "0"
     @State private var shiftYText = "0"
 
@@ -2899,6 +2902,8 @@ private struct PieceOverlayView: View {
                     Button("İkinciyi yukarı") { shift(dx: 0, dy: -shiftStep) }
                     Button("İkinciyi aşağı") { shift(dx: 0, dy: shiftStep) }
                 }.font(.caption)
+                Button("Seçilen köşeleri hizala…") { shiftError = nil; showingAnchorSelection = true }
+                    .font(.caption)
                 Button("Kaydırmayı sayısal gir…") {
                     shiftXText = String(shiftX); shiftYText = String(shiftY)
                     shiftError = nil; showingNumericShift = true
@@ -2933,6 +2938,33 @@ private struct PieceOverlayView: View {
                 .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). İkinci parçanın görsel kaydırması X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") milimetredir.")
             }
             .padding()
+            .sheet(isPresented: $showingAnchorSelection) {
+                NavigationStack {
+                    Form {
+                        Text("İki parçadan birer köşe seçin. Yalnız görsel hizalama değişir; kaynak dosyalar ve karşılaştırma özeti değişmez. Bu işlem dikiş uyumunu doğrulamaz.")
+                        Text("Birinci parça: \(firstIndex + 1). \(first.displayName(index: firstIndex))")
+                        TextField("Birinci parça köşe indeksi", text: $firstAnchor).keyboardType(.numberPad)
+                        NavigationLink("Birinci köşeyi seç") { PointIndexPicker(points: first.points, selected: $firstAnchor) }
+                        Text("İkinci parça: \(secondIndex + 1). \(second.displayName(index: secondIndex))")
+                        TextField("İkinci parça köşe indeksi", text: $secondAnchor).keyboardType(.numberPad)
+                        NavigationLink("İkinci köşeyi seç") { PointIndexPicker(points: second.points, selected: $secondAnchor) }
+                        if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
+                        Button("Köşeleri görsel olarak hizala") {
+                            guard let a = Int(firstAnchor), let b = Int(secondAnchor),
+                                  first.points.indices.contains(a), second.points.indices.contains(b),
+                                  let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
+                                  let target = ContourOverlay.anchorOffset(first: first.points[a], firstBounds: firstBounds,
+                                                                          second: second.points[b], secondBounds: secondBounds) else {
+                                shiftError = "Geçerli köşeleri seçin. Tam ve yarım mm ile güvenli hizalanamayan değerler desteklenmez."
+                                return
+                            }
+                            if applyShift(x: target.x, y: target.y) { showingAnchorSelection = false }
+                        }
+                    }
+                    .navigationTitle("Köşeleri hizala")
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { showingAnchorSelection = false; shiftError = nil } } }
+                }
+            }
             .sheet(isPresented: $showingNumericShift) {
                 NavigationStack {
                     Form {

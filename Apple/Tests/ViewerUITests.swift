@@ -67,6 +67,12 @@ final class ViewerUITests: XCTestCase {
         y.tap(); y.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "-10.5")
         app.buttons["Görsel kaydırmayı uygula"].tap()
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "İkinci parçanın görsel kaydırması: X 25, Y -10")).firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Seçilen köşeleri hizala…"].tap()
+        let a = app.textFields["Birinci parça köşe indeksi"], b = app.textFields["İkinci parça köşe indeksi"]
+        XCTAssertTrue(a.waitForExistence(timeout: 5)); a.tap(); a.typeText("0")
+        b.tap(); b.typeText("1")
+        app.buttons["Köşeleri görsel olarak hizala"].tap()
+        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X -50, Y -100 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretime uygunluk doğrulaması değildir")).firstMatch.exists)
     }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {
