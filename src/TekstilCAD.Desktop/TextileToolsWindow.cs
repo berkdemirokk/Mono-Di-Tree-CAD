@@ -622,9 +622,15 @@ public sealed class TextileToolsWindow : Window
                 if(a==b) { value=a;return true; }
                 var t=(double)offset/count;value=a*(1-t)+b*t;
                 if(!double.IsFinite(value))return false;
-                // A rounded zero is safe only when the exact binary endpoints,
-                // weighted by the integer indices, really cancel to zero.
-                return value!=0 || (Units(a)*(count-offset)+Units(b)*offset).IsZero;
+                // Opposite signs can cancel exactly even when floating-point
+                // products leave a residual. A rounded zero also needs proof.
+                if(value==0 || (a<0 && b>0) || (a>0 && b<0))
+                {
+                    var exact=Units(a)*(count-offset)+Units(b)*offset;
+                    if(exact.IsZero) { value=0;return true; }
+                    if(value==0)return false;
+                }
+                return true;
             }
             var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
             for(var index=first.Index+1;index<last.Index;index++)

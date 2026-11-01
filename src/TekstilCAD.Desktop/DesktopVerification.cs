@@ -11575,6 +11575,19 @@ internal static class DesktopVerification
         Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1,-2),new Point2(3,1),new Point2(5,4) }) && session.UndoCount==1,
             "Interpolated draft is applied with the endpoints in one transaction",checks);
         Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores the project after applying interpolated grading",checks);
+        var four=new PatternPiece { Name="Tam sıfır",Closed=false,Points=[new(0,0),new(10,0),new(20,0),new(30,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[four] });studio.Select(four.Id);
+        var fourBefore=studio.Document.Clone();var fourTools=new TextileToolsWindow(studio);var fourRoot=(FrameworkElement)fourTools.Content;
+        Descendants<TabControl>(fourRoot).Single().SelectedIndex=0;fourRoot.Measure(new Size(1024,640));fourRoot.Arrange(new Rect(0,0,1024,640));fourRoot.UpdateLayout();
+        Descendants<Expander>(fourRoot).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar")).IsExpanded=true;fourRoot.UpdateLayout();
+        Descendants<Expander>(fourRoot).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz")).IsExpanded=true;fourRoot.UpdateLayout();
+        var fourTable=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(fourTools)!;
+        var fourRows=fourTable.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+        fourRows[0].Dx="-1";fourRows[3].Dx="2";fourTable.SelectedItems.Clear();fourTable.SelectedItems.Add(fourRows[0]);fourTable.SelectedItems.Add(fourRows[3]);
+        Descendants<Button>(fourRoot).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(MeasurementInput.TryParseMillimeters(fourRows[1].Dx,out var exactThird) && exactThird==0 &&
+              MeasurementInput.TryParseMillimeters(fourRows[2].Dx,out var nonzeroThird) && nonzeroThird>0 && DocumentSession.ContentEquals(fourBefore,studio.Document),
+              "Interpolation emits exact zero at index one for endpoints -1 and 2 across three steps",checks);
         var repeated=new PatternPiece { Name="Tekrarlı kapanış",Closed=true,Points=[new(0,0),new(10,0),new(0,10),new(0,0)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[repeated] });studio.Select(repeated.Id);
         var closedBefore=studio.Document.Clone();var closedTools=new TextileToolsWindow(studio);var closedRoot=(FrameworkElement)closedTools.Content;
