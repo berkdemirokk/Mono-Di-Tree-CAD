@@ -195,7 +195,9 @@ public static class GradingEngine
     private static double GradeCoordinate(double source, double increment, double steps, int index, string axis)
     {
         var displacement = increment * steps;
-        var result = source + displacement;
+        // Adding positive zero would rewrite a source -0 to +0 even though
+        // this axis did not move. Keep the original binary64 representation.
+        var result = displacement == 0 ? source : source + displacement;
         if (increment != 0 && steps != 0 && (displacement == 0 || result == source))
             throw new InvalidDataException($"Nokta {index}, {axis}: serileme artışı sayısal hassasiyet nedeniyle kayboluyor.");
         // Match the core translation guard's relative arithmetic tolerance.
