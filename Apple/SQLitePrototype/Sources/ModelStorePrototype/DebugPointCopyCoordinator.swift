@@ -55,10 +55,10 @@ public final class DebugPointCopyCoordinator {
     /// wins, a later cancel cannot undo the already installed result.
     @discardableResult
     public func applyEdit(_ request: EditRequest, data: Data) throws -> UUID {
-        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
         lock.lock(); defer { lock.unlock() }
         guard pendingEdit == request.id else { throw DebugPointCopyStore.Error.staleSnapshot }
         pendingEdit = nil
+        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
         let source = request.source
         guard source.documentID == documentID, source.revision == revision, source.data == self.data else {
             throw DebugPointCopyStore.Error.staleSnapshot

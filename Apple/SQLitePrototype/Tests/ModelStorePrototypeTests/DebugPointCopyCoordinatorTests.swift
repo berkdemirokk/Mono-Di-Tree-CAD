@@ -98,6 +98,8 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         let request = coordinator.beginEdit(name: "point")
         let source = request.source
         XCTAssertThrowsError(try coordinator.applyEdit(request, data: Data(count: DebugPointCopyStore.maximumBytes + 1)))
+        XCTAssertThrowsError(try coordinator.applyEdit(request, data: Data([2])))
+        XCTAssertFalse(coordinator.cancelEdit(request))
         let after = coordinator.snapshot(name: "point")
         XCTAssertEqual(after.documentID, source.documentID)
         XCTAssertEqual(after.revision, source.revision)

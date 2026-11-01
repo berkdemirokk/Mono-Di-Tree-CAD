@@ -21,3 +21,5 @@ The coordinator now owns the snapshot bytes and revision together under its lock
 The coordinator can conditionally install a completed edit against its captured source revision and bytes. This serializes prototype-owned state only; callers must independently validate edited bytes and route all real document changes through the coordinator before any app integration.
 
 A single pending edit request can be cancelled under the coordinator lock. Cancellation prevents application only if it acquires that lock first; after an application wins, cancellation cannot undo it. This does not interrupt computation or cancel a SQLite save, and has no effect on app state outside the prototype.
+
+An oversized result consumes its matching edit request before failing, so retry requires a new request. Cancellation/application tests exercise sequential orderings; they do not prove an actual concurrent race on Apple platforms. Ordering is inferred from the shared-lock implementation.
