@@ -15,9 +15,13 @@ public static partial class DressMeasurementParser
     private static readonly Regex SegmentSplit=new(@"[;\r\n]+|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!?]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // Invariant regex case folding does not match Turkish capital dotted İ. Keep
+    // this transformation length-preserving so match offsets still index the
+    // original text, which is retained as evidence.
+    private static string FoldCase(string text)=>text.Replace('İ','i').ToLowerInvariant();
     private static string Canonical(string label)
     {
-        label=Regex.Replace(label.ToLower(CultureInfo.GetCultureInfo("tr-TR")),@"\s+"," ");
+        label=Regex.Replace(FoldCase(label),@"\s+"," ");
         return label switch { "göğüs" or "göğüs çevresi"=>"göğüs çevresi", "bel" or "bel çevresi"=>"bel çevresi", "kalça" or "kalça çevresi"=>"kalça çevresi", "elbise boyu"=>"elbise boyu", "kol boyu"=>"kol boyu",_=>throw new InvalidOperationException() };
     }
     public static DressMeasurementReview Review(string description,string measurements)
@@ -27,10 +31,15 @@ public static partial class DressMeasurementParser
         var values=new Dictionary<string,List<(decimal Value,string Source)>>(StringComparer.Ordinal);
         var unclear=new HashSet<string>(StringComparer.Ordinal);var other=new List<string>();
         foreach(var text in new[] { description,measurements })
-        foreach(var raw in SegmentSplit.Split(text))
         {
-            var segment=raw.Trim();if(segment.Length==0)continue;
-            var labels=LabelPattern.Matches(segment);var match=Exact.Match(segment);
+        var folded=FoldCase(text);var start=0;
+        foreach(Match separator in SegmentSplit.Matches(folded).Cast<Match>().Append(Match.Empty))
+        {
+            var end=separator.Success ? separator.Index : text.Length;
+            var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
+            if(segment.Length==0)continue;
+            var search=FoldCase(segment);
+            var labels=LabelPattern.Matches(search);var match=Exact.Match(search);
             if(!match.Success)
             {
                 foreach(Match label in labels)unclear.Add(Canonical(label.Value));
@@ -43,6 +52,7 @@ public static partial class DressMeasurementParser
             if(value<=0 || value>10_000m) { unclear.Add(key);other.Add(segment);continue; }
             if(!values.TryGetValue(key,out var list))values[key]=list=[];
             list.Add((value,segment));
+        }
         }
         var output=new List<ExplicitDressMeasurement>();var questions=new List<string>();
         foreach(var key in Required.Append("kol boyu"))

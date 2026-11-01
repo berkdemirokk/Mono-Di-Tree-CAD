@@ -5,6 +5,23 @@ namespace TekstilCAD.Tests;
 public class DressMeasurementParserTests
 {
     [Fact]
+    public void TurkishUppercaseMeasurementsRetainOriginalEvidenceAndSplitAtCommas()
+    {
+        var result=DressMeasurementParser.Review("GÖĞÜS ÇEVRESİ 96 CM, BEL ÇEVRESİ 72 CM", "KALÇA ÇEVRESİ 100 CM; ELBİSE BOYU 110 CM");
+        Assert.Empty(result.Questions);
+        Assert.Equal(720m,result.Measurements.Single(x=>x.Label=="bel çevresi").Millimeters);
+        Assert.Equal("BEL ÇEVRESİ 72 CM",Assert.Single(result.Measurements.Single(x=>x.Label=="bel çevresi").SourceExpressions));
+        Assert.Equal(1100m,result.Measurements.Single(x=>x.Label=="elbise boyu").Millimeters);
+    }
+    [Fact]
+    public void UppercaseAmbiguityCannotHideAConflict()
+    {
+        var result=DressMeasurementParser.Review("bel çevresi 70 cm", "BEL ÇEVRESİ YAKLAŞIK 80 CM");
+        Assert.DoesNotContain(result.Measurements,x=>x.Label=="bel çevresi");
+        Assert.Contains(result.Questions,x=>x.StartsWith("bel çevresi"));
+        Assert.Contains("BEL ÇEVRESİ YAKLAŞIK 80 CM",result.Unrecognized);
+    }
+    [Fact]
     public void FindsExplicitTurkishLabelsUnitsAndOriginalEvidence()
     {
         var result=DressMeasurementParser.Review("Kadın elbise; göğüs çevresi 96,5 cm, bel çevresi 720 mm", "kalça çevresi 100 cm\nelbise boyu: 110 cm\nkol boyu = 62 cm");
