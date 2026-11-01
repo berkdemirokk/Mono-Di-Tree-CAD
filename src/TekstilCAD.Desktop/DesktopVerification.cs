@@ -261,6 +261,91 @@ internal static class DesktopVerification
         SynchronizationContext.SetSynchronizationContext(previous);
     }
 
+    private static void VerifyOpenPathClosureGrading(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        foreach(var mode in new[] { "matching","mismatch","dirty","dirtyAfter","stale" })
+        {
+            var piece=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)],
+                Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) }] };
+            var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=[new(1,2),new(3,4),new(5,6),new(1,2)] };
+            if(mode=="mismatch")rule.Deltas[^1]=new Point2(9,2);
+            if(mode=="stale")rule.SourcePoints[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);var tools=new TextileToolsWindow(studio);
+            var callback=(Func<PatternPiece,GradingRuleSet?,bool>)typeof(TextileToolsWindow).GetMethod("HasSnapshotGradeDraft",PrivateInstance)!.CreateDelegate(typeof(Func<PatternPiece,GradingRuleSet?,bool>),tools);
+            var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            var closure=new OpenPathClosureWindow(studio,studio,callback);
+            try
+            {
+                if(mode=="dirty")grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";
+                var before=studio.Document.Clone();closure.ToleranceForVerification.Text="10";closure.CopyRuleForVerification.IsChecked=true;
+                var task=closure.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                if(mode=="matching")
+                {
+                    Check(closure.ApplyButtonForVerification.IsEnabled && closure.MessageForVerification.Contains("artışlar sonuca aktarılacak"),"Closure grading preview explains copied increments",checks);
+                    closure.ApplyForVerification();var after=studio.Document.Clone();
+                    Check(after.Pieces.Count==2 && after.Pieces[1].Closed && after.Pieces[1].Notches!.Single().VertexIndex==1 && after.GradingRules.Count==2 &&
+                        after.GradingRules[1].SourceClosed && after.GradingRules[1].SourcePieceId==after.Pieces[1].Id && after.GradingRules[1].Deltas.SequenceEqual(rule.Deltas) && session.UndoCount==1,
+                        "Closure geometry, marker and matching grading commit together",checks);
+                    Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                        "Closure grading and geometry form one undoable edit",checks);
+                }
+                else if(mode=="dirtyAfter")
+                {
+                    Check(closure.ApplyButtonForVerification.IsEnabled,"Clean closure grading preview is ready",checks);
+                    grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";closure.ApplyForVerification();
+                    Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99" &&
+                        closure.MessageForVerification.Contains("taslağı değişti"),"Dirty draft after closure preview is retained and blocks rule transfer",checks);
+                }
+                else Check(!closure.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 &&
+                    (mode!="dirty" || grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99"),$"Closure rejects {mode} grading without changing source or draft",checks);
+            }
+            finally { closure.Close();tools.Close(); }
+        }
+        foreach(var mode in new[] { "cancel", "changed" })
+        {
+            var piece=new PatternPiece { Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
+            var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=Enumerable.Repeat(new Point2(0,0),4).ToList() };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+            var closure=new OpenPathClosureWindow(studio,studio,(_,_)=>false);var expected=studio.Document.Clone();
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;var wasClosed=false;
+            try
+            {
+                closure.ToleranceForVerification.Text="10";closure.CopyRuleForVerification.IsChecked=true;
+                closure.BeforeClosureForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                pending=closure.CalculateForVerification();PumpUntil(()=>reached.IsSet);
+                if(mode=="cancel") { closure.Close();wasClosed=true; }
+                else { studio.Commit("Kural değişti",()=>studio.Document.GradingRules[0].Deltas[1]=new Point2(3,4));expected=studio.Document.Clone(); }
+                release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(expected,studio.Document) && session.UndoCount==(mode=="changed" ? 1 : 0) &&
+                    (mode=="cancel" || !closure.ApplyButtonForVerification.IsEnabled),$"Closure grading {mode} preserves the current project",checks);
+            }
+            finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }if(!wasClosed)closure.Close(); }
+        }
+        {
+            var piece=new PatternPiece { Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
+            var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=Enumerable.Repeat(new Point2(0,0),4).ToList() };
+            var project=new ProjectDocument { Pieces=[piece],GradingRules=[rule] };
+            for(var i=0;i<20;i++)
+            {
+                var count=i==19 ? 9996 : 10000;var filler=new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] };project.Pieces.Add(filler);
+                project.GradingRules.Add(new GradingRuleSet { SourcePieceId=filler.Id,SourceClosed=false,
+                    SourcePoints=Enumerable.Repeat(new Point2(0,0),count).ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),count).ToList() });
+            }
+            studio.LoadDocument(project);studio.Select(piece.Id);var before=studio.Document.Clone();var closure=new OpenPathClosureWindow(studio,studio,(_,_)=>false);
+            try
+            {
+                closure.ToleranceForVerification.Text="10";closure.CopyRuleForVerification.IsChecked=true;
+                var task=closure.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(!closure.ApplyButtonForVerification.IsEnabled && closure.MessageForVerification.Contains("Serileme noktası sınırı") &&
+                    DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Closure grading preflight rejects total rule-point limit",checks);
+            }
+            finally { closure.Close(); }
+        }
+        SynchronizationContext.SetSynchronizationContext(previous);
+    }
+
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(4,10),new(4,8)] };
@@ -849,6 +934,7 @@ internal static class DesktopVerification
             VerifyOpenPathJoinExactEndpoints(studio,checks);
             VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);
+            VerifyOpenPathClosureGrading(studio,checks);
             VerifyOpenPathSplit(studio,checks);
             VerifyOpenPathProductionInformation(studio,checks);
             VerifyDuplicatePiece(studio,checks);

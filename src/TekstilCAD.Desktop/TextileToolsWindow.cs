@@ -890,8 +890,9 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"İki dikiş kenarını karşılaştır…",()=>new SeamLengthComparisonWindow(workspace,this,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog(),()=>HasPiece());
         Button(panel,"Açık konturu kapat…",()=>
         {
+            if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
-            new OpenPathClosureWindow(workspace,this).ShowDialog();
+            new OpenPathClosureWindow(workspace,this,HasSnapshotGradeDraft).ShowDialog();
             RefreshSources((source.SelectedItem as PatternPiece)?.Id);
         },()=>workspace.Document.Pieces.Any(p=>!p.Closed));
         Button(panel,"Açık konturu böl…",()=>

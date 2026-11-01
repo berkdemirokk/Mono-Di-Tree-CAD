@@ -35,4 +35,24 @@ public static class OpenPathClosure
         return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points],
             Notches=source.Notches?.Select(mark=>mark.Clone()).ToList() },source.Id,source.Name,length);
     }
+    /// <summary>Copies a matching open rule to the validated closure when endpoint increments agree exactly.</summary>
+    public static GradingRuleSet? CloseGrading(PatternPiece source,GradingRuleSet rule,OpenPathClosureResult closure,CancellationToken cancellationToken=default)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(rule);ArgumentNullException.ThrowIfNull(closure);cancellationToken.ThrowIfCancellationRequested();
+        var result=closure.Piece;
+        if(source.Points is null || result is null || result.Points is null || rule.SourcePoints is null || rule.Deltas is null ||
+           source.Id==Guid.Empty || result.Id==Guid.Empty || result.Id==source.Id || closure.SourceId!=source.Id || rule.SourcePieceId!=source.Id ||
+           source.Closed || rule.SourceClosed || !result.Closed || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints ||
+           result.Points.Count!=source.Points.Count || rule.SourcePoints.Count!=source.Points.Count || rule.Deltas.Count!=source.Points.Count)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        if(!Bits(rule.Deltas[0],rule.Deltas[^1]))return null;
+        if(source.Points[0]==source.Points[^1] && !Bits(source.Points[0],source.Points[^1]))return null;
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!source.Points[i].IsFinite || !rule.Deltas[i].IsFinite || !Bits(source.Points[i],rule.SourcePoints[i]) || !Bits(source.Points[i],result.Points[i]))return null;
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new GradingRuleSet { SourcePieceId=result.Id,SourceClosed=true,SourcePoints=[..result.Points],Deltas=[..rule.Deltas] };
+    }
 }
