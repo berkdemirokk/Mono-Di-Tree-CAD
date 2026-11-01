@@ -2920,7 +2920,7 @@ public class MainWindow : Window
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dlg.ShowDialog(this)!=true)return;
         ExportDestination.ValidateExtension(dlg.FileName,dlg.FilterIndex);
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje dosya seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
@@ -2954,6 +2954,7 @@ public class MainWindow : Window
         ArgumentNullException.ThrowIfNull(confirm);
         if(format==3 && !confirm(HpglPreflightMessage)) { SetStatus("HPGL dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==4 && !confirm("PDF tek özel boyutlu sayfada inceleme içindir. Çok sayfalı yazdırma yoktur. Sayısal yuvarlama küçük kontur ayrıntılarını değiştirebilir. Yazıcı ve PDF uygulaması sayfayı ölçekleyebilir; fiziksel ölçüyü bağımsız kontrol edin. İplik yönü içeren parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
+        if(format==5 && !confirm("A4 PDF inceleme sayfalarını dikey yönde ve %100 / gerçek boyutta yazdırın; sayfaya sığdırma ve otomatik ölçeklemeyi kapatın. Her sayfadaki 50 mm kontrol çizgisini ölçün. Sayfaları ROW satırı ve COL sütununa göre soldan sağa, yukarıdan aşağıya; gri çerçeveleri kenar kenara getirerek birleştirin. Yazıcı kenarları kırpabilir; birleşimleri ve ölçüleri kontrol edin. Sayısal yuvarlama küçük ayrıntıları değiştirebilir; fiziksel baskı ve üretim uygunluğu doğrulanmadı. İplik yönlü parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("A4 PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         // Dialogs pump the dispatcher; a drawing, drag or property draft can
         // appear without changing the committed document snapshot.
         EnsurePropertyDraftsApplied();
@@ -3039,7 +3040,7 @@ public class MainWindow : Window
                 try { await Task.Run(()=>HpglFormat.WritePrepared(prepared,path,expected,token)); }
                 finally { if(!windowClosed)IsEnabled=previouslyEnabled; }
             }
-            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; } });
+            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; } });
             var stale=!DocumentSession.ContentEquals(snapshot,Document) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
             exportNotice.Text=stale?"Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı.":"Dosya dışa aktarıldı.";

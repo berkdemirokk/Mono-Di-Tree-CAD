@@ -13,6 +13,7 @@ public static class ExportDestination
             2 => ("SVG", new[] { ".svg" }),
             3 => ("HPGL", new[] { ".plt", ".hpgl" }),
             4 => ("PDF", new[] { ".pdf" }),
+            5 => ("A4 PDF", new[] { ".pdf" }),
             _ => throw new ArgumentOutOfRangeException(nameof(format), "Bilinmeyen dışa aktarım biçimi.")
         };
         var extension = Path.GetExtension(path);
