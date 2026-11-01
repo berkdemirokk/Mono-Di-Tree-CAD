@@ -594,6 +594,8 @@ public sealed class TextileToolsWindow : Window
             if(selected.Length!=2 || selected[1].Index-selected[0].Index<2 || selected.Any(row=>row.Index<0 || row.Index>=rows.Count || !ReferenceEquals(rows[row.Index],row)))
             { result.Text="Aralarında en az bir satır bulunan iki uç satır seçin; ara artışlar değiştirilmedi.";return; }
             var draft=activeDraft;var first=selected[0];var last=selected[1];
+            var firstIndex=first.Index;var lastIndex=last.Index;
+            var beforeRows=rows.Skip(firstIndex).Take(lastIndex-firstIndex+1).Select(row=>(Row:row,Dx:row.Dx,Dy:row.Dy)).ToArray();
             if(!IsNumber(first.Dx,out _) || !IsNumber(first.Dy,out _) || !IsNumber(last.Dx,out _) || !IsNumber(last.Dy,out _))
             { result.Text="İki uç satırın ΔX ve ΔY değerleri geçerli olmalı; ara doldurma uygulanmadı.";return; }
             if(!CommitGradeEdit()) { ShowGradeEditError();return; }
@@ -601,11 +603,14 @@ public sealed class TextileToolsWindow : Window
                !ReferenceEquals(current,piece) || !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
                activeSourceId!=piece.Id || draft.Closed!=piece.Closed || !draft.Points.SequenceEqual(piece.Points) ||
                grades.SelectedItems.Count!=2 || !grades.SelectedItems.Contains(first) || !grades.SelectedItems.Contains(last) ||
-               first.Index<0 || last.Index>=rows.Count || !ReferenceEquals(rows[first.Index],first) || !ReferenceEquals(rows[last.Index],last))
+               first.Index!=firstIndex || last.Index!=lastIndex || lastIndex>=rows.Count ||
+               beforeRows.Length!=lastIndex-firstIndex+1 || beforeRows.Where((entry,offset)=>!ReferenceEquals(rows[firstIndex+offset],entry.Row) || entry.Row.Dx!=entry.Dx || entry.Row.Dy!=entry.Dy).Any())
             { result.Text="Kaynak veya seçim değişti; ara artışlar değiştirilmedi. Açık hücre düzenlemesini kontrol edin.";return; }
             if(!IsNumber(first.Dx,out var x0) || !IsNumber(first.Dy,out var y0) || !IsNumber(last.Dx,out var x1) || !IsNumber(last.Dy,out var y1))
             { result.Text="İki uç satırın ΔX ve ΔY değerleri geçerli olmalı; ara artışlar değiştirilmedi.";return; }
-            var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
+            if(piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && firstIndex==0 && lastIndex==piece.Points.Count-1 &&
+               (BitConverter.DoubleToInt64Bits(x0)!=BitConverter.DoubleToInt64Bits(x1) || BitConverter.DoubleToInt64Bits(y0)!=BitConverter.DoubleToInt64Bits(y1)))
+            { result.Text="Tekrarlı kapanışın ilk ve son satır artışları farklı; ara doldurma uygulanmadı. Aynı köşenin iki artışını kontrol edin.";return; }            var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
             for(var index=first.Index+1;index<last.Index;index++)
             {
                 var t=(double)(index-first.Index)/span;

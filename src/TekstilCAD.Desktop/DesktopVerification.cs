@@ -11562,6 +11562,23 @@ internal static class DesktopVerification
         Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1,-2),new Point2(3,1),new Point2(5,4) }) && session.UndoCount==1,
             "Interpolated draft is applied with the endpoints in one transaction",checks);
         Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores the project after applying interpolated grading",checks);
+        var repeated=new PatternPiece { Name="Tekrarlı kapanış",Closed=true,Points=[new(0,0),new(10,0),new(0,10),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[repeated] });studio.Select(repeated.Id);
+        var closedBefore=studio.Document.Clone();var closedTools=new TextileToolsWindow(studio);var closedRoot=(FrameworkElement)closedTools.Content;
+        Descendants<TabControl>(closedRoot).Single().SelectedIndex=0;closedRoot.Measure(new Size(1024,640));closedRoot.Arrange(new Rect(0,0,1024,640));closedRoot.UpdateLayout();
+        Descendants<Expander>(closedRoot).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar")).IsExpanded=true;closedRoot.UpdateLayout();
+        Descendants<Expander>(closedRoot).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz")).IsExpanded=true;closedRoot.UpdateLayout();
+        var closedTable=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(closedTools)!;
+        var closedRows=closedTable.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+        var closedFill=Descendants<Button>(closedRoot).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur"));
+        closedRows[0].Dx="1";closedRows[3].Dx="2";closedRows[1].Dx="99";closedRows[2].Dx="98";
+        closedTable.SelectedItems.Clear();closedTable.SelectedItems.Add(closedRows[0]);closedTable.SelectedItems.Add(closedRows[3]);
+        closedFill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(closedRows[1].Dx=="99" && closedRows[2].Dx=="98" && DocumentSession.ContentEquals(closedBefore,studio.Document),
+            "Interpolation rejects conflicting increments on repeated closure endpoints without changing intermediate rows",checks);
+        closedRows[3].Dx="1";closedFill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(closedRows[1].Dx=="1" && closedRows[2].Dx=="1" && DocumentSession.ContentEquals(closedBefore,studio.Document),
+            "Interpolation accepts identical increments at both repeated closure endpoints",checks);
     }
     private static void VerifyGradeBatchDraft(MainWindow studio,List<string> checks)
     {
