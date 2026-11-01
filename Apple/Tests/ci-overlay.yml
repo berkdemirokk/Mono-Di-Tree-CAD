@@ -16,6 +16,8 @@
         buildPhase: resources
       - path: Tests/Fixtures/desktop-synthetic-rotated-v7.tcad
         buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-rotated-v7-stale.tcad
+        buildPhase: resources
       - path: Tests/MeasurementDisplayTests.swift
       - path: Tests/NotchSearchTests.swift
     dependencies:

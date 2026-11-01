@@ -2,6 +2,18 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testDesktopSavedStaleV7WithNewPieceShowsVisibleContours() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))
+        let data = try Data(contentsOf: url), before = data
+        let drawing = try Drawing.load(data)
+        XCTAssertEqual(drawing.formatVersion, 7)
+        XCTAssertEqual(drawing.pieces.count, 3)
+        XCTAssertNil(drawing.pieces[0].grain); XCTAssertNil(drawing.pieces[0].material)
+        XCTAssertEqual(drawing.pieces[2].name, "Yeni parça")
+        XCTAssertNil(drawing.pieces[2].grain); XCTAssertNil(drawing.pieces[2].material)
+        XCTAssertEqual(data, before)
+    }
+
     func testV7StaleVisiblePiecesMayHaveNullMetadataAndGrainline() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
         let original = try Data(contentsOf: url)
