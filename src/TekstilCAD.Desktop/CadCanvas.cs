@@ -249,6 +249,13 @@ public sealed class CadCanvas : FrameworkElement
         InvalidateVisual();
         owner.SetStatus($"Son nokta kaldırıldı · {drawing.Count} nokta kaldı. {ToolGuidance(owner.ActiveTool)}");
     }
+    // Coordinate entry has no live canvas pointer; after removing a point,
+    // keep the rubber-band preview at the last retained vertex.
+    internal void AnchorPreviewToLastPendingPoint()
+    {
+        cursor=drawing.Count>0 ? drawing[^1] : default;
+        InvalidateVisual();
+    }
     private void AddValidated(List<Point2> points,bool closed)
     {
         foreach(var point in points) Geometry.Validate(point);

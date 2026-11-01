@@ -714,7 +714,8 @@ public class MainWindow : Window
         var count=canvas.PendingDrawingPointCount;
         if(count==0)return "Kaldırılacak çizim noktası yok.";
         canvas.RemoveLastPendingPoint();
-        return canvas.PendingDrawingPointCount==count-1 ? null : "Nokta kaldırılamadı; çizim durumunu kontrol edin.";
+        if(canvas.PendingDrawingPointCount!=count-1)return "Nokta kaldırılamadı; çizim durumunu kontrol edin.";
+        canvas.AnchorPreviewToLastPendingPoint();return null;
     }
     internal string CoordinateDrawingSummary()
     {

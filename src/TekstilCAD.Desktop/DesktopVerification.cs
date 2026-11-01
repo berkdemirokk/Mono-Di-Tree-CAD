@@ -7038,6 +7038,28 @@ internal static class DesktopVerification
             canvas.AddDrawingPointAt(first);canvas.AddDrawingPointAt(second);
             Check((Point2)cursor.GetValue(canvas)! == second && canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { first,second }),
                 "Polyline coordinate preview follows the last accepted point",checks);
+            var beforeRemoval=studio.Document.Clone();var undoBefore=session.UndoCount;var redoBefore=session.RedoCount;
+            var window=new CoordinateDrawingWindow(studio,()=>canvas.ToolGuidance(studio.ActiveTool),canvas.AddDrawingPointAt,
+                studio.CoordinateDrawingFinishProblem,studio.RemoveCoordinateDrawingPoint,studio.CoordinateDrawingSummary,studio.CoordinateDrawingOpenFinishProblem);
+            try
+            {
+                window.RemoveLastPoint();
+                Check((Point2)cursor.GetValue(canvas)! == first && canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { first }) &&
+                    DocumentSession.ContentEquals(beforeRemoval,studio.Document) && session.UndoCount==undoBefore && session.RedoCount==redoBefore,
+                    "Removing a coordinate point anchors preview to the retained vertex without changing history",checks);
+                canvas.AddDrawingPointAt(second);var mousePosition=new Point2(-500,-600);cursor.SetValue(canvas,mousePosition);
+                canvas.RemoveLastPendingPoint();
+                Check((Point2)cursor.GetValue(canvas)! == mousePosition && canvas.CapturePendingDrawing()!.Points.SequenceEqual(new[] { first }),
+                    "Keyboard removal retains the live mouse pointer preview",checks);
+                foreach(var tool in new[] { "Bézier","Yay" })
+                {
+                    canvas.CancelDrawing();studio.SetTool(tool);canvas.AddDrawingPointAt(first);canvas.AddDrawingPointAt(second);
+                    window.RemoveLastPoint();
+                    Check((Point2)cursor.GetValue(canvas)! == first && canvas.PendingDrawingPointCount==1 && DocumentSession.ContentEquals(beforeRemoval,studio.Document),
+                        $"{tool} coordinate removal clears the removed control-point preview",checks);
+                }
+            }
+            finally { window.Close(); }
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
     }
