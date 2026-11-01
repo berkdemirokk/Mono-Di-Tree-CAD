@@ -110,7 +110,7 @@ private struct ContentView: View {
             if rawSaveNeedsRetry, let rawImport {
                 Text("Kaydedilemeyen ham kopya: \(ModelStore.safeLabel(rawImport.name))")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                Text("Kopya geçici olarak bellekte tutuluyor; başka dosya seçerseniz veya uygulama kapanırsa yeniden seçmeniz gerekir.")
+                Text("Kopya geçici olarak bellekte tutuluyor; başka bir dosya açılırsa veya uygulama kapanırsa yeniden seçmeniz gerekir.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
                     .disabled(isSaving || modelLoad.isLoading)
@@ -118,6 +118,7 @@ private struct ContentView: View {
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
                     Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
                     Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
+                    Button("Test: okunamayan dosya") { openModel(FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), imported: true) }
                 }
                 #endif
             }
@@ -639,8 +640,7 @@ private struct ContentView: View {
 
     private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
         saveNotice = nil
-        rawImport = nil
-        rawSaveNeedsRetry = false
+        // Retain a failed raw save until a replacement has actually opened.
         modelReadCancellation?.cancel()
         let cancellation = ModelReadCancellation()
         modelReadCancellation = cancellation
@@ -671,6 +671,8 @@ private struct ContentView: View {
                 guard modelLoad.finish(request) else { return }
                 switch loaded {
                 case .success(.preview(let drawing, let data)):
+                    rawImport = nil
+                    rawSaveNeedsRetry = false
                     #if DEBUG
                     pieceRenameSnapshot = nil
                     #endif
@@ -685,9 +687,13 @@ private struct ContentView: View {
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
                 case .success(.raw(let data, let reason)):
+                    rawSaveNeedsRetry = false
                     rawImport = RawImport(data: data, name: url.lastPathComponent, request: request, reason: reason)
                     showingRawImport = true
                 case .failure(let failure):
+                    if rawSaveNeedsRetry, let retained = rawImport {
+                        rawImport = RawImport(data: retained.data, name: retained.name, request: request, reason: retained.reason)
+                    }
                     error = failure.localizedDescription
                 }
             }
