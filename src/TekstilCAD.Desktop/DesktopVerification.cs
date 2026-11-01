@@ -1250,6 +1250,7 @@ internal static class DesktopVerification
             VerifyAsyncDxfImport(studio,work,checks);
             VerifyAsyncDxfBulgeImport(studio,work,reportPath,checks);
             VerifyDxfGrainlineReview(studio,work,checks);
+            VerifyDxfPointReview(studio,work,checks);
             VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
             VerifyDxfSourceCheckWorkflow(studio,work,checks);
@@ -2301,6 +2302,46 @@ internal static class DesktopVerification
                 "Headless empty-continue handler clears selections without changing the import",checks);
         }
         finally { window.Close(); }
+    }
+
+    private static void VerifyDxfPointReview(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var path=Path.Combine(work,"point-review.dxf");
+        var source=System.Text.Encoding.UTF8.GetBytes("0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\nCUT\n90\n3\n70\n1\n10\n0\n20\n0\n10\n20\n20\n0\n10\n0\n20\n20\n0\nPOINT\n8\nMARK\n10\n0\n20\n20\n0\nENDSEC\n0\nEOF\n");
+        DxfImportResult Prepare() { File.WriteAllBytes(path,source);studio.LoadDocument(new ProjectDocument { Name="Önceki" });var task=studio.StartDxfPreparationAsync(path,1);PumpUntil(()=>task.IsCompleted);return task.GetAwaiter().GetResult()!; }
+        void Run() { var task=studio.ReviewPreparedDxfAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        DxfPointVertexSelection Choice(DxfImportResult i)=>new(i.SupplementalGeometry!.Records.Single(r=>r.EntityType=="POINT").SourceOrdinal,i.Project.Pieces.Single().Id,2);
+        try
+        {
+            studio.ConfirmDxfReviewForVerification=_=>true;studio.DxfDiscardDecisionForVerification=()=>(true,false);
+            var imported=Prepare();var before=studio.Document.Clone();
+            var reviewWindow=new DxfPointVertexReviewWindow(studio,imported,imported.Project.Clone());
+            Render(reviewWindow,Path.Combine(work,"point-review-minimum.png"),560,480);
+            var reviewRoot=(FrameworkElement)reviewWindow.Content;
+            var pointControl=Descendants<ComboBox>(reviewRoot).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT kaydı");
+            var pieceControl=Descendants<ComboBox>(reviewRoot).Single(c=>AutomationProperties.GetName(c)=="Hedef kapalı parça");
+            var vertexControl=Descendants<ComboBox>(reviewRoot).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe indeksi ve konumu · mm");
+            pieceControl.SelectedIndex=0;pointControl.SelectedIndex=0;vertexControl.SelectedIndex=0;reviewRoot.UpdateLayout();
+            var vertexPreview=Descendants<DxfPiecePreview>(reviewRoot).Single();
+            Check(pointControl.Items.Count==1 && vertexControl.Items.Count==3 && AutomationProperties.GetName(vertexPreview).Contains("Köşe 0") &&
+                Descendants<TextBlock>(reviewRoot).Any(t=>t.Text.Contains("fiziksel çentik") && t.Text.Contains("POINT")),
+                "POINT review presents explicit accessible source, piece and vertex choices with highlighted vertex",checks);
+            reviewWindow.Close();studio.ConfirmDxfPointsForVerification=_=>null;Run();
+            Check(DocumentSession.ContentEquals(before,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source),"Cancelling POINT review preserves source and current document",checks);
+            studio.ConfirmDxfPointsForVerification=i=>[Choice(i)];Run();
+            Check(studio.Document.Pieces.Single().Notches is { Count:1 } marks && marks[0].VertexIndex==2 && marks[0].Position==new Point2(0,20) && imported.Project.Pieces.Single().Notches is null && File.ReadAllBytes(path).SequenceEqual(source),
+                "Explicit POINT mapping applies a detached visual marker",checks);
+            Invoke(studio,"Undo");Check(studio.Document.Pieces.Single().Notches is null,"POINT mapping can be undone after import",checks);
+            Invoke(studio,"Redo");Check(studio.Document.Pieces.Single().Notches is { Count:1 },"POINT mapping can be redone after import",checks);
+            imported=Prepare();before=studio.Document.Clone();studio.ConfirmDxfPointsForVerification=i=>[Choice(i) with { VertexIndex=1 }];Run();
+            Check(DocumentSession.ContentEquals(before,studio.Document),"Mismatched POINT and target vertex cannot replace current document",checks);
+            imported=Prepare();typeof(MainWindow).GetField("preparedDxfReflectY",PrivateInstance)!.SetValue(studio,true);
+            studio.ConfirmDxfPointsForVerification=i=>[Choice(i)];Run();
+            Check(studio.Document.Pieces.Single().Notches is { Count:1 } reflected && reflected[0].Position==new Point2(0,-20) &&
+                reflected[0].Position==studio.Document.Pieces.Single().Points[2],"POINT and target vertex share the selected Y reflection",checks);
+        }
+        finally { studio.ConfirmDxfPointsForVerification=null;studio.ConfirmDxfReviewForVerification=null;studio.DxfDiscardDecisionForVerification=null;SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyDxfGrainlineReview(MainWindow studio,string work,List<string> checks)

@@ -142,6 +142,7 @@ public class MainWindow : Window
     internal Action? AfterDxfSourceCheckForVerification { get; set; }
     internal Func<DxfImportResult,bool>? ConfirmDxfReviewForVerification { get; set; }
     internal Func<DxfImportResult,IReadOnlyList<DxfGrainlineSelection>?>? ConfirmDxfGrainlineReviewForVerification { get; set; }
+    internal Func<DxfImportResult,IReadOnlyList<DxfPointVertexSelection>?>? ConfirmDxfPointsForVerification { get; set; }
     internal Func<PatternPiece,int,bool>? ConfirmDeleteWithGradingForVerification { get; set; }
     internal Action<Window>? MetadataDialogSuccessForVerification { get; set; }
     internal Func<(bool Accepted,bool Saved)>? DxfDiscardDecisionForVerification { get; set; }
@@ -2226,6 +2227,8 @@ public class MainWindow : Window
             var displayedSnapshot=reflectY ? DxfCanvasImportOrientation.ReflectY(importSnapshot) : importSnapshot.Clone();
             var displayedImport=imported with { Project=displayedSnapshot };
             var displayWarnings=imported.Warnings.ToList();
+            if(imported.SupplementalGeometry?.Records.Any(r=>r.EntityType=="POINT")==true)
+                displayWarnings.Add("POINT eşlemesi yalnız ENTITIES bölümündeki POINT ve doğrudan kapalı LWPOLYLINE köşeleri için denenebilir. BLOCKS, INSERT ve POLYLINE köşeleri desteklenmez. Eşleşme fiziksel çentik anlamına gelmez.");
             if(reflectY)displayWarnings.Add("Kullanıcı seçimiyle tüm geometride Y işareti ters çevrildi; bu yansıma konumu ve kapalı kontur yönünü değiştirir. Kaynak dosya değişmedi; kaynakla karşılaştırın.");
             var retryPlacements=false;
             var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(displayedSnapshot.Clone(),displayWarnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
@@ -2280,6 +2283,20 @@ public class MainWindow : Window
                 if (!PreparedImportMatches()) return;
                 if (!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
             }
+            IReadOnlyList<DxfPointVertexSelection> pointSelections=Array.Empty<DxfPointVertexSelection>();
+            var hasPointCandidates=imported.ImportParameters?.Mode==DxfImportMode.General && imported.ImportParameters.BulgeToleranceMm is null &&
+                imported.SupplementalGeometry is { Truncated:false } inventory && inventory.Records.Any(r=>r.EntityType=="POINT" && r.Section=="ENTITIES" && r.Block is null) &&
+                imported.PieceSources is { } sourceLinks && sourceLinks.Any(s=>s.EntityType=="LWPOLYLINE" && s.Section=="ENTITIES" && s.Block is null);
+            if(hasPointCandidates && (ConfirmDxfReviewForVerification is null || ConfirmDxfPointsForVerification is not null))
+            {
+                IReadOnlyList<DxfPointVertexSelection>? selection;
+                if(ConfirmDxfPointsForVerification is { } reviewPoints)selection=reviewPoints(imported);
+                else { var reviewWindow=new DxfPointVertexReviewWindow(this,imported,displayedSnapshot.Clone());selection=reviewWindow.ShowDialog()==true ? reviewWindow.Selections : null; }
+                if(!PreparedImportMatches())return;
+                if(selection is null) { OfferDxfReviewRetry(imported,"POINT incelemesi iptal edildi; proje değiştirilmedi.");return; }
+                pointSelections=selection.ToArray();
+                if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
+            }
             bool saved,discard;
             if(DxfDiscardDecisionForVerification is { } decision) { var choice=decision();discard=choice.Accepted;saved=choice.Saved; }
             else discard=CanDiscard(out saved);
@@ -2293,12 +2310,40 @@ public class MainWindow : Window
             if(!await VerifyDxfSourceBeforeApplyAsync(imported,allowSaved)) { if(dxfSourceCheckCancelled)OfferDxfReviewRetry(imported,"DXF kaynak kontrolü iptal edildi; proje değiştirilmedi.");return; }
             if(!IsPreparedDxfRetryCurrent(imported)) { dxfNotice.Text="Çalışma alanı doğrulamadan sonra değişti; DXF uygulanmadı. Yeniden içe aktarın.";SetStatus(dxfNotice.Text);return; }
             if (!PreparedImportMatches()) return;
+            ProjectDocument? marked=null;
+            if(pointSelections.Count>0)
+            {
+                var pointFingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(imported);
+                var pointPath=preparedDxfPath ?? throw new InvalidOperationException("DXF kaynak yolu yok.");
+                using var pointCancellation=new CancellationTokenSource();dxfImportCancellation=pointCancellation;DxfImportRunning=true;
+                dxfCancel.Content="POINT eşlemesini iptal et";AutomationProperties.SetName(dxfCancel,"POINT eşlemesini iptal et");dxfCancel.IsEnabled=true;dxfCancel.Visibility=Visibility.Visible;
+                if(dxfImportCommand is not null)dxfImportCommand.IsEnabled=false;if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;
+                dxfNotice.Text="POINT eşlemeleri kaynak dosyadan doğrulanıyor; mevcut proje korunuyor.";SetStatus(dxfNotice.Text);
+                try
+                {
+                    marked=await Task.Run(()=> { using var source=new FileStream(pointPath,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfPointVertexMapping.Apply(imported,source,pointSelections,pointFingerprint,reflectY,pointCancellation.Token).Project; });
+                    pointCancellation.Token.ThrowIfCancellationRequested();
+                }
+                catch(OperationCanceledException) when(pointCancellation.IsCancellationRequested) { OfferDxfReviewRetry(imported,"POINT eşlemesi iptal edildi; proje değiştirilmedi.");return; }
+                finally
+                {
+                    if(ReferenceEquals(dxfImportCancellation,pointCancellation))dxfImportCancellation=null;DxfImportRunning=false;dxfCancel.Visibility=Visibility.Collapsed;dxfCancel.IsEnabled=false;
+                    dxfCancel.Content="DXF okumayı iptal et";AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
+                    if(!windowClosed) { if(dxfImportCommand is not null)dxfImportCommand.IsEnabled=true;if(exportCommand is not null)exportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !ExportRunning; }
+                }
+                if(!PreparedImportMatches() || !IsPreparedDxfRetryCurrent(imported))return;
+            }
             // Persist only the verified import snapshot, never an absolute source
             // path. A missing/oversized history fails before replacing the document.
             var candidate = grainSelections.Count == 0
                 ? displayedSnapshot.Clone()
                 : DxfTextileGrainlineMapping.Apply(displayedImport with { Project = displayedSnapshot.Clone() }, grainSelections,
                     grainFingerprint ?? throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.")).Project;
+            if(marked is not null && grainSelections.Count>0)
+            {
+                var markedImport=imported with { Project=marked };
+                marked=DxfTextileGrainlineMapping.Apply(markedImport,grainSelections,DxfTextileGrainlineMapping.CaptureFingerprint(markedImport)).Project;
+            }
             var historyWarnings = imported.Warnings.ToList();
             if(reflectY)historyWarnings.Add("Kullanıcı seçimiyle içe aktarılan geometride Y işareti ters çevrildi; kaynak dosya değişmedi. Konum ve kapalı kontur yönü yansıtıldı; kaynakla karşılaştırın.");
             else historyWarnings.Add("Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin.");
@@ -2306,12 +2351,19 @@ public class MainWindow : Window
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
                 historyWarnings.Add("DXF çizgileri kullanıcı seçimiyle iplik yönüne eşlendi; eşleşmeler ve kaynak işaret denetim ayrıntıları projede saklanmaz. Tüm iplik yönleri kontrol bekliyor; kaynakla karşılaştırın.");
+            if(pointSelections.Count>0)historyWarnings.Add("POINT kayıtları kullanıcı seçimiyle görsel köşe işareti olarak eşlendi; kaynak POINT kimlikleri projede saklanmaz. Fiziksel çentik veya üretim onayı değildir.");
             var history=new DxfImportProvenance { SourceFileName=preparedDxfSource,
                 SourceSha256=imported.SourceSha256 ?? "", SourceByteLength=imported.SourceByteLength ?? -1,
                 MillimetersPerUnit=preparedDxfFactor, Warnings=historyWarnings, PieceIds=candidate.Pieces.Select(p=>p.Id).ToList() };
             history.Validate();candidate.ImportProvenance=history;Validate(candidate);
+            if(marked is not null) { marked.ImportProvenance=history.Clone();Validate(marked);if(!new DocumentHistory().CanRetainSnapshot(candidate))throw new InvalidOperationException("İşaret eşlemesi geri alma geçmişine sığmıyor; DXF uygulanmadı."); }
             if (!PreparedImportMatches()) return;
             LoadDocumentCore(candidate,true,()=> { applied=true;preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false; });
+            if(marked is not null)
+            {
+                var marks=marked.Pieces.ToDictionary(p=>p.Id,p=>p.Notches?.Select(n=>n.Clone()).ToList());
+                Commit("DXF POINT görsel işaretleri eklendi",()=> { foreach(var piece in Document.Pieces)piece.Notches=marks[piece.Id]; });
+            }
             dxfNotice.Text=$"DXF: {Document.Pieces.Count} parça · 1 birim = {preparedDxfFactor} mm · Kaynak kontrol anından sonra değişmiş olabilir; ölçüleri kontrol edin";
             if (grainSelections.Count > 0) dxfNotice.Text += " · İplik yönleri kontrol bekliyor; kaynakla karşılaştırın";
             else if (grainReviewUnavailable) dxfNotice.Text += " · İplik yönü eşlemesi doğrulanamadı; çizgiler ayrı parça olarak korundu";

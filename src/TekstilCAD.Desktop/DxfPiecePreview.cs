@@ -14,6 +14,7 @@ internal sealed class DxfPiecePreview : FrameworkElement
     internal const int MaximumPoints=10_000;
     private Point2[] points=[];
     private bool closed;
+    private int? selectedVertex;
     private string emptyMessage="Bir parça seçin.";
     internal Guid? DisplayedPieceId { get; private set; }
     internal int DisplayedPointCount => points.Length;
@@ -43,7 +44,7 @@ internal sealed class DxfPiecePreview : FrameworkElement
             return SetUnavailable("Parça koordinatları görsel önizleme sınırları dışında; geometri gösterilmedi.");
         var bounds=Geometry.Bounds(snapshot);
         if(bounds.Width==0 && bounds.Height==0)return SetUnavailable("Parça noktaları aynı konumda; geometri gösterilmedi.");
-        points=snapshot;closed=piece.Closed;DisplayedPieceId=piece.Id;emptyMessage="";
+        points=snapshot;closed=piece.Closed;selectedVertex=null;DisplayedPieceId=piece.Id;emptyMessage="";
         VisibleSummary=$"{(closed?"Kapalı":"Açık")} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
         SetAccessibleSummary($"Seçili DXF parçası geometrisi. {VisibleSummary}. {snapshot.Length} nokta. Kimlik: {piece.Id:D}");InvalidateVisual();
         return $"{(closed?"Kapalı kontur":"Açık çizgi")} · {snapshot.Length} nokta · Kimlik: {piece.Id:D}\n"+
@@ -52,8 +53,14 @@ internal sealed class DxfPiecePreview : FrameworkElement
             (!closed ? $"Başlangıç: X {MeasurementInput.Format(snapshot[0].X)} mm · Y {MeasurementInput.Format(snapshot[0].Y)} mm\nBitiş: X {MeasurementInput.Format(snapshot[^1].X)} mm · Y {MeasurementInput.Format(snapshot[^1].Y)} mm\n" : "")+
             "Görünüm otomatik sığdırılır; gerçek koordinat yerleşimini göstermez ve fiziksel ölçüm veya eksiksiz aktarım doğrulaması değildir.";
     }
-    internal void Clear() { points=[];DisplayedPieceId=null;closed=false;emptyMessage="Bir parça seçin.";VisibleSummary="Parça seçin.";SetAccessibleSummary("DXF parçası seçilmedi.");InvalidateVisual(); }
-    private string SetUnavailable(string message) { points=[];DisplayedPieceId=null;closed=false;emptyMessage=message;VisibleSummary="Görsel önizleme yok; ayrıntıları inceleyin.";SetAccessibleSummary("DXF görsel önizleme yok. "+message);InvalidateVisual();return message; }
+    internal void SelectVertex(int? index)
+    {
+        selectedVertex=index is int i && i>=0 && i<points.Length ? i : null;
+        SetAccessibleSummary(selectedVertex is int selected ? $"Seçili DXF parçası. {VisibleSummary}. Köşe {selected}, X {points[selected].X:R}, Y {points[selected].Y:R} mm." : "Seçili DXF parçası. "+VisibleSummary);
+        InvalidateVisual();
+    }
+    internal void Clear() { points=[];selectedVertex=null;DisplayedPieceId=null;closed=false;emptyMessage="Bir parça seçin.";VisibleSummary="Parça seçin.";SetAccessibleSummary("DXF parçası seçilmedi.");InvalidateVisual(); }
+    private string SetUnavailable(string message) { points=[];selectedVertex=null;DisplayedPieceId=null;closed=false;emptyMessage=message;VisibleSummary="Görsel önizleme yok; ayrıntıları inceleyin.";SetAccessibleSummary("DXF görsel önizleme yok. "+message);InvalidateVisual();return message; }
     private void SetAccessibleSummary(string value)
     {
         var previous=AutomationProperties.GetName(this);
@@ -84,6 +91,7 @@ internal sealed class DxfPiecePreview : FrameworkElement
         path.Freeze();
         var pen=new Pen(Brushes.DeepSkyBlue,1.8) { DashStyle=closed?DashStyles.Solid:DashStyles.Dash };
         dc.DrawGeometry(null,pen,path);
+        if(selectedVertex is int selected && selected<points.Length)dc.DrawEllipse(null,new Pen(Brushes.Gold,2),Map(points[selected]),6,6);
         if(!closed)
         {
             var start=Map(points[0]);var end=Map(points[^1]);
