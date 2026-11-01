@@ -592,6 +592,7 @@ internal static class DesktopVerification
             VerifyVertexNotches(studio,work,checks);
             VerifyExtraClosureCleanup(studio,work,checks);
             VerifyBulkDuplicateCleanup(studio,work,checks);
+            VerifyOptInRealMarkedBulkCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
@@ -9548,6 +9549,55 @@ internal static class DesktopVerification
                 "Repeated closing triangle cannot offer deletion below three logical vertices",checks);
         }
         finally { tools.Close();studio.LoadDocument(new ProjectDocument()); }
+    }
+
+    private static void VerifyOptInRealMarkedBulkCleanup(MainWindow studio,List<string> checks)
+    {
+        var input=Environment.GetEnvironmentVariable("TEKSTILCAD_DXF_AUDIT_SOURCE");
+        if(string.IsNullOrWhiteSpace(input))return;
+        var bytes=File.ReadAllBytes(input);
+        using var stream=new MemoryStream(bytes,writable:false);
+        var imported=DxfFormat.Import(stream,"audit",1,DxfTextEncoding.Windows1254);
+        var project=imported.Project.Clone();
+        var eligible=project.Pieces.Where(piece=>piece.Points.Zip(piece.Points.Skip(1)).Any(pair=>pair.First==pair.Second)).Take(2).ToArray();
+        Check(eligible.Length==2,"Real DXF audit has two independent repeated-vertex pieces",checks);
+        var marked=eligible[0];var guarded=eligible[1];
+        int index=Enumerable.Range(0,marked.Points.Count-1).First(i=>marked.Points[i]==marked.Points[i+1]);
+        if(marked.Closed && index==marked.Points.Count-1)index=0;
+        marked.Notches=[new NotchMark { VertexIndex=index,Position=marked.Points[index] }];
+        guarded.Notches=[new NotchMark { VertexIndex=0,Position=guarded.Points[0] }];
+        project.GradingRules.Add(new GradingRuleSet { SourcePieceId=guarded.Id,SourceClosed=guarded.Closed,
+            SourcePoints=guarded.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),guarded.Points.Count).ToList() });
+        var expected=TekstilCAD.Patterns.PatternTools.RemoveConsecutiveDuplicateVertices(marked);
+        var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            studio.LoadDocument(project);studio.Select(marked.Id);var before=studio.Document.Clone();
+            var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            var window=new BulkDuplicateCleanupWindow(studio,studio,_=>false);
+            try
+            {
+                var task=window.PreviewForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                var ready=(Dictionary<Guid,PatternPiece>)typeof(BulkDuplicateCleanupWindow).GetField("ready",PrivateInstance)!.GetValue(window)!;
+                Check(ready.ContainsKey(marked.Id) && !ready.ContainsKey(guarded.Id) &&
+                    DocumentSession.ContentEquals(new ProjectDocument { Pieces=[expected] },new ProjectDocument { Pieces=[ready[marked.Id]] }),
+                    "Real DXF bulk preview matches core marked cleanup and excludes guarded source",checks);
+                window.ApplyForVerification();var after=studio.Document.Clone();
+                Check(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[expected] },new ProjectDocument { Pieces=[after.Pieces.Single(p=>p.Id==marked.Id)] }) &&
+                    DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before.Pieces.Single(p=>p.Id==guarded.Id)],GradingRules=before.GradingRules.Select(r=>r.Clone()).ToList() },
+                        new ProjectDocument { Pieces=[after.Pieces.Single(p=>p.Id==guarded.Id)],GradingRules=after.GradingRules.Select(r=>r.Clone()).ToList() }) && session.UndoCount==1,
+                    "Real DXF bulk commit matches core while preserving marked grading-rule source",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Real DXF marked bulk cleanup preserves one-step undo and redo",checks);
+            }
+            finally { window.Close(); }
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(old);
+            Check(System.Security.Cryptography.SHA256.HashData(bytes).SequenceEqual(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(input))),
+                "Real DXF source bytes remained unchanged",checks);
+        }
     }
 
     private static void VerifyBulkDuplicateCleanup(MainWindow studio,string work,List<string> checks)
