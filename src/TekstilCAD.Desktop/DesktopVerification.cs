@@ -9963,6 +9963,13 @@ internal static class DesktopVerification
         {
             picker.Preview.Height=200;picker.Preview.Margin=new Thickness(0);
             picker.Preview.Measure(new Size(300,200));picker.Preview.Arrange(new Rect(0,0,300,200));picker.Preview.UpdateLayout();
+            var markerImage=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);markerImage.Render(picker.Preview);
+            var markerPixels=new byte[300*200*4];markerImage.CopyPixels(markerPixels,300*4,0);
+            var pink=false;
+            for(var y=18;y<=22;y++)for(var x=78;x<=82;x++)
+            { var pixel=(y*300+x)*4;if(markerPixels[pixel+2]>200 && markerPixels[pixel+1]<190 && markerPixels[pixel]>100)pink=true; }
+            Check(pink && !picker.Preview.MarkersSuppressed && AutomationProperties.GetHelpText(picker.Preview).Contains("Pembe halkalar"),
+                "Point picker draws a separate marked-vertex ring even when that vertex is selected",checks);
             Check(picker.Preview.HitTestPoint(new Point(70,20))==0,
                 "Point picker treats the repeated closing endpoint as the first logical vertex",checks);
             var ambiguousClosure=new PointMeasurePreview(new PatternPiece { Closed=true,
@@ -9990,6 +9997,20 @@ internal static class DesktopVerification
             Check(picker.PickStatus.Text.Contains("işaretli"),"Repeated closing alias reports the first vertex marker",checks);
             studio.Document.Pieces[0].Notches![0].Position=new Point2(1,1);picker.CheckCurrent();
             Check(picker.IsStale && !picker.UseButton.IsEnabled,"Point picker rejects a changed marker snapshot",checks);
+        }
+        finally { picker.Close(); }
+        var manyPoints=Enumerable.Range(0,501).Select(i=>new Point2(i,0)).ToList();
+        var many=new PatternPiece { Closed=false,Points=manyPoints,
+            Notches=manyPoints.Select((p,i)=>new NotchMark { VertexIndex=i,Position=p }).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[many] });studio.Select(many.Id);
+        picker=new PointPickerWindow(studio,studio,studio.Selected!,()=>many.Id,0);
+        try
+        {
+            var root=(FrameworkElement)picker.Content;root.Measure(new Size(670,510));root.Arrange(new Rect(0,0,670,510));root.UpdateLayout();
+            Check(picker.Preview.MarkersSuppressed && picker.PointSelector.Items.Count==501 &&
+                Descendants<TextBlock>(root).Any(t=>t.Text.Contains("500'den fazla köşe işareti") && t.Text.Contains("listede")) &&
+                AutomationProperties.GetHelpText(picker.Preview).Contains("halkaları gösterilmiyor"),
+                "Large marker set hides rings with an explicit accessible explanation while retaining the full list",checks);
         }
         finally { picker.Close();studio.LoadDocument(new ProjectDocument()); }
     }

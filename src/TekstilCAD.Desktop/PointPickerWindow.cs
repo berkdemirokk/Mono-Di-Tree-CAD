@@ -37,7 +37,7 @@ internal sealed class PointPickerWindow : Window
             throw new InvalidOperationException("Kaynak parça değişti; güncel parçayı seçip yeniden deneyin.");
         if(workspace.HasPendingCanvasOrPropertyWork)
             throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
-        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece,collapseClosingAlias:true);
+        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece,collapseClosingAlias:true,showMarkedVertices:true);
         Owner=owner; Title="Kontur noktası seç · Mono Di Tree CAD"; Width=670; Height=510; MinWidth=510; MinHeight=390;
         WindowStartupLocation=WindowStartupLocation.CenterOwner; StudioTheme.Apply(this);
 
@@ -70,9 +70,11 @@ internal sealed class PointPickerWindow : Window
         AutomationProperties.SetHelpText(PointSelector,"İndeksi yazarak veya ok tuşlarıyla seçin. İndeksler sıfırdan başlar.");
         PointSelector.ItemsSource=list; PointSelector.SelectedIndex=initialIndex>=0 && initialIndex<list.Count ? initialIndex : -1;
         panel.Children.Add(PointSelector);
-        panel.Children.Add(new TextBlock { Text="Kalıp önizlemesi · seçili nokta A halkası",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0),FontWeight=FontWeights.SemiBold });
+        panel.Children.Add(new TextBlock { Text="Kalıp önizlemesi · seçili nokta A · pembe halkalar işaretli köşeler",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0),FontWeight=FontWeights.SemiBold });
         if(!Preview.IndividualVerticesVisible)
             panel.Children.Add(new TextBlock { Text="Çok sayıda nokta olduğu için küçük nokta işaretleri gizlendi; kesin seçim için listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,0) });
+        if(Preview.MarkersSuppressed)
+            panel.Children.Add(new TextBlock { Text="500'den fazla köşe işareti olduğundan pembe halkalar gösterilmiyor; tüm işaretli köşeler listede belirtilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,0) });
         panel.Children.Add(Preview);
         AutomationProperties.SetName(PickStatus,"Kontur noktası seçim durumu"); AutomationProperties.SetLiveSetting(PickStatus,AutomationLiveSetting.Polite);panel.Children.Add(PickStatus);
         PointSelector.SelectionChanged+=(_,_)=>UpdateSelection();

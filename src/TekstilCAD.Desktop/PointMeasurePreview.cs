@@ -17,7 +17,10 @@ internal sealed class PointMeasurePreview : FrameworkElement
     private static readonly Brush EndBrush=FrozenBrush(0xff,0xc4,0x68);
     private static readonly Brush TextBrush=FrozenBrush(0xff,0xff,0xff);
     private static readonly Brush MeasurementBrush=FrozenBrush(0xff,0xff,0xff);
+    private static readonly Brush MarkerBrush=FrozenBrush(0xff,0x8f,0xaf);
     private readonly IReadOnlyList<Point2> points;
+    private readonly IReadOnlyList<Point2> markerPositions;
+    private readonly bool showMarkedVertices;
     private readonly bool collapseClosingAlias;
     private readonly StreamGeometry? outline;
     private readonly double minX, minY, span, xExtent, yExtent;
@@ -27,10 +30,14 @@ internal sealed class PointMeasurePreview : FrameworkElement
     internal int StartIndex { get; private set; } = -1;
     internal int EndIndex { get; private set; } = -1;
     internal bool IndividualVerticesVisible => points.Count<=500;
+    internal bool MarkersSuppressed { get; }
 
-    internal PointMeasurePreview(PatternPiece snapshot,bool collapseClosingAlias=false)
+    internal PointMeasurePreview(PatternPiece snapshot,bool collapseClosingAlias=false,bool showMarkedVertices=false)
     {
         points=snapshot.Points.ToArray();
+        this.showMarkedVertices=showMarkedVertices;
+        MarkersSuppressed=showMarkedVertices && (snapshot.Notches?.Count ?? 0)>500;
+        markerPositions=showMarkedVertices && !MarkersSuppressed ? snapshot.Notches?.Select(mark=>mark.Position).ToArray() ?? [] : [];
         this.collapseClosingAlias=collapseClosingAlias && snapshot.Closed && points.Count>1 && points[0]==points[^1];
         Height=180; MinHeight=150; Margin=new Thickness(0,8,0,0); ClipToBounds=true;
         AutomationProperties.SetName(this,"Kalıp konturu ve ölçüm noktaları önizlemesi");
@@ -63,7 +70,8 @@ internal sealed class PointMeasurePreview : FrameworkElement
         EndIndex=endIndex>=0 && endIndex<points.Count ? endIndex : -1;
         var a=StartIndex>=0 ? $"A {StartIndex}. nokta" : "A seçilmedi";
         var b=EndIndex>=0 ? $"B {EndIndex}. nokta" : "B seçilmedi";
-        AutomationProperties.SetHelpText(this,$"Önizleme. A halka, B baklava işaretidir; kesik çizgi aralarındaki düz mesafeyi gösterir. {a}; {b}. Noktayı listelerden veya görsele tıklayarak seçin; yakın noktalar için listeyi kullanın.");
+        var marks=showMarkedVertices ? (MarkersSuppressed ? " İşaret sayısı 500'ü aştığı için işaret halkaları gösterilmiyor; listeyi kullanın." : " Pembe halkalar işaretli köşeleri gösterir.") : "";
+        AutomationProperties.SetHelpText(this,$"Önizleme. A halka, B baklava işaretidir; kesik çizgi aralarındaki düz mesafeyi gösterir. {a}; {b}. Noktayı listelerden veya görsele tıklayarak seçin; yakın noktalar için listeyi kullanın."+marks);
         InvalidateVisual();
     }
 
@@ -91,6 +99,11 @@ internal sealed class PointMeasurePreview : FrameworkElement
         }
         if(IndividualVerticesVisible)
             foreach(var vertex in points) dc.DrawEllipse(OutlineBrush,null,Screen(vertex),2.5,2.5);
+        if(markerPositions.Count>0)
+        {
+            var pen=new Pen(MarkerBrush,2);
+            foreach(var marker in markerPositions)dc.DrawEllipse(null,pen,Screen(marker),10,10);
+        }
         if(StartIndex>=0)
         {
             var p=Screen(points[StartIndex]);
