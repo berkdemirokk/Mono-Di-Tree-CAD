@@ -19,6 +19,15 @@ public class SelectedNotchComparisonTests
         Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Measure(Source,output,3,4,5,1,2,4));
     }
     [Fact]
+    public void NearlyCollinearTripleUsesExactCrossProductForDepth()
+    {
+        Point2[] points=[new(0,0),new(38637.42901740239,14563260.713344457),new(101420.09588128328,38227370.07750368)];
+        var result=SelectedNotchComparison.Measure(points,points,0,1,2,0,1,2);
+        Assert.InRange(result.SourceDepth,3.29147615895e-12,3.29147615896e-12);
+        Assert.Equal(result.SourceDepth,result.CandidateDepth);
+        Assert.InRange(result.SourceWidth,38227504,38227505);
+    }
+    [Fact]
     public void ExplicitDifferentIndicesDetectCollapsedNotch()
     {
         Point2[] output=[new(60,100),new(50,99.999999),new(40,100)];

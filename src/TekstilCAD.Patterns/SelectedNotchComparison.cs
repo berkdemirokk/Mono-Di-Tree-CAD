@@ -1,3 +1,4 @@
+using System.Numerics;
 using TekstilCAD.Core;
 
 namespace TekstilCAD.Patterns;
@@ -51,15 +52,34 @@ public static class SelectedNotchComparison
         static (double Width,double Depth) Measure(Point2[] p)
         {
             double dx=p[2].X-p[0].X,dy=p[2].Y-p[0].Y;
-            double x=p[1].X-p[0].X,y=p[1].Y-p[0].Y;
+
             // Scale before squaring so valid subnormal edges do not become zero.
             double scale=Math.Max(Math.Abs(dx),Math.Abs(dy));
             if(scale==0 || !double.IsFinite(scale))throw new ArgumentException("Seçili ağız ölçüsü gösterilemiyor.");
             double ux=dx/scale,uy=dy/scale,norm=Math.Sqrt(ux*ux+uy*uy);
-            double width=scale*norm,depth=Math.Abs(ux*y-uy*x)/norm;
+            double width=scale*norm;
+            // Compute the cross product on exact binary64 values. A floating-point
+            // subtraction of nearly equal products can otherwise report a depth
+            // several times too large while still remaining nonzero.
+            static BigInteger Units(double value)
+            {
+                long bits=BitConverter.DoubleToInt64Bits(value);int exponent=(int)((bits>>52)&0x7ff);
+                long fraction=bits&0x000f_ffff_ffff_ffffL;
+                var mantissa=new BigInteger(exponent==0 ? fraction : fraction|(1L<<52));
+                var integer=mantissa << (exponent==0 ? 0 : exponent-1);
+                return bits<0 ? -integer : integer;
+            }
+            var ax=Units(p[0].X);var ay=Units(p[0].Y);
+            var cross=BigInteger.Abs((Units(p[2].X)-ax)*(Units(p[1].Y)-ay)-(Units(p[2].Y)-ay)*(Units(p[1].X)-ax));
+            // Each integer unit is 2^-1074 mm. Keep the leading 53 bits
+            // before conversion and combine exponents only at the final scaling.
+            int shift=(int)Math.Max(0,cross.GetBitLength()-53);
+            int widthExponent=Math.ILogB(width);
+            double significand=Math.ScaleB(width,-widthExponent);
+            double depth=Math.ScaleB((double)(cross >> shift)/significand,shift-2148-widthExponent);
             // The exact predicate proves nonzero dimensions; if rounded display
             // arithmetic loses either, fail rather than display zero or NaN.
-            if(width<=0 || depth<=0 || !double.IsFinite(width) || !double.IsFinite(depth))
+            if(width<2.2250738585072014e-308 || depth<2.2250738585072014e-308 || !double.IsFinite(width) || !double.IsFinite(depth))
                 throw new ArgumentException("Seçili ölçü gösterim hassasiyetinde güvenilir biçimde temsil edilemiyor.");
             return (width,depth);
         }
