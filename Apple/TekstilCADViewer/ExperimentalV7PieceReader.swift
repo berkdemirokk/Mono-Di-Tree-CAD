@@ -83,9 +83,11 @@ struct ExperimentalV7PieceReader {
             return
         }
         if [9, 10, 13, 32].contains(byte) { return }
+        var isRootStringValue = false
         if let key = rootValueKey {
             let expected: UInt8 = key == "Name" ? 34 : (key == "Pieces" || key == "GradingRules") ? 91 : 123
             guard byte == expected else { throw Failure.invalid }
+            isRootStringValue = key == "Name"
             rootValueKey = nil
         }
         if expectingPiecesArray {
@@ -99,7 +101,7 @@ struct ExperimentalV7PieceReader {
         switch byte {
         case 34:
             string = true; escaped = false
-            if stack.count == 2 && !inPieces { keyToken = [byte] }
+            if stack.count == 2 && !inPieces && !isRootStringValue { keyToken = [byte] }
         case 58:
             if stack.count == 2 {
                 guard let key = potentialKey,

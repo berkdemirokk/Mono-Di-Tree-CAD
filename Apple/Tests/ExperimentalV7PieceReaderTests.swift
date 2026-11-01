@@ -26,7 +26,36 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
                 XCTAssertEqual(value["Id"] as? String, source["Id"] as? String)
                 XCTAssertEqual(value["Name"] as? String, source["Name"] as? String)
             }
+            let actual = try ExperimentalV7Contours.decode(parts)
+            let existing = try Drawing.load(original)
+            XCTAssertEqual(actual.map(\.id), existing.pieces.map(\.id))
+            XCTAssertEqual(actual.map(\.name), existing.pieces.map(\.name))
+            XCTAssertEqual(actual.map(\.notches), existing.pieces.map(\.notches))
+            XCTAssertEqual(actual.map { $0.points.count }, existing.pieces.map { $0.points.count })
         }
+    }
+    func testContourDecoderRejectsDuplicateKeysAndInvalidMarker() {
+        let duplicate = Data(#"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Name":"B","Closed":false,"Points":[]}"#.utf8)
+        XCTAssertThrowsError(try ExperimentalV7Contours.decode([duplicate]))
+        let invalid = Data(#"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0}],"Notches":[{"VertexIndex":1,"Position":{"X":0,"Y":0}}]}"#.utf8)
+        XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid]))
+        XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid], cancelled: { true }))
+    }
+    func testOptionalExternalLargeDesktopV7Fixture() throws {
+        guard let path = ProcessInfo.processInfo.environment["TCAD_LARGE_V7_FIXTURE"], !path.isEmpty else {
+            throw XCTSkip("Set TCAD_LARGE_V7_FIXTURE to the external synthetic desktop v7 file")
+        }
+        let file = try FileHandle(forReadingFrom: URL(fileURLWithPath: path))
+        defer { try? file.close() }
+        var reader = ExperimentalV7PieceReader()
+        while true {
+            let chunk = try file.read(upToCount: 64 * 1024) ?? Data()
+            if chunk.isEmpty { break }
+            try reader.feed(chunk)
+        }
+        let parts = try reader.finish()
+        XCTAssertEqual(parts.count, 8_000)
+        XCTAssertEqual(try ExperimentalV7Contours.decode(parts).count, 8_000)
     }
     func testEscapedKeyNestedNamesAndSyntaxFailures() throws {
         let json = #"[7,{"Name":"Pieces","\u0050ieces":[{"Name":"{[x]}","Points":[]}],"GradingRules":[],"NestingSnapshot":{"Pieces":[{"Name":"hidden"}]}}]"#
@@ -38,6 +67,11 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
                     #"[7,{"Name":"P","Pieces":[],"GradingRules":[],"NestingSnapshot":{},"Unknown":1}]"#] {
             XCTAssertThrowsError(try extract(Data(bad.utf8), chunk: 1))
         }
+    }
+    func testLongEscapedProjectNameIsNotTreatedAsAKey() throws {
+        let name = String(repeating: #"\u0061"#, count: 1_000)
+        let json = "[7,{\"Name\":\"\(name)\",\"Pieces\":[],\"GradingRules\":[],\"NestingSnapshot\":{}}]"
+        XCTAssertEqual(try extract(Data(json.utf8), chunk: 23).count, 0)
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)

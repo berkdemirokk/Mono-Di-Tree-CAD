@@ -40,6 +40,8 @@ Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa
 
 `ExperimentalV7PieceReader` aynı akış üzerinde v7 zarfı ve kök alanlarının temel türlerini kontrol edip görünür `Pieces` nesnelerinin özgün UTF-8 baytlarını sınırlı bellekte çıkaran ayrı bir prototiptir. Tam v7 şema ve geçmiş doğrulaması yapmaz, çizim üretmez ve çıktısı güvenilir proje olarak kullanılamaz; üretime bağlı değildir. Parça başına 512 KB, toplam çıkarılan parçalar için 16 MB ve 10.000 parça sınırı kullanır. Bu sınırlar gerçek veri ve cihazda henüz ölçülmemiştir.
 
+`ExperimentalV7Contours`, çıkarılan parça baytlarından ayrı sınırlı bir kontur dönüşümü denemesidir; üretim okuyucusuna bağlı değildir. Parça düzeyinde kimlik, nokta, işaret ve desteklenen bilgi alanlarını kontrol eder; v7 geçmiş şemasını, masaüstü parmak izlerini veya kopya eşleşmesini doğrulamaz. Modelin tamamını güvenilir kabul etmek veya 8 MB sınırını artırmak için yeterli değildir.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
