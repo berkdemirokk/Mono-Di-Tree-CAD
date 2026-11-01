@@ -356,6 +356,20 @@ public static class PatternTools
     /// Large contours must be processed off the UI thread; cancellation is cooperative.</summary>
     public static PatternPiece InsertPoint(PatternPiece piece, int afterIndex, Point2 point, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            if(afterIndex<0 || afterIndex>=piece.Points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
+            var normalized=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && afterIndex==piece.Points.Count-1 ? 0 : afterIndex;
+            var detached=piece.Clone();detached.Notches=null;
+            var inserted=InsertPoint(detached,afterIndex,point,cancellationToken);
+            var marks=piece.Notches.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex>normalized ? mark.VertexIndex+1 : mark.VertexIndex,Position=mark.Position }).ToList();
+            foreach(var mark in marks)
+                if(mark.VertexIndex>=inserted.Points.Count || inserted.Points[mark.VertexIndex]!=mark.Position)
+                    throw new ArgumentException("Çentik işareti korunamadı; nokta eklenmedi.",nameof(piece));
+            inserted.Notches=marks;cancellationToken.ThrowIfCancellationRequested();return inserted;
+        }
         var points = SnapshotPointEdit(piece, cancellationToken);
         Geometry.Validate(point);
         if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));

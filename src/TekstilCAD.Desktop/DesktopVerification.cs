@@ -7987,6 +7987,14 @@ internal static class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(marked,studio.Document),
                 "Notch add supports undo and redo",checks);
             tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
+            tools.SetVertexNotch("1",true);var twoMarks=studio.Document.Clone();
+            var insert=tools.InsertVertexAsync("0","5","0");PumpUntil(()=>insert.IsCompleted);insert.GetAwaiter().GetResult();
+            var inserted=studio.Document.Clone();var insertedMarks=inserted.Pieces[0].Notches!;
+            Check(inserted.Pieces[0].Points.Count==5 && insertedMarks.Select(n=>n.VertexIndex).SequenceEqual(new[] { 0,2 }) &&
+                insertedMarks[1].Position==inserted.Pieces[0].Points[2],"Insertion remaps marked vertex indices",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(twoMarks,studio.Document) && session.Redo() && DocumentSession.ContentEquals(inserted,studio.Document) && session.Undo() && session.Undo() && DocumentSession.ContentEquals(marked,studio.Document),
+                "Marked vertex insertion and marker addition undo and redo independently",checks);
+            tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
             tools.SetVertexNotch("3",false);
             Check(studio.Document.Pieces.Single().Notches is null && session.Undo() && DocumentSession.ContentEquals(marked,studio.Document),
                 "Notch removal normalizes closure and can be undone",checks);

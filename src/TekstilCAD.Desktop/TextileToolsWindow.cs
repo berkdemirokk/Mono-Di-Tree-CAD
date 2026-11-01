@@ -935,7 +935,7 @@ public sealed class TextileToolsWindow : Window
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse or VertexEdit.ReverseClosed ? default : new Point2(Number(xText!),Number(yText!));
             var width=widthText is null ? position.Y * 2 : Number(widthText);
             var selected=Piece();var sourceId=selected.Id;
-            if(selected.Notches is not null && operation!=VertexEdit.Move)throw new InvalidOperationException("Bu nokta işlemi işaretli parçada henüz desteklenmiyor.");
+            if(selected.Notches is not null && operation is not (VertexEdit.Move or VertexEdit.Insert))throw new InvalidOperationException("Bu nokta işlemi işaretli parçada henüz desteklenmiyor.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
@@ -977,7 +977,7 @@ public sealed class TextileToolsWindow : Window
             token.ThrowIfCancellationRequested();
             ReplacePiece(edited,operation is VertexEdit.Reverse or VertexEdit.ReverseClosed,
                 operation is VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage ? index : null,
-                operation is VertexEdit.Distance or VertexEdit.Percentage);
+                operation is VertexEdit.Distance or VertexEdit.Percentage,operation==VertexEdit.Insert ? index : null);
         }
         catch(OperationCanceledException) when(vertexMoveCancellation?.IsCancellationRequested==true)
         { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Nokta düzenleme doğrulaması iptal edildi; proje değiştirilmedi."; } }
@@ -1121,12 +1121,15 @@ public sealed class TextileToolsWindow : Window
         workspace.CommitObserved("Kalıp aracı uygulandı",()=>workspace.Document.Pieces.Add(generated),onCommitted);workspace.Select(generated.Id);workspace.FitView();RefreshSources(keepBaseSource?baseId:generated.Id);
         Success(notice+generated.Name+" projeye eklendi. Kaynak parça korundu."+(metadataNotCopied ? " Kaynağın rol, beden, malzeme ve adet bilgileri yeni parçaya aktarılmadı; gerekiyorsa Parça bilgileri bölümünde girin." : "")+detail);
     }
-    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false)
+    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null)
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
+        var normalizedInsertion=insertedAfter is { } selectedIndex && previous.Closed && previous.Points.Count>1 && previous.Points[0]==previous.Points[^1] && selectedIndex==previous.Points.Count-1 ? 0 : insertedAfter;
+        if(insertedAfter is not null && (insertedAfter<0 || insertedAfter>=previous.Points.Count || edited.Points.Count!=previous.Points.Count+1))
+            throw new InvalidOperationException("Eklenen nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
         if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
-           !marks.Zip(edited.Notches).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && pair.First.Position==pair.Second.Position &&
+           !marks.Zip(edited.Notches).All(pair=>pair.Second.VertexIndex==(normalizedInsertion is { } at && pair.First.VertexIndex>at ? pair.First.VertexIndex+1 : pair.First.VertexIndex) && pair.First.Position==pair.Second.Position &&
                pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position)))
             throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();

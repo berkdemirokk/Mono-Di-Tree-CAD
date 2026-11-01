@@ -16,7 +16,7 @@ public class NotchOperationGuardTests
     public void AllDerivedPatternEditsRejectWithoutChangingSource()
     {
         var p=Closed();var before=p.Clone();
-        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),()=>PatternTools.InsertPoint(p,0,new(10,0)),
+        Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),
             ()=>PatternTools.InsertEdgeMidpoint(p,0),()=>PatternTools.DeletePoint(p,0),()=>PatternTools.MovePoint(p,1,new(19,1))];
         foreach(var action in operations) { var ex=Assert.Throws<ArgumentException>(action);Assert.Contains("Çentik",ex.Message); }
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
@@ -61,6 +61,33 @@ public class NotchOperationGuardTests
         var source=Closed();source.Points.Add(source.Points[0]);source.Notches=[new NotchMark { VertexIndex=0,Position=source.Points[0] }];
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,0,new(-1,0)));
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,source.Points.Count-1,new(-1,0)));
+    }
+    [Theory]
+    [InlineData(0,2)]
+    [InlineData(1,1)]
+    [InlineData(3,1)]
+    [InlineData(4,2)]
+    public void MarkedInsertionRemapsIndicesIncludingExplicitClosure(int afterIndex,int expectedIndex)
+    {
+        var source=Closed();source.Points.Add(source.Points[0]);source.Notches![0].Position=new Point2(20,BitConverter.Int64BitsToDouble(long.MinValue));var before=source.Clone();
+        var newPoint=afterIndex is 0 or 4 ? new Point2(10,0) : afterIndex==1 ? new Point2(20,10) : new Point2(0,10);
+        var result=PatternTools.InsertPoint(source,afterIndex,newPoint);
+        Assert.Equal(expectedIndex,result.Notches!.Single().VertexIndex);
+        Assert.Equal(source.Notches!.Single().Position,result.Notches.Single().Position);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(result.Notches.Single().Position.Y));
+        Assert.Equal(result.Points[result.Notches.Single().VertexIndex],result.Notches.Single().Position);
+        Assert.Equal(result.Points[0],result.Points[^1]);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+    }
+    [Fact]
+    public void MarkedOpenInsertionAndInvalidOrCancelledInsertionAreSafe()
+    {
+        var source=Open();var before=source.Clone();var result=PatternTools.InsertPoint(source,0,new(5,0));
+        Assert.Equal(2,result.Notches!.Single().VertexIndex);Assert.Equal(source.Notches!.Single().Position,result.Notches.Single().Position);
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.InsertPoint(source,0,source.Points[0]));
+        using var canceled=new CancellationTokenSource();canceled.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>PatternTools.InsertPoint(source,0,new(5,0),canceled.Token));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
     }
     [Fact]
     public void OpenPathOperationsRejectMarksFromEitherSource()
