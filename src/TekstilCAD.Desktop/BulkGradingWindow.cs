@@ -222,6 +222,11 @@ internal sealed class BulkGradingWindow : Window
         else if(generated.Grainline is not null)
             throw new InvalidOperationException("Yeni bedende beklenmeyen iplik yönü bulundu; sonuç projeye eklenmedi.");
     }
+    internal static void EnsureHistoryCapacity(bool sourceFits, bool resultFits)
+    {
+        if (!sourceFits || !resultFits)
+            throw new InvalidOperationException("Kaynak veya sonuç geri alma/yineleme geçmişi sınırını aşıyor; bedenler eklenmedi.");
+    }
     internal void AddReady()
     {
         var committed=false;
@@ -231,6 +236,8 @@ internal sealed class BulkGradingWindow : Window
                 throw new InvalidOperationException("Proje veya girdiler değişti; bedenleri yeniden hesaplayın.");
             var items=ready.Select(p=>p.Clone()).ToArray();
             var rules=readyRules.Select(r=>r.Clone()).ToArray();
+            var candidate=workspace.Document.Clone();candidate.Pieces.AddRange(items);candidate.GradingRules.AddRange(rules);
+            EnsureHistoryCapacity(workspace.CanRetainCurrentUndoSnapshot,workspace.CanRetainUndoSnapshot(candidate));
             workspace.CommitObserved("Bedenler birlikte oluşturuldu",()=> { workspace.Document.Pieces.AddRange(items);workspace.Document.GradingRules.AddRange(rules); },()=>committed=true);
             ready=null;AddButton.IsEnabled=false;added();Close();
         }

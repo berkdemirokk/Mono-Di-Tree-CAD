@@ -757,6 +757,7 @@ public class MainWindow : Window
     internal Action? AfterCommitBeforeRefreshForVerification { get; set; }
     public void Commit(string description, Action action) => CommitObserved(description,action,null);
     internal bool CanRetainCurrentUndoSnapshot => session.CanRetainCurrentUndoSnapshot;
+    internal bool CanRetainUndoSnapshot(ProjectDocument candidate) => session.CanRetainUndoSnapshot(candidate);
     // Called only after a changed document is committed, before UI refresh can fail.
     internal void CommitObserved(string description, Action action, Action? onCommitted)
     {

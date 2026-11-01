@@ -11936,6 +11936,12 @@ internal static class DesktopVerification
         var original=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(100,0),new(100,100),new(0,100)],Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=7 } };
         studio.LoadDocument(new ProjectDocument { Pieces=[original], GradingRules=[new GradingRuleSet { SourcePieceId=original.Id,SourceClosed=true,SourcePoints=[..original.Points],Deltas=[new(0,0),new(1,0),new(1,1),new(0,1)] }] });original=studio.Document.Pieces[0];studio.Select(original.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var refusedSource=false;var refusedResult=false;
+        try { BulkGradingWindow.EnsureHistoryCapacity(false,true); } catch(InvalidOperationException) { refusedSource=true; }
+        try { BulkGradingWindow.EnsureHistoryCapacity(true,false); } catch(InvalidOperationException) { refusedResult=true; }
+        BulkGradingWindow.EnsureHistoryCapacity(true,true);
+        Check(refusedSource && refusedResult && DocumentSession.ContentEquals(before,studio.Document),
+            "Bulk grading refuses oversized undo or redo snapshot without changing project",checks);
         var added=false;var window=new BulkGradingWindow(studio,studio,original,[new(0,0),new(1,0),new(1,1),new(0,1)],()=>true,()=>added=true);
         Render(window,Path.ChangeExtension(reportPath,".bulk-grading.png"),680,540);
         var bulkRoot=(FrameworkElement)window.Content;
