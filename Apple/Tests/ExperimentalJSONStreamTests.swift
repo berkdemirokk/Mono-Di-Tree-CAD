@@ -24,6 +24,14 @@ final class ExperimentalJSONStreamTests: XCTestCase {
         let bytes = Data(#"{"Name":1,"\u004Eame":2}"#.utf8)
         XCTAssertThrowsError(try validate(bytes, chunkSize: 1))
     }
+    func testKeysCompareDecodedScalarsWithoutUnicodeNormalization() throws {
+        let distinct = Data(#"{"é":1,"e\u0301":2}"#.utf8)
+        for size in [1, 2, 7, distinct.count] { try validate(distinct, chunkSize: size) }
+        let same = Data(#"{"é":1,"\u00E9":2}"#.utf8)
+        XCTAssertThrowsError(try validate(same, chunkSize: 1))
+        let supplementary = Data(#"{"😀":1,"\uD83D\uDE00":2}"#.utf8)
+        XCTAssertThrowsError(try validate(supplementary, chunkSize: 2))
+    }
     func testRejectsMalformedStructureNumbersAndTruncatedUnicode() {
         for text in [#"{"a":1,}"#, #"[1,]"#, #"[1e-9999]"#, #"{"a":1} {}"#, #"[01]"#] {
             XCTAssertThrowsError(try validate(Data(text.utf8), chunkSize: 2), text)

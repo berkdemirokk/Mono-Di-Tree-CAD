@@ -6,7 +6,9 @@ struct ExperimentalJSONStream {
     enum Failure: Error { case invalid, limit, cancelled }
     private enum Kind { case object, array }
     private enum Phase { case objectFirst, objectKey, objectColon, objectValue, objectAfter, arrayFirst, arrayValue, arrayAfter }
-    private struct Frame { var kind: Kind; var phase: Phase; var keys = Set<String>(); var keyBytes = 0 }
+    // String equality folds canonically equivalent Unicode sequences; JSON key
+    // identity here uses the exact decoded scalar sequence instead.
+    private struct Frame { var kind: Kind; var phase: Phase; var keys = Set<[UInt32]>(); var keyBytes = 0 }
     private enum Lex { case none, string, atom }
     private var frames: [Frame] = []
     private var lex: Lex = .none
@@ -147,7 +149,7 @@ struct ExperimentalJSONStream {
             guard keyBytes <= 1024 * 1024 else { throw Failure.limit }
             frames[i].keyBytes += tokenBytes
             guard frames[i].keys.count < maximumKeysPerObject else { throw Failure.limit }
-            guard frames[i].keys.insert(value).inserted else { throw Failure.invalid }
+            guard frames[i].keys.insert(value.unicodeScalars.map(\.value)).inserted else { throw Failure.invalid }
             frames[i].phase = .objectColon
         } else { try beginValue(); try completeValue() }
     }
