@@ -63,7 +63,12 @@ public sealed class DxfBlockOccurrenceTests
         Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second with { PieceId=Guid.NewGuid() }],link.BlockHeaderOrdinal!.Value,true));
         var changed=Encoding.ASCII.GetBytes(text.Replace("10\n10\n20\n0\n0\nENDBLK","10\n11\n20\n0\n0\nENDBLK"));
         using(var unstable=new SwitchOnSecondRewindStream(bytes,changed))
-            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,unstable,[first,second],link.BlockHeaderOrdinal!.Value,true));
+        {
+            var captured=DxfBlockDefinitionPointMapping.CreateMany(import,unstable,[first,second],link.BlockHeaderOrdinal!.Value,true);
+            Assert.Equal(2,captured.Assignments.Length);Assert.Equal(0,unstable.Rewinds);
+        }
+        using(var mutated=new MutatingReadStream(bytes,changed))
+            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,mutated,[first,second],link.BlockHeaderOrdinal!.Value,true));
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>DxfBlockDefinitionPointMapping.CreateMany(import,new MemoryStream(bytes),[first,second],link.BlockHeaderOrdinal!.Value,true,cancellation.Token));
         Assert.Equal(original,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
@@ -72,6 +77,7 @@ public sealed class DxfBlockOccurrenceTests
     private sealed class SwitchOnSecondRewindStream(byte[] first,byte[] second) : Stream
     {
         private readonly MemoryStream a=new(first),b=new(second);private int rewinds;
+        public int Rewinds=>rewinds;
         private MemoryStream Current=>rewinds>=2 ? b : a;
         public override bool CanRead=>true;public override bool CanSeek=>true;public override bool CanWrite=>false;
         public override long Length=>Current.Length;
@@ -82,6 +88,25 @@ public sealed class DxfBlockOccurrenceTests
         public override void SetLength(long value)=>throw new NotSupportedException();
         public override void Write(byte[] buffer,int offset,int count)=>throw new NotSupportedException();
         protected override void Dispose(bool disposing) { if(disposing) { a.Dispose();b.Dispose(); } base.Dispose(disposing); }
+    }
+
+    private sealed class MutatingReadStream(byte[] first,byte[] second) : Stream
+    {
+        private int position;
+        public override bool CanRead=>true;public override bool CanSeek=>true;public override bool CanWrite=>false;
+        public override long Length=>first.Length;
+        public override long Position { get=>position; set=>throw new NotSupportedException(); }
+        public override int Read(byte[] buffer,int offset,int count)
+        {
+            if(position>=first.Length)return 0;
+            int half=first.Length/2;var src=position<half ? first : second;
+            int take=Math.Min(count,(position<half ? half : first.Length)-position);
+            Array.Copy(src,position,buffer,offset,take);position+=take;return take;
+        }
+        public override long Seek(long offset,SeekOrigin origin)=>throw new NotSupportedException();
+        public override void Flush() { }
+        public override void SetLength(long value)=>throw new NotSupportedException();
+        public override void Write(byte[] buffer,int offset,int count)=>throw new NotSupportedException();
     }
 
     [Theory]

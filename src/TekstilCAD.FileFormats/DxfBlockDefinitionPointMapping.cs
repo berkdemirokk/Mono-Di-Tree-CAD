@@ -13,7 +13,7 @@ public sealed record DxfBlockDefinitionPointsResult(ProjectDocument WorkingCopy,
 public static class DxfBlockDefinitionPointMapping
 {
     /// <summary>All-or-nothing batch on one selected piece. Each selection is
-    /// independently revalidated against the same source fingerprint; no partial
+    /// independently revalidated against one source snapshot; no partial
     /// working copy is returned if any selection fails. The caller must keep the
     /// input stream and import stable until completion.</summary>
     public static DxfBlockDefinitionPointsResult CreateMany(DxfImportResult import,Stream source,
@@ -33,12 +33,26 @@ public static class DxfBlockDefinitionPointMapping
                 throw new InvalidDataException("Seçimler aynı parçaya ait, benzersiz POINT ve köşeler olmalıdır.");
             pieceId=item.PieceId;
         }
+        if(!acceptUnplacedDefinition || import.ImportParameters is not { Mode:DxfImportMode.General, BulgeToleranceMm:null } parameters)
+            throw new InvalidDataException("Blok tanımı onayı veya DXF aktarım seçenekleri geçersiz.");
+        // Capture the source once, then parse and hash exactly those detached
+        // bytes. Any concurrent alteration must still match the original import
+        // fingerprint; later source changes cannot affect individual choices.
+        using var snapshot=new MemoryStream();var buffer=new byte[81920];
+        while(true)
+        {
+            token.ThrowIfCancellationRequested();var count=source.Read(buffer,0,buffer.Length);if(count==0)break;
+            if(snapshot.Length+count>DxfSourceSnapshotCheck.MaximumBytes)throw new InvalidDataException("DXF kaynak sınırını aşıyor.");
+            snapshot.Write(buffer,0,count);
+        }
+        token.ThrowIfCancellationRequested();snapshot.Position=0;
+        var fresh=DxfFormat.Import(snapshot,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
         ProjectDocument? copy=null;var assignments=ImmutableArray.CreateBuilder<DxfBlockDefinitionPointAssignment>(selected.Length);
         string? notice=null;
         foreach(var item in selected)
         {
-            token.ThrowIfCancellationRequested();source.Position=0;
-            var verified=Create(import,source,item,blockHeaderOrdinal,acceptUnplacedDefinition,token);
+            token.ThrowIfCancellationRequested();snapshot.Position=0;
+            var verified=CreateCore(import,snapshot,item,blockHeaderOrdinal,acceptUnplacedDefinition,token,fresh);
             copy ??= verified.WorkingCopy;
             if(assignments.Count>0)
             {
@@ -53,6 +67,10 @@ public static class DxfBlockDefinitionPointMapping
 
     public static DxfBlockDefinitionPointResult Create(DxfImportResult import,Stream source,
         DxfPointVertexSelection selection,int blockHeaderOrdinal,bool acceptUnplacedDefinition,CancellationToken token=default)
+        => CreateCore(import,source,selection,blockHeaderOrdinal,acceptUnplacedDefinition,token,null);
+
+    private static DxfBlockDefinitionPointResult CreateCore(DxfImportResult import,Stream source,
+        DxfPointVertexSelection selection,int blockHeaderOrdinal,bool acceptUnplacedDefinition,CancellationToken token,DxfImportResult? captured)
     {
         ArgumentNullException.ThrowIfNull(import);ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(selection);
         token.ThrowIfCancellationRequested();
@@ -67,7 +85,7 @@ public static class DxfBlockDefinitionPointMapping
            oldLink.SourceOrdinals.Length!=1 || !oldLink.InsertPath.IsDefaultOrEmpty)
             throw new InvalidDataException("Seçilen parça doğrudan blok POLYLINE tanımı değil.");
         var oldPiece=import.Project.Pieces.Single(p=>p.Id==selection.PieceId);
-        var fresh=DxfFormat.Import(source,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
+        var fresh=captured ?? DxfFormat.Import(source,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
         if(fresh.SourceByteLength!=import.SourceByteLength || !string.Equals(fresh.SourceSha256,import.SourceSha256,StringComparison.OrdinalIgnoreCase) ||
            fresh.SkippedInsertEntities!=false || fresh.ImportedBlockDefinitions!=true || fresh.SourceGeometry is not { Truncated:false } geometry ||
            fresh.SupplementalGeometry is not { Truncated:false } supplemental || fresh.PieceSources is not { } freshLinks || freshLinks.IsDefault ||
