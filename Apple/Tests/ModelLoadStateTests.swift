@@ -2,6 +2,19 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testDrawingParsingStopsDuringSupersededLargePiece() throws {
+        let point = #"{"X":1,"Y":2}"#
+        let points = Array(repeating: point, count: 4096).joined(separator: ",")
+        let bytes = Data("{\"Name\":\"Büyük\",\"Pieces\":[{\"Closed\":false,\"Points\":[\(points)]}]}".utf8)
+        var checks = 0
+        XCTAssertThrowsError(try Drawing.load(bytes, cancelled: {
+            checks += 1
+            return checks >= 8
+        })) { error in XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(checks, 8)
+        let normal = Data(#"{"Name":"Normal","Pieces":[{"Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#.utf8)
+        XCTAssertEqual(try Drawing.load(normal).pieces.count, 1)
+    }
     func testPickerCancellationIsDistinctFromRealFileErrors() {
         XCTAssertTrue(isFilePickerCancellation(CocoaError(.userCancelled)))
         XCTAssertFalse(isFilePickerCancellation(CocoaError(.fileWriteNoPermission)))

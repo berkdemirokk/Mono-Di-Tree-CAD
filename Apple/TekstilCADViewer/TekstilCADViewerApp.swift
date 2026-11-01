@@ -638,8 +638,10 @@ private struct ContentView: View {
                 else { data = try Drawing.readData(url, cancelled: { cancellation.isCancelled }) }
                 if cancellation.isCancelled { throw CancellationError() }
                 if imported && LosslessProjectName.requiresVersionSixRawRecovery(data) { return .raw(data, .sizeLimit) }
-                do { return .preview(try Drawing.load(data), data) }
+                if cancellation.isCancelled { throw CancellationError() }
+                do { return .preview(try Drawing.load(data, cancelled: { cancellation.isCancelled }), data) }
                 catch {
+                    if error is CancellationError || cancellation.isCancelled { throw CancellationError() }
                     if imported { return .raw(data, .invalidPreview(error.localizedDescription)) }
                     throw error
                 }
@@ -1508,7 +1510,7 @@ private enum ViewerError: LocalizedError {
     var errorDescription: String? { if case let .message(text) = self { return text }; return nil }
 }
 
-private struct Drawing {
+struct Drawing {
     typealias Point = ContourMeasure.Point
     struct Grain { let start: Point; let end: Point; let needsReview: Bool }
     struct Piece {
@@ -1615,12 +1617,14 @@ private struct Drawing {
         try ModelStore.readFileSnapshot(url, expectedIdentity: expectedIdentity, cancelled: cancelled)
     }
 
-    static func load(_ data: Data) throws -> Drawing {
+    static func load(_ data: Data, cancelled: () -> Bool = { false }) throws -> Drawing {
+        if cancelled() { throw CancellationError() }
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         if LosslessProjectName.isOversizedVersionSix(data) {
             throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.")
         }
         let root = try JSONSerialization.jsonObject(with: data)
+        if cancelled() { throw CancellationError() }
         let object: [String: Any]
         let formatVersion: Int
         if let array = root as? [Any], array.count == 2,
@@ -1651,6 +1655,7 @@ private struct Drawing {
             do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false) }
             catch { throw ViewerError.message("Proje alanları yinelenmiş veya güvenli biçimde okunamadı.") }
         }
+        if cancelled() { throw CancellationError() }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
@@ -1660,6 +1665,7 @@ private struct Drawing {
         var pieceRenameIdentitiesValid = true
         var pieceIDs = Set<UUID>()
         for raw in rawPieces {
+            if cancelled() { throw CancellationError() }
             if formatVersion == 6 && !Set(raw.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]) {
                 throw ViewerError.message("Sürüm 6 parçada tanınmayan alanlar var; kontur önizlenmedi.")
             }
@@ -1667,7 +1673,8 @@ private struct Drawing {
                   let closed = jsonBoolean(raw["Closed"]) else { throw ViewerError.message("Parça konturu eksik veya sınır dışında.") }
             total += rawPoints.count
             guard total <= 200_000 else { throw ViewerError.message("Toplam nokta sınırı aşıldı.") }
-            let points: [Point] = try rawPoints.map { point in
+            let points: [Point] = try rawPoints.enumerated().map { offset, point in
+                if offset % 256 == 0 && cancelled() { throw CancellationError() }
                 if formatVersion == 6 && !Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]) {
                     throw ViewerError.message("Kontur noktasında tanınmayan alan var; önizleme güvenli değil.")
                 }
@@ -1685,7 +1692,8 @@ private struct Drawing {
                 totalNotches += marks.count
                 guard totalNotches <= 200_000 else { throw ViewerError.message("Köşe işareti sayısı sınırı aşıldı.") }
                 var seen = Set<Int>()
-                for mark in marks {
+                for (offset, mark) in marks.enumerated() {
+                    if offset % 256 == 0 && cancelled() { throw CancellationError() }
                     guard Set(mark.keys) == Set(["VertexIndex", "Position"]),
                           let n = mark["VertexIndex"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
                           !["f", "d"].contains(String(cString: n.objCType)), n.doubleValue >= 0, n.doubleValue < Double(points.count),
@@ -1776,6 +1784,7 @@ private struct Drawing {
                                 material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable, metadataEmpty: metadataEmpty,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
+        if cancelled() { throw CancellationError() }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
                        formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data),
