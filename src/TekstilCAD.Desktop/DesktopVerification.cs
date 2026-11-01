@@ -6322,14 +6322,14 @@ internal static class DesktopVerification
         PumpUntil(()=>tiledTask!.IsCompleted);tiledTask!.GetAwaiter().GetResult();
         Check(studio.ExportError is null && File.ReadAllText(tiledPath).Contains("50 MM KONTROL") && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
             "A4 PDF export produces calibration and preserves source",checks);
-        var withGrain=mismatchDocument.Clone();withGrain.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(90,90),NeedsReview=true };
+        var withGrain=mismatchDocument.Clone();withGrain.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(90,90),NeedsReview=true };withGrain.Pieces[0].Notches=[new NotchMark { VertexIndex=1,Position=withGrain.Pieces[0].Points[1] }];
         studio.LoadDocument(withGrain);var tiledGrainPath=Path.Combine(work,"inspection-a4-grain.pdf");string? grainWarning=null;
         var grainTask=studio.StartExportAfterPreflight(studio.Document.Clone(),tiledGrainPath,5,ProjectStorage.CaptureVersion(tiledGrainPath),message=> { grainWarning=message;return true; });
-        Check(grainTask is not null && grainWarning is not null && grainWarning.Contains("kesikli") && grainWarning.Contains("kaynak projede"),
+        Check(grainTask is not null && grainWarning is not null && grainWarning.Contains("kesikli") && grainWarning.Contains("kaynak projede") && grainWarning.Contains("fiziksel çentik"),
             "A4 PDF explains the visual grainline and source review limits",checks);
         PumpUntil(()=>grainTask!.IsCompleted);grainTask!.GetAwaiter().GetResult();
-        Check(studio.ExportError is null && File.ReadAllText(tiledGrainPath).Contains("KESIK: IPLIK YONU") && DocumentSession.ContentEquals(withGrain,studio.Document),
-            "A4 PDF exports grainline as visual review without modifying the source",checks);
+        Check(studio.ExportError is null && File.ReadAllText(tiledGrainPath).Contains("KESIK:IPLIK  ARTI:ISARET KESIM DEGIL") && DocumentSession.ContentEquals(withGrain,studio.Document),
+            "A4 PDF exports grainline and visual marker for review without modifying the source",checks);
         studio.LoadDocument(mismatchDocument);
         var flippedPath=Path.Combine(work,"canvas-orientation.dxf");
         var flippedVersion=ProjectStorage.CaptureVersion(flippedPath);string? flippedWarning=null;

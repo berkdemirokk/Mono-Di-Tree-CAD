@@ -107,4 +107,42 @@ public class PdfTiledFormatTests
         finally { if(File.Exists(path))File.Delete(path); }
     }
 
+    [Fact]
+    public void VisualMarksUseContourCoordinatesAndClipAcrossSheets()
+    {
+        var path=Path.Combine(Path.GetTempPath(),$"tekstil-tiled-mark-{Guid.NewGuid():N}.pdf");
+        try
+        {
+            var piece=new PatternPiece { Points=[new(0,0),new(189,0),new(300,300),new(0,300)],Notches=[new NotchMark { VertexIndex=1,Position=new(189,0) }] };
+            var source=new ProjectDocument { Pieces=[piece] };var before=source.Clone();
+            PdfTiledFormat.Export(source,path,ProjectStorage.CaptureVersion(path));
+            var pdf=File.ReadAllText(path,Encoding.ASCII);
+            Assert.Equal(4,pdf.Split("ARTI: GORSEL ISARET KESIM DEGIL").Length-1);
+            var sections=pdf.Split("0 G 0.5 w\n").Skip(1).ToArray();Assert.Equal(4,sections.Length);
+            var marks=sections.Select(section=>section[..section.IndexOf('\n')].Split(' '))
+                .Select(v=>(X1:double.Parse(v[0],CultureInfo.InvariantCulture),Y:double.Parse(v[1],CultureInfo.InvariantCulture),X2:double.Parse(v[3],CultureInfo.InvariantCulture))).ToArray();
+            const double scale=72.0/25.4;
+            Assert.InRange(Math.Abs((marks[0].X2-marks[0].X1)-1.5*scale),0,0.000002);
+            Assert.InRange(Math.Abs((marks[0].X1+marks[0].X2)/2-200*scale),0,0.000002);
+            Assert.InRange(Math.Abs(marks[0].Y-276*scale),0,0.000002);
+            Assert.InRange(Math.Abs((marks[0].X1-marks[1].X1)-190*scale),0,0.000002);
+            Assert.InRange(Math.Abs((marks[2].Y-marks[0].Y)-257*scale),0,0.000002);
+            Assert.True(DocumentSession.ContentEquals(before,source));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+    [Fact]
+    public void InvalidVisualMarkCannotReplaceExistingPdf()
+    {
+        var path=Path.Combine(Path.GetTempPath(),$"tekstil-tiled-invalid-mark-{Guid.NewGuid():N}.pdf");
+        try
+        {
+            File.WriteAllText(path,"original");var expected=ProjectStorage.CaptureVersion(path);
+            var source=new ProjectDocument { Pieces=[new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],Notches=[new NotchMark { VertexIndex=1,Position=new(9,0) }] }] };
+            Assert.Throws<InvalidDataException>(()=>PdfTiledFormat.Export(source,path,expected));
+            Assert.Equal("original",File.ReadAllText(path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+
 }

@@ -37,11 +37,9 @@ public class NotchExportGuardTests
     }
 
     [Theory]
-    [InlineData(false, false)]
-    [InlineData(false, true)]
-    [InlineData(true, false)]
-    [InlineData(true, true)]
-    public void PdfExportRejectsMarksWithoutChangingSourceOrDestination(bool tiled, bool destinationExists)
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SinglePagePdfRejectsMarksWithoutChangingSourceOrDestination(bool destinationExists)
     {
         var directory = Path.Combine(Path.GetTempPath(), "tekstilcad-notch-pdf-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(directory);
@@ -54,8 +52,7 @@ public class NotchExportGuardTests
             var version = ProjectStorage.CaptureVersion(path);
             var error = Assert.Throws<InvalidDataException>(() =>
             {
-                if (tiled) PdfTiledFormat.Export(project, path, version);
-                else PdfFormat.Export(project, path, version);
+                PdfFormat.Export(project, path, version);
             });
             Assert.Contains("Çentik", error.Message);
             Assert.True(DocumentSession.ContentEquals(before, project));
