@@ -3879,7 +3879,7 @@ internal static class DesktopVerification
                 foreach(var control in angleControls)
                 {
                     control.BringIntoView();root.UpdateLayout();control.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);root.UpdateLayout();
-                    Check(FullyVisible(control,root),"Each per-piece angle checkbox is reachable at minimum window size",checks);
+                    Check(FullyVisible(control,root),"Each per-piece angle checkbox is reachable at minimum window size: bounds="+BoundsInRoot(control,root)+" visible="+VisibleBoundsInRoot(control,root)+" scroll="+string.Join(";",Descendants<ScrollViewer>(list).Select(v=>$"{v.VerticalOffset}/{v.ScrollableHeight}/{v.ViewportHeight}")),checks);
                 }
             }
             grain.SelectedIndex=1;rotation.SelectedIndex=2;Calculate();

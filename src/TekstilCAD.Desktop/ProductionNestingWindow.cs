@@ -130,6 +130,9 @@ internal sealed class ProductionNestingWindow : Window
         var panel=new Grid();panel.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(300) });panel.ColumnDefinitions.Add(new ColumnDefinition());root.Children.Add(panel);
         VirtualizingPanel.SetIsVirtualizing(choices,true);
         VirtualizingPanel.SetVirtualizationMode(choices,VirtualizationMode.Recycling);
+        // Long source rows can exceed the minimum window's viewport. Pixel
+        // scrolling keeps their angle controls reachable without giving up virtualization.
+        VirtualizingPanel.SetScrollUnit(choices,ScrollUnit.Pixel);
         ScrollViewer.SetCanContentScroll(choices,true);
         ScrollViewer.SetVerticalScrollBarVisibility(choices,ScrollBarVisibility.Auto);
         ScrollViewer.SetHorizontalScrollBarVisibility(choices,ScrollBarVisibility.Disabled);
