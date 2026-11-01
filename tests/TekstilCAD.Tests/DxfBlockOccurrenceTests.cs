@@ -6,6 +6,22 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Theory]
+    [InlineData("2",true)]
+    [InlineData("0",false)]
+    public void OtherThreeDimensionalPointMustNotCoincideInVisiblePlane(string x,bool allowed)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n"+x+"\n20\n0\n30\n1\n50\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");
+        DxfBlockDefinitionPointResult Create()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        if(allowed)Assert.Single(Assert.Single(Create().WorkingCopy.Pieces).Notches!);
+        else Assert.Throws<InvalidDataException>(()=>Create());
+    }
+
+    [Theory]
     [InlineData("0",false)]
     [InlineData("0.000",false)]
     [InlineData("1e-400",false)]

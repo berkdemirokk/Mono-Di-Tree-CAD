@@ -134,13 +134,24 @@ public static class DxfBlockDefinitionPointMapping
         foreach(var other in supplemental.Records.Where(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="POINT" && r.SourceOrdinal!=selection.SourceOrdinal))
         {
             token.ThrowIfCancellationRequested();
-            if(other.Groups.IsDefault || other.Groups.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 100)))
+            if(other.Groups.IsDefault || other.Groups.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 50 or 100 or 210 or 220 or 230)))
                 throw new InvalidDataException("Bloktaki diğer POINT kaydı doğrulanamadı.");
             var ox=Value(other.Groups,10);var oy=Value(other.Groups,20);
-            if(!DxfExactDecimal.AreEqual(Value(other.Groups,30,true),"0",token) ||
+            var oz=Value(other.Groups,30,true);
+            if(!double.TryParse(oz,NumberStyles.Float,CultureInfo.InvariantCulture,out var dz) || !double.IsFinite(dz) ||
+               !DxfExactDecimal.AreEqual(oz,dz.ToString("R",CultureInfo.InvariantCulture),token) ||
                !double.TryParse(ox,NumberStyles.Float,CultureInfo.InvariantCulture,out var dx) ||
                !double.TryParse(oy,NumberStyles.Float,CultureInfo.InvariantCulture,out var dy) || !double.IsFinite(dx) || !double.IsFinite(dy))
                 throw new InvalidDataException("Bloktaki diğer POINT koordinatı doğrulanamadı.");
+            foreach(var code in new[]{210,220,230})
+                if(!DxfExactDecimal.AreEqual(Value(other.Groups,code,true),code==230 && other.Groups.Any(g=>g.Code==230) ? "1" : "0",token))
+                    throw new InvalidDataException("Bloktaki diğer POINT düzlemi doğrulanamadı.");
+            if(other.Groups.Any(g=>g.Code==50))
+            {
+                var angle=Value(other.Groups,50);
+                if(!double.TryParse(angle,NumberStyles.Float,CultureInfo.InvariantCulture,out var a) || !double.IsFinite(a))
+                    throw new InvalidDataException("Bloktaki diğer POINT açısı geçersiz.");
+            }
             var scaledX=dx*parameters.MillimetersPerUnit;var scaledY=dy*parameters.MillimetersPerUnit;
             if(!double.IsFinite(scaledX) || !double.IsFinite(scaledY) || (dx!=0 && scaledX==0) || (dy!=0 && scaledY==0))
                 throw new InvalidDataException("Bloktaki diğer POINT ölçek sonrası doğrulanamadı.");
