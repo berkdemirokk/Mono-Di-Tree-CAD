@@ -637,7 +637,10 @@ public static class DxfFormat
             if(item.Type=="SECTION")
             {
                 if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF bölüm sınırları iç içe geçemez.");
-                var names=item.Data.Where(p=>p.Code==2).ToArray();
+                // HEADER variables share this SECTION entity until the next
+                // code-0 record. Group 2 after the first variable is its value,
+                // not another section name.
+                var names=item.Data.TakeWhile(p=>p.Code!=9).Where(p=>p.Code==2).ToArray();
                 if(names.Length!=1 || string.IsNullOrWhiteSpace(names[0].Value))throw new InvalidDataException("DXF SECTION adı eksik veya yinelenmiş.");
                 occurrenceSection=names[0].Value;continue;
             }
