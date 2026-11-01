@@ -1028,6 +1028,7 @@ internal static class DesktopVerification
             VerifyDuplicatePiece(studio,checks);
             VerifyDuplicateOptions(studio,checks);
             VerifyDuplicateGrading(studio,checks);
+            VerifyMirrorCopy(studio,work,checks);
             VerifyDeleteShortcutSafety(studio,checks);
             VerifyGradeResetConfirmation(studio,checks);
             VerifyGradingGeometryNotice(studio,reportPath,checks);
@@ -13415,6 +13416,94 @@ internal static class DesktopVerification
         Check(savedAsked==3 && savedTable.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="0" && studio.Document.GradingRules[0].Deltas.SequenceEqual(savedBefore),
             "Confirming grading reset does not alter saved grading increments",checks);
     }
+    private static void VerifyMirrorCopy(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var source=new PatternPiece { Name="Ön",Points=[new(0,0),new(10,0),new(10,20),new(0,20)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(10,-0.0) }],Grainline=new Grainline { Start=new(2,3),End=new(3,8) },
+            Metadata=new PieceMetadata { Role="Kesim",Size="M",Material="Pamuk",Quantity=7 } };
+        var sourceRule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(1,2),new(2,3),new(3,4),new(4,5)] };
+        var original=new ProjectDocument { Pieces=[source],GradingRules=[sourceRule] };
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        void Reset() { studio.LoadDocument(original);studio.Select(source.Id); }
+        try
+        {
+            Reset();var before=studio.Document.Clone();var window=new MirrorCopyWindow(studio);
+            try
+            {
+                Render(window,Path.Combine(work,"mirror-copy-compact.png"),500,420);
+                Check(FullyVisible(window.ApplyButton,(FrameworkElement)window.Content) && window.CopyRule.IsChecked!=true && window.CopyInfo.IsChecked!=true,
+                    "Mirror copy exposes its action and keeps rule and metadata opt-in",checks);
+                window.CopyRule.IsChecked=true;window.CopyInfo.IsChecked=true;
+                var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(window.ApplyButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Mirror copy preview does not change source",checks);
+                window.Gap.Text="11";Check(!window.ApplyButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Changing mirror inputs clears the old preview",checks);
+                window.Gap.Text="10";task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                window.ApplyForVerification();var after=studio.Document.Clone();var copy=after.Pieces.Single(p=>p.Id!=source.Id);
+                var mapped=after.GradingRules.Single(r=>r.SourcePieceId==copy.Id);
+                Check(copy.Points.SequenceEqual(new[] { new Point2(30,0),new Point2(20,0),new Point2(20,20),new Point2(30,20) }) &&
+                    copy.Notches!.Single().VertexIndex==1 && copy.Notches[0].Position.X==20 && BitConverter.DoubleToInt64Bits(copy.Notches[0].Position.Y)==BitConverter.DoubleToInt64Bits(-0.0) &&
+                    copy.Grainline is { NeedsReview:true } && copy.Grainline.Start==new Point2(28,3) && copy.Grainline.End==new Point2(27,8) &&
+                    copy.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:null } &&
+                    mapped.SourcePoints.SequenceEqual(copy.Points) && mapped.Deltas.SequenceEqual(new[] { new Point2(-1,2),new Point2(-2,3),new Point2(-3,4),new Point2(-4,5) }) &&
+                    DocumentSession.ContentEquals(before,new ProjectDocument { Pieces=[after.Pieces[0]],GradingRules=[after.GradingRules.Single(r=>r.SourcePieceId==source.Id)] }),
+                    "Mirror copy maps marked geometry, review grainline and rule without copying quantity or changing source",checks);
+                var path=Path.Combine(work,"mirror-copy.tcad");ProjectStorage.Save(after,path);
+                Check(DocumentSession.ContentEquals(after,ProjectStorage.Load(path)),"Mirror copy survives project save and reopen",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Mirror copy and its rule undo and redo atomically",checks);
+            }
+            finally { window.Close(); }
+            Reset();before=studio.Document.Clone();window=new MirrorCopyWindow(studio);
+            try
+            {
+                window.Side.SelectedIndex=1;var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();window.ApplyForVerification();
+                var copy=studio.Document.Pieces.Single(p=>p.Id!=source.Id);
+                Check(copy.Points.Min(p=>p.X)==-20 && copy.Points.Max(p=>p.X)==-10 && copy.Metadata is null && studio.Document.GradingRules.Count==1,
+                    "Left mirror uses requested gap and leaves optional data out by default",checks);
+            }
+            finally { window.Close(); }
+            Reset();before=studio.Document.Clone();window=new MirrorCopyWindow(studio);
+            try
+            {
+                window.Gap.Text="5E-324";var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(!window.ApplyButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+                    "Mirror copy rejects a gap that disappears at the source coordinate",checks);
+            }
+            finally { window.Close(); }
+            var staleRule=original.Clone();staleRule.GradingRules[0].SourcePoints[0]=new Point2(-0.0,0);
+            studio.LoadDocument(staleRule);studio.Select(source.Id);before=studio.Document.Clone();window=new MirrorCopyWindow(studio);
+            try
+            {
+                window.CopyRule.IsChecked=true;var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(!window.ApplyButton.IsEnabled && window.Status.Text.Contains("bitçe") && DocumentSession.ContentEquals(before,studio.Document),
+                    "Mirror copy rejects a bit-different source grading rule without mutation",checks);
+            }
+            finally { window.Close(); }
+            Reset();window=new MirrorCopyWindow(studio);
+            try
+            {
+                var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                studio.Commit("Kaynak değişti",()=>studio.Document.Pieces[0].Name="Yeni ad");var changed=studio.Document.Clone();window.ApplyForVerification();
+                Check(DocumentSession.ContentEquals(changed,studio.Document) && window.Status.Text.Contains("değişti"),"Mirror copy refuses stale source before commit",checks);
+            }
+            finally { window.Close(); }
+            Reset();before=studio.Document.Clone();window=new MirrorCopyWindow(studio);
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                Task? task=null;
+                try
+                {
+                    window.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                    task=window.CalculateForVerification();PumpUntil(()=>reached.IsSet);window.CancelForVerification();release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(!window.ApplyButton.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Cancelled mirror preview keeps source and history",checks);
+                }
+                finally { release.Set();if(task is not null){PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();}window.Close(); }
+            }
+        }
+        finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
     private static void VerifyDuplicateGrading(MainWindow studio,List<string> checks)
     {
         var source=new PatternPiece { Name="Kaynak",Points=[new(0,0),new(10,0),new(0,10)] };

@@ -388,6 +388,7 @@ public class MainWindow : Window
         AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
         selectionCommands.Add(rotateClockwise);
         selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        selectionCommands.Add(AddButton(transforms,"Yanına aynalı parça…",OpenMirrorCopy,"Kaynağı koruyarak sağ veya sola boşluklu aynalı karşı parça oluşturur; önce önizleme sunar."));
         var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
         AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
         selectionCommands.Add(mirrorHorizontal);
@@ -1323,6 +1324,12 @@ public class MainWindow : Window
                 : "Parça değerleri değişmedi; taslak temizlendi ancak görünüm yenilenemedi. Çalışma alanını kontrol edin.",ex);
         }
     }
+    private void OpenMirrorCopy()
+    {
+        if(CaptureGrainlineEdit() is null)return;
+        new MirrorCopyWindow(this).ShowDialog();
+    }
+
     internal sealed record GrainlineEditStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid PieceId);
 
     // The window holds only a detached drawing; this stamp must be rechecked
