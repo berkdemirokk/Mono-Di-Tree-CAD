@@ -1,5 +1,8 @@
 using TekstilCAD.Core;
+using TekstilCAD.FileFormats;
 using TekstilCAD.Grading;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace TekstilCAD.Tests;
 
@@ -61,5 +64,36 @@ public sealed class GradingMarkedVertexTests
         Assert.Throws<ArgumentException>(()=>GradingEngine.Generate(source,increments,0,"M"));
         using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>GradingEngine.Generate(source,increments,0,"M",cancellation.Token));
+    }
+
+    [Fact]
+    public void GradedMarkedBatchRoundTripsInVersionSix()
+    {
+        var source = Source();
+        Point2[] increments = [new(0,0),new(2,0),new(2,1),new(0,1),new(0,0)];
+        var generated = GradingEngine.GenerateSizes(source,increments,[new("S",-1),new("L",1)]);
+        var document = new ProjectDocument { Pieces = [source, .. generated] };
+        var text = ProjectStorage.SerializeProject(document);
+        Assert.Equal(6,(int)JsonNode.Parse(text)!.AsArray()[0]!);
+        var loaded = ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(text));
+        Assert.True(DocumentSession.ContentEquals(document,loaded));
+        foreach (var piece in loaded.Pieces)
+        {
+            Assert.Equal(new[] { 0,2 },piece.Notches!.Select(m=>m.VertexIndex));
+            Assert.All(piece.Notches!,mark=>Assert.Equal(piece.Points[mark.VertexIndex],mark.Position));
+        }
+    }
+
+    [Fact]
+    public void FailedLaterBatchSizeReturnsNothingAndKeepsSourceMarks()
+    {
+        var source = Source(); var before = source.Clone();
+        Point2[] increments = [new(0,0),new(-20,0),new(-20,-20),new(0,-20),new(0,0)];
+        IReadOnlyList<PatternPiece>? result = null;
+        Assert.Throws<InvalidDataException>(() => result = GradingEngine.GenerateSizes(source,increments,[new("M",0),new("L",1)]));
+        Assert.Null(result);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces = [before] },
+            new ProjectDocument { Pieces = [source] }));
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(source.Notches![0].Position.Y));
     }
 }
