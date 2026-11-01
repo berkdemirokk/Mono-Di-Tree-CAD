@@ -3691,14 +3691,43 @@ internal static class DesktopVerification
             grain.SelectedIndex=1;Calculate();
             var layout=(ProjectDocument?)preview.GetType().GetProperty("Drawing")!.GetValue(preview);
             Check(layout is { Pieces.Count:2 } && layout.Pieces.All(p=>p.Notches is { Count:1 } && p.Notches[0].Position==p.Points[1] &&
-                p.Grainline is { } line && line.Start.X==line.End.X && line.End.Y>line.Start.Y) && !save.IsEnabled &&
-                status.Text.Contains("90°") && status.Text.Contains("kaydedilemez") && DocumentSession.ContentEquals(before,studio.Document),
-                "Rotated marked copies are trace checked and preview only",checks);
-            var blocked=false;
-            try { window.CaptureLayoutDestination(Path.Combine(work,"rotated-must-not-save.tcad"),
-                (int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!,layout!); }
-            catch(InvalidOperationException) { blocked=true; }
-            Check(blocked && !File.Exists(Path.Combine(work,"rotated-must-not-save.tcad")),"Rotated preview cannot bypass the save guard",checks);
+                p.Grainline is { } line && line.Start.X==line.End.X && line.End.Y>line.Start.Y) && save.IsEnabled &&
+                layout.NestingSnapshot?.RotationTrace is not null && status.Text.Contains("sürüm 7") && DocumentSession.ContentEquals(before,studio.Document),
+                "Rotated marked copies retain verified trace and offer version 7 save",checks);
+            var version=(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
+            var path=Path.Combine(work,$"rotated-layout-{Guid.NewGuid():N}.tcad");
+            var expected=window.CaptureLayoutDestination(path,version,layout!);
+            var saved=window.StartSaveLayoutAsync(path,version,layout!,expected);PumpUntil(()=>saved.IsCompleted);saved.GetAwaiter().GetResult();
+            var loaded=ProjectStorage.Load(path);
+            Check(DocumentSession.ContentEquals(layout!,loaded) && loaded.NestingSnapshot!.RotationTrace is not null &&
+                loaded.NestingSnapshot.IsCurrentFor(loaded) && DocumentSession.ContentEquals(before,studio.Document) &&
+                ProductionNestingWindow.FormatLayoutSaveConfirmation(layout!).Contains("sürüm 7"),
+                "Rotated preview saves and reopens a verified v7 project without changing source",checks);
+            var conflictPath=Path.Combine(work,$"rotated-conflict-{Guid.NewGuid():N}.tcad");
+            var conflict=window.CaptureLayoutDestination(conflictPath,version,layout!);File.WriteAllText(conflictPath,"korunan");
+            var conflictTask=window.StartSaveLayoutAsync(conflictPath,version,layout!,conflict);PumpUntil(()=>conflictTask.IsCompleted);
+            var conflicted=false;try { conflictTask.GetAwaiter().GetResult(); } catch(ProjectConflictException) { conflicted=true; }
+            Check(conflicted && File.ReadAllText(conflictPath)=="korunan" && DocumentSession.ContentEquals(before,studio.Document),
+                "Rotated v7 save preserves a competing target",checks);
+            var oldMark=layout!.Pieces[0].Notches![0].Position;layout.Pieces[0].Notches![0].Position=new Point2(99,99);
+            var blocked=false;try { window.CaptureLayoutDestination(Path.Combine(work,"rotated-mutated.tcad"),version,layout); } catch(InvalidOperationException) { blocked=true; }
+            layout.Pieces[0].Notches![0].Position=oldMark;
+            Check(blocked,"Changed rotated preview cannot reuse its earlier approval",checks);
+            var earlierPath=Path.Combine(work,$"rotated-earlier-{Guid.NewGuid():N}.tcad");
+            var earlierVersion=window.CaptureLayoutDestination(earlierPath,version,layout);
+            using(var reachedSave=new ManualResetEventSlim())using(var releaseSave=new ManualResetEventSlim())
+            {
+                var originalName=layout.Pieces[0].Name;
+                try
+                {
+                    window.BeforeLayoutSaveForVerification=()=> { reachedSave.Set();if(!releaseSave.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                    var task=window.StartSaveLayoutAsync(earlierPath,version,layout,earlierVersion);PumpUntil(()=>reachedSave.IsSet);
+                    layout.Pieces[0].Name="Değişen önizleme";releaseSave.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(status.Text.Contains("önceki önizlemesi") && ProjectStorage.Load(earlierPath).Pieces[0].Name==originalName &&
+                        !save.IsEnabled,"Preview changes during v7 save are reported as an earlier snapshot",checks);
+                }
+                finally { releaseSave.Set();window.BeforeLayoutSaveForVerification=null;layout.Pieces[0].Name=originalName; }
+            }
             rotation.SelectedIndex=0;
             Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
                 "Changing rotation clears the old preview",checks);
@@ -3716,6 +3745,9 @@ internal static class DesktopVerification
                 }
                 finally { release.Set();window.BeforeCalculationForVerification=null; }
             }
+            window.Close();studio.OpenProjectFile(path);
+            Check(DocumentSession.ContentEquals(layout!,studio.Document) && studio.Document.NestingSnapshot?.RotationTrace is not null &&
+                studio.Document.NestingSnapshot.IsCurrentFor(studio.Document),"Desktop opens the saved v7 rotated layout with its verified trace",checks);
         }
         finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }

@@ -69,6 +69,7 @@ internal sealed class ProductionNestingWindow : Window
     internal Action? BeforeLayoutSaveForVerification { get; set; }
     private int inputsVersion;
     private int previewRotation;
+    private ProjectDocument? previewLayoutSnapshot;
     private readonly DispatcherTimer documentWatch = new() { Interval=TimeSpan.FromSeconds(1) };
     public ProductionNestingWindow(MainWindow workspace, Window owner)
     {
@@ -93,7 +94,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetName(grainPolicy,"İplik yönü doğrulama politikası");
         AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. 90 derece dönüşte yön doğrulaması zorunludur.");
         AutomationProperties.SetName(rotationPolicy,"Kopyaların dönüşü");
-        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa, tuvalde saat yönünde her seçili parçanın tüm kopyalarına uygulanır. Optimizasyon değildir; iplik yönü doğrulanır. Dönüş açısı kaydedilemediğinden sonuç yalnız önizlenebilir.");
+        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa, tuvalde saat yönünde her seçili parçanın tüm kopyalarına uygulanır. Optimizasyon değildir; iplik yönü doğrulanır. Ayrı kayıt sürüm 7 gerektirir.");
         AutomationProperties.SetName(width,"Kumaş eni, milimetre"); AutomationProperties.SetName(gap,"Parçalar arası boşluk, milimetre");
         AutomationProperties.SetName(fabricLength,"Kullanılabilir kumaş boyu, milimetre, isteğe bağlı");
         AutomationProperties.SetHelpText(fabricLength,"Boş bırakılırsa kumaş boyu sınırlandırılmaz. Bir değer girilirse pastal bu boyu aşamaz.");
@@ -101,7 +102,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(gap,"Parça boşluğu 0 ile 100 milyon milimetre arasında olmalıdır. Ondalık için virgül veya nokta kullanın.");
         AutomationProperties.SetName(edgeMargin,"Dört kenarın her biri için kumaş kenar payı, milimetre");
         AutomationProperties.SetHelpText(edgeMargin,"Aynı pay sol, sağ, başlangıç ve bitiş kenarlarına uygulanır. Sıfır kenar payı eklemez.");
-        var warning=new TextBlock { Text="Kenar payı dört kenarın her birine uygulanır; sıfır seçilirse pay eklenmez. Boşluk parçalar arasındadır. 90° yalnız önizleme; optimizasyon, kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
+        var warning=new TextBlock { Text="Kenar payı dört kenarın her birine uygulanır; sıfır seçilirse pay eklenmez. Boşluk parçalar arasındadır. 90° optimizasyon değildir; kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
         var panel=new Grid();panel.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(300) });panel.ColumnDefinitions.Add(new ColumnDefinition());root.Children.Add(panel);
         VirtualizingPanel.SetIsVirtualizing(choices,true);
         VirtualizingPanel.SetVirtualizationMode(choices,VirtualizationMode.Recycling);
@@ -390,7 +391,7 @@ internal sealed class ProductionNestingWindow : Window
     {
         inputsVersion++; ClearErrorChoice();
         documentWatch.Stop();
-        preview.Drawing=null;previewRotation=0; highlight.ItemsSource=null; mapping.Text="";saveLayout.IsEnabled=false;
+        preview.Drawing=null;previewRotation=0;previewLayoutSnapshot=null; highlight.ItemsSource=null; mapping.Text="";saveLayout.IsEnabled=false;
         SetStatus("Seçim veya ölçüler değişti; güncel önizleme için yeniden hesaplayın.");
     }
     private void CheckVisibleResultCurrent()
@@ -407,6 +408,8 @@ internal sealed class ProductionNestingWindow : Window
             InvalidatePreview();
             SetStatus("Proje değişti; önceki sonuç kaldırıldı. Güncel parçalar için pencereyi kapatıp yeniden açın.");
         }
+        else if(preview.Drawing is { } layout && (previewLayoutSnapshot is null || !DocumentSession.ContentEquals(previewLayoutSnapshot,layout)))
+        { InvalidatePreview();SetStatus("Önizleme değişti; önceki sonuç kaldırıldı. Yeniden hesaplayın."); }
     }
     // Validate the three related fabric settings before scheduling the worker so
     // operators get an actionable field-specific explanation in the result area.
@@ -439,7 +442,7 @@ internal sealed class ProductionNestingWindow : Window
         var grainMode=grainPolicy.SelectedIndex;
         var rotationMode=rotationPolicy.SelectedIndex;
         if(rotationMode is <0 or >1 || (rotationMode==1 && grainMode is not (1 or 2)))
-        { InvalidatePreview();SetStatus("90° dönüş için tek veya çift yön iplik kontrolü seçin; dönüş yalnız önizlenir.");return; }
+        { InvalidatePreview();SetStatus("90° dönüş için tek veya çift yön iplik kontrolü seçin.");return; }
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
@@ -450,6 +453,7 @@ internal sealed class ProductionNestingWindow : Window
             {
                 beforeCalculation?.Invoke();token.ThrowIfCancellationRequested();
                 ProductionNestingResult result;
+                RotatedNestingTrace? trace=null;
                 if(rotationMode==1)
                 {
                     var selected=ids.ToHashSet();var rotations=new Dictionary<(Guid,int),int>();
@@ -464,6 +468,7 @@ internal sealed class ProductionNestingWindow : Window
                     var rotated=PerCopyOrthogonalNesting.Arrange(snapshot,ids,rotations,w,g,length,m,direction,0,token);
                     if(!PerCopyTraceVerifier.IsValidForConstraints(snapshot,ids,rotated,rotations,direction,0,w,g,m,length,token))
                         throw new InvalidOperationException("Döndürülen kopya, işaret veya iplik izi doğrulanamadı; önizleme hazırlanmadı.");
+                    trace=RotatedNestingRecord.Capture(snapshot,ids,rotations,rotated,direction,0,w,g,m,length,token).ToTrace(token);
                     result=rotated.Plan;
                 }
                 else result=grainMode switch {
@@ -486,8 +491,9 @@ internal sealed class ProductionNestingWindow : Window
                     EdgeMargin=result.Nesting.EdgeMargin,
                     Algorithm=NestingSnapshot.ShelfAlgorithm,
                     LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(layout,token),
-                    Placements=result.Placements.Select(p=>new NestingPlacementSnapshot(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId)).ToList()
+                    Placements=result.Placements.Select(p=>new NestingPlacementSnapshot(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId)).ToList(),RotationTrace=trace
                 };
+                ProjectStorage.Validate(layout,token);token.ThrowIfCancellationRequested();
                 // Build frozen geometry and labels away from the UI dispatcher.
                 token.ThrowIfCancellationRequested();
                 var geometry=Preview.BuildGeometryCancellable(layout,token);
@@ -503,7 +509,7 @@ internal sealed class ProductionNestingWindow : Window
                     return new PlacementChoice(placement.PlacedPieceId,label,safeName);
                 }).ToArray();
                 token.ThrowIfCancellationRequested();
-                return (Plan:result,Geometry:geometry,Choices:placementChoices);
+                return (Plan:result,Geometry:geometry,Choices:placementChoices,LayoutSnapshot:layout.Clone());
             });
             if(closed)return;
             token.ThrowIfCancellationRequested();
@@ -512,8 +518,9 @@ internal sealed class ProductionNestingWindow : Window
             if(workspace.HasPendingCanvasOrPropertyWork)
             { InvalidatePreview();SetStatus("Hesap sırasında bekleyen çizim veya alan taslağı oluştu; sonuç uygulanmadı. Önce bunları tamamlayın veya iptal edin.");return; }
             if(!DocumentSession.ContentEquals(snapshot,workspace.Document)) { SetStatus("Proje değişti; sonuç uygulanmadı. Pencereyi kapatıp yeniden açın.");return; }
+            previewLayoutSnapshot=prepared.LayoutSnapshot;
             preview.SetDrawing(planned.Nesting.Layout,w,planned.Nesting.UsedLength,planned.Nesting.EdgeMargin,prepared.Geometry);
-            previewRotation=rotationMode==1 ? 90 : 0;saveLayout.IsEnabled=previewRotation==0;
+            previewRotation=rotationMode==1 ? 90 : 0;saveLayout.IsEnabled=true;
             documentWatch.Start();
             highlight.ItemsSource=prepared.Choices; if(prepared.Choices.Length>0)highlight.SelectedIndex=0;
             var edgeDescription=planned.Nesting.EdgeMargin>0
@@ -523,7 +530,7 @@ internal sealed class ProductionNestingWindow : Window
             var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
                 ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
                 : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
-            var rotationNotice=previewRotation==0 ? "" : " Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Dönüş açıları proje biçiminde saklanamadığından bu önizleme kaydedilemez.";
+            var rotationNotice=previewRotation==0 ? "" : " Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.";
             SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}{rotationNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
@@ -543,8 +550,8 @@ internal sealed class ProductionNestingWindow : Window
         }
         finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
     }
-    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && previewRotation==0 && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
-        ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
+    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
+        ReferenceEquals(preview.Drawing,layout) && previewLayoutSnapshot is not null && DocumentSession.ContentEquals(previewLayoutSnapshot,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
     private async Task SaveLayout()
     {
         if(workspace.HasPendingCanvasOrPropertyWork)
@@ -575,8 +582,10 @@ internal sealed class ProductionNestingWindow : Window
     }
     internal static string FormatLayoutSaveConfirmation(ProjectDocument layout)
     {
-        var fileVersion=layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
-        return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz. Bu bir makine işi değildir. Devam edilsin mi?";
+        var rotated=layout.NestingSnapshot?.RotationTrace is not null;
+        var fileVersion=rotated ? 7 : layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
+        var extra=rotated ? " Kaynak parça geometrisi, kopya açıları ve iplik kısıtları tarihsel izde saklanır; kaynak serileme kuralları aktarılmaz. Desteklemeyen mobil sürümler açamaz." : "";
+        return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz.{extra} Bu bir makine işi veya üretim onayı değildir. Devam edilsin mi?";
     }
     internal ProjectFileVersion CaptureLayoutDestination(string path,int version,ProjectDocument layout)
     {
@@ -610,7 +619,8 @@ internal sealed class ProductionNestingWindow : Window
         {
             await Task.Run(()=> { beforeSave?.Invoke(); ProjectStorage.SaveIfUnchanged(snapshot,path,expected); });
             if(closed)return;
-            var current=!workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion && ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
+            var current=!workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion && ReferenceEquals(preview.Drawing,layout) &&
+                DocumentSession.ContentEquals(snapshot,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
             SetStatus(current
                 ? "Pastal ayrı proje olarak kaydedildi. Kumaş ayarları ve kaynak-kopya eşleşmesi tarihsel bilgi olarak saklandı; makine işi oluşturulmadı. Eski TekstilCAD sürümleri bu dosyayı açamaz."
                 : "Pastalın önceki önizlemesi ayrı proje olarak kaydedildi; proje, seçimler veya bekleyen çizim/alan taslakları işlem sırasında değişti. Güncel sonuç için yeniden hesaplayın. Kaydedilen pastal bilgisi tarihsel görüntüye aittir.");

@@ -351,6 +351,12 @@ public static class ProjectStorage
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
+        if(project.NestingSnapshot?.RotationTrace is not null)
+        {
+            var reread=DeserializeProject(Encoding.UTF8.GetBytes(text));
+            if(!DocumentSession.ContentEquals(project,reread))
+                throw new InvalidDataException("Döndürme izi dosyada kayıpsız yeniden okunamadı; mevcut dosya korunuyor.");
+        }
         return text;
     }
     private static byte[]? ReadSnapshot(string path)
@@ -383,13 +389,15 @@ public static class ProjectStorage
     }
     // Persistence accepts draft contours; manufacturability must be checked by the production operation.
     public static void Validate(ProjectDocument project) => ValidateCore(project, allowInvalidPieceNameUtf16: false);
+    public static void Validate(ProjectDocument project,CancellationToken token) => ValidateCore(project,allowInvalidPieceNameUtf16:false,token);
 
     // DXF layer planning explicitly reports and replaces unsupported name characters;
     // the permanent project format must continue rejecting lossy UTF-16 strings.
     internal static void ValidateForDxfExport(ProjectDocument project) => ValidateCore(project, allowInvalidPieceNameUtf16: true);
 
-    private static void ValidateCore(ProjectDocument project, bool allowInvalidPieceNameUtf16)
+    private static void ValidateCore(ProjectDocument project, bool allowInvalidPieceNameUtf16,CancellationToken token=default)
     {
+        token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(project);
         project.ImportProvenance?.Validate();
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
@@ -397,6 +405,7 @@ public static class ProjectStorage
         var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
         {
+            token.ThrowIfCancellationRequested();
             if (piece is null || piece.Points is null || piece.Points.Count > MaximumPointsPerPiece || piece.Points.Count < (piece.Closed ? 3 : 2))
                 throw new InvalidDataException("Geçersiz kontur veya nokta sınırı aşıldı.");
             if (piece.Name is null || piece.Name.Length > 1024 || (!allowInvalidPieceNameUtf16 && !IsWellFormedUtf16(piece.Name))) throw new InvalidDataException("Geçersiz parça adı veya eksik Unicode karakteri.");
@@ -437,6 +446,7 @@ public static class ProjectStorage
         var ruleIds = new HashSet<Guid>(); long rulePoints = 0;
         foreach (var rule in project.GradingRules)
         {
+            token.ThrowIfCancellationRequested();
             if (rule is null || !ids.Contains(rule.SourcePieceId) || !ruleIds.Add(rule.SourcePieceId) || rule.SourcePoints is null || rule.Deltas is null || rule.SourcePoints.Count != rule.Deltas.Count || rule.SourcePoints.Count < (rule.SourceClosed ? 3 : 2) || rule.SourcePoints.Count > MaximumPointsPerPiece)
                 throw new InvalidDataException("Geçersiz serileme kaynağı veya nokta listesi.");
             rulePoints += rule.SourcePoints.Count;
@@ -446,7 +456,7 @@ public static class ProjectStorage
         }
         if (project.NestingSnapshot is { } snapshot)
         {
-            if(snapshot.RotationTrace is not null)RotatedProjectValidation.Verify(project);
+            if(snapshot.RotationTrace is not null)RotatedProjectValidation.Verify(project,token);
             // This is historical planning metadata, not a certificate that the
             // current geometry or a physical machine is production ready.
             const double limit = 100_000_000;

@@ -73,9 +73,9 @@ public sealed class RotatedNestingRecord
     public double MaxLength => maxLength;
 
     /// <summary>Produces a detached explicit-angle model. No file format or validation status is implied.</summary>
-    public RotatedNestingTrace ToTrace()
+    public RotatedNestingTrace ToTrace(CancellationToken token=default)
     {
-        if(!Verify())throw new InvalidOperationException("Döndürme izi artık doğrulanamıyor.");
+        if(!Verify(token))throw new InvalidOperationException("Döndürme izi artık doğrulanamıyor.");
         return new RotatedNestingTrace {
             Schema=RotatedNestingTrace.CurrentSchema,Algorithm=RotatedNestingTrace.CurrentAlgorithm,
             TransformConvention=RotatedNestingTrace.CurrentTransform,SourceFingerprint=result.SourceFingerprint,
