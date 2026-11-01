@@ -269,6 +269,14 @@ public static class PatternTools
     /// Rejects a midpoint that cannot be represented exactly, preserving the original edge.</summary>
     public static PatternPiece InsertEdgeMidpoint(PatternPiece piece,int afterIndex,CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            var detached=piece.Clone();detached.Notches=null;
+            var inserted=InsertEdgeMidpoint(detached,afterIndex,cancellationToken);
+            return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
+        }
         var points=SnapshotPointEdit(piece,cancellationToken);
         if(afterIndex<0 || afterIndex>=points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
         if(piece.Closed && points.Count>1 && points[0]==points[^1] && afterIndex==points.Count-1)afterIndex=0;
@@ -300,6 +308,14 @@ public static class PatternTools
     /// geometric precision and validation guarantees as distance insertion.</summary>
     public static PatternPiece InsertPointAtPercentage(PatternPiece piece, int afterIndex, double percentage, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            var detached=piece.Clone();detached.Notches=null;
+            var inserted=InsertPointAtPercentage(detached,afterIndex,percentage,cancellationToken);
+            return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
+        }
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (!double.IsFinite(percentage) || percentage <= 0 || percentage >= 100)
             throw new ArgumentException("Yüzde sıfırdan büyük ve 100'den küçük olmalıdır.", nameof(percentage));
@@ -315,6 +331,14 @@ public static class PatternTools
     /// point is at most 0.000001 mm from the original line and requested distance.</summary>
     public static PatternPiece InsertPointAtDistance(PatternPiece piece, int afterIndex, double distance, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            var detached=piece.Clone();detached.Notches=null;
+            var inserted=InsertPointAtDistance(detached,afterIndex,distance,cancellationToken);
+            return PreserveMarksAfterInsertion(piece,inserted,afterIndex,cancellationToken);
+        }
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (afterIndex < 0 || afterIndex >= points.Count) throw new ArgumentOutOfRangeException(nameof(afterIndex));
         if (piece.Closed && points.Count > 1 && points[0] == points[^1] && afterIndex == points.Count - 1) afterIndex = 0;
@@ -351,6 +375,24 @@ public static class PatternTools
         return InsertPoint(detached, afterIndex, point, cancellationToken);
     }
 
+    private static PatternPiece PreserveMarksAfterInsertion(PatternPiece source,PatternPiece inserted,int afterIndex,CancellationToken token)
+    {
+        token.ThrowIfCancellationRequested();
+        if(afterIndex<0 || afterIndex>=source.Points.Count)throw new ArgumentOutOfRangeException(nameof(afterIndex));
+        var normalized=source.Closed && source.Points.Count>1 && source.Points[0]==source.Points[^1] && afterIndex==source.Points.Count-1 ? 0 : afterIndex;
+        if(inserted.Points.Count!=source.Points.Count+1)throw new ArgumentException("Nokta ekleme eşlemesi geçersiz.");
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();
+            if(inserted.Points[i>normalized ? i+1 : i]!=source.Points[i])
+                throw new ArgumentException("Kaynak köşeler korunamadı; nokta eklenmedi.");
+        }
+        var marks=source.Notches!.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex>normalized ? mark.VertexIndex+1 : mark.VertexIndex,Position=mark.Position }).ToList();
+        foreach(var mark in marks)
+            if(mark.VertexIndex>=inserted.Points.Count || inserted.Points[mark.VertexIndex]!=mark.Position)
+                throw new ArgumentException("Çentik işareti korunamadı; nokta eklenmedi.");
+        inserted.Notches=marks;token.ThrowIfCancellationRequested();return inserted;
+    }
     /// <summary>Inserts into a detached contour. If the final stored point explicitly
     /// repeats the first point, its index identifies that same first vertex.
     /// Large contours must be processed off the UI thread; cancellation is cooperative.</summary>

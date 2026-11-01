@@ -8011,6 +8011,22 @@ internal static class DesktopVerification
             Check(result.Text.Contains("güncel projeye ait değil",StringComparison.Ordinal) && DocumentSession.ContentEquals(stable,studio.Document)
                   && session.UndoCount==undo && session.RedoCount==redo,
                 "Stale detached selection is rejected before absent notch no-op",checks);
+            foreach(var mode in new[] { "midpoint","distance","percentage" })
+            {
+                tools.Close();
+                var splitPiece=new PatternPiece { Points=[new(0,0),new(20,0),new(20,20),new(0,20)],
+                    Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+                var splitRule=new GradingRuleSet { SourcePieceId=splitPiece.Id,SourceClosed=true,SourcePoints=[..splitPiece.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[splitPiece],GradingRules=[splitRule] });studio.Select(splitPiece.Id);tools=new TextileToolsWindow(studio);
+                var splitBefore=studio.Document.Clone();
+                var splitTask=mode switch { "midpoint"=>tools.InsertEdgeMidpointAsync("0"),"distance"=>tools.InsertEdgeDistanceAsync("0","10"),_=>tools.InsertEdgePercentageAsync("0","50") };
+                PumpUntil(()=>splitTask.IsCompleted);splitTask.GetAwaiter().GetResult();var splitAfter=studio.Document.Clone();
+                Check(splitAfter.Pieces[0].Notches!.Single().VertexIndex==2 && splitAfter.Pieces[0].Notches![0].Position==splitAfter.Pieces[0].Points[2] &&
+                    splitAfter.GradingRules.Single().SourcePoints.SequenceEqual(splitAfter.Pieces[0].Points),
+                    $"Marked {mode} split retains the mark and updates the grading source",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(splitBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(splitAfter,studio.Document),
+                    $"Marked {mode} split supports undo and redo",checks);
+            }
         }
         finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
