@@ -14,6 +14,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBox prompt=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBox measurements=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
+    private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private DesignReference? reference;
     private bool dirty,loading;
@@ -22,6 +23,8 @@ internal sealed class DesignRequestWindow : Window
     internal DesignRequest CaptureForVerification()=>Capture();
     internal void LoadForVerification(DesignRequest value)=>Apply(value);
     internal bool DirtyForVerification=>dirty;
+    internal TextBox ReviewForVerification=>measurementReview;
+    internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
         Owner=owner;Title="Kalıp isteği hazırla";Width=680;Height=680;MinWidth=480;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
@@ -34,13 +37,32 @@ internal sealed class DesignRequestWindow : Window
         body.Children.Add(new TextBlock { Text="Kadın elbisenin modelini ve istediğiniz özellikleri kendi sözlerinizle yazın; ölçüleri birimleriyle belirtin. Örneğin elbise boyu, göğüs, bel, kalça ve kol ölçülerini biliniyorsa ekleyin. Eksik ölçüler tahmin edilmez. İsteğe bağlı tek PNG/JPEG görseli dosyaya kopyalanır. Bu çevrimdışı istek kalıp oluşturmaz; veri hiçbir servise gönderilmez. Açık proje ve çizim değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
         body.Children.Add(new Label { Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");body.Children.Add(prompt);
         body.Children.Add(new Label { Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");body.Children.Add(measurements);
+        body.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
+        var checkMeasurements=new Button { Content="Açık ölçüleri denetle",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };
+        body.Children.Add(checkMeasurements);checkMeasurements.Click+=(_,_)=>ReviewMeasurements();
+        body.Children.Add(new Label { Content="Ölçü denetimi sonucu",Target=measurementReview });AutomationProperties.SetName(measurementReview,"Ölçü denetimi sonucu");body.Children.Add(measurementReview);
         body.Children.Add(new TextBlock { Text="Referans görseli",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,12,0,4) });body.Children.Add(referenceLabel);
         var refActions=new WrapPanel();body.Children.Add(refActions);
         var choose=new Button { Content="Görsel seç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,8,4) };refActions.Children.Add(choose);choose.Click+=(_,_)=>ChooseReference();
         var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=> { if(reference is not null) { reference=null;dirty=true;UpdateReference(); } };
         body.Children.Add(new TextBlock { Text="Görsel dosyanın tüm baytları ve varsa içindeki metadata isteğe eklenir. Yalnızca PNG/JPEG imzası kontrol edilir; görsel içeriği, ölçüler veya üretime uygunluk doğrulanmaz. Kaydetme yeni ve ayrı bir dosya oluşturur; kalıp çizimi ve plotter çıktısı için sonraki işlem ve kullanıcı kontrolü gerekir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,10,0,0) });
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        prompt.TextChanged+=(_,_)=> { if(!loading)dirty=true; };measurements.TextChanged+=(_,_)=> { if(!loading)dirty=true; };UpdateReference();Closing+=OnClosing;
+        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading)dirty=true; };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading)dirty=true; };UpdateReference();Closing+=OnClosing;
+    }
+    private void ReviewMeasurements()
+    {
+        try
+        {
+            var review=DressMeasurementParser.Review(prompt.Text,measurements.Text);
+            var lines=new List<string> { "Açık bulunan ölçüler (mm):" };
+            lines.AddRange(review.Measurements.Select(m=>$"{m.Label}: {m.Millimeters.ToString(System.Globalization.CultureInfo.InvariantCulture)} mm — kaynak: {string.Join(" / ",m.SourceExpressions)}"));
+            if(review.Measurements.Count==0)lines.Add("Açıkça tanınan ölçü yok.");
+            lines.Add("Kontrol edilmesi gerekenler:");lines.AddRange(review.Questions);
+            if(review.Unrecognized.Count>0)lines.Add($"{review.Unrecognized.Count} ifade bu dar ölçü sözlüğüyle çözümlenmedi; asıl metni kontrol edin.");
+            lines.Add("İfadeler yalnız ön denetimdir. Ölçünün niteliğini, modeli ve üretime uygunluğu kullanıcı doğrulamalıdır; kalıp oluşturulmadı.");
+            measurementReview.Text=string.Join(Environment.NewLine,lines);
+        }
+        catch(ArgumentException ex) { measurementReview.Text="Ölçü denetlenemedi: "+ex.Message; }
     }
     private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt";
     private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() });

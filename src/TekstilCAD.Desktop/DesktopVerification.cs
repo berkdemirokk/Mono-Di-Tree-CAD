@@ -9118,12 +9118,15 @@ internal static class DesktopVerification
         var window=new DesignRequestWindow(studio);
         try
         {
-            var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
+            var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
             window.LoadForVerification(input);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "Design request loads text and exact image bytes independently",checks);
+            window.ReviewMeasurementsForVerification();
+            Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
+                "Dress request reports explicitly stated chest and asks for missing measurements",checks);
             window.PromptForVerification.Text="Değişen elbise isteği";
-            Check(window.DirtyForVerification && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+            Check(window.DirtyForVerification && window.ReviewForVerification.Text.Length==0 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                 "Editing a design request leaves the open project and undo untouched",checks);
             window.LoadForVerification(input);
         }
