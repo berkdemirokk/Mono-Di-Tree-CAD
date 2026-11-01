@@ -771,9 +771,12 @@ public class MainWindow : Window
     private void LoadDocumentCore(ProjectDocument document,bool markUnsaved,Action? onLoaded,bool openingProject=false)
     {
         EnsureNoExport();
-        // Load validates and clones before replacing the live session. Once it
-        // succeeds, publish the outcome before any later UI operation can fail.
-        session.Load(document,Validate);
+        // Project opens reach this path only with the private object just returned
+        // by ProjectStorage.LoadWithVersion, which already parsed and validated the
+        // same byte snapshot on the worker. Repeating the potentially quadratic v7
+        // trace check here would block the dispatcher. All other inputs still use
+        // the normal validator; Load always clones before taking ownership.
+        session.Load(document,openingProject ? null : (Action<ProjectDocument>)Validate);
         // The session's counter spans loads; only losses since this document was
         // installed belong in its on-screen warning.
         historyCapacityBaseline=session.CapacityDiscardedSnapshots;

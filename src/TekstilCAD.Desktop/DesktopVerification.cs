@@ -3703,6 +3703,18 @@ internal static class DesktopVerification
                 loaded.NestingSnapshot.IsCurrentFor(loaded) && DocumentSession.ContentEquals(before,studio.Document) &&
                 ProductionNestingWindow.FormatLayoutSaveConfirmation(layout!).Contains("sürüm 7"),
                 "Rotated preview saves and reopens a verified v7 project without changing source",checks);
+            var invalid=loaded.Clone();var changed=invalid.NestingSnapshot!.RotationTrace!;
+            changed.Copies[0]=changed.Copies[0] with { Degrees=0 };
+            var rejected=false;try { studio.LoadDocument(invalid); } catch(InvalidDataException) { rejected=true; }
+            Check(rejected && DocumentSession.ContentEquals(before,studio.Document),
+                "Non-file document loading still rejects an invalid rotated trace",checks);
+            var badPath=Path.Combine(work,$"rotated-invalid-{Guid.NewGuid():N}.tcad");
+            var badJson=System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(path))!.AsArray();
+            badJson[1]!["NestingSnapshot"]!["RotationTrace"]!["Copies"]![0]!["Degrees"]=0;
+            File.WriteAllText(badPath,badJson.ToJsonString());rejected=false;
+            try { studio.OpenProjectFile(badPath); } catch(InvalidDataException) { rejected=true; }
+            Check(rejected && DocumentSession.ContentEquals(before,studio.Document),
+                "Project storage rejects a forged rotated trace before replacing the document",checks);
             var conflictPath=Path.Combine(work,$"rotated-conflict-{Guid.NewGuid():N}.tcad");
             var conflict=window.CaptureLayoutDestination(conflictPath,version,layout!);File.WriteAllText(conflictPath,"korunan");
             var conflictTask=window.StartSaveLayoutAsync(conflictPath,version,layout!,conflict);PumpUntil(()=>conflictTask.IsCompleted);
