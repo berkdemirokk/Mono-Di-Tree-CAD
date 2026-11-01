@@ -2817,20 +2817,47 @@ private struct PieceSpanSelectionView: View {
     let piece: Drawing.Piece
     let pieceIndex: Int
     @Binding var selection: ContourMeasure.SpanSelection
+    @State private var selectingStart = true
+    @State private var selectionRevision = UUID()
+
+    private var startBinding: Binding<String> {
+        Binding(get: { selection.start }, set: { selection.start = $0; selectionRevision = UUID() })
+    }
+    private var endBinding: Binding<String> {
+        Binding(get: { selection.end }, set: { selection.end = $0; selectionRevision = UUID() })
+    }
+    private func validIndex(_ text: String) -> Int? {
+        guard selection.pieceIndex == pieceIndex, let index = Int(text), piece.points.indices.contains(index) else { return nil }
+        return index
+    }
 
     var body: some View {
         Form {
             Section("Parça") { Text("\(pieceIndex + 1). \(piece.displayName(index: pieceIndex))") }
             Section("Dosya nokta indeksleri") {
-                TextField("Başlangıç indeksi", text: $selection.start).keyboardType(.numberPad)
-                NavigationLink("Başlangıç noktasını seç") { PointIndexPicker(points: piece.points, selected: $selection.start) }
-                TextField("Bitiş indeksi", text: $selection.end).keyboardType(.numberPad)
-                NavigationLink("Bitiş noktasını seç") { PointIndexPicker(points: piece.points, selected: $selection.end) }
+                TextField("Başlangıç indeksi", text: startBinding).keyboardType(.numberPad)
+                NavigationLink("Başlangıç noktasını seç") { PointIndexPicker(points: piece.points, selected: startBinding) }
+                TextField("Bitiş indeksi", text: endBinding).keyboardType(.numberPad)
+                NavigationLink("Bitiş noktasını seç") { PointIndexPicker(points: piece.points, selected: endBinding) }
                 if piece.closed {
                     Picker("Yol yönü", selection: $selection.forward) {
                         Text("İleri").tag(true)
                         Text("Geri").tag(false)
                     }.pickerStyle(.segmented)
+                }
+                Picker("Dokunarak seçilecek nokta", selection: $selectingStart) {
+                    Text("Başlangıç A").tag(true)
+                    Text("Bitiş B").tag(false)
+                }.pickerStyle(.segmented)
+                if piece.hasMinimumContourPoints, piece.contourBounds != nil {
+                    PointDistancePreview(piece: piece, first: validIndex(selection.start), second: validIndex(selection.end),
+                                         pathForward: selection.forward, selectionRevision: selectionRevision) { index in
+                        if selection.pieceIndex != pieceIndex { selection = ContourMeasure.SpanSelection(pieceIndex: pieceIndex) }
+                        if selectingStart { startBinding.wrappedValue = String(index) }
+                        else { endBinding.wrappedValue = String(index) }
+                    }
+                    Text("A başlangıcı, B bitişi; yeşil çizgi seçili kontur yolunu gösterir. Kesik çizgi doğrusal mesafedir.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
                 if let value = selection.length(points: piece.points, closed: piece.closed, pieceIndex: pieceIndex).flatMap({ MeasurementDisplay.format($0) }) {
                     Text("Aralık: yaklaşık \(value) mm")

@@ -34,6 +34,9 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(start.waitForExistence(timeout: 5)); start.tap(); start.typeText("0")
         end.tap(); end.typeText("1")
         XCTAssertTrue(app.staticTexts["Aralık: yaklaşık 100 mm"].waitForExistence(timeout: 5))
+        let preview = app.descendants(matching: .any)["Ölçüm önizlemesi"]
+        XCTAssertTrue(preview.exists)
+        XCTAssertTrue((preview.value as? String ?? "").contains("İlk nokta 0, ikinci nokta 1"))
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(app.staticTexts["Birinci aralık: 0 → 1 · ileri · yaklaşık 100 mm"].waitForExistence(timeout: 5))
     }
