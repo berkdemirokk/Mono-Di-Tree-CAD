@@ -99,6 +99,41 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         let name = String(repeating: #"\u0061"#, count: 1_000)
         let json = "[7,{\"Name\":\"\(name)\",\"Pieces\":[],\"GradingRules\":[],\"NestingSnapshot\":{}}]"
         XCTAssertEqual(try extract(Data(json.utf8), chunk: 23).count, 0)
+        var reader = ExperimentalV7PieceReader()
+        for byte in json.utf8 { try reader.feed(Data([byte])) }
+        let candidate = try reader.finishPreview()
+        XCTAssertEqual(candidate.name, String(repeating: "a", count: 1_000))
+        XCTAssertTrue(candidate.pieces.isEmpty)
+    }
+    func testPreviewCandidateMatchesDesktopFixtureVisiblePieces() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        var reader = ExperimentalV7PieceReader()
+        for offset in stride(from: 0, to: data.count, by: 31) {
+            try reader.feed(data.subdata(in: offset..<min(offset + 31, data.count)))
+        }
+        let candidate = try reader.finishPreview()
+        let expected = try Drawing.load(data)
+        XCTAssertEqual(candidate.name, expected.name)
+        XCTAssertEqual(candidate.pieces.map(\.id), expected.pieces.map(\.id))
+        XCTAssertEqual(candidate.pieces.map(\.notches), expected.pieces.map(\.notches))
+    }
+    func testFourDesktopRotationsMatchCurrentViewerContours() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-four-angle", withExtension: "tcad"))
+        let bytes = try Data(contentsOf: url), before = bytes
+        var reader = ExperimentalV7PieceReader()
+        for offset in stride(from: 0, to: bytes.count, by: 127) {
+            try reader.feed(bytes.subdata(in: offset..<min(offset + 127, bytes.count)))
+        }
+        let candidate = try reader.finishPreview(), expected = try Drawing.load(bytes)
+        XCTAssertEqual(candidate.name, expected.name)
+        XCTAssertEqual(candidate.pieces.count, 4)
+        for (a, b) in zip(candidate.pieces, expected.pieces) {
+            XCTAssertEqual(a.id, b.id); XCTAssertEqual(a.notches, b.notches)
+            XCTAssertEqual(a.points.count, b.points.count)
+            for (x, y) in zip(a.points, b.points) { XCTAssertEqual(x.x, y.x); XCTAssertEqual(x.y, y.y) }
+        }
+        XCTAssertEqual(bytes, before)
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)

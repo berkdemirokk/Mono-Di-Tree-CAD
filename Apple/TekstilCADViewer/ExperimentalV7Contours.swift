@@ -1,6 +1,12 @@
 import Foundation
 import CoreFoundation
 
+/// A candidate, not a verified Drawing: history and snapshot are not checked.
+struct ExperimentalV7Preview {
+    let name: String
+    let pieces: [Drawing.Piece]
+}
+
 /// Detached experimental conversion of extracted UTF-8 pieces into preview data.
 /// Does not establish v7 history validity or signed-zero byte fidelity and is never used by production UI.
 enum ExperimentalV7Contours {
@@ -19,6 +25,10 @@ enum ExperimentalV7Contours {
               abs(x) <= 100_000_000, abs(y) <= 100_000_000,
               object["IsFinite"] == nil || boolean(object["IsFinite"]) == true else { return nil }
         return Drawing.Point(x: x, y: y)
+    }
+    static func preview(name: String, input: [Data], cancelled: () -> Bool = { false }) throws -> ExperimentalV7Preview {
+        guard name.utf16.count <= 1024 else { throw Failure.invalid }
+        return ExperimentalV7Preview(name: name, pieces: try decode(input, cancelled: cancelled))
     }
     static func decode(_ input: [Data], cancelled: () -> Bool = { false }) throws -> [Drawing.Piece] {
         guard input.count <= 10_000 else { throw Failure.limit }

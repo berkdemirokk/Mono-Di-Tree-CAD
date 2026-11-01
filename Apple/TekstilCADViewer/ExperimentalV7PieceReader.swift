@@ -10,6 +10,8 @@ struct ExperimentalV7PieceReader {
     private var string = false, escaped = false
     private var header = 0
     private var keyToken: [UInt8]? = nil
+    private var nameToken: [UInt8]? = nil
+    private var projectName: String? = nil
     private var potentialKey: String? = nil
     private var rootValueKey: String? = nil
     private var rootKeys = Set<String>()
@@ -47,10 +49,17 @@ struct ExperimentalV7PieceReader {
             if cancelled() { throw Failure.cancelled }
             try validator.finish(cancelled: cancelled)
             guard header == 4, foundPieces, !inPieces, piece == nil, stack.isEmpty,
-                  rootKeys.isSuperset(of: ["Name", "Pieces", "GradingRules", "NestingSnapshot"]) else { throw Failure.invalid }
+                  projectName != nil, rootKeys.isSuperset(of: ["Name", "Pieces", "GradingRules", "NestingSnapshot"]) else { throw Failure.invalid }
             finished = true
             return pieces
         } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
+    }
+
+    /// Candidate only: rotation history and full v7 schema have not been checked.
+    mutating func finishPreview(cancelled: () -> Bool = { false }) throws -> ExperimentalV7Preview {
+        let parts = try finish(cancelled: cancelled)
+        guard let name = projectName else { throw Failure.invalid }
+        return try ExperimentalV7Contours.preview(name: name, input: parts, cancelled: cancelled)
     }
 
     private mutating func extract(_ byte: UInt8) throws {
@@ -67,6 +76,10 @@ struct ExperimentalV7PieceReader {
             piece!.append(byte)
         }
         if string {
+            if nameToken != nil {
+                guard nameToken!.count < 16 * 1024 else { throw Failure.limit }
+                nameToken!.append(byte)
+            }
             if keyToken != nil {
                 guard keyToken!.count < 4096 else { throw Failure.limit }
                 keyToken!.append(byte)
@@ -75,6 +88,11 @@ struct ExperimentalV7PieceReader {
             if byte == 92 { escaped = true; return }
             if byte == 34 {
                 string = false
+                if let name = nameToken {
+                    guard let decoded = (try? JSONSerialization.jsonObject(with: Data(name), options: [.fragmentsAllowed])) as? String,
+                          decoded.utf16.count <= 1024 else { throw Failure.invalid }
+                    projectName = decoded; nameToken = nil
+                }
                 if let key = keyToken {
                     potentialKey = (try? JSONSerialization.jsonObject(with: Data(key), options: [.fragmentsAllowed])) as? String
                     keyToken = nil
@@ -101,6 +119,7 @@ struct ExperimentalV7PieceReader {
         switch byte {
         case 34:
             string = true; escaped = false
+            if isRootStringValue { nameToken = [byte] }
             if stack.count == 2 && !inPieces && !isRootStringValue { keyToken = [byte] }
         case 58:
             if stack.count == 2 {
