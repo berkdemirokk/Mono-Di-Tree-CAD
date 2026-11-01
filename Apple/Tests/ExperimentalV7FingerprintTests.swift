@@ -30,4 +30,18 @@ final class ExperimentalV7FingerprintTests: XCTestCase {
         XCTAssertNotEqual(positive, try ExperimentalV7Fingerprint.hash([missingMetadata]))
         XCTAssertThrowsError(try ExperimentalV7Fingerprint.hash([source()], cancelled: { true }))
     }
+    func testDesktopGoldenVectorsAcrossFingerprintDomains() throws {
+        let id = try XCTUnwrap(UUID(uuidString: "11111111-1111-1111-1111-111111111111"))
+        let vertices = [point(0, 0), point(2, 0), point(0, 2)]
+        let grain = ExperimentalV7Fingerprint.Grain(start: point(0, 0), end: point(0, 1), needsReview: false)
+        let marks = [ExperimentalV7Fingerprint.Mark(index: 0, position: point(-0.0, 0))]
+        func piece(_ grain: ExperimentalV7Fingerprint.Grain?, _ marks: [ExperimentalV7Fingerprint.Mark]?) -> ExperimentalV7Fingerprint.Piece {
+            .init(id: id, name: "", closed: true, points: vertices, metadata: nil, grain: grain, marks: marks)
+        }
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([]), "02DCC7E7AAF28CA0FE202CFD74120EBE3E632D05BD0F223F1062CAE017403512")
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([piece(nil, nil)]), "848B759E3594CA2531F44B8A0DF24BB517AB5E175EB15034C4D636FD82FC48C3")
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([piece(grain, nil)]), "8D26074E3A10769EFB71C838D67DE88266A64AF2629F8D1EF18D9A6328E6E592")
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([piece(nil, marks)]), "2C986126E3E97F06E57FE292F6CDAAD617F595498C29E7320D448CFC70C5E716")
+        XCTAssertEqual(try ExperimentalV7Fingerprint.hash([piece(grain, marks)]), "08C036A851D01410883D3F235AD311DCCADBD73F62AAEDE061202C9E81C02A44")
+    }
 }
