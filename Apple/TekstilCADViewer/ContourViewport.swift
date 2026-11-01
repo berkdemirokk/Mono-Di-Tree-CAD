@@ -31,6 +31,11 @@ struct ContourBounds {
 enum ContourOverlay {
     // Strictly below 0.001 mm even though that decimal is not exactly binary64.
     static let maximumError = 0.001.nextDown
+    static func integerShift(_ text: String) -> Double? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.utf8.count <= 6, let value = Int(trimmed), (-10_000...10_000).contains(value) else { return nil }
+        return Double(value)
+    }
 
     // TwoSum gives the exact residual of each finite binary64 addition under
     // IEEE round-to-nearest with gradual underflow. The positive accumulator is

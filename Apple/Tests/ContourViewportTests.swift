@@ -4,6 +4,17 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testNumericOverlayShiftAcceptsOnlyBoundedWholeMillimeters() {
+        XCTAssertEqual(ContourOverlay.integerShift("  -10000  "), -10_000)
+        XCTAssertEqual(ContourOverlay.integerShift("+250"), 250)
+        XCTAssertEqual(ContourOverlay.integerShift("0"), 0)
+        XCTAssertNil(ContourOverlay.integerShift("10001"))
+        XCTAssertNil(ContourOverlay.integerShift("-10001"))
+        XCTAssertNil(ContourOverlay.integerShift("1.5"))
+        XCTAssertNil(ContourOverlay.integerShift("1,5"))
+        XCTAssertNil(ContourOverlay.integerShift("NaN"))
+        XCTAssertNil(ContourOverlay.integerShift(String(repeating: "9", count: 1000)))
+    }
     func testOverlayBoundAcceptsOrdinaryDecimalsButRejectsLargeAndAccumulatedErrors() throws {
         let ordinaryPoints = [p(-0.1, 0), p(0.3, 1)]
         let ordinary = try XCTUnwrap(ContourBounds(points: ordinaryPoints))

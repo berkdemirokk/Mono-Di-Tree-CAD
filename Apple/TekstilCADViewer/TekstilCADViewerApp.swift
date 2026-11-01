@@ -2854,9 +2854,15 @@ private struct PieceOverlayView: View {
     @State private var shiftX = 0.0
     @State private var shiftY = 0.0
     @State private var shiftError: String?
+    @State private var showingNumericShift = false
+    @State private var shiftXText = "0"
+    @State private var shiftYText = "0"
 
     private func shift(dx: Double, dy: Double) {
-        let x = shiftX + dx, y = shiftY + dy
+        _ = applyShift(x: shiftX + dx, y: shiftY + dy)
+    }
+    @discardableResult private func applyShift(x: Double, y: Double) -> Bool {
+
         guard abs(x) <= 10_000, abs(y) <= 10_000,
               let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
               ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil,
@@ -2864,9 +2870,11 @@ private struct PieceOverlayView: View {
                                         second: second.points, secondBounds: secondBounds, dx: x, dy: y) != nil else {
 
             shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
-            return
+            return false
         }
         shiftX = x; shiftY = y; shiftError = nil
+        return true
+
     }
     var body: some View {
         NavigationStack {
@@ -2884,6 +2892,11 @@ private struct PieceOverlayView: View {
                     Button("İkinciyi yukarı") { shift(dx: 0, dy: -1) }
                     Button("İkinciyi aşağı") { shift(dx: 0, dy: 1) }
                 }.font(.caption)
+                Button("Kaydırmayı sayısal gir…") {
+                    shiftXText = String(Int(shiftX)); shiftYText = String(Int(shiftY))
+                    shiftError = nil; showingNumericShift = true
+                }
+                .font(.caption)
                 Button("Görsel hizalamayı sıfırla") { shiftX = 0; shiftY = 0; shiftError = nil }
                     .font(.caption)
                 Text("Her adım 1 mm'dir. Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
@@ -2913,6 +2926,25 @@ private struct PieceOverlayView: View {
                 .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). İkinci parçanın görsel kaydırması X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") milimetredir.")
             }
             .padding()
+            .sheet(isPresented: $showingNumericShift) {
+                NavigationStack {
+                    Form {
+                        Text("İkinci parçanın yalnızca görsel kaydırmasını tam milimetre olarak girin (−10.000 ile 10.000). Kaynak dosya değişmez.")
+                        TextField("X kaydırması (mm)", text: $shiftXText).keyboardType(.numbersAndPunctuation)
+                        TextField("Y kaydırması (mm)", text: $shiftYText).keyboardType(.numbersAndPunctuation)
+                        if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
+                        Button("Görsel kaydırmayı uygula") {
+                            guard let x = ContourOverlay.integerShift(shiftXText), let y = ContourOverlay.integerShift(shiftYText) else {
+                                shiftError = "Her iki eksen için −10.000 ile 10.000 arasında tam sayı girin."
+                                return
+                            }
+                            if applyShift(x: x, y: y) { showingNumericShift = false }
+                        }
+                    }
+                    .navigationTitle("Görsel kaydırma")
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { showingNumericShift = false; shiftError = nil } } }
+                }
+            }
             .navigationTitle("Parçaları üst üste göster")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }

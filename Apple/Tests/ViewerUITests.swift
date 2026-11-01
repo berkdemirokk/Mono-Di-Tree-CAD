@@ -61,6 +61,12 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 1, Y 0 mm"].exists)
         app.buttons["Görsel hizalamayı sıfırla"].tap()
         XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 0, Y 0 mm"].exists)
+        app.buttons["Kaydırmayı sayısal gir…"].tap()
+        let x = app.textFields["X kaydırması (mm)"], y = app.textFields["Y kaydırması (mm)"]
+        XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap(); x.typeText(XCUIKeyboardKey.delete.rawValue + "25")
+        y.tap(); y.typeText(XCUIKeyboardKey.delete.rawValue + "-10")
+        app.buttons["Görsel kaydırmayı uygula"].tap()
+        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 25, Y -10 mm"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretime uygunluk doğrulaması değildir")).firstMatch.exists)
     }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {
