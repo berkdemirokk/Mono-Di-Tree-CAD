@@ -8082,6 +8082,15 @@ internal static class DesktopVerification
         var tools=new TextileToolsWindow(studio);
         try
         {
+            var root=(FrameworkElement)tools.Content;
+            root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            Descendants<TabControl>(root).Single().SelectedIndex=1;
+            root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            var guidance=Descendants<TextBlock>(root).Single(t=>t.Text.StartsWith("İşaret yalnız seçili köşeyi",StringComparison.Ordinal)).Text;
+            Check(guidance.Contains("işaretsiz köşeler taşınabilir veya silinebilir") && guidance.Contains("işaretler korunur") &&
+                guidance.Contains("İşaretli köşeyi taşımak veya silmek") && guidance.Contains("henüz desteklenmez") &&
+                !guidance.Contains("İşaretli parçayı düzenlemeden önce işaretlerini kaldırın"),
+                "Vertex guidance distinguishes mark-preserving edits from protected marked vertices and unsupported operations",checks);
             var before=studio.Document.Clone();var count=session.UndoCount;
             tools.SetVertexNotch("3",true);
             var marked=studio.Document.Clone();var mark=studio.Document.Pieces.Single().Notches?.Single();
