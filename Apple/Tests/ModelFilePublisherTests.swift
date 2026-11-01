@@ -730,6 +730,23 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("model.tcad")), Data("model".utf8))
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
+    func testCopyWritesStayInOpenedDirectoryAfterPathReplacement() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = root.appendingPathComponent("staging")
+        let original = root.appendingPathComponent("original")
+        let foreign = root.appendingPathComponent("foreign")
+        try FileManager.default.createDirectory(at: foreign, withIntermediateDirectories: false)
+        let data = Data("project".utf8), metadata = Data("metadata".utf8)
+        XCTAssertThrowsError(try ModelFilePublisher.writeCopyFiles(data, metadata: metadata, staging: staging) {
+            try FileManager.default.moveItem(at: staging, to: original)
+            try FileManager.default.createSymbolicLink(at: staging, withDestinationURL: foreign)
+        })
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: foreign.path), [])
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("project.tcad")), data)
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("metadata.json")), metadata)
+    }
     func testEmptyReplacementDirectoryIsNotRemoved() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -15,6 +15,33 @@ enum ModelFilePublisher {
         a.st_dev == b.st_dev && a.st_ino == b.st_ino && a.st_mode == b.st_mode
     }
 
+    // The caller still has to publish the directory. This only anchors writes
+    // after opening it; mkdir-to-open and later rename races remain.
+    static func writeCopyFiles(_ data: Data, metadata: Data, staging: URL,
+                               afterOpen: (() throws -> Void)? = nil) throws {
+        guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        let expected = try identity(staging)
+        let fd = staging.path.withCString { open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) }
+        guard fd >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        defer { close(fd) }
+        var actual = stat()
+        guard fstat(fd, &actual) == 0, sameFile(expected, actual) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        try afterOpen?()
+        for (name, bytes) in [("project.tcad", data), ("metadata.json", metadata)] {
+            let file = name.withCString { openat(fd, $0, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600) }
+            guard file >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            let handle = FileHandle(fileDescriptor: file, closeOnDealloc: true)
+            try handle.write(contentsOf: bytes)
+            try handle.close()
+        }
+        guard sameFile(expected, try identity(staging)) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+    }
     static func publish(_ data: Data, staging: URL, destination: URL,
                         beforePayloadCreation: (() throws -> Void)? = nil,
                         beforePublish: (() throws -> Void)? = nil) throws {

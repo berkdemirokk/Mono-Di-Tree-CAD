@@ -964,17 +964,8 @@ enum ModelStore {
         let id = UUID().uuidString
         let staging = directory.appendingPathComponent(".\(id).partial", isDirectory: true)
         let destination = directory.appendingPathComponent("\(id).\(copyExtension)", isDirectory: true)
-        // mkdir fails if the path already exists; createDirectory can silently
-        // accept an existing directory that does not belong to this save.
-        guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
-        }
-        // Do not recursively delete a potentially replaced path. A failed save
-        // may leave its nonempty partial directory for inspection.
-        defer { _ = staging.path.withCString { rmdir($0) } }
-        try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
         let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
-        try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
+        try ModelFilePublisher.writeCopyFiles(data, metadata: metadata, staging: staging)
         try FileManager.default.moveItem(at: staging, to: destination)
     }
 
