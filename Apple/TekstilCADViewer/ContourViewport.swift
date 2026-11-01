@@ -46,7 +46,7 @@ struct ContourViewport {
 
     func position(_ point: ContourMeasure.Point) -> CGPoint {
         CGPoint(x: offsetX + ((point.x * coordinateScale - minX) / extent) * fitted,
-                y: height - offsetY - ((point.y * coordinateScale - minY) / extent) * fitted)
+                y: offsetY + ((point.y * coordinateScale - minY) / extent) * fitted)
     }
 
     // Keep the highlighted ring inside the clipped canvas without changing zoom.

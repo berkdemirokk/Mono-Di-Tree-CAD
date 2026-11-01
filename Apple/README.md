@@ -14,6 +14,8 @@ iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı eri
 
 iPhone ana ekranı kaydırılabilir; önizleme alanındaki sürükleme hareketiyle sayfa kaydırmasının etkileşimi henüz simülatör veya cihazda doğrulanmadı.
 
+Kontur önizlemesinde Y koordinatı masaüstü tuvaliyle aynı yönde aşağı doğru artar. Bu düzeltme ve çentik işaretlerinin görünümü henüz Xcode veya gerçek cihazda doğrulanmadı.
+
 Modellerim ekranında her kaydın yanındaki model işlemleri menüsünden kayıtlı kopya silinebilir; silme işleminden önce kayıt kimliğiyle onay istenir. Bu menü ve erişilebilirlik davranışı henüz Mac, simülatör veya cihazda doğrulanmadı.
 
 ## Sınırlar
