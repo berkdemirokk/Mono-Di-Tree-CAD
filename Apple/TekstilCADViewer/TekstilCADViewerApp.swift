@@ -140,6 +140,12 @@ private struct ContentView: View {
                 }
                 .disabled(isSaving || modelLoad.isLoading)
                 #if DEBUG && targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity"),
+                   let encoded = ProcessInfo.processInfo.environment["TCAD_UI_TEST_EXPECTED_RAW"],
+                   let expected = Data(base64Encoded: encoded) {
+                    Text(rawImport.data == expected ? "Test: ham baytlar aynı" : "Test: ham baytlar değişti")
+                        .accessibilityIdentifier("raw-integrity-status")
+                }
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
                     Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
                     Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
@@ -786,6 +792,15 @@ private struct ContentView: View {
                 if simulateFailure { throw ViewerError.message("Test: ham kopya kaydedilemedi.") }
                 #endif
                 try ModelStore.saveRaw(candidate.data, name: candidate.name)
+                #if DEBUG && targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity") {
+                    let entries = try ModelStore.models()
+                    guard entries.contains(where: { entry in
+                        entry.url.pathExtension.lowercased() == "tcadraw" &&
+                        (try? ModelStore.readListedPayload(entry)) == candidate.data
+                    }) else { throw ViewerError.message("Test: kaydedilen ham baytlar eşleşmedi.") }
+                }
+                #endif
             }
             DispatchQueue.main.async {
                 isSaving = false

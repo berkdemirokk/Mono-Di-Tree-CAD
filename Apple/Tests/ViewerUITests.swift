@@ -206,6 +206,41 @@ final class ViewerUITests: XCTestCase {
         }
     }
 
+    func testPendingRawRecoveryBlocksLibraryOpenWithoutChangingBytesOrSearch() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15)); save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.terminate()
+        app.launchArguments.removeAll { $0 == "--ui-test-fixture" || $0 == "--ui-test-library-reset" }
+        app.launchArguments += ["--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once", "--ui-test-raw-integrity"]
+        app.launchEnvironment["TCAD_UI_TEST_EXPECTED_RAW"] = Data("[6,{\"Name\":\"kesik\"".utf8).base64EncodedString()
+        app.launch()
+        let warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 15)); warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        let failure = app.alerts["İşlem tamamlanamadı"]
+        XCTAssertTrue(failure.waitForExistence(timeout: 15)); failure.buttons["Tamam"].tap()
+        XCTAssertEqual(app.staticTexts["raw-integrity-status"].label, "Test: ham baytlar aynı")
+        app.buttons["Modellerim"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 10)); search.tap(); search.typeText("Deneme")
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10)); row.tap()
+        XCTAssertTrue(failure.waitForExistence(timeout: 5))
+        XCTAssertTrue(failure.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Arama sonuçları korunuyor")).firstMatch.exists)
+        failure.buttons["Tamam"].tap()
+        XCTAssertEqual(search.value as? String, "Deneme")
+        XCTAssertTrue(row.exists)
+        app.buttons["Kapat"].tap()
+        XCTAssertEqual(app.staticTexts["raw-integrity-status"].label, "Test: ham baytlar aynı")
+        app.buttons["Ham kopyayı yeniden kaydet…"].tap()
+        XCTAssertTrue(warning.waitForExistence(timeout: 5)); warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."].waitForExistence(timeout: 15))
+    }
     func testFailedRawSaveCanBeRetriedWithoutSelectingSourceAgain() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once", "--ui-test-raw-picker-lifecycle"]
