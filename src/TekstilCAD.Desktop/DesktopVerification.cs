@@ -644,6 +644,12 @@ internal static class DesktopVerification
             VerifyFractionalSelectionWithSnap(studio,checks);
             VerifyPropertyDraftGeometryGuards(studio,checks);
             VerifyMixedMouseButtons(studio,checks);
+            // Earlier rendering fixtures own hidden textile windows. Close those
+            // independent fixtures so this test exercises an unobstructed canvas;
+            // VerifyNearestVertexSelection also checks the open-window guard itself.
+            var oldTextileFixtures=studio.OwnedWindows.OfType<TextileToolsWindow>().ToArray();
+            Check(oldTextileFixtures.All(window=>!window.IsVisible),"No visible textile window is discarded between verification scenarios",checks);
+            foreach(var fixture in oldTextileFixtures)fixture.Close();
             VerifyNearestVertexSelection(studio,checks);
             VerifyClosingEdgeDragSafety(studio,checks);
             VerifyOpenVertexDrag(studio,checks);
