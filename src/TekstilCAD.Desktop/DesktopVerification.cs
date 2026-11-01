@@ -5256,7 +5256,7 @@ internal static class DesktopVerification
                 var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
                 var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
                 var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
-                        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
+                        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar"));
                 options.IsExpanded=true;root.UpdateLayout();
                 var copy=Descendants<CheckBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynağın rol ve malzemesini kopyala");
                 copy.IsChecked=true;
@@ -5346,7 +5346,7 @@ internal static class DesktopVerification
         Check(FullyVisible(gradeHelp,root) && FullyVisible(helpText,root) && FullyVisible(pointPickerButton,root) &&
               pointPickerButton.Focusable && helpText.ActualWidth<=gradeHelp.ActualWidth,
             $"Expanded grading help and point picker remain visible and reachable at minimum window size: help={FullyVisible(gradeHelp,root)} text={FullyVisible(helpText,root)} button={FullyVisible(pointPickerButton,root)} widths={helpText.ActualWidth}/{gradeHelp.ActualWidth} bounds={BoundsInRoot(gradeHelp,root)} textBounds={BoundsInRoot(helpText,root)} buttonBounds={BoundsInRoot(pointPickerButton,root)}",checks);
-        gradeHelp.IsExpanded=false;root.UpdateLayout();        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Yeni parça bilgileri · isteğe bağlı"));
+        gradeHelp.IsExpanded=false;root.UpdateLayout();        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar"));
         Check(!options.IsExpanded && FullyVisible(options,root),"Grading optional metadata is collapsed and reachable at compact size",checks);
         options.IsExpanded=true;root.UpdateLayout();
         var sizeOption=Descendants<CheckBox>(root).Single(c=>AutomationProperties.GetName(c)=="Yeni beden adını beden bilgisi olarak ekle");
@@ -11535,6 +11535,7 @@ internal static class DesktopVerification
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
         Descendants<TabControl>(root).Single().SelectedIndex=0;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        var options=Descendants<Expander>(root).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar"));options.IsExpanded=true;root.UpdateLayout();
         var expander=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz"));expander.IsExpanded=true;root.UpdateLayout();
         var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
         var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();

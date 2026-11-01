@@ -536,7 +536,7 @@ public sealed class TextileToolsWindow : Window
         // controls scroll as a group so nothing is clipped at the minimum size.
         var lower=new StackPanel();
         lower.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her yeni bedende çizginin konturla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
-        var lowerScroll=new ScrollViewer { Content=lower,MaxHeight=180,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+        var lowerScroll=new ScrollViewer { Content=lower,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(lowerScroll,"Serileme seçenekleri ve işlemleri");
         AutomationProperties.SetHelpText(lowerScroll,"Seçenekler ve işlemler görünmüyorsa bu alanı kaydırın.");
@@ -613,7 +613,7 @@ public sealed class TextileToolsWindow : Window
         size.TextChanged+=(_,_)=>UpdateGradeInputHints();steps.TextChanged+=(_,_)=>UpdateGradeInputHints();
         UpdateGradeInputHints();
         // Optional, explicit transfers: production quantities always need a fresh decision.
-        var metadataOptions=new Expander { Header="Yeni parça bilgileri · isteğe bağlı",IsExpanded=false,Margin=new Thickness(0,0,0,4) };
+        var metadataOptions=new Expander { Header="İsteğe bağlı parça bilgileri ve toplu artışlar",IsExpanded=false,Margin=new Thickness(0,0,0,4) };
         var metadataPanel=new StackPanel();
         var includeSize=new CheckBox { Content="Yeni beden adını beden bilgisi olarak ekle",IsChecked=false,Margin=new Thickness(0,3,0,3) };
         var copyRoleMaterial=new CheckBox { Content="Kaynağın rol ve malzemesini kopyala",IsChecked=false,Margin=new Thickness(0,3,0,3) };
@@ -622,6 +622,7 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(copyRoleMaterial,"Yalnız mevcut rol ve malzeme kopyalanır; adet hiçbir zaman kopyalanmaz.");
         metadataPanel.Children.Add(includeSize);metadataPanel.Children.Add(copyRoleMaterial);
         metadataPanel.Children.Add(new TextBlock { Text="Adet aktarılmaz; adetli pastal için yeni parçada ayrıca girin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
+        metadataPanel.Children.Add(batchEdit);
         metadataOptions.Content=metadataPanel;resetRow.Children.Add(metadataOptions);
         source.SelectionChanged+=(_,_)=> { if(!refreshingSource) { includeSize.IsChecked=false;copyRoleMaterial.IsChecked=false; } };
         var apply=Button(fields,"Artışları projeye uygula",()=>
@@ -748,7 +749,6 @@ public sealed class TextileToolsWindow : Window
         create.VerticalAlignment=VerticalAlignment.Bottom;create.Margin=new Thickness(0,0,0,0);create.Padding=new Thickness(12,7,12,7);
         // Leave room below the last row for the scroll viewer's clipped viewport,
         // so its buttons can be scrolled fully into view at the minimum size.
-        lower.Children.Add(batchEdit);
         var secondaryActions=new WrapPanel { Margin=new Thickness(0,0,0,12) };lower.Children.Add(secondaryActions);
         var batch=Button(secondaryActions,"Birden fazla beden oluştur…",()=>
         {
