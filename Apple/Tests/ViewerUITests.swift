@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSlowOldPieceSearchCannotReplaceNewResults() {
+        let fixture = #"{"Name":"Arama","Pieces":[{"Name":"old","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":5,"Y":5}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-delay-old-piece-search"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Gösterilen parça")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("old")
+        let delay = expectation(description: "Allow the old search to start")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { delay.fulfill() }
+        wait(for: [delay], timeout: 2)
+        search.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "kol")
+        let result = app.buttons["Kol"]
+        XCTAssertTrue(result.waitForExistence(timeout: 5))
+        let stale = expectation(for: NSPredicate(format: "exists == true"), evaluatedWith: app.buttons["old"])
+        stale.isInverted = true
+        wait(for: [stale], timeout: 2)
+        XCTAssertTrue(result.exists)
+    }
+
     func testLargePreviewNavigatesNotchesAndKeepsSelection() {
         let fixture = #"[6,{"Name":"İşaretler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":10,"Y":20}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

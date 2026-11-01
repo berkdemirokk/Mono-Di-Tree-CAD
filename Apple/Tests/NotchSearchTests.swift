@@ -2,6 +2,22 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testPieceSearchUsesNameAndSizeInOrderAndCanCancel() throws {
+        let items = [("Ön Kol", "Parça 1 · Beden: S"), ("Arka Kol", "Parça 2 · Beden: XL"),
+                     ("Ön Kol", "Parça 3 · Beden: XL")]
+        let matching = try XCTUnwrap(ModelSearch.matchingIndices(count: items.count, query: "xl on kol", cancelled: { false }) { items[$0] })
+        XCTAssertEqual(matching, [2])
+        let all = try XCTUnwrap(ModelSearch.matchingIndices(count: items.count, query: "  ", cancelled: { false }) { items[$0] })
+        XCTAssertEqual(all, [0, 1, 2])
+        var calls = 0
+        let cancelled = ModelSearch.matchingIndices(count: 10_000, query: "kol", cancelled: { calls >= 10 }) { _ in
+            calls += 1
+            return ("Kol", "Beden: M")
+        }
+        XCTAssertNil(cancelled)
+        XCTAssertEqual(calls, 10)
+    }
+
     func testCancellationStopsScanWithoutReturningPartialResults() {
         let groups = [Array(0..<100_000)]
         var visited = 0

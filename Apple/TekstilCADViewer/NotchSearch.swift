@@ -13,6 +13,22 @@ enum ModelSearch {
             fields.contains { $0.localizedStandardContains(String(word)) }
         }
     }
+
+    static func matchingIndices(count: Int, query: String, cancelled: () -> Bool,
+                                fields: (Int) -> (name: String, details: String)) -> [Int]? {
+        let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        var result: [Int] = []
+        for index in 0..<max(0, count) {
+            if cancelled() { return nil }
+            if words.isEmpty { result.append(index); continue }
+            let item = fields(index)
+            let searchable = [item.name, item.details]
+            if words.allSatisfy({ word in searchable.contains { $0.localizedStandardContains(word) } }) {
+                result.append(index)
+            }
+        }
+        return cancelled() ? nil : result
+    }
 }
 
 /// Shared by the notch list and its search so visible labels are searchable.

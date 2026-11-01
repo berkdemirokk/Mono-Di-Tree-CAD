@@ -1679,24 +1679,21 @@ private struct PiecePicker: View {
     @Binding var selection: Int?
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
-
-    private var matchingIndices: [Int] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return pieces.indices.filter { index in
-            ModelSearch.matchesLibrary(name: pieces[index].displayName(index: index), identities: [pieces[index].selectionDetails(index: index)], query: query)
-        }
-    }
+    private struct SearchResult { let query: String; let indices: [Int] }
+    @State private var result: SearchResult?
 
     var body: some View {
         NavigationStack {
-            let matches = matchingIndices
+            let current = result?.query == search ? result : nil
+            let matches = current?.indices ?? []
             List {
                 selectionRow(title: "Tüm parçalar", index: nil)
+                if current == nil { ProgressView("Parçalar aranıyor…") }
                 ForEach(matches, id: \.self) { index in
                     selectionRow(title: pieces[index].displayName(index: index), index: index,
                                  details: pieces[index].selectionDetails(index: index))
                 }
-                if matches.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                if current != nil && matches.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text("Eşleşen parça bulunamadı.")
                         .foregroundStyle(.secondary)
                 }
@@ -1707,6 +1704,28 @@ private struct PiecePicker: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Kapat") { dismiss() }
                 }
+            }
+            .task(id: search) {
+                let request = search
+                let snapshot = pieces
+                if !request.isEmpty {
+                    do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
+                }
+                guard !Task.isCancelled else { return }
+                let worker = Task.detached(priority: .userInitiated) { () -> SearchResult? in
+                    #if DEBUG && targetEnvironment(simulator)
+                    if ProcessInfo.processInfo.arguments.contains("--ui-test-delay-old-piece-search"), request == "old" {
+                        Thread.sleep(forTimeInterval: 1.5)
+                    }
+                    #endif
+                    guard let indices = ModelSearch.matchingIndices(count: snapshot.count, query: request, cancelled: { Task.isCancelled }, fields: { index in
+                        (snapshot[index].displayName(index: index), snapshot[index].selectionDetails(index: index))
+                    }) else { return nil }
+                    return SearchResult(query: request, indices: indices)
+                }
+                let found = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled, search == request, let found else { return }
+                result = found
             }
         }
     }
