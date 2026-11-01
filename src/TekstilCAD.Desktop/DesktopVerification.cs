@@ -12966,10 +12966,18 @@ internal static class DesktopVerification
         Check(MeasurementInput.TryParseMillimeters(rows[1].Dx,out var exactZero) && exactZero==0,
             "Interpolation permits exact cancellation to zero",checks);
         rows[0].Dx="1";rows[2].Dx="5";
-        rows[2].Dy="4";fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        rows[2].Dy="4";var beforeFillX=rows[1].Dx;var beforeFillY=rows[1].Dy;fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(rows[0].Dx=="1" && rows[0].Dy=="-2" && rows[1].Dx=="3" && rows[1].Dy=="1" && rows[2].Dx=="5" && rows[2].Dy=="4" &&
               DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
             "Interpolation writes only intermediate draft values using index spacing",checks);
+        var undoFill=Descendants<Button>(root).Single(button=>Equals(button.Content,"Son toplu taslak işlemini geri al"));
+        var redoFill=Descendants<Button>(root).Single(button=>Equals(button.Content,"Toplu taslak işlemini yinele"));
+        undoFill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[1].Dx==beforeFillX && rows[1].Dy==beforeFillY && rows[0].Dx=="1" && rows[2].Dx=="5" && session.UndoCount==0,
+            "Interpolation draft undo restores intermediate text and leaves endpoints unchanged",checks);
+        redoFill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[1].Dx=="3" && rows[1].Dy=="1" && DocumentSession.ContentEquals(before,studio.Document),
+            "Interpolation draft redo restores computed values without project mutation",checks);
         Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1,-2),new Point2(3,1),new Point2(5,4) }) && session.UndoCount==1,
             "Interpolated draft is applied with the endpoints in one transaction",checks);
@@ -13032,6 +13040,24 @@ internal static class DesktopVerification
         Check(rows[0].Dx=="1,5" && rows[0].Dy=="-2" && rows[1].Dx=="0" && rows[1].Dy=="0" &&
               rows[2].Dx=="1,5" && rows[2].Dy=="-2" && changed==2 && session.UndoCount==0 && DocumentSession.ContentEquals(before,studio.Document),
             "Bulk grading changes only selected draft rows and notifies the table without committing",checks);
+        var undoBatch=Descendants<Button>(root).Single(b=>Equals(b.Content,"Son toplu taslak işlemini geri al"));
+        var redoBatch=Descendants<Button>(root).Single(b=>Equals(b.Content,"Toplu taslak işlemini yinele"));
+        undoBatch.BringIntoView();root.UpdateLayout();
+        Check(FullyVisible(undoBatch,root),"Bulk draft undo remains reachable in the scrolling grading controls",checks);
+        rows[0].Dx="sonraki düzenleme";undoBatch.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="sonraki düzenleme" && rows[2].Dx=="1,5" && DocumentSession.ContentEquals(before,studio.Document),
+            "Draft undo refuses later edits to an affected row without partial restore",checks);
+        rows[0].Dx="1,5";rows[1].Dx="7";undoBatch.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="0" && rows[0].Dy=="0" && rows[2].Dx=="0" && rows[2].Dy=="0" && rows[1].Dx=="7" &&
+              session.UndoCount==0 && DocumentSession.ContentEquals(before,studio.Document),
+            "Draft undo restores the bulk operation while preserving unrelated later edits",checks);
+        rows[2].Dy="sonraki düzenleme";redoBatch.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="0" && rows[2].Dy=="sonraki düzenleme" && rows[1].Dx=="7",
+            "Draft redo refuses an edited affected row without partial changes",checks);
+        rows[2].Dy="0";redoBatch.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="1,5" && rows[2].Dy=="-2" && rows[1].Dx=="7" && session.UndoCount==0,
+            "Draft redo restores the bulk operation without modifying project history",checks);
+        rows[1].Dx="0";
         Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1.5,-2),new Point2(0,0),new Point2(1.5,-2) }) &&
               session.UndoCount==1,"Applying batch-edited draft persists the selected increments in one transaction",checks);

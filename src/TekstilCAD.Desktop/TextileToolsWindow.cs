@@ -77,6 +77,15 @@ public sealed class TextileToolsWindow : Window
     private Button? resetRulesButton;
 
     private sealed record GradeDraft(List<Point2> Points, List<Point2> AnchorPoints, bool Closed, List<GradeRow> Rows, GradingRuleSet? BaselineRule, PatternPiece BaselinePiece);
+    private sealed record GradeBatchRow(GradeRow Row,string BeforeX,string BeforeY,string AfterX,string AfterY);
+    private sealed class GradeBatchHistory(Guid sourceId,GradeDraft draft,GradeBatchRow[] changes)
+    {
+        internal Guid SourceId { get; }=sourceId;
+        internal GradeDraft Draft { get; }=draft;
+        internal GradeBatchRow[] Changes { get; }=changes;
+        internal bool Applied { get; set; }=true;
+    }
+    private GradeBatchHistory? gradeBatchHistory;
 
     public TextileToolsWindow(MainWindow workspace)
     {
@@ -516,6 +525,34 @@ public sealed class TextileToolsWindow : Window
         result.Foreground=StudioTheme.Muted;
         result.Text=$"Nokta {index} seçildi. Tabloda ΔX ve ΔY artışlarını düzenleyebilirsiniz; değerler değiştirilmedi.";
     }
+    private void RememberBatchChange(Guid sourceId,GradeDraft draft,IEnumerable<(GradeRow Row,string X,string Y)> changes)
+    {
+        var entries=changes.Select(item=>new GradeBatchRow(item.Row,item.Row.Dx,item.Row.Dy,item.X,item.Y))
+            .Where(item=>item.BeforeX!=item.AfterX || item.BeforeY!=item.AfterY).ToArray();
+        if(entries.Length>0)gradeBatchHistory=new GradeBatchHistory(sourceId,draft,entries);
+    }
+    private void RestoreBatchChange(bool redo)
+    {
+        if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+        var history=gradeBatchHistory;
+        if(history is null || history.Applied==redo || !ReferenceEquals(activeDraft,history.Draft) || activeSourceId!=history.SourceId ||
+           source.SelectedItem is not PatternPiece piece || piece.Id!=history.SourceId ||
+           !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
+           rulesNeedReset || history.Draft.Closed!=piece.Closed || history.Draft.Points.Count!=piece.Points.Count ||
+           !history.Draft.Points.Zip(piece.Points).All(pair=>BitConverter.DoubleToInt64Bits(pair.First.X)==BitConverter.DoubleToInt64Bits(pair.Second.X) && BitConverter.DoubleToInt64Bits(pair.First.Y)==BitConverter.DoubleToInt64Bits(pair.Second.Y)) ||
+           !SavedRuleMatchesDraft(piece.Id,history.Draft))
+        { result.Text="Kaynak, kayıtlı kural veya taslak değişti; toplu taslak geri alma uygulanmadı.";return; }
+        foreach(var entry in history.Changes)
+        {
+            var row=entry.Row;
+            if(row.Index<0 || row.Index>=rows.Count || !ReferenceEquals(rows[row.Index],row) ||
+               row.Dx!=(redo ? entry.BeforeX : entry.AfterX) || row.Dy!=(redo ? entry.BeforeY : entry.AfterY))
+            { result.Text="Etkilenen satırlarda sonraki bir düzenleme var; hiçbir satır değiştirilmedi. Değerleri elle kontrol edin.";return; }
+        }
+        foreach(var entry in history.Changes) { entry.Row.Dx=redo ? entry.AfterX : entry.BeforeX;entry.Row.Dy=redo ? entry.AfterY : entry.BeforeY; }
+        history.Applied=redo;
+        result.Text=redo ? "Son toplu taslak değişikliği yinelendi; proje henüz değiştirilmedi." : "Son toplu taslak değişikliği geri alındı; proje henüz değiştirilmedi.";
+    }
     private static ScrollViewer Scroll(UIElement content) => new() { Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };
     private UIElement GradePanel()
     {
@@ -580,6 +617,7 @@ public sealed class TextileToolsWindow : Window
                activeSourceId!=piece.Id || draft.Closed!=piece.Closed || !draft.Points.SequenceEqual(piece.Points) ||
                textX!=batchX.Text || textY!=batchY.Text || !SelectionMatches())
             { result.Text="Kaynak, seçim veya değerler değişti; toplu işlem uygulanmadı. Açık hücre düzenlemesini kontrol edin.";return; }
+            RememberBatchChange(piece.Id,draft,selected.Select(row=>(row,textX.Trim(),textY.Trim())));
             foreach(var row in selected) { row.Dx=textX.Trim();row.Dy=textY.Trim(); }
             result.Text=$"{selected.Length} satırın taslak artışları değişti; projeye henüz uygulanmadı. Tekrarlı kapanış varsa ilk ve son satırı kontrol edin.";
         },()=>HasPiece()&&!rulesNeedReset);
@@ -641,10 +679,16 @@ public sealed class TextileToolsWindow : Window
                 { result.Text="Ara artış sonlu veya sıfır olmayan değeri koruyarak hesaplanamadı; hiçbir ara satır değiştirilmedi.";return; }
                 updates.Add((rows[index],MeasurementInput.Format(x),MeasurementInput.Format(y)));
             }
+            RememberBatchChange(piece.Id,draft,updates);
             foreach(var update in updates) { update.Row.Dx=update.X;update.Row.Dy=update.Y; }
             result.Text=$"{updates.Count} ara satır indeks aralığına göre dolduruldu; uçlar ve proje değişmedi. Sonuçları inceleyip projeye ayrıca uygulayın.";
         },()=>HasPiece()&&!rulesNeedReset);
         interpolate.Margin=new Thickness(0,4,0,4);interpolate.Padding=new Thickness(10,5,10,5);
+        batchPanel.Children.Add(new TextBlock { Text="Son toplu yazma veya ara doldurma taslakta bir kez geri alınabilir ve yinelenebilir. Sonraki satır düzenlemeleri korunur; bu geçmiş projeye kaydedilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) });
+        var historyActions=new WrapPanel();batchPanel.Children.Add(historyActions);
+        var undoBatch=Button(historyActions,"Son toplu taslak işlemini geri al",()=>RestoreBatchChange(false),()=>gradeBatchHistory is { Applied:true } h && ReferenceEquals(activeDraft,h.Draft) && HasPiece()&&!rulesNeedReset);
+        var redoBatch=Button(historyActions,"Toplu taslak işlemini yinele",()=>RestoreBatchChange(true),()=>gradeBatchHistory is { Applied:false } h && ReferenceEquals(activeDraft,h.Draft) && HasPiece()&&!rulesNeedReset);
+        undoBatch.Margin=redoBatch.Margin=new Thickness(0,4,8,4);undoBatch.Padding=redoBatch.Padding=new Thickness(10,5,10,5);
         var fields=new WrapPanel { VerticalAlignment=VerticalAlignment.Bottom };lower.Children.Add(fields);
         var sizeColumn=new StackPanel { Width=140,Margin=new Thickness(0,0,12,0) };
         var stepColumn=new StackPanel { Width=190,Margin=new Thickness(0,0,12,0) };
