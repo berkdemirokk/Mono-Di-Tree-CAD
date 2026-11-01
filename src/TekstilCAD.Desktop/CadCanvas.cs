@@ -63,7 +63,7 @@ public sealed class CadCanvas : FrameworkElement
             1 => "Başlangıca tıklayın; merkezden uzaklık yarıçapı belirler. Esc iptal eder.",
             _ => "Saat yönünde bitiş yönüne tıklayın; yarıçap değişmez. Esc iptal eder."
         },
-        "Çoklu çizgi" => $"Noktaları tıklayın ({drawing.Count} nokta); açık bitirmek için en az 2 nokta ve Açık çizgiyi bitir düğmesi, kapatmak için en az 3 nokta ve Enter kullanın. Esc iptal eder.",
+        "Çoklu çizgi" => $"Noktaları tıklayın ({drawing.Count} nokta); açık bitirmek için en az 2 nokta ve Shift+Enter veya Açık çizgiyi bitir düğmesi, kapatmak için en az 3 nokta ve Enter kullanın. Esc iptal eder.",
         _ => "Başlamak için çizim alanına tıklayın."
     };
 

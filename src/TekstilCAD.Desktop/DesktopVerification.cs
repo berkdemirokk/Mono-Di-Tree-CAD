@@ -7314,6 +7314,18 @@ internal static class DesktopVerification
             var crossing=canvas.CapturePendingDrawing()!.Points.ToArray();toolbar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(DocumentSession.ContentEquals(before,studio.Document) && canvas.CapturePendingDrawing()!.Points.SequenceEqual(crossing) && error.Text.Contains("kesişen",StringComparison.OrdinalIgnoreCase),
                 "Invalid self-crossing open polyline preserves all pending points",checks);
+            canvas.CancelDrawing();studio.ClearCanvasError();
+            canvas.AddDrawingPointAt(new(0,0));canvas.AddDrawingPointAt(new(10,0));canvas.AddDrawingPointAt(new(10,10));
+            var shortcutPoints=canvas.CapturePendingDrawing()!.Points.ToArray();
+            Check(!studio.HandleCanvasShortcut(Key.Enter,false,ModifierKeys.Shift) &&
+                !studio.HandleCanvasShortcut(Key.Enter,true,ModifierKeys.Shift|ModifierKeys.Alt) && canvas.HasPendingDrawing,
+                "Open-polyline shortcut requires canvas focus and exact modifier",checks);
+            Check(studio.HandleCanvasShortcut(Key.Enter,true,ModifierKeys.Shift) &&
+                studio.Document.Pieces.Count==1 && !studio.Document.Pieces[0].Closed &&
+                studio.Document.Pieces[0].Points.SequenceEqual(shortcutPoints) && !canvas.HasPendingDrawing,
+                "Shift Enter completes the exact open polyline without a closing edge",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
+                "Open-polyline shortcut creates one undoable edit",checks);
         }
         finally { window.Close();canvas.CancelDrawing();studio.ClearCanvasError();studio.SetTool("Seç"); }
     }

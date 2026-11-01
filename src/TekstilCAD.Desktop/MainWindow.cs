@@ -313,7 +313,7 @@ public class MainWindow : Window
             toolButtons[tool] = button;
         }
         AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
-        AddButton(tools,"Açık çizgiyi bitir",FinishOpenDrawing,"Çoklu çizgiyi en az iki noktayla uçları birleştirmeden bitirir.");
+        AddButton(tools,"Açık çizgiyi bitir",FinishOpenDrawing,"Çoklu çizgiyi en az iki noktayla uçları birleştirmeden bitirir. Tuvalde Shift+Enter kullanılabilir.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
         selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi ve varsa köşe işaretlerini aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
@@ -3617,19 +3617,21 @@ public class MainWindow : Window
                 else return;
                 e.Handled = true; return;
             }
-            if (editing || Keyboard.Modifiers != ModifierKeys.None) return;
-            e.Handled=HandleCanvasShortcut(e.Key,canvas.IsKeyboardFocused);
+            if (editing) return;
+            e.Handled=HandleCanvasShortcut(e.Key,canvas.IsKeyboardFocused,Keyboard.Modifiers);
         }
         catch (ProjectConflictException) { e.Handled = true; ShowProjectSaveConflict(this); }
         catch (Exception ex) { e.Handled = true; MessageBox.Show(this, ex.Message, "İşlem tamamlanamadı", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
     // The caller must supply direct canvas focus, never focus-within. This prevents
     // unrelated controls from triggering drawing commands or deleting a piece.
-    internal bool HandleCanvasShortcut(Key key,bool canvasFocused)
+    internal bool HandleCanvasShortcut(Key key,bool canvasFocused,ModifierKeys modifiers=ModifierKeys.None)
     {
         if(!canvasFocused)return false;
+        if(modifiers!=ModifierKeys.None && !(modifiers==ModifierKeys.Shift && key==Key.Enter))return false;
         if(recoveryRestoreIncomplete && key is (Key.V or Key.L or Key.P or Key.R or Key.B or Key.A or Key.F or Key.G or Key.Escape or Key.Enter or Key.Delete or Key.Back))
         { BlockForIncompleteRecovery();return true; }
+        if(modifiers==ModifierKeys.Shift && key==Key.Enter) { FinishOpenDrawing();return true; }
         switch(key)
         {
             case Key.V: SetTool("Seç"); break;
