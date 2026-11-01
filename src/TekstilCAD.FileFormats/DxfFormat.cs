@@ -626,6 +626,37 @@ public static class DxfFormat
         var metadataSources=new DxfMetadataSourceReport(metadataRecords.ToImmutable(),metadataRecordsTruncated);
         var opaqueMetadata=new DxfOpaqueMetadata(opaqueGroups.ToImmutable(),opaqueTruncated);
         var layerStates=ReadLayerStates(entities,cancellationToken);
+        // All source reports and the geometry pass must agree on the owning
+        // BLOCK occurrence. Reject malformed boundaries before producing any
+        // occurrence evidence, including in the legacy importer.
+        string? occurrenceSection=null;bool occurrenceBlock=false;
+        foreach(var item in entities)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(item.Type=="SECTION")
+            {
+                if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF bölüm sınırları iç içe geçemez.");
+                occurrenceSection=item.Text(2);continue;
+            }
+            if(item.Type=="ENDSEC")
+            {
+                if(occurrenceSection is null || occurrenceBlock)throw new InvalidDataException("DXF blok veya bölüm sonu eksik.");
+                occurrenceSection=null;continue;
+            }
+            if(item.Type=="BLOCK")
+            {
+                if(occurrenceSection!="BLOCKS" || occurrenceBlock)throw new InvalidDataException("DXF BLOCK yalnız BLOCKS bölümünde ve ayrı tanım olarak bulunabilir.");
+                occurrenceBlock=true;continue;
+            }
+            if(item.Type=="ENDBLK")
+            {
+                if(occurrenceSection!="BLOCKS" || !occurrenceBlock)throw new InvalidDataException("DXF ENDBLK için blok tanımı bulunamadı.");
+                occurrenceBlock=false;
+            }
+            else if(occurrenceSection=="BLOCKS" && !occurrenceBlock)
+                throw new InvalidDataException("DXF BLOCKS içinde sahipsiz kaynak kaydı var.");
+        }
+        if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF bölüm veya blok kapatılmadı.");
         // Preserve undecoded annotation groups for explicit review. They are
         // not mapped to garment fields or treated as block placements.
         const int maxAnnotations=4096,maxAnnotationGroups=32768,maxAnnotationCharacters=1_000_000;
