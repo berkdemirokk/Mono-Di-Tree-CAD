@@ -32,15 +32,18 @@ public static class ProjectStorage
         return LoadWithVersion(path).Project;
     }
     /// <summary>Parses and fingerprints the same byte snapshot, so callers cannot bind a document to a later version.</summary>
-    public static ProjectLoadResult LoadWithVersion(string path)
+    public static ProjectLoadResult LoadWithVersion(string path) => LoadWithVersion(path, CancellationToken.None);
+    public static ProjectLoadResult LoadWithVersion(string path, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var full = Path.GetFullPath(path);
-        var bytes = ReadSnapshot(full) ?? throw new FileNotFoundException("Proje dosyası bulunamadı.", full);
-        var project = DeserializeProject(bytes);
+        var bytes = ReadSnapshot(full, cancellationToken) ?? throw new FileNotFoundException("Proje dosyası bulunamadı.", full);
+        var project = DeserializeProject(bytes, cancellationToken);
         return new(project, new(full, Convert.ToHexString(SHA256.HashData(bytes))));
     }
-    internal static ProjectDocument DeserializeProject(byte[] bytes)
+    internal static ProjectDocument DeserializeProject(byte[] bytes, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (bytes.Length > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor.");
         ProjectDocument project;
         string? rotatedRaw=null;
@@ -49,7 +52,7 @@ public static class ProjectStorage
         {
             using var json = JsonDocument.Parse(DecodeProjectText(bytes));
             var root = json.RootElement;
-            RejectDuplicateProperties(root);
+            RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
                 if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7) || root[1].ValueKind != JsonValueKind.Object)
@@ -72,13 +75,14 @@ public static class ProjectStorage
                     rotatedRaw=raw.GetRawText();
                     foreach(var piece in root[1].GetProperty("Pieces").EnumerateArray())
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("Points",out var points) || points.ValueKind!=JsonValueKind.Array ||
                            points.GetArrayLength()>MaximumPointsPerPiece || (rotatedVisiblePoints+=points.GetArrayLength())>MaximumTotalPoints)
                             throw new InvalidDataException("Görünür yerleşim nokta sınırı geçersiz.");
                     }
                     // Reject missing/unknown/duplicate trace fields before model
                     // constructors or JSON defaults can synthesize any values.
-                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),rotatedVisiblePoints);
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),rotatedVisiblePoints,cancellationToken);
                 }
                 ValidateSerializedImportProvenance(root[1], version);
                 project = root[1].Deserialize<ProjectDocument>(Options) ?? throw new InvalidDataException("Proje dosyası boş.");
@@ -96,12 +100,13 @@ public static class ProjectStorage
             else throw new InvalidDataException("Geçersiz proje biçimi.");
         }
         catch (JsonException ex) { throw new InvalidDataException("Proje dosyası geçersiz veya bu sürümün tanımadığı alanlar içeriyor. Veri kaybını önlemek için dosya açılmadı.", ex); }
-        Validate(project);
+        Validate(project,cancellationToken);
         if(rotatedRaw is not null)
         {
             var trace=project.NestingSnapshot!.RotationTrace!;
-            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces },project);
+            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces },project,cancellationToken);
         }
+        cancellationToken.ThrowIfCancellationRequested();
         return project;
     }
     // Reject malformed byte sequences instead of silently replacing characters in saved names.
@@ -261,8 +266,9 @@ public static class ProjectStorage
                 }
     }
     // Duplicate keys can hide data when a JSON reader selects only the last occurrence.
-    internal static void RejectDuplicateProperties(JsonElement element)
+    internal static void RejectDuplicateProperties(JsonElement element, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (element.ValueKind == JsonValueKind.Object)
         {
             var names = new HashSet<string>(StringComparer.Ordinal);
@@ -270,12 +276,12 @@ public static class ProjectStorage
             {
                 if (!names.Add(property.Name))
                     throw new InvalidDataException("Proje dosyasında yinelenen alan var; veri kaybını önlemek için dosya açılmadı.");
-                RejectDuplicateProperties(property.Value);
+                RejectDuplicateProperties(property.Value, cancellationToken);
             }
         }
         else if (element.ValueKind == JsonValueKind.Array)
         {
-            foreach (var item in element.EnumerateArray()) RejectDuplicateProperties(item);
+            foreach (var item in element.EnumerateArray()) RejectDuplicateProperties(item, cancellationToken);
         }
         else if (element.ValueKind == JsonValueKind.Number && element.TryGetDouble(out var number) && number == 0)
         {
@@ -300,19 +306,27 @@ public static class ProjectStorage
     /// Noncooperating applications and alternate hard-link/short-name aliases are outside this mutex contract.
     /// </summary>
     public static ProjectFileVersion SaveIfUnchanged(ProjectDocument project, string path, ProjectFileVersion expectedVersion)
-        => SaveIfUnchanged(project,path,expectedVersion,null);
+        => SaveIfUnchanged(project,path,expectedVersion,CancellationToken.None,null);
+
+    public static ProjectFileVersion SaveIfUnchanged(ProjectDocument project, string path, ProjectFileVersion expectedVersion, CancellationToken cancellationToken)
+        => SaveIfUnchanged(project,path,expectedVersion,cancellationToken,null);
 
     // Per-call hook is for deterministic competing-writer verification only.
     internal static ProjectFileVersion SaveIfUnchanged(ProjectDocument project, string path, ProjectFileVersion expectedVersion, Action? beforeCommitForVerification)
+        => SaveIfUnchanged(project,path,expectedVersion,CancellationToken.None,beforeCommitForVerification);
+
+    internal static ProjectFileVersion SaveIfUnchanged(ProjectDocument project, string path, ProjectFileVersion expectedVersion, CancellationToken cancellationToken, Action? beforeCommitForVerification)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(expectedVersion);
         EnsureWritableDestination(path);
         var full = Path.GetFullPath(path);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         if (!string.Equals(full, expectedVersion.FullPath, comparison))
             throw new ArgumentException("Kayıt sürümü farklı bir dosyaya ait.", nameof(expectedVersion));
-        Validate(project);
-        var text = SerializeProject(project);
+        Validate(project,cancellationToken);
+        var text = SerializeProject(project,cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
         using var lease = AcquireWriteLease(full);
         EnsureWritableDestination(full);
         var current = CaptureVersion(full);
@@ -328,12 +342,13 @@ public static class ProjectStorage
             if (!string.Equals(latest.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
                 throw new ProjectConflictException();
         }
-        AtomicWriteCoreWithMode(full, text, beforeFinalCancellationCheck:CheckImmediatelyBeforeCommit, failIfExists:expectedVersion.Sha256 is null);
+        AtomicWriteCoreWithMode(full, text, cancellationToken, beforeFinalCancellationCheck:CheckImmediatelyBeforeCommit, failIfExists:expectedVersion.Sha256 is null);
         return new(full, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
     }
     // Array shape makes old ProjectDocument readers reject rather than drop rules.
-    internal static string SerializeProject(ProjectDocument project)
+    internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var text = project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
             : project.Pieces.Any(p=>p.Notches is not null)
@@ -353,13 +368,14 @@ public static class ProjectStorage
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
         if(project.NestingSnapshot?.RotationTrace is not null)
         {
-            var reread=DeserializeProject(Encoding.UTF8.GetBytes(text));
+            var reread=DeserializeProject(Encoding.UTF8.GetBytes(text),cancellationToken);
             if(!DocumentSession.ContentEquals(project,reread))
                 throw new InvalidDataException("Döndürme izi dosyada kayıpsız yeniden okunamadı; mevcut dosya korunuyor.");
         }
+        cancellationToken.ThrowIfCancellationRequested();
         return text;
     }
-    private static byte[]? ReadSnapshot(string path)
+    private static byte[]? ReadSnapshot(string path, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -370,6 +386,7 @@ public static class ProjectStorage
             int count;
             while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 // The file may grow after the initial length check, including on
                 // platforms where sharing modes cannot exclude every writer.
                 if (memory.Length + count > MaximumProjectBytes)
