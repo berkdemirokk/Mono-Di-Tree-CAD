@@ -4,6 +4,22 @@ import CoreFoundation
 /// Replaces only the root project name token, leaving all other bytes untouched.
 enum LosslessProjectName {
     static let maximumEditBytes = 8 * 1024 * 1024
+    // Recognize the normal UTF-8 v6 envelope without parsing or copying the
+    // rest of a large document. This is a size preflight, not validation.
+    static func isOversizedUTF8VersionSix(_ data: Data) -> Bool {
+        guard data.count > maximumEditBytes else { return false }
+        return data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            var i = bytes.count >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf ? 3 : 0
+            func next() -> UInt8? {
+                while i < bytes.count && [9, 10, 13, 32].contains(bytes[i]) { i += 1 }
+                guard i < bytes.count else { return nil }
+                defer { i += 1 }
+                return bytes[i]
+            }
+            return next() == 91 && next() == 54 && next() == 44
+        }
+    }
     enum Failure: LocalizedError {
         case invalid
         var errorDescription: String? { "Proje adı güvenli biçimde değiştirilemedi. En fazla 8 MB boyutunda UTF-8 proje ve en fazla 1024 UTF-16 birimlik bir ad kullanın; UTF-16 ve UTF-32 dosyaları desteklenmez." }

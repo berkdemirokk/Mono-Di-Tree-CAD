@@ -12,6 +12,21 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testRawLibraryRecordIsRecoverableButNeverOfferedAsPreview() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let path = root.appendingPathComponent("Büyük.tcadraw")
+        let data = Data([0xff, 0x00, 0x91])
+        try data.write(to: path)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == path })
+        XCTAssertFalse(entry.canOpen)
+        XCTAssertTrue(entry.requiresRecovery)
+        XCTAssertTrue(entry.name.contains("Ham kayıt"))
+        XCTAssertEqual(try ModelStore.readListedPayload(entry), data)
+        XCTAssertEqual(try Data(contentsOf: path), data)
+    }
+
     func testCorruptSavedModelCanBeReadAsRawBytesWithoutChangingIt() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

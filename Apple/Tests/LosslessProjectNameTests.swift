@@ -3,6 +3,20 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
+    func testOversizedVersionSixPreflightRecognizesOnlyExactUTF8Envelope() {
+        let limit = LosslessProjectName.maximumEditBytes
+        func sample(_ prefix: [UInt8], count: Int) -> Data {
+            var data = Data(prefix)
+            if count > data.count { data.append(Data(repeating: 32, count: count - data.count)) }
+            return data
+        }
+        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[6,".utf8), count: limit)))
+        XCTAssertTrue(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[ 6 ,".utf8), count: limit + 1)))
+        XCTAssertTrue(LosslessProjectName.isOversizedUTF8VersionSix(sample([0xef, 0xbb, 0xbf] + Array("\n[6,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[6.0,".utf8), count: limit + 1)))
+        XCTAssertFalse(LosslessProjectName.isOversizedUTF8VersionSix(sample(Array("[5,".utf8), count: limit + 1)))
+    }
+
     private func replace(_ input: String, with name: String = "New") throws -> String {
         let result = try LosslessProjectName.replacing(in: Data(input.utf8), with: name)
         return try XCTUnwrap(String(data: result, encoding: .utf8))

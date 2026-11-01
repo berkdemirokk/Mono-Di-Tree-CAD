@@ -42,6 +42,10 @@ private struct ContentView: View {
     @State private var exportName = "Model.tcad"
     @State private var importedData: Data?
     @State private var sourceData: Data?
+    private struct RawImport { let data: Data; let name: String; let request: UUID }
+    private enum OpenedModel { case preview(Drawing, Data); case oversizedRaw(Data) }
+    @State private var rawImport: RawImport?
+    @State private var showingRawImport = false
     @State private var showingNameEditor = false
     @State private var editedName = ""
     @State private var showingPieceNameEditor = false
@@ -442,6 +446,12 @@ private struct ContentView: View {
         } message: {
             Text("Bu ad Modellerim listesinde görünür; dosyanın içindeki proje adı değişmez. En fazla 1024 UTF-16 birimi kullanın.")
         }
+        .alert("Dosya önizlenemedi", isPresented: $showingRawImport) {
+            Button("Vazgeç", role: .cancel) { rawImport = nil }
+            Button("Ham kopyayı telefona kaydet") { saveRawImport() }
+        } message: {
+            Text("Sürüm 6 önizlemesi 8 MB ile sınırlı. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+        }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
             Button("İptal", role: .cancel) { editedName = project?.name ?? "" }
@@ -494,6 +504,14 @@ private struct ContentView: View {
                     importedData = data
                     importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
                 }
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-import") {
+                    let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
+                    var large = Data("[6,".utf8)
+                    large.append(Data(repeating: 32, count: LosslessProjectName.maximumEditBytes))
+                    large.append(Data(#"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#.utf8))
+                    try large.write(to: largeURL)
+                    openModel(largeURL, imported: true)
+                }
             } catch { self.error = error.localizedDescription }
         }
         #endif
@@ -517,6 +535,7 @@ private struct ContentView: View {
 
     private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
         saveNotice = nil
+        rawImport = nil
         let request = modelLoad.begin()
         // Acquire the picker grant while still handling its result. Keep it
         // alive until the background coordinated read has finished.
@@ -526,16 +545,17 @@ private struct ContentView: View {
             #if DEBUG && targetEnvironment(simulator)
             if ProcessInfo.processInfo.arguments.contains("--ui-test-open-delay") { Thread.sleep(forTimeInterval: 3) }
             #endif
-            let loaded = Result { () -> (Drawing, Data) in
+            let loaded = Result { () -> OpenedModel in
                 let data: Data
                 if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
                 else { data = try Drawing.readData(url) }
-                return (try Drawing.load(data), data)
+                if imported && LosslessProjectName.isOversizedUTF8VersionSix(data) { return .oversizedRaw(data) }
+                return .preview(try Drawing.load(data), data)
             }
             DispatchQueue.main.async {
                 guard modelLoad.finish(request) else { return }
                 switch loaded {
-                case .success(let (drawing, data)):
+                case .success(.preview(let drawing, let data)):
                     #if DEBUG
                     pieceRenameSnapshot = nil
                     #endif
@@ -549,8 +569,32 @@ private struct ContentView: View {
                     sourceData = data
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
+                case .success(.oversizedRaw(let data)):
+                    rawImport = RawImport(data: data, name: url.lastPathComponent, request: request)
+                    showingRawImport = true
                 case .failure(let failure):
                     error = failure.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func saveRawImport() {
+        guard let candidate = rawImport, candidate.request == modelLoad.request, !modelLoad.isLoading else {
+            rawImport = nil
+            error = "Seçim değişti; dosyayı yeniden seçin."
+            return
+        }
+        rawImport = nil
+        saveNotice = nil
+        isSaving = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try ModelStore.saveRaw(candidate.data, name: candidate.name) }
+            DispatchQueue.main.async {
+                isSaving = false
+                switch result {
+                case .success: saveNotice = "Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."
+                case .failure(let failure): error = failure.localizedDescription
                 }
             }
         }
@@ -703,6 +747,7 @@ enum ModelStore {
     }
 
     private static let copyExtension = "tcadcopy"
+    private static let rawExtension = "tcadraw"
     private static let payloadName = "project.tcad"
     private static let metadataName = "metadata.json"
     #if DEBUG && targetEnvironment(simulator)
@@ -731,6 +776,14 @@ enum ModelStore {
     }
 
     static func save(_ data: Data, name: String) throws {
+        try save(data, name: name, fileExtension: "tcad")
+    }
+
+    static func saveRaw(_ data: Data, name: String) throws {
+        try save(data, name: name, fileExtension: rawExtension)
+    }
+
+    private static func save(_ data: Data, name: String, fileExtension: String) throws {
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let stem = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
         var safeStem = ""
@@ -742,7 +795,7 @@ enum ModelStore {
         while safeStem.first == "." { safeStem.removeFirst() }
         if safeStem.isEmpty { safeStem = "Model" }
         let directory = try directory()
-        let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).tcad")
+        let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).\(fileExtension)")
         let staging = directory.appendingPathComponent(".\(UUID().uuidString).partial")
         try ModelFilePublisher.publish(data, staging: staging, destination: destination)
     }
@@ -853,6 +906,11 @@ enum ModelStore {
                     name = regular ? displayName(url) : "Dosya değil (\(url.lastPathComponent))"
                     canOpen = regular
                     requiresRecovery = false
+                } else if url.pathExtension.lowercased() == rawExtension {
+                    let regular = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) } ?? false
+                    name = regular ? "Ham kayıt: \(displayName(url))" : "Dosya değil (\(url.lastPathComponent))"
+                    canOpen = false
+                    requiresRecovery = regular
                 } else if url.pathExtension.lowercased() == copyExtension {
                     let directory = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR) } ?? false
                     let hasPayload = directory && FileManager.default.fileExists(atPath: payloadURL(url).path)
@@ -967,7 +1025,7 @@ enum ModelStore {
     static func delete(_ url: URL, in library: URL, afterValidation: (() throws -> Void)? = nil) throws {
         let directory = library.standardizedFileURL
         guard url.standardizedFileURL.deletingLastPathComponent() == directory,
-              ["tcad", copyExtension].contains(url.pathExtension.lowercased()) else {
+              ["tcad", rawExtension, copyExtension].contains(url.pathExtension.lowercased()) else {
             throw ViewerError.message("Model silinemedi.")
         }
         var rootInfo = stat()
@@ -978,7 +1036,7 @@ enum ModelStore {
         guard (rootInfo.st_mode & S_IFMT) == expectedType else {
             throw ViewerError.message("Kayıt beklenen dosya türünde değil; içeriği korumak için silinmedi.")
         }
-        if url.pathExtension.lowercased() == "tcad" {
+        if url.pathExtension.lowercased() != copyExtension {
             try afterValidation?()
             // Unlike recursive removal, unlink cannot recursively remove a
             // directory substituted after the type check.
@@ -1179,7 +1237,9 @@ private struct ModelLibrary: View {
                     prepareRecovery(model)
                 }
             } message: {
-                if modelToRecover?.requiresRecovery == true {
+                if modelToRecover?.url.pathExtension.lowercased() == "tcadraw" {
+                    Text("Bu ham kayıt önizlenmedi veya proje olarak doğrulanmadı. Dosya değiştirilmeden dışa aktarılır; bozuk olabilir. En fazla 64 MB desteklenir.")
+                } else if modelToRecover?.requiresRecovery == true {
                     Text("Kayıt bilgisi eksik, bozuk, çok büyük veya desteklenmeyen sürümde; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
                 } else {
                     Text("Dosya içeriği açılmadan veya değiştirilmeden dışa aktarılır. Ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi varsa kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
@@ -1408,6 +1468,9 @@ private struct Drawing {
 
     static func load(_ data: Data) throws -> Drawing {
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
+        if LosslessProjectName.isOversizedUTF8VersionSix(data) {
+            throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.")
+        }
         let root = try JSONSerialization.jsonObject(with: data)
         let object: [String: Any]
         let formatVersion: Int

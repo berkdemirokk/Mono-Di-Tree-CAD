@@ -1,6 +1,24 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testOversizedV6ImportOffersUnvalidatedRawRecovery() {
+        let fixture = #"{"Name":"Önceki","Pieces":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-large-v6-import"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 20))
+        XCTAssertTrue(warning.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Dosya doğrulanmadı")).firstMatch.exists)
+        warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."].waitForExistence(timeout: 20))
+        XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons["Modellerim"].tap()
+        let raw = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ham kayıt:")).firstMatch
+        XCTAssertTrue(raw.waitForExistence(timeout: 10)); raw.tap()
+        XCTAssertTrue(app.alerts["Ham kopyayı kurtar?"].waitForExistence(timeout: 5))
+    }
+
     func testProjectRenameIsDisabledForVersionSixButAvailableForEarlierFormats() {
         let app = XCUIApplication()
         app.launchArguments.append("--ui-test-fixture")
