@@ -200,6 +200,37 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: target), bytes)
     }
 
+    func testMetadataReadRejectsReplacementAndMutation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let metadata = copy.appendingPathComponent("metadata.json")
+        let source = Data(#"{"version":1,"name":"Özgün"}"#.utf8)
+        try source.write(to: metadata)
+        try Data("project".utf8).write(to: copy.appendingPathComponent("project.tcad"))
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == copy })
+        let expected = try XCTUnwrap(entry.identity?.metadata)
+        if case .valid(let value) = ModelStore.metadata(copy, expected: expected) {
+            XCTAssertEqual(value.name, "Özgün")
+        } else { XCTFail("Stable metadata should be readable") }
+        let original = root.appendingPathComponent("original.json")
+        try FileManager.default.moveItem(at: metadata, to: original)
+        let replacement = Data(#"{"version":1,"name":"Başka"}"#.utf8)
+        try replacement.write(to: metadata)
+        if case .invalid = ModelStore.metadata(copy, expected: expected) {} else { XCTFail("Replacement must be rejected") }
+        XCTAssertEqual(try Data(contentsOf: original), source)
+        XCTAssertEqual(try Data(contentsOf: metadata), replacement)
+        let current = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == copy }?.identity?.metadata)
+        if case .invalid = ModelStore.metadata(copy, expected: current, afterFirstChunk: {
+            let writer = try FileHandle(forWritingTo: metadata)
+            defer { try? writer.close() }
+            try writer.seekToEnd(); try writer.write(contentsOf: Data([0x20]))
+        }) {} else { XCTFail("Metadata changed during read must be rejected") }
+        XCTAssertEqual(try Data(contentsOf: metadata), replacement + Data([0x20]))
+    }
+
     func testLibraryFilteringPreservesOrderAndCancelsWithoutPartialResults() throws {
         func entry(_ file: String, _ name: String, _ date: Date?) -> ModelStore.Entry {
             ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(file).tcad"), name: name, date: date,

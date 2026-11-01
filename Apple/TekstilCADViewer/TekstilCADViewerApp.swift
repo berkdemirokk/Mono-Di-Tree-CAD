@@ -843,7 +843,7 @@ enum ModelStore {
             return "\(url.pathExtension.lowercased()) · \(uuid.uuidString)"
         }
     }
-    private struct CopyMetadata: Codable {
+    struct CopyMetadata: Codable {
         let version: Int
         let name: String
     }
@@ -956,11 +956,11 @@ enum ModelStore {
         url.pathExtension.lowercased() == copyExtension ? url.appendingPathComponent(payloadName) : url
     }
 
-    private enum MetadataResult {
+    enum MetadataResult {
         case valid(CopyMetadata), oversized, invalid
     }
 
-    private static func metadata(_ url: URL) -> MetadataResult {
+    static func metadata(_ url: URL, expected: FileIdentity?, afterFirstChunk: (() throws -> Void)? = nil) -> MetadataResult {
         let limit = 64 * 1024
         guard url.pathExtension.lowercased() == copyExtension else { return .invalid }
         let metadataURL = url.appendingPathComponent(metadataName)
@@ -976,13 +976,18 @@ enum ModelStore {
         let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
         do {
-            var data = Data()
+            guard let expected, fileIdentity(info) == expected else { return .invalid }
+            var data = Data(), didRead = false
             while data.count <= limit {
                 let chunk = try file.read(upToCount: min(8192, limit + 1 - data.count)) ?? Data()
                 if chunk.isEmpty { break }
                 data.append(chunk)
+                if !didRead { didRead = true; try afterFirstChunk?() }
             }
+            var final = stat()
+            guard fstat(descriptor, &final) == 0, fileIdentity(final) == expected else { return .invalid }
             if data.count > limit { return .oversized }
+            guard Int64(data.count) == Int64(final.st_size) else { return .invalid }
             try LosslessProjectName.validateAuxiliaryJSONKeys(data, limit: limit)
             guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   Set(object.keys) == Set(["version", "name"]),
@@ -1016,7 +1021,7 @@ enum ModelStore {
                 } else if url.pathExtension.lowercased() == copyExtension {
                     let directory = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR) } ?? false
                     let hasPayload = directory && (initialIdentity?.payload.map { ($0.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) } ?? false)
-                    switch (directory ? metadata(url) : .invalid, hasPayload) {
+                    switch (directory ? metadata(url, expected: initialIdentity?.metadata) : .invalid, hasPayload) {
                     case (.valid(let metadata), true):
                         name = metadata.name.isEmpty ? "Model" : metadata.name; canOpen = true; requiresRecovery = false
                     case (.oversized, true), (.invalid, true):
