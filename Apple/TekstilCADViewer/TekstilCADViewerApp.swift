@@ -110,7 +110,7 @@ private struct ContentView: View {
             if rawSaveNeedsRetry, let rawImport {
                 Text("Kaydedilemeyen ham kopya: \(ModelStore.safeLabel(rawImport.name))")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                Text("Kopya geçici olarak bellekte tutuluyor; başka bir dosya açılırsa veya uygulama kapanırsa yeniden seçmeniz gerekir.")
+                Text("Kopya geçici olarak bellekte tutuluyor. Başka bir dosya açmadan önce kopyayı kaydedin veya ham kopyadan vazgeçin; uygulama kapanırsa yeniden seçmeniz gerekir.")
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
                     .disabled(isSaving || modelLoad.isLoading)
@@ -119,6 +119,11 @@ private struct ContentView: View {
                     Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
                     Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
                     Button("Test: okunamayan dosya") { openModel(FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString), imported: true) }
+                    Button("Test: ikinci bozuk dosya") {
+                        let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".tcad")
+                        do { try Data("[6,{".utf8).write(to: file); openModel(file, imported: true) }
+                        catch { error = error.localizedDescription }
+                    }
                 }
                 #endif
             }
@@ -507,9 +512,10 @@ private struct ContentView: View {
             Text("Bu ad Modellerim listesinde görünür; dosyanın içindeki proje adı değişmez. En fazla 1024 UTF-16 birimi kullanın.")
         }
         .alert("Dosya önizlenemedi", isPresented: $showingRawImport) {
-            Button("Vazgeç", role: .cancel) { rawImport = nil; rawSaveNeedsRetry = false }
+            Button(rawSaveNeedsRetry ? "Ham kopyadan vazgeç" : "Vazgeç", role: .cancel) { rawImport = nil; rawSaveNeedsRetry = false }
             Button("Ham kopyayı telefona kaydet") { saveRawImport() }
         } message: {
+            if rawSaveNeedsRetry { Text("Ham kopyadan vazgeçerseniz bellekteki kaydedilmemiş kopya silinir; kaynak dosya değiştirilmez.") }
             if case .sizeLimit? = rawImport?.reason {
                 Text("Sürüm 6 veya 7 dosyası veya doğrulama için çözülen metni 8 MB sınırını aşıyor. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
             } else if case .invalidPreview(let reason)? = rawImport?.reason {
@@ -639,6 +645,10 @@ private struct ContentView: View {
     }
 
     private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
+        guard !rawSaveNeedsRetry else {
+            error = "Önce kaydedilemeyen ham kopyayı yeniden kaydedin veya ham kopyadan açıkça vazgeçin. Önceki kopya bellekte korunuyor."
+            return
+        }
         saveNotice = nil
         // Retain a failed raw save until a replacement has actually opened.
         modelReadCancellation?.cancel()
