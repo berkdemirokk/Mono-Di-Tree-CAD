@@ -42,8 +42,9 @@ private struct ContentView: View {
     @State private var exportName = "Model.tcad"
     @State private var importedData: Data?
     @State private var sourceData: Data?
-    private struct RawImport { let data: Data; let name: String; let request: UUID }
-    private enum OpenedModel { case preview(Drawing, Data); case oversizedRaw(Data) }
+    private enum RawImportReason { case sizeLimit, invalidPreview(String) }
+    private struct RawImport { let data: Data; let name: String; let request: UUID; let reason: RawImportReason }
+    private enum OpenedModel { case preview(Drawing, Data); case raw(Data, RawImportReason) }
     @State private var rawImport: RawImport?
     @State private var showingRawImport = false
     @State private var showingNameEditor = false
@@ -450,7 +451,13 @@ private struct ContentView: View {
             Button("Vazgeç", role: .cancel) { rawImport = nil }
             Button("Ham kopyayı telefona kaydet") { saveRawImport() }
         } message: {
-            Text("Sürüm 6 dosyası veya doğrulama için çözülen metni 8 MB sınırını aşıyor. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+            if case .sizeLimit? = rawImport?.reason {
+                Text("Sürüm 6 dosyası veya doğrulama için çözülen metni 8 MB sınırını aşıyor. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+            } else if case .invalidPreview(let reason)? = rawImport?.reason {
+                Text("\(reason) Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+            } else {
+                Text("Dosya güvenle önizlenemedi; bozuk veya desteklenmeyen bir biçimde olabilir. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+            }
         }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
@@ -528,6 +535,11 @@ private struct ContentView: View {
                     try large.write(to: largeURL)
                     openModel(largeURL, imported: true)
                 }
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-invalid-v6-import") {
+                    let invalidURL = FileManager.default.temporaryDirectory.appendingPathComponent("Eksik-\(UUID().uuidString).tcad")
+                    try Data("[6,{\"Name\":\"kesik\"".utf8).write(to: invalidURL)
+                    openModel(invalidURL, imported: true)
+                }
             } catch { self.error = error.localizedDescription }
         }
         #endif
@@ -565,8 +577,12 @@ private struct ContentView: View {
                 let data: Data
                 if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
                 else { data = try Drawing.readData(url) }
-                if imported && LosslessProjectName.requiresVersionSixRawRecovery(data) { return .oversizedRaw(data) }
-                return .preview(try Drawing.load(data), data)
+                if imported && LosslessProjectName.requiresVersionSixRawRecovery(data) { return .raw(data, .sizeLimit) }
+                do { return .preview(try Drawing.load(data), data) }
+                catch {
+                    if imported { return .raw(data, .invalidPreview(error.localizedDescription)) }
+                    throw error
+                }
             }
             DispatchQueue.main.async {
                 guard modelLoad.finish(request) else { return }
@@ -585,8 +601,8 @@ private struct ContentView: View {
                     sourceData = data
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
-                case .success(.oversizedRaw(let data)):
-                    rawImport = RawImport(data: data, name: url.lastPathComponent, request: request)
+                case .success(.raw(let data, let reason)):
+                    rawImport = RawImport(data: data, name: url.lastPathComponent, request: request, reason: reason)
                     showingRawImport = true
                 case .failure(let failure):
                     error = failure.localizedDescription

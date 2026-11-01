@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testInvalidV6ImportCanBeCancelledOrKeptAsRawWithoutReplacingCurrentModel() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(#"{"Name":"Önceki","Pieces":[]}"#.utf8).base64EncodedString()
+        app.launch()
+        var warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        warning.buttons["Vazgeç"].tap()
+        XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.terminate()
+        app.launch()
+        warning = app.alerts["Dosya önizlenemedi"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        warning.buttons["Ham kopyayı telefona kaydet"].tap()
+        XCTAssertTrue(app.staticTexts["Ham kopya Modellerim bölümüne kaydedildi; önizlenemiyor."].waitForExistence(timeout: 15))
+        XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons["Modellerim"].tap()
+        let raw = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ham kayıt:")).firstMatch
+        XCTAssertTrue(raw.waitForExistence(timeout: 10)); raw.tap()
+        XCTAssertTrue(app.alerts["Ham kopyayı kurtar?"].waitForExistence(timeout: 5))
+    }
+
     func testVersionSixBOMEncodingsShowNotchPreview() throws {
         let text = #"[6,{"Name":"Kodlanmış","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let variants: [(String.Encoding, [UInt8])] = [

@@ -12,6 +12,22 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testInvalidImportRawCopyKeepsExactBytesAndOriginal() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let source = root.appendingPathComponent("invalid.tcad")
+        let destination = root.appendingPathComponent("saved.tcadraw")
+        let bytes = Data([0x5b, 0x36, 0x2c, 0xff, 0x00])
+        try bytes.write(to: source)
+        try ModelFilePublisher.publish(bytes, staging: root.appendingPathComponent("staging"), destination: destination)
+        let raw = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == destination })
+        XCTAssertFalse(raw.canOpen)
+        XCTAssertTrue(raw.requiresRecovery)
+        XCTAssertEqual(try ModelStore.readListedPayload(raw), bytes)
+        XCTAssertEqual(try Data(contentsOf: source), bytes)
+    }
+
     func testExpandedUTF16RawRecoveryPreservesExactSourceBytes() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
