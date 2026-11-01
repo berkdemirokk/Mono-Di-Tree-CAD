@@ -214,9 +214,13 @@ public static class AutomaticPerCopyNesting
         // claim, and each goes through the full per-copy placement verifier.
         var alternating = new Dictionary<(Guid, int), int>();
         var alternatingReverse = new Dictionary<(Guid, int), int>();
+        var twoToOne = new Dictionary<(Guid, int), int>();
+        var oneToTwo = new Dictionary<(Guid, int), int>();
         var alternatingUnique = new HashSet<(Guid, int)>();
         var reverseUnique = new HashSet<(Guid, int)>();
-        long alternatingWork = 0, reverseWork = 0;
+        var twoToOneUnique = new HashSet<(Guid, int)>();
+        var oneToTwoUnique = new HashSet<(Guid, int)>();
+        long alternatingWork = 0, reverseWork = 0, twoToOneWork = 0, oneToTwoWork = 0;
         foreach (var mapping in expansion.Placements)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -225,10 +229,16 @@ public static class AutomaticPerCopyNesting
             var otherIndex=options.Count>1 ? 1-firstIndex : 0;
             var angle=options[firstIndex].Angle;var reverseAngle=options[otherIndex].Angle;
             alternating.Add(key,angle);alternatingReverse.Add(key,reverseAngle);
+            var thirdIndex=options.Count>1 && mapping.CopyNumber%3==1 ? 1 : 0;
+            var otherThirdIndex=options.Count>1 ? 1-thirdIndex : 0;
+            var thirdAngle=options[thirdIndex].Angle;var otherThirdAngle=options[otherThirdIndex].Angle;
+            twoToOne.Add(key,thirdAngle);oneToTwo.Add(key,otherThirdAngle);
             long v=originals[mapping.SourcePieceId].Points.Count;
-            alternatingWork+=v*v;reverseWork+=v*v;
+            alternatingWork+=v*v;reverseWork+=v*v;twoToOneWork+=v*v;oneToTwoWork+=v*v;
             if(alternatingUnique.Add((mapping.SourcePieceId,angle)))alternatingWork+=3L*v*v;
             if(reverseUnique.Add((mapping.SourcePieceId,reverseAngle)))reverseWork+=3L*v*v;
+            if(twoToOneUnique.Add((mapping.SourcePieceId,thirdAngle)))twoToOneWork+=3L*v*v;
+            if(oneToTwoUnique.Add((mapping.SourcePieceId,otherThirdAngle)))oneToTwoWork+=3L*v*v;
         }
         foreach (var (angles, cost, needed) in new[]
         {
@@ -252,7 +262,16 @@ public static class AutomaticPerCopyNesting
                 alternatingReverse.Any(pair => narrow[pair.Key] != pair.Value) &&
                 alternatingReverse.Any(pair => shortRows[pair.Key] != pair.Value) &&
                 alternatingReverse.Any(pair => second[pair.Key] != pair.Value) &&
-                alternatingReverse.Any(pair => alternating[pair.Key] != pair.Value))
+                alternatingReverse.Any(pair => alternating[pair.Key] != pair.Value)),
+            (twoToOne, twoToOneWork, twoToOne.Any(pair => chosen[pair.Key] != pair.Value) &&
+                twoToOne.Any(pair => alternate[pair.Key] != pair.Value) && twoToOne.Any(pair => narrow[pair.Key] != pair.Value) &&
+                twoToOne.Any(pair => shortRows[pair.Key] != pair.Value) && twoToOne.Any(pair => second[pair.Key] != pair.Value) &&
+                twoToOne.Any(pair => alternating[pair.Key] != pair.Value) && twoToOne.Any(pair => alternatingReverse[pair.Key] != pair.Value)),
+            (oneToTwo, oneToTwoWork, oneToTwo.Any(pair => chosen[pair.Key] != pair.Value) &&
+                oneToTwo.Any(pair => alternate[pair.Key] != pair.Value) && oneToTwo.Any(pair => narrow[pair.Key] != pair.Value) &&
+                oneToTwo.Any(pair => shortRows[pair.Key] != pair.Value) && oneToTwo.Any(pair => second[pair.Key] != pair.Value) &&
+                oneToTwo.Any(pair => alternating[pair.Key] != pair.Value) && oneToTwo.Any(pair => alternatingReverse[pair.Key] != pair.Value) &&
+                oneToTwo.Any(pair => twoToOne[pair.Key] != pair.Value))
         })
         {
             if (!needed) continue;
