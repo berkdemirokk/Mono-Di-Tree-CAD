@@ -10,14 +10,14 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let db = root.appendingPathComponent("copy.sqlite"), doc = UUID()
-        let coordinator = DebugPointCopyCoordinator(documentID: doc, data: Data([1, 0, 255]))
+        let coordinator = try DebugPointCopyCoordinator(documentID: doc, data: Data([1, 0, 255]))
         let snapshot = coordinator.snapshot(name: "point")
         let id = UUID()
         try ModelStorePrototype.save(at: db, id: UUID().uuidString, name: "existing", data: Data([9]))
-        coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4]))
+        try coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4]))
         XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot))
         XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
-        coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4]))
+        try coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4]))
         XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot))
         let current = coordinator.snapshot(name: "point")
         XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: current) { throw Cancelled() })
@@ -30,9 +30,9 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let db = root.appendingPathComponent("copy.sqlite"), doc = UUID()
         let oldData = Data([1, 0, 255]), newData = Data([2, 0, 254])
-        let coordinator = DebugPointCopyCoordinator(documentID: doc, data: oldData)
+        let coordinator = try DebugPointCopyCoordinator(documentID: doc, data: oldData)
         let old = coordinator.snapshot(name: "old")
-        coordinator.replaceDocument(documentID: doc, data: newData)
+        try coordinator.replaceDocument(documentID: doc, data: newData)
         let current = coordinator.snapshot(name: "new")
         XCTAssertNotEqual(old.revision, current.revision)
         XCTAssertEqual(old.data, oldData)
@@ -46,12 +46,24 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         try coordinator.save(at: db, id: newID, snapshot: current)
         XCTAssertEqual(try ModelStorePrototype.read(at: db, id: newID.uuidString)?.data, newData)
     }
+    func testOversizedStateIsRejectedWithoutChangingCurrentDocument() throws {
+        let oversized = Data(count: DebugPointCopyStore.maximumBytes + 1)
+        let doc = UUID(), other = UUID(), original = Data([1, 0, 255])
+        XCTAssertThrowsError(try DebugPointCopyCoordinator(documentID: doc, data: oversized))
+        let coordinator = try DebugPointCopyCoordinator(documentID: doc, data: original)
+        let before = coordinator.snapshot(name: "before")
+        XCTAssertThrowsError(try coordinator.replaceDocument(documentID: other, data: oversized))
+        let after = coordinator.snapshot(name: "after")
+        XCTAssertEqual(after.documentID, before.documentID)
+        XCTAssertEqual(after.revision, before.revision)
+        XCTAssertEqual(after.data, original)
+    }
     func testConcurrentSaveAndChangeLeaveOldSnapshotStale() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let db = root.appendingPathComponent("copy.sqlite"), doc = UUID()
-        let coordinator = DebugPointCopyCoordinator(documentID: doc, data: Data([1, 0, 255]))
+        let coordinator = try DebugPointCopyCoordinator(documentID: doc, data: Data([1, 0, 255]))
         let snapshot = coordinator.snapshot(name: "point")
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
         let saveDone = expectation(description: "save completed")
@@ -70,7 +82,8 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
             release.signal(); XCTFail("Save did not reach transaction"); return
         }
         DispatchQueue.global().async {
-            coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4]))
+            do { try coordinator.replaceDocument(documentID: doc, data: Data([2, 3, 4])) }
+            catch { XCTFail("Unexpected document update failure: \(error)") }
             changeDone.fulfill()
         }
         release.signal()

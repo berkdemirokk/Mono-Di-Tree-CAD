@@ -9,7 +9,8 @@ public final class DebugPointCopyCoordinator {
     private var revision: UUID
     private var data: Data
 
-    public init(documentID: UUID, data: Data) {
+    public init(documentID: UUID, data: Data) throws {
+        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
         self.documentID = documentID
         self.revision = UUID()
         self.data = data
@@ -17,7 +18,8 @@ public final class DebugPointCopyCoordinator {
 
     /// Each change gets a new token; callers cannot restore an old revision.
     @discardableResult
-    public func replaceDocument(documentID: UUID, data: Data) -> UUID {
+    public func replaceDocument(documentID: UUID, data: Data) throws -> UUID {
+        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
         lock.lock(); defer { lock.unlock() }
         self.documentID = documentID
         self.revision = UUID()
