@@ -3,6 +3,15 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
+    func testNameEditorDetectsNonUTF8ByteOrderMarks() {
+        XCTAssertFalse(LosslessProjectName.hasNonUTF8BOM(Data("[1,{}]".utf8)))
+        XCTAssertFalse(LosslessProjectName.hasNonUTF8BOM(Data([0xef, 0xbb, 0xbf]) + Data("[1,{}]".utf8)))
+        let boms: [[UInt8]] = [[0xff, 0xfe], [0xfe, 0xff], [0xff, 0xfe, 0, 0], [0, 0, 0xfe, 0xff]]
+        for bom in boms {
+            XCTAssertTrue(LosslessProjectName.hasNonUTF8BOM(Data(bom)))
+        }
+    }
+
     func testVersionSixRejectsNonzeroNumbersThatUnderflowToZero() throws {
         for token in ["1e-999", "-1e-999", "0.0000000000000000001e-999"] {
             let input = "[6,{\"Name\":\"Model\",\"Pieces\":[{\"Points\":[{\"X\":\(token),\"Y\":0}]}]}]"

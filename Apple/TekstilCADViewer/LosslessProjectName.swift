@@ -26,6 +26,10 @@ enum LosslessProjectName {
         return nil
     }
 
+    // Drawing.load has already validated the text; only its BOM is needed
+    // here to decide whether the UTF-8-only name editor can be offered.
+    static func hasNonUTF8BOM(_ data: Data) -> Bool { bomEncoding(data) != nil }
+
     private static func hasVersionSixPrefix(_ data: Data) -> Bool {
         return data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)

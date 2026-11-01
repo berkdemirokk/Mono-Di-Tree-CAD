@@ -132,9 +132,13 @@ private struct ContentView: View {
                 }.disabled(isSaving || modelLoad.isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
-                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion == 6 || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion == 6 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
                 if project.formatVersion == 6 {
                     Text("Sürüm 6 projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                if project.formatVersion != 6 && project.hasNonUTF8BOM {
+                    Text("UTF-16 veya UTF-32 dosyalarında proje adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
@@ -679,7 +683,7 @@ private struct ContentView: View {
     }
 
     private func saveRenamedCopy() {
-        guard let data = sourceData, let currentProject = project, currentProject.formatVersion != 6 else { return }
+        guard let data = sourceData, let currentProject = project, currentProject.formatVersion != 6, !currentProject.hasNonUTF8BOM else { return }
         let name = editedName
         saveNotice = nil
         isSaving = true
@@ -1464,6 +1468,7 @@ private struct Drawing {
     let pieces: [Piece]
     let pieceRenameIdentitiesValid: Bool
     let formatVersion: Int
+    let hasNonUTF8BOM: Bool
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -1681,7 +1686,8 @@ private struct Drawing {
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
-        return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid, formatVersion: formatVersion)
+        return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
+                       formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data))
     }
 }
 
