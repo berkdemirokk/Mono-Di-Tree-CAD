@@ -1020,13 +1020,17 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Sonraki kenara V çentik aç",()=>VertexMoveTaskForVerification=InsertNotchAsync(index.Text,notchFraction.Text,notchWidth.Text,notchDepth.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece { Closed:true }&&IsNumber(notchFraction.Text,out _)&&IsNumber(notchDepth.Text,out _)&&IsNumber(notchWidth.Text,out _));
         Note(panel,"Açık konturun başlangıç ve bitiş yönünü ters çevirebilirsiniz. Noktaların konumu değişmez. Eşleşen kayıtlı serileme artışları noktalarla birlikte ters çevrilir; uygulanmamış taslaklar korunur.");
         Button(panel,"Açık kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseOpenPathAsync(),()=>source.SelectedItem is PatternPiece { Closed:false });
+        Note(panel,"Kapalı konturun sonundaki birden fazla aynı kapanış kopyası bir kopyaya indirilebilir. İşlem işaretli veya serileme kuralı/taslağı bulunan parçalarda reddedilir; kaynak dosya değiştirilmez. Kaynak ve pastal geçmişi önceki durumu anlatmaya devam eder. Diğer kontur hataları kalabilir; dışa aktarım veya üretim uygunluğu doğrulanmaz.");
+        Button(panel,"Fazla kapanış noktalarını temizle",()=>VertexMoveTaskForVerification=CleanExtraClosureAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
+        Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaret veya serileme kuralı/taslağı bulunan parçalar korunur.");
+        Button(panel,"Bitişik eş noktaları temizle",()=>VertexMoveTaskForVerification=CleanConsecutiveAsync(),()=>HasPiece());
         Note(panel,"Kapalı konturun yönünü ters çevirin; ilk nokta ve şekil korunur. Nokta indeksleri değişir. Eşleşen kayıtlı serileme artışları ilgili noktalarla birlikte taşınır; uygulanmamış taslaklar korunur.");
         Button(panel,"Kapalı kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseClosedContourAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
         Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&!SelectedIsMarked()&&source.SelectedItem is PatternPiece p&&LogicalCount(p)>(p.Closed?3:2));return Scroll(panel);
     }
-    private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse, ReverseClosed, Notch, Distance, Percentage }
+    private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse, ReverseClosed, Notch, Distance, Percentage, CleanClosure, CleanConsecutive }
     internal void SetVertexNotch(string indexText,bool add)
     {
         try
@@ -1062,6 +1066,8 @@ public sealed class TextileToolsWindow : Window
     internal Task InsertEdgePercentageAsync(string indexText,string percentageText) => EditVertexAsync(VertexEdit.Percentage,indexText,percentageText,"0");
     internal Task InsertNotchAsync(string indexText,string fractionText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText);
     internal Task InsertNotchAsync(string indexText,string fractionText,string widthText,string depthText) => EditVertexAsync(VertexEdit.Notch,indexText,fractionText,depthText,widthText);
+    internal Task CleanExtraClosureAsync() => EditVertexAsync(VertexEdit.CleanClosure,"0",null,null);
+    internal Task CleanConsecutiveAsync() => EditVertexAsync(VertexEdit.CleanConsecutive,"0",null,null);
     internal Task ReverseOpenPathAsync() => EditVertexAsync(VertexEdit.Reverse,"0",null,null);
     internal Task ReverseClosedContourAsync() => EditVertexAsync(VertexEdit.ReverseClosed,"0",null,null);
     private async Task EditVertexAsync(VertexEdit operation,string indexText,string? xText,string? yText,string? widthText=null)
@@ -1073,7 +1079,7 @@ public sealed class TextileToolsWindow : Window
             if(!CommitGradeEdit())throw new ArgumentException("Serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
             if(!int.TryParse(indexText,NumberStyles.Integer,CultureInfo.InvariantCulture,out var index))throw new ArgumentException("Nokta indeksi tam sayı olmalıdır.");
-            var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse or VertexEdit.ReverseClosed ? default : new Point2(Number(xText!),Number(yText!));
+            var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse or VertexEdit.ReverseClosed or VertexEdit.CleanClosure or VertexEdit.CleanConsecutive ? default : new Point2(Number(xText!),Number(yText!));
             var width=widthText is null ? position.Y * 2 : Number(widthText);
             var selected=Piece();var sourceId=selected.Id;
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
@@ -1084,6 +1090,10 @@ public sealed class TextileToolsWindow : Window
             if(operation==VertexEdit.Move && BitConverter.DoubleToInt64Bits(snapshot.Points[index].X)==BitConverter.DoubleToInt64Bits(position.X) &&
                BitConverter.DoubleToInt64Bits(snapshot.Points[index].Y)==BitConverter.DoubleToInt64Bits(position.Y))
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
+            bool ClosureHasUnsafeDependencies()=>snapshot.Notches is not null || document.GradingRules.Any(rule=>rule.SourcePieceId==sourceId) ||
+                (gradeDrafts.TryGetValue(sourceId,out var pendingDraft) && HasUnsavedGradeDraft(sourceId,pendingDraft));
+            if((operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive) && ClosureHasUnsafeDependencies())
+                throw new InvalidOperationException("İşaret, kayıtlı serileme kuralı veya uygulanmamış serileme taslağı var; kapanış temizlenmedi.");
             var before=BeforeVertexMoveForVerification;var after=AfterVertexMoveForVerification;
             vertexMoveCancellation=new CancellationTokenSource();var token=vertexMoveCancellation.Token;
             vertexMoveBusy=true;started=true;source.IsEnabled=false;grades.IsEnabled=false;
@@ -1096,6 +1106,8 @@ public sealed class TextileToolsWindow : Window
                 var value=operation switch
                 {
                     VertexEdit.Move => PatternTools.MovePoint(snapshot,index,position,token,allowMarkedVertexMove:true),
+                    VertexEdit.CleanClosure => PatternTools.RemoveExtraClosingVertices(snapshot,token),
+                    VertexEdit.CleanConsecutive => PatternTools.RemoveConsecutiveDuplicateVertices(snapshot,token),
                     VertexEdit.Insert => PatternTools.InsertPoint(snapshot,index,position,token),
                     VertexEdit.Delete => PatternTools.DeletePoint(snapshot,index,token),
                     VertexEdit.Midpoint => PatternTools.InsertEdgeMidpoint(snapshot,index,token),
@@ -1117,9 +1129,11 @@ public sealed class TextileToolsWindow : Window
                vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth || notchWidthInput?.Text!=inputWidth || edgeDistanceInput?.Text!=inputDistance || edgePercentageInput?.Text!=inputPercentage)
                 throw new InvalidOperationException("Proje, seçim veya bekleyen çalışma değişti. Nokta düzenlemesi uygulanmadı; güncel durumu kontrol edin.");
             token.ThrowIfCancellationRequested();
+            if((operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive) && ClosureHasUnsafeDependencies())
+                throw new InvalidOperationException("İşaret veya serileme bilgisi değişti; kapanış temizlenmedi.");
             ReplacePiece(edited,operation is VertexEdit.Reverse or VertexEdit.ReverseClosed,
                 operation is VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage ? index : null,
-                operation is VertexEdit.Distance or VertexEdit.Percentage,operation is VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage or VertexEdit.Notch ? index : null,operation==VertexEdit.Delete ? index : null,operation==VertexEdit.Move ? index : null);
+                operation is VertexEdit.Distance or VertexEdit.Percentage,operation is VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage or VertexEdit.Notch ? index : null,operation==VertexEdit.Delete ? index : null,operation==VertexEdit.Move ? index : null,operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive);
         }
         catch(OperationCanceledException) when(vertexMoveCancellation?.IsCancellationRequested==true)
         { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Nokta düzenleme doğrulaması iptal edildi; proje değiştirilmedi."; } }
@@ -1263,7 +1277,7 @@ public sealed class TextileToolsWindow : Window
         workspace.CommitObserved("Kalıp aracı uygulandı",()=>workspace.Document.Pieces.Add(generated),onCommitted);workspace.Select(generated.Id);workspace.FitView();RefreshSources(keepBaseSource?baseId:generated.Id);
         Success(notice+generated.Name+" projeye eklendi. Kaynak parça korundu."+(metadataNotCopied ? " Kaynağın rol, beden, malzeme ve adet bilgileri yeni parçaya aktarılmadı; gerekiyorsa Parça bilgileri bölümünde girin." : "")+detail);
     }
-    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null,int? deletedIndex=null,int? movedIndex=null)
+    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null,int? deletedIndex=null,int? movedIndex=null,bool closureCleanup=false)
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
@@ -1299,7 +1313,7 @@ public sealed class TextileToolsWindow : Window
             workspace.Document.Pieces[index]=edited;
             if(reversedRule is not null) { var ruleIndex=workspace.Document.GradingRules.IndexOf(rule!);workspace.Document.GradingRules[ruleIndex]=reversedRule; }
         },()=>
-        { if(reversedRule is not null)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success("Kontur noktası düzenlendi ve doğrulandı."+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
+        { if(reversedRule is not null || closureCleanup)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success((closureCleanup ? "Tekrarlı nokta kopyaları temizlendi; diğer kontur hataları kalabilir. Dışa aktarım ve üretim uygunluğu doğrulanmadı. Kaynak dosya değiştirilmedi; kaynak ve pastal geçmişi önceki durumu anlatır." : "Kontur noktası düzenlendi ve doğrulandı.")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
     }
     private UIElement NestingPanel()
     {

@@ -590,6 +590,7 @@ internal static class DesktopVerification
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
+            VerifyExtraClosureCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
@@ -2186,7 +2187,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null,null]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null,null,false]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -9389,6 +9390,75 @@ internal static class DesktopVerification
         finally { tools.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
+    private static void VerifyExtraClosureCleanup(MainWindow studio,List<string> checks)
+    {
+        var oldContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            var piece=new PatternPiece { Name="Çift kapanış",Closed=true,Points=[new(0,0),new(10,0),new(10,10),new(0,10),new(0,0),new(0,0)] };
+            var provenance=new DxfImportProvenance { SourceFileName="sample.dxf",SourceSha256=new string('A',64),SourceByteLength=10,MillimetersPerUnit=1,PieceIds=[piece.Id],Warnings=["Kaynak uyarısı"] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece],ImportProvenance=provenance });studio.Select(piece.Id);
+            var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var cleanup=tools.CleanExtraClosureAsync();PumpUntil(()=>cleanup.IsCompleted);cleanup.GetAwaiter().GetResult();
+                var after=studio.Document.Clone();
+                Check(after.Pieces.Single().Points.Count==5 && after.Pieces[0].Points.SequenceEqual(before.Pieces[0].Points.Take(5)) &&
+                    after.ImportProvenance!.SourceSha256==provenance.SourceSha256 && after.ImportProvenance.Warnings.SequenceEqual(provenance.Warnings) && session.UndoCount==1,
+                    "Explicit closure cleanup keeps historical source metadata and commits one edit",checks);
+                _=DxfFormat.AnalyzeExport(after);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Closure cleanup undo and redo preserve geometry and import history",checks);
+            }
+            finally { tools.Close(); }
+            var repeatedNeighbor=piece.Clone();repeatedNeighbor.Points.Insert(2,repeatedNeighbor.Points[1]);
+            studio.LoadDocument(new ProjectDocument { Pieces=[repeatedNeighbor],ImportProvenance=provenance.Clone() });studio.Select(piece.Id);
+            var neighborsBefore=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            try
+            {
+                var cleanup=tools.CleanConsecutiveAsync();PumpUntil(()=>cleanup.IsCompleted);cleanup.GetAwaiter().GetResult();
+                var after=studio.Document.Clone();
+                Check(after.Pieces[0].Points.Count==5 && after.Pieces[0].Points[1]==new Point2(10,0) && after.Pieces[0].Points[2]==new Point2(10,10) &&
+                    after.ImportProvenance!.SourceSha256==provenance.SourceSha256 && session.UndoCount==1,
+                    "Consecutive duplicate cleanup preserves other vertices and source history",checks);
+                _=DxfFormat.AnalyzeExport(after);
+                Check(session.Undo() && DocumentSession.ContentEquals(neighborsBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Consecutive duplicate cleanup is one undoable transaction",checks);
+            }
+            finally { tools.Close(); }
+            var graded=new ProjectDocument { Pieces=[piece.Clone()],GradingRules=[new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,
+                SourcePoints=piece.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),piece.Points.Count).ToList() }] };
+            studio.LoadDocument(graded);studio.Select(piece.Id);var guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            try
+            {
+                var blocked=tools.CleanExtraClosureAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(guarded,studio.Document) && session.UndoCount==0,
+                    "Closure cleanup refuses a piece with a saved grading rule",checks);
+            }
+            finally { tools.Close(); }
+            var markedPiece=piece.Clone();markedPiece.Notches=[new NotchMark { VertexIndex=1,Position=markedPiece.Points[1] }];
+            studio.LoadDocument(new ProjectDocument { Pieces=[markedPiece] });studio.Select(piece.Id);guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            try
+            {
+                var blocked=tools.CleanConsecutiveAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(guarded,studio.Document) && session.UndoCount==0,
+                    "Consecutive cleanup refuses marked pieces without changing their markers",checks);
+            }
+            finally { tools.Close(); }
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()] });studio.Select(piece.Id);guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            try
+            {
+                var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="1";
+                var blocked=tools.CleanExtraClosureAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(guarded,studio.Document) && session.UndoCount==0 && table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="1",
+                    "Closure cleanup refuses and preserves an unapplied grading draft",checks);
+            }
+            finally { tools.Close(); }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(oldContext); }
+    }
     private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)
     {
         var previousContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));

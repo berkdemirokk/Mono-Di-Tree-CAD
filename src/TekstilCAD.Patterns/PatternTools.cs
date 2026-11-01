@@ -528,6 +528,48 @@ public static class PatternTools
         ValidatePointEdit(piece.Closed, points, cancellationToken);
         return NewPiece(piece, points, "", preserveGrainline:true);
     }
+    /// <summary>Remove only byte-identical redundant terminal copies of a closed contour's first vertex.</summary>
+    public static PatternPiece RemoveExtraClosingVertices(PatternPiece piece,CancellationToken cancellationToken=default)
+    {
+        ArgumentNullException.ThrowIfNull(piece);
+        var points=SnapshotPointEdit(piece,cancellationToken);
+        if(!piece.Closed || points.Count<5)throw new ArgumentException("Fazla kapanış noktası içeren kapalı kontur gerekli.",nameof(piece));
+        var first=points[0];var start=points.Count;
+        while(start>1 && points[start-1]==first) { cancellationToken.ThrowIfCancellationRequested();start--; }
+        if(points.Count-start<2)throw new ArgumentException("Sonda birden fazla kapanış kopyası bulunamadı.",nameof(piece));
+        for(var i=start;i<points.Count;i++)
+            if(BitConverter.DoubleToInt64Bits(points[i].X)!=BitConverter.DoubleToInt64Bits(first.X) ||
+               BitConverter.DoubleToInt64Bits(points[i].Y)!=BitConverter.DoubleToInt64Bits(first.Y))
+                throw new ArgumentException("Kapanış kopyalarının koordinat bitleri farklı; otomatik temizleme yapılmadı.",nameof(piece));
+        if(start<3)throw new ArgumentException("Kapalı kontur için en az üç kaynak nokta gerekli.",nameof(piece));
+        foreach(var point in points) { cancellationToken.ThrowIfCancellationRequested();Geometry.Validate(point); }
+        points.RemoveRange(start+1,points.Count-start-1);
+        cancellationToken.ThrowIfCancellationRequested();
+        var edited=piece.Clone();edited.Points=points;if(edited.Grainline is not null)edited.Grainline.NeedsReview=true;return edited;
+    }
+    /// <summary>Remove only bit-identical consecutive duplicate points in a detached copy.</summary>
+    public static PatternPiece RemoveConsecutiveDuplicateVertices(PatternPiece piece,CancellationToken cancellationToken=default)
+    {
+        ArgumentNullException.ThrowIfNull(piece);
+        var points=SnapshotPointEdit(piece,cancellationToken);var cleaned=new List<Point2>(points.Count);
+        foreach(var point in points)
+        {
+            cancellationToken.ThrowIfCancellationRequested();Geometry.Validate(point);
+            if(cleaned.Count>0 && cleaned[^1]==point)
+            {
+                if(BitConverter.DoubleToInt64Bits(cleaned[^1].X)!=BitConverter.DoubleToInt64Bits(point.X) ||
+                   BitConverter.DoubleToInt64Bits(cleaned[^1].Y)!=BitConverter.DoubleToInt64Bits(point.Y))
+                    throw new ArgumentException("Bitişik eş noktaların koordinat bitleri farklı; temizleme yapılmadı.",nameof(piece));
+                continue;
+            }
+            cleaned.Add(point);
+        }
+        if(cleaned.Count==points.Count)throw new ArgumentException("Bitişik eş nokta bulunamadı.",nameof(piece));
+        var logical=cleaned.Count-(piece.Closed && cleaned.Count>1 && cleaned[0]==cleaned[^1] ? 1 : 0);
+        if(logical<(piece.Closed ? 3 : 2))throw new ArgumentException("Temizleme sonrası yeterli nokta kalmıyor.",nameof(piece));
+        cancellationToken.ThrowIfCancellationRequested();var edited=piece.Clone();edited.Points=cleaned;
+        if(edited.Grainline is not null)edited.Grainline.NeedsReview=true;return edited;
+    }
     public static PatternPiece DeletePoint(PatternPiece piece, int index)
         => DeletePoint(piece, index, CancellationToken.None);
 
