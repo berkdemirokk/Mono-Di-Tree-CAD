@@ -7,8 +7,9 @@ using TekstilCAD.FileFormats;
 namespace TekstilCAD.Desktop;
 
 /// <summary>
-/// Decodes a detached, reduced still-image preview; it does not interpret a garment,
-/// apply EXIF orientation, or establish measurements. WIC runs in this process, so
+/// Decodes a detached, reduced still-image preview; it does not interpret a garment
+/// or establish measurements. JPEG EXIF orientation is applied
+/// to the preview only. WIC runs in this process, so
 /// these limits do not provide process isolation or a hard codec memory/time limit.
 /// </summary>
 internal static class ReferencePhotoDecoder
@@ -28,13 +29,23 @@ internal static class ReferencePhotoDecoder
         if(!png && !jpeg)throw new InvalidDataException("Önizleme yalnız PNG veya JPEG dosyalarını destekler.");
         try
         {
-            int width,height;
+            int width,height;var orientation=1;
             using(var header=new MemoryStream(bytes,false))
             {
                 var decoder=BitmapDecoder.Create(header,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.None);
                 if((png && decoder is not PngBitmapDecoder) || (jpeg && decoder is not JpegBitmapDecoder) || decoder.Frames.Count!=1)
                     throw new InvalidDataException("Görsel biçimi veya kare sayısı önizleme için desteklenmiyor.");
                 width=decoder.Frames[0].PixelWidth;height=decoder.Frames[0].PixelHeight;
+                if(jpeg && decoder.Frames[0].Metadata is BitmapMetadata metadata)
+                {
+                    var tag=metadata.GetQuery("/app1/ifd/{ushort=274}");
+                    if(tag is not null)
+                    {
+                        if(tag is not ushort value || value is <1 or >8)
+                            throw new InvalidDataException("JPEG yön bilgisi geçersiz; önizleme açılamadı.");
+                        orientation=value;
+                    }
+                }
             }
             if(width<=0 || height<=0 || width>MaximumDimension || height>MaximumDimension || (long)width*height>MaximumPixels)
                 throw new InvalidDataException("Görselin piksel boyutu önizleme sınırını aşıyor.");
@@ -55,7 +66,25 @@ internal static class ReferencePhotoDecoder
             var converted=new FormatConvertedBitmap(image,PixelFormats.Bgra32,null,0);
             var stride=checked(converted.PixelWidth*4);var pixels=new byte[checked(stride*converted.PixelHeight)];
             converted.CopyPixels(pixels,stride,0);
-            var preview=BitmapSource.Create(converted.PixelWidth,converted.PixelHeight,96,96,PixelFormats.Bgra32,null,pixels,stride);
+            var sourceWidth=converted.PixelWidth;var sourceHeight=converted.PixelHeight;
+            var outputWidth=orientation>=5 ? sourceHeight : sourceWidth;
+            var outputHeight=orientation>=5 ? sourceWidth : sourceHeight;
+            if(orientation!=1)
+            {
+                var oriented=new byte[pixels.Length];
+                for(var y=0;y<sourceHeight;y++)for(var x=0;x<sourceWidth;x++)
+                {
+                    var (dx,dy)=orientation switch
+                    {
+                        2=>(sourceWidth-1-x,y),3=>(sourceWidth-1-x,sourceHeight-1-y),4=>(x,sourceHeight-1-y),
+                        5=>(y,x),6=>(sourceHeight-1-y,x),7=>(sourceHeight-1-y,sourceWidth-1-x),8=>(y,sourceWidth-1-x),
+                        _=>throw new InvalidDataException("JPEG yön bilgisi geçersiz.")
+                    };
+                    Buffer.BlockCopy(pixels,(y*sourceWidth+x)*4,oriented,(dy*outputWidth+dx)*4,4);
+                }
+                pixels=oriented;
+            }
+            var preview=BitmapSource.Create(outputWidth,outputHeight,96,96,PixelFormats.Bgra32,null,pixels,outputWidth*4);
             preview.Freeze();return preview;
         }
         catch(Exception ex) when(ex is IOException or FormatException or NotSupportedException or ArgumentException or InvalidOperationException or COMException or OverflowException)

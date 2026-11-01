@@ -9184,6 +9184,74 @@ internal static class DesktopVerification
                 Check(preview.IsFrozen && preview.PixelWidth==32 && preview.PixelHeight==16 && photoBytes.SequenceEqual(originalBytes),
                     "Local "+(jpeg ? "JPEG" : "PNG")+" preview decodes independently without changing request bytes",checks);
             }
+            // Encode a real, asymmetric JPEG first; insert a standard little-endian
+            // APP1/Exif TIFF IFD containing orientation 274. This independently
+            // exercises the metadata reader rather than its transform helper.
+            byte[] OrientedJpeg(int? orientation)
+            {
+                const int w=64,h=48;var pixels=new byte[w*h*4];
+                for(var y=0;y<h;y++)for(var x=0;x<w;x++)
+                {
+                    int i=(y*w+x)*4;
+                    var rgb=(x<w/2,y<h/2) switch
+                    {
+                        (true,true)=>(R:(byte)240,G:(byte)0,B:(byte)0),
+                        (false,true)=>(R:(byte)0,G:(byte)240,B:(byte)0),
+                        (true,false)=>(R:(byte)0,G:(byte)0,B:(byte)240),
+                        _=>(R:(byte)240,G:(byte)240,B:(byte)0)
+                    };
+                    pixels[i]=rgb.B;pixels[i+1]=rgb.G;pixels[i+2]=rgb.R;pixels[i+3]=255;
+                }
+                var bitmap=BitmapSource.Create(w,h,96,96,PixelFormats.Bgra32,null,pixels,w*4);
+                var encoder=new JpegBitmapEncoder { QualityLevel=100 };encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                using var stream=new MemoryStream();encoder.Save(stream);var jpeg=stream.ToArray();
+                if(orientation is null)return jpeg;
+                byte[] app1=[0xff,0xe1,0x00,0x22,0x45,0x78,0x69,0x66,0x00,0x00,
+                    0x49,0x49,0x2a,0x00,0x08,0x00,0x00,0x00,0x01,0x00,
+                    0x12,0x01,0x03,0x00,0x01,0x00,0x00,0x00,(byte)orientation.Value,0x00,0x00,0x00,
+                    0x00,0x00,0x00,0x00];
+                return jpeg[..2].Concat(app1).Concat(jpeg[2..]).ToArray();
+            }
+            int[] CornerColors(BitmapSource bitmap)
+            {
+                int stride=bitmap.PixelWidth*4;var pixels=new byte[stride*bitmap.PixelHeight];bitmap.CopyPixels(pixels,stride,0);
+                int Classify(int x,int y)
+                {
+                    var i=y*stride+x*4;int r=pixels[i+2],g=pixels[i+1],b=pixels[i];
+                    var colors=new[] { (R:240,G:0,B:0),(R:0,G:240,B:0),(R:0,G:0,B:240),(R:240,G:240,B:0) };
+                    return Enumerable.Range(0,colors.Length).MinBy(k=>
+                        (r-colors[k].R)*(r-colors[k].R)+(g-colors[k].G)*(g-colors[k].G)+(b-colors[k].B)*(b-colors[k].B));
+                }
+                return [Classify(bitmap.PixelWidth/4,bitmap.PixelHeight/4),Classify(bitmap.PixelWidth*3/4,bitmap.PixelHeight/4),
+                    Classify(bitmap.PixelWidth/4,bitmap.PixelHeight*3/4),Classify(bitmap.PixelWidth*3/4,bitmap.PixelHeight*3/4)];
+            }
+            int[][] expectedCorners=[[0,1,2,3],[1,0,3,2],[3,2,1,0],[2,3,0,1],
+                [0,2,1,3],[2,0,3,1],[3,1,2,0],[1,3,0,2]];
+            foreach(var orientation in Enumerable.Range(0,9))
+            {
+                var jpegBytes=OrientedJpeg(orientation==0 ? null : orientation);var originalBytes=(byte[])jpegBytes.Clone();
+                if(orientation!=0)
+                {
+                    using var header=new MemoryStream(jpegBytes,false);
+                    var decoder=BitmapDecoder.Create(header,BitmapCreateOptions.None,BitmapCacheOption.None);
+                    var metadata=(BitmapMetadata)decoder.Frames[0].Metadata;
+                    Check(Convert.ToInt32(metadata.GetQuery("/app1/ifd/{ushort=274}"),CultureInfo.InvariantCulture)==orientation,
+                        "JPEG fixture contains EXIF orientation "+orientation,checks);
+                }
+                var result=Task.Run(()=>ReferencePhotoDecoder.Decode(jpegBytes)).GetAwaiter().GetResult();
+                var expected=orientation==0 ? 1 : orientation;bool swap=expected>=5;
+                Check(result.IsFrozen && result.PixelWidth==(swap ? 48 : 64) && result.PixelHeight==(swap ? 64 : 48) &&
+                    CornerColors(result).SequenceEqual(expectedCorners[expected-1]) && jpegBytes.SequenceEqual(originalBytes),
+                    "Actual JPEG "+(orientation==0 ? "without orientation" : "EXIF orientation "+orientation)+" preserves expected pixels and source bytes",checks);
+            }
+            foreach(var invalidOrientation in new[] { 0,9 })
+            {
+                var invalidJpeg=OrientedJpeg(invalidOrientation);var savedBytes=(byte[])invalidJpeg.Clone();bool rejected=false;
+                try { _=Task.Run(()=>ReferencePhotoDecoder.Decode(invalidJpeg)).GetAwaiter().GetResult(); }
+                catch(InvalidDataException) { rejected=true; }
+                Check(rejected && invalidJpeg.SequenceEqual(savedBytes),
+                    "Out-of-range JPEG EXIF orientation "+invalidOrientation+" is rejected without changing source bytes",checks);
+            }
             var widePhoto=EncodePhoto(2000,10,false);var scaledPreview=Task.Run(()=>ReferencePhotoDecoder.Decode(widePhoto)).GetAwaiter().GetResult();
             Check(scaledPreview.PixelWidth==1024 && scaledPreview.PixelHeight>0 && scaledPreview.PixelHeight<=1024,
                 "Large valid reference is reduced to the bounded preview size",checks);

@@ -27,7 +27,7 @@ internal sealed class ReferencePhotoWindow : Window
         close.Click+=(_,_)=>Close();DockPanel.SetDock(close,Dock.Bottom);root.Children.Add(close);
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
-        var explanation=new TextBlock { Text="Referans yalnız görsel inceleme içindir; ölçü veya kalıp çıkarılmaz. EXIF yönü otomatik düzeltilmez; fotoğraf yan dönük görünebilir.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
+        var explanation=new TextBlock { Text="Referans yalnız görsel inceleme içindir; ölçü veya kalıp çıkarılmaz. JPEG EXIF yön etiketi uygulanır; diğer yön bilgileri uygulanmayabilir.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
         DockPanel.SetDock(explanation,Dock.Top);root.Children.Add(explanation);
         AutomationProperties.SetName(photo,"Seçilen referans görselinin önizlemesi");
         AutomationProperties.SetHelpText(photo,"Görüntü içeriği otomatik açıklanmaz; önizleme ölçü doğrulaması değildir.");
