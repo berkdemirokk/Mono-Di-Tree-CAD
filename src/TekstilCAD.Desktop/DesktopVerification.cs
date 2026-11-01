@@ -1660,7 +1660,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -7470,11 +7470,12 @@ internal static class DesktopVerification
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var piece=new PatternPiece { Name="Eğimli kenar",Closed=false,Points=[new(0,0),new(60,80)],Metadata=new PieceMetadata { Quantity=2 } };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=[new(0,0),new(10,10)] };
         try
         {
             foreach(var scenario in new[] { "commit", "stale", "cancel" })
             {
-                studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()] });studio.Select(piece.Id);
+                studio.LoadDocument(new ProjectDocument { Pieces=[piece.Clone()],GradingRules=[rule.Clone()] });studio.Select(piece.Id);
                 var before=studio.Document.Clone();var undo=session.UndoCount;var tools=new TextileToolsWindow(studio);
                 using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? task=null;
                 try
@@ -7489,6 +7490,9 @@ internal static class DesktopVerification
                         var edited=studio.Document.Pieces.Single();
                         Check(edited.Id==piece.Id && edited.Metadata?.Quantity==2 && edited.Points[1]==new Point2(18,24) && session.UndoCount==undo+1,
                             "Percentage insertion commits diagonal geometry and preserves identity and metadata",checks);
+                        var mapped=studio.Document.GradingRules.Single();
+                        Check(mapped.SourcePoints.SequenceEqual(edited.Points) && mapped.Deltas.SequenceEqual(new[] { new Point2(0,0),new Point2(3,3),new Point2(10,10) }),
+                            "Percentage insertion interpolates the matching grading rule",checks);
                         Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Percentage insertion is one undo step",checks);
                     }
                     else Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && !tools.VertexMoveRunningForVerification,
