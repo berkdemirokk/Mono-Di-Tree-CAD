@@ -50,6 +50,9 @@ internal sealed class PhotoTraceWindow : Window
         input.Children.Add(new Label { Content="Y",Target=yInput,Foreground=DesignRequestWindow.Ink });AutomationProperties.SetName(yInput,"Seçilecek piksel Y");input.Children.Add(yInput);
         var addPoint=new Button { Content="Nokta ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(addPoint);
         addPoint.Click+=(_,_)=> { if(!MeasurementInput.TryParseMillimeters(xInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(yInput.Text,out var y) || !CanvasForVerification.TryAddPixelPoint(new Point(x,y)))StatusForVerification.Text="Piksel koordinatı geçersiz veya nokta eklenemedi."; };
+        var checkMeasure=new Button { Content="Ölçü karşılaştır…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(checkMeasure);
+        AutomationProperties.SetHelpText(checkMeasure,"Taslak noktaları arasındaki fotoğraf mesafesini ayrı bilinen bir ölçüyle karşılaştırır; proje değişmez ve sonuç kaydedilmez.");
+        checkMeasure.Click+=(_,_)=>CreateMeasurementCheck()?.ShowDialog();
         var viewActions=new WrapPanel { Margin=new Thickness(0,2,0,2) };DockPanel.SetDock(viewActions,Dock.Top);root.Children.Add(viewActions);
         Button ViewAction(string text,string help,Action action) { var button=new Button { Content=text,Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };AutomationProperties.SetHelpText(button,help);button.Click+=(_,_)=> { action();UpdateStatus(); };viewActions.Children.Add(button);return button; }
         ViewAction("Yakınlaştır","Son seçilen veya klavye imlecindeki noktaya yakınlaştırır.",()=>CanvasForVerification.ZoomAtCursor(2));
@@ -79,6 +82,20 @@ internal sealed class PhotoTraceWindow : Window
         UpdateStatus();root.Children.Add(CanvasForVerification);
         Closing+=OnClosing;
         workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
+    }
+    internal PhotoTraceCheckWindow? CreateMeasurementCheck()
+    {
+        try
+        {
+            var points=CanvasForVerification.Points.ToArray();
+            if(points.Length<3) { StatusForVerification.Text="Ölçü karşılaştırmak için referans uçlarını ve en az bir başka nokta seçin.";return null; }
+            if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm)) { StatusForVerification.Text="Önce bilinen referans mesafesini girin.";return null; }
+            var a=new Point2(points[0].X,points[0].Y);var b=new Point2(points[1].X,points[1].Y);
+            _=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,a,b,mm,[a,b]);
+            return new PhotoTraceCheckWindow(this,image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,mm,points);
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
+        { StatusForVerification.Text="Ölçü karşılaştırması açılamadı: "+ex.Message;return null; }
     }
     internal void CancelPathSuggestion()=>pathCancellation?.Cancel();
     internal async Task StartPathSuggestionAsync()

@@ -9265,6 +9265,23 @@ internal static class DesktopVerification
             canvas.ZoomAtCursor(100);Check(canvas.Zoom==8,"Photo zoom is bounded",checks);
             canvas.ResetZoom();Check(canvas.Zoom==1 && canvas.Points.SequenceEqual(beforeZoom) && trace.DraftRevision==beforeZoomRevision,
                 "Fitting the photo preserves trace and draft revision",checks);
+            trace.LengthForVerification.Text="100";_ = new WindowInteropHelper(trace).EnsureHandle();var checkWindow=trace.CreateMeasurementCheck() ?? throw new InvalidOperationException("Photo measurement window missing: "+trace.StatusForVerification.Text);
+            try
+            {
+                Render(checkWindow,Path.ChangeExtension(reportPath,".photo-check-compact.png"),460,420);
+                var checkRoot=(FrameworkElement)checkWindow.Content;
+                Check(Descendants<Button>(checkRoot).Where(b=>Equals(b.Content,"Karşılaştır") || Equals(b.Content,"Kapat")).All(b=>FullyVisible(b,checkRoot)) && checkWindow.ResultForVerification.IsReadOnly,
+                    "Photo measurement dialog has visible compact actions and a read-only result",checks);
+                checkWindow.FirstForVerification.SelectedIndex=0;checkWindow.SecondForVerification.SelectedIndex=4;checkWindow.KnownForVerification.Text="150";checkWindow.Calculate();
+                Check(checkWindow.ResultForVerification.Text.Contains("141.421356") && checkWindow.ResultForVerification.Text.Contains("150 mm") &&
+                    DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom),
+                    "Photo measurement compares an independent segment without changing the draft or project",checks);
+                checkWindow.KnownForVerification.Text="151";Check(checkWindow.ResultForVerification.Text=="","Changing a comparison input clears the old measurement",checks);
+                checkWindow.SecondForVerification.SelectedIndex=1;checkWindow.Calculate();
+                Check(checkWindow.ResultForVerification.Text.Contains("aynı iki ucu"),"Photo measurement refuses to reuse the calibration segment",checks);
+                canvas.TryAddPixelPoint(new Point(25,25));Check(checkWindow.FirstForVerification.Items.Count==beforeZoom.Length,"Photo comparison uses a detached point snapshot",checks);canvas.UndoPoint();
+            }
+            finally { checkWindow.Close(); }
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
