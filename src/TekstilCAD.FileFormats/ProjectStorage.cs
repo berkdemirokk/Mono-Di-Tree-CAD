@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Security.Cryptography;
 using System.Text;
 using TekstilCAD.Core;
+using TekstilCAD.Nesting;
 
 namespace TekstilCAD.FileFormats;
 
@@ -42,6 +43,7 @@ public static class ProjectStorage
     {
         if (bytes.Length > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor.");
         ProjectDocument project;
+        string? rotatedRaw=null;
         try
         {
             using var json = JsonDocument.Parse(DecodeProjectText(bytes));
@@ -49,7 +51,7 @@ public static class ProjectStorage
             RejectDuplicateProperties(root);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
@@ -60,6 +62,24 @@ public static class ProjectStorage
                 if (version < 3 && root[1].TryGetProperty("NestingSnapshot", out _))
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
+                var hasTrace=root[1].TryGetProperty("NestingSnapshot",out var nesting) && nesting.ValueKind==JsonValueKind.Object && nesting.TryGetProperty("RotationTrace",out _);
+                if((version==7)!=hasTrace)throw new InvalidDataException("Döndürme izi yalnız tam sürüm 7 projesinde bulunmalıdır.");
+                if(hasTrace)
+                {
+                    var raw=nesting.GetProperty("RotationTrace");
+                    if(raw.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Döndürme izi nesnesi eksik veya geçersiz.");
+                    rotatedRaw=raw.GetRawText();
+                    long visiblePoints=0;
+                    foreach(var piece in root[1].GetProperty("Pieces").EnumerateArray())
+                    {
+                        if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("Points",out var points) || points.ValueKind!=JsonValueKind.Array ||
+                           points.GetArrayLength()>MaximumPointsPerPiece || (visiblePoints+=points.GetArrayLength())>MaximumTotalPoints)
+                            throw new InvalidDataException("Görünür yerleşim nokta sınırı geçersiz.");
+                    }
+                    // Reject missing/unknown/duplicate trace fields before model
+                    // constructors or JSON defaults can synthesize any values.
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),visiblePoints);
+                }
                 ValidateSerializedImportProvenance(root[1], version);
                 project = root[1].Deserialize<ProjectDocument>(Options) ?? throw new InvalidDataException("Proje dosyası boş.");
             }
@@ -77,6 +97,11 @@ public static class ProjectStorage
         }
         catch (JsonException ex) { throw new InvalidDataException("Proje dosyası geçersiz veya bu sürümün tanımadığı alanlar içeriyor. Veri kaybını önlemek için dosya açılmadı.", ex); }
         Validate(project);
+        if(rotatedRaw is not null)
+        {
+            var trace=project.NestingSnapshot!.RotationTrace!;
+            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces });
+        }
         return project;
     }
     // Reject malformed byte sequences instead of silently replacing characters in saved names.
@@ -309,7 +334,9 @@ public static class ProjectStorage
     // Array shape makes old ProjectDocument readers reject rather than drop rules.
     internal static string SerializeProject(ProjectDocument project)
     {
-        var text = project.Pieces.Any(p=>p.Notches is not null)
+        var text = project.NestingSnapshot?.RotationTrace is not null
+            ? JsonSerializer.Serialize<object[]>([7, project], Options)
+            : project.Pieces.Any(p=>p.Notches is not null)
             ? JsonSerializer.Serialize<object[]>([6, project], Options)
             : project.ImportProvenance is not null
             ? JsonSerializer.Serialize<object[]>([5, project], Options)
@@ -419,8 +446,7 @@ public static class ProjectStorage
         }
         if (project.NestingSnapshot is { } snapshot)
         {
-            if(snapshot.RotationTrace is not null)
-                throw new InvalidDataException("Döndürmeli pastal izi henüz bu proje biçiminde kaydedilemez; önceki dosya korundu.");
+            if(snapshot.RotationTrace is not null)RotatedProjectValidation.Verify(project);
             // This is historical planning metadata, not a certificate that the
             // current geometry or a physical machine is production ready.
             const double limit = 100_000_000;

@@ -27,14 +27,32 @@ public static class RotatedNestingTraceCodec
         try
         {
             using var json=JsonDocument.Parse(bytes);
-            ValidateRaw(json.RootElement,layout,token);
+            if(layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces)throw new InvalidDataException("Yerleşim sınırı geçersiz.");
+            long visible=0;
+            foreach(var piece in layout.Pieces)
+            {
+                token.ThrowIfCancellationRequested();
+                if(piece?.Points is null || piece.Points.Count>NestingEngine.MaximumVerticesPerPiece || (visible+=piece.Points.Count)>NestingEngine.MaximumTotalVertices)
+                    throw new InvalidDataException("Yerleşim nokta sınırı geçersiz.");
+            }
+            ValidateRaw(json.RootElement,visible,token);
             var trace=json.RootElement.Deserialize<RotatedNestingTrace>(Options) ?? throw new InvalidDataException("Döndürme izi boş.");
             token.ThrowIfCancellationRequested();return RotatedNestingRecord.FromTrace(trace,layout,token);
         }
         catch(JsonException ex) { throw new InvalidDataException("Döndürme izi JSON biçimi geçersiz.",ex); }
     }
 
-    private static void ValidateRaw(JsonElement root,ProjectDocument layout,CancellationToken token)
+    /// <summary>Checks raw fields before model defaults can be applied; geometry is verified separately.</summary>
+    public static void ValidateRawStructure(byte[] bytes,long visiblePointCount,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(bytes);
+        if(bytes.Length>MaximumBytes || visiblePointCount<0 || visiblePointCount>NestingEngine.MaximumTotalVertices)
+            throw new InvalidDataException("Döndürme izi kaynak sınırı geçersiz.");
+        try { using var json=JsonDocument.Parse(bytes);ValidateRaw(json.RootElement,visiblePointCount,token); }
+        catch(JsonException ex) { throw new InvalidDataException("Döndürme izi JSON biçimi geçersiz.",ex); }
+    }
+
+    private static void ValidateRaw(JsonElement root,long visiblePointCount,CancellationToken token)
     {
         Fields(root,["Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","SourcePieces","LayoutPieces","Selections","Copies","FabricWidth","Gap","EdgeMargin","UsedLength","MaxLength","GrainDirection","ToleranceDegrees"]);
         foreach(var field in new[]{"Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","GrainDirection"})String(root.GetProperty(field),128);
@@ -42,14 +60,7 @@ public static class RotatedNestingTraceCodec
         var max=root.GetProperty("MaxLength");if(max.ValueKind!=JsonValueKind.Null)Number(max);
         var sources=root.GetProperty("SourcePieces");var historical=root.GetProperty("LayoutPieces");var selected=root.GetProperty("Selections");var copies=root.GetProperty("Copies");
         Array(sources,1,NestingEngine.MaximumPieces);Array(historical,1,NestingEngine.MaximumPieces);Array(selected,1,NestingEngine.MaximumPieces);Array(copies,1,NestingEngine.MaximumPieces);
-        if(layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces)throw new InvalidDataException("Yerleşim sınırı geçersiz.");
-        long total=0;
-        foreach(var piece in layout.Pieces)
-        {
-            token.ThrowIfCancellationRequested();
-            if(piece?.Points is null || piece.Points.Count>NestingEngine.MaximumVerticesPerPiece || (total+=piece.Points.Count)>NestingEngine.MaximumTotalVertices)
-                throw new InvalidDataException("Yerleşim nokta sınırı geçersiz.");
-        }
+        long total=visiblePointCount;
         foreach(var id in selected.EnumerateArray()) { token.ThrowIfCancellationRequested();GuidValue(id); }
         foreach(var copy in copies.EnumerateArray())
         {

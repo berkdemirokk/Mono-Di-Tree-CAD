@@ -1,6 +1,8 @@
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 using TekstilCAD.Nesting;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace TekstilCAD.Tests;
 
@@ -41,5 +43,67 @@ public sealed class RotatedProjectValidationTests
         trace.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=trace.LayoutPieces });
         document.NestingSnapshot.LayoutFingerprint=trace.LayoutFingerprint;
         Assert.Throws<InvalidDataException>(()=>RotatedProjectValidation.Verify(document));
+    }
+
+    [Fact]
+    public void VersionSevenProjectAndRecoveryRoundTripKeepHistoricalAndStaleState()
+    {
+        var document=Fixture();var json=ProjectStorage.SerializeProject(document);
+        Assert.Equal(7,JsonNode.Parse(json)![0]!.GetValue<int>());
+        var loaded=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(json));
+        Assert.True(DocumentSession.ContentEquals(document,loaded));Assert.True(loaded.NestingSnapshot!.IsCurrentFor(loaded));
+        loaded.Pieces[0].Name="Düzenlenmiş";Assert.False(loaded.NestingSnapshot.IsCurrentFor(loaded));
+        var changed=ProjectStorage.SerializeProject(loaded);
+        var reread=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(changed));
+        Assert.True(DocumentSession.ContentEquals(loaded,reread));Assert.False(reread.NestingSnapshot!.IsCurrentFor(reread));
+        var recovery=RecoveryEnvelope.Serialize(loaded,[]);
+        var recovered=RecoveryEnvelope.Deserialize(Encoding.UTF8.GetBytes(recovery));
+        Assert.True(DocumentSession.ContentEquals(loaded,recovered.Document));
+        var forged=JsonNode.Parse(recovery)!.AsObject();
+        forged["Project"]![1]!["NestingSnapshot"]!["RotationTrace"]!["Copies"]![0]!["Degrees"]=180;
+        Assert.Throws<InvalidDataException>(()=>RecoveryEnvelope.Deserialize(Encoding.UTF8.GetBytes(forged.ToJsonString())));
+    }
+
+    [Fact]
+    public void RawVersionAndTraceFieldsCannotBeOmittedOrDowngraded()
+    {
+        var json=ProjectStorage.SerializeProject(Fixture());
+        byte[] Edit(Action<JsonArray> edit) { var root=JsonNode.Parse(json)!.AsArray();edit(root);return Encoding.UTF8.GetBytes(root.ToJsonString()); }
+        Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Edit(root=>root[0]=6)));
+        Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Edit(root=>root[1]!["NestingSnapshot"]!.AsObject().Remove("RotationTrace"))));
+        Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Edit(root=>root[1]!["NestingSnapshot"]!["RotationTrace"]!.AsObject().Remove("MaxLength"))));
+        Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Edit(root=>root[1]!["NestingSnapshot"]!["RotationTrace"]!["LayoutPieces"]![0]!["Points"]![0]!.AsObject().Remove("X"))));
+    }
+
+    [Fact]
+    public void ConflictPreservesExistingFileWithVersionSeven()
+    {
+        var document=Fixture();var path=Path.Combine(AppContext.BaseDirectory,$"rotation-{Guid.NewGuid():N}.tcad");
+        try
+        {
+            var version=ProjectStorage.CaptureVersion(path);File.WriteAllText(path,"korunan");
+            Assert.Throws<ProjectConflictException>(()=>ProjectStorage.SaveIfUnchanged(document,path,version));
+            Assert.Equal("korunan",File.ReadAllText(path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+
+    [Fact]
+    public void VersionSevenDiskRoundTripPreservesTraceAndStaleEditedLayout()
+    {
+        var source=Fixture();var path=Path.Combine(AppContext.BaseDirectory,$"rotation-roundtrip-{Guid.NewGuid():N}.tcad");
+        try
+        {
+            ProjectStorage.Save(source,path);var loaded=ProjectStorage.LoadWithVersion(path);
+            Assert.True(DocumentSession.ContentEquals(source,loaded.Project));
+            loaded.Project.Pieces[0].Name="Düzenlenmiş";
+            Assert.False(loaded.Project.NestingSnapshot!.IsCurrentFor(loaded.Project));
+            var version=ProjectStorage.SaveIfUnchanged(loaded.Project,path,loaded.Version);
+            var reopened=ProjectStorage.LoadWithVersion(path);
+            Assert.Equal(version.Sha256,reopened.Version.Sha256);
+            Assert.True(DocumentSession.ContentEquals(loaded.Project,reopened.Project));
+            Assert.False(reopened.Project.NestingSnapshot!.IsCurrentFor(reopened.Project));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
     }
 }

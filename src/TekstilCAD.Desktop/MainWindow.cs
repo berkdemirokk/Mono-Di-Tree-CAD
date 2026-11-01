@@ -931,7 +931,7 @@ public class MainWindow : Window
             if(windowClosed || generation!=nestingHistoryGeneration || !ReferenceEquals(Document,source))return;
             nestingHistoryNotice.Text=matches switch
             {
-                true => "Pastal geçmişi: parçalarda değişiklik algılanmadı; üretim onayı değildir.",
+                true => detached.NestingSnapshot!.RotationTrace is null ? "Pastal geçmişi: parçalarda değişiklik algılanmadı; üretim onayı değildir." : "Döndürmeli pastal geçmişi doğrulandı; parçalarda değişiklik algılanmadı. Üretim veya makine onayı değildir.",
                 false => "Pastal geçmişi: parçalar değişmiş; geçmiş ayarları güncel yerleşimi doğrulamaz.",
                 null => "Pastal geçmişi karşılaştırılamadı; geçmiş ayarlarını doğrulanmış saymayın."
             };
@@ -1788,7 +1788,7 @@ public class MainWindow : Window
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
                 applied=true;
             },openingProject:true);
-            SetStatus("Proje açıldı: "+filePath);
+            SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
         }
         catch(Exception ex) when(applied && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
@@ -1951,7 +1951,9 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=Document.Pieces.Any(p=>p.Notches is { Count:>0 })
+        var description=Document.NestingSnapshot?.RotationTrace is not null
+            ? "Döndürmeli pastal geçmişi proje biçimi sürüm 7 ile saklanır. Önceki TekstilCAD ve desteklemeyen mobil sürümler bu dosyayı açamaz. Geçmiş iz üretim onayı değildir."
+            : Document.Pieces.Any(p=>p.Notches is { Count:>0 })
             ? "Köşe işaretleri proje biçimi sürüm 6 ile saklanır. Eski TekstilCAD sürümleri bu dosyayı açamaz. Önceki dosyayı korumak için farklı adla kaydedin."
             : Document.ImportProvenance is not null
             ? "DXF kaynak ve aktarım notları proje biçimi sürüm 5 ile saklanır. Önceki TekstilCAD sürümleri bu dosyayı açamaz. Eski sürümle çalışacaksanız mevcut dosyayı koruyup farklı adla kaydedin."
