@@ -24,6 +24,16 @@ public sealed class RotatedProjectValidationTests
     }
 
     [Fact]
+    public void RecoveryCancellationBeforeEmbeddedV7ValidationPreservesBytes()
+    {
+        var document=Fixture();var bytes=Encoding.UTF8.GetBytes(RecoveryEnvelope.Serialize(document,[]));
+        var original=bytes.ToArray();using var cancelled=new CancellationTokenSource();
+        Assert.Throws<OperationCanceledException>(()=>RecoveryEnvelope.Deserialize(bytes,cancelled.Token,()=>cancelled.Cancel()));
+        Assert.Equal(original,bytes);
+        Assert.True(DocumentSession.ContentEquals(document,RecoveryEnvelope.Deserialize(bytes).Document));
+    }
+
+    [Fact]
     public void HistoricalEvidenceRemainsVerifiableAfterVisibleLayoutEdit()
     {
         var document=Fixture();RotatedProjectValidation.Verify(document);

@@ -70,7 +70,7 @@ internal static class RecoveryEnvelope
             catch (ArgumentException ex) { throw new InvalidDataException("Tamamlanmamış çizim noktası geçersiz.", ex); }
     }
 
-    internal static RecoverySnapshot Deserialize(byte[] bytes, CancellationToken cancellationToken = default)
+    internal static RecoverySnapshot Deserialize(byte[] bytes, CancellationToken cancellationToken = default, Action? beforeProjectValidationForVerification = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (bytes.Length > MaximumBytes) throw new InvalidDataException("Kurtarma kaydı boyut sınırını aşıyor.");
@@ -115,6 +115,7 @@ internal static class RecoveryEnvelope
                     pending = new RecoveryPendingDrawing(drawing.Tool, drawing.Points.Select(p => new Point2(p.X, p.Y)).ToArray());
                 ValidatePendingDrawing(pending);
             }
+            beforeProjectValidationForVerification?.Invoke();
             var project = ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(projectJson.GetRawText()),cancellationToken);
             var drafts = draftDtos.Select(d => new RecoveryPropertyDraft(d.PieceId, Decode(d.Name), Decode(d.X), Decode(d.Y), Decode(d.BaseName), d.BaseX, d.BaseY)).ToArray();
             Validate(drafts);

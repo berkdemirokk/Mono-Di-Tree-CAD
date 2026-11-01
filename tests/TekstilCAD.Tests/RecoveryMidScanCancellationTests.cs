@@ -15,6 +15,28 @@ public sealed class RecoveryMidScanCancellationTests
     }
 
     [Fact]
+    public void BoundedReadHandlesExactLimitEarlyEofAndGrowthWithoutPadding()
+    {
+        var method=typeof(RecoveryStore).GetMethod("ReadBounded",BindingFlags.Static|BindingFlags.NonPublic)!;
+        var bytes=Enumerable.Range(0,16).Select(i=>(byte)i).ToArray();
+        using(var exact=new ReportedLengthStream(bytes,16))
+            Assert.Equal(bytes,(byte[])method.Invoke(null,[exact,16,CancellationToken.None])!);
+        using(var early=new ReportedLengthStream(bytes,32))
+            Assert.Equal(bytes,(byte[])method.Invoke(null,[early,32,CancellationToken.None])!);
+        using(var grown=new ReportedLengthStream(bytes,8))
+        {
+            var error=Assert.Throws<TargetInvocationException>(()=>method.Invoke(null,[grown,8,CancellationToken.None]));
+            Assert.IsType<InvalidDataException>(error.InnerException);
+        }
+        Assert.Equal(Enumerable.Range(0,16).Select(i=>(byte)i),bytes);
+    }
+
+    private sealed class ReportedLengthStream(byte[] data,long reportedLength) : MemoryStream(data)
+    {
+        public override long Length => reportedLength;
+    }
+
+    [Fact]
     public void BoundedReadCancellationAfterFirstRealFileReadLeavesRecordRecoverable()
     {
         var directory = TestDirectory();
