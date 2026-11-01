@@ -36,12 +36,12 @@ public static class RotatedNestingTraceCodec
 
     private static void ValidateRaw(JsonElement root,ProjectDocument layout,CancellationToken token)
     {
-        Fields(root,["Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","SourcePieces","Selections","Copies","FabricWidth","Gap","EdgeMargin","UsedLength","MaxLength","GrainDirection","ToleranceDegrees"]);
+        Fields(root,["Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","SourcePieces","LayoutPieces","Selections","Copies","FabricWidth","Gap","EdgeMargin","UsedLength","MaxLength","GrainDirection","ToleranceDegrees"]);
         foreach(var field in new[]{"Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","GrainDirection"})String(root.GetProperty(field),128);
         foreach(var field in new[]{"FabricWidth","Gap","EdgeMargin","UsedLength","ToleranceDegrees"})Number(root.GetProperty(field));
         var max=root.GetProperty("MaxLength");if(max.ValueKind!=JsonValueKind.Null)Number(max);
-        var sources=root.GetProperty("SourcePieces");var selected=root.GetProperty("Selections");var copies=root.GetProperty("Copies");
-        Array(sources,1,NestingEngine.MaximumPieces);Array(selected,1,NestingEngine.MaximumPieces);Array(copies,1,NestingEngine.MaximumPieces);
+        var sources=root.GetProperty("SourcePieces");var historical=root.GetProperty("LayoutPieces");var selected=root.GetProperty("Selections");var copies=root.GetProperty("Copies");
+        Array(sources,1,NestingEngine.MaximumPieces);Array(historical,1,NestingEngine.MaximumPieces);Array(selected,1,NestingEngine.MaximumPieces);Array(copies,1,NestingEngine.MaximumPieces);
         if(layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces)throw new InvalidDataException("Yerleşim sınırı geçersiz.");
         long total=0;
         foreach(var piece in layout.Pieces)
@@ -57,7 +57,7 @@ public static class RotatedNestingTraceCodec
             GuidValue(copy.GetProperty("SourcePieceId"));GuidValue(copy.GetProperty("PlacedPieceId"));
             Integer(copy.GetProperty("CopyNumber"));Integer(copy.GetProperty("Degrees"));
         }
-        foreach(var piece in sources.EnumerateArray())
+        foreach(var piece in sources.EnumerateArray().Concat(historical.EnumerateArray()))
         {
             token.ThrowIfCancellationRequested();Fields(piece,["Id","Name","Points","Closed","Metadata","Grainline"],["Notches"]);
             GuidValue(piece.GetProperty("Id"));String(piece.GetProperty("Name"),1024);Boolean(piece.GetProperty("Closed"));

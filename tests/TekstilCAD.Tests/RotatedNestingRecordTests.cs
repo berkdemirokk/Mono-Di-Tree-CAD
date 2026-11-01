@@ -70,7 +70,7 @@ public sealed class RotatedNestingRecordTests
         Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
         var badLayout=layout.Clone();badLayout.Pieces[0].Notches=null;
         changed=trace.Clone();changed.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(badLayout);
-        Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,badLayout));
+        Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(changed,badLayout));
         changed=trace.Clone();changed.Schema="unknown";
         Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
         var historical=layout.Clone();historical.NestingSnapshot=new NestingSnapshot();

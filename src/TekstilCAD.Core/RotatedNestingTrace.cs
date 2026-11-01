@@ -19,6 +19,7 @@ public sealed class RotatedNestingTrace
     public string SourceFingerprint { get; set; }="";
     public string LayoutFingerprint { get; set; }="";
     public List<PatternPiece> SourcePieces { get; set; }=[];
+    public List<PatternPiece> LayoutPieces { get; set; }=[];
     public List<Guid> Selections { get; set; }=[];
     public List<RotatedNestingCopy> Copies { get; set; }=[];
     public double FabricWidth { get; set; }
@@ -32,10 +33,10 @@ public sealed class RotatedNestingTrace
 
     private void ValidateStructure()
     {
-        if(SourcePieces is null || Selections is null || Copies is null || SourcePieces.Count>10_000 || Selections.Count>10_000 || Copies.Count>10_000 ||
-           SourcePieces.Any(p=>p is null || p.Points is null || p.Points.Count>10_000 ||
+        if(SourcePieces is null || LayoutPieces is null || Selections is null || Copies is null || SourcePieces.Count>10_000 || LayoutPieces.Count>10_000 || Selections.Count>10_000 || Copies.Count>10_000 ||
+           SourcePieces.Concat(LayoutPieces).Any(p=>p is null || p.Points is null || p.Points.Count>10_000 ||
            (p.Notches is not null && (p.Notches.Count>p.Points.Count || p.Notches.Any(mark=>mark is null)))) ||
-           SourcePieces.Sum(p=>(long)p.Points.Count)>200_000 || Copies.Any(copy=>copy is null))
+           SourcePieces.Concat(LayoutPieces).Sum(p=>(long)p.Points.Count)>200_000 || Copies.Any(copy=>copy is null))
             throw new ArgumentException("Döndürme izi veri yapısı eksik veya geçersiz.");
     }
 
@@ -45,7 +46,7 @@ public sealed class RotatedNestingTrace
         return new() {
         Schema=Schema,Algorithm=Algorithm,TransformConvention=TransformConvention,
         SourceFingerprint=SourceFingerprint,LayoutFingerprint=LayoutFingerprint,
-        SourcePieces=SourcePieces.Select(p=>p.Clone()).ToList(),Selections=[..Selections],Copies=[..Copies],
+        SourcePieces=SourcePieces.Select(p=>p.Clone()).ToList(),LayoutPieces=LayoutPieces.Select(p=>p.Clone()).ToList(),Selections=[..Selections],Copies=[..Copies],
         FabricWidth=FabricWidth,Gap=Gap,EdgeMargin=EdgeMargin,UsedLength=UsedLength,
         MaxLength=MaxLength,GrainDirection=GrainDirection,ToleranceDegrees=ToleranceDegrees };
     }
@@ -62,6 +63,7 @@ public sealed class RotatedNestingTrace
             Same(a.EdgeMargin,b.EdgeMargin) && Same(a.UsedLength,b.UsedLength) && Same(a.ToleranceDegrees,b.ToleranceDegrees) &&
             (a.MaxLength is null ? b.MaxLength is null : b.MaxLength is not null && Same(a.MaxLength.Value,b.MaxLength.Value)) &&
             a.Selections.SequenceEqual(b.Selections) && a.Copies.SequenceEqual(b.Copies) &&
-            DocumentSession.ContentEquals(new ProjectDocument { Pieces=a.SourcePieces },new ProjectDocument { Pieces=b.SourcePieces });
+            DocumentSession.ContentEquals(new ProjectDocument { Pieces=a.SourcePieces },new ProjectDocument { Pieces=b.SourcePieces }) &&
+            DocumentSession.ContentEquals(new ProjectDocument { Pieces=a.LayoutPieces },new ProjectDocument { Pieces=b.LayoutPieces });
     }
 }

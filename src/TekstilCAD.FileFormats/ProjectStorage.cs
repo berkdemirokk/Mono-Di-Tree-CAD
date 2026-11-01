@@ -419,6 +419,8 @@ public static class ProjectStorage
         }
         if (project.NestingSnapshot is { } snapshot)
         {
+            if(snapshot.RotationTrace is not null)
+                throw new InvalidDataException("Döndürmeli pastal izi henüz bu proje biçiminde kaydedilemez; önceki dosya korundu.");
             // This is historical planning metadata, not a certificate that the
             // current geometry or a physical machine is production ready.
             const double limit = 100_000_000;

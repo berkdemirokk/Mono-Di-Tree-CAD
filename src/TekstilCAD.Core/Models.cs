@@ -251,9 +251,11 @@ public sealed class NestingSnapshot
     public string Algorithm { get; set; } = ShelfAlgorithm;
     public string LayoutFingerprint { get; set; } = "";
     public List<NestingPlacementSnapshot> Placements { get; set; } = [];
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public RotatedNestingTrace? RotationTrace { get; set; }
 
     public NestingSnapshot Clone() => new() { FabricWidth=FabricWidth, UsedLength=UsedLength, Gap=Gap,
-        EdgeMargin=EdgeMargin, Algorithm=Algorithm, LayoutFingerprint=LayoutFingerprint, Placements=[.. Placements] };
+        EdgeMargin=EdgeMargin, Algorithm=Algorithm, LayoutFingerprint=LayoutFingerprint, Placements=[.. Placements],RotationTrace=RotationTrace?.Clone() };
 
     /// <summary>Checks whether all placed piece content still matches the historical snapshot.
     /// This is not a guarantee of machine suitability or production correctness.</summary>

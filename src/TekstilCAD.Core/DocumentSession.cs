@@ -148,7 +148,8 @@ public sealed class DocumentSession
         (a is not null && b is not null && a.FabricWidth == b.FabricWidth && a.UsedLength == b.UsedLength &&
          BitConverter.DoubleToInt64Bits(a.Gap)==BitConverter.DoubleToInt64Bits(b.Gap) &&
          BitConverter.DoubleToInt64Bits(a.EdgeMargin)==BitConverter.DoubleToInt64Bits(b.EdgeMargin) && a.Algorithm == b.Algorithm &&
-         a.LayoutFingerprint == b.LayoutFingerprint && a.Placements.SequenceEqual(b.Placements));
+         a.LayoutFingerprint == b.LayoutFingerprint && a.Placements.SequenceEqual(b.Placements) &&
+         (a.RotationTrace is null ? b.RotationTrace is null : b.RotationTrace is not null && RotatedNestingTrace.ContentEquals(a.RotationTrace,b.RotationTrace)));
     private static bool ProvenanceEquals(DxfImportProvenance? a, DxfImportProvenance? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.SourceFileName==b.SourceFileName && a.SourceSha256==b.SourceSha256 &&
          a.SourceByteLength==b.SourceByteLength && a.MillimetersPerUnit==b.MillimetersPerUnit &&

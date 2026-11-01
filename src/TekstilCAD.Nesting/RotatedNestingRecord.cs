@@ -79,7 +79,7 @@ public sealed class RotatedNestingRecord
         return new RotatedNestingTrace {
             Schema=RotatedNestingTrace.CurrentSchema,Algorithm=RotatedNestingTrace.CurrentAlgorithm,
             TransformConvention=RotatedNestingTrace.CurrentTransform,SourceFingerprint=result.SourceFingerprint,
-            LayoutFingerprint=result.LayoutFingerprint,SourcePieces=source.Pieces.Select(p=>p.Clone()).ToList(),
+            LayoutFingerprint=result.LayoutFingerprint,SourcePieces=source.Pieces.Select(p=>p.Clone()).ToList(),LayoutPieces=result.Plan.Nesting.Layout.Pieces.Select(p=>p.Clone()).ToList(),
             Selections=[..selected],Copies=result.Plan.Placements.Select(p=>new RotatedNestingCopy(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId,result.PlacedRotations[p.PlacedPieceId])).ToList(),
             FabricWidth=width,Gap=gap,EdgeMargin=margin,UsedLength=result.Plan.Nesting.UsedLength,
             MaxLength=double.IsPositiveInfinity(maxLength) ? null : maxLength,GrainDirection=direction.ToString(),ToleranceDegrees=tolerance };
@@ -91,12 +91,15 @@ public sealed class RotatedNestingRecord
     {
         token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(trace);ArgumentNullException.ThrowIfNull(layout);
         if(trace.Schema!=RotatedNestingTrace.CurrentSchema || trace.Algorithm!=RotatedNestingTrace.CurrentAlgorithm ||
-           trace.TransformConvention!=RotatedNestingTrace.CurrentTransform || trace.SourcePieces is null || trace.Selections is null ||
+           trace.TransformConvention!=RotatedNestingTrace.CurrentTransform || trace.SourcePieces is null || trace.LayoutPieces is null || trace.Selections is null ||
            trace.Copies is null || trace.Copies.Count>NestingEngine.MaximumPieces || layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces ||
            layout.GradingRules is null || layout.GradingRules.Count!=0 || layout.NestingSnapshot is not null || layout.ImportProvenance is not null ||
-           (trace.MaxLength is double limit && !double.IsFinite(limit)) ||
+           (trace.MaxLength is double limit && !double.IsFinite(limit)) || layout.Pieces.Any(p=>p is null || p.Points is null || (p.Notches is not null && p.Notches.Any(m=>m is null))) ||
            trace.GrainDirection is not ("OneWay" or "TwoWay"))
             throw new InvalidDataException("Döndürme izi biçimi veya sürümü desteklenmiyor.");
+        try { trace=trace.Clone(); } catch(ArgumentException ex) { throw new InvalidDataException("Döndürme izi yapısı geçersiz.",ex); }
+        if(!DocumentSession.ContentEquals(new ProjectDocument { Pieces=trace.LayoutPieces },new ProjectDocument { Pieces=layout.Pieces }))
+            throw new InvalidDataException("Yerleşim döndürme izindeki tarihsel konturla eşleşmiyor.");
         var direction=trace.GrainDirection=="OneWay" ? GrainDirectionPolicy.Direction.OneWay : GrainDirectionPolicy.Direction.TwoWay;
         var angles=new Dictionary<(Guid,int),int>();var rotations=new Dictionary<Guid,int>();var placements=new List<ProductionPlacement>();
         foreach(var copy in trace.Copies)
