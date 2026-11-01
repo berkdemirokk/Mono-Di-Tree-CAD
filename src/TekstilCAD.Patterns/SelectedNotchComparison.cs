@@ -20,11 +20,35 @@ public static class SelectedNotchComparison
         int sourceStart,int sourceWitness,int sourceEnd,int candidateStart,int candidateWitness,int candidateEnd,
         CancellationToken cancellationToken=default)
     {
-        // Reuse the exact nondegeneracy, orientation and projection checks used
-        // by Compare; discard its tolerance verdict completely.
-        var value=Compare(source,candidate,sourceStart,sourceWitness,sourceEnd,candidateStart,candidateWitness,candidateEnd,
-            double.MaxValue,double.MaxValue,cancellationToken);
-        return new(value.SourceWidth,value.CandidateWidth,value.SourceDepth,value.CandidateDepth);
+        try
+        {
+            var value=Compare(source,candidate,sourceStart,sourceWitness,sourceEnd,candidateStart,candidateWitness,candidateEnd,
+                double.MaxValue,double.MaxValue,cancellationToken);
+            return new(value.SourceWidth,value.CandidateWidth,value.SourceDepth,value.CandidateDepth);
+        }
+        catch(ArgumentException)
+        {
+            // Measurement alone may report a completely flat candidate; this
+            // never changes Compare's stricter acceptance predicate.
+            ArgumentNullException.ThrowIfNull(candidate);cancellationToken.ThrowIfCancellationRequested();
+            if(candidateStart<0 || candidateWitness<0 || candidateEnd<0 || candidateStart>=candidate.Count || candidateWitness>=candidate.Count || candidateEnd>=candidate.Count ||
+                candidateStart==candidateWitness || candidateStart==candidateEnd || candidateWitness==candidateEnd)throw;
+            var a=candidate[candidateStart];var w=candidate[candidateWitness];var b=candidate[candidateEnd];
+            Geometry.Validate(a);Geometry.Validate(w);Geometry.Validate(b);
+            static BigInteger Units(double value)
+            {
+                long bits=BitConverter.DoubleToInt64Bits(value);int e=(int)((bits>>52)&0x7ff);long f=bits&0x000f_ffff_ffff_ffffL;
+                var n=new BigInteger(e==0 ? f : f|(1L<<52)) << (e==0 ? 0 : e-1);return bits<0 ? -n : n;
+            }
+            var dx=Units(b.X)-Units(a.X);var dy=Units(b.Y)-Units(a.Y);var wx=Units(w.X)-Units(a.X);var wy=Units(w.Y)-Units(a.Y);
+            var length=dx*dx+dy*dy;var dot=dx*wx+dy*wy;
+            if(length.IsZero || dx*wy-dy*wx!=BigInteger.Zero || dot<=0 || dot>=length)throw;
+            var width=Geometry.Distance(a,b);
+            if(!double.IsFinite(width) || width<2.2250738585072014e-308)throw new ArgumentException("Aday ağız genişliği gösterilemiyor.");
+            var original=Compare(source,source,sourceStart,sourceWitness,sourceEnd,sourceStart,sourceWitness,sourceEnd,
+                double.MaxValue,double.MaxValue,cancellationToken);
+            return new(original.SourceWidth,width,original.SourceDepth,0);
+        }
     }
     /// <remarks>All indices are zero-based. The caller is responsible for matching the same physical feature.
     /// Neither contour validity nor the correctness of a seam allowance is established.</remarks>

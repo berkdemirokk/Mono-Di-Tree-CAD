@@ -7,6 +7,21 @@ public class SelectedNotchComparisonTests
     private static readonly Point2[] Source=[new(0,0),new(100,0),new(100,100),new(60,100),
         new(50,90),new(40,100),new(0,100)];
     [Fact]
+    public void MeasurementReportsFlatCandidateButToleranceComparisonStillRejectsIt()
+    {
+        Point2[] flat=[new(60,100),new(50,100),new(40,100)];var before=flat.ToArray();
+        var result=SelectedNotchComparison.Measure(Source,flat,3,4,5,0,1,2);
+        Assert.Equal(10,result.SourceDepth);Assert.Equal(0,result.CandidateDepth);Assert.Equal(20,result.CandidateWidth);
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,flat,3,4,5,0,1,2,100,100));
+        Assert.Equal(before,flat);
+    }
+    [Fact]
+    public void MeasurementRejectsFlatCandidateWithWitnessBeyondMouth()
+    {
+        Point2[] outside=[new(60,100),new(80,100),new(40,100)];
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Measure(Source,outside,3,4,5,0,1,2));
+    }
+    [Fact]
     public void MeasureOnlyUsesIndependentIndicesWithoutToleranceVerdictOrMutation()
     {
         Point2[] output=[new(99,99),new(60,100),new(50,91),new(40,100)];

@@ -9962,17 +9962,49 @@ internal static class DesktopVerification
                 {
                     originalFeature[1]=new(5,-99);candidateFeature[2]=new(5,-99);
                     int[] chosen=[0,1,2,1,2,3];for(var n=0;n<chosen.Length;n++)measure.Selectors[n].SelectedIndex=chosen[n];
+                    Check(measure.Previews[0].Selected.SequenceEqual(new[] { 0,1,2 }) && measure.Previews[1].Selected.SequenceEqual(new[] { 1,2,3 }) &&
+                        AutomationProperties.GetHelpText(measure.Previews[0]).Contains("T 1"),"Both visual selectors follow independent index lists and expose selected roles",checks);
+                    var visualPreview=measure.Previews[0];visualPreview.Measure(new Size(300,210));visualPreview.Arrange(new Rect(0,0,300,210));visualPreview.UpdateLayout();
+                    var visual=new DrawingVisual();using(var context=visual.RenderOpen())
+                        typeof(OffsetTriplePreview).GetMethod("OnRender",PrivateInstance)!.Invoke(visualPreview,[context]);
+                    static IEnumerable<GeometryDrawing> GeometryDrawings(Drawing? item)
+                    {
+                        if(item is GeometryDrawing geometry)yield return geometry;
+                        else if(item is DrawingGroup group)foreach(var child in group.Children)foreach(var geometryChild in GeometryDrawings(child))yield return geometryChild;
+                    }
+                    var strokes=GeometryDrawings(VisualTreeHelper.GetDrawing(visual)).Select(d=>d.Pen?.Brush).OfType<SolidColorBrush>().Select(b=>b.Color).ToArray();
+                    Check(strokes.Contains(Colors.RoyalBlue) && strokes.Contains(Colors.DarkOrange) && strokes.Contains(Colors.ForestGreen),
+                        "Visual selection renders three distinct role colors",checks);
+                    measure.Previews[0].RequestPointForVerification(-2);
+                    Check(measure.Selectors[0].SelectedIndex==0,"Ambiguous visual selection preserves the list choice",checks);
+                    measure.Previews[0].RequestPointForVerification(2);
+                    Check(measure.Selectors[0].SelectedIndex==2 && measure.Previews[0].Selected[0]==2,"Unambiguous visual selection updates its matching list",checks);
+                    measure.Selectors[0].SelectedIndex=0;
                     measure.Compare();
                     Check(measure.Result.Text.Contains("Kaynak ağız: 10 mm") && measure.Result.Text.Contains("Kaynak derinlik: 3 mm") &&
                         measure.Result.Text.Contains("Aday derinlik: 2 mm") && measure.Result.Text.Contains("doğrulanmadı") &&
                         !measure.Result.Text.Contains("tolerans",StringComparison.OrdinalIgnoreCase) &&
                         DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                         "Unverified preview compares independently selected detached triples without a production verdict or document change",checks);
+                    var duplicate=new OffsetTriplePreview([new Point2(0,0),new Point2(0,0),new Point2(10,10)],"Çakışık seçim");
+                    duplicate.Measure(new Size(300,210));duplicate.Arrange(new Rect(0,0,300,210));duplicate.UpdateLayout();
+                    Check(duplicate.HitTestPoint(duplicate.Map(new Point2(0,0)))==-2 && duplicate.HitTestPoint(duplicate.Map(new Point2(10,10)))==2 &&
+                        duplicate.Map(new Point2(0,10)).Y>duplicate.Map(new Point2(0,0)).Y,"Visual selection rejects coincident points and follows canvas Y direction",checks);
                     measure.Selectors[4].SelectedIndex=1;measure.Compare();
                     Check(measure.Result.Text.Contains("Ölçüm yapılamadı") && DocumentSession.ContentEquals(before,studio.Document),
                         "Unverified preview measurement rejects repeated vertices without changing the project",checks);
                 }
                 finally { measure.Close(); }
+                var flatMeasure=new OffsetPreviewMeasurementWindow(preview,[new Point2(0,0),new Point2(5,-3),new Point2(10,0)],[new Point2(0,0),new Point2(5,0),new Point2(10,0)]);
+                try
+                {
+                    for(var n=0;n<6;n++)flatMeasure.Selectors[n].SelectedIndex=n%3;
+                    flatMeasure.Compare();
+                    Check(flatMeasure.Result.Text.Contains("Aday derinlik: 0 mm") && flatMeasure.Result.Text.Contains("derinlik sıfırdır") &&
+                        flatMeasure.Result.Text.Contains("doğrulanmadı") && DocumentSession.ContentEquals(before,studio.Document),
+                        "Flat candidate is explicitly measured as zero without approving the offset",checks);
+                }
+                finally { flatMeasure.Close(); }
             }
             finally { preview.Close(); }
             source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==narrow.Id);
