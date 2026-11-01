@@ -307,6 +307,21 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testContentSearchPagesResumeAtFirstUnscannedCandidate() {
+        var budget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
+        var first = ModelStore.ContentPageGate(start: 0)
+        XCTAssertTrue(first.shouldScan(index: 0, bytes: 20, now: 1, budget: &budget))
+        XCTAssertTrue(first.shouldScan(index: 1, bytes: 20, now: 1, budget: &budget))
+        XCTAssertFalse(first.shouldScan(index: 2, bytes: 20, now: 1, budget: &budget))
+        XCTAssertFalse(first.shouldScan(index: 3, bytes: 20, now: 1, budget: &budget))
+        XCTAssertEqual(first.next, 2)
+        var nextBudget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
+        var second = ModelStore.ContentPageGate(start: 2)
+        XCTAssertFalse(second.shouldScan(index: 1, bytes: 20, now: 1, budget: &nextBudget))
+        XCTAssertTrue(second.shouldScan(index: 2, bytes: 20, now: 1, budget: &nextBudget))
+        XCTAssertTrue(second.shouldScan(index: 3, bytes: 20, now: 1, budget: &nextBudget))
+        XCTAssertNil(second.next)
+    }
     func testContentSearchBudgetBoundsFilesBytesAndElapsedTime() {
         var files = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 10, duration: 5)
         XCTAssertTrue(files.reserve(bytes: 30, now: 10))
