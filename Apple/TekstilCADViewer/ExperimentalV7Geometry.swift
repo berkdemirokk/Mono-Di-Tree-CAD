@@ -33,9 +33,11 @@ enum ExperimentalV7Geometry {
         }
     }
     static func exactlyMatches(source: Drawing.Piece, placed: Drawing.Piece, degrees: Int,
+                               direction: String, tolerance: Double,
                                cancelled: () -> Bool = { false }) throws -> Bool {
         if cancelled() { throw CancellationError() }
-        guard [0, 90, 180, 270].contains(degrees), source.closed == placed.closed,
+        guard [0, 90, 180, 270].contains(degrees), source.closed, placed.closed,
+              ["OneWay", "TwoWay"].contains(direction), tolerance.isFinite, tolerance >= 0, tolerance <= 90,
               sameText(source.name, placed.name), sameText(source.role, placed.role), sameText(source.size, placed.size),
               sameText(source.material, placed.material), placed.quantity == 1,
               source.points.count == placed.points.count, let first = source.points.first,
@@ -53,9 +55,20 @@ enum ExperimentalV7Geometry {
         switch (source.grain, placed.grain) {
         case (nil, nil): break
         case let (a?, b?):
-            guard a.needsReview == b.needsReview, sameTranslation(a.start, b.start), sameTranslation(a.end, b.end) else { return false }
+            guard !a.needsReview, !b.needsReview, sameTranslation(a.start, b.start), sameTranslation(a.end, b.end),
+                  grainAllowed(start: turn(a.start, degrees: degrees), end: turn(a.end, degrees: degrees), direction: direction, tolerance: tolerance),
+                  grainAllowed(start: b.start, end: b.end, direction: direction, tolerance: tolerance) else { return false }
         default: return false
         }
         return true
+    }
+
+    private static func grainAllowed(start: Drawing.Point, end: Drawing.Point, direction: String, tolerance: Double) -> Bool {
+        let dx = end.x - start.x
+        var dy = end.y - start.y
+        if direction == "TwoWay" { dy = abs(dy) }
+        if dx == 0 && dy > 0 { return true }
+        if dy == 0 && tolerance == 90 { return true }
+        return dx != 0 && tolerance > 0 && atan2(abs(dx), dy) * (180 / Double.pi) < tolerance - 1e-12
     }
 }

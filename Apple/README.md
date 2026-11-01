@@ -44,6 +44,8 @@ Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa
 
 Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, masaüstünün deterministik kopya kimliklerini, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Nokta ve iplik yönü için çeyrek dönüş sonrası tam öteleme vektörlerini ihtiyatla karşılaştırır; masaüstünde toleransla kabul edilen bazı geçerli dosyaları reddedebilir. Parmak izlerini yeniden hesaplamaz, işaretlerin signed-zero bitlerini doğrulamaz ve üretim geometrisini kanıtlamaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
 
+Deneysel karşılaştırma kapalı kontur, iplik yönünün kontrol edilmiş olması ve seçilen tek/çift yön ile açı toleransına uymasını da arar. Bu, çakışma/yerleşim sınırları veya tarihsel verinin tam masaüstü doğrulaması değildir.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

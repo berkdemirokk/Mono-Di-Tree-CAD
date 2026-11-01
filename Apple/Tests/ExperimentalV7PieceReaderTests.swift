@@ -63,9 +63,9 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         }
     }
     func testExactQuarterTurnCheckRejectsAlteredGeometryAndObservesCancellation() throws {
-        func piece(_ id: String, _ points: String, _ start: String, _ end: String) throws -> Drawing.Piece {
+        func piece(_ id: String, _ points: String, _ start: String, _ end: String, closed: Bool = true) throws -> Drawing.Piece {
             let firstPoint = points.components(separatedBy: "},")[0] + "}"
-            let json = "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[\(points)],\"Notches\":[{\"VertexIndex\":0,\"Position\":\(firstPoint)}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":\(start),\"End\":\(end),\"NeedsReview\":false}}"
+            let json = "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":\(closed),\"Points\":[\(points)],\"Notches\":[{\"VertexIndex\":0,\"Position\":\(firstPoint)}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":\(start),\"End\":\(end),\"NeedsReview\":false}}"
             return try XCTUnwrap(ExperimentalV7Contours.decode([Data(json.utf8)]).first)
         }
         let source = try piece("11111111-1111-1111-1111-111111111111",
@@ -74,12 +74,18 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         let placed = try piece("22222222-2222-2222-2222-222222222222",
             #"{"X":10,"Y":20},{"X":10,"Y":24},{"X":8,"Y":20}"#,
             #"{"X":10,"Y":21}"#, #"{"X":9,"Y":21}"#)
-        XCTAssertTrue(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90))
+        XCTAssertTrue(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 90))
+        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 0))
         let altered = try piece("22222222-2222-2222-2222-222222222222",
             #"{"X":10,"Y":20},{"X":10,"Y":25},{"X":8,"Y":20}"#,
             #"{"X":10,"Y":21}"#, #"{"X":9,"Y":21}"#)
-        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: altered, degrees: 90))
-        XCTAssertThrowsError(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, cancelled: { true }))
+        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: altered, degrees: 90, direction: "TwoWay", tolerance: 90))
+        let open = try piece("11111111-1111-1111-1111-111111111111",
+            #"{"X":0,"Y":0},{"X":4,"Y":0},{"X":0,"Y":2}"#,
+            #"{"X":1,"Y":0}"#, #"{"X":1,"Y":1}"#, closed: false)
+        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: open, placed: open, degrees: 0, direction: "TwoWay", tolerance: 90))
+        XCTAssertFalse(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 91))
+        XCTAssertThrowsError(try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: 90, direction: "TwoWay", tolerance: 90, cancelled: { true }))
     }
     func testSignedIntegerTokensUseFieldRangeAfterSyntax() throws {
         let template = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":INDEX,"Position":{"X":0,"Y":0}}],"Metadata":{"Role":"Kesim","Quantity":QUANTITY}}"#
@@ -213,6 +219,10 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         snapshot = originalSnapshot; snapshot["LayoutFingerprint"] = String(repeating: "A", count: 64); try rejected(snapshot)
         trace = originalTrace; trace["Selections"] = []
         snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; trace["ToleranceDegrees"] = 91
+        snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; trace["Gap"] = -1
+        snapshot = originalSnapshot; snapshot["Gap"] = -1; snapshot["RotationTrace"] = trace; try rejected(snapshot)
         snapshot = originalSnapshot
         let originalPlacements = try XCTUnwrap(snapshot["Placements"] as? [[String: Any]])
         trace = originalTrace

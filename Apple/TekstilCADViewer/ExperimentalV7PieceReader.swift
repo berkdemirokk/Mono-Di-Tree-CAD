@@ -26,6 +26,7 @@ struct ExperimentalV7PieceReader {
     private var scopedNumberIsTrace = false
     private var snapshotNumbers: [String: UInt64] = [:], traceNumbers: [String: UInt64] = [:]
     private var snapshotFingerprint: String?, traceFingerprint: String?
+    private var grainDirection: String?
     private struct Mapping: Equatable { let source: UUID; let number: Int; let placed: UUID }
     private var placementMappings: [Mapping] = [], traceMappings: [Mapping] = []
     private var rotationAngles: [UUID: Int] = [:]
@@ -81,7 +82,20 @@ struct ExperimentalV7PieceReader {
                   !sourceIDs.isEmpty, selectionIDs == sourceIDs, historyIDs.count == traceMappings.count,
                   let fingerprint = snapshotFingerprint, fingerprint == traceFingerprint,
                   ["FabricWidth", "UsedLength", "Gap", "EdgeMargin"].allSatisfy({ snapshotNumbers[$0] != nil && snapshotNumbers[$0] == traceNumbers[$0] }),
+                  let direction = grainDirection, let toleranceBits = traceNumbers["ToleranceDegrees"],
                   traceMappings.allSatisfy({ sourceIDs.contains($0.source) && historyIDs.contains($0.placed) }) else { throw Failure.invalid }
+            let tolerance = Double(bitPattern: toleranceBits)
+            guard let widthBits = snapshotNumbers["FabricWidth"], let lengthBits = snapshotNumbers["UsedLength"],
+                  let gapBits = snapshotNumbers["Gap"], let marginBits = snapshotNumbers["EdgeMargin"] else { throw Failure.invalid }
+            let width = Double(bitPattern: widthBits), length = Double(bitPattern: lengthBits)
+            let gap = Double(bitPattern: gapBits), margin = Double(bitPattern: marginBits)
+            guard width > 0, width <= 100_000_000, length > 0, length <= 100_000_000,
+                  gap >= 0, gap <= 100_000_000, margin >= 0, margin * 2 < width,
+                  tolerance >= 0, tolerance <= 90 else { throw Failure.invalid }
+            if let maxBits = traceNumbers["MaxLength"] {
+                let maximum = Double(bitPattern: maxBits)
+                guard maximum > 0, length <= maximum else { throw Failure.invalid }
+            }
             var seenPlaced = Set<UUID>(), seenCopies = Set<String>(), counts: [UUID: Int] = [:]
             for mapping in traceMappings {
                 if cancelled() { throw Failure.cancelled }
@@ -91,7 +105,8 @@ struct ExperimentalV7PieceReader {
                       seenCopies.insert("\(mapping.source.uuidString)#\(mapping.number)").inserted else { throw Failure.invalid }
                 guard let source = sourceGeometry[mapping.source], let placed = historyGeometry[mapping.placed],
                       let angle = rotationAngles[mapping.placed],
-                      try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: angle, cancelled: cancelled) else { throw Failure.invalid }
+                      try ExperimentalV7Geometry.exactlyMatches(source: source, placed: placed, degrees: angle,
+                          direction: direction, tolerance: tolerance, cancelled: cancelled) else { throw Failure.invalid }
                 counts[mapping.source, default: 0] += 1
             }
             guard sourceQuantities.allSatisfy({ counts[$0.key] == $0.value }) else { throw Failure.invalid }
@@ -208,7 +223,9 @@ struct ExperimentalV7PieceReader {
                     case "Schema": guard value == "per-copy-orthogonal-trace-v1" else { throw Failure.invalid }
                     case "TransformConvention": guard value == "origin-quarter-turn-then-translate-v1" else { throw Failure.invalid }
                     case "Algorithm": guard value == (traceActive ? "explicit-per-copy-shelf-v1" : "deterministic-shelf-v1") else { throw Failure.invalid }
-                    case "GrainDirection": guard value == "OneWay" || value == "TwoWay" else { throw Failure.invalid }
+                    case "GrainDirection":
+                        guard value == "OneWay" || value == "TwoWay" else { throw Failure.invalid }
+                        grainDirection = value
                     case "SourceFingerprint", "LayoutFingerprint":
                         guard value.utf8.count == 64, value.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }) else { throw Failure.invalid }
                         if key == "LayoutFingerprint" {
@@ -313,7 +330,8 @@ struct ExperimentalV7PieceReader {
             if let array = mappingArray, let token = mappingToken, byte == 125 && stack.count == mappingDepth {
                 if array == "SourcePieces" || array == "LayoutPieces" {
                     let candidates = try ExperimentalV7Contours.decode([Data(token)], cancelled: cancelled)
-                    guard let item = candidates.first, let id = item.id, item.grain != nil, item.role == "Kesim", item.material != nil else { throw Failure.invalid }
+                    guard let item = candidates.first, let id = item.id, item.grain != nil, item.closed,
+                          item.points.count <= 2_000, item.role == "Kesim", item.material != nil else { throw Failure.invalid }
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity
@@ -375,7 +393,7 @@ struct ExperimentalV7PieceReader {
         stack = []; rootKeys = []; snapshotKeys = []; traceKeys = []
         validator = ExperimentalJSONStream(); projectName = nil; potentialKey = nil; rootValueKey = nil; scopedValue = nil
         scopedStringKey = nil; scopedNumberKey = nil; snapshotNumbers = [:]; traceNumbers = [:]
-        snapshotFingerprint = nil; traceFingerprint = nil
+        snapshotFingerprint = nil; traceFingerprint = nil; grainDirection = nil
     }
 
     #if DEBUG
