@@ -8,6 +8,25 @@ enum LosslessProjectName {
     // it does not establish that the rest of the file is valid JSON.
     static func isOversizedVersionSix(_ data: Data) -> Bool {
         guard data.count > maximumEditBytes, data.count <= 64 * 1024 * 1024 else { return false }
+        return hasVersionSixPrefix(data)
+    }
+
+    static func requiresVersionSixRawRecovery(_ data: Data) -> Bool {
+        if isOversizedVersionSix(data) { return true }
+        guard data.count <= maximumEditBytes, let encoding = bomEncoding(data), hasVersionSixPrefix(data),
+              let text = String(data: data, encoding: encoding) else { return false }
+        return text.utf8.count > maximumEditBytes
+    }
+
+    private static func bomEncoding(_ data: Data) -> String.Encoding? {
+        if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) { return .utf32LittleEndian }
+        if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) { return .utf32BigEndian }
+        if data.starts(with: [0xff, 0xfe]) { return .utf16LittleEndian }
+        if data.starts(with: [0xfe, 0xff]) { return .utf16BigEndian }
+        return nil
+    }
+
+    private static func hasVersionSixPrefix(_ data: Data) -> Bool {
         return data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let limit = min(bytes.count, 4096)
@@ -39,12 +58,7 @@ enum LosslessProjectName {
     // save the original bytes, not this temporary UTF-8 representation.
     static func versionSixValidationData(_ data: Data) throws -> Data {
         guard data.count <= maximumEditBytes else { throw Failure.invalid }
-        let encoding: String.Encoding
-        if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) { encoding = .utf32LittleEndian }
-        else if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) { encoding = .utf32BigEndian }
-        else if data.starts(with: [0xff, 0xfe]) { encoding = .utf16LittleEndian }
-        else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
-        else { encoding = .utf8 }
+        let encoding = bomEncoding(data) ?? .utf8
         if encoding == .utf8 {
             guard String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
             return data

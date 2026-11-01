@@ -12,6 +12,27 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testExpandedUTF16RawRecoveryPreservesExactSourceBytes() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let text = "[6,{\"Name\":\"" + String(repeating: "€", count: 3_000_000) + "\",\"Pieces\":[]}]"
+        var bytes = Data([0xfe, 0xff])
+        bytes.append(try XCTUnwrap(text.data(using: .utf16BigEndian)))
+        XCTAssertLessThan(bytes.count, LosslessProjectName.maximumEditBytes)
+        XCTAssertTrue(LosslessProjectName.requiresVersionSixRawRecovery(bytes))
+        let source = root.appendingPathComponent("source.tcad")
+        let staging = root.appendingPathComponent("staging")
+        let destination = root.appendingPathComponent("raw.tcadraw")
+        try bytes.write(to: source)
+        try ModelFilePublisher.publish(bytes, staging: staging, destination: destination)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == destination })
+        XCTAssertFalse(entry.canOpen)
+        XCTAssertTrue(entry.requiresRecovery)
+        XCTAssertEqual(try ModelStore.readListedPayload(entry), bytes)
+        XCTAssertEqual(try Data(contentsOf: source), bytes)
+    }
+
     func testEncodedOversizedRawRecoveryPreservesSourceBytes() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

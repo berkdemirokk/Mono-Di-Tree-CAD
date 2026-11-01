@@ -27,8 +27,18 @@ final class LosslessProjectNameTests: XCTestCase {
         let text = "[6,{\"Name\":\"" + String(repeating: "€", count: 3_000_000) + "\",\"Pieces\":[]}]"
         var encoded = Data([0xfe, 0xff])
         encoded.append(try XCTUnwrap(text.data(using: .utf16BigEndian)))
+        let original = encoded
         XCTAssertLessThan(encoded.count, LosslessProjectName.maximumEditBytes)
+        XCTAssertTrue(LosslessProjectName.requiresVersionSixRawRecovery(encoded))
         XCTAssertThrowsError(try LosslessProjectName.versionSixValidationData(encoded))
+        XCTAssertEqual(encoded, original)
+        let legacy = text.replacingOccurrences(of: "[6,", with: "[5,")
+        var legacyBytes = Data([0xfe, 0xff])
+        legacyBytes.append(try XCTUnwrap(legacy.data(using: .utf16BigEndian)))
+        XCTAssertFalse(LosslessProjectName.requiresVersionSixRawRecovery(legacyBytes))
+        var small = Data([0xff, 0xfe])
+        small.append(try XCTUnwrap("[6,{}]".data(using: .utf16LittleEndian)))
+        XCTAssertFalse(LosslessProjectName.requiresVersionSixRawRecovery(small))
     }
 
     func testOversizedVersionSixPreflightRecognizesExactEncodedEnvelope() {
@@ -58,6 +68,7 @@ final class LosslessProjectNameTests: XCTestCase {
         let tooLate = Array(String(repeating: " ", count: 4095).utf8) + Array("[6,".utf8)
         XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(tooLate, count: limit + 1)))
         XCTAssertFalse(LosslessProjectName.isOversizedVersionSix(sample(Array("[6,".utf8), count: 64 * 1024 * 1024 + 1)))
+        XCTAssertFalse(LosslessProjectName.requiresVersionSixRawRecovery(sample(Array("[6,".utf8), count: 64 * 1024 * 1024 + 1)))
     }
 
     private func replace(_ input: String, with name: String = "New") throws -> String {

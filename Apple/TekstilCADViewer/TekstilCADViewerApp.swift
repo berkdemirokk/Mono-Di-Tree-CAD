@@ -450,7 +450,7 @@ private struct ContentView: View {
             Button("Vazgeç", role: .cancel) { rawImport = nil }
             Button("Ham kopyayı telefona kaydet") { saveRawImport() }
         } message: {
-            Text("Sürüm 6 önizlemesi 8 MB ile sınırlı. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
+            Text("Sürüm 6 dosyası veya doğrulama için çözülen metni 8 MB sınırını aşıyor. Dosya doğrulanmadı ve model olarak açılmadı. İsterseniz en fazla 64 MB'lık ham kopyayı kurtarma kaydı olarak saklayabilirsiniz; bu kopya uygulamada önizlenemez.")
         }
         .alert("Proje adını değiştir", isPresented: $showingNameEditor) {
             TextField("Proje adı", text: $editedName)
@@ -507,9 +507,21 @@ private struct ContentView: View {
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-import") {
                     let largeURL = FileManager.default.temporaryDirectory.appendingPathComponent("Büyük-\(UUID().uuidString).tcad")
                     let utf16 = ProcessInfo.processInfo.arguments.contains("--ui-test-large-v6-utf16be")
+                    let expansion = ProcessInfo.processInfo.arguments.contains("--ui-test-v6-utf16-expansion")
                     let width = utf16 ? 2 : 1
-                    let text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
-                        + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+                    let text: String
+                    if expansion {
+                        let name = String(repeating: "€", count: 1000)
+                        let pieces = (0..<2800).map { index in
+                            let id = String(format: "00000000-0000-0000-0000-%012d", index + 1)
+                            let mark = index == 0 ? #", "Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]"# : ""
+                            return #"{"Id":"\#(id)","Name":"\#(name)","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]\#(mark)}"#
+                        }.joined(separator: ",")
+                        text = #"[6,{"Name":"Büyük","Pieces":[\#(pieces)],"GradingRules":[]}]"#
+                    } else {
+                        text = "[6," + String(repeating: " ", count: LosslessProjectName.maximumEditBytes / width)
+                            + #"{"Name":"Büyük","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+                    }
                     var large = utf16 ? Data([0xfe, 0xff]) : Data()
                     guard let encoded = text.data(using: utf16 ? .utf16BigEndian : .utf8) else { throw ViewerError.message("Test verisi kodlanamadı.") }
                     large.append(encoded)
@@ -553,7 +565,7 @@ private struct ContentView: View {
                 let data: Data
                 if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
                 else { data = try Drawing.readData(url) }
-                if imported && LosslessProjectName.isOversizedVersionSix(data) { return .oversizedRaw(data) }
+                if imported && LosslessProjectName.requiresVersionSixRawRecovery(data) { return .oversizedRaw(data) }
                 return .preview(try Drawing.load(data), data)
             }
             DispatchQueue.main.async {
