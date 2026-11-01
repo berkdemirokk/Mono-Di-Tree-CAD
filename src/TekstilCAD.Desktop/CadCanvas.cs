@@ -32,6 +32,8 @@ public sealed class CadCanvas : FrameworkElement
     private Grainline? dragPreviewGrainline;
     private Point2 dragTranslation;
     private PatternPiece? dragSourceSnapshot;
+    private GradingRuleSet? dragRuleReference,dragRuleSnapshot;
+    private bool dragRuleEligible;
     private CancellationTokenSource? largeCompletionCancellation;
     private CancellationTokenSource? largeVertexCancellation;
     internal Task? LargeVertexValidationTask { get; private set; }
@@ -235,7 +237,7 @@ public sealed class CadCanvas : FrameworkElement
     // Once a mutation has committed, unexpected ordinary UI failures must not
     // escape as if the edit did not happen. Keep catastrophic CLR failures out.
     private static bool IsNonFatal(Exception ex) => ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException);
-    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragSourceSnapshot=null;dragTranslation=default; }
+    private void ClearDrag() { dragId=null;dragVertex=-1;dragOriginal=null;dragPreview=null;dragScreenOrigin=null;dragOriginalGrainline=null;dragPreviewGrainline=null;dragSourceSnapshot=null;dragRuleReference=null;dragRuleSnapshot=null;dragRuleEligible=false;dragTranslation=default; }
     internal void CancelLargeCompletion() => largeCompletionCancellation?.Cancel();
     internal void CancelLargeVertexValidation() => largeVertexCancellation?.Cancel();
     public void CancelDrawing() { CancelLargeCompletion();CancelLargeVertexValidation();var changed=drawing.Count>0;drawing.Clear();ClearDrag();panStart=null;ReleaseMouseCapture();InvalidateVisual();if(changed)owner.PendingDrawingChanged(); }
@@ -493,7 +495,7 @@ public sealed class CadCanvas : FrameworkElement
             {
                 if(!CanDragMarkedVertex(piece,vertex))return;
             }
-            if(piece is not null) { dragSourceSnapshot=piece.Clone();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
+            if(piece is not null) { dragSourceSnapshot=piece.Clone();dragRuleReference=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);dragRuleSnapshot=dragRuleReference?.Clone();dragRuleEligible=!owner.OwnedWindows.OfType<TextileToolsWindow>().Any();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
         }
         AddDrawingPointCore(p);
@@ -677,6 +679,8 @@ public sealed class CadCanvas : FrameworkElement
         if(vertex<0 || vertex>=piece.Points.Count)return false;
         return true;
     }
+    private bool RuleStillMatches(GradingRuleSet? live,GradingRuleSet? saved) =>
+        live is not null && saved is not null && DocumentSession.ContentEquals(new ProjectDocument { GradingRules=[live] },new ProjectDocument { GradingRules=[saved] });
     private void Up(MouseButtonEventArgs e)
     {
         if(e.ChangedButton==MouseButton.Middle)
@@ -706,7 +710,7 @@ public sealed class CadCanvas : FrameworkElement
             {
                 if(dragSourceSnapshot is not null && !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[dragSourceSnapshot] }))
                     throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
-                StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result,dragVertex);
+                StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result,dragVertex,dragRuleEligible && ReferenceEquals(dragRuleReference,owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id)) && RuleStillMatches(dragRuleReference,dragRuleSnapshot));
                 ClearDrag();ReleaseMouseCapture();InvalidateVisual();return;
             }
             List<NotchMark>? verifiedVertexMarks=null;
@@ -733,7 +737,9 @@ public sealed class CadCanvas : FrameworkElement
             var newGrain=dragVertex>=0 ? dragOriginalGrainline?.Clone() : GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],snapshot[0],dragTranslation.X,dragTranslation.Y);
             if(dragVertex>=0 && newGrain is not null)newGrain.NeedsReview=true;
             var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
-            var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) : null;
+            var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) :
+                dragRuleEligible && !owner.OwnedWindows.OfType<TextileToolsWindow>().Any() && ReferenceEquals(rule,dragRuleReference) && RuleStillMatches(rule,dragRuleSnapshot)
+                    ? rule?.WithVertexMoveFor(piece,snapshot,dragVertex) : null;
             owner.CommitObserved(dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
                 piece.Points=snapshot;piece.Grainline=newGrain;if(dragVertex<0)piece.Notches=movedNotches;else if(verifiedVertexMarks is not null)piece.Notches=verifiedVertexMarks;
                 if(translatedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
@@ -746,7 +752,7 @@ public sealed class CadCanvas : FrameworkElement
     }
 
     /// <summary>Validates a detached large vertex proposal; no live geometry changes until the worker succeeds.</summary>
-    internal void StartLargeVertexValidation(Guid id, bool closed, IReadOnlyList<Point2> original, IReadOnlyList<Point2> proposed,int vertexIndex=-1)
+    internal void StartLargeVertexValidation(Guid id, bool closed, IReadOnlyList<Point2> original, IReadOnlyList<Point2> proposed,int vertexIndex=-1,bool mayMapFromDrag=true)
     {
         if(LargeVertexValidationRunning) { owner.SetStatus("Nokta değişikliği zaten doğrulanıyor; lütfen bekleyin.");return; }
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
@@ -759,12 +765,13 @@ public sealed class CadCanvas : FrameworkElement
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
         ValidateClosingEdgePreserved(original,proposed,closed);
-        var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();var markedSource=piece.Notches is null ? null : piece.Clone();
+        var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();var sourcePiece=piece.Clone();var markedSource=piece.Notches is null ? null : sourcePiece;
+        var rule=document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);var ruleSnapshot=rule?.Clone();var mayMapRule=mayMapFromDrag && !owner.OwnedWindows.OfType<TextileToolsWindow>().Any();
         var cancellation=new CancellationTokenSource();largeVertexCancellation=cancellation;
-        LargeVertexValidationTask=ValidateLargeVertexAsync(id,closed,source,candidate,document,originalGrain,markedSource,vertexIndex,cancellation);
+        LargeVertexValidationTask=ValidateLargeVertexAsync(id,closed,source,candidate,document,originalGrain,markedSource,sourcePiece,vertexIndex,rule,ruleSnapshot,mayMapRule,cancellation);
     }
 
-    private async Task ValidateLargeVertexAsync(Guid id,bool closed,Point2[] source,Point2[] candidate,ProjectDocument document,Grainline? originalGrain,PatternPiece? markedSource,int vertexIndex,CancellationTokenSource cancellation)
+    private async Task ValidateLargeVertexAsync(Guid id,bool closed,Point2[] source,Point2[] candidate,ProjectDocument document,Grainline? originalGrain,PatternPiece? markedSource,PatternPiece sourcePiece,int vertexIndex,GradingRuleSet? originalRule,GradingRuleSet? ruleSnapshot,bool mayMapRule,CancellationTokenSource cancellation)
     {
         owner.SetStatus("Büyük parçanın nokta değişikliği doğrulanıyor; ekranda kayıtlı geometri var. Bekleyin veya Esc ile iptal edin.");
         var committed=false;
@@ -780,14 +787,18 @@ public sealed class CadCanvas : FrameworkElement
             var current=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
             if(current is null || (markedSource is null ? current.Notches is not null : !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[markedSource] })) || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
             { owner.SetStatus("Parça değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
+            var liveRule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);
+            var mappedRule=mayMapRule && !owner.OwnedWindows.OfType<TextileToolsWindow>().Any() && ReferenceEquals(liveRule,originalRule) && RuleStillMatches(liveRule,ruleSnapshot) && DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[sourcePiece] })
+                ? liveRule?.WithVertexMoveFor(sourcePiece,candidate,vertexIndex) : null;
             // Check and commit without yielding to avoid applying a stale worker result.
             owner.CommitObserved("Büyük parçanın noktası taşındı",()=>
             {
                 var target=owner.Document.Pieces.First(p=>p.Id==id);
                 target.Points=candidate.ToList();if(verifiedMarks is not null)target.Notches=verifiedMarks;
+                if(mappedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(liveRule!)]=mappedRule;
                 if(target.Grainline is not null)target.Grainline.NeedsReview=true;
             },()=>committed=true);
-            if(owner.Document.GradingRules.Any(rule=>rule.SourcePieceId==id))
+            if(liveRule is not null && mappedRule is null)
                 owner.ShowCanvasError("Büyük parçanın noktası taşındı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
             else
             {

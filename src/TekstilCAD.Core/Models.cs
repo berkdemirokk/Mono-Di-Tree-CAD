@@ -211,6 +211,27 @@ public sealed class GradingRuleSet
         return result;
     }
 
+    /// <summary>Retain increments only for a proven single-vertex move of the exact saved source.</summary>
+    public GradingRuleSet? WithVertexMoveFor(PatternPiece source,IReadOnlyList<Point2> moved,int index)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(moved);
+        if(source.Id!=SourcePieceId || source.Closed!=SourceClosed || source.Points is null || SourcePoints is null || Deltas is null ||
+           index<0 || index>=source.Points.Count || source.Points.Count!=SourcePoints.Count ||
+           Deltas.Count!=SourcePoints.Count || moved.Count!=SourcePoints.Count)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        var repeated=source.Closed && source.Points.Count>1 && source.Points[0]==source.Points[^1];
+        if(repeated && (!Bits(source.Points[0],source.Points[^1]) || !Bits(Deltas[0],Deltas[^1])))return null;
+        if(repeated && index==source.Points.Count-1)index=0;
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            if(!source.Points[i].IsFinite || !moved[i].IsFinite || !Deltas[i].IsFinite || !Bits(SourcePoints[i],source.Points[i]))return null;
+            if(i!=index && !(repeated && index==0 && i==source.Points.Count-1) && !Bits(source.Points[i],moved[i]))return null;
+        }
+        if(repeated && !Bits(moved[0],moved[^1]))return null;
+        var result=Clone();result.SourcePoints=moved.ToList();return result;
+    }
+
     /// <summary>Remove one vertex and its increment only when the source and result match bit for bit.</summary>
     public GradingRuleSet? WithVertexDeletionFor(PatternPiece source,PatternPiece edited,int index)
     {

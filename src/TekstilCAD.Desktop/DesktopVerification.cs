@@ -1568,7 +1568,7 @@ internal static class DesktopVerification
             studio.LoadDocument(document);
             studio.SetTool("Seç");studio.Select(piece.Id);
             var before=studio.Document.Clone();
-            canvas.StartLargeVertexValidation(piece.Id,closed,original,valid);
+            canvas.StartLargeVertexValidation(piece.Id,closed,original,valid,0);
             var task=canvas.LargeVertexValidationTask ?? throw new InvalidOperationException("Large vertex worker did not start.");
             canvas.StartLargeVertexValidation(piece.Id,closed,original,valid);
             Check(canvas.LargeVertexValidationRunning && ReferenceEquals(task,canvas.LargeVertexValidationTask)
@@ -1578,11 +1578,8 @@ internal static class DesktopVerification
             Check(!canvas.LargeVertexValidationRunning && studio.Selected!.Points.SequenceEqual(valid) && session.UndoCount==1,
                 $"Large {(closed?"closed":"open")} vertex change commits once",checks);
             var warning=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
-            Check(closed
-                ? warning.Text.Contains("taşındı") && warning.Text.Contains("serileme kuralı") && warning.Text.Contains("gözden geçirin") &&
-                  studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(original)
-                : string.IsNullOrEmpty(warning.Text),
-                $"Large vertex change {(closed?"warns about the preserved stale rule":"has no grading warning without a rule")}",checks);
+            Check(string.IsNullOrEmpty(warning.Text) && (!closed || studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(valid)),
+                "Large vertex change retains a matching grading rule",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
                 $"Large {(closed?"closed":"open")} vertex change is undoable",checks);
 
@@ -1654,6 +1651,26 @@ internal static class DesktopVerification
                     "Concurrent marker changes reject the large vertex proposal",checks);
             }
             finally { releaseMarked.Set();if(waiting is not null) { PumpUntil(()=>waiting.IsCompleted);waiting.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
+        var rulePiece=new PatternPiece { Name="Büyük kural",Closed=true,Points=original.ToList() };
+        var movingRule=new GradingRuleSet { SourcePieceId=rulePiece.Id,SourceClosed=true,SourcePoints=original.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),original.Length).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[rulePiece],GradingRules=[movingRule] });studio.SetTool("Seç");studio.Select(rulePiece.Id);
+        using(var reachedRule=new ManualResetEventSlim())using(var releaseRule=new ManualResetEventSlim())
+        {
+            Task? pendingRule=null;
+            try
+            {
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reachedRule.Set();if(!releaseRule.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.StartLargeVertexValidation(rulePiece.Id,true,original,valid,0);
+                pendingRule=canvas.LargeVertexValidationTask!;PumpUntil(()=>reachedRule.IsSet);
+                studio.Document.GradingRules.Single().Deltas[1]=new Point2(3,4);var changedRule=studio.Document.Clone();
+                releaseRule.Set();PumpUntil(()=>pendingRule.IsCompleted);pendingRule.GetAwaiter().GetResult();
+                var currentRule=studio.Document.GradingRules.Single();
+                Check(currentRule.Deltas[1]==new Point2(3,4) && currentRule.SourcePoints.SequenceEqual(original) && studio.Selected!.Points.SequenceEqual(valid),
+                    "Concurrent grading edit is preserved and not silently rebound to the moved source",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(changedRule,studio.Document),"Undo keeps the concurrent rule edit",checks);
+            }
+            finally { releaseRule.Set();if(pendingRule is not null) { PumpUntil(()=>pendingRule.IsCompleted);pendingRule.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
         }
         var draftPiece=new PatternPiece { Name="Büyük taslak",Closed=false,Points=original.ToList() };
         studio.LoadDocument(new ProjectDocument { Pieces=[draftPiece] });studio.SetTool("Seç");studio.Select(draftPiece.Id);
@@ -2047,11 +2064,11 @@ internal static class DesktopVerification
             try { up.Invoke(canvas,[click]); } catch(TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { staleRejected=true; }
             Check(staleRejected && DocumentSession.ContentEquals(newer,studio.Document) && session.UndoCount==priorUndo,
                 "Marked drag rejects a changed source and keeps newer marks",checks);canvas.CancelDrawing();
-            studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
             Check(canvas.HasActiveDragPreview,"Dragging an explicitly marked vertex starts",checks);
             before=studio.Document.Clone();undo=session.UndoCount;pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+10));up.Invoke(canvas,[click]);
             var markedMoved=studio.Document.Clone();
-            Check(markedMoved.Pieces[0].Points[1]==new Point2(110,10) && markedMoved.Pieces[0].Notches!.Single().Position==markedMoved.Pieces[0].Points[1] && session.UndoCount==undo+1,
+            Check(markedMoved.Pieces[0].Points[1]==new Point2(110,10) && markedMoved.Pieces[0].Notches!.Single().Position==markedMoved.Pieces[0].Points[1] && markedMoved.GradingRules.Single().SourcePoints.SequenceEqual(markedMoved.Pieces[0].Points) && session.UndoCount==undo+1,
                 "Marked vertex drag moves the visual mark with its vertex",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedMoved,studio.Document),
                 "Marked vertex drag is one undoable edit",checks);
@@ -2062,11 +2079,23 @@ internal static class DesktopVerification
             var vertexEdited=studio.Document.Clone();
             Check(vertexEdited.Pieces[0].Points[0]==new Point2(-10,10) && vertexEdited.Pieces[0].Notches!.Single().VertexIndex==1 &&
                 vertexEdited.Pieces[0].Notches![0].Position==marked.Notches![0].Position && vertexEdited.Pieces[0].Grainline!.NeedsReview &&
-                vertexEdited.GradingRules.Single().SourcePoints.SequenceEqual(before.GradingRules.Single().SourcePoints) &&
-                error.Text.Contains("serileme",StringComparison.OrdinalIgnoreCase) && session.UndoCount==undo+1,
-                "Unmarked vertex drag retains marks, warns about old grading and marks grainline for review",checks);
+                vertexEdited.GradingRules.Single().SourcePoints.SequenceEqual(vertexEdited.Pieces[0].Points) &&
+                string.IsNullOrEmpty(error.Text) && session.UndoCount==undo+1,
+                "Unmarked vertex drag retains marks and grading while marking grainline for review",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(vertexEdited,studio.Document),
                 "Unmarked vertex drag on a marked piece is undoable and redoable",checks);
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);
+            var openTextileTools=new TextileToolsWindow(studio);
+            try
+            {
+                var beforeWithTools=studio.Document.Clone();PointAt(0,0,1);down.Invoke(canvas,[canvas,click]);
+                pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X-10,pointer.Y+10));up.Invoke(canvas,[click]);
+                Check(studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(beforeWithTools.GradingRules.Single().SourcePoints) &&
+                    error.Text.Contains("serileme",StringComparison.OrdinalIgnoreCase),
+                    "An open textile draft window prevents silent grading rebind",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(beforeWithTools,studio.Document),"Undo restores the contour while a textile window is open",checks);
+            }
+            finally { openTextileTools.Close(); }
             var repeatedMarked=marked.Clone();repeatedMarked.Points.Add(repeatedMarked.Points[0]);
             repeatedMarked.Notches=[new NotchMark { VertexIndex=0,Position=repeatedMarked.Points[0] }];
             Check(CadCanvas.CanDragMarkedVertex(repeatedMarked,0) && CadCanvas.CanDragMarkedVertex(repeatedMarked,repeatedMarked.Points.Count-1) &&
