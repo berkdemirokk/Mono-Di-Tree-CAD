@@ -2386,6 +2386,8 @@ private struct DressStyleSketch: Shape {
 private struct ExperimentalDesignBriefView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var style = ExperimentalDesignBrief.DressStyle.describe
+    @State private var step = 0
+    @State private var confirmClose = false
     @State private var description = ""
     @State private var bust = ""
     @State private var waist = ""
@@ -2399,6 +2401,9 @@ private struct ExperimentalDesignBriefView: View {
     @State private var exportDocument: ProjectExportDocument?
     @State private var message = ""
 
+    private var hasInput: Bool {
+        style != .describe || !description.isEmpty || !bust.isEmpty || !waist.isEmpty || !hips.isEmpty || !length.isEmpty || !otherMeasurements.isEmpty || image != nil
+    }
     private var requestPrompt: String { ExperimentalDesignBrief.prompt(style: style, description: description) }
     private var requestMeasurements: String {
         ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
@@ -2415,8 +2420,16 @@ private struct ExperimentalDesignBriefView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Text("Kadın elbise tarifinizi, açıkça bildiğiniz ölçüleri ve isteğe bağlı örneği masaüstünde incelenmek üzere hazırlayın. Bu dosya kalıp üretmez ve verileri otomatik göndermez. Üretim için ayrıca onaylı kalıp gerekir.")
-                Section("1 · Nasıl bir elbise istiyorsunuz?") {
+                Section {
+                    HStack {
+                        Text("ELBİSE İSTEĞİ").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(step + 1) / 4").font(.caption.weight(.semibold)).accessibilityLabel("Adım \(step + 1), toplam 4")
+                    }
+                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
+                }
+                if step == 0 {
+                Section("Nasıl bir elbise istiyorsunuz?") {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: 10)], spacing: 10) {
                         ForEach(ExperimentalDesignBrief.DressStyle.allCases) { option in
                             Button { style = option } label: {
@@ -2446,18 +2459,22 @@ private struct ExperimentalDesignBriefView: View {
                         }
                     }
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. İsterseniz ayrıntıları kendi sözlerinizle yazın.").font(.caption)
-                    TextEditor(text: $description).frame(minHeight: 100)
+                    TextEditor(text: $description).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz")
                 }
-                Section("2 · Bildiğiniz ölçüler neler?") {
+                }
+                if step == 1 {
+                Section("Bildiğiniz ölçüler neler?") {
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
                     TextField("Göğüs çevresi · ör. 92 cm", text: $bust)
                     TextField("Bel çevresi · ör. 72 cm", text: $waist)
                     TextField("Kalça çevresi · ör. 98 cm", text: $hips)
                     TextField("Elbise boyu · ör. 110 cm", text: $length)
                     Text("Ek ölçüler veya notlar").font(.caption)
-                    TextEditor(text: $otherMeasurements).frame(minHeight: 70)
+                    TextEditor(text: $otherMeasurements).frame(minHeight: 70).accessibilityLabel("Ek ölçüler veya notlar")
                 }
-                Section("3 · Örnek görsel · isteğe bağlı") {
+                }
+                if step == 2 {
+                Section("Örnek görsel · isteğe bağlı") {
                     Button("Dosyalardan görsel seç") { selectingImage = true }
                     if let imageName {
                         Text("Seçilen: \(ModelStore.safeLabel(imageName))")
@@ -2465,16 +2482,47 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     Text("Seçilen görsel özgün baytlarıyla, içerebileceği konum ve diğer bilgiler dahil dosyaya eklenir. PNG veya JPEG, en fazla 8 MiB.").font(.caption)
                 }
-                Section("4 · İsteğinizi gözden geçirin") {
+                }
+                if step == 3 {
+                Section("İsteğinizi gözden geçirin") {
                     Text(requestPrompt.isEmpty ? "Henüz model veya tarif yok." : requestPrompt)
                     Text(requestMeasurements.isEmpty ? "Henüz ölçü girilmedi." : requestMeasurements)
+                    if let imageName { Text("Görsel: \(ModelStore.safeLabel(imageName))") }
+                    else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
                 }
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
-                Button("İstek dosyasını kaydet…") { prepareExport() }
+                Text("Bu istek dosyası kalıp üretmez veya otomatik gönderilmez. Üretim için ayrıca onaylı kalıp gerekir.").font(.caption).foregroundStyle(.secondary)
+                }
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
             }
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 12) {
+                    if step > 0 {
+                        Button("Geri") { step -= 1; message = "" }
+                            .buttonStyle(.bordered).controlSize(.large)
+                    }
+                    if step < 3 {
+                        Button("Devam") { step += 1; message = "" }
+                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    } else {
+                        Button("İstek dosyasını kaydet…") { prepareExport() }
+                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
+                .padding(.horizontal).padding(.vertical, 10)
+                .background(.regularMaterial)
+            }
             .navigationTitle("Kalıp isteği · DEBUG")
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .interactiveDismissDisabled(hasInput)
+            .toolbar { ToolbarItem(placement: .cancellationAction) {
+                Button("Kapat") { if hasInput { confirmClose = true } else { dismiss() } }
+            } }
+            .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
+                Button("İsteği sil ve kapat", role: .destructive) { dismiss() }
+                Button("Düzenlemeye devam et", role: .cancel) { }
+            } message: { Text("Kaydedilmemiş tarif, ölçüler ve görsel bu ekrandan silinir.") }
             .fileImporter(isPresented: $selectingImage, allowedContentTypes: [.image]) { result in
                 do {
                     let url = try result.get()
