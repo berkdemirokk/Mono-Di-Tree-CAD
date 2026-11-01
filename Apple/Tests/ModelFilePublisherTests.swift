@@ -307,6 +307,26 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testContentSearchBudgetBoundsFilesBytesAndElapsedTime() {
+        var files = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 10, duration: 5)
+        XCTAssertTrue(files.reserve(bytes: 30, now: 10))
+        XCTAssertTrue(files.reserve(bytes: 30, now: 11))
+        XCTAssertFalse(files.reserve(bytes: 1, now: 12))
+        XCTAssertEqual(files.bytes, 60)
+        var bytes = ModelStore.ContentSearchBudget(maximumFiles: 10, maximumBytes: 100, start: 10, duration: 5)
+        XCTAssertTrue(bytes.reserve(bytes: 70, now: 11))
+        XCTAssertFalse(bytes.reserve(bytes: 31, now: 12))
+        XCTAssertTrue(bytes.reserve(bytes: 30, now: 12))
+        XCTAssertFalse(bytes.reserve(bytes: 0, now: 15))
+        XCTAssertFalse(bytes.reserve(bytes: -1, now: 12))
+    }
+
+    func testStaleOrCancelledContentSearchResultsAreNotAccepted() {
+        let first = UUID(), next = UUID()
+        XCTAssertTrue(ModelStore.acceptsSearchResult(request: first, current: first, cancelled: false))
+        XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: next, cancelled: false))
+        XCTAssertFalse(ModelStore.acceptsSearchResult(request: first, current: first, cancelled: true))
+    }
     func testContentSearchMatchesWordsAcrossModelAndPieceFields() {
         let fields = ["Fabrika 42", "Ön kol", "XL", "Pamuk"]
         XCTAssertTrue(ModelStore.contentSearchMatches(query: "42 kol pamuk", fields: fields))

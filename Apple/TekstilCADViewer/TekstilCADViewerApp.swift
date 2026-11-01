@@ -1149,6 +1149,30 @@ enum ModelStore {
         return cancelled() ? nil : matches
     }
 
+    struct ContentSearchBudget {
+        let maximumFiles: Int
+        let maximumBytes: Int64
+        let deadline: TimeInterval
+        private(set) var files = 0
+        private(set) var bytes: Int64 = 0
+        init(maximumFiles: Int = 100, maximumBytes: Int64 = 32 * 1024 * 1024,
+             start: TimeInterval, duration: TimeInterval = 5) {
+            self.maximumFiles = maximumFiles
+            self.maximumBytes = maximumBytes
+            self.deadline = start + duration
+        }
+        mutating func reserve(bytes size: Int64, now: TimeInterval) -> Bool {
+            guard size >= 0, files < maximumFiles, now < deadline,
+                  size <= maximumBytes - bytes else { return false }
+            files += 1
+            bytes += size
+            return true
+        }
+    }
+
+    static func acceptsSearchResult<Key: Equatable>(request: Key, current: Key, cancelled: Bool) -> Bool {
+        !cancelled && request == current
+    }
     static func contentSearchMatches(query: String, fields: [String]) -> Bool {
         let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         return !words.isEmpty && words.allSatisfy { word in
@@ -1382,7 +1406,7 @@ private struct ModelLibrary: View {
         let revision: UUID
         let searchContents: Bool
     }
-    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let limited: Bool }
     @State private var filterResult: FilterResult?
     private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents) }
 
@@ -1397,6 +1421,10 @@ private struct ModelLibrary: View {
                         .accessibilityLabel("\(models.count) kayıttan \(current.entries.count) tanesi gösteriliyor")
                     if searchContents {
                         Text("İçerik araması açık: parça adı, beden, malzeme")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if current.limited {
+                        Text("İçerik araması kaynak sınırına ulaştı; sonuçlar eksik olabilir. Ad araması seçili kayıt grubunun tamamında yapıldı.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     if current.skipped > 0 {
@@ -1564,19 +1592,25 @@ private struct ModelLibrary: View {
                     do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
                 }
                 guard !Task.isCancelled else { return }
-                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int)? in
+                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Bool)? in
                     let cancelled = { Task.isCancelled }
                     guard let names = ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
-                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0) }
+                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, false) }
                     guard let candidates = ModelStore.filteredModels(snapshot, query: "", newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
                     let named = Set(names.map(\.id))
                     var selected: [ModelStore.Entry] = []
                     var skipped = 0
+                    var limited = false
+                    var budget = ModelStore.ContentSearchBudget(start: ProcessInfo.processInfo.systemUptime)
                     for entry in candidates {
                         if cancelled() { return nil }
                         if named.contains(entry.id) { selected.append(entry); continue }
                         let identity = entry.url.pathExtension.lowercased() == "tcadcopy" ? entry.identity?.payload : entry.identity?.entry
                         guard entry.canOpen, let identity, identity.size <= 8 * 1024 * 1024 else { skipped += 1; continue }
+                        guard budget.reserve(bytes: identity.size, now: ProcessInfo.processInfo.systemUptime) else {
+                            limited = true
+                            continue
+                        }
                         do {
                             let bytes = try ModelStore.readListedPayload(entry, cancelled: cancelled)
                             let drawing = try Drawing.load(bytes, cancelled: cancelled)
@@ -1591,11 +1625,11 @@ private struct ModelLibrary: View {
                             skipped += 1
                         }
                     }
-                    return (selected, skipped)
+                    return (selected, skipped, limited)
                 }
                 let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
-                guard !Task.isCancelled, filterKey == request, let result else { return }
-                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1)
+                guard ModelStore.acceptsSearchResult(request: request, current: filterKey, cancelled: Task.isCancelled), let result else { return }
+                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1, limited: result.2)
             }
         }
     }
