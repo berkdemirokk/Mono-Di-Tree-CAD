@@ -1087,12 +1087,21 @@ enum ModelStore {
         try? url.resourceValues(forKeys: [.creationDateKey]).creationDate
     }
 
-    static func filteredModels(_ entries: [Entry], query: String, newest: Bool,
+    enum LibraryFilter: String, CaseIterable, Identifiable {
+        case all = "Tüm kayıtlar"
+        case normal = "Açma seçeneği olanlar"
+        case attention = "Kontrol gerekenler"
+        var id: String { rawValue }
+    }
+
+    static func filteredModels(_ entries: [Entry], query: String, newest: Bool, filter: LibraryFilter = .all,
                                cancelled: () -> Bool) -> [Entry]? {
         let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
         var matches: [Entry] = []
         for entry in entries {
             if cancelled() { return nil }
+            if filter == .normal && !entry.canOpen { continue }
+            if filter == .attention && entry.canOpen { continue }
             if words.isEmpty { matches.append(entry); continue }
             let fields = [entry.name, entry.safeName, entry.displayIdentity, entry.readableIdentity,
                           safeLabel(entry.displayIdentity), safeLabel(entry.readableIdentity)]
@@ -1299,6 +1308,7 @@ private struct ModelLibrary: View {
     @State private var modelsRevision = UUID()
     @State private var search = ""
     @State private var sortOrder: SortOrder = .name
+    @State private var libraryFilter: ModelStore.LibraryFilter = .all
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
     @State private var modelToRecover: ModelStore.Entry?
@@ -1323,11 +1333,12 @@ private struct ModelLibrary: View {
     private struct FilterKey: Hashable {
         let query: String
         let newest: Bool
+        let filter: ModelStore.LibraryFilter
         let revision: UUID
     }
     private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry] }
     @State private var filterResult: FilterResult?
-    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, revision: modelsRevision) }
+    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision) }
 
     var body: some View {
         NavigationStack {
@@ -1338,6 +1349,10 @@ private struct ModelLibrary: View {
                     Text("\(current.entries.count) / \(models.count) kayıt gösteriliyor")
                         .font(.caption).foregroundStyle(.secondary)
                         .accessibilityLabel("\(models.count) kayıttan \(current.entries.count) tanesi gösteriliyor")
+                    if libraryFilter != .all {
+                        Text("Filtre: \(libraryFilter.rawValue)")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
@@ -1356,7 +1371,12 @@ private struct ModelLibrary: View {
                 } else if matchingModels.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
-                        Button("Aramayı temizle") { search = "" }
+                        if !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Button("Aramayı temizle") { search = "" }
+                        }
+                        if libraryFilter != .all {
+                            Button("Tüm kayıtları göster") { libraryFilter = .all }
+                        }
                     }
                 }
                 ForEach(matchingModels) { model in
@@ -1412,15 +1432,20 @@ private struct ModelLibrary: View {
                     Menu {
                         Button { loadModels() } label: { Label("Listeyi yenile", systemImage: "arrow.clockwise") }
                             .disabled(isLoading || isRecovering)
+                        Picker("Kayıt durumu", selection: $libraryFilter) {
+                            ForEach(ModelStore.LibraryFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(filter)
+                            }
+                        }
                         Picker("Sıralama", selection: $sortOrder) {
                             ForEach(SortOrder.allCases) { order in
                                 Text(order.rawValue).tag(order)
                             }
                         }
                     } label: {
-                        Label("Sırala", systemImage: "arrow.up.arrow.down")
+                        Label("Liste seçenekleri", systemImage: "line.3.horizontal.decrease.circle")
                     }
-                    .accessibilityLabel("Modelleri sırala")
+                    .accessibilityLabel("Model listesi seçenekleri")
                 }
             }
             .onAppear { loadModels() }
@@ -1473,7 +1498,7 @@ private struct ModelLibrary: View {
                 }
                 guard !Task.isCancelled else { return }
                 let worker = Task.detached(priority: .userInitiated) {
-                    ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, cancelled: { Task.isCancelled })
+                    ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: { Task.isCancelled })
                 }
                 let entries = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
                 guard !Task.isCancelled, filterKey == request, let entries else { return }

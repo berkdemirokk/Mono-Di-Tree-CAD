@@ -833,7 +833,7 @@ final class ViewerUITests: XCTestCase {
         let akasya = app.buttons["Akasya"]
         XCTAssertTrue(zebra.waitForExistence(timeout: 10))
         XCTAssertTrue(akasya.waitForExistence(timeout: 10))
-        let sort = app.buttons["Modelleri sırala"]
+        let sort = app.buttons["Model listesi seçenekleri"]
         sort.tap()
         app.buttons["Ada göre"].tap()
         XCTAssertLessThan(akasya.frame.minY, zebra.frame.minY)
@@ -843,6 +843,12 @@ final class ViewerUITests: XCTestCase {
         sort.tap()
         app.buttons["Ada göre"].tap()
         XCTAssertLessThan(akasya.frame.minY, zebra.frame.minY)
+        sort.tap()
+        app.buttons["Kontrol gerekenler"].tap()
+        let showAll = app.buttons["Tüm kayıtları göster"]
+        XCTAssertTrue(showAll.waitForExistence(timeout: 5))
+        showAll.tap()
+        XCTAssertTrue(zebra.waitForExistence(timeout: 5))
 
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5))

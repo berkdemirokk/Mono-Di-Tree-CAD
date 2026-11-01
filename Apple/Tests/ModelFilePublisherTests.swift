@@ -255,6 +255,21 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testLibraryStatusFilterCombinesWithSearchAndRetainsAllByDefault() throws {
+        func entry(_ name: String, _ open: Bool, _ recovery: Bool) -> ModelStore.Entry {
+            ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(name).tcad"), name: name, date: nil,
+                             canOpen: open, requiresRecovery: recovery, identity: nil)
+        }
+        let rows = [entry("Kol A", true, false), entry("Kol B", false, true), entry("Kol C", false, false)]
+        XCTAssertEqual(try XCTUnwrap(ModelStore.filteredModels(rows, query: "kol", newest: false, cancelled: { false })).count, 3)
+        let normal = try XCTUnwrap(ModelStore.filteredModels(rows, query: "kol", newest: false, filter: .normal, cancelled: { false }))
+        XCTAssertEqual(normal.map(\.name), ["Kol A"])
+        let attention = try XCTUnwrap(ModelStore.filteredModels(rows, query: "kol", newest: false, filter: .attention, cancelled: { false }))
+        XCTAssertEqual(attention.map(\.name), ["Kol B", "Kol C"])
+        let narrowed = try XCTUnwrap(ModelStore.filteredModels(rows, query: "B", newest: false, filter: .attention, cancelled: { false }))
+        XCTAssertEqual(narrowed.map(\.name), ["Kol B"])
+    }
+
     func testCancelledLibraryEnumerationReturnsNoPartialListOrFileChanges() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
