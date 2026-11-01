@@ -175,13 +175,11 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Selected;
         if(piece is null)
         { owner.SetStatus("Taşımak için önce proje parçaları listesinden veya kalıp alanından bir parça seçin.");return; }
-        if(piece.Notches is { Count:>0 })
-        { owner.SetStatus("Taşımadan önce parçanın köşe işaretlerini kaldırın; işaretler otomatik taşınmaz.");return; }
         var step=modifiers==ModifierKeys.Control ? .1 : modifiers==ModifierKeys.Shift ? 10 : 1;
         var dx=key==Key.Left ? -step : key==Key.Right ? step : 0;
         var dy=key==Key.Up ? -step : key==Key.Down ? step : 0;
         var id=piece.Id;
-        var translated=Geometry.Translate(piece.Points,dx,dy);
+        var (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
         var translatedGrain=GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
         var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);
         var translatedRule=rule?.TranslatedFor(piece,translated,dx,dy);
@@ -189,7 +187,7 @@ public sealed class CadCanvas : FrameworkElement
         {
             var target=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id)
                 ?? throw new InvalidOperationException("Seçili parça değişti. Yeniden seçerek taşıyın.");
-            target.Points=translated;
+            target.Points=translated;target.Notches=translatedNotches;
             target.Grainline=translatedGrain;
             if(translatedRule is not null)
                 owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;

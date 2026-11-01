@@ -83,9 +83,12 @@ internal static class GroupMoveVerification
             try
             {
                 window.XForVerification.Text="1";Wait(window.ApplyForVerification());
-                if(!DocumentSession.ContentEquals(before,studio.Document) || session.UndoCount!=0 || !window.StatusForVerification.Contains("İşaretli"))
-                    throw new InvalidOperationException("A marked member must reject the whole group move without changing history.");
-                checks.Add("Group move rejects marked pieces atomically");
+                var moved=studio.Document.Pieces[0];
+                if(moved.Notches is not { Count:1 } || moved.Notches[0].Position!=moved.Points[0] || moved.Points[0]!=new Point2(1,0) || session.UndoCount!=1)
+                    throw new InvalidOperationException("Group move must retain a mark at its translated vertex.");
+                if(!session.Undo() || !DocumentSession.ContentEquals(before,studio.Document))
+                    throw new InvalidOperationException("Undo must restore the original marked group.");
+                checks.Add("Group move translates marked vertices and restores them on undo");
             }
             finally { window.Close();a.Notches=null; }
             foreach(var cancel in new[] { false,true })
