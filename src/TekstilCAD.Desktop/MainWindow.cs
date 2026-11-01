@@ -1594,6 +1594,9 @@ public class MainWindow : Window
             if(!confirmed)return;
             if(!ReferenceEquals(Document,originalDocument) || SelectedId!=p.Id || propertyDrafts.ContainsKey(p.Id) || !DocumentSession.ContentEquals(Document,originalContent))
             { SetStatus("Proje veya seçim değişti · Parça silinmedi. Tekrar kontrol edin.");return; }
+            // The modal callback may replace the piece with an equivalent clone.
+            // Delete the live object verified by the snapshot, not a detached reference.
+            p=Document.Pieces.Single(piece=>piece.Id==p.Id);
         }
         var committed=false;
         try { CommitObserved("Parça silindi",()=> { Document.Pieces.Remove(p); Document.GradingRules.RemoveAll(r=>r.SourcePieceId==p.Id); SelectedId=null; },()=>committed=true); }

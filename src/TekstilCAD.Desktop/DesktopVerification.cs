@@ -12097,6 +12097,19 @@ internal static class DesktopVerification
             Invoke(studio,"Undo");
             Check(DocumentSession.ContentEquals(before,studio.Document) && studio.SelectedId==piece.Id,"Undo restores deleted piece and grading rule",checks);
             studio.ConfirmDeleteWithGradingForVerification=(_,_)=>
+            {
+                var detached=studio.Document.Pieces[0];
+                studio.Document.Pieces[0]=detached.Clone();
+                detached.Name="Ayrılmış eski parça";
+                return true;
+            };
+            DeleteKey();
+            Check(studio.Document.Pieces.Count==0 && studio.Document.GradingRules.Count==0,
+                "Deletion resolves the live piece after an equivalent clone replaces the modal source",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(before,studio.Document) && studio.SelectedId==piece.Id,
+                "Undo restores both piece and rule after deletion of a replaced live source",checks);
+            studio.ConfirmDeleteWithGradingForVerification=(_,_)=>
             { studio.Commit("Onay sırasında düzenleme",()=>studio.Document.Pieces[0].Name="Değişen parça");return true; };
             DeleteKey();
             Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Name=="Değişen parça" && studio.Document.GradingRules.Count==1 && status.Text.Contains("silinmedi"),
