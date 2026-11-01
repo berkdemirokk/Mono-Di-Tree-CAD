@@ -43,4 +43,24 @@ public sealed class RotatedNestingRecordTests
         Assert.ThrowsAny<OperationCanceledException>(()=>RotatedNestingRecord.Capture(f.Source,[f.Id],f.Angles,f.Result,
             GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100,cancelled.Token));
     }
+
+    [Fact]
+    public void TraceModelRoundTripReverifiesAgainstLayoutAndRejectsTampering()
+    {
+        var f=Fixture();var original=RotatedNestingRecord.Capture(f.Source,[f.Id],f.Angles,f.Result,
+            GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100);
+        var trace=original.ToTrace();var layout=original.CopyResult().Plan.Nesting.Layout;
+        var restored=RotatedNestingRecord.FromTrace(trace,layout);
+        Assert.True(restored.Verify());Assert.True(RotatedNestingTrace.ContentEquals(trace,restored.ToTrace()));
+        Assert.Equal(90,restored.CopyAngles()[(f.Id,2)]);
+        var changed=trace.Clone();changed.Copies[1]=changed.Copies[1] with { Degrees=0 };
+        Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
+        changed=trace.Clone();changed.Gap=2;
+        Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
+        var badLayout=layout.Clone();badLayout.Pieces[0].Notches=null;
+        changed=trace.Clone();changed.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(badLayout);
+        Assert.Throws<InvalidOperationException>(()=>RotatedNestingRecord.FromTrace(changed,badLayout));
+        changed=trace.Clone();changed.Schema="unknown";
+        Assert.Throws<InvalidDataException>(()=>RotatedNestingRecord.FromTrace(changed,layout));
+    }
 }

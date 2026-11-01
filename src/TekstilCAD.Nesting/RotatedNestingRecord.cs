@@ -72,6 +72,47 @@ public sealed class RotatedNestingRecord
     public double EdgeMargin => margin;
     public double MaxLength => maxLength;
 
+    /// <summary>Produces a detached explicit-angle model. No file format or validation status is implied.</summary>
+    public RotatedNestingTrace ToTrace()
+    {
+        if(!Verify())throw new InvalidOperationException("Döndürme izi artık doğrulanamıyor.");
+        return new RotatedNestingTrace {
+            Schema=RotatedNestingTrace.CurrentSchema,Algorithm=RotatedNestingTrace.CurrentAlgorithm,
+            TransformConvention=RotatedNestingTrace.CurrentTransform,SourceFingerprint=result.SourceFingerprint,
+            LayoutFingerprint=result.LayoutFingerprint,SourcePieces=source.Pieces.Select(p=>p.Clone()).ToList(),
+            Selections=[..selected],Copies=result.Plan.Placements.Select(p=>new RotatedNestingCopy(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId,result.PlacedRotations[p.PlacedPieceId])).ToList(),
+            FabricWidth=width,Gap=gap,EdgeMargin=margin,UsedLength=result.Plan.Nesting.UsedLength,
+            MaxLength=double.IsPositiveInfinity(maxLength) ? null : maxLength,GrainDirection=direction.ToString(),ToleranceDegrees=tolerance };
+    }
+
+    /// <summary>Rebuilds and verifies a detached candidate against the supplied layout.
+    /// This is not a JSON parser or proof that the supplied history is authentic.</summary>
+    public static RotatedNestingRecord FromTrace(RotatedNestingTrace trace,ProjectDocument layout,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(trace);ArgumentNullException.ThrowIfNull(layout);
+        if(trace.Schema!=RotatedNestingTrace.CurrentSchema || trace.Algorithm!=RotatedNestingTrace.CurrentAlgorithm ||
+           trace.TransformConvention!=RotatedNestingTrace.CurrentTransform || trace.SourcePieces is null || trace.Selections is null ||
+           trace.Copies is null || trace.Copies.Count>NestingEngine.MaximumPieces || layout.Pieces is null || layout.Pieces.Count>NestingEngine.MaximumPieces ||
+           (trace.MaxLength is double limit && !double.IsFinite(limit)) ||
+           trace.GrainDirection is not ("OneWay" or "TwoWay"))
+            throw new InvalidDataException("Döndürme izi biçimi veya sürümü desteklenmiyor.");
+        var direction=trace.GrainDirection=="OneWay" ? GrainDirectionPolicy.Direction.OneWay : GrainDirectionPolicy.Direction.TwoWay;
+        var angles=new Dictionary<(Guid,int),int>();var rotations=new Dictionary<Guid,int>();var placements=new List<ProductionPlacement>();
+        foreach(var copy in trace.Copies)
+        {
+            token.ThrowIfCancellationRequested();
+            if(copy is null || !angles.TryAdd((copy.SourcePieceId,copy.CopyNumber),copy.Degrees) || !rotations.TryAdd(copy.PlacedPieceId,copy.Degrees))
+                throw new InvalidDataException("Döndürme kopyası eksik veya yinelenmiş.");
+            placements.Add(new ProductionPlacement(copy.SourcePieceId,copy.CopyNumber,copy.PlacedPieceId));
+        }
+        var nesting=new NestingResult(new ProjectDocument { Name=layout.Name,Pieces=layout.Pieces },trace.UsedLength,0,0)
+            { FabricWidth=trace.FabricWidth,Gap=trace.Gap,EdgeMargin=trace.EdgeMargin };
+        var result=new PerCopyNestingResult(new ProductionNestingResult(nesting,placements),rotations)
+            { SourceFingerprint=trace.SourceFingerprint,LayoutFingerprint=trace.LayoutFingerprint };
+        return Capture(new ProjectDocument { Pieces=trace.SourcePieces },trace.Selections,angles,result,direction,
+            trace.ToleranceDegrees,trace.FabricWidth,trace.Gap,trace.EdgeMargin,trace.MaxLength ?? double.PositiveInfinity,token);
+    }
+
     private static void CheckPiece(PatternPiece piece,ref long vertices)
     {
         if(piece.Points is null || piece.Points.Count>NestingEngine.MaximumVerticesPerPiece ||
