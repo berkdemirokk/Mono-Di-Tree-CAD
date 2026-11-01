@@ -25,6 +25,7 @@
       - path: Tests/ExperimentalJSONStreamTests.swift
       - path: Tests/ExperimentalV7PieceReaderTests.swift
       - path: Tests/ExperimentalV7FingerprintTests.swift
+      - path: Tests/ExperimentalJSONDoubleBitsTests.swift
     dependencies:
       - target: TekstilCADViewer_iOS
     settings:

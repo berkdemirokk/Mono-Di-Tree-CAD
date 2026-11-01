@@ -52,6 +52,8 @@ Deneysel tarihsel konturlar için ayrıca sınırlı ve ihtiyatlı basit kontur 
 
 `ExperimentalV7Fingerprint`, masaüstünün tarihsel parça özeti kodlaması için bağımsız bir denemedir. Nokta ve işaret koordinatlarını açık IEEE-754 bitleri olarak ister; JSON'dan bu bitleri çıkarmaz ve akış okuyucusuna bağlı değildir. Masaüstü fixture özeti ve signed-zero farkı için testler tanımlıdır; Apple'da henüz çalıştırılmamıştır.
 
+`ExperimentalJSONDoubleBits`, tek bir tam ASCII JSON sayı token'ını sınırlı ve iptal edilebilir biçimde binary64 bitlerine dönüştüren ayrı bir denemedir; `-0` işaretini korur ve sıfıra yuvarlanan sıfır dışı sayıları reddeder. Girdi byte'larından pointer saklamaz. Henüz belge akışından token çıkarımına veya parmak izi doğrulamasına bağlı değildir; tüm ondalıkların masaüstüyle aynı yuvarlandığı doğrulanmamıştır.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
