@@ -9404,21 +9404,37 @@ internal static class DesktopVerification
             var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits],GradingRules=[rule] };
             studio.LoadDocument(document);studio.Select(good.Id);var before=studio.Document.Clone();
             var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
-            var window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            var tools=new TextileToolsWindow(studio);var protectedLookups=0;
+            var toolSource=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
+            var toolGrades=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
+            toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="2";
+            toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==good.Id);
+            var window=new BulkDuplicateCleanupWindow(studio,studio,id=> { if(id==marked.Id || id==graded.Id)protectedLookups++;return id==draft.Id; },tools.ResetCleanGradeDrafts);
             try
             {
                 var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
-                Check(window.ReadyCountForVerification==2 && window.ReportForVerification.Any(s=>s.Contains("işaret var")) &&
+                Check(protectedLookups==0 && window.ReadyCountForVerification==2 && window.ReportForVerification.Any(s=>s.Contains("işaret var")) &&
                     window.ReportForVerification.Any(s=>s.Contains("serileme kuralı var")) && window.ReportForVerification.Any(s=>s.Contains("serileme taslağı var")) &&
                     window.ReportForVerification.Any(s=>s.Contains("koordinat bitleri farklı")) && DocumentSession.ContentEquals(before,studio.Document),
                     "Bulk duplicate preview reports eligible and each protected skip without editing the project",checks);
+                var detached=(Dictionary<Guid,PatternPiece>)typeof(BulkDuplicateCleanupWindow).GetField("ready",PrivateInstance)!.GetValue(window)!;
                 window.ApplyForVerification();var after=studio.Document.Clone();
+                detached[good.Id].Points[0]=new Point2(999,999);
+                Check(DocumentSession.ContentEquals(after,studio.Document) && protectedLookups==0,
+                    "Committed project owns independent geometry and skips unnecessary protected draft lookups",checks);
+                typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[good.Id,true]);
+                Check(!(bool)typeof(TextileToolsWindow).GetField("rulesNeedReset",PrivateInstance)!.GetValue(tools)!,
+                    "Successful cleanup refreshes a clean grading draft to the new contour",checks);
+                toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
+                Check(toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="2",
+                    "Bulk cleanup retains the skipped piece's unapplied grading draft",checks);
                 Check(after.Pieces[0].Points.Count==4 && after.Pieces[1].Points.Count==4 && after.Pieces.Skip(2).Select(p=>p.Points.Count).SequenceEqual(new[] {5,5,5,5}) && session.UndoCount==1,
                     "Bulk duplicate cleanup changes only eligible pieces in one transaction",checks);
                 Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
                     "Bulk duplicate cleanup undo and redo restore all protected pieces",checks);
             }
-            finally { window.Close(); }
+            finally { window.Close();tools.Close(); }
             studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
             try
             {

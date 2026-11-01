@@ -14,6 +14,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
 {
     private readonly MainWindow workspace;
     private readonly Func<Guid,bool> hasDraft;
+    private readonly Action<IReadOnlyCollection<Guid>>? resetCleanDrafts;
     private readonly ListBox report=new() { MinHeight=180,MaxHeight=330,HorizontalContentAlignment=HorizontalAlignment.Stretch };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private readonly Button preview=new() { Content="Önizlemeyi hesapla",Margin=new Thickness(4),Padding=new Thickness(10,6,10,6) };
@@ -31,9 +32,9 @@ internal sealed class BulkDuplicateCleanupWindow : Window
     internal int ReadyCountForVerification=>ready?.Count ?? 0;
     internal IReadOnlyList<string> ReportForVerification=>report.Items.Cast<string>().ToArray();
 
-    internal BulkDuplicateCleanupWindow(MainWindow workspace,Window owner,Func<Guid,bool> hasDraft)
+    internal BulkDuplicateCleanupWindow(MainWindow workspace,Window owner,Func<Guid,bool> hasDraft,Action<IReadOnlyCollection<Guid>>? resetCleanDrafts=null)
     {
-        this.workspace=workspace;this.hasDraft=hasDraft;Owner=owner;Title="Bitişik tekrarları topluca incele";Width=720;Height=620;MinWidth=500;MinHeight=400;
+        this.workspace=workspace;this.hasDraft=hasDraft;this.resetCleanDrafts=resetCleanDrafts;Owner=owner;Title="Bitişik tekrarları topluca incele";Width=720;Height=620;MinWidth=500;MinHeight=400;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel();DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
@@ -60,7 +61,11 @@ internal sealed class BulkDuplicateCleanupWindow : Window
         ready=null;apply.IsEnabled=false;report.ItemsSource=null;
         if(workspace.HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
         var document=workspace.Document;var copy=document.Clone();var selection=workspace.SelectedId;
-        var drafts=copy.Pieces.ToDictionary(p=>p.Id,p=>hasDraft(p.Id));
+        // Pieces with marks or saved rules are unconditionally skipped. Avoid
+        // looking up their drafts (which may scan a large grading-rule list).
+        // Document equality still invalidates the preview if either guard changes.
+        var protectedRuleIds=copy.GradingRules.Select(r=>r.SourcePieceId).ToHashSet();
+        var drafts=copy.Pieces.Where(p=>p.Notches is null && !protectedRuleIds.Contains(p.Id)).ToDictionary(p=>p.Id,p=>hasDraft(p.Id));
         using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);SetStatus("Önizleme hazırlanıyor; proje değiştirilmedi.");
         try
         {
@@ -68,14 +73,15 @@ internal sealed class BulkDuplicateCleanupWindow : Window
             var calculated=await Task.Run(()=>
             {
                 before?.Invoke();var token=cts.Token;token.ThrowIfCancellationRequested();ProjectStorage.Validate(copy);
-                var changes=new Dictionary<Guid,PatternPiece>();var details=new List<string>();var rules=copy.GradingRules.Select(r=>r.SourcePieceId).ToHashSet();
+                var changes=new Dictionary<Guid,PatternPiece>();var details=new List<string>();var rules=protectedRuleIds;
                 foreach(var piece in copy.Pieces)
                 {
                     token.ThrowIfCancellationRequested();var label=$"{SafeName(piece.Name)} · {piece.Id:D}";
-                    if(piece.Notches is not null || rules.Contains(piece.Id) || drafts[piece.Id])
+                    if(piece.Notches is not null || rules.Contains(piece.Id) || drafts.GetValueOrDefault(piece.Id))
                     {
                         var reasons=new List<string>();if(piece.Notches is not null)reasons.Add("işaret var");
-                        if(rules.Contains(piece.Id))reasons.Add("serileme kuralı var");if(drafts[piece.Id])reasons.Add("uygulanmamış serileme taslağı var");
+                        if(rules.Contains(piece.Id))reasons.Add("serileme kuralı var");if(drafts.GetValueOrDefault(piece.Id))reasons.Add("uygulanmamış serileme taslağı var");
+                        if(piece.Notches is not null || rules.Contains(piece.Id))reasons.Add("taslak durumu ayrıca incelenmedi");
                         details.Add(label+" · atlandı: "+string.Join(", ",reasons));continue;
                     }
                     var adjacent=false;for(int i=1;i<piece.Points.Count;i++) { if((i&1023)==0)token.ThrowIfCancellationRequested();if(piece.Points[i]==piece.Points[i-1]) { adjacent=true;break; } }
@@ -108,7 +114,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
         try
         {
             workspace.CommitObserved("Bitişik nokta tekrarları temizlendi",()=>
-            { for(var i=0;i<workspace.Document.Pieces.Count;i++)if(changes.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item.Clone(); },()=>committed=true);
+            { for(var i=0;i<workspace.Document.Pieces.Count;i++)if(changes.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item; },()=> { committed=true;resetCleanDrafts?.Invoke(changes.Keys.ToArray()); });
             ready=null;apply.IsEnabled=false;SetStatus($"{changes.Count} parça temizlendi; tek adımda geri alınabilir. Diğer hatalar kalabilir; kaynak ve pastal geçmişini kontrol edin.");
         }
         catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException))

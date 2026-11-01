@@ -841,6 +841,18 @@ public sealed class TextileToolsWindow : Window
         if(saved.SourceClosed!=draft.Closed||(!saved.SourcePoints.SequenceEqual(draft.Points)&&!IsTranslation(saved.SourcePoints,draft.Points))||saved.Deltas.Count!=draft.Rows.Count)return true;
         return draft.Rows.Select((row,index)=>!IsNumber(row.Dx,out var dx)||!IsNumber(row.Dy,out var dy)||!SameBits(dx,saved.Deltas[index].X)||!SameBits(dy,saved.Deltas[index].Y)).Any(changed=>changed);
     }
+    private bool HasUnrecordedGradeDraft(Guid id)
+    {
+        if(!gradeDrafts.TryGetValue(id,out var draft))return false;
+        return draft.Rows.Any(row=>!IsNumber(row.Dx,out var x) || BitConverter.DoubleToInt64Bits(x)!=0 ||
+            !IsNumber(row.Dy,out var y) || BitConverter.DoubleToInt64Bits(y)!=0);
+    }
+    internal void ResetCleanGradeDrafts(IReadOnlyCollection<Guid> ids)
+    {
+        var saved=workspace.Document.GradingRules.Select(rule=>rule.SourcePieceId).ToHashSet();
+        foreach(var id in ids)
+            if(!saved.Contains(id) && !HasUnrecordedGradeDraft(id))gradeDrafts.Remove(id);
+    }
     private bool HasUnsavedGradeRules() => gradeDrafts.Any(entry=>HasUnsavedGradeDraft(entry.Key,entry.Value));
     private bool ConfirmDiscardGradeRules()
     {
@@ -1028,7 +1040,7 @@ public sealed class TextileToolsWindow : Window
         {
             if(!CommitGradeEdit()) { ShowGradeEditError();return; }
             var chosen=source.SelectedItem is PatternPiece selected ? selected.Id : (Guid?)null;
-            new BulkDuplicateCleanupWindow(workspace,this,id=>gradeDrafts.TryGetValue(id,out var draft) && HasUnsavedGradeDraft(id,draft)).ShowDialog();
+            new BulkDuplicateCleanupWindow(workspace,this,HasUnrecordedGradeDraft,ResetCleanGradeDrafts).ShowDialog();
             RefreshSources(chosen);
         },()=>HasPiece());
         Note(panel,"Kapalı konturun yönünü ters çevirin; ilk nokta ve şekil korunur. Nokta indeksleri değişir. Eşleşen kayıtlı serileme artışları ilgili noktalarla birlikte taşınır; uygulanmamış taslaklar korunur.");
