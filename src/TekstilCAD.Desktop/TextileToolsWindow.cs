@@ -536,7 +536,7 @@ public sealed class TextileToolsWindow : Window
         // controls scroll as a group so nothing is clipped at the minimum size.
         var lower=new StackPanel();
         lower.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her yeni bedende çizginin konturla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
-        var lowerScroll=new ScrollViewer { Content=lower,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
+        var lowerScroll=new ScrollViewer { Content=lower,MaxHeight=180,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(lowerScroll,"Serileme seçenekleri ve işlemleri");
         AutomationProperties.SetHelpText(lowerScroll,"Seçenekler ve işlemler görünmüyorsa bu alanı kaydırın.");
@@ -547,7 +547,7 @@ public sealed class TextileToolsWindow : Window
         resetRulesButton=Button(resetRow,"Yeni geometri için artışları sıfırla",ResetRulesForCurrentGeometry,()=>HasPiece()&&rulesNeedReset);
         resetRulesButton.Margin=new Thickness(0,0,0,6);resetRulesButton.Padding=new Thickness(10,5,10,5);resetRulesButton.Visibility=Visibility.Collapsed;
         var batchEdit=new Expander { Header="Seçili satırlara aynı artışı yaz",IsExpanded=false,Margin=new Thickness(0,0,0,6) };
-        var batchPanel=new StackPanel();batchEdit.Content=batchPanel;lower.Children.Add(batchEdit);
+        var batchPanel=new StackPanel();batchEdit.Content=batchPanel;
         batchPanel.Children.Add(new TextBlock { Text="Tabloda Ctrl veya Shift ile satırları seçin. İki değer seçili satırların mevcut artışlarının yerine yazılır; yalnız taslak değişir. Tekrarlı kapanış için ilk ve son satırı ayrı seçin.",TextWrapping=TextWrapping.Wrap });
         var batchFields=new WrapPanel();batchPanel.Children.Add(batchFields);
         var batchX=new TextBox { Width=100,Margin=new Thickness(0,4,8,4),Text="0" };
@@ -748,6 +748,7 @@ public sealed class TextileToolsWindow : Window
         create.VerticalAlignment=VerticalAlignment.Bottom;create.Margin=new Thickness(0,0,0,0);create.Padding=new Thickness(12,7,12,7);
         // Leave room below the last row for the scroll viewer's clipped viewport,
         // so its buttons can be scrolled fully into view at the minimum size.
+        lower.Children.Add(batchEdit);
         var secondaryActions=new WrapPanel { Margin=new Thickness(0,0,0,12) };lower.Children.Add(secondaryActions);
         var batch=Button(secondaryActions,"Birden fazla beden oluştur…",()=>
         {

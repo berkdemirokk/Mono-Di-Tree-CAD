@@ -5365,6 +5365,13 @@ internal static class DesktopVerification
         var rebaseVisible=FullyVisible(rebaseButton,root);
         Check(optionsVisible && createVisible && rebaseVisible && rebaseButton.Focusable && lowerScroll.Focusable && KeyboardNavigation.GetIsTabStop(lowerScroll),
             $"Expanded grading metadata controls: size={sizeVisible}, copy={copyVisible}, create={createVisible}, rebase={rebaseVisible}, offset={lowerScroll.VerticalOffset}, scrollable={lowerScroll.ScrollableHeight}, bounds={BoundsInRoot(lowerScroll,root)}, button={BoundsInRoot(button,root)}, buttonVisible={VisibleBoundsInRoot(button,root)}, rebaseBounds={BoundsInRoot(rebaseButton,root)}, rebaseVisibleBounds={VisibleBoundsInRoot(rebaseButton,root)}",checks);
+        var batchOptions=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz"));
+        batchOptions.IsExpanded=true;root.UpdateLayout();
+        var batchWrite=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili satırlara yaz"));
+        batchWrite.BringIntoView();root.UpdateLayout();
+        Check(FullyVisible(batchWrite,root) && batchWrite.Focusable,
+            "Bulk grading action remains fully reachable in the minimum-size scrolling area",checks);
+        batchOptions.IsExpanded=false;root.UpdateLayout();
         var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
         var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
         var selector=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
