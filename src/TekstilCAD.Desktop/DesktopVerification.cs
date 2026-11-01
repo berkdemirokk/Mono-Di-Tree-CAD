@@ -10462,6 +10462,32 @@ internal static class DesktopVerification
             Check(session.Redo() && DocumentSession.ContentEquals(duplicated,studio.Document),
                 "Redo restores the duplicate with its identity",checks);
 
+            var marked=new PatternPiece { Name="İşaretli kalıp",Points=[new(0,0),new(20,0),new(0,20),new(0,0)],
+                Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) },new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+            var markedRule=new GradingRuleSet { SourcePieceId=marked.Id,SourceClosed=true,SourcePoints=[..marked.Points],
+                Deltas=[new(1,0),new(0,1),new(-1,0),new(1,0)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule] });studio.Select(marked.Id);
+            var markedBefore=studio.Document.Clone();var markedUndo=session.UndoCount;
+            var markedDialog=new DuplicatePieceWindow(studio,studio.Selected!,"İşaretli kalıp",markedRule);
+            var dialogRoot=(FrameworkElement)markedDialog.Content;
+            dialogRoot.Measure(new Size(640,510));dialogRoot.Arrange(new Rect(0,0,640,510));dialogRoot.UpdateLayout();
+            Check(Descendants<TextBlock>(dialogRoot).Any(t=>t.Text.Contains("2 köşe işareti") && t.Text.Contains("kopyalanır")),
+                "Duplicate options explain that the marked vertices are copied",checks);
+            markedDialog.Close();
+            studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,true);
+            studio.DuplicateSelectedPiece();
+            var markedCopy=studio.Document.Pieces.Single(p=>p.Id!=marked.Id);
+            var markedSource=studio.Document.Pieces.Single(p=>p.Id==marked.Id);
+            Check(markedCopy.Points.SequenceEqual(markedSource.Points) && markedCopy.Notches is { Count:2 } && markedSource.Notches is { Count:2 } &&
+                markedCopy.Notches.Zip(markedSource.Notches).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && pair.First.Position==pair.Second.Position && !ReferenceEquals(pair.First,pair.Second)) &&
+                !ReferenceEquals(markedCopy.Notches,markedSource.Notches) && studio.Document.GradingRules.Any(r=>r.SourcePieceId==markedCopy.Id && r.SourcePoints.SequenceEqual(markedCopy.Points)) &&
+                session.UndoCount==markedUndo+1 && status.Text.Contains("köşe işaretleri kopyalandı"),
+                "Marked duplicate independently preserves both vertex marks, explicit closure and selected grading rule",checks);
+            var markedAfter=studio.Document.Clone();
+            Check(session.Undo() && DocumentSession.ContentEquals(markedBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedAfter,studio.Document),
+                "Marked duplicate and copied rule undo and redo together",checks);
+            studio.ChooseDuplicateForVerification=null;
+
             studio.LoadDocument(initial);studio.Select(source.Id);studio.SetTool("Çoklu çizgi");
             canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çoklu çizgi",[new(1,1),new(2,1)]));
             before=studio.Document.Clone();undo=session.UndoCount;calls=0;
@@ -10508,7 +10534,7 @@ internal static class DesktopVerification
         }
         finally
         {
-            studio.ConfirmDuplicateForVerification=null;studio.AfterCommitBeforeRefreshForVerification=null;
+            studio.ConfirmDuplicateForVerification=null;studio.ChooseDuplicateForVerification=null;studio.AfterCommitBeforeRefreshForVerification=null;
             canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument());studio.SetTool("Seç");
         }
     }

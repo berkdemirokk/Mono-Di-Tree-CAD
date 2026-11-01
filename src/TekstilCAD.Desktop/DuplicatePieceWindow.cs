@@ -28,6 +28,8 @@ internal sealed class DuplicatePieceWindow : Window
         KeyboardNavigation.SetIsTabStop(viewer,true);AutomationProperties.SetName(viewer,"Parça çoğaltma seçenekleri");root.Children.Add(viewer);
         panel.Children.Add(new TextBlock { Text=$"‘{shownName}’ · {source.Id:D}",TextWrapping=TextWrapping.Wrap,FontWeight=FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text="Geometri yeni kimlikle aynı konuma kopyalanır; iki parça üst üste görünür. Kaynak değişmez. Pastal yerleşimi ve kaynak geçmişi yeni parçaya aktarılmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
+        if(source.Notches is { Count:>0 })
+            panel.Children.Add(new TextBlock { Text=$"{source.Notches.Count} köşe işareti de aynı köşelere bağımsız olarak kopyalanır. İşaretler kesim derinliği veya makine çıktısı değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) });
         CopyMetadata.IsEnabled=source.Metadata is not null;CopyGrainline.IsEnabled=source.Grainline is not null;
         AutomationProperties.SetName(CopyMetadata,"Rol beden malzeme ve adet bilgisini kopyala");AutomationProperties.SetName(CopyGrainline,"İplik yönünü kopyala");
         panel.Children.Add(CopyMetadata);
