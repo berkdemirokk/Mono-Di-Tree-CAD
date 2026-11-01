@@ -324,6 +324,79 @@ internal static class DesktopVerification
         }
         finally { window.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyOpenPathJoinGrading(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        foreach(var mode in new[] { "matching","mismatch","dirty","dirtyAfter","stale" })
+        {
+            var a=new PatternPiece { Name="A",Closed=false,Points=[new(0,0),new(10,0)],Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+            var b=new PatternPiece { Name="B",Closed=false,Points=[new(11,0),new(20,5)],Notches=[new NotchMark { VertexIndex=1,Position=new(20,5) }] };
+            var ra=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(1,2),new(3,4)] };
+            var rb=new GradingRuleSet { SourcePieceId=b.Id,SourceClosed=false,SourcePoints=[..b.Points],Deltas=[new(3,4),new(5,6)] };
+            if(mode=="mismatch")rb.Deltas[0]=new Point2(8,4);
+            if(mode=="stale")ra.SourcePoints[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+            studio.LoadDocument(new ProjectDocument { Pieces=[a,b],GradingRules=[ra,rb] });studio.Select(a.Id);
+            var tools=new TextileToolsWindow(studio);
+            var callback=(Func<PatternPiece,GradingRuleSet?,bool>)typeof(TextileToolsWindow).GetMethod("HasSnapshotGradeDraft",PrivateInstance)!.CreateDelegate(typeof(Func<PatternPiece,GradingRuleSet?,bool>),tools);
+            var source=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
+            source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==b.Id);
+            var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            var join=new OpenPathJoinWindow(studio,studio,callback);
+            try
+            {
+                if(mode=="dirty")grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";
+                var before=studio.Document.Clone();join.ToleranceForVerification.Text="1";join.ExplicitEndpointsForVerification.IsChecked=true;
+                join.FirstEndpointForVerification.SelectedIndex=1;join.SecondEndpointForVerification.SelectedIndex=0;join.CopyRulesForVerification.IsChecked=true;
+                var task=join.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                if(mode=="matching")
+                {
+                    Check(join.ApplyButtonForVerification.IsEnabled && join.MessageForVerification.Contains("artışlar sonuca aktarılacak"),"Join grading preview explains copied increments",checks);
+                    join.ApplyForVerification();var after=studio.Document.Clone();
+                    Check(after.Pieces.Count==3 && after.GradingRules.Count==3 && after.GradingRules[2].SourcePieceId==after.Pieces[2].Id &&
+                        after.GradingRules[2].Deltas.SequenceEqual(new[] { new Point2(1,2),new Point2(3,4),new Point2(3,4),new Point2(5,6) }) &&
+                        after.Pieces[2].Notches!.Select(m=>m.VertexIndex).SequenceEqual(new[] { 0,3 }) && session.UndoCount==1,
+                        "Joined path and matching bridge grading are committed together",checks);
+                    Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                        "Joined grading and geometry form one undoable edit",checks);
+                }
+                else if(mode=="dirtyAfter")
+                {
+                    Check(join.ApplyButtonForVerification.IsEnabled,"Clean join grading preview is ready",checks);
+                    grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";join.ApplyForVerification();
+                    Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99" &&
+                        join.MessageForVerification.Contains("taslağı değişti"),"Dirty draft after join preview is retained and blocks rule transfer",checks);
+                }
+                else Check(!join.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 &&
+                    (mode!="dirty" || grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99"),$"Join rejects {mode} grading without changing source or draft",checks);
+            }
+            finally { join.Close();tools.Close(); }
+        }
+        {
+            var a=new PatternPiece { Closed=false,Points=[new(0,0),new(10,0)] };var b=new PatternPiece { Closed=false,Points=[new(11,0),new(20,5)] };
+            var project=new ProjectDocument { Pieces=[a,b],GradingRules=[
+                new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(1,2),new(3,4)] },
+                new GradingRuleSet { SourcePieceId=b.Id,SourceClosed=false,SourcePoints=[..b.Points],Deltas=[new(3,4),new(5,6)] }] };
+            for(var i=0;i<20;i++)
+            {
+                var count=i==19 ? 9996 : 10000;var filler=new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] };
+                project.Pieces.Add(filler);project.GradingRules.Add(new GradingRuleSet { SourcePieceId=filler.Id,SourceClosed=false,
+                    SourcePoints=Enumerable.Repeat(new Point2(0,0),count).ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),count).ToList() });
+            }
+            studio.LoadDocument(project);studio.Select(a.Id);var before=studio.Document.Clone();var join=new OpenPathJoinWindow(studio,studio,(_,_)=>false);
+            try
+            {
+                join.ToleranceForVerification.Text="1";join.ExplicitEndpointsForVerification.IsChecked=true;join.FirstEndpointForVerification.SelectedIndex=1;
+                join.SecondEndpointForVerification.SelectedIndex=0;join.CopyRulesForVerification.IsChecked=true;
+                var task=join.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(!join.ApplyButtonForVerification.IsEnabled && join.MessageForVerification.Contains("Serileme noktası sınırı") &&
+                    DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Join grading preflight rejects the total rule-point limit",checks);
+            }
+            finally { join.Close(); }
+        }
+        SynchronizationContext.SetSynchronizationContext(previous);
+    }
+
     private static void VerifyExplicitOpenPathJoin(MainWindow studio,List<string> checks)
     {
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
@@ -772,6 +845,7 @@ internal static class DesktopVerification
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
             VerifyExplicitOpenPathJoin(studio,checks);
+            VerifyOpenPathJoinGrading(studio,checks);
             VerifyOpenPathJoinExactEndpoints(studio,checks);
             VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);

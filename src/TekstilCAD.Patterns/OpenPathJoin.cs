@@ -119,4 +119,50 @@ public static class OpenPathJoin
             SecondEndpointIndex = match.ReverseB ? b.Length - 1 : 0
         };
     }
+    /// <summary>Copies two exact open-path rules onto a verified join. Endpoint increments must match even across a bridge.</summary>
+    public static GradingRuleSet? JoinGrading(PatternPiece first,PatternPiece second,GradingRuleSet firstRule,GradingRuleSet secondRule,
+        OpenPathJoinResult joined,CancellationToken cancellationToken=default)
+    {
+        ArgumentNullException.ThrowIfNull(first);ArgumentNullException.ThrowIfNull(second);ArgumentNullException.ThrowIfNull(firstRule);
+        ArgumentNullException.ThrowIfNull(secondRule);ArgumentNullException.ThrowIfNull(joined);cancellationToken.ThrowIfCancellationRequested();
+        var piece=joined.Piece;
+        if(piece is null || first.Points is null || second.Points is null || piece.Points is null || first.Closed || second.Closed || piece.Closed ||
+           first.Id==Guid.Empty || second.Id==Guid.Empty || first.Id==second.Id || piece.Id==Guid.Empty || piece.Id==first.Id || piece.Id==second.Id ||
+           joined.FirstSourceId!=first.Id || joined.SecondSourceId!=second.Id || first.Points.Count<2 || second.Points.Count<2 ||
+           first.Points.Count>LargeOpenPathValidator.MaximumStoredPoints || second.Points.Count>LargeOpenPathValidator.MaximumStoredPoints ||
+           (joined.FirstEndpointIndex!=0 && joined.FirstEndpointIndex!=first.Points.Count-1) ||
+           (joined.SecondEndpointIndex!=0 && joined.SecondEndpointIndex!=second.Points.Count-1))return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        bool Valid(PatternPiece source,GradingRuleSet rule)
+        {
+            if(rule.SourcePieceId!=source.Id || rule.SourceClosed || rule.SourcePoints is null || rule.Deltas is null ||
+               rule.SourcePoints.Count!=source.Points.Count || rule.Deltas.Count!=source.Points.Count)return false;
+            for(var i=0;i<source.Points.Count;i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if(!source.Points[i].IsFinite || !rule.Deltas[i].IsFinite || !Bits(rule.SourcePoints[i],source.Points[i]))return false;
+            }
+            return true;
+        }
+        if(!Valid(first,firstRule) || !Valid(second,secondRule) || !Bits(firstRule.Deltas[joined.FirstEndpointIndex],secondRule.Deltas[joined.SecondEndpointIndex]))return null;
+        var reverseFirst=joined.FirstEndpointIndex==0;var reverseSecond=joined.SecondEndpointIndex==second.Points.Count-1;
+        var end=first.Points[joined.FirstEndpointIndex];var start=second.Points[joined.SecondEndpointIndex];var shared=end==start;
+        if(shared && !Bits(end,start))return null;
+        var count=(long)first.Points.Count+second.Points.Count-(shared ? 1 : 0);
+        if(count!=piece.Points.Count || count>LargeOpenPathValidator.MaximumStoredPoints)return null;
+        var output=new List<Point2>((int)count);var increments=new List<Point2>((int)count);
+        for(var i=0;i<first.Points.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var index=reverseFirst ? first.Points.Count-1-i : i;
+            output.Add(first.Points[index]);increments.Add(firstRule.Deltas[index]);
+        }
+        for(var i=shared ? 1 : 0;i<second.Points.Count;i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var index=reverseSecond ? second.Points.Count-1-i : i;
+            output.Add(second.Points[index]);increments.Add(secondRule.Deltas[index]);
+        }
+        for(var i=0;i<output.Count;i++) { cancellationToken.ThrowIfCancellationRequested();if(!Bits(output[i],piece.Points[i]))return null; }
+        cancellationToken.ThrowIfCancellationRequested();
+        return new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=output,Deltas=increments };
+    }
 }

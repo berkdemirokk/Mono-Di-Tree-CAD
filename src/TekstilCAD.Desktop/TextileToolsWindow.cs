@@ -903,8 +903,9 @@ public sealed class TextileToolsWindow : Window
         },()=>source.SelectedItem is PatternPiece { Closed:false,Points.Count:>=3 });
         Button(panel,"İki açık konturu birleştir…",()=>
         {
+            if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
-            var dialog=new OpenPathJoinWindow(workspace,this);
+            var dialog=new OpenPathJoinWindow(workspace,this,HasSnapshotGradeDraft);
             dialog.ShowDialog();
             RefreshSources((source.SelectedItem as PatternPiece)?.Id);
         },()=>workspace.Document.Pieces.Count(p=>!p.Closed)>=2);

@@ -12,6 +12,8 @@ namespace TekstilCAD.Desktop;
 internal sealed class OpenPathJoinWindow : Window
 {
     private readonly MainWindow workspace;
+    private readonly Func<PatternPiece,GradingRuleSet?,bool>? hasDraft;
+    private readonly CheckBox copyRules=new() { Content="Uyumlu kayıtlı serileme artışlarını sonuca aktar",Margin=new Thickness(0,6,0,8) };
     private readonly ComboBox first = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
     private readonly ComboBox second = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
     private readonly CheckBox explicitEndpoints=new() { Content="Uçları kendim seçeceğim",Margin=new Thickness(0,6,0,4) };
@@ -27,6 +29,7 @@ internal sealed class OpenPathJoinWindow : Window
     private readonly Button apply = new() { Content="Yeni parça olarak ekle", Padding=new Thickness(12,7,12,7), IsEnabled=false, Margin=new Thickness(0,0,8,0) };
     private CancellationTokenSource? cancellation;
     private OpenPathJoinResult? proposal;
+    private GradingRuleSet? proposalRule;
     private PatternPiece? beforeFirst, beforeSecond,displayedFirst,displayedSecond;
     private ProjectDocument? document,documentSnapshot;
     private bool closed;
@@ -35,6 +38,7 @@ internal sealed class OpenPathJoinWindow : Window
     internal void ApplyForVerification() => Apply();
     internal TextBox ToleranceForVerification => tolerance;
     internal CheckBox ExplicitEndpointsForVerification=>explicitEndpoints;
+    internal CheckBox CopyRulesForVerification=>copyRules;
     internal ComboBox FirstEndpointForVerification=>firstEndpoint;
     internal ComboBox SecondEndpointForVerification=>secondEndpoint;
     internal Button ApplyButtonForVerification => apply;
@@ -42,9 +46,9 @@ internal sealed class OpenPathJoinWindow : Window
 
     private sealed record Choice(Guid Id, string Label,string SearchLabel) { public override string ToString()=>Label; }
 
-    internal OpenPathJoinWindow(MainWindow workspace, Window owner)
+    internal OpenPathJoinWindow(MainWindow workspace, Window owner,Func<PatternPiece,GradingRuleSet?,bool>? hasDraft=null)
     {
-        this.workspace=workspace; Owner=owner; Title="Açık konturları birleştir";
+        this.workspace=workspace;this.hasDraft=hasDraft; Owner=owner; Title="Açık konturları birleştir";
         Width=760; Height=760; MinWidth=500; MinHeight=500; WindowStartupLocation=WindowStartupLocation.CenterOwner;
         StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) }; Content=root;
@@ -62,6 +66,7 @@ internal sealed class OpenPathJoinWindow : Window
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" }); body.Children.Add(tolerance);
         body.Children.Add(new TextBlock { Text="Uçlar eşit değilse yerleri değiştirilmez; aralarına düz bir köprü eklenir. Elle seçimde yalnız seçilen uçlar kullanılır; görüntülenen koordinatlar yuvarlanabilir, indeksleri kontrol edin. Otomatik modda birden fazla olası eşleşme veya kesişen sonuç reddedilir.", TextWrapping=TextWrapping.Wrap });
         body.Children.Add(omitProductionData);
+        AutomationProperties.SetHelpText(copyRules,"Her iki kaynakta geometriyle bitçe eşleşen kayıtlı kural ve temiz taslak gerekir. Birleşim veya köprü uçlarının artışları bitçe aynı olmalıdır; yeni bedenleri kontrol edin.");body.Children.Add(copyRules);
         body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview); body.Children.Add(message);
         AutomationProperties.SetName(first,"Birinci açık parça"); AutomationProperties.SetName(second,"İkinci açık parça");
@@ -97,13 +102,14 @@ internal sealed class OpenPathJoinWindow : Window
         UpdateEndpoints();
         tolerance.TextChanged+=(_,_)=>InvalidateProposal();
         omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();
+        copyRules.Checked+=(_,_)=>InvalidateProposal();copyRules.Unchecked+=(_,_)=>InvalidateProposal();
         calculate.Click+=async (_,_)=>await CalculateAsync(); apply.Click+=(_,_)=>Apply();
         cancel.Click+=(_,_)=>Close(); Closed+=(_,_)=> { closed=true; cancellation?.Cancel(); };
     }
 
     private void InvalidateProposal()
     {
-        cancellation?.Cancel(); proposal=null; beforeFirst=null; beforeSecond=null; document=null;documentSnapshot=null;
+        cancellation?.Cancel(); proposal=null;proposalRule=null; beforeFirst=null; beforeSecond=null; document=null;documentSnapshot=null;
         apply.IsEnabled=false; preview.Points=null; preview.Bridge=null; preview.Notches=null; preview.InvalidateVisual(); message.Text="Önizleme hesaplanmadı.";
     }
 
@@ -127,6 +133,9 @@ internal sealed class OpenPathJoinWindow : Window
            !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[one,two] },new ProjectDocument { Pieces=[displayedFirst,displayedSecond] })))
         { message.Text="Gösterilen uçlar eski; parçaları yeniden seçin ve uçları kontrol edin.";return; }
         var oneCopy=one.Clone(); var twoCopy=two.Clone(); var omit=omitProductionData.IsChecked==true;
+        var carry=copyRules.IsChecked==true;var firstRule=fullSnapshot.GradingRules.FirstOrDefault(r=>r.SourcePieceId==oneCopy.Id);var secondRule=fullSnapshot.GradingRules.FirstOrDefault(r=>r.SourcePieceId==twoCopy.Id);
+        if(carry && (hasDraft is null || firstRule is null || secondRule is null || hasDraft(oneCopy,firstRule) || hasDraft(twoCopy,secondRule)))
+        { message.Text="Her iki kaynak için kayıtlı kural ve kaynakla eşleşen temiz serileme taslağı gerekli.";return; }
         using var tokenSource=new CancellationTokenSource(); cancellation=tokenSource;
         calculate.IsEnabled=false; message.Text="Konturlar doğrulanıyor; kapatmak hesabı iptal eder.";
         try
@@ -134,17 +143,20 @@ internal sealed class OpenPathJoinWindow : Window
             var result=await Task.Run(()=> { BeforeJoinForVerification?.Invoke();tokenSource.Token.ThrowIfCancellationRequested();var joined=explicitChoice
                 ? OpenPathJoin.JoinSelected(oneCopy,twoCopy,firstSide==0 ? 0 : oneCopy.Points.Count-1,secondSide==0 ? 0 : twoCopy.Points.Count-1,gap,tokenSource.Token,omit)
                 : OpenPathJoin.Join(oneCopy,twoCopy,gap,tokenSource.Token,omit);
-                var candidate=fullSnapshot.Clone();candidate.Pieces.Add(joined.Piece);ProjectStorage.Validate(candidate,tokenSource.Token);return joined; },tokenSource.Token);
+                var mapped=carry ? OpenPathJoin.JoinGrading(oneCopy,twoCopy,firstRule!,secondRule!,joined,tokenSource.Token) : null;
+                if(carry && mapped is null)throw new InvalidOperationException("Kaynak kuralları veya birleşim/köprü uçlarının artışları bitçe eşleşmiyor.");
+                var candidate=fullSnapshot.Clone();candidate.Pieces.Add(joined.Piece);if(mapped is not null)candidate.GradingRules.Add(mapped);ProjectStorage.Validate(candidate,tokenSource.Token);return (joined,mapped); },tokenSource.Token);
+            var joinedResult=result.joined;
             if(closed || tokenSource.IsCancellationRequested)return;
-            if(!ReferenceEquals(workspace.Document,currentDocument) || !DocumentSession.ContentEquals(workspace.Document,fullSnapshot) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy))
+            if(!ReferenceEquals(workspace.Document,currentDocument) || !DocumentSession.ContentEquals(workspace.Document,fullSnapshot) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy) || (carry && (hasDraft!(oneCopy,firstRule) || hasDraft(twoCopy,secondRule))))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın."; return; }
-            proposal=result; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;documentSnapshot=fullSnapshot;
-            preview.Points=result.Piece.Points;preview.Notches=result.Piece.Notches;
+            proposal=joinedResult;proposalRule=result.mapped; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;documentSnapshot=fullSnapshot;
+            preview.Points=joinedResult.Piece.Points;preview.Notches=joinedResult.Piece.Notches;
             // Reuse the exact endpoint decision made by the join operation;
             // rounded display distances can identify a different candidate set.
-            preview.Bridge=(oneCopy.Points[result.FirstEndpointIndex],twoCopy.Points[result.SecondEndpointIndex]);
+            preview.Bridge=(oneCopy.Points[joinedResult.FirstEndpointIndex],twoCopy.Points[joinedResult.SecondEndpointIndex]);
             preview.InvalidateVisual();
-            message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. {result.Piece.Notches?.Count ?? 0} köşe işareti aynı koordinatlara kopyalanır. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
+            message.Text=$"Önizleme: {joinedResult.Piece.Points.Count} noktalı açık kontur. {joinedResult.Piece.Notches?.Count ?? 0} köşe işareti aynı koordinatlara kopyalanır. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(joinedResult.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuca üretim bilgisi veya kaynak geçmişi aktarılmaz. "+(carry ? "Kayıtlı artışlar sonuca aktarılacak; yeni bedenleri kontrol edin." : "Sonuç için serileme kuralı oluşturulmaz.")+" Geri al, yalnız eklenen sonucu kaldırır.";
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }
@@ -165,11 +177,14 @@ internal sealed class OpenPathJoinWindow : Window
            workspace.HasPendingCanvasOrPropertyWork || !SameCurrent(beforeFirst) || !SameCurrent(beforeSecond))
         { InvalidateProposal(); message.Text="Proje veya kaynak değişti; önizlemeyi yeniden hesaplayın."; return; }
         if(!workspace.CanRetainCurrentUndoSnapshot) { message.Text="Proje geri alma sınırını aşıyor; sonuç eklenmedi.";return; }
-        var generated=proposal.Piece.Clone(); var committed=false;
+        if(proposalRule is not null && (hasDraft is null || hasDraft(beforeFirst,documentSnapshot.GradingRules.FirstOrDefault(r=>r.SourcePieceId==beforeFirst.Id)) ||
+            hasDraft(beforeSecond,documentSnapshot.GradingRules.FirstOrDefault(r=>r.SourcePieceId==beforeSecond.Id))))
+        { InvalidateProposal();message.Text="Serileme taslağı değişti; önizlemeyi yeniden hesaplayın.";return; }
+        var generated=proposal.Piece.Clone();var mappedRule=proposalRule?.Clone(); var committed=false;
         apply.IsEnabled=false;
         try
         {
-            workspace.CommitObserved("Açık konturlar birleştirildi",()=>workspace.Document.Pieces.Add(generated),()=>committed=true);
+            workspace.CommitObserved("Açık konturlar birleştirildi",()=> { workspace.Document.Pieces.Add(generated);if(mappedRule is not null)workspace.Document.GradingRules.Add(mappedRule); },()=>committed=true);
             message.Text="Yeni açık parça eklendi. Kaynaklar korundu; ana çalışma alanında Geri al ile sonuç kaldırılabilir. Projeyi kaydedin.";
             proposal=null;
         }
