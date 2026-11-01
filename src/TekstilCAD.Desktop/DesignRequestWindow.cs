@@ -35,6 +35,22 @@ internal sealed class DesignRequestWindow : Window
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
         body.Children.Add(new TextBlock { Text="Kalıp isteği hazırla",FontSize=20,FontWeight=FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text="Kadın elbisenin modelini ve istediğiniz özellikleri kendi sözlerinizle yazın; ölçüleri birimleriyle belirtin. Örneğin elbise boyu, göğüs, bel, kalça ve kol ölçülerini biliniyorsa ekleyin. Eksik ölçüler tahmin edilmez. İsteğe bağlı tek PNG/JPEG görseli dosyaya kopyalanır. Bu çevrimdışı istek kalıp oluşturmaz; veri hiçbir servise gönderilmez. Açık proje ve çizim değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
+        body.Children.Add(new TextBlock { Text="İsteğe bağlı başlangıç: Bir model seçin; açıklama alanına örnek metin eklenir. Seçim kalıp oluşturmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) });
+        var models=new WrapPanel { Margin=new Thickness(0,0,0,6) };body.Children.Add(models);
+        void ModelChoice(string label,string template)
+        {
+            var button=new Button { Content=label,Margin=new Thickness(0,0,8,4),Padding=new Thickness(10,5,10,5) };
+            AutomationProperties.SetHelpText(button,"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
+            button.Click+=(_,_)=>
+            {
+                var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
+                if(prompt.Text.Length+addition.Length>prompt.MaxLength) { status.Text="Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.";return; }
+                prompt.AppendText(addition);prompt.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
+            };
+            models.Children.Add(button);
+        }
+        ModelChoice("Düz elbise", "Düz elbise; detaylar: ");
+        ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ");
         body.Children.Add(new Label { Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");body.Children.Add(prompt);
         body.Children.Add(new Label { Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");body.Children.Add(measurements);
         body.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
