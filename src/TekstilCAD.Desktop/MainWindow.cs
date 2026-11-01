@@ -931,7 +931,7 @@ public class MainWindow : Window
             if(windowClosed || generation!=nestingHistoryGeneration || !ReferenceEquals(Document,source))return;
             nestingHistoryNotice.Text=matches switch
             {
-                true => detached.NestingSnapshot!.RotationTrace is null ? "Pastal geçmişi: parçalarda değişiklik algılanmadı; üretim onayı değildir." : "Döndürmeli pastal geçmişi doğrulandı; parçalarda değişiklik algılanmadı. Üretim veya makine onayı değildir.",
+                true => detached.NestingSnapshot!.RotationTrace is null ? "Pastal geçmişi: parçalarda değişiklik algılanmadı; üretim onayı değildir." : "Döndürmeli pastal geçmişi: parçalarda değişiklik algılanmadı; dönüş izi bu karşılaştırmada doğrulanmadı. Üretim veya makine onayı değildir.",
                 false => "Pastal geçmişi: parçalar değişmiş; geçmiş ayarları güncel yerleşimi doğrulamaz.",
                 null => "Pastal geçmişi karşılaştırılamadı; geçmiş ayarlarını doğrulanmış saymayın."
             };

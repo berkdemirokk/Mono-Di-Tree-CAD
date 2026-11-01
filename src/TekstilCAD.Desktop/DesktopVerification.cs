@@ -3748,6 +3748,15 @@ internal static class DesktopVerification
             window.Close();studio.OpenProjectFile(path);
             Check(DocumentSession.ContentEquals(layout!,studio.Document) && studio.Document.NestingSnapshot?.RotationTrace is not null &&
                 studio.Document.NestingSnapshot.IsCurrentFor(studio.Document),"Desktop opens the saved v7 rotated layout with its verified trace",checks);
+            var changedTrace=studio.Document.NestingSnapshot!.RotationTrace!;
+            changedTrace.Copies[0]=changedTrace.Copies[0] with { Degrees=0 };
+            var generationField=typeof(MainWindow).GetField("nestingHistoryGeneration",PrivateInstance)!;
+            var generation=(int)generationField.GetValue(studio)!+1;generationField.SetValue(studio,generation);
+            var compare=(Task)typeof(MainWindow).GetMethod("CompareNestingHistoryAsync",PrivateInstance)!.Invoke(studio,[studio.Document.Clone(),studio.Document,generation])!;
+            PumpUntil(()=>compare.IsCompleted);compare.GetAwaiter().GetResult();
+            var notice=(TextBlock)typeof(MainWindow).GetField("nestingHistoryNotice",PrivateInstance)!.GetValue(studio)!;
+            Check(notice.Text.Contains("parçalarda değişiklik algılanmadı") && notice.Text.Contains("bu karşılaştırmada doğrulanmadı"),
+                "Unchanged layout does not claim a mutated rotation trace was verified",checks);
         }
         finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
