@@ -2328,7 +2328,7 @@ internal static class DesktopVerification
                 Descendants<TextBlock>(reviewRoot).Any(t=>t.Text.Contains("fiziksel çentik") && t.Text.Contains("POINT")),
                 "POINT review presents explicit accessible source, piece and vertex choices with highlighted vertex",checks);
             var vertexIndex=Descendants<TextBox>(reviewRoot).Single(t=>AutomationProperties.GetName(t)=="Hedef köşe indeksine git");
-            Check(new[]{pointControl,pieceControl,vertexControl}.All(c=>c.ItemsPanel.LoadContent() is VirtualizingStackPanel &&
+            Check(new[]{pointControl,pieceControl,vertexControl}.All(c=>c.ItemsPanel.VisualTree?.Type==typeof(VirtualizingStackPanel) &&
                 VirtualizingPanel.GetIsVirtualizing(c) && VirtualizingPanel.GetVirtualizationMode(c)==VirtualizationMode.Recycling && ScrollViewer.GetCanContentScroll(c)),
                 "POINT and vertex selectors use recycling virtualization",checks);
             vertexIndex.Text="2";Check(vertexControl.SelectedIndex==2 && AutomationProperties.GetName(vertexPreview).Contains("Köşe 2"),
@@ -2348,9 +2348,12 @@ internal static class DesktopVerification
                 var largeVertices=Descendants<ComboBox>(largeRoot).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe indeksi ve konumu · mm");
                 var largeIndex=Descendants<TextBox>(largeRoot).Single(t=>AutomationProperties.GetName(t)=="Hedef köşe indeksine git");
                 largePiece.SelectedIndex=0;largeIndex.Text="9999";
+                largeIndex.BringIntoView();largeRoot.UpdateLayout();largeIndex.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);largeRoot.UpdateLayout();
                 Check(largeVertices.Items.Count==10_000 && largeVertices.SelectedIndex==9999 &&
                     AutomationProperties.GetName(Descendants<DxfPiecePreview>(largeRoot).Single()).Contains("Köşe 9999"),
                     "Large contour index search reaches the last vertex without changing the source",checks);
+                Check(FullyVisible(largeIndex,largeRoot) && largeIndex.Focusable && KeyboardNavigation.GetIsTabStop(largeIndex),
+                    "Large contour index input remains visible and keyboard-accessible at minimum window size",checks);
             }
             finally { largeReview.Close(); }
             reviewWindow.Close();studio.ConfirmDxfPointsForVerification=_=>null;Run();
