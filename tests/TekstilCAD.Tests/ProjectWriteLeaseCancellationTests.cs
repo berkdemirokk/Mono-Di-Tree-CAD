@@ -16,18 +16,20 @@ public sealed class ProjectWriteLeaseCancellationTests
         {
             ProjectStorage.Save(new ProjectDocument { Name="Original" },path);
             var expected=ProjectStorage.CaptureVersion(path);var bytes=File.ReadAllBytes(path);
-            holder=Task.Run(()=>
+            // Dedicated threads keep this synchronization test independent of
+            // thread-pool starvation from parallel test collections.
+            holder=Task.Factory.StartNew(()=>
             {
                 using var lease=ProjectStorage.AcquireWriteLease(Path.GetFullPath(path));
                 locked.Set();
-                if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException();
-            });
+                release.Wait();
+            },CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
             Assert.True(locked.Wait(TimeSpan.FromSeconds(5)));
-            waiter=Task.Run(()=>
+            waiter=Task.Factory.StartNew(()=>
             {
                 try { using var lease=ProjectStorage.AcquireWriteLease(Path.GetFullPath(path),cancellation.Token,()=>waiting.Set());return false; }
                 catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { return true; }
-            });
+            },CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
             Assert.True(waiting.Wait(TimeSpan.FromSeconds(5)));
             cancellation.Cancel();
             Assert.True(waiter.Wait(TimeSpan.FromSeconds(5)));
@@ -36,16 +38,24 @@ public sealed class ProjectWriteLeaseCancellationTests
             using(var saveCancellation=new CancellationTokenSource())
             using(var saveStarted=new ManualResetEventSlim())
             {
-                var save=Task.Run(()=>
+                var save=Task.Factory.StartNew(()=>
                 {
                     saveStarted.Set();
                     try { ProjectStorage.SaveIfUnchanged(new ProjectDocument { Name="Cancelled" },path,expected,saveCancellation.Token);return false; }
                     catch(OperationCanceledException) when(saveCancellation.IsCancellationRequested) { return true; }
-                });
-                Assert.True(saveStarted.Wait(TimeSpan.FromSeconds(5)));
-                saveCancellation.Cancel();
-                Assert.True(save.Wait(TimeSpan.FromSeconds(5)) && save.Result);
-                Assert.Equal(bytes,File.ReadAllBytes(path));
+                },CancellationToken.None,TaskCreationOptions.LongRunning,TaskScheduler.Default);
+                try
+                {
+                    Assert.True(saveStarted.Wait(TimeSpan.FromSeconds(5)));
+                    saveCancellation.Cancel();
+                    Assert.True(save.Wait(TimeSpan.FromSeconds(5)) && save.Result);
+                    Assert.Equal(bytes,File.ReadAllBytes(path));
+                }
+                finally
+                {
+                    saveCancellation.Cancel();release.Set();
+                    save.GetAwaiter().GetResult();
+                }
             }
             release.Set();Assert.True(holder.Wait(TimeSpan.FromSeconds(5)));
             ProjectStorage.SaveIfUnchanged(new ProjectDocument { Name="After" },path,expected);
