@@ -42,7 +42,7 @@ Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa
 
 `ExperimentalV7Contours`, çıkarılan parça baytlarından sınırlı bir kontur dönüşümü denemesidir; üretim okuyucusuna bağlı değildir. Deneysel belge, çağıranın bellekte tuttuğu en fazla 64 MB özgün `Data` ile `Drawing` adayını birlikte tutabilir; fedilen baytlarla eşleşme SHA-256 ile denetlenir. Bu ek bellek gerektirir; dosyayı doğrulamaz veya gerçek cihazda bellek güvenliği kanıtlamaz. Parça düzeyinde kimlik, nokta, işaret ve desteklenen bilgi alanlarını kontrol eder; v7 geçmişini, masaüstü parmak izlerini veya kopyaların geometrik dönüşümünü doğrulamaz. Bu aday üretimde kullanılmaz ve 8 MB sınırını artırmak için yeterli değildir.
 
-Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Parmak izlerini yeniden hesaplamaz ve dönüştürülmüş geometriyi kaynakla karşılaştırmaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
+Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, masaüstünün deterministik kopya kimliklerini, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Parmak izlerini yeniden hesaplamaz ve dönüştürülmüş geometriyi kaynakla karşılaştırmaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
 
 ## Sınırlar
 

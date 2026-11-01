@@ -83,6 +83,7 @@ struct ExperimentalV7PieceReader {
             for mapping in traceMappings {
                 if cancelled() { throw Failure.cancelled }
                 guard let quantity = sourceQuantities[mapping.source], mapping.number <= quantity,
+                      Self.desktopCopyID(source: mapping.source, number: mapping.number) == mapping.placed,
                       seenPlaced.insert(mapping.placed).inserted,
                       seenCopies.insert("\(mapping.source.uuidString)#\(mapping.number)").inserted else { throw Failure.invalid }
                 counts[mapping.source, default: 0] += 1
@@ -336,5 +337,17 @@ struct ExperimentalV7PieceReader {
                   [0, 90, 180, 270].contains(degrees.intValue) else { throw Failure.invalid }
         }
         return Mapping(source: source, number: n.intValue, placed: placed)
+    }
+
+    // Guid(ReadOnlySpan<byte>) in the desktop runtime treats its first three
+    // fields as little-endian. UUID text uses network byte order for them.
+    private static func desktopCopyID(source: UUID, number: Int) -> UUID? {
+        let text = "TekstilCAD.production-copy.v1:\(source.uuidString.lowercased()):\(number)"
+        let bytes = Array(SHA256.hash(data: Data(text.utf8)).prefix(16))
+        let order = [3, 2, 1, 0, 5, 4, 7, 6, 8, 9, 10, 11, 12, 13, 14, 15]
+        let hex = order.map { String(format: "%02x", Int(bytes[$0])) }.joined()
+        let a = hex.index(hex.startIndex, offsetBy: 8), b = hex.index(a, offsetBy: 4)
+        let c = hex.index(b, offsetBy: 4), d = hex.index(c, offsetBy: 4)
+        return UUID(uuidString: "\(hex[..<a])-\(hex[a..<b])-\(hex[b..<c])-\(hex[c..<d])-\(hex[d...])")
     }
 }
