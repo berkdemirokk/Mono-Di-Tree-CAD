@@ -44,7 +44,7 @@ enum ExperimentalDesignBrief {
 
     /// Preserve exactly what the user entered, including units and unknowns.
     static func measurements(bust: String, waist: String, hips: String, length: String, other: String) -> String {
-        let items = [("Göğüs", bust), ("Bel", waist), ("Basen", hips), ("Elbise boyu", length)]
+        let items = [("Göğüs çevresi", bust), ("Bel çevresi", waist), ("Kalça çevresi", hips), ("Elbise boyu", length)]
         var lines = items.compactMap { label, value -> String? in
             value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "\(label): \(value)"
         }

@@ -2401,9 +2401,9 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 Section("2 · Bildiğiniz ölçüler neler?") {
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
-                    TextField("Göğüs · ör. 92 cm", text: $bust)
-                    TextField("Bel · ör. 72 cm", text: $waist)
-                    TextField("Basen · ör. 98 cm", text: $hips)
+                    TextField("Göğüs çevresi · ör. 92 cm", text: $bust)
+                    TextField("Bel çevresi · ör. 72 cm", text: $waist)
+                    TextField("Kalça çevresi · ör. 98 cm", text: $hips)
                     TextField("Elbise boyu · ör. 110 cm", text: $length)
                     Text("Ek ölçüler veya notlar").font(.caption)
                     TextEditor(text: $otherMeasurements).frame(minHeight: 70)

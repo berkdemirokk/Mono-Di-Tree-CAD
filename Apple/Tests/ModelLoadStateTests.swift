@@ -9,9 +9,15 @@ final class ModelLoadStateTests: XCTestCase {
         let data = try ExperimentalDesignBrief.make(prompt: prompt, measurements: measures, image: nil, imageName: nil)
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
         XCTAssertEqual(brief.prompt, "Seçilen elbise modeli: A kesim elbise\nUzun kollu")
-        XCTAssertEqual(brief.measurements, "Göğüs: 92 cm\nElbise boyu: 110 cm\nOmuz: 38 cm")
+        XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nElbise boyu: 110 cm\nOmuz: 38 cm")
         XCTAssertEqual(ExperimentalDesignBrief.prompt(style: .describe, description: "Kendi tarifim"), "Kendi tarifim")
         XCTAssertEqual(ExperimentalDesignBrief.measurements(bust: "", waist: "", hips: "", length: "", other: ""), "")
+    }
+    func testDressMeasurementsUseDesktopCircumferenceNames() throws {
+        let measures = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "72 cm", hips: "98 cm", length: "110 cm", other: "")
+        let data = try ExperimentalDesignBrief.make(prompt: "Düz elbise", measurements: measures, image: nil, imageName: nil)
+        let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
+        XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nBel çevresi: 72 cm\nKalça çevresi: 98 cm\nElbise boyu: 110 cm")
     }
     func testDesignBriefPreservesUserTextAndReferenceBytes() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
