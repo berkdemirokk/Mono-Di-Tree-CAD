@@ -8,9 +8,9 @@ public sealed record OpenPathClosureResult(PatternPiece Piece, Guid SourceId, st
 public static class OpenPathClosure
 {
     /// <summary>Closes the original endpoints with a straight edge without moving or removing points.
-    /// The source remains unchanged. Metadata and grainline are rejected because their meaning
+    /// The source remains unchanged. Metadata and grainline require explicit omitSourceProductionData consent because their meaning
     /// on the new piece is unresolved. Project-level rules and provenance are never copied.</summary>
-    public static OpenPathClosureResult Close(PatternPiece source, double tolerance, CancellationToken cancellationToken = default)
+    public static OpenPathClosureResult Close(PatternPiece source, double tolerance, CancellationToken cancellationToken = default, bool omitSourceProductionData = false)
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
@@ -18,7 +18,7 @@ public static class OpenPathClosure
         if(source.Id==Guid.Empty || source.Name is null || source.Name.Length>1024)throw new ArgumentException("Kaynak kimliği veya adı geçersiz.");
         if(source.Closed || source.Points is null || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints)
             throw new ArgumentException("Kapatmak için en az üç noktalı açık bir kontur gerekir.");
-        if(source.Metadata is not null || source.Grainline is not null)
+        if(!omitSourceProductionData && (source.Metadata is not null || source.Grainline is not null))
             throw new ArgumentException("Üretim bilgisi veya iplik yönü olan parça otomatik kapatılamaz.");
         var points=source.Points.ToArray();
         foreach(var point in points) { cancellationToken.ThrowIfCancellationRequested(); Geometry.Validate(point); }

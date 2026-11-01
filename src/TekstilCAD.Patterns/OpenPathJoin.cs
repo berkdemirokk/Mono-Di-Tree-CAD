@@ -13,12 +13,12 @@ public static class OpenPathJoin
     /// Joins two open paths only when exactly one pair of endpoints is within the given
     /// millimetre tolerance. Noncoincident endpoints remain unchanged and a straight
     /// bridge is inserted; no snapping, trimming or closing is performed. Inputs must
-    /// remain unchanged while this method snapshots them. Metadata and grainlines are
-    /// rejected because combining their meanings requires an explicit user decision.
+    /// remain unchanged while this method snapshots them. Metadata and grainlines require explicit omitSourceProductionData consent because
+    /// their meanings cannot be combined automatically.
     /// The returned piece has a new identity and no project-level references.
     /// </summary>
     public static OpenPathJoinResult Join(PatternPiece first, PatternPiece second, double tolerance,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, bool omitSourceProductionData = false)
     {
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(second);
@@ -31,7 +31,7 @@ public static class OpenPathJoin
             throw new ArgumentException("Kaynak parça adı geçersiz.");
         if (first.Closed || second.Closed || first.Points is null || second.Points is null)
             throw new ArgumentException("İki açık kontur gereklidir.");
-        if (first.Metadata is not null || second.Metadata is not null || first.Grainline is not null || second.Grainline is not null)
+        if (!omitSourceProductionData && (first.Metadata is not null || second.Metadata is not null || first.Grainline is not null || second.Grainline is not null))
             throw new ArgumentException("Üretim bilgisi veya iplik yönü olan parçalar otomatik birleştirilemez.");
         if (first.Points.Count < 2 || second.Points.Count < 2 ||
             first.Points.Count > LargeOpenPathValidator.MaximumStoredPoints || second.Points.Count > LargeOpenPathValidator.MaximumStoredPoints)

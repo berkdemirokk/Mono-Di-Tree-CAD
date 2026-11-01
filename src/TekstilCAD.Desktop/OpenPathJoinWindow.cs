@@ -14,6 +14,7 @@ internal sealed class OpenPathJoinWindow : Window
     private readonly ComboBox first = new() { MinWidth=350, Margin=new Thickness(0,4,0,8) };
     private readonly ComboBox second = new() { MinWidth=350, Margin=new Thickness(0,4,0,8) };
     private readonly TextBox tolerance = new() { Text="0", MinWidth=120, Margin=new Thickness(0,4,0,8) };
+    private readonly CheckBox omitProductionData = new() { Content="Üretim bilgisi ve iplik yönü sonuca aktarılmadan devam et", IsChecked=false, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock message = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,8,0,8) };
     private readonly JoinPreview preview = new() { Height=230, Margin=new Thickness(0,8,0,8) };
     private readonly Button calculate = new() { Content="Önizle", Padding=new Thickness(12,7,12,7), Margin=new Thickness(0,0,8,0) };
@@ -42,11 +43,13 @@ internal sealed class OpenPathJoinWindow : Window
         var cancel=new Button { Content="Kapat / hesabı iptal et", Padding=new Thickness(12,7,12,7) }; buttons.Children.Add(cancel);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; root.Children.Add(scroll);
         var body=new StackPanel(); scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="İki açık konturu seçin. Kaynaklar, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir açık parça olarak eklenir. Üretim bilgisi veya iplik yönü olan kaynaklar birleştirilmez.", TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="İki açık konturu seçin. Kaynaklar, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir açık parça olarak eklenir. Üretim bilgisi veya iplik yönü varsa bunlar yalnız açık onayla sonuca aktarılmadan bırakılabilir.", TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Birinci açık parça" }); body.Children.Add(first);
         body.Children.Add(new TextBlock { Text="İkinci açık parça" }); body.Children.Add(second);
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" }); body.Children.Add(tolerance);
         body.Children.Add(new TextBlock { Text="Uçlar eşit değilse yerleri değiştirilmez; aralarına düz bir köprü eklenir. Birden fazla olası eşleşme veya kesişen sonuç reddedilir.", TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(omitProductionData);
+        body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview); body.Children.Add(message);
         AutomationProperties.SetName(first,"Birinci açık parça"); AutomationProperties.SetName(second,"İkinci açık parça");
         AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre"); AutomationProperties.SetName(preview,"Birleştirilmiş kontur önizlemesi");
@@ -60,6 +63,7 @@ internal sealed class OpenPathJoinWindow : Window
         if(second.Items.Count>1)second.SelectedIndex=1;
         first.SelectionChanged+=(_,_)=>InvalidateProposal(); second.SelectionChanged+=(_,_)=>InvalidateProposal();
         tolerance.TextChanged+=(_,_)=>InvalidateProposal();
+        omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();
         calculate.Click+=async (_,_)=>await CalculateAsync(); apply.Click+=(_,_)=>Apply();
         cancel.Click+=(_,_)=>Close(); Closed+=(_,_)=> { closed=true; cancellation?.Cancel(); };
     }
@@ -83,12 +87,12 @@ internal sealed class OpenPathJoinWindow : Window
         var one=currentDocument.Pieces.SingleOrDefault(p=>p.Id==a.Id);
         var two=currentDocument.Pieces.SingleOrDefault(p=>p.Id==b.Id);
         if(one is null || two is null) { message.Text="Kaynak parça bulunamadı."; return; }
-        var oneCopy=one.Clone(); var twoCopy=two.Clone();
+        var oneCopy=one.Clone(); var twoCopy=two.Clone(); var omit=omitProductionData.IsChecked==true;
         using var tokenSource=new CancellationTokenSource(); cancellation=tokenSource;
         calculate.IsEnabled=false; message.Text="Konturlar doğrulanıyor; kapatmak hesabı iptal eder.";
         try
         {
-            var result=await Task.Run(()=>OpenPathJoin.Join(oneCopy,twoCopy,gap,tokenSource.Token),tokenSource.Token);
+            var result=await Task.Run(()=>OpenPathJoin.Join(oneCopy,twoCopy,gap,tokenSource.Token,omit),tokenSource.Token);
             if(closed || tokenSource.IsCancellationRequested)return;
             if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın."; return; }
@@ -110,7 +114,7 @@ internal sealed class OpenPathJoinWindow : Window
     private bool SameCurrent(PatternPiece original)
     {
         var p=workspace.Document.Pieces.SingleOrDefault(p=>p.Id==original.Id);
-        return p is not null && p.Name==original.Name && p.Closed==original.Closed && p.Metadata is null && p.Grainline is null && p.Points.SequenceEqual(original.Points);
+        return p is not null && OpenPathSourceSnapshot.Matches(p,original);
     }
 
     private void Apply()

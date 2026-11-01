@@ -12,6 +12,7 @@ internal sealed class OpenPathClosureWindow : Window
     private readonly MainWindow workspace;
     private readonly ComboBox source=new() { MinWidth=350,Margin=new Thickness(0,4,0,8) };
     private readonly TextBox tolerance=new() { Text="0",MinWidth=120,Margin=new Thickness(0,4,0,8) };
+    private readonly CheckBox omitProductionData = new() { Content="Üretim bilgisi ve iplik yönü sonuca aktarılmadan devam et", IsChecked=false, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock message=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
     private readonly ClosurePreview preview=new() { Height=230,Margin=new Thickness(0,8,0,8) };
     private readonly Button calculate=new() { Content="Önizle",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,0) };
@@ -38,16 +39,19 @@ internal sealed class OpenPathClosureWindow : Window
         var close=new Button { Content="Kapat / hesabı iptal et",Padding=new Thickness(12,7,12,7) };buttons.Children.Add(close);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);
         var body=new StackPanel();scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="Bir açık parça seçin. İlk ve son nokta değiştirilmeden düz bir kenarla kapatılır. Kaynak, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir kapalı parçadır. Üretim bilgisi veya iplik yönü olan kaynaklar kapatılamaz.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Bir açık parça seçin. İlk ve son nokta değiştirilmeden düz bir kenarla kapatılır. Kaynak, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir kapalı parçadır. Üretim bilgisi veya iplik yönü varsa bunlar yalnız açık onayla sonuca aktarılmadan bırakılabilir.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Açık parça" });body.Children.Add(source);
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" });body.Children.Add(tolerance);
         body.Children.Add(new TextBlock { Text="Kırmızı çizgi eklenecek kapanış kenarıdır. Sıfır mesafede uçlar zaten aynı yerdedir. Kesişen veya geçersiz kontur reddedilir.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(omitProductionData);
+        body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview);body.Children.Add(message);
         AutomationProperties.SetName(source,"Kapatılacak açık parça");AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre");
         AutomationProperties.SetName(preview,"Kapalı kontur ve kapanış kenarı önizlemesi");AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
         foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))source.Items.Add(new Choice(p.Id,$"{p.Name} · {p.Id:D}"));
         if(source.Items.Count>0)source.SelectedIndex=0;
         source.SelectionChanged+=(_,_)=>InvalidateProposal();tolerance.TextChanged+=(_,_)=>InvalidateProposal();
+        omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();
         calculate.Click+=async (_,_)=>await CalculateAsync();apply.Click+=(_,_)=>Apply();close.Click+=(_,_)=>Close();
         Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
@@ -66,11 +70,11 @@ internal sealed class OpenPathClosureWindow : Window
         var currentDocument=workspace.Document;
         var current=currentDocument.Pieces.SingleOrDefault(p=>p.Id==choice.Id);
         if(current is null) { message.Text="Kaynak parça bulunamadı.";return; }
-        var copy=current.Clone();
+        var copy=current.Clone();var omit=omitProductionData.IsChecked==true;
         using var tokenSource=new CancellationTokenSource();cancellation=tokenSource;calculate.IsEnabled=false;message.Text="Kontur doğrulanıyor; kapatmak hesabı iptal eder.";
         try
         {
-            var result=await Task.Run(()=>OpenPathClosure.Close(copy,gap,tokenSource.Token),tokenSource.Token);
+            var result=await Task.Run(()=>OpenPathClosure.Close(copy,gap,tokenSource.Token,omit),tokenSource.Token);
             if(closed || tokenSource.IsCancellationRequested)return;
             if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(copy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın.";return; }
@@ -86,7 +90,7 @@ internal sealed class OpenPathClosureWindow : Window
     private bool SameCurrent(PatternPiece original)
     {
         var p=workspace.Document.Pieces.SingleOrDefault(p=>p.Id==original.Id);
-        return p is not null && p.Name==original.Name && p.Closed==original.Closed && p.Metadata is null && p.Grainline is null && p.Points.SequenceEqual(original.Points);
+        return p is not null && OpenPathSourceSnapshot.Matches(p,original);
     }
     private void Apply()
     {

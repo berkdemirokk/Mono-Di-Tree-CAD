@@ -83,6 +83,44 @@ internal static class DesktopVerification
         var top=CountNear(bounds.Top);var bottom=CountNear(bounds.Bottom);
         return downward ? top>bottom+15 : bottom>top+15;
     }
+    private static void VerifyOpenPathProductionInformation(MainWindow studio,List<string> checks)
+    {
+        var first=new PatternPiece { Name="Ön",Closed=false,Points=[new(0,0),new(10,0)],Metadata=new PieceMetadata { Size="M",Quantity=2 } };
+        var second=new PatternPiece { Name="Yan",Closed=false,Points=[new(10,0),new(10,10),new(0,10)],Grainline=new Grainline { Start=new(8,1),End=new(8,8) } };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second] });
+        var join=new OpenPathJoinWindow(studio,studio);
+        try
+        {
+            void Preview() { var task=join.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            var consent=(CheckBox)typeof(OpenPathJoinWindow).GetField("omitProductionData",PrivateInstance)!.GetValue(join)!;
+            Preview();Check(!join.ApplyButtonForVerification.IsEnabled && consent.IsChecked==false,"Join rejects production data without explicit omission consent",checks);
+            consent.IsChecked=true;Preview();Check(join.ApplyButtonForVerification.IsEnabled,"Join offers a preview with explicit omission consent",checks);
+            consent.IsChecked=false;Check(!join.ApplyButtonForVerification.IsEnabled,"Changing production-data consent invalidates the join preview",checks);
+            consent.IsChecked=true;Preview();studio.Document.Pieces[0].Metadata!.Quantity=3;join.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==2 && !join.ApplyButtonForVerification.IsEnabled,"Join rejects changed source production information",checks);
+            Preview();join.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==3 && studio.Document.Pieces[0].Metadata!.Quantity==3 && studio.Document.Pieces[1].Grainline is not null &&
+                studio.Document.Pieces[2].Metadata is null && studio.Document.Pieces[2].Grainline is null,"Join preserves sources and leaves explicitly omitted data off the new piece",checks);
+        }
+        finally { join.Close(); }
+        var source=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10)],
+            Metadata=new PieceMetadata { Size="M" },Grainline=new Grainline { Start=new(2,1),End=new(2,8) } };
+        studio.LoadDocument(new ProjectDocument { Pieces=[source] });var closure=new OpenPathClosureWindow(studio,studio);
+        try
+        {
+            void Preview() { var task=closure.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            closure.ToleranceForVerification.Text="15";
+            var consent=(CheckBox)typeof(OpenPathClosureWindow).GetField("omitProductionData",PrivateInstance)!.GetValue(closure)!;
+            Preview();Check(!closure.ApplyButtonForVerification.IsEnabled && consent.IsChecked==false,"Closure rejects production data without explicit omission consent",checks);
+            consent.IsChecked=true;Preview();Check(closure.ApplyButtonForVerification.IsEnabled,"Closure offers a preview with explicit omission consent",checks);
+            studio.Document.Pieces[0].Grainline!.End=new(3,8);closure.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==1 && !closure.ApplyButtonForVerification.IsEnabled,"Closure rejects a changed source grainline",checks);
+            Preview();closure.ApplyForVerification();
+            Check(studio.Document.Pieces.Count==2 && studio.Document.Pieces[0].Metadata!.Size=="M" && studio.Document.Pieces[0].Grainline!.End==new Point2(3,8) &&
+                studio.Document.Pieces[1].Metadata is null && studio.Document.Pieces[1].Grainline is null,"Closure preserves the source and leaves explicitly omitted data off the new piece",checks);
+        }
+        finally { closure.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
+    }
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(4,10),new(4,8)] };
@@ -423,6 +461,7 @@ internal static class DesktopVerification
             VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
             VerifyOpenPathClosure(studio,checks);
+            VerifyOpenPathProductionInformation(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDuplicateOptions(studio,checks);
             VerifyDuplicateGrading(studio,checks);
