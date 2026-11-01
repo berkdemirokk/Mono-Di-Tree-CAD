@@ -83,7 +83,7 @@ internal sealed class DesignRequestWindow : Window
         send.Background=StudioTheme.Accent;send.Foreground=StudioTheme.Background;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        body.Children.Add(new TextBlock { Text="Ölçüyü açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var editBody=new StackPanel();body.Children.Add(new Expander { Header="İstek ve ölçüleri düzenle",Content=editBody,Margin=new Thickness(0,8,0,8) });
         editBody.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
         editBody.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");editBody.Children.Add(measurements);
@@ -115,13 +115,15 @@ internal sealed class DesignRequestWindow : Window
     {
         var message=chatInput.Text;
         if(string.IsNullOrWhiteSpace(message)) { status.Text="Göndermek için bir mesaj yazın.";return; }
-        var addition=(prompt.Text.Length==0 ? "" : "\n")+message;
+        // Only an entire, unambiguous value with an explicit supported unit answers the current question.
+        var answerLabel=suggestedMeasurement is not null && System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)) ? suggestedMeasurement : null;
+        var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { status.Text="Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.";return; }
         preservingLastModel=true;
         try { prompt.AppendText(addition); }
         finally { preservingLastModel=false; }
-        chatInput.Clear();chatInput.Focus();status.Text="Mesaj isteğe eklendi; henüz kalıp oluşturulmadı.";
+        chatInput.Clear();chatInput.Focus();status.Text=answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.";
     }
     private void InsertMeasurementLabel()
     {

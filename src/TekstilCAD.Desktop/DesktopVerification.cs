@@ -9222,10 +9222,11 @@ internal static class DesktopVerification
                 window.ConversationForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ConversationForVerification.Text.Contains("bel çevresi") &&
                 window.ConversationForVerification.Text.Contains("kalıp veya plotter çıktısı oluşturulmaz"),
                 "Chat appends explicit measurements, asks the next question and honestly describes its scope",checks);
-            window.ChatInputForVerification.Text="bel çevresi 72 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.ChatInputForVerification.Text="72 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.ConversationForVerification.Text.Contains("bel çevresi: 720 mm") && window.ConversationForVerification.Text.Contains("kalça çevresi") &&
+                window.CaptureForVerification().Prompt.Contains("bel çevresi: 72 cm") &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && DocumentSession.ContentEquals(before,studio.Document),
-                "Chat continues with the next missing measurement while preserving reference and project",checks);
+                "Chat associates a unit-bearing answer with the current question while preserving reference and project",checks);
             window.PromptForVerification.Text=new string('x',DesignRequestStorage.MaximumTextLength);window.ChatInputForVerification.Text="kaybolmamalı";
             send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.ChatInputForVerification.Text=="kaybolmamalı" && window.PromptForVerification.Text.Length==DesignRequestStorage.MaximumTextLength,
