@@ -255,6 +255,18 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testLibraryLabelsEscapeDirectionalAndLineControlsWithoutChangingIdentity() throws {
+        let raw = "Ön\u{202e}model\nA"
+        let entry = ModelStore.Entry(url: URL(fileURLWithPath: "/models/test.tcad"), name: raw, date: nil,
+                                     canOpen: true, requiresRecovery: false, identity: nil)
+        XCTAssertEqual(entry.safeName, "Ön\\u202Emodel\\u000AA")
+        XCTAssertEqual(entry.name, raw)
+        let escaped = try XCTUnwrap(ModelStore.filteredModels([entry], query: "\\u202E", newest: false, cancelled: { false }))
+        XCTAssertEqual(escaped.map(\.id), [entry.id])
+        let original = try XCTUnwrap(ModelStore.filteredModels([entry], query: "model", newest: false, cancelled: { false }))
+        XCTAssertEqual(original.map(\.id), [entry.id])
+    }
+
     func testOpeningSpecialModelFileFailsWithoutWaitingForWriter() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -818,6 +818,21 @@ private struct ContentView: View {
 }
 
 enum ModelStore {
+    // Display only: make line breaks and directional formatting explicit.
+    // The stored name, path, and payload remain untouched.
+    static func safeLabel(_ value: String) -> String {
+        var result = ""
+        for scalar in value.unicodeScalars {
+            switch scalar.properties.generalCategory {
+            case .control, .format, .lineSeparator, .paragraphSeparator:
+                result += String(format: "\\u%04X", scalar.value)
+            default:
+                result.unicodeScalars.append(scalar)
+            }
+        }
+        return result
+    }
+
     struct FileIdentity: Equatable {
         let device: Int64, inode: UInt64, size: Int64, mode: UInt32
         let modifiedSeconds: Int64, modifiedNanoseconds: Int64
@@ -840,6 +855,7 @@ enum ModelStore {
         // The complete directory entry name distinguishes records in this
         // library; actions continue to use the full URL, never a display ID.
         var displayIdentity: String { url.lastPathComponent }
+        var safeName: String { ModelStore.safeLabel(name) }
         var selectionStatus: String? {
             if canOpen { return nil }
             return requiresRecovery ? "Önizlenemiyor · Ham kopya kurtarma denenebilir" : "Açılamıyor · Kayıt kontrol edilmeli"
@@ -1064,7 +1080,8 @@ enum ModelStore {
         for entry in entries {
             if cancelled() { return nil }
             if words.isEmpty { matches.append(entry); continue }
-            let fields = [entry.name, entry.displayIdentity, entry.readableIdentity]
+            let fields = [entry.name, entry.safeName, entry.displayIdentity, entry.readableIdentity,
+                          safeLabel(entry.displayIdentity), safeLabel(entry.readableIdentity)]
             if words.allSatisfy({ word in fields.contains { $0.localizedStandardContains(word) } }) {
                 matches.append(entry)
             }
@@ -1336,11 +1353,11 @@ private struct ModelLibrary: View {
                         else { error = "Bu kayıt açılamıyor. Kayıtlı dosyayı kontrol edin." }
                     } label: {
                         VStack(alignment: .leading) {
-                            Text(model.name)
+                            Text(model.safeName)
                             if let status = model.selectionStatus {
                                 Text(status).font(.caption).foregroundStyle(.secondary)
                             }
-                            Text("Kayıt: \(model.readableIdentity)")
+                            Text("Kayıt: \(ModelStore.safeLabel(model.readableIdentity))")
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             if let date = model.date {
                                 Text("Kaydedildi: \(date.formatted(date: .abbreviated, time: .standard))")
@@ -1350,8 +1367,8 @@ private struct ModelLibrary: View {
                         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel(model.name)
-                    .accessibilityValue((model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .accessibilityLabel(model.safeName)
+                    .accessibilityValue((model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
@@ -1363,8 +1380,8 @@ private struct ModelLibrary: View {
                         Image(systemName: "ellipsis.circle")
                             .frame(width: 44, height: 44)
                     }
-                    .accessibilityLabel("\(model.name) model işlemleri")
-                    .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)")
+                    .accessibilityLabel("\(model.safeName) model işlemleri")
+                    .accessibilityValue("Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))")
                     .disabled(isRecovering)
                     }
                     .swipeActions {
@@ -1426,7 +1443,7 @@ private struct ModelLibrary: View {
                     modelToDelete = nil
                 }
             } message: {
-                Text("\(modelToDelete?.name ?? "Model")\nKayıt: \(modelToDelete?.readableIdentity ?? "")\nTam kayıt kimliği: \(modelToDelete?.displayIdentity ?? "")\nTelefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
+                Text("\(modelToDelete?.safeName ?? "Model")\nKayıt: \(ModelStore.safeLabel(modelToDelete?.readableIdentity ?? ""))\nTam kayıt kimliği: \(ModelStore.safeLabel(modelToDelete?.displayIdentity ?? ""))\nTelefonunuzdaki kayıtlı modellerden silinecek. Orijinal dosya etkilenmez.")
             }
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
