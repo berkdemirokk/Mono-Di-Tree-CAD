@@ -10,6 +10,9 @@ namespace TekstilCAD.Desktop;
 /// <summary>Ephemeral visualization only; it has no document or export reference.</summary>
 internal sealed class OffsetUnverifiedPreviewWindow : Window
 {
+    internal static Point MapPoint(Point2 p,double cx,double cy,double scale,double width,double height,double panX,double panY)
+        => new(width/2+panX+(p.X-cx)*scale,height/2+panY+(p.Y-cy)*scale);
+
     internal OffsetUnverifiedPreviewWindow(Window owner, IReadOnlyList<Point2> source, IReadOnlyList<Point2> candidate)
     {
         Owner=owner; Title="Doğrulanmamış dikiş payı önizlemesi";
@@ -66,7 +69,7 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
         {
             base.OnRender(dc); dc.DrawRectangle(Brushes.White,null,new Rect(RenderSize));
             double scale=Math.Max(1,Math.Min(ActualWidth,ActualHeight)-30)/span*zoom;
-            Point Map(Point2 p)=>new(ActualWidth/2+panX+(p.X-cx)*scale,ActualHeight/2+panY-(p.Y-cy)*scale);
+            Point Map(Point2 p)=>MapPoint(p,cx,cy,scale,ActualWidth,ActualHeight,panX,panY);
             void Draw(Point2[] points,Brush brush,double thickness)
             {
                 if(points.Length<2)return;

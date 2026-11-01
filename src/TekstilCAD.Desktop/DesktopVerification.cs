@@ -9100,6 +9100,9 @@ internal static class DesktopVerification
                 var warning=panel.Children.OfType<TextBlock>().Single();
                 var buttons=panel.Children.OfType<Button>().ToArray();
                 var drawing=panel.Children.OfType<FrameworkElement>().Single(c=>c is not TextBlock && c is not Button);
+                var top=OffsetUnverifiedPreviewWindow.MapPoint(new Point2(0,0),0,0,1,100,100,0,0);
+                var bottom=OffsetUnverifiedPreviewWindow.MapPoint(new Point2(0,10),0,0,1,100,100,0,0);
+                Check(bottom.Y>top.Y,"Offset preview uses the same Y direction as the main canvas",checks);
                 Check(!preview.IsVisible && warning.Focusable && warning.Text.Contains("DOĞRULANMAMIŞ",StringComparison.Ordinal) &&
                     warning.Text.Contains("çentik korunumu kanıtı değildir",StringComparison.Ordinal) &&
                     AutomationProperties.GetName(warning)==warning.Text && drawing.Focusable &&
