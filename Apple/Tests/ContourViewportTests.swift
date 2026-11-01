@@ -104,4 +104,22 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertGreaterThan(viewport.position(points[2]).y, viewport.position(points[0]).y)
         XCTAssertLessThan(viewport.position(points[2]).x, viewport.position(points[1]).x)
     }
+    func testVertexTapRespectsZoomOffsetAndRejectsAmbiguity() throws {
+        let points = [p(0, 0), p(100, 0), p(100, 100)]
+        let size = CGSize(width: 232, height: 132)
+        let viewport = try XCTUnwrap(ContourViewport(points: points, width: 232, height: 132))
+        let base = viewport.position(points[1]), zoom: CGFloat = 2
+        let offset = CGSize(width: 20, height: -10)
+        let tap = CGPoint(x: (base.x - size.width / 2) * zoom + size.width / 2 + offset.width,
+                          y: (base.y - size.height / 2) * zoom + size.height / 2 + offset.height)
+        XCTAssertEqual(viewport.vertexHit(points: points, closed: false, tap: tap, size: size, zoom: zoom, offset: offset), .vertex(1))
+        XCTAssertEqual(viewport.vertexHit(points: points, closed: false, tap: CGPoint(x: -1000, y: -1000), size: size, zoom: zoom, offset: offset), .none)
+        let duplicate = points + [points[0]]
+        let first = viewport.position(points[0])
+        XCTAssertEqual(viewport.vertexHit(points: duplicate, closed: true, tap: first, size: size, zoom: 1, offset: .zero), .vertex(0))
+        XCTAssertEqual(viewport.vertexHit(points: duplicate, closed: false, tap: first, size: size, zoom: 1, offset: .zero), .ambiguous)
+        let close = [p(0, 0), p(1, 0), p(100, 0)]
+        let closeViewport = try XCTUnwrap(ContourViewport(points: close, width: 232, height: 132))
+        XCTAssertEqual(closeViewport.vertexHit(points: close, closed: false, tap: closeViewport.position(close[0]), size: size, zoom: 1, offset: .zero), .ambiguous)
+    }
 }

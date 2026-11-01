@@ -75,6 +75,30 @@ struct ContourViewport {
                 y: offsetY + ((point.y * coordinateScale - minY) / extent) * fitted)
     }
 
+    enum VertexHit: Equatable { case none, ambiguous, vertex(Int) }
+
+    // Screen-space hit test. Distinct nearby vertices must be selected from
+    // the list instead of guessing; a repeated closure aliases vertex zero.
+    func vertexHit(points: [ContourMeasure.Point], closed: Bool, tap: CGPoint,
+                   size: CGSize, zoom: CGFloat, offset: CGSize, tolerance: CGFloat = 18) -> VertexHit {
+        guard tap.x.isFinite, tap.y.isFinite, size.width.isFinite, size.height.isFinite,
+              size.width > 0, size.height > 0, zoom.isFinite, zoom > 0,
+              offset.width.isFinite, offset.height.isFinite, tolerance.isFinite, tolerance > 0 else { return .none }
+        let repeated = closed && points.count > 1 && points[0].x == points[points.count - 1].x && points[0].y == points[points.count - 1].y
+        let count = points.count - (repeated ? 1 : 0)
+        var hit: Int?
+        for index in 0..<count {
+            let point = position(points[index])
+            let x = (point.x - size.width / 2) * zoom + size.width / 2 + offset.width
+            let y = (point.y - size.height / 2) * zoom + size.height / 2 + offset.height
+            guard x.isFinite, y.isFinite else { continue }
+            if hypot(x - tap.x, y - tap.y) <= tolerance {
+                if hit != nil { return .ambiguous }
+                hit = index
+            }
+        }
+        return hit.map(VertexHit.vertex) ?? .none
+    }
     // Keep the highlighted ring inside the clipped canvas without changing zoom.
     static func visibleOffset(point: CGPoint, size: CGSize, zoom: CGFloat, offset: CGSize) -> CGSize? {
         guard size.width.isFinite, size.height.isFinite, size.width > 0, size.height > 0,

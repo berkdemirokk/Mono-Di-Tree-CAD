@@ -2671,6 +2671,7 @@ private struct PointDistanceView: View {
     @State private var first = "0"
     @State private var second = "1"
     @State private var pathForward = true
+    @State private var selectingFirst = true
 
     private var indices: (Int, Int)? {
         guard let a = Int(first), let b = Int(second),
@@ -2695,9 +2696,15 @@ private struct PointDistanceView: View {
                                 Text("Geri").tag(false)
                             }.pickerStyle(.segmented)
                         }
+                        Picker("Dokunarak seçilecek nokta", selection: $selectingFirst) {
+                            Text("İlk nokta A").tag(true)
+                            Text("İkinci nokta B").tag(false)
+                        }.pickerStyle(.segmented)
                         if piece.hasMinimumContourPoints, piece.contourBounds != nil {
-                            PointDistancePreview(piece: piece, first: a, second: b, pathForward: pathForward)
-                            Text("A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
+                            PointDistancePreview(piece: piece, first: a, second: b, pathForward: pathForward) { index in
+                                if selectingFirst { first = String(index) } else { second = String(index) }
+                            }
+                            Text("Çizimde bir köşeye dokunarak seçin. A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         let firstPoint = piece.points[a], secondPoint = piece.points[b]
@@ -2739,10 +2746,12 @@ private struct PointDistancePreview: View {
     let first: Int
     let second: Int
     let pathForward: Bool
+    let onSelect: (Int) -> Void
 
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
     @State private var panEnabled = false
+    @State private var hitMessage: String?
     @State private var canvasSize: CGSize = .zero
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
@@ -2768,11 +2777,22 @@ private struct PointDistancePreview: View {
                     .simultaneousGesture(MagnificationGesture()
                         .updating($pinch) { value, state, _ in state = value }
                         .onEnded { value in zoom = boundedZoom(zoom * value); offset = boundedOffset(offset, size: geometry.size, zoom: zoom) })
+                    .simultaneousGesture(SpatialTapGesture().onEnded { value in
+                        guard !panEnabled, let bounds = piece.contourBounds,
+                              let viewport = ContourViewport(bounds: bounds, width: Double(geometry.size.width), height: Double(geometry.size.height)) else { return }
+                        switch viewport.vertexHit(points: piece.points, closed: piece.closed, tap: value.location,
+                                                  size: geometry.size, zoom: activeZoom, offset: activeOffset) {
+                        case .vertex(let index): hitMessage = nil; onSelect(index)
+                        case .ambiguous: hitMessage = "Birden fazla yakın nokta var; yakınlaştırın veya listeden seçin."
+                        case .none: hitMessage = "Nokta bulunamadı; bir köşeye dokunun veya listeden seçin."
+                        }
+                    })
                     .accessibilityLabel("Ölçüm önizlemesi")
                     .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol"). Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
                     .onAppear { canvasSize = geometry.size }
                     .onChange(of: geometry.size) { canvasSize = $0 }
             }.frame(height: 180)
+            if let hitMessage { Text(hitMessage).font(.caption).foregroundStyle(.secondary) }
             HStack {
                 Button("Ölçüm çizimini uzaklaştır") { zoom = boundedZoom(zoom / 1.25) }.disabled(zoom <= 0.5)
                 Button("Ölçüm çizimini yakınlaştır") { zoom = boundedZoom(zoom * 1.25) }.disabled(zoom >= 10)
