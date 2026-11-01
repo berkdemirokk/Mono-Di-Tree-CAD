@@ -2125,7 +2125,7 @@ internal static class DesktopVerification
         {
             var doc=input.Project.Clone();doc.ImportProvenance=new DxfImportProvenance {
                 SourceFileName=Path.GetFileName(path),SourceSha256=input.SourceSha256!,SourceByteLength=input.SourceByteLength!.Value,
-                MillimetersPerUnit=1,Warnings=[..input.Warnings],PieceIds=doc.Pieces.Select(p=>p.Id).ToList() };
+                MillimetersPerUnit=1,Warnings=[..input.Warnings,"Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin."],PieceIds=doc.Pieces.Select(p=>p.Id).ToList() };
             return doc;
         }
         try
@@ -5288,7 +5288,7 @@ internal static class DesktopVerification
             var applyHidden=studio.ReviewPreparedDxfAsync();PumpUntil(()=>applyHidden.IsCompleted);applyHidden.GetAwaiter().GetResult();
             var expectedHidden=hidden.Project.Clone();expectedHidden.ImportProvenance=new DxfImportProvenance {
                 SourceFileName=Path.GetFileName(hiddenPath),SourceSha256=hidden.SourceSha256!,SourceByteLength=hidden.SourceByteLength!.Value,
-                MillimetersPerUnit=1,Warnings=[..hidden.Warnings],PieceIds=expectedHidden.Pieces.Select(p=>p.Id).ToList() };
+                MillimetersPerUnit=1,Warnings=[..hidden.Warnings,"Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin."],PieceIds=expectedHidden.Pieces.Select(p=>p.Id).ToList() };
             Check(DocumentSession.ContentEquals(expectedHidden,studio.Document) && studio.Document.Pieces.Count==1
                 && File.ReadAllBytes(hiddenPath).SequenceEqual(hiddenBytes),
                 "Explicitly hidden INSERT permits applying independent model geometry without changing the source",checks);
