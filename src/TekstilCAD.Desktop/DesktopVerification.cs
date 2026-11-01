@@ -3859,6 +3859,29 @@ internal static class DesktopVerification
             var save=(Button)typeof(ProductionNestingWindow).GetField("saveLayout",PrivateInstance)!.GetValue(window)!;
             var calculate=typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!;
             void Calculate() { var task=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            Render(window,Path.Combine(work,"per-piece-angle-minimum.png"),680,520);
+            var root=(FrameworkElement)window.Content;
+            var list=(ListBox)typeof(ProductionNestingWindow).GetField("choices",PrivateInstance)!.GetValue(window)!;
+            for(var mode=0;mode<=4;mode++)
+            {
+                rotation.SelectedIndex=mode;root.UpdateLayout();
+                var rows=Descendants<WrapPanel>(list).Where(p=>Descendants<CheckBox>(p).Any(c=>AutomationProperties.GetName(c).Contains("aday açı"))).ToArray();
+                Check(rows.Length>0 && rows.All(p=>p.Visibility==Visibility.Collapsed),$"Per-piece angle controls are hidden in rotation mode {mode}",checks);
+            }
+            rotation.SelectedIndex=5;root.UpdateLayout();
+            foreach(var item in new[]{items[0]!,items[1]!})
+            {
+                list.ScrollIntoView(item);root.UpdateLayout();list.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);root.UpdateLayout();
+                var container=(DependencyObject?)list.ItemContainerGenerator.ContainerFromItem(item);
+                var angleControls=container is null ? [] : Descendants<CheckBox>(container).Where(c=>AutomationProperties.GetName(c).Contains("aday açı")).ToArray();
+                Check(angleControls.Length==4 && angleControls.All(c=>c.Visibility==Visibility.Visible && c.Focusable && KeyboardNavigation.GetIsTabStop(c)),
+                    "Per-piece angle controls expose four keyboard-accessible choices for each source",checks);
+                foreach(var control in angleControls)
+                {
+                    control.BringIntoView();root.UpdateLayout();control.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);root.UpdateLayout();
+                    Check(FullyVisible(control,root),"Each per-piece angle checkbox is reachable at minimum window size",checks);
+                }
+            }
             grain.SelectedIndex=1;rotation.SelectedIndex=2;Calculate();
             Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),
                 "Restricted automatic angles reject reverse one-way grain",checks);
