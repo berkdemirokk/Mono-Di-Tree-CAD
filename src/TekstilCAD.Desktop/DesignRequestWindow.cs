@@ -16,6 +16,8 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBox measurements=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBox conversation=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,Height=128,Background=StudioTheme.Surface,Foreground=StudioTheme.Text,BorderThickness=new Thickness(0),Padding=new Thickness(8),VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=48,MaxHeight=100,Background=StudioTheme.Background,Foreground=StudioTheme.Text,Padding=new Thickness(10),MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    private readonly Button measurementShortcut=new() { Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
+    private string? suggestedMeasurement;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
@@ -73,6 +75,8 @@ internal sealed class DesignRequestWindow : Window
         body.Children.Add(new TextBlock { Text="2  ·  İSTEĞİNİZ",FontWeight=FontWeights.SemiBold,Foreground=StudioTheme.Text,Margin=new Thickness(0,10,0,4) });
         body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Konuşma ve sıradaki soru",Target=conversation,Padding=new Thickness(0,4,0,4) });
         AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(new Border { Child=conversation,Background=StudioTheme.Surface,BorderBrush=StudioTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(3),Margin=new Thickness(0,0,0,6) });
+        AutomationProperties.SetHelpText(measurementShortcut,"Sorulan ölçünün etiketini mesajın sonuna ekler; sayı veya birim seçmez. Mevcut metin korunur.");
+        body.Children.Add(measurementShortcut);measurementShortcut.Click+=(_,_)=>InsertMeasurementLabel();
         body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Mesajınız",Target=chatInput,Padding=new Thickness(0,4,0,4) });AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");
         var compose=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,6) };body.Children.Add(compose);
         var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
@@ -119,11 +123,40 @@ internal sealed class DesignRequestWindow : Window
         finally { preservingLastModel=false; }
         chatInput.Clear();chatInput.Focus();status.Text="Mesaj isteğe eklendi; henüz kalıp oluşturulmadı.";
     }
+    private void InsertMeasurementLabel()
+    {
+        var label=suggestedMeasurement;
+        if(label is null)return;
+        var text=label+": ";
+        if(chatInput.Text.EndsWith(text,StringComparison.Ordinal)) { chatInput.Focus();return; }
+        var addition=(chatInput.Text.Length==0 ? "" : "\n")+text;
+        if((long)chatInput.Text.Length+addition.Length+addition.Count(c=>c=='\n')>chatInput.MaxLength)
+        { status.Text="Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.";return; }
+        chatInput.AppendText(addition);chatInput.CaretIndex=chatInput.Text.Length;chatInput.Focus();
+        status.Text="Ölçü etiketi eklendi. Değeri ve birimi siz yazın.";
+    }
+    private void UpdateMeasurementShortcut(DressMeasurementReview review)
+    {
+        var question=review.Questions.FirstOrDefault();
+        suggestedMeasurement=null;
+        if(question is not null && question.EndsWith(": açık ölçü ve birim nedir?",StringComparison.Ordinal))
+        {
+            var label=question[..question.IndexOf(':')];
+            if(label is "göğüs çevresi" or "bel çevresi" or "kalça çevresi" or "elbise boyu" or "kol boyu")suggestedMeasurement=label;
+        }
+        measurementShortcut.Visibility=suggestedMeasurement is null ? Visibility.Collapsed : Visibility.Visible;
+        if(suggestedMeasurement is not null)
+        {
+            measurementShortcut.Content="Etiketi ekle: "+suggestedMeasurement;
+            AutomationProperties.SetName(measurementShortcut,"Sorulan ölçü etiketini ekle: "+suggestedMeasurement);
+        }
+    }
     private void RefreshConversation()
     {
         DressMeasurementReview review;
         try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
-        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        UpdateMeasurementShortcut(review);
         var lines=new List<string> { "Siz:",string.IsNullOrEmpty(prompt.Text) ? "Henüz istek yazılmadı." : prompt.Text };
         if(!string.IsNullOrEmpty(measurements.Text)) { lines.Add("Ölçü notlarınız:");lines.Add(measurements.Text); }
         lines.Add("Yardımcı:");
