@@ -37,7 +37,34 @@ public enum ModelStorePrototype {
         guard code == SQLITE_OK else { throw fail(db, code) }
     }
 
+    private static func integer(_ db: OpaquePointer, _ sql: String) throws -> Int64 {
+        var statement: OpaquePointer?
+        let prepared = sqlite3_prepare_v2(db, sql, -1, &statement, nil)
+        guard prepared == SQLITE_OK, let stmt = statement else { throw fail(db, prepared) }
+        defer { sqlite3_finalize(stmt) }
+        let step = sqlite3_step(stmt)
+        guard step == SQLITE_ROW, sqlite3_column_type(stmt, 0) == SQLITE_INTEGER else {
+            throw StoreError(code: SQLITE_CORRUPT, message: "Invalid database metadata")
+        }
+        return sqlite3_column_int64(stmt, 0)
+    }
+
+    private static func validateSchema(_ db: OpaquePointer, allowInitialize: Bool) throws {
+        let appID = try integer(db, "PRAGMA application_id")
+        let version = try integer(db, "PRAGMA user_version")
+        if appID == 0 && version == 0 && allowInitialize {
+            let objects = try integer(db, "SELECT count(*) FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'")
+            guard objects == 0 else { throw StoreError(code: SQLITE_NOTADB, message: "Unrecognized database") }
+            try execute(db, "CREATE TABLE models (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, payload BLOB NOT NULL)")
+            try execute(db, "PRAGMA application_id=1413693764")
+            try execute(db, "PRAGMA user_version=1")
+        } else if appID != 1413693764 || version != 1 {
+            throw StoreError(code: SQLITE_NOTADB, message: "Unrecognized or unsupported database")
+        }
+    }
+
     private static func connection<T>(_ url: URL, create: Bool = false, _ body: (OpaquePointer) throws -> T) throws -> T {
+        guard url.isFileURL else { throw StoreError(code: SQLITE_CANTOPEN, message: "Database URL must be a file URL") }
         var db: OpaquePointer?
         let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | (create ? SQLITE_OPEN_CREATE : 0)
         let code = sqlite3_open_v2(url.path, &db, flags, nil)
@@ -48,9 +75,14 @@ public enum ModelStorePrototype {
         }
         defer { sqlite3_close(handle) }
         sqlite3_busy_timeout(handle, 10_000)
+        // Never alter settings or add tables to an unrecognized database.
+        if create {
+            try transaction(handle) { try validateSchema(handle, allowInitialize: true) }
+        } else {
+            try validateSchema(handle, allowInitialize: false)
+        }
         try execute(handle, "PRAGMA journal_mode=DELETE")
         try execute(handle, "PRAGMA synchronous=FULL")
-        if create { try execute(handle, "CREATE TABLE IF NOT EXISTS models (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, payload BLOB NOT NULL)") }
         return try body(handle)
     }
 
@@ -119,7 +151,10 @@ public enum ModelStorePrototype {
             while true {
                 let step = sqlite3_step(stmt)
                 if step == SQLITE_DONE { return rows }
-                guard step == SQLITE_ROW, let id = textColumn(stmt, 0), let name = textColumn(stmt, 1) else { throw fail(db, step) }
+                guard step == SQLITE_ROW else { throw fail(db, step) }
+                guard let id = textColumn(stmt, 0), let name = textColumn(stmt, 1) else {
+                    throw StoreError(code: SQLITE_CORRUPT, message: "Invalid model metadata")
+                }
                 rows.append(Summary(id: id, name: name))
             }
         }
@@ -142,8 +177,9 @@ public enum ModelStorePrototype {
     }
 
     private static func textColumn(_ statement: OpaquePointer, _ index: Int32) -> String? {
-        guard let text = sqlite3_column_text(statement, index) else { return nil }
-        return String(decoding: UnsafeBufferPointer(start: text, count: Int(sqlite3_column_bytes(statement, index))), as: UTF8.self)
+        guard sqlite3_column_type(statement, index) == SQLITE_TEXT,
+              let text = sqlite3_column_text(statement, index) else { return nil }
+        return String(bytes: UnsafeBufferPointer(start: text, count: Int(sqlite3_column_bytes(statement, index))), encoding: .utf8)
     }
 
     public static func read(at url: URL, id: String) throws -> Record? {
@@ -156,7 +192,10 @@ public enum ModelStorePrototype {
             guard bound == SQLITE_OK else { throw fail(db, bound) }
             let result = sqlite3_step(stmt)
             if result == SQLITE_DONE { return nil }
-            guard result == SQLITE_ROW, let name = textColumn(stmt, 0) else { throw fail(db, result) }
+            guard result == SQLITE_ROW else { throw fail(db, result) }
+            guard let name = textColumn(stmt, 0), sqlite3_column_type(stmt, 1) == SQLITE_BLOB else {
+                throw StoreError(code: SQLITE_CORRUPT, message: "Invalid model record")
+            }
             let count = Int(sqlite3_column_bytes(stmt, 1))
             let data: Data
             if count == 0 { data = Data() }

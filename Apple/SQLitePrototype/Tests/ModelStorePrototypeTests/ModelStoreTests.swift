@@ -4,6 +4,53 @@ import CSQLite
 @testable import ModelStorePrototype
 
 final class ModelStoreTests: XCTestCase {
+    func testLegacyFileCannotBeAccidentallyUsedAsDestination() throws {
+        try withDatabase { url in
+            let legacy = Data("[1,{\"Name\":\"original\",\"Pieces\":[]}]".utf8)
+            try legacy.write(to: url)
+            XCTAssertThrowsError(try ModelStorePrototype.importSnapshots(at: url, records: [
+                .init(id: "copy", name: "Copy", data: legacy)
+            ]))
+            XCTAssertEqual(try Data(contentsOf: url), legacy)
+        }
+    }
+
+    func testUnrecognizedDatabaseAndFutureVersionAreNotModified() throws {
+        try withDatabase { url in
+            var db: OpaquePointer?
+            XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+            let handle = try XCTUnwrap(db)
+            XCTAssertEqual(sqlite3_exec(handle, "CREATE TABLE customer_data(value TEXT); INSERT INTO customer_data VALUES('keep');", nil, nil, nil), SQLITE_OK)
+            XCTAssertEqual(sqlite3_close(handle), SQLITE_OK)
+            let original = try Data(contentsOf: url)
+            XCTAssertThrowsError(try ModelStorePrototype.save(at: url, id: "x", name: "X", data: Data([1])))
+            XCTAssertEqual(try Data(contentsOf: url), original)
+        }
+        try withDatabase { url in
+            try ModelStorePrototype.save(at: url, id: "old", name: "Old", data: Data([7]))
+            var db: OpaquePointer?
+            XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+            let handle = try XCTUnwrap(db)
+            XCTAssertEqual(sqlite3_exec(handle, "PRAGMA user_version=2", nil, nil, nil), SQLITE_OK)
+            XCTAssertEqual(sqlite3_close(handle), SQLITE_OK)
+            let original = try Data(contentsOf: url)
+            XCTAssertThrowsError(try ModelStorePrototype.importSnapshots(at: url, records: [.init(id: "new", name: "New", data: Data([8]))]))
+            XCTAssertEqual(try Data(contentsOf: url), original)
+        }
+    }
+
+    func testCorruptPayloadTypeIsRejectedInsteadOfConverted() throws {
+        try withDatabase { url in
+            try ModelStorePrototype.save(at: url, id: "x", name: "X", data: Data([1]))
+            var db: OpaquePointer?
+            XCTAssertEqual(sqlite3_open(url.path, &db), SQLITE_OK)
+            let handle = try XCTUnwrap(db)
+            XCTAssertEqual(sqlite3_exec(handle, "UPDATE models SET payload='not a blob' WHERE id='x'", nil, nil, nil), SQLITE_OK)
+            XCTAssertEqual(sqlite3_close(handle), SQLITE_OK)
+            XCTAssertThrowsError(try ModelStorePrototype.read(at: url, id: "x"))
+        }
+    }
+
     func testExplicitImportIsAtomicAndLeavesCallerSourceUntouched() throws {
         struct Interrupted: Error { }
         try withDatabase { url in
