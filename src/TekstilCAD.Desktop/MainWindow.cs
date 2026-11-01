@@ -709,7 +709,7 @@ public class MainWindow : Window
         if(canvas is not null && canvas.HasPendingDrawing)
         {
             if(tool==ActiveTool)return;
-            if(!ConfirmDiscardPendingDrawing("Araç değiştirilirse"))return;
+            if(!ConfirmStableDiscardPendingDrawing("Araç değiştirilirse"))return;
         }
         ActiveTool=tool; canvas?.CancelDrawing();
         RefreshToolPresentation(tool);
@@ -1544,18 +1544,29 @@ public class MainWindow : Window
             throw new InvalidOperationException($"Parça projeden silindi (kimlik: {p.Id:D}) ancak görünüm yenilenemedi. Geri alma geçmişini kontrol edin; işlemi hemen tekrar etmeyin.",ex);
         }
     }
+    internal Func<bool>? ConfirmDiscardDrawingForVerification { get; set; }
     private bool ConfirmDiscardPendingDrawing(string action)
     {
         if(canvas is null || !canvas.HasPendingDrawing)return true;
+        if(ConfirmDiscardDrawingForVerification is { } confirm)return confirm();
         return MessageBox.Show(this,$"{action} tamamlanmamış çizimin {canvas.PendingDrawingPointCount} noktası silinecek. Çizim proje dosyasına dahil değildir. İşleme devam edilirse bu oturumun otomatik kurtarma kaydı da temizlenebilir veya güncellenebilir; çizimi daha sonra kurtaramayabilirsiniz. Devam edilsin mi?",
             "Tamamlanmamış çizim",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+    }
+    private bool ConfirmStableDiscardPendingDrawing(string action)
+    {
+        if(canvas is null || !canvas.HasPendingDrawing)return true;
+        var stamp=CaptureDxfPreparationStamp();
+        if(!ConfirmDiscardPendingDrawing(action))return false;
+        if(DxfStampMatches(stamp))return true;
+        SetStatus("Onay sırasında proje, seçim veya bekleyen çizim değişti; işlem uygulanmadı. Güncel çalışmayı kontrol edin.");
+        return false;
     }
     private void Undo() => ApplyHistoryChange(false);
     private void Redo() => ApplyHistoryChange(true);
     private void ApplyHistoryChange(bool redo)
     {
         if(BlockForIncompleteRecovery() || BlockForActiveDrag() || BlockForLargeVertexValidation() || (redo ? session.RedoCount : session.UndoCount)==0 ||
-           !ConfirmDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
+           !ConfirmStableDiscardPendingDrawing(redo ? "Yinelenirse" : "Geri alınırsa"))return;
         if(BlockForActiveDrag() || BlockForLargeVertexValidation() || !(redo ? session.Redo() : session.Undo()))return;
         // The history operation has already changed the document. A later UI
         // failure must not encourage the user to undo the next history entry.
@@ -1574,11 +1585,16 @@ public class MainWindow : Window
         if(BlockForLargeVertexValidation())return false;
         // Confirm without clearing: a later save, dialog cancellation or load failure
         // must leave the unfinished drawing intact until replacement actually occurs.
-        if(!ConfirmDiscardPendingDrawing("Bu işlem sürdürülürse"))return false;
+        if(!ConfirmStableDiscardPendingDrawing("Bu işlem sürdürülürse"))return false;
+        var approvedDrawing=canvas.CapturePendingDrawing();
         if (!HasUnsavedDocumentWork) return true;
         var saveCompleted=false;
         var prompt=CreateDiscardPrompt(()=>saveCompleted=true);
         var accepted=prompt.ShowDialog() == true;
+        var currentDrawing=canvas.CapturePendingDrawing();
+        if(accepted && (approvedDrawing is null ? currentDrawing is not null :
+            currentDrawing is null || approvedDrawing.Tool!=currentDrawing.Tool || !approvedDrawing.Points.SequenceEqual(currentDrawing.Points)))
+        { SetStatus("Kaydetme onayı sırasında bekleyen çizim değişti; işlem uygulanmadı. Güncel çizimi kontrol edin.");return false; }
         saved=accepted && saveCompleted;
         return accepted;
     }
