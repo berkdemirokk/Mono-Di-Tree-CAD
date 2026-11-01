@@ -20,4 +20,21 @@ public sealed class SeamConvexPrecisionTests
         Assert.NotEqual(before[0], result.Points[0]);
         Assert.Equal(before, source.Points);
     }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void PositiveAllowanceLostOnOnlyOneAxisIsRejected(bool reverse)
+    {
+        const double x = 90_000_000;
+        var source = new PatternPiece { Points = [new(x, 0), new(x + 100, 0),
+            new(x + 100, 100), new(x, 100)] };
+        if (reverse) source.Points.Reverse();
+        var before = source.Points.ToArray();
+        // Y can move by this amount, while either X coordinate rounds unchanged.
+        var error = Assert.Throws<ArgumentException>(() => PatternTools.OffsetConvex(source, 0.000000001));
+        Assert.Contains("temsil", error.Message);
+        Assert.Equal(before, source.Points);
+        var result = PatternTools.OffsetConvex(source, 0.0001);
+        Assert.True(result.Points.Min(p => p.X) < before.Min(p => p.X));
+        Assert.True(result.Points.Min(p => p.Y) < before.Min(p => p.Y));
+    }
 }
