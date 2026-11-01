@@ -32,4 +32,19 @@ public class OffsetUnverifiedPreviewTests
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.Offset(source,5));
         Assert.Equal(before,source.Points);
     }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OffsetBeyondSupportedCoordinateRangeIsRejectedBeforePreview(bool reverse)
+    {
+        const double x = Geometry.MaxCoordinate;
+        var source = new PatternPiece { Points = [new(x - 100, 0), new(x, 0), new(x, 100), new(x - 100, 100)] };
+        if (reverse) source.Points.Reverse();
+        var before = source.Points.ToArray();
+        var failure = Assert.Throws<ArgumentException>(() => PatternTools.Offset(source, 1));
+        Assert.Contains("koordinat sınırını", failure.Message);
+        Assert.IsNotType<OffsetLocalDetailUnverifiedException>(failure);
+        Assert.Equal(before, source.Points);
+    }
 }

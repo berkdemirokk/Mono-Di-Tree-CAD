@@ -84,6 +84,16 @@ public static class PatternTools
         var result = Clipper.InflatePaths(new Paths64 { path }, delta, JoinType.Miter, EndType.Polygon, 2.0);
         cancellationToken.ThrowIfCancellationRequested();
         if (result.Count != 1) throw new ArgumentException("Dikiş payı tek bir dış kontur oluşturmadı; sonuç uygulanmadı.");
+        // Preview consumers also offer geometry-based measurement. Never expose
+        // a boundary outside the coordinate range supported by those operations,
+        // even when the later local-detail check would otherwise reject it.
+        const long maxGridCoordinate = (long)(Geometry.MaxCoordinate * OffsetGridScale);
+        foreach (var p in result[0])
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (p.X < -maxGridCoordinate || p.X > maxGridCoordinate || p.Y < -maxGridCoordinate || p.Y > maxGridCoordinate)
+                throw new ArgumentException("Dikiş payı desteklenen koordinat sınırını aşıyor; işlem uygulanmadı.");
+        }
         // Inverting a safe offset should recover the source within grid-rounding error.
         // Larger symmetric differences expose collapsed recesses or altered topology.
         cancellationToken.ThrowIfCancellationRequested();
