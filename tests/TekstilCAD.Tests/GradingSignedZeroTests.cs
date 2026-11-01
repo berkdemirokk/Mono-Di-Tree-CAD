@@ -25,13 +25,17 @@ public sealed class GradingSignedZeroTests
     }
 
     [Theory] [InlineData(0)] [InlineData(1)]
-    public void MarkedSourceRemainsRejectedEvenForZeroMovement(double steps)
+    public void MarkedSourceFollowsItsGradedVertex(double steps)
     {
         var source = new PatternPiece { Points = [new(0,0),new(20,0),new(20,20),new(0,20)],
             Notches = [new NotchMark { VertexIndex = 0, Position = new(0,0) }] };
         Point2[] increments = [new(1,0),new(1,0),new(1,0),new(1,0)];
         var before = source.Clone();
-        Assert.Throws<ArgumentException>(() => GradingEngine.Generate(source, increments, steps, "M"));
+        var result = GradingEngine.Generate(source, increments, steps, "M");
+        var mark = Assert.Single(result.Notches!);
+        Assert.Equal(0, mark.VertexIndex);
+        Assert.Equal(result.Points[0], mark.Position);
+        Assert.NotSame(source.Notches![0], mark);
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces = [before] },
             new ProjectDocument { Pieces = [source] }));
     }

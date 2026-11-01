@@ -110,7 +110,8 @@ internal static class GradeText
 
 public static class GradingEngine
 {
-    /// <summary>Generate a new size without mutating the base contour. A rule is matched by point index.</summary>
+    /// <summary>Generate a new size without mutating the base contour. A rule is matched by point index;
+    /// visual vertex marks retain that index and follow its graded point.</summary>
     public static PatternPiece Generate(PatternPiece basePiece, IReadOnlyList<Point2> increments, double steps, string sizeName)
         => Generate(basePiece, increments, steps, sizeName, CancellationToken.None);
 
@@ -119,7 +120,6 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
-        NotchSafety.RequireNoNotches(basePiece);
         var grainline = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         if (string.IsNullOrWhiteSpace(sizeName) || sizeName.Trim().Length > 128) throw new ArgumentException("Beden adı gerekli ve en fazla 128 karakter olmalıdır.", nameof(sizeName));
@@ -131,6 +131,9 @@ public static class GradingEngine
         if (basePiece.Points is null || basePiece.Points.Count != increments.Count)
             throw new ArgumentException("Her temel kalıp noktası için tam bir X/Y kuralı gereklidir.", nameof(increments));
         ValidateContour(basePiece.Points, basePiece.Closed, cancellationToken);
+        // Validate and snapshot all visual marks before generating any output.
+        // This rejects stale, duplicate, empty, or repeated-closure aliases.
+        var sourceMarks = basePiece.Notches is null ? null : MarkedPieceTranslation.Translate(basePiece, 0, 0, cancellationToken).Notches;
         // An explicit closing vertex represents the first vertex, not another
         // independent point. Different rules would silently split that vertex.
         if (basePiece.Closed && basePiece.Points[0] == basePiece.Points[^1] && increments[0] != increments[^1])
@@ -188,8 +191,23 @@ public static class GradingEngine
         ValidateContour(result, basePiece.Closed, cancellationToken);
         if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points)) != Math.Sign(Geometry.SignedArea(result)))
             throw new InvalidDataException("Serileme kontur yönünü tersine çevirdi; kuralları kontrol edin.");
+        List<NotchMark>? resultMarks = null;
+        if (sourceMarks is not null)
+        {
+            resultMarks = new List<NotchMark>(sourceMarks.Count);
+            foreach (var mark in sourceMarks)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                int i = mark.VertexIndex;
+                var position = new Point2(GradeCoordinate(mark.Position.X, increments[i].X, steps, i, "X"),
+                    GradeCoordinate(mark.Position.Y, increments[i].Y, steps, i, "Y"));
+                if (position != result[i])
+                    throw new InvalidDataException("Serilemede köşe işareti yeni noktayla eşleşmedi; işlem uygulanmadı.");
+                resultMarks.Add(new NotchMark { VertexIndex = i, Position = position });
+            }
+        }
         cancellationToken.ThrowIfCancellationRequested();
-        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline };
+        return new PatternPiece { Id = Guid.NewGuid(), Name = $"{basePiece.Name} · {sizeName.Trim()}", Points = result, Closed = basePiece.Closed, Grainline = grainline, Notches = resultMarks };
     }
 
     private static double GradeCoordinate(double source, double increment, double steps, int index, string axis)
@@ -215,7 +233,6 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
-        NotchSafety.RequireNoNotches(basePiece);
         _ = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         ArgumentNullException.ThrowIfNull(sizes);
