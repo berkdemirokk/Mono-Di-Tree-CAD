@@ -1833,7 +1833,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
