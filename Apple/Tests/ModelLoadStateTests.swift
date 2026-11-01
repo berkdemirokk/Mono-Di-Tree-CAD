@@ -39,6 +39,26 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertNotEqual(state.revision, originalRevision)
         XCTAssertFalse(state.load.isLoading)
     }
+    #if DEBUG
+    func testEditIdentityRejectsSelectionLoadAndModelChanges() throws {
+        var state = LoadedModelState<Int>()
+        state.install(1, data: Data([1]), selectedPiece: 0)
+        let identity = try XCTUnwrap(state.editIdentity())
+        XCTAssertTrue(state.isCurrent(identity, data: Data([1])))
+        state.selectedPiece = 1
+        XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
+        state.selectedPiece = 0
+        let load = state.load.begin()
+        XCTAssertNil(state.editIdentity())
+        XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
+        state.load.invalidate()
+        XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
+        XCTAssertFalse(state.completePreview(load, model: 2, data: Data([2]), selectedPiece: 0))
+        let replacement = state.load.begin()
+        XCTAssertTrue(state.completePreview(replacement, model: 2, data: Data([2]), selectedPiece: 0))
+        XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
+    }
+    #endif
     func testInstallingModelReplacesSelectionWithMatchedOrDefaultSelection() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]), selectedPiece: 2)

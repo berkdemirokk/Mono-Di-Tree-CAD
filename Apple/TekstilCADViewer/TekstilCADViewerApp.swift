@@ -94,9 +94,7 @@ private struct ContentView: View {
         let pieceID: UUID
         let index: Int
         let projectName: String
-        let revision: UUID
-
-        let loadRequest: UUID
+        let identity: LoadedModelState<Drawing>.EditIdentity
     }
     @State private var pointEditSnapshot: PointEditSnapshot?
     #endif
@@ -341,14 +339,15 @@ private struct ContentView: View {
                             }
                         #if DEBUG
                         Button("Deneysel nokta düzenle…") {
-                            guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
+                            guard let data = sourceData, let id = project.pieces[selectedPiece].id,
+                                  let identity = loadedModel.editIdentity() else { return }
                             pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
-                                index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: loadedModel.load.request)
+                                index: selectedPiece, projectName: project.name, identity: identity)
                         }
                             .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: $pointEditSnapshot) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
-                                    isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && loadedModel.load.request == snapshot.loadRequest && !loadedModel.load.isLoading },
+                                    isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
                                     invalidateForTesting: { loadedModel.load.invalidate() })
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
