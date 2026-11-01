@@ -1031,6 +1031,7 @@ internal static class DesktopVerification
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyMarkedGrading(studio,checks);
+            VerifyLargeGradeWorker(studio,checks);
             VerifyGradeRuleSignedZeroConflict(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
@@ -5701,7 +5702,7 @@ internal static class DesktopVerification
             "4096-point selected piece does not claim the over-4096 limits",checks);
         studio.Select(p4097.Id);
         var prior=warning.Text;
-        Check(warning.Visibility==Visibility.Visible && prior.Contains("4096 noktanın üzerini desteklemez") && prior.Contains("2000") && prior.Contains("HPGL") && warning.Focusable,
+        Check(warning.Visibility==Visibility.Visible && prior.Contains("4096 noktanın üzerini desteklemez") && prior.Contains("7071") && prior.Contains("2000") && prior.Contains("HPGL") && warning.Focusable,
             "4097-point selected piece shows persistent and focusable downstream limits",checks);
         Render(studio,Path.ChangeExtension(reportPath,".selected-piece-limits-1024x640.png"),1024,640);
         Check(FullyVisible(warning,(FrameworkElement)studio.Content)
@@ -9798,6 +9799,33 @@ internal static class DesktopVerification
             }
             finally { tools.Close(); }
         }
+    }
+
+    private static void VerifyLargeGradeWorker(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var points=Enumerable.Range(0,4097).Select(i=> { var angle=Math.Tau*i/4097;return new Point2(1000*Math.Cos(angle),1000*Math.Sin(angle)); }).ToList();
+        var source=new PatternPiece { Name="Büyük beden",Points=points,Notches=[new NotchMark { VertexIndex=0,Position=points[0] }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[source] });studio.Select(source.Id);var before=studio.Document.Clone();
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;var tools=new TextileToolsWindow(studio);
+        using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+        try
+        {
+            var root=(FrameworkElement)tools.Content;root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
+            var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            Check(grid.Items.Count==4097 && grid.EnableRowVirtualization,"Large grading source has a virtualized row for each point",checks);
+            grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="0.001";
+            tools.BeforeGradeForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+            var create=Descendants<Button>(root).Single(b=>Equals(b.Content,"Yeni bedeni projeye ekle"));create.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            pending=tools.GradeTaskForVerification ?? throw new InvalidOperationException("Large grading worker did not start.");PumpUntil(()=>reached.IsSet);
+            var responsive=false;studio.Dispatcher.BeginInvoke(new Action(()=>responsive=true));PumpUntil(()=>responsive);
+            Check(responsive && tools.GradeRunningForVerification && DocumentSession.ContentEquals(before,studio.Document),"Large grading worker leaves the dispatcher responsive and source unchanged",checks);
+            var cancel=(Button)typeof(TextileToolsWindow).GetField("cancelGrade",PrivateInstance)!.GetValue(tools)!;cancel.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(!tools.GradeRunningForVerification && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 &&
+                grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="0.001","Cancelled large grading preserves source, draft and history",checks);
+        }
+        finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }tools.BeforeGradeForVerification=null;tools.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyMarkedGrading(MainWindow studio,List<string> checks)

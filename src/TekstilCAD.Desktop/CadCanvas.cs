@@ -298,7 +298,7 @@ public sealed class CadCanvas : FrameworkElement
     }
     private async Task FinishLargePolylineAsync(Point2[] points, ProjectDocument document, CancellationTokenSource cancellation,bool closed)
     {
-        owner.SetStatus("Büyük çizim arka planda doğrulanıyor. Dikiş payı ve serileme 4096; pastal 2000 noktayla sınırlıdır. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
+        owner.SetStatus("Büyük çizim arka planda doğrulanıyor. Dikiş payı 4096, tek beden serileme 7071 ve pastal 2000 noktayla sınırlıdır; toplu serileme ortak iş bütçesine tabidir. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
         var committed=false;
         try
         {
@@ -309,7 +309,7 @@ public sealed class CadCanvas : FrameworkElement
             { owner.SetStatus("Doğrulama sırasında proje değişti; çizim korunuyor. Tamamlamak için yeniden deneyin.");return; }
             owner.AddPiece(points.ToList(),closed,()=> { committed=true;drawing.Clear(); });owner.ClearCanvasError();
             InvalidateVisual();
-            owner.SetStatus("Büyük çizim tamamlandı. Dikiş payı ve serileme 4096; pastal 2000 noktayla sınırlıdır. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
+            owner.SetStatus("Büyük çizim tamamlandı. Dikiş payı 4096, tek beden serileme 7071 ve pastal 2000 noktayla sınırlıdır; toplu serileme ortak iş bütçesine tabidir. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
         }
         catch(OperationCanceledException) when(cancellation.IsCancellationRequested && !committed) { }
         catch(OperationCanceledException ex) when(committed)

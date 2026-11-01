@@ -55,7 +55,7 @@ public static class LargeContourValidator
         for (var i = 0; i < count; i++)
             if (!unique.Add(snapshot[i])) throw new ArgumentException("A closed contour contains repeated vertices.", nameof(points));
         cancellationToken.ThrowIfCancellationRequested();
-        if (Math.Abs(Geometry.SignedArea(snapshot)) <= Geometry.Epsilon)
+        if (Math.Abs(Geometry.SignedArea(snapshot,cancellationToken)) <= Geometry.Epsilon)
             throw new ArgumentException("A closed contour must have nonzero area.", nameof(points));
 
         var bounds = new EdgeBounds[count];

@@ -30,7 +30,7 @@ public sealed class GradeRule
             var points = RequiredProperty(root, "Increments");
             if (name.ValueKind != JsonValueKind.String || baseSize.ValueKind != JsonValueKind.String || points.ValueKind != JsonValueKind.Array)
                 throw new InvalidDataException("Serileme kuralı alanları geçersiz.");
-            if (points.GetArrayLength() is < 2 or > Geometry.MaxValidatedContourVertices)
+            if (points.GetArrayLength() is < 2 or > GradingEngine.MaximumGradePoints)
                 throw new InvalidDataException("Serileme kuralı nokta sayısı geçersiz.");
             foreach (var point in points.EnumerateArray())
             {
@@ -83,7 +83,7 @@ public sealed class GradeRule
     }
     private void Validate()
     {
-        if (string.IsNullOrWhiteSpace(Name) || Name.Length > 1024 || !GradeText.IsWellFormed(Name) || string.IsNullOrWhiteSpace(BaseSize) || BaseSize.Length > 128 || !GradeText.IsWellFormed(BaseSize) || Increments is null || Increments.Count is < 2 or > Geometry.MaxValidatedContourVertices)
+        if (string.IsNullOrWhiteSpace(Name) || Name.Length > 1024 || !GradeText.IsWellFormed(Name) || string.IsNullOrWhiteSpace(BaseSize) || BaseSize.Length > 128 || !GradeText.IsWellFormed(BaseSize) || Increments is null || Increments.Count is < 2 or > GradingEngine.MaximumGradePoints)
             throw new InvalidDataException("Serileme kuralı adı, temel beden veya nokta listesi geçersiz.");
         if (Increments.Any(p => !p.IsFinite || Math.Abs(p.X) > 1e8 || Math.Abs(p.Y) > 1e8))
             throw new InvalidDataException("Serileme artımları sonlu ve izin verilen aralıkta olmalıdır.");
@@ -110,6 +110,9 @@ internal static class GradeText
 
 public static class GradingEngine
 {
+    // Two quadratic contour validations are bounded by the same 50 million work budget.
+    public const int MaximumGradePoints = 7071;
+    public const long MaximumBatchValidationWork = 50_000_000;
     /// <summary>Generate a new size without mutating the base contour. A rule is matched by point index;
     /// visual vertex marks retain that index and follow its graded point.</summary>
     public static PatternPiece Generate(PatternPiece basePiece, IReadOnlyList<Point2> increments, double steps, string sizeName)
@@ -156,14 +159,19 @@ public static class GradingEngine
             throw new InvalidDataException("Serileme kapanış kenarını sıfıra indirdi; kuralları kontrol edin.");
         // A uniform rule is a translation. Checking each absolute displacement
         // alone can miss substantial distortion of a much shorter edge.
-        if (increments.All(p => p == increments[0]))
+        var uniform=true;
+        for(var i=1;i<increments.Count;i++) { if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();if(increments[i]!=increments[0]) { uniform=false;break; } }
+        if (uniform)
         {
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                var translated = Geometry.Translate(basePiece.Points, increments[0].X * steps, increments[0].Y * steps);
-                if (!translated.SequenceEqual(result))
-                    throw new InvalidDataException("Serileme konturu güvenle taşıyamadı.");
+                var translated = Geometry.Translate(basePiece.Points, increments[0].X * steps, increments[0].Y * steps,cancellationToken);
+                for(var i=0;i<translated.Count;i++)
+                {
+                    if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();
+                    if(translated[i]!=result[i])throw new InvalidDataException("Serileme konturu güvenle taşıyamadı.");
+                }
             }
             catch (ArgumentException error)
             {
@@ -171,7 +179,7 @@ public static class GradingEngine
             }
             cancellationToken.ThrowIfCancellationRequested();
         }
-        if (grainline is not null && increments.All(p => p == increments[0]))
+        if (grainline is not null && uniform)
         {
             var delta = increments[0];
             Point2 Move(Point2 p) => new(GradeCoordinate(p.X, delta.X, steps, 0, "X"),
@@ -182,14 +190,14 @@ public static class GradingEngine
             var start = Move(grainline.Start);
             var end = Move(grainline.End);
             var moved = Geometry.Translate([basePiece.Points[0], grainline.Start, grainline.End],
-                delta.X * steps, delta.Y * steps);
+                delta.X * steps, delta.Y * steps,cancellationToken);
             if (moved[0] != result[0] || moved[1] != start || moved[2] != end)
                 throw new InvalidDataException("İplik yönü ve kontur aynı konuma güvenle taşınamadı.");
             grainline.Start = start;
             grainline.End = end;
         }
         ValidateContour(result, basePiece.Closed, cancellationToken);
-        if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points)) != Math.Sign(Geometry.SignedArea(result)))
+        if (basePiece.Closed && Math.Sign(Geometry.SignedArea(basePiece.Points,cancellationToken)) != Math.Sign(Geometry.SignedArea(result,cancellationToken)))
             throw new InvalidDataException("Serileme kontur yönünü tersine çevirdi; kuralları kontrol edin.");
         List<NotchMark>? resultMarks = null;
         if (sourceMarks is not null)
@@ -238,10 +246,11 @@ public static class GradingEngine
         ArgumentNullException.ThrowIfNull(sizes);
         if (basePiece.Points is null || basePiece.Points.Count != increments.Count)
             throw new ArgumentException("Her nokta için bir kural gereklidir.", nameof(increments));
-        // Bound total quadratic work before generating any output, including base revalidation.
-        if ((long)increments.Count * sizes.Count > 200_000 || (long)increments.Count * increments.Count * sizes.Count > 50_000_000)
-            throw new ArgumentException("Serileme grubu çok büyük; daha küçük gruplar kullanın.", nameof(sizes));
+        // Bound operands before multiplication, then total quadratic work including both contour validations.
+        if(increments.Count>MaximumGradePoints)throw new ArgumentException("Serileme için en fazla 7071 nokta desteklenir.",nameof(increments));
         if (sizes.Count > 1000) throw new ArgumentException("En fazla 1000 beden oluşturulabilir.", nameof(sizes));
+        if ((long)increments.Count * sizes.Count > 200_000 || (long)increments.Count * increments.Count * sizes.Count > MaximumBatchValidationWork)
+            throw new ArgumentException("Serileme grubu çok büyük; daha küçük gruplar kullanın.", nameof(sizes));
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var size in sizes)
         {
@@ -278,8 +287,8 @@ public static class GradingEngine
     private static void ValidateContour(IReadOnlyList<Point2> points, bool closed, CancellationToken cancellationToken)
     {
         // Quadratic intersection validation is intentionally bounded for this first implementation.
-        if (points.Count < (closed ? 3 : 2) || points.Count > Geometry.MaxValidatedContourVertices)
-            throw new ArgumentException("Serileme için geçersiz nokta sayısı (en fazla 4096).");
+        if (points.Count < (closed ? 3 : 2) || points.Count > GradingEngine.MaximumGradePoints)
+            throw new ArgumentException("Serileme için geçersiz nokta sayısı (en fazla 7071).");
         for (var i = 0; i < points.Count; i++)
         {
             if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
@@ -302,8 +311,12 @@ public static class GradingEngine
             if (ux * vy - uy * vx == 0 && ux * vx + uy * vy > 0)
                 throw new InvalidDataException("Kontur komşu kenarlarda geri dönüyor veya üst üste biniyor.");
         }
-        if (Geometry.HasSelfIntersections(points, closed, cancellationToken)) throw new InvalidDataException("Kontur kendiyle kesişiyor veya yinelenen kenar içeriyor.");
-        if (closed && Math.Abs(Geometry.SignedArea(points)) <= Geometry.Epsilon)
+        if(points.Count>Geometry.MaxValidatedContourVertices)
+        {
+            if(closed)LargeContourValidator.Validate(points,cancellationToken);else LargeOpenPathValidator.Validate(points,cancellationToken);
+        }
+        else if (Geometry.HasSelfIntersections(points, closed, cancellationToken)) throw new InvalidDataException("Kontur kendiyle kesişiyor veya yinelenen kenar içeriyor.");
+        if (closed && Math.Abs(Geometry.SignedArea(points,cancellationToken)) <= Geometry.Epsilon)
             throw new InvalidDataException("Kapalı konturun alanı sıfır olamaz.");
     }
 }

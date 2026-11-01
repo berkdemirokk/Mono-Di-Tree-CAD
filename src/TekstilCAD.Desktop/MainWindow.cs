@@ -857,7 +857,7 @@ public class MainWindow : Window
         if(pointCount>2000)
         {
             pieceLimits.Text=pointCount>Geometry.MaxValidatedContourVertices
-                ? $"{pointCount} nokta: Pastal parça başına 2000 noktayla sınırlıdır. Dikiş payı ve beden serileme 4096 noktanın üzerini desteklemez; nokta düzenleme arka planda doğrulanır. HPGL iş genelindeki 50 milyon kenar çifti sınırına tabidir; dosya çıktısı fiziksel makine uyumluluğunu doğrulamaz."
+                ? $"{pointCount} nokta: Pastal 2000 noktayla sınırlıdır. Dikiş payı 4096 noktanın üzerini desteklemez. Tek beden serileme en fazla 7071 nokta; toplu serileme iş bütçesiyle sınırlıdır. HPGL 50 milyon kenar çifti sınırına tabidir; fiziksel uyum doğrulanmadı."
                 : $"{pointCount} nokta: Pastal parça başına 2000 noktayla sınırlıdır. HPGL iş genelindeki 50 milyon kenar çifti sınırına tabidir; dosya çıktısı fiziksel makine uyumluluğunu doğrulamaz.";
             pieceLimits.Visibility=Visibility.Visible;
         }

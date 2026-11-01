@@ -44,7 +44,7 @@ public static class MarkedPieceTranslation
                     throw new ArgumentException("İşaret kaynak konturla eşleşmiyor; taşıma uygulanmadı.", nameof(source));
             }
         }
-        var translated = Geometry.Translate(source.Points, dx, dy);
+        var translated = Geometry.Translate(source.Points, dx, dy,cancellationToken);
         for (var i = 0; i < translated.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();

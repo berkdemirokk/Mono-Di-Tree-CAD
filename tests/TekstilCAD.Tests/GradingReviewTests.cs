@@ -46,7 +46,7 @@ public class GradingReviewTests
     {
         var rule = new GradeRule { Name = new string('x', 1025), Increments = [..Zero] };
         Assert.Throws<InvalidDataException>(() => rule.ToJson());
-        rule.Name = "Test"; rule.Increments = Enumerable.Repeat(default(Point2), Geometry.MaxValidatedContourVertices + 1).ToList();
+        rule.Name = "Test"; rule.Increments = Enumerable.Repeat(default(Point2), GradingEngine.MaximumGradePoints + 1).ToList();
         Assert.Throws<InvalidDataException>(() => rule.ToJson());
     }
     [Fact]

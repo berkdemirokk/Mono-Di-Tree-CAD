@@ -166,7 +166,7 @@ internal sealed class BulkGradingWindow : Window
                 for(int i=0;i<generated.Count;i++)
                 {
                     cts.Token.ThrowIfCancellationRequested();
-                    ValidateGrainTransfer(source,generated[i],increments,sizes[i].Steps);
+                    ValidateGrainTransfer(source,generated[i],increments,sizes[i].Steps,cts.Token);
                     GradeBatchInput.ApplyMetadata(generated[i],source,entries[i],include,copy);
                 }
                 var candidate=snapshot.Clone();candidate.Pieces.AddRange(generated.Select(p=>p.Clone()));MainWindow.Validate(candidate);
@@ -201,11 +201,14 @@ internal sealed class BulkGradingWindow : Window
         }
         return result.ToString();
     }
-    internal static void ValidateGrainTransfer(PatternPiece source,PatternPiece generated,IReadOnlyList<Point2> increments,double steps)
+    internal static void ValidateGrainTransfer(PatternPiece source,PatternPiece generated,IReadOnlyList<Point2> increments,double steps,CancellationToken cancellationToken=default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if(source.Grainline is { } line)
         {
-            var shift=increments.Count>0 && increments.All(p=>p==increments[0]) ? increments[0]*steps : new Point2(0,0);
+            var uniform=increments.Count>0;
+            for(var i=1;i<increments.Count;i++) { if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();if(increments[i]!=increments[0]) { uniform=false;break; } }
+            var shift=uniform ? increments[0]*steps : new Point2(0,0);
             if(generated.Grainline is not { } result || ReferenceEquals(line,result) || result.Start!=line.Start+shift || result.End!=line.End+shift || !result.NeedsReview)
                 throw new InvalidOperationException("Yeni bedenin iplik yönü beklenen şekilde korunamadı; sonuç projeye eklenmedi.");
         }

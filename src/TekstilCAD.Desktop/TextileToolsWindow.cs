@@ -748,7 +748,7 @@ public sealed class TextileToolsWindow : Window
                     beforeGrade?.Invoke();
                     token.ThrowIfCancellationRequested();
                     var item=GradingEngine.Generate(snapshot,increments,stepCount,sizeName,token);
-                    BulkGradingWindow.ValidateGrainTransfer(snapshot,item,increments,stepCount);
+                    BulkGradingWindow.ValidateGrainTransfer(snapshot,item,increments,stepCount,token);
                     if(transferSize || role is not null || material is not null)
                         item.Metadata=new PieceMetadata { Size=transferSize ? sizeName : null,Role=role,Material=material,Quantity=null };
                     token.ThrowIfCancellationRequested();

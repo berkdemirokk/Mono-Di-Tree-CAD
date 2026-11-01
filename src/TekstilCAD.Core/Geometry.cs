@@ -32,14 +32,19 @@ public static class Geometry
         return FiniteResult(max * Math.Sqrt(Math.Pow(dx / max, 2) + Math.Pow(dy / max, 2)));
     }
 
-    public static double SignedArea(IReadOnlyList<Point2> polygon)
+    public static double SignedArea(IReadOnlyList<Point2> polygon) => SignedArea(polygon,CancellationToken.None);
+
+    public static double SignedArea(IReadOnlyList<Point2> polygon,CancellationToken cancellationToken)
     {
-        Validate(polygon);
+        cancellationToken.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(polygon);
+        for(var i=0;i<polygon.Count;i++) { if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();Validate(polygon[i]); }
+        cancellationToken.ThrowIfCancellationRequested();
         if (polygon.Count < 3) return 0;
         // Translate to the first vertex to reduce cancellation for far-from-origin contours.
         var origin = polygon[0]; double sum = 0, magnitude = 0;
         for (var i = 1; i < polygon.Count - 1; i++)
         {
+            if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();
             var a = polygon[i] - origin; var b = polygon[i + 1] - origin;
             var left = a.X * b.Y; var right = a.Y * b.X;
             sum += left - right;
@@ -51,11 +56,11 @@ public static class Geometry
         // subnormal, not the rounding unit of IEEE double precision.
         var roundingBound = Math.Max(1e-12, (polygon.Count + 8d) * 2.220446049250313e-16);
         if (magnitude > 0 && Math.Abs(sum) <= magnitude * roundingBound)
-            return ExactSignedArea(polygon);
-        return FiniteResult(sum / 2);
+            return ExactSignedArea(polygon,cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();return FiniteResult(sum / 2);
     }
 
-    private static double ExactSignedArea(IReadOnlyList<Point2> polygon)
+    private static double ExactSignedArea(IReadOnlyList<Point2> polygon,CancellationToken cancellationToken)
     {
         // Every finite double is an integer multiple of 2^-1074.
         static BigInteger Scaled(double value)
@@ -73,10 +78,12 @@ public static class Geometry
         var ax = Scaled(polygon[1].X) - ox; var ay = Scaled(polygon[1].Y) - oy;
         for (int i = 2; i < polygon.Count; i++)
         {
+            if((i & 63)==0)cancellationToken.ThrowIfCancellationRequested();
             var bx = Scaled(polygon[i].X) - ox; var by = Scaled(polygon[i].Y) - oy;
             sum += ax * by - ay * bx;
             ax = bx; ay = by;
         }
+        cancellationToken.ThrowIfCancellationRequested();
         if (sum.IsZero) return 0;
         // Reduce before conversion, retaining extra bits for rounding.
         int shift = (int)Math.Max(0, BigInteger.Abs(sum).GetBitLength() - 60);
@@ -90,16 +97,25 @@ public static class Geometry
         return new(points.Min(p => p.X), points.Min(p => p.Y), points.Max(p => p.X), points.Max(p => p.Y));
     }
 
-    public static List<Point2> Translate(IReadOnlyList<Point2> points, double dx, double dy)
+    public static List<Point2> Translate(IReadOnlyList<Point2> points, double dx, double dy) => Translate(points,dx,dy,CancellationToken.None);
+
+    public static List<Point2> Translate(IReadOnlyList<Point2> points, double dx, double dy,CancellationToken cancellationToken)
     {
-        Validate(points);
+        cancellationToken.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(points);
+        for(var i=0;i<points.Count;i++) { if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();Validate(points[i]); }
+        cancellationToken.ThrowIfCancellationRequested();
         // Displacements may span the whole supported world (200,000,000 mm).
         // The resulting coordinates, rather than the delta, have world limits.
         if (!double.IsFinite(dx) || !double.IsFinite(dy)) throw new ArgumentOutOfRangeException(nameof(dx), "Taşıma miktarı sonlu olmalıdır.");
         // Adding +0 to -0 changes its stored bits. An unmoved axis should
         // retain the source representation, including signed zero.
-        var moved = Map(points, p => new(dx == 0 ? p.X : p.X + dx, dy == 0 ? p.Y : p.Y + dy));
-        TranslationPrecision.Validate(points, moved);
+        var moved=new List<Point2>(points.Count);
+        for(var i=0;i<points.Count;i++)
+        {
+            if((i & 255)==0)cancellationToken.ThrowIfCancellationRequested();var p=points[i];
+            var value=new Point2(dx == 0 ? p.X : p.X + dx,dy == 0 ? p.Y : p.Y + dy);Validate(value);moved.Add(value);
+        }
+        TranslationPrecision.Validate(points,moved,cancellationToken);cancellationToken.ThrowIfCancellationRequested();
         return moved;
     }
 
@@ -267,7 +283,7 @@ public static class Geometry
         if (distinctCount != count)
             throw new ArgumentException("A closed contour contains repeated vertices.", nameof(points));
         cancellationToken.ThrowIfCancellationRequested();
-        var area = SignedArea(points);
+        var area = SignedArea(points,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         if (Math.Abs(area) <= Epsilon)
             throw new ArgumentException("A closed contour must have nonzero area.", nameof(points));

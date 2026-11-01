@@ -48,14 +48,16 @@ internal static class TranslationPrecision
         return BigInteger.Abs(target-source) * Denominator <= source;
     }
 
-    internal static void Validate(IReadOnlyList<Point2> source, IReadOnlyList<Point2> target)
+    internal static void Validate(IReadOnlyList<Point2> source, IReadOnlyList<Point2> target,CancellationToken cancellationToken=default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (source.Count != target.Count) throw new ArgumentException("Taşınan nokta sayısı değişti.");
         if (source.Count == 0) return;
         var sMinX=source[0].X; var sMaxX=sMinX; var sMinY=source[0].Y; var sMaxY=sMinY;
         var tMinX=target[0].X; var tMaxX=tMinX; var tMinY=target[0].Y; var tMaxY=tMinY;
         for (var i=0; i<source.Count; i++)
         {
+            if((i & 63)==0)cancellationToken.ThrowIfCancellationRequested();
             var s=source[i]; var t=target[i];
             sMinX=Math.Min(sMinX,s.X); sMaxX=Math.Max(sMaxX,s.X);
             sMinY=Math.Min(sMinY,s.Y); sMaxY=Math.Max(sMaxY,s.Y);
@@ -65,6 +67,7 @@ internal static class TranslationPrecision
             if (!SameVector(source[previous],s,target[previous],t) || !SameVector(source[0],s,target[0],t))
                 throw new ArgumentException("Taşıma sırasında parça şekli sayısal hassasiyetle korunamıyor. Daha küçük koordinatlar kullanın.");
         }
+        cancellationToken.ThrowIfCancellationRequested();
         if (!SameSpan(sMinX,sMaxX,tMinX,tMaxX) || !SameSpan(sMinY,sMaxY,tMinY,tMaxY))
             throw new ArgumentException("Taşıma sırasında parçanın eni veya boyu sayısal hassasiyetle korunamıyor. Daha küçük koordinatlar kullanın.");
     }

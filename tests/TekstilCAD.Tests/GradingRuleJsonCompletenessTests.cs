@@ -32,7 +32,7 @@ public class GradingRuleJsonCompletenessTests
     [Fact]
     public void OversizedPointListIsRejectedBeforeIndividualEntriesAreRead()
     {
-        var points = string.Join(',', Enumerable.Repeat("{}", Geometry.MaxValidatedContourVertices + 1));
+        var points = string.Join(',', Enumerable.Repeat("{}", GradingEngine.MaximumGradePoints + 1));
         var json = "{\"Name\":\"R\",\"BaseSize\":\"M\",\"Increments\":[" + points + "]}";
         var error = Assert.Throws<InvalidDataException>(() => GradeRule.FromJson(json));
         Assert.Contains("nokta sayısı", error.Message);
