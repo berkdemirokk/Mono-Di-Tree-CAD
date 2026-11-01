@@ -92,7 +92,7 @@ public static class PatternTools
         // Check local vertices and edge midpoints in both directions, in grid units.
         // This is a conservative sampling check, not a proof of Hausdorff distance.
         if (!LocallyMatchesWithCancellation(path, recovered[0], 8.0, cancellationToken) || !LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken))
-            throw new OffsetLocalDetailUnverifiedException();
+            throw new OffsetLocalDetailUnverifiedException(result[0].Select(p => new Point2(p.X / scale, p.Y / scale)));
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
         cancellationToken.ThrowIfCancellationRequested();
@@ -518,3 +518,4 @@ public static class PatternTools
     }
     private static double Cross(Point2 a, Point2 b) => a.X * b.Y - a.Y * b.X;
 }
+

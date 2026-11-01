@@ -25,6 +25,8 @@ public sealed class TextileToolsWindow : Window
     private readonly List<(Button Button,Func<bool> Available)> commands = [];
     private bool refreshingSource;
     private bool offsetBusy;
+    private Action? showUnverifiedOffsetPreview;
+    private readonly Button unverifiedOffsetPreview = new() { Content="Doğrulanmamış önizleme", Visibility=Visibility.Collapsed };
     // A committed result whose view could not be refreshed must be inspected
     // in the workspace before another allowance can be created in this window.
     private bool offsetReviewRequired;
@@ -129,6 +131,9 @@ public sealed class TextileToolsWindow : Window
         AutomationProperties.SetHelpText(resultViewer,"Uzun sonuçları okumak için yön tuşlarıyla kaydırın.");
         result.SetBinding(ToolTipProperty,new Binding(nameof(TextBlock.Text)) { Source=result });footer.Children.Add(resultViewer);
         var footerActions=new WrapPanel { VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right };
+        unverifiedOffsetPreview.Click+=(_,_)=>showUnverifiedOffsetPreview?.Invoke();
+        AutomationProperties.SetHelpText(unverifiedOffsetPreview,"Yalnızca görüntüleme; proje değişmez ve sonuç dışa aktarılmaz.");
+        footerActions.Children.Add(unverifiedOffsetPreview);
         cancelGrade.Click+=(_,_)=>RequestGradeCancellation();
         AutomationProperties.SetName(cancelGrade,"Beden hesaplamasını iptal et");
         AutomationProperties.SetHelpText(cancelGrade,"İptal isteğinden sonra işlem durana kadar bekleyin; sonuç projeye eklenmez.");
@@ -952,6 +957,7 @@ public sealed class TextileToolsWindow : Window
             if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Önce eklenmiş dikiş payı parçasını ana çalışma alanında kontrol edin. Yeniden hesaplamak için atölyeyi kapatıp açın."; }
             return;
         }
+        showUnverifiedOffsetPreview=null; unverifiedOffsetPreview.Visibility=Visibility.Collapsed;
         var offsetCommitted=false;
         Guid? committedPieceId=null;
         Guid? sourcePieceId=null;
@@ -1000,7 +1006,24 @@ public sealed class TextileToolsWindow : Window
                         : " Ölçüyü ve konturu kontrol edin; seçilen payı doğrulatın.";
                     result.Text=$"Dikiş payı uygulanmadı ({allowanceDescription}): "+ex.Message+
                         " Bu hesaplama kaynak parçayı değiştirmedi."+nextStep+" Üretim payını yalnız üretim şartları izin veriyorsa değiştirin. "+offsetSourceDescription+".";
-                }
+                    if(ex is OffsetLocalDetailUnverifiedException { Preview.IsDefaultOrEmpty: false } unverified)
+                    {
+                        var preview=unverified.Preview;
+                        showUnverifiedOffsetPreview=()=>
+                        {
+                            if(windowClosed || workspace.HasPendingCanvasOrPropertyWork ||
+                               !ReferenceEquals(workspace.Document,originalDocument) || !DocumentSession.ContentEquals(workspace.Document,originalContent) ||
+                               offsetAllowance?.Text!=originalAllowanceText || source.SelectedItem is not PatternPiece selectedAgain || selectedAgain.Id!=snapshot.Id)
+                            {
+                                showUnverifiedOffsetPreview=null; unverifiedOffsetPreview.Visibility=Visibility.Collapsed;
+                                result.Foreground=StudioTheme.Warning;
+                                result.Text="Proje, seçim veya dikiş payı değişti; eski önizleme gösterilmedi. Güncel konturla yeniden hesaplayın.";
+                                return;
+                            }
+                            new OffsetUnverifiedPreviewWindow(this,snapshot.Points,preview).ShowDialog();
+                        };
+                        unverifiedOffsetPreview.Visibility=Visibility.Visible;
+                    }                }
                 return;
             }
             if(windowClosed)return;
@@ -1158,5 +1181,7 @@ public sealed class TextileToolsWindow : Window
         public string Dx { get; set; }="0";public string Dy { get; set; }="0";
     }
 }
+
+
 
 
