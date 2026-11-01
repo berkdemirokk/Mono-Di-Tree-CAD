@@ -1087,7 +1087,7 @@ enum ModelStore {
 
     // Detect common concurrent in-place changes while reading an imported file.
     // Metadata checks are not an atomic snapshot against uncoordinated writers.
-    static func readFileSnapshot(_ url: URL, afterFirstChunk: (() throws -> Void)? = nil) throws -> Data {
+    static func readFileSnapshot(_ url: URL, expectedIdentity: FileIdentity? = nil, afterFirstChunk: (() throws -> Void)? = nil) throws -> Data {
         let limit = 64 * 1024 * 1024
         let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NONBLOCK) }
         guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
@@ -1098,6 +1098,9 @@ enum ModelStore {
         }
         let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
+        if let expectedIdentity, fileIdentity(initial) != expectedIdentity {
+            throw ViewerError.message("Kayıt açılırken değişti; model listesini yenileyip tekrar deneyin.")
+        }
         guard initial.st_size <= Int64(limit) else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         var data = Data(), didRead = false
         while true {
@@ -1138,7 +1141,7 @@ enum ModelStore {
         guard let payload, (payload.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) else {
             throw ViewerError.message("Kayıt içeriği normal bir dosya değil; açılamadı.")
         }
-        let data = try Drawing.readData(payloadURL(entry.url))
+        let data = try Drawing.readData(payloadURL(entry.url), expectedIdentity: payload)
         try afterRead?()
         try requireCurrent(entry)
         return data
@@ -1580,22 +1583,22 @@ private struct Drawing {
     }
     static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
 
-    static func readData(_ url: URL) throws -> Data {
+    static func readData(_ url: URL, expectedIdentity: ModelStore.FileIdentity? = nil) throws -> Data {
         // File providers can replace or materialize a document while it is
         // being read. Capture one coordinated snapshot before parsing it.
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         var snapshot: Result<Data, Error>?
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
-            snapshot = Result { try readCoordinatedData(coordinatedURL) }
+            snapshot = Result { try readCoordinatedData(coordinatedURL, expectedIdentity: expectedIdentity) }
         }
         if let coordinationError { throw coordinationError }
         guard let snapshot else { throw ViewerError.message("Dosya okuması tamamlanamadı.") }
         return try snapshot.get()
     }
 
-    private static func readCoordinatedData(_ url: URL) throws -> Data {
-        try ModelStore.readFileSnapshot(url)
+    private static func readCoordinatedData(_ url: URL, expectedIdentity: ModelStore.FileIdentity?) throws -> Data {
+        try ModelStore.readFileSnapshot(url, expectedIdentity: expectedIdentity)
     }
 
     static func load(_ data: Data) throws -> Drawing {

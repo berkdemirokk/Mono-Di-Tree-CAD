@@ -258,6 +258,25 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url).count, bytes.count + 1)
     }
 
+    func testOpenedDescriptorMustMatchListedFileIdentity() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let listed = root.appendingPathComponent("model.tcad")
+        let original = root.appendingPathComponent("original.saved")
+        let other = root.appendingPathComponent("other.saved")
+        let source = Data("original".utf8), foreign = Data("different".utf8)
+        try source.write(to: listed); try foreign.write(to: other)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == listed })
+        let expected = try XCTUnwrap(entry.identity?.entry)
+        XCTAssertEqual(try ModelStore.readFileSnapshot(listed, expectedIdentity: expected), source)
+        try FileManager.default.moveItem(at: listed, to: original)
+        try FileManager.default.createSymbolicLink(at: listed, withDestinationURL: other)
+        XCTAssertThrowsError(try ModelStore.readFileSnapshot(listed, expectedIdentity: expected))
+        XCTAssertEqual(try Data(contentsOf: original), source)
+        XCTAssertEqual(try Data(contentsOf: other), foreign)
+    }
+
     func testOversizedModelIsRejectedBeforeReadingAnyChunk() throws {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: url) }
