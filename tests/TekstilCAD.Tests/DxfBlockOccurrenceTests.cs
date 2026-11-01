@@ -6,6 +6,38 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Fact]
+    public void ExplicitPlainAndMarkedBlockPiecesShareOneProjectAtomically()
+    {
+        string Block(string name,string x,bool point)=>"0\nBLOCK\n2\n"+name+"\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n"+x+"\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            (point ? "0\nPOINT\n8\nB\n10\n"+x+"\n20\n0\n" : "")+"0\nENDBLK\n";
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n"+Block("A","0",true)+Block("B","2",false)+"0\nENDSEC\n0\nEOF\n");
+        var before=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var links=import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE").ToArray();Assert.Equal(2,links.Length);
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        var marked=new DxfBlockProjectPointSelection(links[0].BlockHeaderOrdinal!.Value,links[0].PieceId,point.SourceOrdinal,0);
+        var plain=new DxfBlockProjectPieceSelection(links[1].BlockHeaderOrdinal!.Value,links[1].PieceId);
+        var output=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[marked],[plain],"source.dxf",true);
+        Assert.Equal(2,output.WorkingCopy.Pieces.Count);Assert.Single(output.Assignments);
+        Assert.Single(output.WorkingCopy.Pieces.Single(p=>p.Id==marked.PieceId).Notches!);
+        Assert.Null(output.WorkingCopy.Pieces.Single(p=>p.Id==plain.PieceId).Notches);
+        var saved=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(output.WorkingCopy)));
+        Assert.True(TekstilCAD.Core.DocumentSession.ContentEquals(output.WorkingCopy,saved));
+        Assert.Contains(saved.ImportProvenance!.Warnings,w=>w.Contains("İşaretsiz blok"));
+        var plainOnly=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[plain],"source.dxf",true);
+        Assert.Single(plainOnly.WorkingCopy.Pieces);Assert.Empty(plainOnly.Assignments);Assert.Null(plainOnly.WorkingCopy.Pieces[0].Notches);
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[marked],[plain,plain],"source.dxf",true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[marked],[new(marked.BlockHeaderOrdinal,marked.PieceId)],"source.dxf",true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[plain with { BlockHeaderOrdinal=marked.BlockHeaderOrdinal }],"source.dxf",true));
+        var altered=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n"+Block("A","0",true)+Block("B","3",false)+"0\nENDSEC\n0\nEOF\n");
+        using(var changing=new SwitchOnRewindStream(bytes,altered))
+            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,changing,[marked],[plain],"source.dxf",true));
+        using var cancelled=new CancellationTokenSource();cancelled.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[marked],[plain],"source.dxf",true,cancelled.Token));
+        Assert.Equal(before,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+    }
+
+    [Fact]
     public void ProvenanceEscapesUntrustedLayerDelimitersAndUnicodeControls()
     {
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+

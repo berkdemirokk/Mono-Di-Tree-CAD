@@ -9,12 +9,116 @@ public sealed record DxfBlockDefinitionPointResult(ProjectDocument WorkingCopy,i
 public sealed record DxfBlockDefinitionPointAssignment(int PointOrdinal,int VertexOrdinal,int VertexIndex);
 public sealed record DxfBlockDefinitionPointsResult(ProjectDocument WorkingCopy,int BlockHeaderOrdinal,ImmutableArray<DxfBlockDefinitionPointAssignment> Assignments,string Notice);
 public sealed record DxfBlockProjectPointSelection(int BlockHeaderOrdinal,Guid PieceId,int PointOrdinal,int VertexIndex);
+public sealed record DxfBlockProjectPieceSelection(int BlockHeaderOrdinal,Guid PieceId);
 public sealed record DxfBlockProjectPointAssignment(int BlockHeaderOrdinal,Guid PieceId,int PointOrdinal,int VertexOrdinal,int VertexIndex,string SourceLayer,string PointLayer);
 public sealed record DxfBlockProjectResult(ProjectDocument WorkingCopy,ImmutableArray<DxfBlockProjectPointAssignment> Assignments,string Notice);
 
 /// <summary>Explicitly selects one unplaced block definition and one coincident visual vertex marker.</summary>
 public static class DxfBlockDefinitionPointMapping
 {
+    /// <summary>Creates one detached project with explicitly chosen unmarked
+    /// POLYLINE definitions and/or explicitly mapped POINT vertices. No
+    /// placement or manufacturing meaning is inferred.</summary>
+    public static DxfBlockProjectResult CreateProjectWithPieces(DxfImportResult import,Stream source,
+        IReadOnlyCollection<DxfBlockProjectPointSelection> pointSelections,IReadOnlyCollection<DxfBlockProjectPieceSelection> pieceSelections,
+        string sourceFileName,bool acceptUnplacedDefinitions,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(import);ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(pointSelections);
+        ArgumentNullException.ThrowIfNull(pieceSelections);ArgumentNullException.ThrowIfNull(sourceFileName);token.ThrowIfCancellationRequested();
+        if(!acceptUnplacedDefinitions || !source.CanRead || !source.CanSeek || source.Position!=0 ||
+           import.ImportParameters is not { Mode:DxfImportMode.General, BulgeToleranceMm:null } parameters || import.CapturedWarnings.IsDefault ||
+           import.SourceSha256 is null || import.AnnotationSnapshotSha256!=import.SourceSha256 || import.AnnotationSnapshotByteLength!=import.SourceByteLength ||
+           import.PieceSources is not { } oldLinks || oldLinks.IsDefault || import.Project.NestingSnapshot is not null || import.Project.GradingRules.Count!=0 ||
+           !string.Equals(import.PieceSourcesFingerprint,NestingSnapshot.ComputeLayoutFingerprint(import.Project,token),StringComparison.Ordinal))
+            throw new InvalidDataException("Kaynak kimliği, blok tanımı onayı veya DXF seçenekleri geçersiz.");
+        var points=DxfBoundedSelections.Copy(pointSelections,32,token);var plain=DxfBoundedSelections.Copy(pieceSelections,32,token);
+        if(points.Length==0 && plain.Length==0)throw new InvalidDataException("En az bir parça veya POINT seçilmelidir.");
+        var chosen=new HashSet<Guid>();
+        foreach(var item in points) { token.ThrowIfCancellationRequested();if(item is null)throw new InvalidDataException("POINT seçimi eksik.");chosen.Add(item.PieceId); }
+        foreach(var item in plain)
+        {
+            token.ThrowIfCancellationRequested();
+            if(item is null || item.BlockHeaderOrdinal<0 || item.PieceId==Guid.Empty || !chosen.Add(item.PieceId))
+                throw new InvalidDataException("Parça seçimi eksik, yinelenmiş veya POINT seçimiyle çakışıyor.");
+        }
+        using var snapshot=new MemoryStream();var buffer=new byte[81920];
+        while(true)
+        {
+            token.ThrowIfCancellationRequested();var count=source.Read(buffer,0,buffer.Length);if(count==0)break;
+            if(snapshot.Length+count>DxfSourceSnapshotCheck.MaximumBytes)throw new InvalidDataException("DXF kaynak sınırını aşıyor.");
+            snapshot.Write(buffer,0,count);
+        }
+        snapshot.Position=0;token.ThrowIfCancellationRequested();
+        DxfBlockProjectResult? marked=null;
+        if(points.Length>0) { marked=CreateProject(import,snapshot,points,sourceFileName,true,token);snapshot.Position=0; }
+        var fresh=DxfFormat.Import(snapshot,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
+        if(fresh.SourceByteLength!=import.SourceByteLength || !string.Equals(fresh.SourceSha256,import.SourceSha256,StringComparison.OrdinalIgnoreCase) ||
+           fresh.SkippedInsertEntities!=false || fresh.ImportedBlockDefinitions!=true || fresh.SourceGeometry is not { Truncated:false } geometry ||
+           fresh.SupplementalGeometry is not { Truncated:false } supplemental || fresh.PieceSources is not { } freshLinks || freshLinks.IsDefault ||
+           fresh.BlockEntityInventory is not { Truncated:false } inventory || inventory.Records.IsDefault)
+            throw new InvalidDataException("Kaynak baytları veya blok envanteri doğrulanamadı.");
+        var result=marked?.WorkingCopy ?? new ProjectDocument { Name=import.Project.Name+" · blok tanımları" };
+        var warnings=marked?.WorkingCopy.ImportProvenance?.Warnings.ToList() ?? import.CapturedWarnings.Select(EscapeAuditText).Concat(["Yerleştirilmemiş blok tanımlarından çalışma kopyası; yerleşim veya üretim onayı değildir."]).ToList();
+        var sourceByOrdinal=geometry.Records.ToDictionary(r=>r.SourceOrdinal);
+        foreach(var item in plain)
+        {
+            token.ThrowIfCancellationRequested();
+            var old=oldLinks.SingleOrDefault(p=>p.PieceId==item.PieceId);
+            if(old is null || old.Section!="BLOCKS" || old.EntityType!="POLYLINE" || old.BlockHeaderOrdinal!=item.BlockHeaderOrdinal || old.SourceOrdinals.Length!=1 || !old.InsertPath.IsDefaultOrEmpty)
+                throw new InvalidDataException("Seçilen parça doğrudan blok POLYLINE tanımı değil.");
+            var link=freshLinks.SingleOrDefault(p=>p.BlockHeaderOrdinal==item.BlockHeaderOrdinal && p.EntityType=="POLYLINE" && p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==old.SourceOrdinals[0]);
+            if(link is null || link.ChildSourceOrdinals.Length<3 || supplemental.Records.Any(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal && r.EntityType!="POINT"))
+                throw new InvalidDataException("Blok geometri envanteri eksik veya desteklenmiyor.");
+            bool open=false;int count=0;
+            foreach(var entry in inventory.Records.Where(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal))
+            {
+                token.ThrowIfCancellationRequested();
+                if(entry.EntityType=="POLYLINE") { if(open)throw new InvalidDataException("İç içe POLYLINE dizisi.");open=true;count=0; }
+                else if(entry.EntityType=="VERTEX") { if(!open)throw new InvalidDataException("Sahipsiz VERTEX.");count++; }
+                else if(entry.EntityType=="SEQEND") { if(!open || count<2)throw new InvalidDataException("Geçersiz SEQEND.");open=false; }
+                else if(open || entry.EntityType is not ("POINT" or "LINE" or "TEXT" or "MTEXT"))throw new InvalidDataException("Blokta desteklenmeyen kaynak kaydı var.");
+            }
+            if(open)throw new InvalidDataException("POLYLINE dizisi tamamlanmadı.");
+            foreach(var line in geometry.Records.Where(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal && r.EntityType=="LINE"))
+            {
+                token.ThrowIfCancellationRequested();
+                foreach(var code in new[]{30,31,38,39,210,220,230})
+                {
+                    var values=line.Groups.Where(g=>g.Code==code).ToArray();
+                    if(values.Length>1 || (values.Length==1 && !DxfExactDecimal.AreEqual(values[0].RawValue.Trim(),code==230 ? "1" : "0",token)))
+                        throw new InvalidDataException("Blok LINE düzlemi doğrulanamadı.");
+                }
+                foreach(var code in new[]{10,20,11,21})
+                {
+                    var values=line.Groups.Where(g=>g.Code==code).ToArray();
+                    if(values.Length!=1 || !double.TryParse(values[0].RawValue.Trim(),NumberStyles.Float,CultureInfo.InvariantCulture,out var n) || !double.IsFinite(n))
+                        throw new InvalidDataException("Blok LINE ucu doğrulanamadı.");
+                }
+            }
+            var piece=fresh.Project.Pieces.Single(p=>p.Id==link.PieceId).Clone();var previous=import.Project.Pieces.Single(p=>p.Id==item.PieceId);piece.Id=previous.Id;
+            if(!piece.Closed || piece.Notches is not null || link.ChildSourceOrdinals.Length!=piece.Points.Count+1 ||
+               !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[previous] }))
+                throw new InvalidDataException("Kaynak kontur veya köşe sayısı değişmiş.");
+            for(int i=0;i<piece.Points.Count;i++)
+            {
+                token.ThrowIfCancellationRequested();int ordinal=link.ChildSourceOrdinals[i];
+                if(!sourceByOrdinal.TryGetValue(ordinal,out var vertex) || vertex.EntityType!="VERTEX" || vertex.BlockHeaderOrdinal!=item.BlockHeaderOrdinal)
+                    throw new InvalidDataException("POLYLINE köşe kaynağı doğrulanamadı.");
+            }
+            if(!sourceByOrdinal.TryGetValue(link.ChildSourceOrdinals[^1],out var end) || end.EntityType!="SEQEND" || end.BlockHeaderOrdinal!=item.BlockHeaderOrdinal)
+                throw new InvalidDataException("POLYLINE bitiş kaydı doğrulanamadı.");
+            result.Pieces.Add(piece);
+            warnings.Add($"İşaretsiz blok {item.BlockHeaderOrdinal}; parça {item.PieceId:D}; POLYLINE {link.SourceOrdinals[0]}; katman \"{EscapeAuditText(link.Layer)}\".");
+        }
+        result.ImportProvenance=new DxfImportProvenance { SourceFileName=sourceFileName,SourceSha256=import.SourceSha256!,SourceByteLength=import.SourceByteLength ?? -1,
+            MillimetersPerUnit=parameters.MillimetersPerUnit,Warnings=warnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };
+        token.ThrowIfCancellationRequested();ProjectStorage.Validate(result,token);source.Position=0;
+        var final=DxfSourceSnapshotCheck.CheckStream(source,import,token);
+        if(final.Status!=DxfSourceSnapshotCheck.Status.MatchesReadBytes || !final.ImportIdentityVerified)throw new InvalidDataException("DXF kaynağı eşleme sırasında değişti.");
+        token.ThrowIfCancellationRequested();return new(result,marked?.Assignments ?? ImmutableArray<DxfBlockProjectPointAssignment>.Empty,
+            "Yerleştirilmemiş blok tanımlarından çalışma kopyası; fiziksel çentik, yerleşim veya üretim onayı değildir.");
+    }
+
     // UTF-16 code units are escaped individually so the stored text is
     // reversible, including isolated surrogates; separators cannot imitate
     // the surrounding audit fields and display controls cannot spoof rows.
