@@ -11554,6 +11554,19 @@ internal static class DesktopVerification
         fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(rows[1].Dx=="99" && rows[1].Dy=="99" && DocumentSession.ContentEquals(before,studio.Document),
             "Invalid interpolation endpoint leaves the intermediate draft unchanged",checks);
+        rows[0].Dx="5E-324";rows[2].Dx="5E-324";rows[2].Dy="4";
+        fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(MeasurementInput.TryParseMillimeters(rows[1].Dx,out var smallest) && BitConverter.DoubleToInt64Bits(smallest)==1,
+            "Interpolation preserves equal minimum subnormal endpoint increments exactly",checks);
+        rows[0].Dx="0";rows[2].Dx="5E-324";rows[1].Dx="99";rows[1].Dy="99";
+        fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[1].Dx=="99" && rows[1].Dy=="99" && DocumentSession.ContentEquals(before,studio.Document),
+            "Interpolation rejects nonzero underflow without changing either intermediate component",checks);
+        rows[0].Dx="-5E-324";rows[2].Dx="5E-324";
+        fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(MeasurementInput.TryParseMillimeters(rows[1].Dx,out var exactZero) && exactZero==0,
+            "Interpolation permits exact cancellation to zero",checks);
+        rows[0].Dx="1";rows[2].Dx="5";
         rows[2].Dy="4";fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(rows[0].Dx=="1" && rows[0].Dy=="-2" && rows[1].Dx=="3" && rows[1].Dy=="1" && rows[2].Dx=="5" && rows[2].Dy=="4" &&
               DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,

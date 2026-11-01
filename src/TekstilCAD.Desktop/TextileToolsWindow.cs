@@ -610,13 +610,28 @@ public sealed class TextileToolsWindow : Window
             { result.Text="İki uç satırın ΔX ve ΔY değerleri geçerli olmalı; ara artışlar değiştirilmedi.";return; }
             if(piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && firstIndex==0 && lastIndex==piece.Points.Count-1 &&
                (BitConverter.DoubleToInt64Bits(x0)!=BitConverter.DoubleToInt64Bits(x1) || BitConverter.DoubleToInt64Bits(y0)!=BitConverter.DoubleToInt64Bits(y1)))
-            { result.Text="Tekrarlı kapanışın ilk ve son satır artışları farklı; ara doldurma uygulanmadı. Aynı köşenin iki artışını kontrol edin.";return; }            var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
+            { result.Text="Tekrarlı kapanışın ilk ve son satır artışları farklı; ara doldurma uygulanmadı. Aynı köşenin iki artışını kontrol edin.";return; }            static System.Numerics.BigInteger Units(double value)
+            {
+                var bits=BitConverter.DoubleToInt64Bits(value);var exponent=(int)((bits>>52)&0x7ff);
+                var mantissa=bits&0x000f_ffff_ffff_ffffL;if(exponent!=0)mantissa|=1L<<52;
+                var units=new System.Numerics.BigInteger(mantissa)<<(exponent==0 ? 0 : exponent-1);
+                return bits<0 ? -units : units;
+            }
+            static bool Interpolate(double a,double b,int offset,int count,out double value)
+            {
+                if(a==b) { value=a;return true; }
+                var t=(double)offset/count;value=a*(1-t)+b*t;
+                if(!double.IsFinite(value))return false;
+                // A rounded zero is safe only when the exact binary endpoints,
+                // weighted by the integer indices, really cancel to zero.
+                return value!=0 || (Units(a)*(count-offset)+Units(b)*offset).IsZero;
+            }
+            var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
             for(var index=first.Index+1;index<last.Index;index++)
             {
-                var t=(double)(index-first.Index)/span;
-                var x=x0*(1-t)+x1*t;var y=y0*(1-t)+y1*t;
-                if(!double.IsFinite(x) || !double.IsFinite(y))
-                { result.Text="Ara artışlar sonlu hesaplanamadı; hiçbir ara satır değiştirilmedi.";return; }
+                var offset=index-first.Index;
+                if(!Interpolate(x0,x1,offset,span,out var x) || !Interpolate(y0,y1,offset,span,out var y))
+                { result.Text="Ara artış sonlu veya sıfır olmayan değeri koruyarak hesaplanamadı; hiçbir ara satır değiştirilmedi.";return; }
                 updates.Add((rows[index],MeasurementInput.Format(x),MeasurementInput.Format(y)));
             }
             foreach(var update in updates) { update.Row.Dx=update.X;update.Row.Dy=update.Y; }
