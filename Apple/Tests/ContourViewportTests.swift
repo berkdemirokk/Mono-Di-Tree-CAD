@@ -4,19 +4,29 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
-    func testOverlayRejectsRoundedShiftEvenIfMaximumMoves() throws {
-        let ordinary = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(10, 10)]))
-        let roundedMax = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(9_007_199_254_740_994, 1)]))
-        // In binary64, max + 1 rounds up by 2: checking only != would accept it.
-        XCTAssertNotEqual(roundedMax.maxX + 1, roundedMax.maxX)
-        XCTAssertNil(ContourOverlay.bounds(ordinary, roundedMax, dx: 1))
-        let points = [p(0, 0), p(9_007_199_254_740_991, 0), p(9_007_199_254_740_992, 1)]
-        let bounds = try XCTUnwrap(ContourBounds(points: points))
-        // Maximum + 2 is exact, but the interior vertex + 2 is not.
-        XCTAssertNotNil(ContourOverlay.bounds(ordinary, bounds, dx: 2))
-        XCTAssertFalse(ContourOverlay.isExact(points: points, bounds: bounds, dx: 2))
-        XCTAssertNil(ContourOverlay.aligned(points[1], bounds: bounds, dx: 2))
-        XCTAssertTrue(ContourOverlay.isExact(points: [p(0, 0), p(10, 10)], bounds: ordinary, dx: 1))
+    func testOverlayBoundAcceptsOrdinaryDecimalsButRejectsLargeAndAccumulatedErrors() throws {
+        let ordinaryPoints = [p(-0.1, 0), p(0.3, 1)]
+        let ordinary = try XCTUnwrap(ContourBounds(points: ordinaryPoints))
+        let error = try XCTUnwrap(ContourOverlay.errorBound(first: ordinaryPoints, firstBounds: ordinary,
+                                                            second: ordinaryPoints, secondBounds: ordinary))
+        XCTAssertGreaterThan(error, 0)
+        XCTAssertLessThanOrEqual(error, ContourOverlay.maximumError)
+        let roundedPoints = [p(0, 0), p(9_007_199_254_740_994, 1)]
+        let rounded = try XCTUnwrap(ContourBounds(points: roundedPoints))
+        XCTAssertNotEqual(rounded.maxX + 1, rounded.maxX) // rounds by 2 mm
+        XCTAssertNil(ContourOverlay.errorBound(first: ordinaryPoints, firstBounds: ordinary,
+                                               second: roundedPoints, secondBounds: rounded, dx: 1))
+        let interiorPoints = [p(0, 0), p(9_007_199_254_740_991, 0), p(9_007_199_254_740_992, 1)]
+        let interior = try XCTUnwrap(ContourBounds(points: interiorPoints))
+        XCTAssertNil(ContourOverlay.errorBound(first: ordinaryPoints, firstBounds: ordinary,
+                                               second: interiorPoints, secondBounds: interior, dx: 2))
+        let few = [p(0, 0), p(1e12, 0)]
+        let many = [p(0, 0)] + Array(repeating: p(1e12, 0), count: 100)
+        let large = try XCTUnwrap(ContourBounds(points: few))
+        XCTAssertNotNil(ContourOverlay.errorBound(first: ordinaryPoints, firstBounds: ordinary,
+                                                  second: few, secondBounds: large, dx: 0.0001))
+        XCTAssertNil(ContourOverlay.errorBound(first: ordinaryPoints, firstBounds: ordinary,
+                                               second: many, secondBounds: large, dx: 0.0001))
     }
     func testOverlayTranslationChangesOnlySecondRelativePositionAndFits() throws {
         let a = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))
@@ -31,7 +41,8 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertEqual(originB.x, -3); XCTAssertEqual(originB.y, 5)
         XCTAssertNil(ContourOverlay.bounds(a, b, dx: .infinity))
         let huge = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(Double.greatestFiniteMagnitude, 1)]))
-        XCTAssertNil(ContourOverlay.bounds(a, huge, dx: 1))
+        XCTAssertNil(ContourOverlay.errorBound(first: [p(100, 20), p(200, 70)], firstBounds: a,
+                                               second: [p(0, 0), p(Double.greatestFiniteMagnitude, 1)], secondBounds: huge, dx: 1))
     }
     func testOverlayUsesSharedScaleAndRejectsOverflow() throws {
         let first = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))

@@ -29,35 +29,68 @@ struct ContourBounds {
 // Align each bounding-box minimum at the same origin without scaling either
 // piece independently. Reject overflow instead of drawing misleading geometry.
 enum ContourOverlay {
-    // Error-free TwoSum: reject additions that rounded, including when a
-    // requested 1 mm shift rounds to 2 mm at large binary64 coordinates.
-    private static func exactSum(_ a: Double, _ b: Double) -> Double? {
-        guard a.isFinite, b.isFinite else { return nil }
-        if b == 0 { return a }
-        let sum = a + b
-        guard sum.isFinite else { return nil }
-        let bVirtual = sum - a
-        guard bVirtual.isFinite else { return nil }
-        let error = (a - (sum - bVirtual)) + (b - bVirtual)
-        return error == 0 ? sum : nil
+    // Strictly below 0.001 mm even though that decimal is not exactly binary64.
+    static let maximumError = 0.001.nextDown
+
+    // TwoSum gives the exact residual of each finite binary64 addition under
+    // IEEE round-to-nearest with gradual underflow. The positive accumulator is
+    // rounded upward after every nonzero contribution, including all vertices.
+    private struct ErrorBudget {
+        var total = 0.0
+        mutating func add(_ a: Double, _ b: Double) -> Double? {
+            guard a.isFinite, b.isFinite else { return nil }
+            let sum = a + b
+            guard sum.isFinite else { return nil }
+            let bVirtual = sum - a
+            guard bVirtual.isFinite else { return nil }
+            let residual = (a - (sum - bVirtual)) + (b - bVirtual)
+            guard residual.isFinite else { return nil }
+            if residual != 0 {
+                let upper = (total + abs(residual)).nextUp
+                guard upper.isFinite, upper <= ContourOverlay.maximumError else { return nil }
+                total = upper
+            }
+            return sum
+        }
     }
+
+    // This assessment covers normalized bounding coordinates and every point,
+    // both axes and both translation stages. It sums absolute residuals across
+    // all operations (conservative, including duplicate boundary points).
+    static func errorBound(first: [ContourMeasure.Point], firstBounds: ContourBounds,
+                           second: [ContourMeasure.Point], secondBounds: ContourBounds,
+                           dx: Double = 0, dy: Double = 0) -> Double? {
+        var budget = ErrorBudget()
+        guard let aw = budget.add(firstBounds.maxX, -firstBounds.minX),
+              let ah = budget.add(firstBounds.maxY, -firstBounds.minY),
+              let bw = budget.add(secondBounds.maxX, -secondBounds.minX),
+              let bh = budget.add(secondBounds.maxY, -secondBounds.minY),
+              aw >= 0, ah >= 0, bw >= 0, bh >= 0,
+              budget.add(bw, dx) != nil, budget.add(bh, dy) != nil else { return nil }
+        func include(_ point: ContourMeasure.Point, _ bounds: ContourBounds, _ x: Double, _ y: Double, _ budget: inout ErrorBudget) -> Bool {
+            guard let nx = budget.add(point.x, -bounds.minX), let ny = budget.add(point.y, -bounds.minY),
+                  budget.add(nx, x) != nil, budget.add(ny, y) != nil else { return false }
+            return true
+        }
+        for point in first { if !include(point, firstBounds, 0, 0, &budget) { return nil } }
+        for point in second { if !include(point, secondBounds, dx, dy, &budget) { return nil } }
+        return budget.total
+    }
+
+    // Caller must assess the complete set before rendering or changing shift.
     static func bounds(_ first: ContourBounds, _ second: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourBounds? {
-        guard let firstWidth = exactSum(first.maxX, -first.minX),
-              let secondWidth = exactSum(second.maxX, -second.minX),
-              let firstHeight = exactSum(first.maxY, -first.minY),
-              let secondHeight = exactSum(second.maxY, -second.minY),
-              firstWidth >= 0, secondWidth >= 0, firstHeight >= 0, secondHeight >= 0,
-              let maxX = exactSum(secondWidth, dx), let maxY = exactSum(secondHeight, dy) else { return nil }
-        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: firstWidth, y: firstHeight),
+        let aw = first.maxX - first.minX, ah = first.maxY - first.minY
+        let bw = second.maxX - second.minX, bh = second.maxY - second.minY
+        let maxX = bw + dx, maxY = bh + dy
+        guard [aw, ah, bw, bh, dx, dy, maxX, maxY].allSatisfy(\.isFinite),
+              aw >= 0, ah >= 0, bw >= 0, bh >= 0 else { return nil }
+        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: aw, y: ah),
                                       .init(x: dx, y: dy), .init(x: maxX, y: maxY)])
     }
     static func aligned(_ point: ContourMeasure.Point, bounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourMeasure.Point? {
-        guard let baseX = exactSum(point.x, -bounds.minX), let baseY = exactSum(point.y, -bounds.minY),
-              let x = exactSum(baseX, dx), let y = exactSum(baseY, dy) else { return nil }
+        let x = (point.x - bounds.minX) + dx, y = (point.y - bounds.minY) + dy
+        guard x.isFinite, y.isFinite else { return nil }
         return .init(x: x, y: y)
-    }
-    static func isExact(points: [ContourMeasure.Point], bounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> Bool {
-        points.allSatisfy { aligned($0, bounds: bounds, dx: dx, dy: dy) != nil }
     }
 }
 // Fits finite model coordinates without multiplying by an enormous scale.

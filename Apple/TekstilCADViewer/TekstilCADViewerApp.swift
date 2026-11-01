@@ -2775,8 +2775,9 @@ private struct PieceComparisonView: View {
                     if a.hasMinimumContourPoints, b.hasMinimumContourPoints,
                        let firstBounds = a.contourBounds, let secondBounds = b.contourBounds,
                        ContourOverlay.bounds(firstBounds, secondBounds) != nil,
-                       ContourOverlay.isExact(points: a.points, bounds: firstBounds),
-                       ContourOverlay.isExact(points: b.points, bounds: secondBounds) {
+                       ContourOverlay.errorBound(first: a.points, firstBounds: firstBounds,
+                                                 second: b.points, secondBounds: secondBounds) != nil {
+
                         Button("Parçaları üst üste göster…") { showingOverlay = true }
                             .sheet(isPresented: $showingOverlay) {
                                 PieceOverlayView(first: a, firstIndex: first, second: b, secondIndex: second)
@@ -2859,8 +2860,9 @@ private struct PieceOverlayView: View {
         guard abs(x) <= 10_000, abs(y) <= 10_000,
               let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
               ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil,
-              ContourOverlay.isExact(points: first.points, bounds: firstBounds),
-              ContourOverlay.isExact(points: second.points, bounds: secondBounds, dx: x, dy: y) else {
+              ContourOverlay.errorBound(first: first.points, firstBounds: firstBounds,
+                                        second: second.points, secondBounds: secondBounds, dx: x, dy: y) != nil else {
+
             shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
             return
         }
@@ -2870,7 +2872,7 @@ private struct PieceOverlayView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Başlangıçta parçaların sınır kutusu sol üstleri hizalanır; ikisi aynı ölçektedir. Kaynak konumları değiştirilmez.")
-                Text("Yalnızca görsel karşılaştırmadır; dikiş uyumu, çakışma veya üretime uygunluk doğrulaması değildir.")
+                Text("Hizalama ve kaydırmada tüm noktalardaki toplam sayısal yuvarlama hatası en fazla 0,001 mm ile sınırlandırılır. Bu sınır kaynak verisinin sayıya dönüşümünü ve ekrandaki piksel yuvarlamasını içermez. Yalnızca görsel karşılaştırmadır; dikiş uyumu, çakışma veya üretime uygunluk doğrulaması değildir.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Birinci: \(firstIndex + 1). \(first.displayName(index: firstIndex)) · düz çizgi", isOn: $showFirst)
                 Toggle("İkinci: \(secondIndex + 1). \(second.displayName(index: secondIndex)) · kesik çizgi", isOn: $showSecond)
