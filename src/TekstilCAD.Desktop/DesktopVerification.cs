@@ -8314,7 +8314,8 @@ internal static class DesktopVerification
             Render(window,Path.ChangeExtension(reportPath,".nest-error-navigation.png"),680,520);
             var choices=(ListBox)typeof(ProductionNestingWindow).GetField("choices",PrivateInstance)!.GetValue(window)!;
             var targetContainer=(DependencyObject)choices.ItemContainerGenerator.ContainerFromItem(items[1])!;
-            var targetCheckbox=Descendants<CheckBox>(targetContainer).Single();
+            var targetLabel=(string)items[1]!.GetType().GetProperty("Label")!.GetValue(items[1])!;
+            var targetCheckbox=Descendants<CheckBox>(targetContainer).Single(c=>AutomationProperties.GetName(c)==targetLabel);
             Check(FullyVisible(targetCheckbox,(FrameworkElement)window.Content),"Navigating to an error scrolls target into view: bounds="+BoundsInRoot(targetCheckbox,(FrameworkElement)window.Content)+" visible="+VisibleBoundsInRoot(targetCheckbox,(FrameworkElement)window.Content)+" scroll="+string.Join(";",Descendants<ScrollViewer>(choices).Select(v=>$"{v.VerticalOffset}/{v.ScrollableHeight}/{v.ViewportHeight}/{v.CanContentScroll}")),checks);
             studio.Document.Pieces[0].Name="Yeni ad";typeof(ProductionNestingWindow).GetMethod("CheckVisibleResultCurrent",PrivateInstance)!.Invoke(window,null);
             Check(button.Visibility==Visibility.Collapsed && !(bool)items[1]!.GetType().GetProperty("IsNavigationTarget")!.GetValue(items[1])!,"Pastal navigation clears when project changes",checks);
@@ -9609,7 +9610,7 @@ internal static class DesktopVerification
             .Invoke(null,["Ön"+char.ConvertFromUtf32(0xE0001)+"😀",int.MaxValue])!;
         Check(safeName=="Ön\\uDB40\\uDC01😀","Quantity names escape astral format controls and preserve emoji",checks);
         var firstContainer=(DependencyObject)list.ItemContainerGenerator.ContainerFromIndex(0)!;
-        var firstCheckbox=Descendants<CheckBox>(firstContainer).Single();
+        var firstCheckbox=Descendants<CheckBox>(firstContainer).Single(c=>AutomationProperties.GetName(c)==first);
         Check(AutomationProperties.GetHelpText(firstCheckbox).Contains("Aynı\\u202E") && firstCheckbox.ToolTip?.ToString()?.Contains("Aynı\\u202E")==true,
             "Quantity selection exposes the complete safe name through help and tooltip",checks);
         items[1]!.GetType().GetProperty("IsSelected")!.SetValue(items[1],true);
