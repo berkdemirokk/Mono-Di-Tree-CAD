@@ -19,3 +19,5 @@ The concurrency test checks the completed save and stale follow-up; scheduling a
 The coordinator now owns the snapshot bytes and revision together under its lock, and rejects a forged snapshot whose bytes do not match the current state. Callers must route every real document change into that coordinator; external document state and independent direct prototype APIs are not protected by it.
 
 The coordinator can conditionally install a completed edit against its captured source revision and bytes. This serializes prototype-owned state only; callers must independently validate edited bytes and route all real document changes through the coordinator before any app integration.
+
+A single pending edit request can be cancelled under the coordinator lock. Cancellation prevents application only if it acquires that lock first; after an application wins, cancellation cannot undo it. This does not interrupt computation or cancel a SQLite save, and has no effect on app state outside the prototype.
