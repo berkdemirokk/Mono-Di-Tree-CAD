@@ -2033,7 +2033,7 @@ public class MainWindow : Window
             var path=open.FileName;
             var import=await Task.Run(()=>DxfFormat.Import(path,settings.Factor,settings.Encoding,cancellation.Token));
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
-            if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault)
+            if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault || import.CapturedWarnings.IsDefault)
                 throw new InvalidDataException("Blok kaynak envanteri eksik; çalışma kopyası hazırlanmadı.");
             var review=new DxfBlockDefinitionReviewWindow(this,import);
             if(review.ShowDialog()!=true || review.Selection is not { } selection)return;
@@ -2066,7 +2066,7 @@ public class MainWindow : Window
         var parameters=import.ImportParameters ?? throw new InvalidDataException("DXF aktarım seçenekleri eksik.");
         var provenance=new DxfImportProvenance { SourceFileName=sourceName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
             MillimetersPerUnit=parameters.MillimetersPerUnit,PieceIds=result.WorkingCopy.Pieces.Select(p=>p.Id).ToList(),
-            Warnings=[result.Notice,$"Kaynak blok başlığı {result.BlockHeaderOrdinal}, POINT {result.PointOrdinal}, VERTEX {result.VertexOrdinal}; bu kimlikler kaynak dosyaya aittir.",$"Kaynak metin kodlaması: {parameters.Encoding}."] };
+            Warnings=import.CapturedWarnings.Concat([result.Notice,$"Kaynak blok başlığı {result.BlockHeaderOrdinal}, POINT {result.PointOrdinal}, VERTEX {result.VertexOrdinal}; bu kimlikler kaynak dosyaya aittir.",$"Kaynak metin kodlaması: {parameters.Encoding}."]).ToList() };
         provenance.Validate();result.WorkingCopy.ImportProvenance=provenance;ProjectStorage.Validate(result.WorkingCopy);
     }
 

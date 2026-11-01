@@ -2339,7 +2339,20 @@ internal static class DesktopVerification
             var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla"));
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.Selection is null && DocumentSession.ContentEquals(before,import.Project),"Block definition selection requires explicit unplaced-copy acknowledgment",checks);
+            var confirmation=Descendants<CheckBox>(root).Single();confirmation.IsChecked=true;
+            var indexText=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Köşe indeksine git");
+            var go=Descendants<Button>(root).Single(b=>Equals(b.Content,"Köşeye git"));indexText.Text="999999";go.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
+            Check(vertex.SelectedIndex==-1 && AutomationProperties.GetName(status).Contains("Geçerli bir köşe"),"Invalid vertex search clears old selection and exposes error to accessibility",checks);
+            apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Selection is null,"Invalid vertex search cannot apply previous vertex",checks);
+            vertex.SelectedIndex=0;indexText.Text="0";block.SelectedIndex=-1;
+            Check(vertex.SelectedIndex==-1 && indexText.Text=="","Changing block clears the selected vertex and search text",checks);
+            block.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;indexText.Text="0";piece.SelectedIndex=-1;
+            Check(vertex.SelectedIndex==-1 && indexText.Text=="","Changing piece clears the selected vertex and search text",checks);
             Check(Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Yerleşim") && t.Text.Contains("fiziksel çentik")),"Block definition review explains placement and marker limitations",checks);
+            Check(!import.CapturedWarnings.IsEmpty && Descendants<TextBlock>(root).Any(t=>t.Text.StartsWith("• ")),
+                "Block review displays source import warnings",checks);
             Check(Descendants<DxfPiecePreview>(root).Count()==1 && AutomationProperties.GetName(Descendants<ScrollViewer>(root).First()).Contains("Blok tanımı"),"Block review provides a named scroll area and contour preview",checks);
         }
         finally { window.Close(); }
@@ -2358,6 +2371,7 @@ internal static class DesktopVerification
         var reopened=ProjectStorage.Load(savedPath);
         Check(DocumentSession.ContentEquals(result.WorkingCopy,reopened) && reopened.ImportProvenance?.SourceSha256==import.SourceSha256 &&
             reopened.ImportProvenance.Warnings.Any(w=>w.Contains("yerleştirilmemiş",StringComparison.OrdinalIgnoreCase)) &&
+            import.CapturedWarnings.All(w=>reopened.ImportProvenance.Warnings.Contains(w)) &&
             File.ReadAllBytes(sourcePath).SequenceEqual(originalSource),"Block copy save preserves source and historical unplaced provenance",checks);
         var conflictPath=Path.Combine(work,$"block-conflict-{Guid.NewGuid():N}.tcad");var absent=ProjectStorage.CaptureVersion(conflictPath);
         File.WriteAllText(conflictPath,"korunan");bool conflict=false;
