@@ -2024,13 +2024,14 @@ public class MainWindow : Window
         if(DxfImportRunning || ExportRunning || windowClosed)return;
         var open=new OpenFileDialog { Filter="DXF dosyası (*.dxf)|*.dxf",CheckFileExists=true };
         if(open.ShowDialog(this)!=true)return;
-        if(MessageBox.Show(this,"Dosya UTF-8 olarak ve 1 dosya birimi = 1 mm ölçeğiyle okunacak. Yerleştirilmemiş blok tanımından ayrı bir çalışma kopyası hazırlanır; yerleşim veya üretim doğrulanmaz. Devam edilsin mi?","Blok tanımı",MessageBoxButton.YesNo,MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
+        var settings=new DxfBlockCopyOptions();var options=CreateDxfBlockCopyOptionsWindow(settings);
+        if(options.ShowDialog()!=true)return;
         using var cancellation=new CancellationTokenSource();dxfImportCancellation=cancellation;DxfImportRunning=true;
         dxfCancel.Visibility=Visibility.Visible;dxfCancel.IsEnabled=true;SetStatus("Blok tanımları okunuyor; açık proje korunuyor.");
         try
         {
             var path=open.FileName;
-            var import=await Task.Run(()=>DxfFormat.Import(path,1,DxfTextEncoding.Utf8,cancellation.Token));
+            var import=await Task.Run(()=>DxfFormat.Import(path,settings.Factor,settings.Encoding,cancellation.Token));
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
             if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault)
                 throw new InvalidDataException("Blok kaynak envanteri eksik; çalışma kopyası hazırlanmadı.");
@@ -2040,10 +2041,11 @@ public class MainWindow : Window
             var blockOrdinal=review.BlockHeaderOrdinal;
             var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.Create(import,source,selection,blockOrdinal,true,cancellation.Token); });
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
+            AttachBlockDefinitionProvenance(result,import,Path.GetFileName(path));
             var save=new SaveFileDialog { Filter="TekstilCAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",AddExtension=true,OverwritePrompt=false };
             if(save.ShowDialog(this)!=true)return;
             if(!string.Equals(Path.GetExtension(save.FileName),".tcad",StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Çalışma kopyası .tcad uzantısıyla kaydedilmelidir.");
-            EnsureWritableDestination(save.FileName);
+            EnsureSeparateBlockDefinitionDestination(save.FileName,path);
             var expected=ProjectStorage.CaptureVersion(save.FileName,cancellation.Token);
             if(expected.Sha256 is not null)throw new IOException("Mevcut dosya korunuyor; yeni bir dosya adı seçin.");
             await Task.Run(()=>ProjectStorage.SaveIfUnchanged(result.WorkingCopy,save.FileName,expected,cancellation.Token));
@@ -2057,6 +2059,37 @@ public class MainWindow : Window
             if(ReferenceEquals(dxfImportCancellation,cancellation))dxfImportCancellation=null;
             DxfImportRunning=false;dxfCancel.Visibility=Visibility.Collapsed;dxfCancel.IsEnabled=false;
         }
+    }
+
+    internal static void AttachBlockDefinitionProvenance(DxfBlockDefinitionPointResult result,DxfImportResult import,string sourceName)
+    {
+        var parameters=import.ImportParameters ?? throw new InvalidDataException("DXF aktarım seçenekleri eksik.");
+        var provenance=new DxfImportProvenance { SourceFileName=sourceName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
+            MillimetersPerUnit=parameters.MillimetersPerUnit,PieceIds=result.WorkingCopy.Pieces.Select(p=>p.Id).ToList(),
+            Warnings=[result.Notice,$"Kaynak blok başlığı {result.BlockHeaderOrdinal}, POINT {result.PointOrdinal}, VERTEX {result.VertexOrdinal}; bu kimlikler kaynak dosyaya aittir.",$"Kaynak metin kodlaması: {parameters.Encoding}."] };
+        provenance.Validate();result.WorkingCopy.ImportProvenance=provenance;ProjectStorage.Validate(result.WorkingCopy);
+    }
+
+    internal sealed class DxfBlockCopyOptions { internal double Factor { get; set; }=1; internal DxfTextEncoding Encoding { get; set; }=DxfTextEncoding.Utf8; }
+    internal Window CreateDxfBlockCopyOptionsWindow(DxfBlockCopyOptions state)
+    {
+        var dialog=new Window { Owner=this,Title="Blok tanımı ölçü ve kodlama",Width=520,Height=400,MinWidth=440,MinHeight=320,WindowStartupLocation=WindowStartupLocation.CenterOwner };StudioTheme.Apply(dialog);
+        var root=new DockPanel { Margin=new Thickness(16) };dialog.Content=root;
+        var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        var body=new StackPanel();var scroll=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Blok tanımı ölçü ve kodlama seçenekleri");root.Children.Add(scroll);
+        body.Children.Add(new TextBlock { Text="Yerleştirilmemiş blok tanımından ayrı bir çalışma kopyası hazırlanır; yerleşim ve üretim doğrulanmaz. Dosya birimi otomatik belirlenmez.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="DXF dosya birimi",Margin=new Thickness(0,8,0,4) });
+        var units=new ComboBox { ItemsSource=new[]{"Milimetre · 1 mm","Santimetre · 10 mm","İnç · 25,4 mm"},SelectedIndex=0 };AutomationProperties.SetName(units,"DXF dosya birimi");body.Children.Add(units);
+        body.Children.Add(new TextBlock { Text="DXF metin kodlaması",Margin=new Thickness(0,8,0,4) });
+        var encoding=new ComboBox { ItemsSource=new[]{"UTF-8","Türkçe Windows-1254","Batı Avrupa Windows-1252"},SelectedIndex=0 };AutomationProperties.SetName(encoding,"DXF metin kodlaması");body.Children.Add(encoding);
+        var cancel=AddButton(actions,"Vazgeç",()=>dialog.DialogResult=false);cancel.IsCancel=true;cancel.IsDefault=true;
+        AddButton(actions,"Devam et",()=> { SetDxfBlockCopyOptions(state,units.SelectedIndex,encoding.SelectedIndex);dialog.DialogResult=true; });
+        return dialog;
+    }
+    internal static void SetDxfBlockCopyOptions(DxfBlockCopyOptions state,int unitIndex,int encodingIndex)
+    {
+        if(unitIndex is <0 or >2 || encodingIndex is <0 or >2)throw new InvalidOperationException("Geçerli birim ve kodlama seçin.");
+        state.Factor=new[]{1.0,10.0,25.4}[unitIndex];state.Encoding=encodingIndex switch { 1=>DxfTextEncoding.Windows1254,2=>DxfTextEncoding.Windows1252,_=>DxfTextEncoding.Utf8 };
     }
 
     private async void ImportDxf()
@@ -3360,6 +3393,15 @@ public class MainWindow : Window
             throw new InvalidOperationException("Pastalı yönetilen kurtarma klasörü dışında kaydedin.");
         EnsureWritableDestination(target);
         EnsureExportDoesNotReplaceOpenProject(target);
+    }
+    internal void EnsureSeparateBlockDefinitionDestination(string target,string source)
+    {
+        EnsureSeparateLayoutDestination(target);
+        var destination=Path.GetFullPath(target);var original=Path.GetFullPath(source);
+        if(string.Equals(destination,original,StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("DXF kaynağı çalışma kopyası hedefi olamaz.");
+        if(File.Exists(destination) && File.Exists(original) && FileIdentity.SameExistingFile(original,destination))
+            throw new InvalidOperationException("DXF kaynağının başka adı çalışma kopyası hedefi olamaz.");
     }
     internal string? DxfLayerRenameNotice()
     {

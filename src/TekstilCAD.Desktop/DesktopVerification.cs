@@ -1252,7 +1252,7 @@ internal static class DesktopVerification
             VerifyAsyncDxfBulgeImport(studio,work,reportPath,checks);
             VerifyDxfGrainlineReview(studio,work,checks);
             VerifyDxfPointReview(studio,work,checks);
-            VerifyDxfBlockDefinitionReview(studio,checks);
+            VerifyDxfBlockDefinitionReview(studio,work,checks);
             VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
             VerifyDxfSourceCheckWorkflow(studio,work,checks);
@@ -2306,8 +2306,22 @@ internal static class DesktopVerification
         finally { window.Close(); }
     }
 
-    private static void VerifyDxfBlockDefinitionReview(MainWindow studio,List<string> checks)
+    private static void VerifyDxfBlockDefinitionReview(MainWindow studio,string work,List<string> checks)
     {
+        var settings=new MainWindow.DxfBlockCopyOptions();var options=studio.CreateDxfBlockCopyOptionsWindow(settings);
+        try
+        {
+            Render(options,Path.Combine(work,"block-options-minimum.png"),440,320);
+            var optionsRoot=(FrameworkElement)options.Content;
+            var units=Descendants<ComboBox>(optionsRoot).Single(c=>AutomationProperties.GetName(c)=="DXF dosya birimi");
+            var encoding=Descendants<ComboBox>(optionsRoot).Single(c=>AutomationProperties.GetName(c)=="DXF metin kodlaması");
+            units.SelectedIndex=2;encoding.SelectedIndex=1;
+            MainWindow.SetDxfBlockCopyOptions(settings,units.SelectedIndex,encoding.SelectedIndex);
+            Check(settings.Factor==25.4 && settings.Encoding==DxfTextEncoding.Windows1254,"Block copy options retain explicit DXF unit and encoding",checks);
+            bool rejected=false;try { MainWindow.SetDxfBlockCopyOptions(settings,-1,0); } catch(InvalidOperationException) { rejected=true; }
+            Check(rejected && settings.Factor==25.4 && settings.Encoding==DxfTextEncoding.Windows1254,"Invalid block copy options do not alter prior selection",checks);
+        }
+        finally { options.Close(); }
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
             "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
             "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
@@ -2315,6 +2329,7 @@ internal static class DesktopVerification
         var window=new DxfBlockDefinitionReviewWindow(studio,import);
         try
         {
+            Render(window,Path.Combine(work,"block-review-minimum.png"),500,380);
             var root=(FrameworkElement)window.Content;
             var block=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
             var point=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
@@ -2325,8 +2340,35 @@ internal static class DesktopVerification
             apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.Selection is null && DocumentSession.ContentEquals(before,import.Project),"Block definition selection requires explicit unplaced-copy acknowledgment",checks);
             Check(Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Yerleşim") && t.Text.Contains("fiziksel çentik")),"Block definition review explains placement and marker limitations",checks);
+            Check(Descendants<DxfPiecePreview>(root).Count()==1 && AutomationProperties.GetName(Descendants<ScrollViewer>(root).First()).Contains("Blok tanımı"),"Block review provides a named scroll area and contour preview",checks);
         }
         finally { window.Close(); }
+        var links=import.PieceSources!.Value;var link=links.Single(p=>p.EntityType=="POLYLINE");
+        var rawPoint=import.SupplementalGeometry!.Records.Single(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
+        var result=DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(rawPoint.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        MainWindow.AttachBlockDefinitionProvenance(result,import,"source.dxf");
+        var savedPath=Path.Combine(work,$"block-copy-{Guid.NewGuid():N}.tcad");var sourcePath=Path.Combine(work,$"block-source-{Guid.NewGuid():N}.dxf");
+        File.WriteAllBytes(sourcePath,bytes);var originalSource=File.ReadAllBytes(sourcePath);
+        var version=ProjectStorage.CaptureVersion(savedPath);using(var cancellation=new CancellationTokenSource())
+        {
+            cancellation.Cancel();bool stopped=false;try { ProjectStorage.SaveIfUnchanged(result.WorkingCopy,savedPath,version,cancellation.Token); } catch(OperationCanceledException) { stopped=true; }
+            Check(stopped && !File.Exists(savedPath) && File.ReadAllBytes(sourcePath).SequenceEqual(originalSource),"Cancelled block copy save preserves source and creates no destination",checks);
+        }
+        studio.EnsureSeparateBlockDefinitionDestination(savedPath,sourcePath);ProjectStorage.SaveIfUnchanged(result.WorkingCopy,savedPath,version);
+        var reopened=ProjectStorage.Load(savedPath);
+        Check(DocumentSession.ContentEquals(result.WorkingCopy,reopened) && reopened.ImportProvenance?.SourceSha256==import.SourceSha256 &&
+            reopened.ImportProvenance.Warnings.Any(w=>w.Contains("yerleştirilmemiş",StringComparison.OrdinalIgnoreCase)) &&
+            File.ReadAllBytes(sourcePath).SequenceEqual(originalSource),"Block copy save preserves source and historical unplaced provenance",checks);
+        var conflictPath=Path.Combine(work,$"block-conflict-{Guid.NewGuid():N}.tcad");var absent=ProjectStorage.CaptureVersion(conflictPath);
+        File.WriteAllText(conflictPath,"korunan");bool conflict=false;
+        try { ProjectStorage.SaveIfUnchanged(result.WorkingCopy,conflictPath,absent); } catch(ProjectConflictException) { conflict=true; }
+        Check(conflict && File.ReadAllText(conflictPath)=="korunan" && File.ReadAllBytes(sourcePath).SequenceEqual(originalSource),"Block copy save conflict preserves target and source",checks);
+        bool sourceRejected=false;try { studio.EnsureSeparateBlockDefinitionDestination(sourcePath,sourcePath); } catch(InvalidOperationException) { sourceRejected=true; }
+        var active=(FieldInfo)typeof(MainWindow).GetField("filePath",PrivateInstance)!;var oldPath=active.GetValue(studio);
+        var missing=Path.Combine(work,$"deleted-active-{Guid.NewGuid():N}.tcad");
+        try { active.SetValue(studio,missing);bool rejected=false;try { studio.EnsureSeparateBlockDefinitionDestination(missing,sourcePath); } catch(InvalidOperationException) { rejected=true; }
+            Check(sourceRejected && rejected && !File.Exists(missing),"Source and deleted active project paths cannot be block copy destinations",checks); }
+        finally { active.SetValue(studio,oldPath); }
     }
 
     private static void VerifyDxfPointReview(MainWindow studio,string work,List<string> checks)
