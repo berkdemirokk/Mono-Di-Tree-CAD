@@ -2399,18 +2399,23 @@ private struct ExperimentalDesignBriefView: View {
     @State private var selectingImage = false
     @State private var exporting = false
     @State private var exportDocument: ProjectExportDocument?
+    @State private var pendingDraft: ExperimentalDesignBrief.Draft?
+    @State private var savedDraft: ExperimentalDesignBrief.Draft?
     @State private var message = ""
 
-    private var hasInput: Bool {
-        style != .describe || !description.isEmpty || !bust.isEmpty || !waist.isEmpty || !hips.isEmpty || !length.isEmpty || !otherMeasurements.isEmpty || image != nil
+    private var draft: ExperimentalDesignBrief.Draft {
+        .init(style: style, description: description, bust: bust, waist: waist, hips: hips, length: length,
+              otherMeasurements: otherMeasurements, image: image, imageName: imageName)
     }
-    private var requestPrompt: String { ExperimentalDesignBrief.prompt(style: style, description: description) }
-    private var requestMeasurements: String {
-        ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
-    }
+    private var hasUnsavedInput: Bool { draft.requiresDiscardConfirmation(saved: savedDraft) }
+    private var requestPrompt: String { draft.prompt }
+    private var requestMeasurements: String { draft.measurements }
     private func prepareExport() {
+        pendingDraft = nil
         do {
-            let data = try ExperimentalDesignBrief.make(prompt: requestPrompt, measurements: requestMeasurements, image: image, imageName: imageName)
+            let candidate = draft
+            let data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName)
+            pendingDraft = candidate
             exportDocument = ProjectExportDocument(data: data)
             exporting = true
         } catch {
@@ -2515,9 +2520,9 @@ private struct ExperimentalDesignBriefView: View {
                 .background(.regularMaterial)
             }
             .navigationTitle("Kalıp isteği · DEBUG")
-            .interactiveDismissDisabled(hasInput)
+            .interactiveDismissDisabled(hasUnsavedInput)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button("Kapat") { if hasInput { confirmClose = true } else { dismiss() } }
+                Button("Kapat") { if hasUnsavedInput { confirmClose = true } else { dismiss() } }
             } }
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
                 Button("İsteği sil ve kapat", role: .destructive) { dismiss() }
@@ -2537,8 +2542,12 @@ private struct ExperimentalDesignBriefView: View {
             .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json,
                           defaultFilename: "kalip-istegi.tcad-request.json") { result in
                 switch result {
-                case .success: message = "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
-                case .failure(let error): if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
+                case .success:
+                    savedDraft = pendingDraft; pendingDraft = nil
+                    message = "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
+                case .failure(let error):
+                    pendingDraft = nil
+                    if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
                 }
             }
         }

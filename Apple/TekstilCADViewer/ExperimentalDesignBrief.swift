@@ -36,6 +36,27 @@ enum ExperimentalDesignBrief {
         var id: String { rawValue }
     }
 
+    struct Draft: Equatable {
+        let style: DressStyle
+        let description: String
+        let bust: String
+        let waist: String
+        let hips: String
+        let length: String
+        let otherMeasurements: String
+        let image: Data?
+        let imageName: String?
+
+        var hasInput: Bool {
+            style != .describe || !description.isEmpty || !bust.isEmpty || !waist.isEmpty ||
+                !hips.isEmpty || !length.isEmpty || !otherMeasurements.isEmpty || image != nil
+        }
+        func requiresDiscardConfirmation(saved: Draft?) -> Bool { saved.map { self != $0 } ?? hasInput }
+        var prompt: String { ExperimentalDesignBrief.prompt(style: style, description: description) }
+        var measurements: String {
+            ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
+        }
+    }
     /// Selection describes an intended style; no pattern geometry is implied.
     static func prompt(style: DressStyle, description: String) -> String {
         guard style != .describe else { return description }

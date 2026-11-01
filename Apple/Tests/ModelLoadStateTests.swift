@@ -3,6 +3,20 @@ import XCTest
 
 final class ModelLoadStateTests: XCTestCase {
     #if DEBUG
+    func testBriefSavedSnapshotTracksLaterChangesIncludingImage() {
+        func draft(_ description: String, image: Data? = nil) -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: "", hips: "", length: "",
+                  otherMeasurements: "", image: image, imageName: image == nil ? nil : "photo.png")
+        }
+        let empty = draft(""), entered = draft("Elbise"), changed = draft("Farklı"), withImage = draft("Elbise", image: Data([1]))
+        XCTAssertFalse(empty.requiresDiscardConfirmation(saved: nil))
+        XCTAssertTrue(entered.requiresDiscardConfirmation(saved: nil)) // no successful save
+        XCTAssertFalse(entered.requiresDiscardConfirmation(saved: entered))
+        XCTAssertTrue(changed.requiresDiscardConfirmation(saved: entered))
+        XCTAssertTrue(empty.requiresDiscardConfirmation(saved: entered))
+        XCTAssertTrue(withImage.requiresDiscardConfirmation(saved: entered))
+        XCTAssertFalse(withImage.requiresDiscardConfirmation(saved: withImage))
+    }
     func testDressStyleAndOnlyEnteredMeasurementsAreCarriedIntoRequest() throws {
         let prompt = ExperimentalDesignBrief.prompt(style: .aline, description: "Uzun kollu")
         let measures = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "", hips: "  ", length: "110 cm", other: "Omuz: 38 cm")
