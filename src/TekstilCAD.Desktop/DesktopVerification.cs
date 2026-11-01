@@ -9213,6 +9213,17 @@ internal static class DesktopVerification
             "Explicitly applying the edge suggestion changes only the last trace point",checks);
         edgeCanvas.SuggestLastEdge();edgeCanvas.TryAddPixelPoint(new Point(11,12));
         Check(edgeCanvas.EdgeSuggestion is null && !edgeCanvas.ApplyEdgeSuggestion(),"Changing photo points invalidates an old edge suggestion",checks);
+        var pathCanvas=new PhotoTraceCanvas { Image=edgeBitmap };
+        foreach(var p in new[] { new Point(1,1),new Point(2,1),new Point(4.2,2.1),new Point(9.2,6.2) })pathCanvas.TryAddPixelPoint(p);
+        var pathBefore=pathCanvas.Points.ToArray();var candidate=new[] { new Point(4,2),new Point(5,2),new Point(5,3),new Point(6,4),new Point(7,5),new Point(8,6),new Point(9,6) };
+        Check(pathCanvas.SetPathSuggestion(pathBefore[^2],pathBefore[^1],candidate) && pathCanvas.Points.SequenceEqual(pathBefore),
+            "Photo path remains a preview before acceptance",checks);
+        Check(pathCanvas.ApplyPathSuggestion() && pathCanvas.Points.Count>pathBefore.Length && pathCanvas.Points[^1]==pathBefore[^1] && pathCanvas.Points[2]==pathBefore[2],
+            "Accepting photo path retains the exact subpixel endpoints and inserts interior points",checks);
+        Check(pathCanvas.UndoPath() && pathCanvas.Points.SequenceEqual(pathBefore) && !pathCanvas.UndoPath(),
+            "Photo path acceptance can be undone once as a single action",checks);
+        pathCanvas.SetPathSuggestion(pathBefore[^2],pathBefore[^1],candidate);pathCanvas.TryAddPixelPoint(new Point(12,12));
+        Check(pathCanvas.PathSuggestion is null && !pathCanvas.ApplyPathSuggestion(),"Changing a photo point invalidates a path preview",checks);
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
@@ -9249,6 +9260,22 @@ internal static class DesktopVerification
             canvas.ZoomAtCursor(100);Check(canvas.Zoom==8,"Photo zoom is bounded",checks);
             canvas.ResetZoom();Check(canvas.Zoom==1 && canvas.Points.SequenceEqual(beforeZoom) && trace.DraftRevision==beforeZoomRevision,
                 "Fitting the photo preserves trace and draft revision",checks);
+            var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
+            try
+            {
+                using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+                trace.ComputePathForVerification=(_,_,_,token)=> { reached.Set();release.Wait(token);return new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) }; };
+                var pendingPath=trace.StartPathSuggestionAsync();PumpUntil(()=>reached.IsSet);
+                canvas.TryAddPixelPoint(new Point(25,25));release.Set();PumpUntil(()=>pendingPath.IsCompleted);pendingPath.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is null && trace.StatusForVerification.Text.Contains("değişti"),"Editing while a photo path is computed discards the stale proposal",checks);
+                canvas.UndoPoint();using var cancelReached=new ManualResetEventSlim();
+                trace.ComputePathForVerification=(_,_,_,token)=> { cancelReached.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested();return null; };
+                var cancelledPath=trace.StartPathSuggestionAsync();PumpUntil(()=>cancelReached.IsSet);trace.CancelPathSuggestion();PumpUntil(()=>cancelledPath.IsCompleted);cancelledPath.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("iptal"),
+                    "Cancelling photo path computation preserves selected points",checks);
+                trace.ComputePathForVerification=null;
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(savedContext); }
             trace.LengthForVerification.Text="100";trace.TryApply();
             Check(DocumentSession.ContentEquals(initial,workspace.Document) && session.UndoCount==0 && trace.StatusForVerification.Text.Contains("iptal"),
                 "Cancelling photo draft confirmation leaves project and undo unchanged",checks);
@@ -9262,14 +9289,21 @@ internal static class DesktopVerification
             Check(DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("değişti"),
                 "Photo input changed during draft confirmation prevents applying stale geometry",checks);
             trace.LengthForVerification.Text="100";
+            var savedSegment=canvas.Points.ToArray();
+            var proposal=new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) };
+            Check(canvas.SetPathSuggestion(savedSegment[^2],savedSegment[^1],proposal),"Photo path can be prepared for draft confirmation",checks);
+            var pendingWarning=false;trace.ConfirmForVerification=message=> { pendingWarning=message.Contains("Uygulanmamış mavi öneri");return false; };trace.TryApply();
+            Check(pendingWarning && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Draft confirmation discloses an unaccepted photo path and leaves the project unchanged on cancellation",checks);
+            Check(canvas.ApplyPathSuggestion(),"Reviewed photo path is explicitly accepted",checks);
             trace.ConfirmForVerification=_=>true;trace.TryApply();
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
-            Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(100,100) }) && session.UndoCount==1,
-                "Confirmed manual photo trace adds one scaled open draft",checks);
+            Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(110,10),new Point2(110,90),new Point2(100,100) }) && session.UndoCount==1,
+                "Confirmed photo trace with accepted path adds one scaled open draft",checks);
             var provenance=AssertSingle(added.PhotoTraceHistory!);
             Check(provenance.PieceId==draft.Id && provenance.SourceSha256==photoHash && provenance.SourceByteLength==encodedPhoto.Length &&
-                provenance.GeneratedPoints.SequenceEqual(draft.Points) && provenance.TracePixels.Count==3,
-                "Manual photo draft retains captured source identity and historical calibration",checks);
+                provenance.GeneratedPoints.SequenceEqual(draft.Points) && provenance.TracePixels.Count==5,
+                "Photo draft retains accepted path, source identity and historical calibration",checks);
             var historyWindow=new PhotoTraceHistoryWindow(workspace,added);
             try
             {

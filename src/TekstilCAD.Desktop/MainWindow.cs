@@ -1397,7 +1397,7 @@ public class MainWindow : Window
         ArgumentNullException.ThrowIfNull(history);
         if(PhotoTraceProblem(stamp) is { } problem) { SetStatus(problem);return false; }
         var copied=points.ToList();LargeOpenPathValidator.Validate(copied);
-        var piece=new PatternPiece { Name="Fotoğraftan elle çizilen taslak",Closed=false,Points=copied };
+        var piece=new PatternPiece { Name="Fotoğraftan oluşturulan taslak",Closed=false,Points=copied };
         var captured=history.Clone();captured.PieceId=piece.Id;
         if(!captured.GeneratedPoints.SequenceEqual(copied))throw new InvalidOperationException("Fotoğraf kaydı ile taslak uyuşmuyor; proje değiştirilmedi.");
         var candidate=stamp.Snapshot.Clone();candidate.Pieces.Add(piece.Clone());(candidate.PhotoTraceHistory ??= []).Add(captured.Clone());ProjectStorage.Validate(candidate);
@@ -1405,7 +1405,7 @@ public class MainWindow : Window
             throw new InvalidOperationException("Taslak geri alma kapasitesine sığmıyor; proje değiştirilmedi.");
         if(PhotoTraceProblem(stamp) is { } changed) { SetStatus(changed);return false; }
         bool committed=false;
-        try { CommitObserved("Fotoğraftan elle çizilmiş açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());(Document.PhotoTraceHistory ??= []).Add(captured.Clone());SelectedId=piece.Id; },()=>committed=true); }
+        try { CommitObserved("Fotoğraftan açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());(Document.PhotoTraceHistory ??= []).Add(captured.Clone());SelectedId=piece.Id; },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         { mainMutationReviewRequired=true;SetStatus("Taslak eklendi ancak görünüm yenilenemedi; projeyi kontrol edin. İşlem geri alınabilir.");return true; }
         return committed;
