@@ -747,8 +747,18 @@ enum ModelStore {
 
     private static func metadata(_ url: URL) -> MetadataResult {
         let limit = 64 * 1024
-        guard url.pathExtension.lowercased() == copyExtension,
-              let file = try? FileHandle(forReadingFrom: url.appendingPathComponent(metadataName)) else { return .invalid }
+        guard url.pathExtension.lowercased() == copyExtension else { return .invalid }
+        let metadataURL = url.appendingPathComponent(metadataName)
+        // A damaged or substituted metadata path might be a FIFO. Opening it
+        // normally could wait indefinitely before we even reach the size cap.
+        let descriptor = metadataURL.path.withCString { open($0, O_RDONLY | O_NONBLOCK | O_NOFOLLOW) }
+        guard descriptor >= 0 else { return .invalid }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & S_IFMT) == S_IFREG else {
+            close(descriptor)
+            return .invalid
+        }
+        let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
         do {
             var data = Data()

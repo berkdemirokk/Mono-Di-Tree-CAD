@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 import XCTest
 @testable import TekstilCADViewer_iOS
 
@@ -11,6 +12,38 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testSpecialMetadataFilesDoNotBlockLibraryOrFollowLinks() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let fifoCopy = root.appendingPathComponent("fifo.tcadcopy", isDirectory: true)
+        let linkedCopy = root.appendingPathComponent("linked.tcadcopy", isDirectory: true)
+        let normalCopy = root.appendingPathComponent("normal.tcadcopy", isDirectory: true)
+        for copy in [fifoCopy, linkedCopy, normalCopy] {
+            try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+            try Data("model".utf8).write(to: copy.appendingPathComponent("project.tcad"))
+        }
+        let fifo = fifoCopy.appendingPathComponent("metadata.json")
+        XCTAssertEqual(fifo.path.withCString { mkfifo($0, 0o600) }, 0)
+        let external = root.appendingPathComponent("external.json")
+        let metadata = Data("{\"version\":1,\"name\":\"External\"}".utf8)
+        try metadata.write(to: external)
+        try FileManager.default.createSymbolicLink(at: linkedCopy.appendingPathComponent("metadata.json"), withDestinationURL: external)
+        try Data("{\"version\":1,\"name\":\"Normal\"}".utf8).write(to: normalCopy.appendingPathComponent("metadata.json"))
+
+        let entries = try ModelStore.models(in: root)
+        for copy in [fifoCopy, linkedCopy] {
+            let entry = try XCTUnwrap(entries.first { $0.url == copy })
+            XCTAssertFalse(entry.canOpen)
+            XCTAssertTrue(entry.requiresRecovery)
+            XCTAssertEqual(try ModelStore.readListedPayload(entry), Data("model".utf8))
+        }
+        XCTAssertEqual(try Data(contentsOf: external), metadata)
+        let normal = try XCTUnwrap(entries.first { $0.url == normalCopy })
+        XCTAssertTrue(normal.canOpen)
+        XCTAssertEqual(normal.name, "Normal")
+    }
+
     func testInvalidOrMissingMetadataOffersRawRecoveryWithoutChangingSource() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
