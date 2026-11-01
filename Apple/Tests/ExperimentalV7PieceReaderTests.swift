@@ -41,6 +41,20 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid]))
         XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid], cancelled: { true }))
     }
+    func testContourDecoderRejectsTooFewPointsAndNonIntegerQuantityTokens() throws {
+        let prefix = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Metadata":{"Role":"Kesim","Quantity":NUMBER}}"#
+        for token in ["1.0", "1e0", "1E+0"] {
+            let bytes = Data(prefix.replacingOccurrences(of: "NUMBER", with: token).utf8)
+            XCTAssertThrowsError(try ExperimentalV7Contours.decode([bytes]), token)
+        }
+        let valid = Data(prefix.replacingOccurrences(of: "NUMBER", with: "1").utf8)
+        XCTAssertEqual(try ExperimentalV7Contours.decode([valid]).first?.quantity, 1)
+        let point = #"{"X":0,"Y":0}"#
+        for (closed, points) in [(false, ""), (false, point), (true, point), (true, point + "," + point)] {
+            let json = "{\"Id\":\"11111111-1111-1111-1111-111111111111\",\"Name\":\"A\",\"Closed\":\(closed),\"Points\":[\(points)]}"
+            XCTAssertThrowsError(try ExperimentalV7Contours.decode([Data(json.utf8)]))
+        }
+    }
     func testOptionalExternalLargeDesktopV7Fixture() throws {
         guard let path = ProcessInfo.processInfo.environment["TCAD_LARGE_V7_FIXTURE"], !path.isEmpty else {
             throw XCTSkip("Set TCAD_LARGE_V7_FIXTURE to the external synthetic desktop v7 file")

@@ -8,7 +8,7 @@ struct ExperimentalJSONStream {
     private enum Phase { case objectFirst, objectKey, objectColon, objectValue, objectAfter, arrayFirst, arrayValue, arrayAfter }
     // String equality folds canonically equivalent Unicode sequences; JSON key
     // identity here uses the exact decoded scalar sequence instead.
-    private struct Frame { var kind: Kind; var phase: Phase; var keys = Set<[UInt32]>(); var keyBytes = 0 }
+    private struct Frame { var kind: Kind; var phase: Phase; var keys = Set<[UInt32]>(); var keyBytes = 0; var currentKey: [UInt32]? = nil }
     private enum Lex { case none, string, atom }
     private var frames: [Frame] = []
     private var lex: Lex = .none
@@ -23,11 +23,13 @@ struct ExperimentalJSONStream {
     private let maximumTokenBytes: Int
     private let maximumDepth: Int
     private let maximumKeysPerObject: Int
+    private let strictIntegerKeys: Bool
 
     init(maximumBytes: Int = 64 * 1024 * 1024, maximumTokenBytes: Int = 64 * 1024,
-         maximumDepth: Int = 128, maximumKeysPerObject: Int = 128) {
+         maximumDepth: Int = 128, maximumKeysPerObject: Int = 128, strictIntegerKeys: Bool = false) {
         self.maximumBytes = maximumBytes; self.maximumTokenBytes = maximumTokenBytes
         self.maximumDepth = maximumDepth; self.maximumKeysPerObject = maximumKeysPerObject
+        self.strictIntegerKeys = strictIntegerKeys
     }
 
     mutating func feed(_ data: Data, cancelled: () -> Bool = { false }) throws {
@@ -149,12 +151,22 @@ struct ExperimentalJSONStream {
             guard keyBytes <= 1024 * 1024 else { throw Failure.limit }
             frames[i].keyBytes += tokenBytes
             guard frames[i].keys.count < maximumKeysPerObject else { throw Failure.limit }
-            guard frames[i].keys.insert(value.unicodeScalars.map(\.value)).inserted else { throw Failure.invalid }
+            let scalars = value.unicodeScalars.map(\.value)
+            guard frames[i].keys.insert(scalars).inserted else { throw Failure.invalid }
+            frames[i].currentKey = scalars
             frames[i].phase = .objectColon
         } else { try beginValue(); try completeValue() }
     }
     private mutating func endAtom() throws {
         guard let text = String(bytes: token, encoding: .utf8) else { throw Failure.invalid }
+        if strictIntegerKeys, let frame = frames.last, frame.phase == .objectValue,
+           let key = frame.currentKey,
+           key == Array("Quantity".unicodeScalars.map(\.value)) || key == Array("VertexIndex".unicodeScalars.map(\.value)) {
+            if text != "null" {
+                guard !text.isEmpty, text.utf8.allSatisfy({ (48...57).contains($0) }),
+                      (text == "0" || text.first != "0"), Int32(text) != nil else { throw Failure.invalid }
+            }
+        }
         if text != "true" && text != "false" && text != "null" {
             let pattern = #"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$"#
             guard text.range(of: pattern, options: .regularExpression) != nil,

@@ -2,7 +2,7 @@ import Foundation
 import CoreFoundation
 
 /// Detached experimental conversion of extracted UTF-8 pieces into preview data.
-/// Does not establish v7 history validity and is never used by production UI.
+/// Does not establish v7 history validity or signed-zero byte fidelity and is never used by production UI.
 enum ExperimentalV7Contours {
     enum Failure: Error { case invalid, limit, cancelled }
     private static func number(_ value: Any?) -> Double? {
@@ -27,7 +27,7 @@ enum ExperimentalV7Contours {
             if cancelled() { throw Failure.cancelled }
             bytes += data.count
             guard bytes <= 16 * 1024 * 1024 else { throw Failure.limit }
-            var scanner = ExperimentalJSONStream(maximumBytes: 512 * 1024)
+            var scanner = ExperimentalJSONStream(maximumBytes: 512 * 1024, strictIntegerKeys: true)
             try scanner.feed(data, cancelled: cancelled); try scanner.finish(cancelled: cancelled)
             guard data.count <= 512 * 1024,
                   let raw = try JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -36,7 +36,7 @@ enum ExperimentalV7Contours {
                   id.uuidString != "00000000-0000-0000-0000-000000000000", ids.insert(id).inserted,
                   let name = raw["Name"] as? String, name.utf16.count <= 1024,
                   let closed = boolean(raw["Closed"]), let rawPoints = raw["Points"] as? [[String: Any]],
-                  rawPoints.count <= 10_000 else { throw Failure.invalid }
+                  rawPoints.count >= (closed ? 3 : 2), rawPoints.count <= 10_000 else { throw Failure.invalid }
             total += rawPoints.count
             guard total <= 200_000 else { throw Failure.limit }
             var points: [Drawing.Point] = []; points.reserveCapacity(rawPoints.count)
