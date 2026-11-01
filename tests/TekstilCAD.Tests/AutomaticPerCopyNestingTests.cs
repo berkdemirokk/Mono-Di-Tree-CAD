@@ -30,6 +30,32 @@ public sealed class AutomaticPerCopyNestingTests
     }
 
     [Fact]
+    public void AlternatingCopyOrientationsRecoverAFeasibleLengthWithoutChangingSource()
+    {
+        var piece=new PatternPiece {
+            Points=[new(0,0),new(1,0),new(1,2),new(0,2)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(1,0) }],
+            Grainline=new Grainline { Start=new(0,0),End=new(0,1) },
+            Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=11 }
+        };
+        var source=new ProjectDocument { Pieces=[piece] };var before=source.Clone();
+        IReadOnlyDictionary<Guid,IReadOnlyList<int>> allowed=new Dictionary<Guid,IReadOnlyList<int>> { [piece.Id]=[0,90] };
+        var result=AutomaticPerCopyNesting.Arrange(source,[piece.Id],allowed,5,0,5,0,GrainDirectionPolicy.Direction.TwoWay,90);
+        Assert.Equal(5,result.Plan.Nesting.UsedLength);Assert.Equal(11,result.Plan.Placements.Count);
+        Assert.Equal(6,result.PlacedRotations.Values.Count(angle=>angle==90));
+        Assert.Equal(5,result.PlacedRotations.Values.Count(angle=>angle==0));
+        Assert.True(PerCopyTraceVerifier.IsValidForAllowedAngles(source,[piece.Id],result,allowed,
+            GrainDirectionPolicy.Direction.TwoWay,90,5,0,0,5));
+        Assert.True(DocumentSession.ContentEquals(before,source));
+        var withClearance=AutomaticPerCopyNesting.Arrange(source,[piece.Id],allowed,8,0.25,20,0.5,GrainDirectionPolicy.Direction.TwoWay,90);
+        Assert.True(PerCopyTraceVerifier.IsValidForAllowedAngles(source,[piece.Id],withClearance,allowed,
+            GrainDirectionPolicy.Direction.TwoWay,90,8,0.25,0.5,20));
+        var repeated=AutomaticPerCopyNesting.Arrange(source,[piece.Id],allowed,5,0,5,0,GrainDirectionPolicy.Direction.TwoWay,90);
+        Assert.Equal(result.Plan.Placements.Select(p=>result.PlacedRotations[p.PlacedPieceId]),
+            repeated.Plan.Placements.Select(p=>repeated.PlacedRotations[p.PlacedPieceId]));
+        Assert.Throws<InvalidOperationException>(()=>AutomaticPerCopyNesting.Arrange(source,[piece.Id],allowed,5,0,5,0,GrainDirectionPolicy.Direction.OneWay,0));
+    }
+    [Fact]
     public void NarrowOrientationsRecoverAValidShorterMarker()
     {
         PatternPiece Rectangle(int width, int height) => new()

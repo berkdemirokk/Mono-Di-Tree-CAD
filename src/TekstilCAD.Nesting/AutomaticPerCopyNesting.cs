@@ -209,6 +209,27 @@ public static class AutomaticPerCopyNesting
             secondWork += v * v;
             if (secondUnique.Add((mapping.SourcePieceId, angle))) secondWork += 3L * v * v;
         }
+        // Alternate the first two independently permitted orientations per
+        // source copy. Both phases are bounded heuristics, not an optimality
+        // claim, and each goes through the full per-copy placement verifier.
+        var alternating = new Dictionary<(Guid, int), int>();
+        var alternatingReverse = new Dictionary<(Guid, int), int>();
+        var alternatingUnique = new HashSet<(Guid, int)>();
+        var reverseUnique = new HashSet<(Guid, int)>();
+        long alternatingWork = 0, reverseWork = 0;
+        foreach (var mapping in expansion.Placements)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var key=(mapping.SourcePieceId,mapping.CopyNumber);var options=candidates[mapping.SourcePieceId];
+            var firstIndex=options.Count>1 && mapping.CopyNumber%2==1 ? 1 : 0;
+            var otherIndex=options.Count>1 ? 1-firstIndex : 0;
+            var angle=options[firstIndex].Angle;var reverseAngle=options[otherIndex].Angle;
+            alternating.Add(key,angle);alternatingReverse.Add(key,reverseAngle);
+            long v=originals[mapping.SourcePieceId].Points.Count;
+            alternatingWork+=v*v;reverseWork+=v*v;
+            if(alternatingUnique.Add((mapping.SourcePieceId,angle)))alternatingWork+=3L*v*v;
+            if(reverseUnique.Add((mapping.SourcePieceId,reverseAngle)))reverseWork+=3L*v*v;
+        }
         foreach (var (angles, cost, needed) in new[]
         {
             (alternate, extra, differs),
@@ -220,7 +241,18 @@ public static class AutomaticPerCopyNesting
             (second, secondWork, second.Any(pair => chosen[pair.Key] != pair.Value) &&
                 second.Any(pair => alternate[pair.Key] != pair.Value) &&
                 second.Any(pair => narrow[pair.Key] != pair.Value) &&
-                second.Any(pair => shortRows[pair.Key] != pair.Value))
+                second.Any(pair => shortRows[pair.Key] != pair.Value)),
+            (alternating, alternatingWork, alternating.Any(pair => chosen[pair.Key] != pair.Value) &&
+                alternating.Any(pair => alternate[pair.Key] != pair.Value) &&
+                alternating.Any(pair => narrow[pair.Key] != pair.Value) &&
+                alternating.Any(pair => shortRows[pair.Key] != pair.Value) &&
+                alternating.Any(pair => second[pair.Key] != pair.Value)),
+            (alternatingReverse, reverseWork, alternatingReverse.Any(pair => chosen[pair.Key] != pair.Value) &&
+                alternatingReverse.Any(pair => alternate[pair.Key] != pair.Value) &&
+                alternatingReverse.Any(pair => narrow[pair.Key] != pair.Value) &&
+                alternatingReverse.Any(pair => shortRows[pair.Key] != pair.Value) &&
+                alternatingReverse.Any(pair => second[pair.Key] != pair.Value) &&
+                alternatingReverse.Any(pair => alternating[pair.Key] != pair.Value))
         })
         {
             if (!needed) continue;
