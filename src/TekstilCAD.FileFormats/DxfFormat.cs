@@ -1318,7 +1318,7 @@ public static class DxfFormat
         const int maxRecords=4096,maxGroups=32768,maxCharacters=1_000_000;
         var records=ImmutableArray.CreateBuilder<DxfSourceGeometryRecord>();
         var groupCount=0;var characterCount=0;var truncated=false;
-        string section="",block="";int? blockHeaderOrdinal=null;
+        string section="",block="";
         for(var ordinal=0;ordinal<entities.Count;ordinal++)
         {
             token.ThrowIfCancellationRequested();
@@ -1388,7 +1388,7 @@ public static class DxfFormat
         const int maxRecords=4096,maxGroups=32768,maxCharacters=1_000_000;
         var records=ImmutableArray.CreateBuilder<DxfSupplementalGeometryRecord>();
         var totalGroups=0;var totalCharacters=0;var totalRecords=0;var truncated=false;
-        string section="",block="";
+        string section="",block="";int? blockHeaderOrdinal=null;
         for(var ordinal=0;ordinal<entities.Count;ordinal++)
         {
             token.ThrowIfCancellationRequested();
