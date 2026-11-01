@@ -4,6 +4,16 @@ import Foundation
 struct ContourBounds {
     let minX: Double, maxX: Double, minY: Double, maxY: Double
 
+    init?(combining bounds: [ContourBounds]) {
+        guard let first = bounds.first else { return nil }
+        var minX = first.minX, maxX = first.maxX, minY = first.minY, maxY = first.maxY
+        for bound in bounds.dropFirst() {
+            minX = min(minX, bound.minX); maxX = max(maxX, bound.maxX)
+            minY = min(minY, bound.minY); maxY = max(maxY, bound.maxY)
+        }
+        self.minX = minX; self.maxX = maxX; self.minY = minY; self.maxY = maxY
+    }
+
     init?(points: [ContourMeasure.Point]) {
         guard let first = points.first else { return nil }
         var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y

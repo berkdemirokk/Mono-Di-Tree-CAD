@@ -4,6 +4,15 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testCombinedPieceAndGrainBoundsMatchAllPoints() throws {
+        let groups = [[p(0, 1), p(2, 3)], [p(-20, 9), p(8, -4)], [p(-40, 0), p(60, 0)]]
+        let cached = try XCTUnwrap(ContourBounds(combining: groups.compactMap { ContourBounds(points: $0) }))
+        let direct = try XCTUnwrap(ContourBounds(points: groups.flatMap { $0 }))
+        XCTAssertEqual(cached.minX, direct.minX); XCTAssertEqual(cached.maxX, direct.maxX)
+        XCTAssertEqual(cached.minY, direct.minY); XCTAssertEqual(cached.maxY, direct.maxY)
+        XCTAssertNil(ContourBounds(combining: []))
+    }
+
     func testCachedBoundsMatchDirectViewportAcrossSizesAndExtremeCoordinates() throws {
         let cases: [[ContourMeasure.Point]] = [
             [p(0, 0), p(20, 30), p(-10, 5)],

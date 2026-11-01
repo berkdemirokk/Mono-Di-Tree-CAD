@@ -1463,6 +1463,7 @@ private struct Drawing {
         let closed: Bool
         let contourLength: Double?
         let isCollapsed: Bool
+        let contourBounds: ContourBounds?
         let role: String?
         let size: String?
         let material: String?
@@ -1708,6 +1709,7 @@ private struct Drawing {
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
                                 contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
                                 isCollapsed: ContourMeasure.isCollapsed(points),
+                                contourBounds: points.count > 1 ? ContourBounds(points: points) : nil,
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
@@ -2199,18 +2201,20 @@ private struct DrawingView: View {
         offset = limitedOffset(CGSize(width: offset.width + width, height: offset.height + height), size: size, scale: zoom)
     }
 
-    private var viewportPoints: [Drawing.Point] {
-        var points = pieces.filter { $0.points.count > 1 }.flatMap(\.points)
+    private var viewportBounds: ContourBounds? {
+        var bounds = pieces.compactMap(\.contourBounds)
         if showGrain {
             for piece in pieces where !piece.points.isEmpty {
-                if let grain = piece.grain { points.append(contentsOf: [grain.start, grain.end]) }
+                if let grain = piece.grain, let grainBounds = ContourBounds(points: [grain.start, grain.end]) {
+                    bounds.append(grainBounds)
+                }
             }
         }
-        return points
+        return ContourBounds(combining: bounds)
     }
 
     private func refreshBounds(size: CGSize) {
-        cachedBounds = ContourBounds(points: viewportPoints)
+        cachedBounds = viewportBounds
         revealSelectedNotch(size: size)
     }
 
