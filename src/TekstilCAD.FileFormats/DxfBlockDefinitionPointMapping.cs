@@ -34,6 +34,28 @@ public static class DxfBlockDefinitionPointMapping
             throw new InvalidDataException("Kaynak baytları, blok envanteri veya INSERT durumu doğrulanamadı.");
         if(inventory.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType is not ("POINT" or "POLYLINE" or "VERTEX" or "SEQEND" or "LINE" or "TEXT" or "MTEXT")))
             throw new InvalidDataException("Blokta bilinmeyen veya desteklenmeyen kaynak varlığı var.");
+        bool sequenceOpen=false;int sequenceVertices=0;
+        foreach(var entry in inventory.Records.Where(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal))
+        {
+            token.ThrowIfCancellationRequested();
+            if(entry.EntityType=="POLYLINE")
+            {
+                if(sequenceOpen)throw new InvalidDataException("İç içe POLYLINE dizisi desteklenmiyor.");
+                sequenceOpen=true;sequenceVertices=0;
+            }
+            else if(entry.EntityType=="VERTEX")
+            {
+                if(!sequenceOpen)throw new InvalidDataException("Sahipsiz VERTEX kaydı var.");
+                sequenceVertices++;
+            }
+            else if(entry.EntityType=="SEQEND")
+            {
+                if(!sequenceOpen || sequenceVertices<2)throw new InvalidDataException("Sahipsiz veya eksik POLYLINE sonu var.");
+                sequenceOpen=false;
+            }
+            else if(sequenceOpen)throw new InvalidDataException("POLYLINE dizisi tamamlanmadan başka kayıt başladı.");
+        }
+        if(sequenceOpen)throw new InvalidDataException("POLYLINE dizisi kapatılmadı.");
         var link=freshLinks.SingleOrDefault(p=>p.BlockHeaderOrdinal==blockHeaderOrdinal && p.EntityType=="POLYLINE" &&
             p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==oldLink.SourceOrdinals[0]);
         if(link is null || link.ChildSourceOrdinals.Length<2 || selection.VertexIndex<0 || selection.VertexIndex>=link.ChildSourceOrdinals.Length-1)

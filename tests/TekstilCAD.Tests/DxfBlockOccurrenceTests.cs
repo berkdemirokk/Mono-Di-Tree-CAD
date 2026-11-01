@@ -5,6 +5,27 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Theory]
+    [InlineData("0\nVERTEX\n10\n0\n20\n0\n")]
+    [InlineData("0\nSEQEND\n")]
+    [InlineData("0\nSEQEND\n0\nSEQEND\n")]
+    [InlineData("0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n0\n20\n0\n0\nPOLYLINE\n8\nA\n70\n1\n")]
+    public void OrphanVertexOrSequenceEndCannotAuthorizeMapping(string orphan)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+orphan+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var before=bytes.ToArray();
+        Assert.Throws<InvalidDataException>(()=>
+        {
+            var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+            var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+            var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+            DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        });
+        Assert.Equal(before,bytes);
+    }
+
     [Fact]
     public void TruncatedBlockInventoryCannotAuthorizeMapping()
     {
