@@ -16,6 +16,12 @@ public class PdfTiledFormatTests
         var pdf=File.ReadAllText(path,Encoding.ASCII);
         Assert.Contains("/Count 4",pdf);
         Assert.Equal(4,pdf.Split("/MediaBox [0 0 595.275591 841.889764]").Length-1);
+        Assert.Equal(4,pdf.Split(project.Pieces[0].Id.ToString("D")).Length-1);
+        // Conservative Helvetica advance-width upper bounds (em fractions),
+        // using exaggerated 100/100 labels although total pages are capped at 100.
+        var longest=$"SATIR 100/100  SUTUN 100/100  SAYFA 100/100  YAZDIRMA 100%  ID {project.Pieces[0].Id:D}";
+        var width=longest.Sum(c=>c==' ' ? 0.278 : c is >= '0' and <= '9' or >= 'a' and <= 'f' ? 0.556 : c is >= 'A' and <= 'Z' ? 0.944 : 0.889)*8;
+        Assert.True(width<190*72.0/25.4);
         Assert.Contains("SATIR 1/2  SUTUN 1/2  SAYFA 1/4",pdf);
         Assert.Contains("SATIR 1/2  SUTUN 2/2  SAYFA 2/4",pdf);
         Assert.Contains("SATIR 2/2  SUTUN 1/2  SAYFA 3/4",pdf);

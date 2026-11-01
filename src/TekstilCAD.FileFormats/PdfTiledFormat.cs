@@ -41,7 +41,8 @@ public static class PdfTiledFormat
             // The grey frame is the exact joining edge; only contour ink inside
             // the frame is printed. Neighbouring frames share the same model edge.
             body.Append($"0.65 G 0.3 w {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re S\n");
-            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (SATIR {row+1}/{rows}  SUTUN {col+1}/{cols}  SAYFA {row*cols+col+1}/{pageCount}  YAZDIRMA 100%) Tj ET\n");
+            var identity=copy.Pieces.Count==1 ? $"  ID {copy.Pieces[0].Id:D}" : "";
+            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (SATIR {row+1}/{rows}  SUTUN {col+1}/{cols}  SAYFA {row*cols+col+1}/{pageCount}  YAZDIRMA 100%{identity}) Tj ET\n");
             body.Append($"0 G 0.5 w {F(10*Scale)} {F(15*Scale)} m {F(60*Scale)} {F(15*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(14*Scale)} Td (50 MM KONTROL) Tj ET\n");
             if(hasGrainlines || markCount>0)
             {

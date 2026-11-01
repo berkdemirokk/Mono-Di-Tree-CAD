@@ -326,6 +326,7 @@ public class MainWindow : Window
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
         selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi ve varsa köşe işaretlerini aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
+        selectionCommands.Add(AddButton(tools, "Seçili parçayı A4 PDF çıkar…", ExportSelectedA4, "Yalnız seçili parçayı gerçek boyutlu A4 inceleme sayfalarına aktarır; kaynak proje değişmez."));
         tools.Children.Add(Label("GÖRÜNÜM", Muted, 10));
         selectionCommands.Add(AddButton(tools, "Seçili parçayı göster", () => canvas?.FitSelectedPiece(), "Seçili parçayı çalışma alanına sığdır · G (kalıp alanı odaktayken)"));
         var navigation = new WrapPanel(); tools.Children.Add(navigation);
@@ -3239,6 +3240,44 @@ public class MainWindow : Window
             if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !DxfImportRunning;
         }
     }
+    private sealed record SelectedA4Capture(ProjectDocument Original,ProjectDocument Snapshot,Guid Epoch,Guid PieceId,ProjectDocument Output);
+    private SelectedA4Capture CaptureSelectedA4()
+    {
+        EnsureNoExport();EnsurePropertyDraftsApplied();
+        var piece=Selected ?? throw new InvalidOperationException("A4 PDF için önce bir parça seçin.");
+        var document=Document;var snapshot=document.Clone();var selected=snapshot.Pieces.Single(p=>p.Id==piece.Id);
+        var output=new ProjectDocument { Name=snapshot.Name,Pieces=[selected.Clone()] };
+        Validate(output);
+        return new(document,snapshot,projectEpoch,piece.Id,output);
+    }
+    private bool SelectedA4StillCurrent(SelectedA4Capture capture) =>
+        ReferenceEquals(Document,capture.Original) && projectEpoch==capture.Epoch && SelectedId==capture.PieceId &&
+        !HasPendingCanvasOrPropertyWork && DocumentSession.ContentEquals(Document,capture.Snapshot);
+    private Task? StartSelectedA4(SelectedA4Capture capture,string path,ProjectFileVersion expected,Func<string,bool> confirm)
+    {
+        if(!SelectedA4StillCurrent(capture))throw new InvalidOperationException("Proje veya seçili parça değişti; A4 aktarımını yeniden başlatın.");
+        var piece=capture.Output.Pieces[0];
+        return StartExportAfterPreflight(capture.Output,path,5,expected,
+            text=>confirm($"Yalnız seçili parça aktarılır: {SafePieceName(piece.Name)} · {piece.Id:D}. Diğer parçalar, üretim bilgileri, serileme kuralları ve proje geçmişi PDF'e aktarılmaz.\n\n"+text),
+            ()=>SelectedA4StillCurrent(capture));
+    }
+    internal Task? StartSelectedA4ForVerification(string path,ProjectFileVersion expected,Func<string,bool> confirm)
+        => StartSelectedA4(CaptureSelectedA4(),path,expected,confirm);
+    private void ExportSelectedA4()
+    {
+        var capture=CaptureSelectedA4();var piece=capture.Output.Pieces[0];
+        var dlg=new SaveFileDialog { Title=$"Yalnız seçili parça · {piece.Id:D}",Filter="PDF A4 inceleme (*.pdf)|*.pdf",DefaultExt=".pdf",AddExtension=true,
+            FileName=SafeFileName(piece.Name)+" - A4.pdf",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dlg.ShowDialog(this)!=true)return;
+        if(!SelectedA4StillCurrent(capture))throw new InvalidOperationException("Proje veya seçili parça değişti; A4 aktarımını yeniden başlatın.");
+        ExportDestination.ValidateExtension(dlg.FileName,5);EnsureWritableDestination(dlg.FileName);EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
+        var expected=ProjectStorage.CaptureVersion(dlg.FileName);
+        if(expected.Sha256 is not null && MessageBox.Show(this,"Seçilen dosya A4 inceleme çıktısıyla değiştirilsin mi? Aktarım sürerken aynı dosyayı başka uygulamalarda değiştirmeyin.",
+            "Mevcut dosyayı değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
+        _=StartSelectedA4(capture,dlg.FileName,expected,
+            text=>MessageBox.Show(this,text,"A4 inceleme çıktısı",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+    }
+
     private void Export()
     {
         EnsureNoExport();
@@ -3277,7 +3316,7 @@ public class MainWindow : Window
         "Küçük çentikler veya yön değişimleri yuvarlama sırasında düzleşebilir. Dosyayı üretimden önce kontrol edin.\n\n"+
         "Tuvalde Y aşağı artar; HPGL koordinatları aynı işaretle yazılır. Y ekseni yukarı olan cihazda görünüm dikey ters olabilir; hedefte yönü kontrol edin.\n\n"+
         "Fiziksel makine uyumluluğu ve kalibrasyon doğrulanmadı. Farklı birim/mm değerlerini fiziksel bağlantı kurmayan Makine simülatöründe deneyebilirsiniz.\n\nDosyayı hazırlamak istiyor musunuz?";
-    internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm)
+    internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm,Func<bool>? selectedSourceCurrent=null)
     {
         ArgumentNullException.ThrowIfNull(confirm);
         if(format==6 && !confirm("Bu seçenek dış dosyadaki Y koordinatlarının işaretini ters çevirir; proje değişmez. Bu bir yansımadır ve kapalı konturların saat yönünü tersine çevirir. Y ekseni yukarı olan CAD programlarında kalıp ekrandaki yönde görünür. Dosyanın koordinatları ve konumu değişeceğinden hedef programda ölçü ve yönü kontrol edin. Devam edilsin mi?")) { SetStatus("DXF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
@@ -3287,7 +3326,8 @@ public class MainWindow : Window
         // Dialogs pump the dispatcher; a drawing, drag or property draft can
         // appear without changing the committed document snapshot.
         EnsurePropertyDraftsApplied();
-        if(!DocumentSession.ContentEquals(snapshot,Document))throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
+        if(selectedSourceCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !selectedSourceCurrent())
+            throw new InvalidOperationException("Proje veya seçim inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
         return StartExportAsync(snapshot,path,format,expected);
     }
     private bool BlockForExport()

@@ -6331,6 +6331,45 @@ internal static class DesktopVerification
         Check(studio.ExportError is null && File.ReadAllText(tiledGrainPath).Contains("KESIK:IPLIK  ARTI:ISARET KESIM DEGIL") && DocumentSession.ContentEquals(withGrain,studio.Document),
             "A4 PDF exports grainline and visual marker for review without modifying the source",checks);
         studio.LoadDocument(mismatchDocument);
+        var selectedDocument=mismatchDocument.Clone();
+        selectedDocument.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(90,90),NeedsReview=true };
+        selectedDocument.Pieces[0].Notches=[new NotchMark { VertexIndex=1,Position=selectedDocument.Pieces[0].Points[1] }];
+        var otherPiece=new PatternPiece { Name="Diğer",Points=[new(5000,0),new(5100,0),new(5000,100)] };selectedDocument.Pieces.Add(otherPiece);
+        studio.LoadDocument(selectedDocument);studio.Select(selectedDocument.Pieces[0].Id);var selectedBefore=studio.Document.Clone();
+        var selectedPath=Path.Combine(work,"selected-a4.pdf");string? selectedWarning=null;
+        var selectedTask=studio.StartSelectedA4ForVerification(selectedPath,ProjectStorage.CaptureVersion(selectedPath),message=> { selectedWarning=message;return true; });
+        Check(selectedTask is not null && selectedWarning is not null && selectedWarning.Contains("Yalnız seçili parça") && selectedWarning.Contains(selectedDocument.Pieces[0].Id.ToString("D")) && selectedWarning.Contains("üretim bilgileri"),
+            "Selected A4 export identifies its exact source and omitted information",checks);
+        PumpUntil(()=>selectedTask!.IsCompleted);selectedTask!.GetAwaiter().GetResult();
+        var selectedPdf=File.ReadAllText(selectedPath);
+        Check(studio.ExportError is null && selectedPdf.Contains("/Count 1") && selectedPdf.Contains("KESIK:IPLIK  ARTI:ISARET") && selectedPdf.Contains(selectedDocument.Pieces[0].Id.ToString("D")) && DocumentSession.ContentEquals(selectedBefore,studio.Document),
+            "Selected A4 exports only chosen marked grainline piece and preserves full project",checks);
+        var selectedSession=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var undoBeforeExport=selectedSession.UndoCount;
+        var openProjectPath=Path.Combine(work,"selected-open-project.pdf");ProjectStorage.Save(studio.Document,openProjectPath);
+        var openBytes=File.ReadAllBytes(openProjectPath);var filePathField=typeof(MainWindow).GetField("filePath",PrivateInstance)!;var previousFilePath=filePathField.GetValue(studio);
+        try
+        {
+            filePathField.SetValue(studio,openProjectPath);var rejected=false;
+            try { studio.StartSelectedA4ForVerification(openProjectPath,ProjectStorage.CaptureVersion(openProjectPath),_=>true); }
+            catch(InvalidOperationException) { rejected=true; }
+            Check(rejected && File.ReadAllBytes(openProjectPath).SequenceEqual(openBytes) &&
+                DocumentSession.ContentEquals(selectedBefore,studio.Document) && selectedSession.UndoCount==undoBeforeExport,
+                "Selected A4 rejects the open project target and preserves source and undo",checks);
+        }
+        finally { filePathField.SetValue(studio,previousFilePath); }
+        var staleSelectedPath=Path.Combine(work,"selected-a4-stale.pdf");
+        try
+        {
+            studio.StartSelectedA4ForVerification(staleSelectedPath,ProjectStorage.CaptureVersion(staleSelectedPath),_=> { studio.Select(otherPiece.Id);return true; });
+            Check(false,"Selected A4 rejects changed selection",checks);
+        }
+        catch(InvalidOperationException)
+        {
+            Check(!File.Exists(staleSelectedPath) && DocumentSession.ContentEquals(selectedBefore,studio.Document),
+                "Selected A4 rejects selection changes during preflight without writing",checks);
+        }
+        studio.LoadDocument(mismatchDocument);
         var flippedPath=Path.Combine(work,"canvas-orientation.dxf");
         var flippedVersion=ProjectStorage.CaptureVersion(flippedPath);string? flippedWarning=null;
         var flippedDeclined=studio.StartExportAfterPreflight(studio.Document.Clone(),flippedPath,6,flippedVersion,message=> { flippedWarning=message;return false; });
