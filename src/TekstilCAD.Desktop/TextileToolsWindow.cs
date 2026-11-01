@@ -1264,7 +1264,7 @@ public sealed class TextileToolsWindow : Window
                         : " Ölçüyü ve konturu kontrol edin; seçilen payı doğrulatın.";
                     if(ex is OffsetLocalDetailUnverifiedException detail)
                         nextStep += detail.SourceIndex is int sourceIndex && detail.Sample is OffsetLocalSample sample
-                            ? $" Karşılaştırmada ilk doğrulanamayan kaynak örneği: {(sample==OffsetLocalSample.Vertex ? "köşe" : "kenar orta noktası; başlangıç köşesi")} {sourceIndex} (indeksler sıfırdan başlar). Bu tek başına kusur kanıtı değildir."
+                            ? $" Karşılaştırmada ilk doğrulanamayan örnek, 0,000001 mm ızgarasına yuvarlanmış kaynak konturda {(sample==OffsetLocalSample.Vertex ? "köşe" : "kenar orta noktası; başlangıç köşesi")} {sourceIndex} (indeksler sıfırdan başlar). Bu tek başına kusur kanıtı değildir."
                             : " Ters karşılaştırmadaki örnek kaynak konturda güvenle konumlandırılamadı.";
                     result.Text=$"Dikiş payı uygulanmadı ({allowanceDescription}): "+ex.Message+
                         " Bu hesaplama kaynak parçayı değiştirmedi."+nextStep+" Üretim payını yalnız üretim şartları izin veriyorsa değiştirin. "+offsetSourceDescription+".";
