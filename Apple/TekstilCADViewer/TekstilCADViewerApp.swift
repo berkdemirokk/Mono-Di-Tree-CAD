@@ -2359,6 +2359,30 @@ struct Drawing {
 }
 
 #if DEBUG
+/// Illustrative icons only; they do not describe generated pattern geometry.
+private struct DressStyleSketch: Shape {
+    let style: ExperimentalDesignBrief.DressStyle
+    func path(in rect: CGRect) -> Path {
+        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: rect.minX + x * rect.width, y: rect.minY + y * rect.height) }
+        var path = Path()
+        let flare: CGFloat = style == .aline ? 0.06 : (style == .wrap ? 0.12 : 0.18)
+        path.move(to: p(0.32, 0.07))
+        path.addLine(to: p(0.15, 0.16)); path.addLine(to: p(0.23, 0.32))
+        path.addLine(to: p(0.31, 0.27)); path.addLine(to: p(0.31, 0.46))
+        path.addLine(to: p(flare, 0.94)); path.addLine(to: p(1 - flare, 0.94))
+        path.addLine(to: p(0.69, 0.46)); path.addLine(to: p(0.69, 0.27))
+        path.addLine(to: p(0.77, 0.32)); path.addLine(to: p(0.85, 0.16))
+        path.addLine(to: p(0.68, 0.07)); path.addQuadCurve(to: p(0.32, 0.07), control: p(0.5, 0.25))
+        path.closeSubpath()
+        if style == .wrap {
+            path.move(to: p(0.68, 0.08)); path.addLine(to: p(0.34, 0.45)); path.addLine(to: p(0.68, 0.45))
+        } else if style == .shirt {
+            path.move(to: p(0.5, 0.13)); path.addLine(to: p(0.5, 0.91))
+            path.move(to: p(0.36, 0.42)); path.addLine(to: p(0.64, 0.42))
+        }
+        return path
+    }
+}
 private struct ExperimentalDesignBriefView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var style = ExperimentalDesignBrief.DressStyle.describe
@@ -2393,8 +2417,33 @@ private struct ExperimentalDesignBriefView: View {
             Form {
                 Text("Kadın elbise tarifinizi, açıkça bildiğiniz ölçüleri ve isteğe bağlı örneği masaüstünde incelenmek üzere hazırlayın. Bu dosya kalıp üretmez ve verileri otomatik göndermez. Üretim için ayrıca onaylı kalıp gerekir.")
                 Section("1 · Nasıl bir elbise istiyorsunuz?") {
-                    Picker("Model tarifi", selection: $style) {
-                        ForEach(ExperimentalDesignBrief.DressStyle.allCases) { style in Text(style.rawValue).tag(style) }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 125), spacing: 10)], spacing: 10) {
+                        ForEach(ExperimentalDesignBrief.DressStyle.allCases) { option in
+                            Button { style = option } label: {
+                                VStack(spacing: 8) {
+                                    if option == .describe {
+                                        Image(systemName: "text.bubble")
+                                            .font(.system(size: 38)).frame(height: 92)
+                                    } else {
+                                        DressStyleSketch(style: option)
+                                            .stroke(style == option ? Color.accentColor : Color.secondary,
+                                                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                                            .frame(width: 76, height: 92)
+                                    }
+                                    Text(option.rawValue).font(.subheadline.weight(.medium))
+                                        .multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
+                                }
+                                .frame(maxWidth: .infinity, minHeight: 142)
+                                .padding(8)
+                                .background(style == option ? Color.accentColor.opacity(0.12) : Color.secondary.opacity(0.07))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(style == option ? Color.accentColor : Color.secondary.opacity(0.25), lineWidth: style == option ? 2 : 1))
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(option.rawValue)
+                            .accessibilityValue(style == option ? "Seçili" : "Seçili değil")
+                            .accessibilityAddTraits(style == option ? .isSelected : [])
+                        }
                     }
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. İsterseniz ayrıntıları kendi sözlerinizle yazın.").font(.caption)
                     TextEditor(text: $description).frame(minHeight: 100)
