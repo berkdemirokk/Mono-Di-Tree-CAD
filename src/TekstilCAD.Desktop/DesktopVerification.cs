@@ -7376,6 +7376,11 @@ internal static class DesktopVerification
             Check(window.RemovePointButton.Focusable && KeyboardNavigation.GetIsTabStop(window.RemovePointButton)
                 && Equals(window.RemovePointButton.Content,"Son noktayı kaldır") && AutomationProperties.GetName(window.PointSummary).Contains(window.PointSummary.Text),
                 "Coordinate point removal and its current summary are keyboard and automation accessible",checks);
+            var firstGuidance=window.Guidance.Text;
+            Check(AutomationProperties.GetName(window.Guidance).Contains(firstGuidance) &&
+                AutomationProperties.GetLiveSetting(window.Guidance)==AutomationLiveSetting.Polite &&
+                AutomationProperties.GetLiveSetting(window.Feedback)==AutomationLiveSetting.Polite,
+                "Coordinate guidance exposes its current text as a live automation name",checks);
             window.RemoveLastPoint();
             Check(window.Feedback.Text.Contains("yok",StringComparison.OrdinalIgnoreCase) && canvas.CapturePendingDrawing() is null
                 && DocumentSession.ContentEquals(initial,studio.Document) && session.UndoCount==undo,
@@ -7384,9 +7389,17 @@ internal static class DesktopVerification
             Check(window.Feedback.Text.Contains("X koordinatı") && canvas.CapturePendingDrawing() is null
                 && DocumentSession.ContentEquals(initial,studio.Document) && session.UndoCount==undo,
                 "Invalid coordinate preserves the document, history and pending drawing",checks);
-            window.XInput.Text="1,25";window.YInput.Text="2,5";window.AddPoint();
+            Check(AutomationProperties.GetName(window.Feedback).Contains(window.Feedback.Text),
+                "Coordinate validation feedback exposes its current error through automation",checks);
+            window.XInput.Text="1,25";
+            Check(window.Feedback.Text.Length==0 && AutomationProperties.GetName(window.Feedback)=="Koordinat girişi durumu",
+                "Editing an input clears the previous feedback from both visual and automation text",checks);
+            window.YInput.Text="2,5";window.AddPoint();
             Check(window.Feedback.Text.Contains("Nokta işlendi") && canvas.CapturePendingDrawing()!.Points.SequenceEqual([new Point2(1.25,2.5)]),
                 "Explicit fractional coordinates are retained without grid snapping",checks);
+            Check(window.Guidance.Text!=firstGuidance && AutomationProperties.GetName(window.Guidance).Contains(window.Guidance.Text) &&
+                AutomationProperties.GetName(window.Feedback).Contains(window.Feedback.Text),
+                "Coordinate success updates the next-step and feedback automation names",checks);
             Check(window.PointSummary.Text.Contains("1") && AutomationProperties.GetName(window.PointSummary).Contains(window.PointSummary.Text),
                 "Coordinate point summary and accessible name update after adding a point",checks);
             var lineSummary=window.PointSummary.Text;

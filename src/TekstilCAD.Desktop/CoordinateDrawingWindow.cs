@@ -72,7 +72,11 @@ internal sealed class CoordinateDrawingWindow : Window
         UpdateDrawingState();
     }
 
-    private void ClearFeedback() => Feedback.Text="";
+    private void ClearFeedback()
+    {
+        if(Feedback.Text.Length==0)return;
+        Feedback.Text="";AutomationProperties.SetName(Feedback,"Koordinat girişi durumu");Announce(Feedback);
+    }
     private static void Announce(TextBlock control)
     {
         if(UIElementAutomationPeer.CreatePeerForElement(control) is { } peer)
@@ -81,11 +85,12 @@ internal sealed class CoordinateDrawingWindow : Window
     private void ShowFeedback(string message, bool error)
     {
         Feedback.Foreground=error ? StudioTheme.Warning : StudioTheme.Text;
-        Feedback.Text=message; Announce(Feedback);
+        Feedback.Text=message;AutomationProperties.SetName(Feedback,"Koordinat girişi durumu: "+message); Announce(Feedback);
     }
     private void UpdateDrawingState()
     {
         Guidance.Text=guidance(); PointSummary.Text=summary();
+        AutomationProperties.SetName(Guidance,"Çizimde sıradaki adım: "+Guidance.Text);
         AutomationProperties.SetName(PointSummary,"Tamamlanmamış çizimde nokta özeti: "+PointSummary.Text);
         Announce(Guidance); Announce(PointSummary);
     }
