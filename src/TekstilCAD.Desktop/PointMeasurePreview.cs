@@ -18,6 +18,7 @@ internal sealed class PointMeasurePreview : FrameworkElement
     private static readonly Brush TextBrush=FrozenBrush(0xff,0xff,0xff);
     private static readonly Brush MeasurementBrush=FrozenBrush(0xff,0xff,0xff);
     private readonly IReadOnlyList<Point2> points;
+    private readonly bool collapseClosingAlias;
     private readonly StreamGeometry? outline;
     private readonly double minX, minY, span, xExtent, yExtent;
     private const int GridSize=128;
@@ -27,9 +28,10 @@ internal sealed class PointMeasurePreview : FrameworkElement
     internal int EndIndex { get; private set; } = -1;
     internal bool IndividualVerticesVisible => points.Count<=500;
 
-    internal PointMeasurePreview(PatternPiece snapshot)
+    internal PointMeasurePreview(PatternPiece snapshot,bool collapseClosingAlias=false)
     {
         points=snapshot.Points.ToArray();
+        this.collapseClosingAlias=collapseClosingAlias && snapshot.Closed && points.Count>1 && points[0]==points[^1];
         Height=180; MinHeight=150; Margin=new Thickness(0,8,0,0); ClipToBounds=true;
         AutomationProperties.SetName(this,"Kalıp konturu ve ölçüm noktaları önizlemesi");
         AutomationProperties.SetHelpText(this,"Salt okunur önizleme. A halka, B baklava işaretiyle gösterilir; nokta seçimi yukarıdaki listelerden yapılır.");
@@ -105,7 +107,8 @@ internal sealed class PointMeasurePreview : FrameworkElement
         }
     }
 
-    // A click is accepted only if exactly one vertex is within the hit radius.
+    // A click is accepted only if exactly one selectable vertex is within the hit radius.
+    // The editing picker can treat a repeated closing endpoint as vertex zero.
     // -1 means no hit, -2 means ambiguous; neither changes the selection.
     internal int HitTestPoint(Point position)
     {
@@ -124,8 +127,9 @@ internal sealed class PointMeasurePreview : FrameworkElement
                     {
                         var p=Normalized(points[i]); var dx=(p.X-nx)*scale; var dy=(p.Y-ny)*scale;
                         if(dx*dx+dy*dy>radius*radius)continue;
-                        if(found>=0)return -2;
-                        found=i;
+                        var logicalIndex=collapseClosingAlias && i==points.Count-1 ? 0 : i;
+                        if(found>=0 && found!=logicalIndex)return -2;
+                        found=logicalIndex;
                     }
         return found;
     }

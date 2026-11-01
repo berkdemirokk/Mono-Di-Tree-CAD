@@ -9898,6 +9898,19 @@ internal static class DesktopVerification
         picker=new PointPickerWindow(studio,studio,markedSource,()=>markedSource.Id,0);
         try
         {
+            picker.Preview.Height=200;picker.Preview.Margin=new Thickness(0);
+            picker.Preview.Measure(new Size(300,200));picker.Preview.Arrange(new Rect(0,0,300,200));picker.Preview.UpdateLayout();
+            Check(picker.Preview.HitTestPoint(new Point(70,20))==0,
+                "Point picker treats the repeated closing endpoint as the first logical vertex",checks);
+            var ambiguousClosure=new PointMeasurePreview(new PatternPiece { Closed=true,
+                Points=[new(0,0),new(.2,0),new(20,0),new(0,20),new(0,0)] },collapseClosingAlias:true) { Height=200,Margin=new Thickness(0) };
+            ambiguousClosure.Measure(new Size(300,200));ambiguousClosure.Arrange(new Rect(0,0,300,200));ambiguousClosure.UpdateLayout();
+            Check(ambiguousClosure.HitTestPoint(new Point(70,20))==-2,
+                "A distinct nearby vertex remains ambiguous even when the closing alias is collapsed",checks);
+            var measurementPreview=new PointMeasurePreview(markedSource) { Height=200,Margin=new Thickness(0) };
+            measurementPreview.Measure(new Size(300,200));measurementPreview.Arrange(new Rect(0,0,300,200));measurementPreview.UpdateLayout();
+            Check(measurementPreview.HitTestPoint(new Point(70,20))==-2,
+                "Measurement preview keeps its existing distinct-index selection behavior",checks);
             string Label(int index)
             {
                 var item=picker.PointSelector.Items[index];

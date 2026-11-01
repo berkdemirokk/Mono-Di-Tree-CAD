@@ -37,7 +37,7 @@ internal sealed class PointPickerWindow : Window
             throw new InvalidOperationException("Kaynak parça değişti; güncel parçayı seçip yeniden deneyin.");
         if(workspace.HasPendingCanvasOrPropertyWork)
             throw new InvalidOperationException("Önce tamamlanmamış çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");
-        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece);
+        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece,collapseClosingAlias:true);
         Owner=owner; Title="Kontur noktası seç · Mono Di Tree CAD"; Width=670; Height=510; MinWidth=510; MinHeight=390;
         WindowStartupLocation=WindowStartupLocation.CenterOwner; StudioTheme.Apply(this);
 
@@ -53,7 +53,7 @@ internal sealed class PointPickerWindow : Window
         var scroller=new ScrollViewer { Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(scroller,"Kontur noktası seçim içeriği");root.Children.Add(scroller);
         panel.Children.Add(new TextBlock { Text="Kontur noktası seç",FontSize=20,FontWeight=FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text="Noktalar 0'dan başlayan indekslerle listelenir; işaretli köşeler listede belirtilir. Listeden veya önizlemeden bir nokta seçin. Yakın ya da üst üste noktaları kesin ayırt etmek için listeyi kullanın. Bu seçim X/Y girişlerini değiştirmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) });
+        panel.Children.Add(new TextBlock { Text="Noktalar 0'dan başlayan indekslerle listelenir; işaretli köşeler listede belirtilir. Listeden veya önizlemeden bir nokta seçin. Tekrarlı kapanış görselden ilk nokta olarak seçilir. Yakın ya da üst üste farklı noktaları ayırt etmek için listeyi kullanın. Bu seçim X/Y girişlerini değiştirmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) });
         var identity=new TextBox { Text=sourceId.ToString("D"),IsReadOnly=true,Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetName(identity,"Kaynak parça tam kimliği");panel.Children.Add(identity);
         var list=new List<PointChoice>(piece.Points.Count);
