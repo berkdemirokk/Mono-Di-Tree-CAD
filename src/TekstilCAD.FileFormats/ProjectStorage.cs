@@ -742,7 +742,7 @@ public static class ProjectStorage
             }
         }
     }
-    internal static IDisposable AcquireWriteLease(string fullPath, CancellationToken cancellationToken = default, Action? beforeWaitForVerification = null)
+    internal static IDisposable AcquireWriteLease(string fullPath, CancellationToken cancellationToken = default, Action? beforeWaitForVerification = null, Action<bool>? afterAcquireForVerification = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var key = OperatingSystem.IsWindows() ? fullPath.ToUpperInvariant() : fullPath;
@@ -751,23 +751,27 @@ public static class ProjectStorage
         try
         {
             beforeWaitForVerification?.Invoke();
-            int signaled;
+            int signaled;var abandoned = false;
             try
             {
                 signaled = cancellationToken.CanBeCanceled
                     ? WaitHandle.WaitAny([mutex, cancellationToken.WaitHandle], TimeSpan.FromSeconds(10))
                     : mutex.WaitOne(TimeSpan.FromSeconds(10)) ? 0 : WaitHandle.WaitTimeout;
             }
-            catch (AbandonedMutexException) { signaled = 0; }
+            catch (AbandonedMutexException) { signaled = 0; abandoned = true; }
             if (signaled == 1) cancellationToken.ThrowIfCancellationRequested();
             if (signaled == WaitHandle.WaitTimeout)
-                throw new IOException("Dosya başka bir oturumda kaydediliyor. Lütfen kısa süre sonra yeniden deneyin.");
-            // A cancellation can race acquisition; release on this same thread.
-            if (cancellationToken.IsCancellationRequested)
             {
-                mutex.ReleaseMutex();
+                cancellationToken.ThrowIfCancellationRequested();
+                throw new IOException("Dosya başka bir oturumda kaydediliyor. Lütfen kısa süre sonra yeniden deneyin.");
+            }
+            // A cancellation can race acquisition; release on this same thread.
+            try
+            {
+                afterAcquireForVerification?.Invoke(abandoned);
                 cancellationToken.ThrowIfCancellationRequested();
             }
+            catch { mutex.ReleaseMutex(); throw; }
             return new WriteLease(mutex);
         }
         catch { mutex.Dispose(); throw; }

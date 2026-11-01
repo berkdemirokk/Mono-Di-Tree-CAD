@@ -66,4 +66,60 @@ public sealed class ProjectWriteLeaseCancellationTests
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>ProjectStorage.AcquireWriteLease(Path.GetFullPath("cancelled.tcad"),cancellation.Token));
     }
+    [Fact]
+    public void CancellationWakesThreadObservedBlockedInLeaseWait()
+    {
+        var path=Path.GetFullPath($"waiting-{Guid.NewGuid():N}.tcad");
+        using var held=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+        using var aboutToWait=new ManualResetEventSlim();using var cancellation=new CancellationTokenSource();
+        Exception? holderError=null,waiterError=null;bool cancelled=false;
+        var holder=new Thread(()=>
+        {
+            try { using var lease=ProjectStorage.AcquireWriteLease(path);held.Set();release.Wait(); }
+            catch(Exception error) { holderError=error;held.Set(); }
+        });
+        var waiter=new Thread(()=>
+        {
+            try { using var lease=ProjectStorage.AcquireWriteLease(path,cancellation.Token,()=>aboutToWait.Set()); }
+            catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { cancelled=true; }
+            catch(Exception error) { waiterError=error; }
+        });
+        try
+        {
+            holder.Start();Assert.True(held.Wait(TimeSpan.FromSeconds(5)));Assert.Null(holderError);
+            waiter.Start();Assert.True(aboutToWait.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(SpinWait.SpinUntil(()=> (waiter.ThreadState & System.Threading.ThreadState.WaitSleepJoin)!=0,TimeSpan.FromSeconds(5)));
+            cancellation.Cancel();Assert.True(waiter.Join(TimeSpan.FromSeconds(5)));
+            Assert.True(cancelled);Assert.Null(waiterError);
+        }
+        finally { cancellation.Cancel();release.Set();if(holder.IsAlive)holder.Join();if(waiter.IsAlive)waiter.Join(); }
+    }
+
+    [Fact]
+    public void CancellationAfterAcquisitionReleasesMutexForAnotherWriter()
+    {
+        var path=Path.GetFullPath($"acquired-{Guid.NewGuid():N}.tcad");
+        using var cancellation=new CancellationTokenSource();bool acquired=false;
+        Assert.Throws<OperationCanceledException>(()=>ProjectStorage.AcquireWriteLease(path,cancellation.Token,
+            afterAcquireForVerification:_=> { acquired=true;cancellation.Cancel(); }));
+        Assert.True(acquired);
+        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
+        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+    }
+
+    [Fact]
+    public void AbandonedLeaseIsAcquiredAndReleasedNormally()
+    {
+        var path=Path.GetFullPath($"abandoned-{Guid.NewGuid():N}.tcad");
+        IDisposable? abandonedLease=null;Exception? error=null;
+        var owner=new Thread(()=> { try { abandonedLease=ProjectStorage.AcquireWriteLease(path); } catch(Exception ex) { error=ex; } });
+        owner.Start();Assert.True(owner.Join(TimeSpan.FromSeconds(5)));Assert.Null(error);Assert.NotNull(abandonedLease);
+        bool wasAbandoned=false;
+        using(ProjectStorage.AcquireWriteLease(path,afterAcquireForVerification:abandoned=>wasAbandoned=abandoned))
+            Assert.True(wasAbandoned);
+        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
+        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+        GC.KeepAlive(abandonedLease);
+    }
+
 }
