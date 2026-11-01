@@ -353,6 +353,7 @@ internal static class DesktopVerification
             VerifyDraftRecovery(studio,work,checks);
             VerifyPendingDrawingRecovery(studio,work,checks);
             VerifyDrawingDiscardApprovalRace(studio,checks);
+            VerifyDocumentDiscardApprovalRace(studio,checks);
             VerifyRecoveryWarningPresentation(studio,reportPath,checks);
             VerifyBackgroundRecoveryScan(studio,work,reportPath,checks);
             VerifyRecoveryPaging(studio,work,checks);
@@ -6140,6 +6141,40 @@ internal static class DesktopVerification
         }
         finally { timer.Stop();timer.Interval=originalInterval; }
     }
+    private static void VerifyDocumentDiscardApprovalRace(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var x=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        var canDiscard=typeof(MainWindow).GetMethod("CanDiscard",PrivateInstance,null,Type.EmptyTypes,null)!;
+        try
+        {
+            foreach(var scenario in new[] { "document", "selection", "draft", "drawing", "unchanged" })
+            {
+                var a=new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)] };
+                var b=new PatternPiece { Points=[new(20,0),new(30,0),new(20,10)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[a,b] });studio.Select(a.Id);studio.SetTool("Çizgi");
+                studio.Commit("Kaydedilmemiş değişiklik",()=>studio.Document.Name="Onaylanan çalışma");
+                ProjectDocument? expected=null;Guid? selected=null;int undo=0;
+                studio.ConfirmDiscardDocumentForVerification=()=> {
+                    if(scenario=="document")studio.Commit("Yeni değişiklik",()=>studio.Document.Name="Yeni çalışma");
+                    if(scenario=="selection")studio.Select(b.Id);
+                    if(scenario=="draft")x.Text="3";
+                    if(scenario=="drawing")canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
+                    expected=studio.Document.Clone();selected=studio.SelectedId;undo=session.UndoCount;return true;
+                };
+                var accepted=(bool)canDiscard.Invoke(studio,null)!;
+                Check(accepted==(scenario=="unchanged") && expected is not null && DocumentSession.ContentEquals(expected,studio.Document) &&
+                    studio.SelectedId==selected && session.UndoCount==undo &&
+                    (scenario!="draft" || x.Text=="3") && (scenario!="drawing" || canvas.HasPendingDrawing) &&
+                    (scenario=="unchanged" || status.Text.Contains("değişti")),
+                    $"Discard approval preserves {scenario} state while its dialog is open",checks);
+            }
+        }
+        finally { studio.ConfirmDiscardDocumentForVerification=null;canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument()); }
+    }
+
     private static void VerifyDrawingDiscardApprovalRace(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;

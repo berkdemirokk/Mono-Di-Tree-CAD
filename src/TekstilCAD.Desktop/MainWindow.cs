@@ -1576,6 +1576,7 @@ public class MainWindow : Window
         { throw new InvalidOperationException((redo ? "Yineleme" : "Geri alma")+" uygulandı; görünüm yenilenemedi. Tekrar denemeden önce proje ve işlem geçmişini kontrol edin.",ex); }
     }
     private bool CanDiscard() => CanDiscard(out _);
+    internal Func<bool>? ConfirmDiscardDocumentForVerification { get; set; }
     private bool CanDiscard(out bool saved)
     {
         saved=false;
@@ -1589,8 +1590,16 @@ public class MainWindow : Window
         var approvedDrawing=canvas.CapturePendingDrawing();
         if (!HasUnsavedDocumentWork) return true;
         var saveCompleted=false;
-        var prompt=CreateDiscardPrompt(()=>saveCompleted=true);
-        var accepted=prompt.ShowDialog() == true;
+        var approvedState=CaptureDxfPreparationStamp();
+        bool accepted;
+        if(ConfirmDiscardDocumentForVerification is { } confirm)accepted=confirm();
+        else
+        {
+            var prompt=CreateDiscardPrompt(()=> { saveCompleted=true;approvedState=CaptureDxfPreparationStamp(); });
+            accepted=prompt.ShowDialog() == true;
+        }
+        if(accepted && !DxfStampMatches(approvedState))
+        { SetStatus("Kaydetme onayı sırasında proje veya bekleyen çalışma değişti; işlem uygulanmadı. Güncel çalışmayı kontrol edin.");return false; }
         var currentDrawing=canvas.CapturePendingDrawing();
         if(accepted && (approvedDrawing is null ? currentDrawing is not null :
             currentDrawing is null || approvedDrawing.Tool!=currentDrawing.Tool || !approvedDrawing.Points.SequenceEqual(currentDrawing.Points)))
