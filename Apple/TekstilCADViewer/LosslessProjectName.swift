@@ -215,6 +215,13 @@ enum LosslessProjectName {
                 if token != "true" && token != "false" && token != "null" {
                     let pattern = #"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?$"#
                     guard token.range(of: pattern, options: .regularExpression) != nil else { throw Failure.invalid }
+                    if strictV6 {
+                        // Desktop rejects nonzero numbers that deserialize to
+                        // zero. Otherwise distinct geometry can appear equal.
+                        guard let number = Double(token), number.isFinite else { throw Failure.invalid }
+                        let mantissa = token.prefix { $0 != "e" && $0 != "E" }
+                        guard number != 0 || !mantissa.contains(where: { ("1"..."9").contains(String($0)) }) else { throw Failure.invalid }
+                    }
                 }
             }
         }

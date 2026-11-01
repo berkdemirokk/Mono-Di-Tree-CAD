@@ -1,6 +1,21 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testUnderflowingVersionSixNotchCoordinatesAreNotPreviewed() {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        let invalid = #"[6,{"Name":"İşaret","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":1e-999,"Y":0},{"X":10,"Y":10}],"Notches":[{"VertexIndex":0,"Position":{"X":1e-999,"Y":0}}]}],"GradingRules":[]}]"#
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(invalid.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15))
+        XCTAssertFalse(app.buttons["Köşe işaretlerini ara ve seç…"].exists)
+        app.terminate()
+        let valid = invalid.replacingOccurrences(of: "1e-999", with: "0e-999")
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(valid.utf8).base64EncodedString()
+        app.launch()
+        XCTAssertTrue(app.buttons["Köşe işaretlerini ara ve seç…"].waitForExistence(timeout: 15))
+    }
+
     func testNotchRowsExposePieceAndSizeForIdenticalCoordinates() {
         let fixture = #"[6,{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Metadata":{"Size":"S"},"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":20,"Y":20}],"Metadata":{"Size":"XL"},"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

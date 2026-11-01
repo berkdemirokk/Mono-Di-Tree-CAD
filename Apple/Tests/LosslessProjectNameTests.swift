@@ -3,6 +3,19 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
+    func testVersionSixRejectsNonzeroNumbersThatUnderflowToZero() throws {
+        for token in ["1e-999", "-1e-999", "0.0000000000000000001e-999"] {
+            let input = "[6,{\"Name\":\"Model\",\"Pieces\":[{\"Points\":[{\"X\":\(token),\"Y\":0}]}]}]"
+            XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(input.utf8)), token)
+        }
+        for token in ["0", "-0.0", "0e-999", "5e-324"] {
+            let input = "[6,{\"Name\":\"Model\",\"Pieces\":[{\"Points\":[{\"X\":\(token),\"Y\":0}]}]}]"
+            XCTAssertNoThrow(try LosslessProjectName.validateUniqueKeys(Data(input.utf8)), token)
+        }
+        let grading = #"[6,{"Name":"Model","Pieces":[],"GradingRules":[{"Deltas":[{"X":1e-999,"Y":0}]}]}]"#
+        XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(grading.utf8)))
+    }
+
     func testVersionSixValidationAcceptsBOMEncodingsWithoutChangingSource() throws {
         let text = #"[6,{"Name":"Ön","Pieces":[{"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0}}]}]}]"#
         let encodings: [(String.Encoding, [UInt8])] = [
