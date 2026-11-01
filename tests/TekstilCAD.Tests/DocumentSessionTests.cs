@@ -12,6 +12,8 @@ public sealed class DocumentSessionTests
     [InlineData("grain")]
     [InlineData("rule-source")]
     [InlineData("rule-delta")]
+    [InlineData("gap")]
+    [InlineData("edge-margin")]
     public void SignedZeroChangesAreSavedAndUndoable(string field)
     {
         var piece=new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],
@@ -19,7 +21,9 @@ public sealed class DocumentSessionTests
             Grainline=new Grainline { Start=new(0,0),End=new(1,1) } };
         var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],
             Deltas=[new(0,0),new(0,0),new(0,0)] };
-        var original=new ProjectDocument { Pieces=[piece],GradingRules=[rule] };
+        var original=new ProjectDocument { Pieces=[piece],GradingRules=[rule],NestingSnapshot=new NestingSnapshot {
+            FabricWidth=100,UsedLength=50,Gap=0,EdgeMargin=0,LayoutFingerprint=new string('0',64),
+            Placements=[new NestingPlacementSnapshot(Guid.NewGuid(),1,piece.Id)] } };
         var session=new DocumentSession(original);var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
         var saved=ProjectStorage.SerializeProject(session.Document);
         Assert.True(session.Execute(d=>
@@ -31,6 +35,8 @@ public sealed class DocumentSessionTests
                 case "grain":d.Pieces[0].Grainline!.Start=new(negativeZero,0);break;
                 case "rule-source":d.GradingRules[0].SourcePoints[0]=new(negativeZero,0);break;
                 case "rule-delta":d.GradingRules[0].Deltas[0]=new(negativeZero,0);break;
+                case "gap":d.NestingSnapshot!.Gap=negativeZero;break;
+                case "edge-margin":d.NestingSnapshot!.EdgeMargin=negativeZero;break;
             }
         },ProjectStorage.Validate));
         Assert.True(session.IsDirty);Assert.Equal(1,session.UndoCount);

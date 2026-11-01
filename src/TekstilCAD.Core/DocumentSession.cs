@@ -146,7 +146,8 @@ public sealed class DocumentSession
         (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && PointBitsEqual(pair.First.Position,pair.Second.Position)));
     private static bool NestingEquals(NestingSnapshot? a, NestingSnapshot? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.FabricWidth == b.FabricWidth && a.UsedLength == b.UsedLength &&
-         a.Gap == b.Gap && a.EdgeMargin == b.EdgeMargin && a.Algorithm == b.Algorithm &&
+         BitConverter.DoubleToInt64Bits(a.Gap)==BitConverter.DoubleToInt64Bits(b.Gap) &&
+         BitConverter.DoubleToInt64Bits(a.EdgeMargin)==BitConverter.DoubleToInt64Bits(b.EdgeMargin) && a.Algorithm == b.Algorithm &&
          a.LayoutFingerprint == b.LayoutFingerprint && a.Placements.SequenceEqual(b.Placements));
     private static bool ProvenanceEquals(DxfImportProvenance? a, DxfImportProvenance? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.SourceFileName==b.SourceFileName && a.SourceSha256==b.SourceSha256 &&
