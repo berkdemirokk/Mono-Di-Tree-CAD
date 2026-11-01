@@ -42,4 +42,20 @@ public class IndependentNotchWidthTests
         using var c=new CancellationTokenSource();c.Cancel();
         Assert.ThrowsAny<OperationCanceledException>(()=>PatternTools.InsertNotch(Rectangle(),0,.5,4,1,c.Token));
     }
+
+    [Theory] [InlineData(false)] [InlineData(true)]
+    public void ApexMustRemainPerpendicularWhenLargeOriginRoundsAwayOneComponent(bool reverse)
+    {
+        const double x = 90_000_000, rise = 0.0000007;
+        var points = new List<Point2> { new(x,0),new(x+100,rise),new(x+100,100+rise),new(x,100) };
+        if (reverse) points.Reverse();
+        int edge = reverse ? 2 : 0;
+        var source = new PatternPiece { Points = points };
+        var before = points.ToArray();
+        // The nominal normal has an X component of about 7e-9 mm, which
+        // rounds away at this X origin while the one-millimetre length survives.
+        Assert.Throws<ArgumentException>(() => PatternTools.NotchPoints(points[edge], points[edge+1], .5, 4, 1));
+        Assert.Throws<ArgumentException>(() => PatternTools.InsertNotch(source, edge, .5, 4, 1));
+        Assert.Equal(before, source.Points);
+    }
 }

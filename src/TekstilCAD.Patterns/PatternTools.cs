@@ -235,9 +235,12 @@ public static class PatternTools
         var unit = (b - a) * (1 / length); var center = a + (b - a) * alongFraction;
         List<Point2> result = [center - unit * (width / 2), center + new Point2(-unit.Y, unit.X) * depth, center + unit * (width / 2)];
         foreach (var point in result) Geometry.Validate(point);
+        var apexVector = result[1] - center;
         if (result[0] == center || result[2] == center || result[1] == center ||
             Math.Abs(Geometry.Distance(result[0], result[2]) - width) > width * 1e-9 ||
-            Math.Abs(Geometry.Distance(center, result[1]) - depth) > depth * 1e-9)
+            Math.Abs(Geometry.Distance(center, result[1]) - depth) > depth * 1e-9 ||
+            Math.Abs(unit.X * apexVector.X + unit.Y * apexVector.Y) > depth * 1e-9 ||
+            Cross(unit, apexVector) <= 0)
             throw new ArgumentException("Çentik ölçüleri sayısal hassasiyetle temsil edilemiyor.");
         return result;
     }
@@ -266,9 +269,12 @@ public static class PatternTools
         var edgeLength = Geometry.Distance(points[afterIndex], points[next]);
         var expectedCenter = points[afterIndex] + edge * fraction;
         var actualCenter = notch[0] + (notch[2] - notch[0]) * 0.5;
+        var apexVector = notch[1] - actualCenter;
         if (Geometry.Distance(actualCenter, expectedCenter) > Math.Min(width, depth) * 1e-9 ||
             Math.Abs(Geometry.Distance(notch[0], notch[2]) - width) > width * 1e-9 ||
             Math.Abs(Geometry.Distance(actualCenter, notch[1]) - depth) > depth * 1e-9 ||
+            Math.Abs((edge.X / edgeLength) * apexVector.X + (edge.Y / edgeLength) * apexVector.Y) > depth * 1e-9 ||
+            Cross(edge, apexVector) * Math.Sign(sourceArea) <= 0 ||
             Math.Abs(Geometry.Distance(points[afterIndex], actualCenter) / edgeLength - fraction) > 1e-9)
             throw new ArgumentException("Çentik konumu veya ölçüleri sayısal hassasiyetle temsil edilemiyor.");
         points.InsertRange(afterIndex + 1, notch);
