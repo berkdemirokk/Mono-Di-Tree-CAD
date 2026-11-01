@@ -838,7 +838,11 @@ public sealed class CadCanvas : FrameworkElement
         var a=Math.Atan2(start.Y-center.Y,start.X-center.X);var b=Math.Atan2(end.Y-center.Y,end.X-center.X);
         var sweep=(b-a+2*Math.PI)%(2*Math.PI);
         if(sweep<1e-6)throw new ArgumentException("Yayın başlangıç ve bitiş yönleri farklı olmalıdır.");
-        return Enumerable.Range(0,65).Select(i=>new Point2(center.X+radius*Math.Cos(a+sweep*i/64),center.Y+radius*Math.Sin(a+sweep*i/64))).ToList();
+        var points=Enumerable.Range(0,65).Select(i=>new Point2(center.X+radius*Math.Cos(a+sweep*i/64),center.Y+radius*Math.Sin(a+sweep*i/64))).ToList();
+        // Reconstructing the first point through trigonometry can move the
+        // selected start by an ulp, separating it from an adjoining contour.
+        points[0]=start;
+        return points;
     }
     private void Wheel(object sender,MouseWheelEventArgs e) { ZoomAt(e.GetPosition(this),e.Delta);e.Handled=true; }
     internal void ZoomAt(Point p,int delta)
