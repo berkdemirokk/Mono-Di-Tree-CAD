@@ -29,14 +29,19 @@ struct ContourBounds {
 // Align each bounding-box minimum at the same origin without scaling either
 // piece independently. Reject overflow instead of drawing misleading geometry.
 enum ContourOverlay {
-    static func bounds(_ first: ContourBounds, _ second: ContourBounds) -> ContourBounds? {
+    static func bounds(_ first: ContourBounds, _ second: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourBounds? {
         let widths = [first.maxX - first.minX, second.maxX - second.minX]
         let heights = [first.maxY - first.minY, second.maxY - second.minY]
-        guard widths.allSatisfy({ $0.isFinite && $0 >= 0 }), heights.allSatisfy({ $0.isFinite && $0 >= 0 }) else { return nil }
-        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: widths.max() ?? 0, y: heights.max() ?? 0)])
+        guard widths.allSatisfy({ $0.isFinite && $0 >= 0 }), heights.allSatisfy({ $0.isFinite && $0 >= 0 }),
+              dx.isFinite, dy.isFinite else { return nil }
+        let maxX = widths[1] + dx, maxY = heights[1] + dy
+        guard maxX.isFinite, maxY.isFinite,
+              (dx == 0 || maxX != widths[1]), (dy == 0 || maxY != heights[1]) else { return nil }
+        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: widths[0], y: heights[0]),
+                                      .init(x: dx, y: dy), .init(x: maxX, y: maxY)])
     }
-    static func aligned(_ point: ContourMeasure.Point, bounds: ContourBounds) -> ContourMeasure.Point? {
-        let x = point.x - bounds.minX, y = point.y - bounds.minY
+    static func aligned(_ point: ContourMeasure.Point, bounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourMeasure.Point? {
+        let x = (point.x - bounds.minX) + dx, y = (point.y - bounds.minY) + dy
         guard x.isFinite, y.isFinite else { return nil }
         return .init(x: x, y: y)
     }

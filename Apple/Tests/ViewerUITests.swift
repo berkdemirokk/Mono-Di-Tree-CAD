@@ -57,6 +57,10 @@ final class ViewerUITests: XCTestCase {
         let overlay = app.buttons["Parçaları üst üste göster…"]
         XCTAssertTrue(overlay.waitForExistence(timeout: 5)); overlay.tap()
         XCTAssertTrue(app.descendants(matching: .any)["Aynı ölçekte üst üste parça görünümü"].waitForExistence(timeout: 5))
+        app.buttons["İkinciyi sağa"].tap()
+        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 1, Y 0 mm"].exists)
+        app.buttons["Görsel hizalamayı sıfırla"].tap()
+        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 0, Y 0 mm"].exists)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretime uygunluk doğrulaması değildir")).firstMatch.exists)
     }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {

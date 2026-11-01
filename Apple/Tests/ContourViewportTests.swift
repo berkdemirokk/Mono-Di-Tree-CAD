@@ -4,6 +4,21 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testOverlayTranslationChangesOnlySecondRelativePositionAndFits() throws {
+        let a = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))
+        let b = try XCTUnwrap(ContourBounds(points: [p(-70, 10), p(-20, 60)]))
+        let bounds = try XCTUnwrap(ContourOverlay.bounds(a, b, dx: -3, dy: 5))
+        XCTAssertEqual(bounds.minX, -3)
+        XCTAssertEqual(bounds.maxX, 100)
+        XCTAssertEqual(bounds.maxY, 55)
+        let originA = try XCTUnwrap(ContourOverlay.aligned(p(100, 20), bounds: a))
+        let originB = try XCTUnwrap(ContourOverlay.aligned(p(-70, 10), bounds: b, dx: -3, dy: 5))
+        XCTAssertEqual(originA.x, 0); XCTAssertEqual(originA.y, 0)
+        XCTAssertEqual(originB.x, -3); XCTAssertEqual(originB.y, 5)
+        XCTAssertNil(ContourOverlay.bounds(a, b, dx: .infinity))
+        let huge = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(Double.greatestFiniteMagnitude, 1)]))
+        XCTAssertNil(ContourOverlay.bounds(a, huge, dx: 1))
+    }
     func testOverlayUsesSharedScaleAndRejectsOverflow() throws {
         let first = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))
         let second = try XCTUnwrap(ContourBounds(points: [p(-70, 10), p(-20, 60)]))

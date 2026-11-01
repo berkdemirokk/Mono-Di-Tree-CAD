@@ -2848,37 +2848,63 @@ private struct PieceOverlayView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showFirst = true
     @State private var showSecond = true
+    @State private var shiftX = 0.0
+    @State private var shiftY = 0.0
+    @State private var shiftError: String?
 
+    private func shift(dx: Double, dy: Double) {
+        let x = shiftX + dx, y = shiftY + dy
+        guard abs(x) <= 10_000, abs(y) <= 10_000,
+              let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
+              ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil else {
+            shiftError = "Bu görsel kaydırma sayı veya 10.000 mm sınırı nedeniyle uygulanamadı."
+            return
+        }
+        shiftX = x; shiftY = y; shiftError = nil
+    }
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Her parçanın sınır kutusunun sol üstü aynı noktaya hizalanır; ikisi aynı ölçektedir. Kaynak konumları değiştirilmez.")
+                Text("Başlangıçta parçaların sınır kutusu sol üstleri hizalanır; ikisi aynı ölçektedir. Kaynak konumları değiştirilmez.")
                 Text("Yalnızca görsel karşılaştırmadır; dikiş uyumu, çakışma veya üretime uygunluk doğrulaması değildir.")
                     .font(.caption).foregroundStyle(.secondary)
                 Toggle("Birinci: \(firstIndex + 1). \(first.displayName(index: firstIndex)) · düz çizgi", isOn: $showFirst)
                 Toggle("İkinci: \(secondIndex + 1). \(second.displayName(index: secondIndex)) · kesik çizgi", isOn: $showSecond)
+                Text("İkinci parçanın görsel kaydırması: X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") mm")
+                    .font(.caption)
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
+                    Button("İkinciyi sola") { shift(dx: -1, dy: 0) }
+                    Button("İkinciyi sağa") { shift(dx: 1, dy: 0) }
+                    Button("İkinciyi yukarı") { shift(dx: 0, dy: -1) }
+                    Button("İkinciyi aşağı") { shift(dx: 0, dy: 1) }
+                }.font(.caption)
+                Button("Görsel hizalamayı sıfırla") { shiftX = 0; shiftY = 0; shiftError = nil }
+                    .font(.caption)
+                Text("Her adım 1 mm'dir. Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
+                    .font(.caption).foregroundStyle(.secondary)
+                if let shiftError { Text(shiftError).font(.caption).foregroundStyle(.secondary) }
                 Canvas { context, size in
                     guard let aBounds = first.contourBounds, let bBounds = second.contourBounds,
-                          let bounds = ContourOverlay.bounds(aBounds, bBounds),
+                          let bounds = ContourOverlay.bounds(aBounds, bBounds, dx: shiftX, dy: shiftY),
                           let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)) else { return }
-                    func path(_ piece: Drawing.Piece, _ pieceBounds: ContourBounds) -> Path? {
-                        guard let firstPoint = piece.points.first.flatMap({ ContourOverlay.aligned($0, bounds: pieceBounds) }) else { return nil }
+                    func path(_ piece: Drawing.Piece, _ pieceBounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> Path? {
+                        guard let firstPoint = piece.points.first.flatMap({ ContourOverlay.aligned($0, bounds: pieceBounds, dx: dx, dy: dy) }) else { return nil }
                         var path = Path()
                         path.move(to: viewport.position(firstPoint))
                         for point in piece.points.dropFirst() {
-                            guard let aligned = ContourOverlay.aligned(point, bounds: pieceBounds) else { return nil }
+                            guard let aligned = ContourOverlay.aligned(point, bounds: pieceBounds, dx: dx, dy: dy) else { return nil }
                             path.addLine(to: viewport.position(aligned))
                         }
                         if piece.closed { path.closeSubpath() }
                         return path
                     }
                     if showFirst, let path = path(first, aBounds) { context.stroke(path, with: .color(.orange), lineWidth: 2) }
-                    if showSecond, let path = path(second, bBounds) { context.stroke(path, with: .color(.purple), style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
+                    if showSecond, let path = path(second, bBounds, dx: shiftX, dy: shiftY) { context.stroke(path, with: .color(.purple), style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.secondary.opacity(0.08))
                 .accessibilityLabel("Aynı ölçekte üst üste parça görünümü")
-                .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). Sol üst sınırlar hizalıdır.")
+                .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). İkinci parçanın görsel kaydırması X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") milimetredir.")
             }
             .padding()
             .navigationTitle("Parçaları üst üste göster")
