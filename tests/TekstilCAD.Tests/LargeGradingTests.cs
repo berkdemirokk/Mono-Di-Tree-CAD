@@ -10,14 +10,34 @@ public class LargeGradingTests
         return new PatternPiece { Name="Büyük kalıp",Points=points,Notches=[new NotchMark { VertexIndex=0,Position=points[0] }] };
     }
     [Fact]
-    public void Grade4097PointContourRetainsMarkerAndIsUndoable()
+    public void LargeMarkedRuleSavesReopensGradesAndSavesWithoutLosingBits()
     {
-        var source=Circle(4097);var increments=Enumerable.Repeat(new Point2(0,0),source.Points.Count).ToArray();increments[0]=new Point2(.001,0);
-        var original=new ProjectDocument { Pieces=[source.Clone()] };var outputs=GradingEngine.GenerateSizes(source,increments,[new GradeSize("L",1)]);
-        var result=Assert.Single(outputs);Assert.Equal(source.Points.Count,result.Points.Count);Assert.Equal(new Point2(1000.001,0),result.Points[0]);
-        Assert.Equal(result.Points[0],result.Notches!.Single().Position);Assert.True(DocumentSession.ContentEquals(original,new ProjectDocument { Pieces=[source] }));
-        var session=new DocumentSession(original);Assert.True(session.Execute(doc=>doc.Pieces.Add(result),ProjectStorage.Validate));
-        Assert.True(session.Undo());Assert.True(DocumentSession.ContentEquals(original,session.Document));
+        var source=Circle(4097);var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+        source.Notches![0].Position=new Point2(source.Points[0].X,negativeZero);
+        var increments=Enumerable.Repeat(new Point2(0,0),source.Points.Count).ToArray();increments[0]=new Point2(.001,0);increments[1]=new Point2(negativeZero,0);
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[..increments] };
+        var original=new ProjectDocument { Pieces=[source.Clone()],GradingRules=[rule] };
+        var path=Path.Combine(AppContext.BaseDirectory,"large-grading-"+Guid.NewGuid().ToString("N")+".tcad");
+        try
+        {
+            ProjectStorage.Save(original,path);var loaded=ProjectStorage.LoadWithVersion(path);
+            Assert.True(DocumentSession.ContentEquals(original,loaded.Project));
+            Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(loaded.Project.GradingRules[0].Deltas[1].X));
+            Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(loaded.Project.Pieces[0].Notches![0].Position.Y));
+            var outputs=GradingEngine.GenerateSizes(loaded.Project.Pieces[0],loaded.Project.GradingRules[0].Deltas,[new GradeSize("L",1)]);
+            var result=Assert.Single(outputs);Assert.Equal(source.Points.Count,result.Points.Count);Assert.Equal(new Point2(1000.001,0),result.Points[0]);
+            Assert.Equal(result.Points[0],result.Notches!.Single().Position);
+            Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(result.Notches[0].Position.Y));
+            var session=new DocumentSession(loaded.Project);Assert.True(session.Execute(doc=>doc.Pieces.Add(result),ProjectStorage.Validate));
+            var saved=session.Document.Clone();var savedVersion=ProjectStorage.SaveIfUnchanged(saved,path,loaded.Version);
+            Assert.True(DocumentSession.ContentEquals(saved,ProjectStorage.Load(path)));
+            Assert.True(session.Undo());Assert.True(DocumentSession.ContentEquals(original,session.Document));
+            Assert.True(session.Redo());Assert.True(DocumentSession.ContentEquals(saved,session.Document));
+            File.WriteAllText(path,"Başka oturumun verisi");
+            Assert.Throws<ProjectConflictException>(()=>ProjectStorage.SaveIfUnchanged(session.Document,path,savedVersion));
+            Assert.Equal("Başka oturumun verisi",File.ReadAllText(path));Assert.True(DocumentSession.ContentEquals(saved,session.Document));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
     }
     [Fact]
     public void OversizedAndMultiSizeWorkAreRejectedBeforeQuadraticValidation()
