@@ -45,12 +45,13 @@ internal static class DesktopVerification
             detached.ShowPiece(new PatternPiece { Points=[..points],Closed=closed });
             preview=detached;
         }
-        preview.Measure(new Size(300,200));preview.Arrange(new Rect(0,0,300,200));preview.UpdateLayout();
+        preview.Measure(new Size(300,230));preview.Arrange(new Rect(0,0,300,230));preview.UpdateLayout();
         if(preview.ActualWidth<24 || preview.ActualHeight<24)throw new InvalidOperationException("Preview was not arranged for direction verification.");
         var visual=new DrawingVisual();
         using(var context=visual.RenderOpen())
             preview.GetType().GetMethod("OnRender",PrivateInstance)!.Invoke(preview,[context]);
-        var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(visual);
+        var width=(int)Math.Ceiling(preview.RenderSize.Width);var height=(int)Math.Ceiling(preview.RenderSize.Height);
+        var bitmap=new RenderTargetBitmap(width,height,96,96,PixelFormats.Pbgra32);bitmap.Render(visual);
         static IEnumerable<GeometryDrawing> Drawings(Drawing? drawing)
         {
             if(drawing is GeometryDrawing geometry)yield return geometry;
@@ -59,19 +60,30 @@ internal static class DesktopVerification
         }
         var strokes=Drawings(VisualTreeHelper.GetDrawing(visual)).Where(d=>d.Pen?.Brush is SolidColorBrush b && b.Color==color).ToArray();
         if(strokes.Length!=1)throw new InvalidOperationException($"Expected one {color} contour from {preview.GetType().Name}, found {strokes.Length}.");
-        var stroke=strokes[0];
-        var figure=stroke.Geometry.GetFlattenedPathGeometry().Figures.Single();var end=figure.StartPoint;
-        foreach(var segment in figure.Segments)
+        // The asymmetric fixtures have a longer horizontal contour at one Y extreme.
+        // Count rendered contour pixels away from the side edges, so unfilled
+        // geometries are verified as strokes rather than as filled regions.
+        var bounds=strokes[0].Geometry.Bounds;
+        if(bounds.IsEmpty || bounds.Width<10 || bounds.Height<10)throw new InvalidOperationException("Preview contour has no measurable extent.");
+        var pixels=new byte[width*height*4];bitmap.CopyPixels(pixels,width*4,0);
+        int CountNear(double y)
         {
-            if(segment is LineSegment line)end=line.Point;
-            else if(segment is PolyLineSegment poly && poly.Points.Count>0)end=poly.Points[^1];
+            var count=0;
+            for(var row=Math.Max(0,(int)Math.Floor(y-2));row<=Math.Min(height-1,(int)Math.Ceiling(y+2));row++)
+                for(var column=Math.Max(0,(int)Math.Ceiling(bounds.Left+bounds.Width*.2));column<=Math.Min(width-1,(int)Math.Floor(bounds.Right-bounds.Width*.2));column++)
+                {
+                    var i=(row*width+column)*4;
+                    if(Math.Abs(pixels[i]-color.B)+Math.Abs(pixels[i+1]-color.G)+Math.Abs(pixels[i+2]-color.R)<120)count++;
+                }
+            return count;
         }
-        return downward ? end.Y>figure.StartPoint.Y : end.Y<figure.StartPoint.Y;
+        var top=CountNear(bounds.Top);var bottom=CountNear(bounds.Bottom);
+        return downward ? top>bottom+15 : bottom>top+15;
     }
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
-        var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
-        var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+        var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(4,10),new(4,8)] };
+        var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0),new(0,0)] };
         studio.LoadDocument(new ProjectDocument { Name="Kapatma doğrulaması",Pieces=[a],GradingRules=[rule] });
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var initial=studio.Document.Clone();var window=new OpenPathClosureWindow(studio,studio);
@@ -91,7 +103,7 @@ internal static class DesktopVerification
                 "Closure adds one closed piece while preserving the source and its grading rule",checks);
             Invoke(studio,"Undo");
             Check(DocumentSession.ContentEquals(initial,studio.Document),"Closure undo restores the original project",checks);
-            Preview();window.ToleranceForVerification.Text="9";
+            Preview();window.ToleranceForVerification.Text="8";
             var before=studio.Document.Clone();var undo=session.UndoCount;
             Check(!window.ApplyButtonForVerification.IsEnabled,"Changing closure tolerance invalidates preview",checks);
             window.ApplyForVerification();Preview();
