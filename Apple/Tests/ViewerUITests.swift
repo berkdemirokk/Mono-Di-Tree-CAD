@@ -1698,6 +1698,23 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.buttons["Bu modeli telefona kaydet"].exists)
     }
 
+    func testLibraryCanSearchPieceMaterial() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-library-fixture", "--ui-test-library-reset"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let save = app.buttons["Bu modeli telefona kaydet"]
+        XCTAssertTrue(save.waitForExistence(timeout: 15)); save.tap()
+        XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
+        app.buttons["Modellerim"].tap()
+        let options = app.buttons["Model listesi seçenekleri"]
+        XCTAssertTrue(options.waitForExistence(timeout: 10)); options.tap()
+        app.buttons["Parça adı, beden ve malzemede ara"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Pamuk")
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch.waitForExistence(timeout: 10))
+    }
     func testRenamedCopyWithLongSpecialNameCanBeFoundReopenedAndDeleted() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()

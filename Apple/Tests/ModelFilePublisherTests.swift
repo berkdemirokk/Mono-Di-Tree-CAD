@@ -307,6 +307,14 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testContentSearchMatchesWordsAcrossModelAndPieceFields() {
+        let fields = ["Fabrika 42", "Ön kol", "XL", "Pamuk"]
+        XCTAssertTrue(ModelStore.contentSearchMatches(query: "42 kol pamuk", fields: fields))
+        XCTAssertTrue(ModelStore.contentSearchMatches(query: "xl", fields: fields))
+        XCTAssertFalse(ModelStore.contentSearchMatches(query: "kol yün", fields: fields))
+        XCTAssertFalse(ModelStore.contentSearchMatches(query: "  ", fields: fields))
+        XCTAssertTrue(ModelStore.contentSearchMatches(query: #"\u{202E}"#, fields: ["parça\u{202E}isim"]))
+    }
     func testLibraryStatusFilterCombinesWithSearchAndRetainsAllByDefault() throws {
         func entry(_ name: String, _ open: Bool, _ recovery: Bool) -> ModelStore.Entry {
             ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(name).tcad"), name: name, date: nil,

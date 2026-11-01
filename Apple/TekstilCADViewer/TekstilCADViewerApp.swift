@@ -63,6 +63,7 @@ private struct ContentView: View {
         let index: Int
         let projectName: String
         let revision: UUID
+
         let loadRequest: UUID
     }
     @State private var pointEditSnapshot: PointEditSnapshot?
@@ -1148,6 +1149,13 @@ enum ModelStore {
         return cancelled() ? nil : matches
     }
 
+    static func contentSearchMatches(query: String, fields: [String]) -> Bool {
+        let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        return !words.isEmpty && words.allSatisfy { word in
+            fields.contains { $0.localizedStandardContains(word) || safeLabel($0).localizedStandardContains(word) }
+        }
+    }
+
     private static func fileIdentity(_ url: URL) -> FileIdentity? {
         var info = stat()
         guard url.path.withCString({ lstat($0, &info) }) == 0 else { return nil }
@@ -1345,6 +1353,7 @@ private struct ModelLibrary: View {
     @State private var search = ""
     @State private var sortOrder: SortOrder = .name
     @State private var libraryFilter: ModelStore.LibraryFilter = .all
+    @State private var searchContents = false
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
     @State private var modelToRecover: ModelStore.Entry?
@@ -1371,10 +1380,11 @@ private struct ModelLibrary: View {
         let newest: Bool
         let filter: ModelStore.LibraryFilter
         let revision: UUID
+        let searchContents: Bool
     }
-    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry] }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int }
     @State private var filterResult: FilterResult?
-    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision) }
+    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents) }
 
     var body: some View {
         NavigationStack {
@@ -1385,6 +1395,14 @@ private struct ModelLibrary: View {
                     Text("\(current.entries.count) / \(models.count) kayıt gösteriliyor")
                         .font(.caption).foregroundStyle(.secondary)
                         .accessibilityLabel("\(models.count) kayıttan \(current.entries.count) tanesi gösteriliyor")
+                    if searchContents {
+                        Text("İçerik araması açık: parça adı, beden, malzeme")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if current.skipped > 0 {
+                        Text("İçerik aramasında \(current.skipped) kayıt okunamadı veya 8 MB sınırını aşıyor; ad araması devam eder.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     if libraryFilter != .all {
                         Text("Filtre: \(libraryFilter.rawValue)")
                             .font(.caption).foregroundStyle(.secondary)
@@ -1478,6 +1496,7 @@ private struct ModelLibrary: View {
                     Menu {
                         Button { loadModels() } label: { Label("Listeyi yenile", systemImage: "arrow.clockwise") }
                             .disabled(isLoading || isRecovering)
+                        Toggle("Parça adı, beden ve malzemede ara", isOn: $searchContents)
                         Picker("Kayıt durumu", selection: $libraryFilter) {
                             ForEach(ModelStore.LibraryFilter.allCases) { filter in
                                 Text(filter.rawValue).tag(filter)
@@ -1545,12 +1564,38 @@ private struct ModelLibrary: View {
                     do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
                 }
                 guard !Task.isCancelled else { return }
-                let worker = Task.detached(priority: .userInitiated) {
-                    ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: { Task.isCancelled })
+                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int)? in
+                    let cancelled = { Task.isCancelled }
+                    guard let names = ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
+                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0) }
+                    guard let candidates = ModelStore.filteredModels(snapshot, query: "", newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
+                    let named = Set(names.map(\.id))
+                    var selected: [ModelStore.Entry] = []
+                    var skipped = 0
+                    for entry in candidates {
+                        if cancelled() { return nil }
+                        if named.contains(entry.id) { selected.append(entry); continue }
+                        let identity = entry.url.pathExtension.lowercased() == "tcadcopy" ? entry.identity?.payload : entry.identity?.entry
+                        guard entry.canOpen, let identity, identity.size <= 8 * 1024 * 1024 else { skipped += 1; continue }
+                        do {
+                            let bytes = try ModelStore.readListedPayload(entry, cancelled: cancelled)
+                            let drawing = try Drawing.load(bytes, cancelled: cancelled)
+                            var fields = [entry.name, entry.displayIdentity, entry.readableIdentity]
+                            for piece in drawing.pieces {
+                                if cancelled() { return nil }
+                                fields.append(contentsOf: [piece.name, piece.size, piece.material].compactMap { $0 })
+                            }
+                            if ModelStore.contentSearchMatches(query: request.query, fields: fields) { selected.append(entry) }
+                        } catch {
+                            if cancelled() { return nil }
+                            skipped += 1
+                        }
+                    }
+                    return (selected, skipped)
                 }
-                let entries = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
-                guard !Task.isCancelled, filterKey == request, let entries else { return }
-                filterResult = FilterResult(key: request, entries: entries)
+                let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled, filterKey == request, let result else { return }
+                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1)
             }
         }
     }
