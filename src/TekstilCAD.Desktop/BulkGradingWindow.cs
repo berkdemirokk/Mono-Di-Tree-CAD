@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Threading;
 using System.Windows.Automation.Peers;
 using TekstilCAD.Core;
+using TekstilCAD.FileFormats;
 using TekstilCAD.Grading;
 
 namespace TekstilCAD.Desktop;
@@ -21,10 +22,12 @@ internal sealed class BulkGradingWindow : Window
     private CancellationTokenSource? cancellation;
     private IReadOnlyList<PatternPiece>? ready;
     private string? readyText;
-    private bool readySize,readyRole;
+    private bool readySize,readyRole,readyCopyRules;
+    private IReadOnlyList<GradingRuleSet>? readyRules;
     internal TextBox Entries { get; } = new() { AcceptsReturn=true,TextWrapping=TextWrapping.NoWrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Height=112,Margin=new Thickness(0,5,0,5) };
     internal CheckBox IncludeSize { get; } = new() { Content="Beden bilgisini ekle",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,12,4) };
     internal CheckBox CopyRole { get; } = new() { Content="Kaynağın rol ve malzemesini kopyala",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
+    internal CheckBox CopyRules { get; } = new() { Content="Kullanılan artışları yeni bedenlere de kaydet",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
     internal Button PreviewButton { get; } = new() { Content="Bedenleri hesapla ve incele",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,6,8,6) };
     internal Button AddButton { get; } = new() { Content="Tüm bedenleri projeye ekle",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,6,8,6),IsEnabled=false };
     internal Button CancelButton { get; } = new() { Content="Hesabı iptal et",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,6,8,6),IsEnabled=false };
@@ -51,7 +54,9 @@ internal sealed class BulkGradingWindow : Window
         panel.Children.Add(new TextBlock { Text="Birden fazla beden oluştur",FontSize=20,FontWeight=FontWeights.SemiBold });
         panel.Children.Add(new TextBlock { Text="Her satıra beden adı; adım sayısı; isteğe bağlı kesim adedi yazın. Örnek: S; -1; 12 ve L; 1; 8 ayrı satırlarda. Her beden temel kalıptan hesaplanır. Adımlar virgül veya noktayla ondalıklı olabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,0) });
         AutomationProperties.SetName(Entries,"Beden adları ve adımları");AutomationProperties.SetHelpText(Entries,"Her satıra beden adı, adım sayısı ve isteğe bağlı kesim adedi girin; örnek S; -1; 12.");panel.Children.Add(Entries);
-        var options=new WrapPanel();options.Children.Add(IncludeSize);options.Children.Add(CopyRole);panel.Children.Add(options);
+        var options=new WrapPanel();options.Children.Add(IncludeSize);options.Children.Add(CopyRole);options.Children.Add(CopyRules);panel.Children.Add(options);
+        AutomationProperties.SetName(CopyRules,"Kullanılan serileme artışlarını yeni bedenlere kaydet");
+        AutomationProperties.SetHelpText(CopyRules,"Her yeni beden için bağımsız kural oluşturulur. Sonraki bedenler yeni kaynaktan hesaplanır; sonuçları kontrol edin.");
         panel.Children.Add(new TextBlock { Text="Adet kaynaktan kopyalanmaz; her beden için üçüncü alana girilebilir. Sıfır adım veya sıfır artış, temel kalıpla aynı geometriyi oluşturabilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
         if(this.source.Grainline is not null)
             panel.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her bedenin konturuyla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
@@ -78,7 +83,7 @@ internal sealed class BulkGradingWindow : Window
         var monitor=new DispatcherTimer { Interval=TimeSpan.FromSeconds(1) };
         monitor.Tick+=(_,_)=> { if(ready is not null && !Current()) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Proje veya artışlar değişti; önizleme geçersiz. Pencereyi kapatıp yeniden açın."; } };
         Loaded+=(_,_)=>monitor.Start(); Closed+=(_,_)=> { monitor.Stop();statusProperty.RemoveValueChanged(Status,announceStatus); };
-        Entries.TextChanged+=(_,_)=>InvalidatePreview();IncludeSize.Checked+=(_,_)=>InvalidatePreview();IncludeSize.Unchecked+=(_,_)=>InvalidatePreview();CopyRole.Checked+=(_,_)=>InvalidatePreview();CopyRole.Unchecked+=(_,_)=>InvalidatePreview();
+        Entries.TextChanged+=(_,_)=>InvalidatePreview();IncludeSize.Checked+=(_,_)=>InvalidatePreview();IncludeSize.Unchecked+=(_,_)=>InvalidatePreview();CopyRole.Checked+=(_,_)=>InvalidatePreview();CopyRole.Unchecked+=(_,_)=>InvalidatePreview();CopyRules.Checked+=(_,_)=>InvalidatePreview();CopyRules.Unchecked+=(_,_)=>InvalidatePreview();
         PreviewButton.Click+=(_,_)=>Calculation=CalculateAsync();AddButton.Click+=(_,_)=>AddReady();CancelButton.Click+=(_,_)=>RequestCancellation();
         Closing+=(_,e)=>{ if(cancellation is not null){e.Cancel=true;RequestCancellation();} };
     }
@@ -93,7 +98,7 @@ internal sealed class BulkGradingWindow : Window
     private void InvalidatePreview()
     {
         var hadPreview=ready is not null;
-        ready=null;readyText=null;AddButton.IsEnabled=false;PreviewList.ItemsSource=null;GeometryPreview.Clear();ClearMarkComparison();SetChangeSummary("");
+        ready=null;readyRules=null;readyText=null;AddButton.IsEnabled=false;PreviewList.ItemsSource=null;GeometryPreview.Clear();ClearMarkComparison();SetChangeSummary("");
         if(hadPreview) { Status.Foreground=StudioTheme.Warning;Status.Text="Girdiler değişti; bedenleri yeniden hesaplayın."; }
     }
     private void UpdateGeometryPreview()
@@ -155,8 +160,8 @@ internal sealed class BulkGradingWindow : Window
         try
         {
             if(!Current())throw new InvalidOperationException("Proje veya artış taslağı değişti. Pencereyi kapatıp güncel kaynakla tekrar açın.");
-            var text=Entries.Text;var include=IncludeSize.IsChecked==true;var copy=CopyRole.IsChecked==true;var entries=Parse(text,source,snapshot);var sizes=entries.Select(entry=>entry.Size).ToArray();
-            var cts=new CancellationTokenSource();cancellation=cts;Entries.IsEnabled=false;IncludeSize.IsEnabled=false;CopyRole.IsEnabled=false;PreviewButton.IsEnabled=false;CancelButton.IsEnabled=true;
+            var text=Entries.Text;var include=IncludeSize.IsChecked==true;var copy=CopyRole.IsChecked==true;var copyRules=CopyRules.IsChecked==true;var entries=Parse(text,source,snapshot);var sizes=entries.Select(entry=>entry.Size).ToArray();
+            var cts=new CancellationTokenSource();cancellation=cts;Entries.IsEnabled=false;IncludeSize.IsEnabled=false;CopyRole.IsEnabled=false;CopyRules.IsEnabled=false;PreviewButton.IsEnabled=false;CancelButton.IsEnabled=true;
             Status.Foreground=StudioTheme.Muted;Status.Text="Bedenler hesaplanıyor; isterseniz iptal edebilirsiniz.";
             var items=await Task.Run(()=>
             {
@@ -169,7 +174,9 @@ internal sealed class BulkGradingWindow : Window
                     ValidateGrainTransfer(source,generated[i],increments,sizes[i].Steps,cts.Token);
                     GradeBatchInput.ApplyMetadata(generated[i],source,entries[i],include,copy);
                 }
-                var candidate=snapshot.Clone();candidate.Pieces.AddRange(generated.Select(p=>p.Clone()));MainWindow.Validate(candidate);
+                var rules=new List<GradingRuleSet>();
+                if(copyRules)foreach(var piece in generated)rules.Add(GradingEngine.CreateDerivedRule(piece,increments,cts.Token));
+                var candidate=snapshot.Clone();candidate.Pieces.AddRange(generated.Select(p=>p.Clone()));candidate.GradingRules.AddRange(rules.Select(rule=>rule.Clone()));ProjectStorage.Validate(candidate,cts.Token);
                 var labels=new string[generated.Count];
                 for(var i=0;i<generated.Count;i++)
                 {
@@ -177,18 +184,18 @@ internal sealed class BulkGradingWindow : Window
                     var item=generated[i];var bounds=Geometry.Bounds(item.Points);var unchanged=item.Points.SequenceEqual(source.Points);
                     labels[i]=$"{SafeName(item.Name)} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm"+(unchanged?" · temel geometriyle aynı":"")+(entries[i].Quantity is int quantity?$" · adet {quantity}":" · adet girilmedi");
                 }
-                cts.Token.ThrowIfCancellationRequested();return (Generated:generated,Labels:labels);
+                cts.Token.ThrowIfCancellationRequested();return (Generated:generated,Labels:labels,Rules:rules);
             });
             cts.Token.ThrowIfCancellationRequested();
-            if(!Current() || Entries.Text!=text || (IncludeSize.IsChecked==true)!=include || (CopyRole.IsChecked==true)!=copy)throw new InvalidOperationException("Proje veya girdiler değişti; sonuç uygulanmadı.");
-            ready=items.Generated;readyText=text;readySize=include;readyRole=copy;
+            if(!Current() || Entries.Text!=text || (IncludeSize.IsChecked==true)!=include || (CopyRole.IsChecked==true)!=copy || (CopyRules.IsChecked==true)!=copyRules)throw new InvalidOperationException("Proje veya girdiler değişti; sonuç uygulanmadı.");
+            ready=items.Generated;readyRules=items.Rules;readyText=text;readySize=include;readyRole=copy;readyCopyRules=copyRules;
             PreviewList.ItemsSource=items.Labels;
             PreviewList.SelectedIndex=0;
-            Status.Foreground=source.Grainline is null && source.Notches is not { Count:>0 } ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet yalnız girildiğinde eklenir."+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.")+(source.Notches is { Count:>0 } ? (GeometryPreview.MarksSuppressed ? " İşaretler 500 sınırı nedeniyle gösterilmiyor; her bedeni kontrol edin." : " Köşe işaretleri önizlemede gösterilir; her bedeni kontrol edin.") : "");AddButton.IsEnabled=true;
+            Status.Foreground=source.Grainline is null && source.Notches is not { Count:>0 } ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet yalnız girildiğinde eklenir."+(copyRules ? " Her bedene bağımsız serileme kuralı kaydedilecek; sonraki bedenleri kontrol edin." : "")+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.")+(source.Notches is { Count:>0 } ? (GeometryPreview.MarksSuppressed ? " İşaretler 500 sınırı nedeniyle gösterilmiyor; her bedeni kontrol edin." : " Köşe işaretleri önizlemede gösterilir; her bedeni kontrol edin.") : "");AddButton.IsEnabled=true;
         }
         catch(OperationCanceledException) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Hesap iptal edildi; proje değişmedi."; }
         catch(Exception ex) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Bedenler hazırlanamadı: "+ex.Message; }
-        finally { cancellation?.Dispose();cancellation=null;Entries.IsEnabled=true;IncludeSize.IsEnabled=true;CopyRole.IsEnabled=true;PreviewButton.IsEnabled=true;CancelButton.IsEnabled=false; }
+        finally { cancellation?.Dispose();cancellation=null;Entries.IsEnabled=true;IncludeSize.IsEnabled=true;CopyRole.IsEnabled=true;CopyRules.IsEnabled=true;PreviewButton.IsEnabled=true;CancelButton.IsEnabled=false; }
     }
     private static string SafeName(string input)
     {
@@ -220,10 +227,11 @@ internal sealed class BulkGradingWindow : Window
         var committed=false;
         try
         {
-            if(cancellation is not null || ready is null || ready.Count==0 || Entries.Text!=readyText || (IncludeSize.IsChecked==true)!=readySize || (CopyRole.IsChecked==true)!=readyRole || !Current())
+            if(cancellation is not null || ready is null || ready.Count==0 || Entries.Text!=readyText || (IncludeSize.IsChecked==true)!=readySize || (CopyRole.IsChecked==true)!=readyRole || (CopyRules.IsChecked==true)!=readyCopyRules || readyRules is null || !Current())
                 throw new InvalidOperationException("Proje veya girdiler değişti; bedenleri yeniden hesaplayın.");
             var items=ready.Select(p=>p.Clone()).ToArray();
-            workspace.CommitObserved("Bedenler birlikte oluşturuldu",()=>workspace.Document.Pieces.AddRange(items),()=>committed=true);
+            var rules=readyRules.Select(r=>r.Clone()).ToArray();
+            workspace.CommitObserved("Bedenler birlikte oluşturuldu",()=> { workspace.Document.Pieces.AddRange(items);workspace.Document.GradingRules.AddRange(rules); },()=>committed=true);
             ready=null;AddButton.IsEnabled=false;added();Close();
         }
         catch(Exception ex)

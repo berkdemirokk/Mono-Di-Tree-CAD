@@ -11934,7 +11934,7 @@ internal static class DesktopVerification
     private static void VerifyBulkGrading(MainWindow studio,string reportPath,List<string> checks)
     {
         var original=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(100,0),new(100,100),new(0,100)],Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=7 } };
-        studio.LoadDocument(new ProjectDocument { Pieces=[original] });original=studio.Document.Pieces[0];studio.Select(original.Id);
+        studio.LoadDocument(new ProjectDocument { Pieces=[original], GradingRules=[new GradingRuleSet { SourcePieceId=original.Id,SourceClosed=true,SourcePoints=[..original.Points],Deltas=[new(0,0),new(1,0),new(1,1),new(0,1)] }] });original=studio.Document.Pieces[0];studio.Select(original.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var added=false;var window=new BulkGradingWindow(studio,studio,original,[new(0,0),new(1,0),new(1,1),new(0,1)],()=>true,()=>added=true);
         Render(window,Path.ChangeExtension(reportPath,".bulk-grading.png"),680,540);
@@ -11981,12 +11981,29 @@ internal static class DesktopVerification
             window.Entries.Text=new string('x',1_000_001);Calculate();
             Check(window.Ready is null && window.Status.Text.Contains("çok uzun") && DocumentSession.ContentEquals(before,studio.Document),"Oversized batch input is rejected before parsing without modifying the project",checks);
             window.Entries.Text="S; -1; 2\nM; 0\nL; 1; 3";Calculate();
+            Check(window.CopyRules.IsChecked!=true,"Bulk derived rules are opt-in",checks);
+            window.CopyRules.IsChecked=true;
+            Check(window.Ready is null && !window.AddButton.IsEnabled,"Changing derived-rule option invalidates previous preview",checks);
+            Calculate();
+            Check(window.Ready?.Count==3 && window.Status.Text.Contains("bağımsız serileme kuralı") && DocumentSession.ContentEquals(before,studio.Document),
+                "Derived rules are prepared with batch preview without changing the project",checks);
             var count=session.UndoCount;window.AddReady();
             Check(added && studio.Document.Pieces.Count==4 && session.UndoCount==count+1,"Bulk grading commits all sizes in one history entry",checks);
             Check(studio.Document.Pieces.Skip(1).Select(p=>p.Metadata?.Quantity).SequenceEqual(new int?[]{2,null,3})
                 && studio.Document.Pieces[0].Metadata?.Quantity==7,
                 "Bulk grading applies each entered quantity without copying or changing the source",checks);
-            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"One undo removes the complete bulk grading batch",checks);
+            var addedSnapshot=studio.Document.Clone();
+            Check(studio.Document.GradingRules.Count==4 && studio.Document.GradingRules.Single(r=>r.SourcePieceId==original.Id).Deltas.SequenceEqual(before.GradingRules[0].Deltas) && studio.Document.Pieces.Skip(1).All(piece=>
+                studio.Document.GradingRules.Single(rule=>rule.SourcePieceId==piece.Id) is { } rule &&
+                rule.SourceClosed==piece.Closed && rule.SourcePoints.SequenceEqual(piece.Points) &&
+                rule.Deltas.SequenceEqual(new Point2[]{new(0,0),new(1,0),new(1,1),new(0,1)})),
+                "Every generated size receives its own matching rule and source remains unchanged",checks);
+            var saved=Path.ChangeExtension(reportPath,".bulk-derived-rules.tcad");
+            ProjectStorage.Save(studio.Document,saved);
+            Check(DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(saved)),"Bulk derived rules survive project save and reopen",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() &&
+                DocumentSession.ContentEquals(addedSnapshot,studio.Document) && session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
+                "One undo and redo include all bulk sizes and derived rules",checks);
         }
         finally { SynchronizationContext.SetSynchronizationContext(old); }
         studio.LoadDocument(before);var postSource=studio.Document.Pieces[0];studio.Select(postSource.Id);
@@ -12017,7 +12034,7 @@ internal static class DesktopVerification
         using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
         try
         {
-            cancelWindow.Entries.Text="S; -1\nL; 1";
+            cancelWindow.CopyRules.IsChecked=true;cancelWindow.Entries.Text="S; -1\nL; 1";
             cancelWindow.BeforeBulkCalculationForVerification=()=>{reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException();};
             var task=cancelWindow.CalculateAsync();PumpUntil(()=>reached.IsSet);
             cancelWindow.CancelButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
