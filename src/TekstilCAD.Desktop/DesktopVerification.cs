@@ -11527,7 +11527,7 @@ internal static class DesktopVerification
         studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
         var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
-        Descendants<TabControl>(root).Single().SelectedIndex=1;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        Descendants<TabControl>(root).Single().SelectedIndex=0;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
         var expander=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz"));expander.IsExpanded=true;root.UpdateLayout();
         var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
         var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
