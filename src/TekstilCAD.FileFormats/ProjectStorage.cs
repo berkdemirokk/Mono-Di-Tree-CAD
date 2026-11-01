@@ -296,10 +296,33 @@ public static class ProjectStorage
     {
         cancellationToken.ThrowIfCancellationRequested();
         var full = Path.GetFullPath(path);
-        var bytes = ReadSnapshot(full,cancellationToken);
-        var hash = bytes is null ? null : Convert.ToHexString(SHA256.HashData(bytes));
+        try
+        {
+            using var input = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return new(full, CaptureVersionHash(input, cancellationToken));
+        }
+        catch (FileNotFoundException) { cancellationToken.ThrowIfCancellationRequested(); return new(full, null); }
+        catch (DirectoryNotFoundException) { cancellationToken.ThrowIfCancellationRequested(); return new(full, null); }
+    }
+    // Hash the same opened stream incrementally, without allocating the entire
+    // project on each of the two pre-commit version checks.
+    internal static string CaptureVersionHash(Stream input, CancellationToken cancellationToken)
+    {
         cancellationToken.ThrowIfCancellationRequested();
-        return new(full, hash);
+        if (input.Length > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor.");
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        var buffer = new byte[81920];
+        long total = 0;
+        int count;
+        while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            total += count;
+            if (total > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası okunurken 64 MB sınırını aştı.");
+            hash.AppendData(buffer, 0, count);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return Convert.ToHexString(hash.GetHashAndReset());
     }
     /// <summary>
     /// Optimistic save coordinated with this library's writers across processes. The token is path-bound.
@@ -640,7 +663,7 @@ public static class ProjectStorage
         using var lease = AcquireWriteLease(target);
         cancellationToken.ThrowIfCancellationRequested();
         EnsureWritableDestination(target);
-        var current = CaptureVersion(target);
+        var current = CaptureVersion(target,cancellationToken);
         if (!string.Equals(current.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
             throw new ProjectConflictException();
         cancellationToken.ThrowIfCancellationRequested();
@@ -651,7 +674,7 @@ public static class ProjectStorage
             // Recheck after preparing the temporary file, so an external change
             // during preparation is not silently replaced. This only narrows
             // the race: path-based replacement still follows the check.
-            var latest = CaptureVersion(target);
+            var latest = CaptureVersion(target,cancellationToken);
             if (!string.Equals(latest.Sha256, expectedVersion.Sha256, StringComparison.Ordinal))
                 throw new ProjectConflictException();
         }
