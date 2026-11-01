@@ -3261,6 +3261,7 @@ public class MainWindow : Window
             text=>confirm($"Yalnız seçili parça aktarılır: {SafePieceName(piece.Name)} · {piece.Id:D}. Diğer parçalar, üretim bilgileri, serileme kuralları ve proje geçmişi PDF'e aktarılmaz.\n\n"+text),
             ()=>SelectedA4StillCurrent(capture));
     }
+    internal Action? BeforeSelectedA4WriteForVerification { get; set; }
     internal Task? StartSelectedA4ForVerification(string path,ProjectFileVersion expected,Func<string,bool> confirm)
         => StartSelectedA4(CaptureSelectedA4(),path,expected,confirm);
     private void ExportSelectedA4()
@@ -3328,7 +3329,7 @@ public class MainWindow : Window
         EnsurePropertyDraftsApplied();
         if(selectedSourceCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !selectedSourceCurrent())
             throw new InvalidOperationException("Proje veya seçim inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        return StartExportAsync(snapshot,path,format,expected);
+        return StartExportAsync(snapshot,path,format,expected,selectedSourceCurrent);
     }
     private bool BlockForExport()
     {
@@ -3341,7 +3342,7 @@ public class MainWindow : Window
         if (ExportRunning) throw new InvalidOperationException("Dışa aktarım sürüyor. Yeni bir kayıt veya aktarım başlatmadan önce işlemin bitmesini bekleyin.");
         if (DxfImportRunning) throw new InvalidOperationException("DXF okuma sürüyor. Yeni bir kayıt veya aktarım başlatmadan önce işlemin bitmesini bekleyin.");
     }
-    internal Task StartExportAsync(ProjectDocument snapshot, string path, int format, ProjectFileVersion expected)
+    internal Task StartExportAsync(ProjectDocument snapshot, string path, int format, ProjectFileVersion expected,Func<bool>? completionCurrent=null)
     {
         EnsureNoExport();
         ArgumentNullException.ThrowIfNull(snapshot); ArgumentNullException.ThrowIfNull(expected);
@@ -3363,7 +3364,7 @@ public class MainWindow : Window
         if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;
         exportNotice.Foreground=StudioTheme.Muted; exportNotice.Text="Dışa aktarım sürüyor; sonraki düzenlemeler dosyaya dahil değil."; exportNotice.ToolTip=path; exportNotice.Visibility=Visibility.Visible;
         SetStatus(cancellation is null ? "Dosya proje kopyasından hazırlanıyor. Bu aktarım iptal edilemez; başka proje açmak, kaydetmek veya pencereyi kapatmak için bekleyin." : "HPGL proje kopyasından hazırlanıyor. İsterseniz iptal isteği gönderebilirsiniz; sonuç bildirilene kadar bekleyin.");
-        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp);
+        return ExportTask=RunExportAsync(copy,path,format,expected,cancellation,hpglStamp,completionCurrent,completionCurrent is null ? null : BeforeSelectedA4WriteForVerification);
     }
     private void RequestExportCancellation()
     {
@@ -3374,7 +3375,7 @@ public class MainWindow : Window
         exportNotice.Text="İptal istendi; sonuç bekleniyor. Dosya değiştirme işlemi başlamışsa aktarım tamamlanabilir.";
         SetStatus(exportNotice.Text);
     }
-    private async Task RunExportAsync(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,CancellationTokenSource? cancellation,DxfPreparationStamp? hpglStamp)
+    private async Task RunExportAsync(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,CancellationTokenSource? cancellation,DxfPreparationStamp? hpglStamp,Func<bool>? completionCurrent,Action? beforeSelectedWrite)
     {
         try
         {
@@ -3409,12 +3410,12 @@ public class MainWindow : Window
                 try { await Task.Run(()=>HpglFormat.WritePrepared(prepared,path,expected,token)); }
                 finally { if(!windowClosed)IsEnabled=previouslyEnabled; }
             }
-            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; case 6: DxfFormat.ExportCanvasOrientation(snapshot,path,expected); break; } });
-            var stale=!DocumentSession.ContentEquals(snapshot,Document) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
+            else await Task.Run(()=> { beforeSelectedWrite?.Invoke();switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; case 6: DxfFormat.ExportCanvasOrientation(snapshot,path,expected); break; } });
+            var stale=(completionCurrent is null ? !DocumentSession.ContentEquals(snapshot,Document) : !completionCurrent()) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
-            exportNotice.Text=stale?"Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı.":"Dosya dışa aktarıldı.";
+            exportNotice.Text=stale?(completionCurrent is null ? "Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı." : "Dosya hazırlandı; proje veya seçim değiştiği için önceki seçili parça kopyası kullanıldı."):"Dosya dışa aktarıldı.";
             exportNotice.ToolTip=path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"");
-            SetStatus("Dosya dışa aktarıldı: "+path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"")+(stale?" · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı.":""));
+            SetStatus("Dosya dışa aktarıldı: "+path+(format==3?" · 40 birim/mm; fiziksel makine doğrulanmadı":"")+(stale?(completionCurrent is null ? " · Proje işlem sırasında değişti; dosya önceki proje kopyasından hazırlandı." : " · Proje veya seçim değişti; dosya önceki seçili parça kopyasından hazırlandı."):""));
         }
         catch(OperationCanceledException) when(cancellation?.IsCancellationRequested == true)
         {

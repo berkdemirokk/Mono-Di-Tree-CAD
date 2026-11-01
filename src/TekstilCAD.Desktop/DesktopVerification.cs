@@ -6342,6 +6342,8 @@ internal static class DesktopVerification
             "Selected A4 export identifies its exact source and omitted information",checks);
         PumpUntil(()=>selectedTask!.IsCompleted);selectedTask!.GetAwaiter().GetResult();
         var selectedPdf=File.ReadAllText(selectedPath);
+        var selectedNotice=(TextBlock)typeof(MainWindow).GetField("exportNotice",PrivateInstance)!.GetValue(studio)!;
+        Check(selectedNotice.Text=="Dosya dışa aktarıldı.","Unchanged multi-piece selected export reports normal success",checks);
         Check(studio.ExportError is null && selectedPdf.Contains("/Count 1") && selectedPdf.Contains("KESIK:IPLIK  ARTI:ISARET") && selectedPdf.Contains(selectedDocument.Pieces[0].Id.ToString("D")) && DocumentSession.ContentEquals(selectedBefore,studio.Document),
             "Selected A4 exports only chosen marked grainline piece and preserves full project",checks);
         var selectedSession=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -6358,6 +6360,26 @@ internal static class DesktopVerification
                 "Selected A4 rejects the open project target and preserves source and undo",checks);
         }
         finally { filePathField.SetValue(studio,previousFilePath); }
+        foreach(var edit in new[] { "selection","document" })
+        {
+            studio.LoadDocument(selectedBefore);studio.Select(selectedBefore.Pieces[0].Id);
+            using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+            try
+            {
+                studio.BeforeSelectedA4WriteForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                var path=Path.Combine(work,$"selected-a4-change-{edit}.pdf");
+                pending=studio.StartSelectedA4ForVerification(path,ProjectStorage.CaptureVersion(path),_=>true);
+                PumpUntil(()=>reached.IsSet);
+                if(edit=="selection")studio.Select(otherPiece.Id);
+                else studio.Commit("Başka parça değişti",()=>studio.Document.Pieces[1].Name="Değişmiş");
+                release.Set();PumpUntil(()=>pending!.IsCompleted);pending!.GetAwaiter().GetResult();
+                Check(studio.ExportError is null && File.Exists(path) && selectedNotice.Text.Contains("proje veya seçim değişti") &&
+                    File.ReadAllText(path).Contains(selectedBefore.Pieces[0].Id.ToString("D")),
+                    $"Selected A4 reports a real {edit} change while retaining the original exported snapshot",checks);
+            }
+            finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }studio.BeforeSelectedA4WriteForVerification=null; }
+        }
+        studio.LoadDocument(selectedBefore);studio.Select(selectedBefore.Pieces[0].Id);
         var staleSelectedPath=Path.Combine(work,"selected-a4-stale.pdf");
         try
         {
