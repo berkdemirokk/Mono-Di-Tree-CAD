@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using System.Text;
 using System.Windows;
@@ -21,7 +22,7 @@ public sealed class TextileToolsWindow : Window
     private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock sourceInfo = new() { TextWrapping=TextWrapping.Wrap, MaxHeight=44, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center };
     private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
-    private readonly TextBlock result = new LiveResultTextBlock() { TextWrapping=TextWrapping.Wrap, Text="Artışları girip yeni bedeni oluşturun veya diğer araç sekmelerini kullanın." };
+    private readonly TextBlock result = new() { TextWrapping=TextWrapping.Wrap, Text="Artışları girip yeni bedeni oluşturun veya diğer araç sekmelerini kullanın." };
     private readonly List<(Button Button,Func<bool> Available)> commands = [];
     private bool refreshingSource;
     private bool offsetBusy;
@@ -159,7 +160,18 @@ public sealed class TextileToolsWindow : Window
         tabs.Items.Add(new TabItem { Header="02  Kontur düzenleme",Content=PatternPanel() });
         tabs.Items.Add(new TabItem { Header="03  Temel pastal",Content=NestingPanel() });
         RefreshSources(workspace.Selected?.Id);
-        Closed+=(_,_)=>windowClosed=true;
+        var textDescriptor=DependencyPropertyDescriptor.FromProperty(TextBlock.TextProperty,typeof(TextBlock))
+            ?? throw new InvalidOperationException("İşlem sonucu metni izlenemiyor.");
+        EventHandler resultTextChanged=(_,_)=>
+        {
+            AutomationProperties.SetName(result,"Tekstil aracı işlem sonucu: "+result.Text);
+            if(System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(result) is { } peer)
+                peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
+        };
+        textDescriptor.AddValueChanged(result,resultTextChanged);
+        // Constructor setup may already have changed the text before observing it.
+        AutomationProperties.SetName(result,"Tekstil aracı işlem sonucu: "+result.Text);
+        Closed+=(_,_)=> { textDescriptor.RemoveValueChanged(result,resultTextChanged);windowClosed=true; };
         Closing+=(_,e)=>
         {
             if(vertexMoveBusy)
@@ -235,17 +247,6 @@ public sealed class TextileToolsWindow : Window
         result.Foreground=StudioTheme.Danger;
         result.Text="Kaynak değiştirilmedi veya pencere kapatılmadı. Lütfen düzenlenen tablo hücresini tamamlayın.";
         grades.Focus();
-    }
-    private sealed class LiveResultTextBlock : TextBlock
-    {
-        protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
-        {
-            base.OnPropertyChanged(e);
-            if(e.Property!=TextProperty)return;
-            AutomationProperties.SetName(this,"Tekstil aracı işlem sonucu: "+Text);
-            if(System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(this) is { } peer)
-                peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
-        }
     }
     private static Border Card(UIElement child,Thickness margin) => new() { Child=child,Padding=new Thickness(10),Margin=margin,Background=StudioTheme.Surface,BorderBrush=StudioTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(10) };
     private static StackPanel Panel() => new() { Margin=new Thickness(18) };
