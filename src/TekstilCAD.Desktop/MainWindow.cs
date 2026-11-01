@@ -1901,7 +1901,8 @@ public class MainWindow : Window
         // A missing-version token commits with fail-if-exists even if another
         // process creates the destination after the snapshot was captured.
         ProjectStorage.SaveIfUnchanged(candidate,path,expected);
-        SetStatus("Güvenli proje kopyası oluşturuldu: "+path+" · Açık proje ve taslaklar değişmedi.");
+        SetStatus("Güvenli proje kopyası oluşturuldu: "+path+" · Açık proje ve taslaklar değişmedi."+
+            (canvas.HasPendingDrawing ? " Tamamlanmamış çizim kopyaya dahil değil; çizim çalışma alanında korunuyor." : ""));
     }
     private void SaveAs() => SaveAsCore(false);
     private void SaveAsCore(bool compatibilityAcknowledged)

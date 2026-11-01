@@ -6525,6 +6525,18 @@ internal static class DesktopVerification
         Check(ProjectStorage.Load(copy).Pieces.Single().Name=="Yalnız kopyaya alınan taslak" && File.ReadAllBytes(rescue).SequenceEqual(rescueBytes)
             && string.Equals(activePath,rescue,StringComparison.OrdinalIgnoreCase) && DocumentSession.ContentEquals(beforeCopy,studio.Document) && name.Text=="Yalnız kopyaya alınan taslak",
             "New copy preserves the open path, original project and pending draft",checks);
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        studio.SetTool("Çoklu çizgi");
+        Check(canvas.AddDrawingPointAt(new Point2(150,150)) is null,"Pending drawing fixture was created",checks);
+        var pending=canvas.CapturePendingDrawing()!.Points.ToArray();
+        var copyWithPending=Path.Combine(work,"new-copy-pending-drawing.tcad");
+        studio.SaveNewCopyTo(copyWithPending);
+        var copyStatus=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        Check(copyStatus.Text.Contains("Tamamlanmamış çizim kopyaya dahil değil") &&
+            canvas.CapturePendingDrawing()!.Points.SequenceEqual(pending) && ProjectStorage.Load(copyWithPending).Pieces.Count==beforeCopy.Pieces.Count &&
+            string.Equals((string?)typeof(MainWindow).GetField("filePath",PrivateInstance)!.GetValue(studio),rescue,StringComparison.OrdinalIgnoreCase),
+            "New copy warns that unfinished drawing is excluded and keeps it in the workspace",checks);
+        canvas.CancelDrawing();
     }
     private static void VerifyDxfPiecePreview(MainWindow studio,string work,string reportPath,List<string> checks)
     {
