@@ -1094,21 +1094,19 @@ enum ModelStore {
         let staging: URL
         let destination: URL
     }
-    static func preparePointCopy(_ data: Data, projectName: String) throws -> PreparedPointCopy {
+    static func preparePointCopy(_ data: Data, projectName: String,
+                                 directoryOverride: URL? = nil, id: UUID = UUID(),
+                                 beforeVerification: (() throws -> Void)? = nil,
+                                 afterOpen: (() throws -> Void)? = nil) throws -> PreparedPointCopy {
         guard data.count <= 8 * 1024 * 1024 else { throw ViewerError.message("Dosya 8 MB sınırını aşıyor.") }
-        let directory = try directory(), id = UUID().uuidString
-        let staging = directory.appendingPathComponent(".\(id).partial", isDirectory: true)
-        let destination = directory.appendingPathComponent("\(id).\(copyExtension)", isDirectory: true)
-        guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
-        do {
-            try data.write(to: staging.appendingPathComponent(payloadName), options: .withoutOverwriting)
-            let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
-            try metadata.write(to: staging.appendingPathComponent(metadataName), options: .withoutOverwriting)
-            return PreparedPointCopy(staging: staging, destination: destination)
-        } catch {
-            _ = staging.path.withCString { rmdir($0) }
-            throw error
-        }
+        let directory: URL
+        if let directoryOverride { directory = directoryOverride } else { directory = try self.directory() }
+        let staging = directory.appendingPathComponent(".\(id.uuidString).partial", isDirectory: true)
+        let destination = directory.appendingPathComponent("\(id.uuidString).\(copyExtension)", isDirectory: true)
+        let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
+        try ModelFilePublisher.writeCopyFiles(data, metadata: metadata, staging: staging,
+                                              beforeVerification: beforeVerification, afterOpen: afterOpen)
+        return PreparedPointCopy(staging: staging, destination: destination)
     }
     static func finishPointCopy(_ prepared: PreparedPointCopy) throws {
         try FileManager.default.moveItem(at: prepared.staging, to: prepared.destination)

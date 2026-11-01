@@ -844,6 +844,56 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("model.tcad")), Data("model".utf8))
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
+    #if DEBUG
+    func testPointCopyRejectsStagingCollisionWithoutChangingExistingFiles() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let id = UUID()
+        let staging = root.appendingPathComponent(".\(id.uuidString).partial")
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        let existing = staging.appendingPathComponent("existing")
+        let bytes = Data("existing".utf8)
+        try bytes.write(to: existing)
+        XCTAssertThrowsError(try ModelStore.preparePointCopy(Data("new".utf8), projectName: "test", directoryOverride: root, id: id))
+        XCTAssertEqual(try Data(contentsOf: existing), bytes)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("\(id.uuidString).tcadcopy").path))
+    }
+
+    func testPointCopyRejectsReplacedStagingWithoutWritingIntoForeignDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let id = UUID(), bytes = Data("edited".utf8)
+        let staging = root.appendingPathComponent(".\(id.uuidString).partial")
+        let original = root.appendingPathComponent("original")
+        let foreign = root.appendingPathComponent("foreign")
+        try FileManager.default.createDirectory(at: foreign, withIntermediateDirectories: false)
+        XCTAssertThrowsError(try ModelStore.preparePointCopy(bytes, projectName: "test", directoryOverride: root, id: id, afterOpen: {
+            try FileManager.default.moveItem(at: staging, to: original)
+            try FileManager.default.createSymbolicLink(at: staging, withDestinationURL: foreign)
+        }))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: foreign.path), [])
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("project.tcad")), bytes)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("\(id.uuidString).tcadcopy").path))
+    }
+
+    func testPointCopyDestinationCollisionPreservesBothCopies() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bytes = Data("edited".utf8)
+        let prepared = try ModelStore.preparePointCopy(bytes, projectName: "test", directoryOverride: root)
+        try FileManager.default.createDirectory(at: prepared.destination, withIntermediateDirectories: false)
+        let sentinel = prepared.destination.appendingPathComponent("existing")
+        let existing = Data("existing".utf8)
+        try existing.write(to: sentinel)
+        XCTAssertThrowsError(try ModelStore.finishPointCopy(prepared))
+        XCTAssertEqual(try Data(contentsOf: sentinel), existing)
+        XCTAssertEqual(try Data(contentsOf: prepared.staging.appendingPathComponent("project.tcad")), bytes)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: prepared.staging.appendingPathComponent("metadata.json").path))
+    }
+    #endif
     func testCopyWritesStayInOpenedDirectoryAfterPathReplacement() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
