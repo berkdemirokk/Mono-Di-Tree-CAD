@@ -103,7 +103,8 @@ public static class PatternTools
         // A global area budget can hide a small lost notch on a large perimeter.
         // Check local vertices and edge midpoints in both directions, in grid units.
         // This is a conservative sampling check, not a proof of Hausdorff distance.
-        if (!LocallyMatchesWithCancellation(path, recovered[0], 8.0, cancellationToken) || !LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken))
+        var sourceMatches=LocallyMatchesWithDiagnostic(path,recovered[0],8.0,cancellationToken,out var failingIndex,out var failingSample);
+        if (!sourceMatches || !LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken))
         {
             // The local check may return false just as cancellation is requested.
             // Do not replace that cancellation with a validation failure or copy
@@ -115,7 +116,7 @@ public static class PatternTools
                 preview.Add(new Point2(p.X / scale, p.Y / scale));
             }
             cancellationToken.ThrowIfCancellationRequested();
-            throw new OffsetLocalDetailUnverifiedException(preview);
+            throw new OffsetLocalDetailUnverifiedException(preview,sourceMatches ? null : failingIndex,sourceMatches ? null : failingSample);
         }
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
@@ -193,7 +194,11 @@ public static class PatternTools
         => LocallyMatchesWithCancellation(source, target, tolerance, CancellationToken.None);
 
     private static bool LocallyMatchesWithCancellation(Path64 source, Path64 target, double tolerance, CancellationToken cancellationToken)
+        => LocallyMatchesWithDiagnostic(source,target,tolerance,cancellationToken,out _,out _);
+
+    private static bool LocallyMatchesWithDiagnostic(Path64 source, Path64 target, double tolerance, CancellationToken cancellationToken,out int failingIndex,out OffsetLocalSample failingSample)
     {
+        failingIndex=-1;failingSample=default;
         if (source.Count > Geometry.MaxValidatedContourVertices || target.Count > Geometry.MaxValidatedContourVertices)
             throw new ArgumentException("Dikiş payı doğrulama nokta sınırını aşıyor.");
         bool Near(double x, double y, Point64 origin)
@@ -214,7 +219,8 @@ public static class PatternTools
         {
             cancellationToken.ThrowIfCancellationRequested();
             var a=source[i];var b=source[(i+1)%source.Count];
-            if(!Near(0,0,a) || !Near((b.X-a.X)/2.0,(b.Y-a.Y)/2.0,a))return false;
+            if(!Near(0,0,a)) { failingIndex=i;failingSample=OffsetLocalSample.Vertex;return false; }
+            if(!Near((b.X-a.X)/2.0,(b.Y-a.Y)/2.0,a)) { failingIndex=i;failingSample=OffsetLocalSample.EdgeMidpoint;return false; }
         }
         return true;
     }

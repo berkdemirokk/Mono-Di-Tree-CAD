@@ -28,6 +28,8 @@ public sealed class OffsetLocalDetailErrorTests
         var error = Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(source, 1));
 
         Assert.IsAssignableFrom<ArgumentException>(error);
+        Assert.Equal(error.SourceIndex.HasValue,error.Sample.HasValue);
+        if(error.SourceIndex is int index)Assert.InRange(index,0,source.Points.Count-1);
         Assert.True(DocumentSession.ContentEquals(before, current));
     }
 
