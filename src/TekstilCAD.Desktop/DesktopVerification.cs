@@ -1596,11 +1596,12 @@ internal static class DesktopVerification
             Notches=[new NotchMark { VertexIndex=2,Position=original[2] }] };
         studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.SetTool("Seç");studio.Select(marked.Id);
         var markedBefore=studio.Document.Clone();
-        var rejectedMarked=false;
-        try { canvas.StartLargeVertexValidation(marked.Id,true,original,valid,2); }
-        catch(InvalidOperationException) { rejectedMarked=true; }
-        Check(rejectedMarked && !canvas.LargeVertexValidationRunning && DocumentSession.ContentEquals(markedBefore,studio.Document),
-            "Large marked vertex itself cannot move",checks);
+        var markedCandidate=original.ToArray();markedCandidate[2]=new Point2(original[2].X+0.01,original[2].Y);
+        canvas.StartLargeVertexValidation(marked.Id,true,original,markedCandidate,2);
+        var movedMarkedTask=canvas.LargeVertexValidationTask!;PumpUntil(()=>movedMarkedTask.IsCompleted);movedMarkedTask.GetAwaiter().GetResult();
+        Check(studio.Selected!.Points[2]==markedCandidate[2] && studio.Selected.Notches!.Single().Position==markedCandidate[2] && session.UndoCount==1,
+            "Large marked vertex and its mark move together",checks);
+        Check(session.Undo() && DocumentSession.ContentEquals(markedBefore,studio.Document),"Undo restores the moved large marked vertex",checks);
         canvas.StartLargeVertexValidation(marked.Id,true,original,valid,0);
         var markedTask=canvas.LargeVertexValidationTask!;PumpUntil(()=>markedTask.IsCompleted);markedTask.GetAwaiter().GetResult();
         Check(studio.Selected!.Points.SequenceEqual(valid) && studio.Selected.Notches!.Single().VertexIndex==2 &&
@@ -1618,11 +1619,11 @@ internal static class DesktopVerification
             Notches=[new NotchMark { VertexIndex=0,Position=repeated[0] }] };
         studio.LoadDocument(new ProjectDocument { Pieces=[closureMarked] });studio.SetTool("Seç");studio.Select(closureMarked.Id);
         var closureCandidate=repeated.ToArray();closureCandidate[0]=valid[0];closureCandidate[^1]=valid[0];
-        var closureRejected=false;
-        try { canvas.StartLargeVertexValidation(closureMarked.Id,true,repeated,closureCandidate,repeated.Length-1); }
-        catch(InvalidOperationException) { closureRejected=true; }
-        Check(closureRejected && !canvas.LargeVertexValidationRunning && studio.Selected!.Points.SequenceEqual(repeated),
-            "Large marked repeated closure rejects moving its alias",checks);
+        canvas.StartLargeVertexValidation(closureMarked.Id,true,repeated,closureCandidate,repeated.Length-1);
+        var closureTask=canvas.LargeVertexValidationTask!;PumpUntil(()=>closureTask.IsCompleted);closureTask.GetAwaiter().GetResult();
+        Check(studio.Selected!.Points[0]==closureCandidate[0] && studio.Selected.Points[^1]==closureCandidate[0] && studio.Selected.Notches!.Single().Position==closureCandidate[0],
+            "Large marked repeated closure moves both aliases and the mark",checks);
+        Check(session.Undo() && studio.Selected!.Points.SequenceEqual(repeated),"Undo restores marked repeated closure",checks);
         studio.LoadDocument(markedBefore.Clone());studio.SetTool("Seç");studio.Select(marked.Id);
         using(var reachedCancel=new ManualResetEventSlim())using(var releaseCancel=new ManualResetEventSlim())
         {
@@ -2047,7 +2048,13 @@ internal static class DesktopVerification
             Check(staleRejected && DocumentSession.ContentEquals(newer,studio.Document) && session.UndoCount==priorUndo,
                 "Marked drag rejects a changed source and keeps newer marks",checks);canvas.CancelDrawing();
             studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
-            Check(!canvas.HasActiveDragPreview,"Dragging an explicitly marked vertex is rejected",checks);
+            Check(canvas.HasActiveDragPreview,"Dragging an explicitly marked vertex starts",checks);
+            before=studio.Document.Clone();undo=session.UndoCount;pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y+10));up.Invoke(canvas,[click]);
+            var markedMoved=studio.Document.Clone();
+            Check(markedMoved.Pieces[0].Points[1]==new Point2(110,10) && markedMoved.Pieces[0].Notches!.Single().Position==markedMoved.Pieces[0].Points[1] && session.UndoCount==undo+1,
+                "Marked vertex drag moves the visual mark with its vertex",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedMoved,studio.Document),
+                "Marked vertex drag is one undoable edit",checks);
             studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);
             before=studio.Document.Clone();undo=session.UndoCount;PointAt(0,0,1);down.Invoke(canvas,[canvas,click]);
             Check(canvas.HasActiveDragPreview && (int)vertexField.GetValue(canvas)! == 0,"Unmarked vertex on a marked piece can start a drag",checks);
@@ -2062,8 +2069,8 @@ internal static class DesktopVerification
                 "Unmarked vertex drag on a marked piece is undoable and redoable",checks);
             var repeatedMarked=marked.Clone();repeatedMarked.Points.Add(repeatedMarked.Points[0]);
             repeatedMarked.Notches=[new NotchMark { VertexIndex=0,Position=repeatedMarked.Points[0] }];
-            Check(!CadCanvas.CanDragMarkedVertex(repeatedMarked,0) && !CadCanvas.CanDragMarkedVertex(repeatedMarked,repeatedMarked.Points.Count-1) &&
-                CadCanvas.CanDragMarkedVertex(repeatedMarked,1),"Both aliases of a marked closing vertex remain protected",checks);
+            Check(CadCanvas.CanDragMarkedVertex(repeatedMarked,0) && CadCanvas.CanDragMarkedVertex(repeatedMarked,repeatedMarked.Points.Count-1) &&
+                CadCanvas.CanDragMarkedVertex(repeatedMarked,1),"Both aliases of a marked closing vertex can be moved together",checks);
             var far=new PatternPiece { Points=[new(50_000_000,0),new(50_000_100,0),new(50_000_100,100),new(50_000_000,100)],
                 Notches=[new NotchMark { VertexIndex=1,Position=new(50_000_100,0) }] };
             studio.LoadDocument(new ProjectDocument { Pieces=[far] });studio.Select(far.Id);before=studio.Document.Clone();undo=session.UndoCount;

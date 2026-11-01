@@ -79,6 +79,21 @@ public class NotchOperationGuardTests
         using var cancelled=new CancellationTokenSource();cancelled.Cancel();
         Assert.Throws<OperationCanceledException>(()=>PatternTools.MovePoint(source,index,new(-1,0),cancelled.Token,allowMarkedVertexMove:true));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void MarkedVertexMovePreservesUnchangedAxisBits(bool useClosingAlias)
+    {
+        var source=Closed();source.Points.Add(source.Points[0]);
+        var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+        source.Notches=[new NotchMark { VertexIndex=0,Position=new Point2(negativeZero,0) }];
+        var before=source.Clone();
+        var moved=PatternTools.MovePoint(source,useClosingAlias ? source.Points.Count-1 : 0,new Point2(0,1),allowMarkedVertexMove:true);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(moved.Notches![0].Position.X));
+        Assert.Equal(1,moved.Notches[0].Position.Y);
+        Assert.Equal(moved.Points[0],moved.Points[^1]);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+    }
     [Fact]
     public void ExplicitMarkedMoveRejectsBadOrDuplicateMarkerCoordinates()
     {

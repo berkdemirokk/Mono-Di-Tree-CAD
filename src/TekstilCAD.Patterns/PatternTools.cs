@@ -684,7 +684,12 @@ public static class PatternTools
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if(mark.VertexIndex>=moved.Points.Count)throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
-                if(allowMarkedVertexMove && mark.VertexIndex==markedIndex)mark.Position=moved.Points[mark.VertexIndex];
+                if(allowMarkedVertexMove && mark.VertexIndex==markedIndex)
+                {
+                    var before=piece.Points[mark.VertexIndex];var after=moved.Points[mark.VertexIndex];
+                    mark.Position=new Point2(BitConverter.DoubleToInt64Bits(before.X)==BitConverter.DoubleToInt64Bits(after.X) ? mark.Position.X : after.X,
+                        BitConverter.DoubleToInt64Bits(before.Y)==BitConverter.DoubleToInt64Bits(after.Y) ? mark.Position.Y : after.Y);
+                }
                 else if(moved.Points[mark.VertexIndex]!=mark.Position)throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
             }
             moved.Notches=marks;cancellationToken.ThrowIfCancellationRequested();return moved;

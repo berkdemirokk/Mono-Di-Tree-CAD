@@ -491,7 +491,7 @@ public sealed class CadCanvas : FrameworkElement
             { owner.SetStatus("Parça taşınmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
             if(vertex>=0 && piece?.Notches is not null)
             {
-                if(!CanDragMarkedVertex(piece,vertex)) { owner.SetStatus("İşaretli köşe taşınamaz; önce işareti gözden geçirin.");return; }
+                if(!CanDragMarkedVertex(piece,vertex))return;
             }
             if(piece is not null) { dragSourceSnapshot=piece.Clone();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
@@ -670,12 +670,12 @@ public sealed class CadCanvas : FrameworkElement
             dragPreviewGrainline=GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],dragPreview[0],dragTranslation.X,dragTranslation.Y);
         }
     }
+    private static bool SamePointBits(IReadOnlyList<Point2> first,IReadOnlyList<Point2> second) =>
+        first.Count==second.Count && first.Zip(second).All(pair=>BitConverter.DoubleToInt64Bits(pair.First.X)==BitConverter.DoubleToInt64Bits(pair.Second.X) && BitConverter.DoubleToInt64Bits(pair.First.Y)==BitConverter.DoubleToInt64Bits(pair.Second.Y));
     internal static bool CanDragMarkedVertex(PatternPiece piece,int vertex)
     {
         if(vertex<0 || vertex>=piece.Points.Count)return false;
-        if(piece.Notches is null)return true;
-        var logical=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && vertex==piece.Points.Count-1 ? 0 : vertex;
-        return !piece.Notches.Any(mark=>mark.VertexIndex==logical);
+        return true;
     }
     private void Up(MouseButtonEventArgs e)
     {
@@ -709,12 +709,14 @@ public sealed class CadCanvas : FrameworkElement
                 StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result,dragVertex);
                 ClearDrag();ReleaseMouseCapture();InvalidateVisual();return;
             }
+            List<NotchMark>? verifiedVertexMarks=null;
             if(dragVertex>=0)
             {
                 if(piece.Notches is not null)
                 {
-                    var verified=PatternTools.MovePoint(piece,dragVertex,result[dragVertex]);
-                    if(!verified.Points.SequenceEqual(result))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");
+                    var verified=PatternTools.MovePoint(piece,dragVertex,result[dragVertex],allowMarkedVertexMove:true);
+                    if(!SamePointBits(verified.Points,result))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");
+                    verifiedVertexMarks=verified.Notches;
                 }
                 else ValidateDraggedVertex(result,piece.Closed);
             }
@@ -733,7 +735,7 @@ public sealed class CadCanvas : FrameworkElement
             var rule=owner.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
             var translatedRule=dragVertex<0 ? rule?.TranslatedFor(piece,snapshot,dragTranslation.X,dragTranslation.Y) : null;
             owner.CommitObserved(dragVertex>=0 ? "Kontur noktası taşındı" : "Parça taşındı",()=> {
-                piece.Points=snapshot;piece.Grainline=newGrain;if(dragVertex<0)piece.Notches=movedNotches;
+                piece.Points=snapshot;piece.Grainline=newGrain;if(dragVertex<0)piece.Notches=movedNotches;else if(verifiedVertexMarks is not null)piece.Notches=verifiedVertexMarks;
                 if(translatedRule is not null)owner.Document.GradingRules[owner.Document.GradingRules.IndexOf(rule!)]=translatedRule;
             },()=>observedCommits++);
             if(rule is not null && translatedRule is null)
@@ -753,7 +755,7 @@ public sealed class CadCanvas : FrameworkElement
         if(owner.HasPropertyDraftFor(id))
             throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
         if(piece.Notches is not null && (vertexIndex<0 || vertexIndex>=piece.Points.Count || !CanDragMarkedVertex(piece,vertexIndex)))
-            throw new InvalidOperationException("İşaretli köşe taşınamaz; işlem uygulanmadı.");
+            throw new InvalidOperationException("İşaret koordinat bitleri kaynak köşeyle eşleşmiyor; işlem uygulanmadı.");
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
         ValidateClosingEdgePreserved(original,proposed,closed);
@@ -769,7 +771,7 @@ public sealed class CadCanvas : FrameworkElement
         try
         {
             var before=BeforeLargeVertexValidationForVerification;
-            await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(markedSource is not null) { var verified=PatternTools.MovePoint(markedSource,vertexIndex,candidate[vertexIndex],cancellation.Token);if(!verified.Points.Zip(candidate).All(pair=>BitConverter.DoubleToInt64Bits(pair.First.X)==BitConverter.DoubleToInt64Bits(pair.Second.X) && BitConverter.DoubleToInt64Bits(pair.First.Y)==BitConverter.DoubleToInt64Bits(pair.Second.Y)) || verified.Points.Count!=candidate.Length)throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor."); } else if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token); },cancellation.Token);
+            var verifiedMarks=await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(markedSource is not null) { var verified=PatternTools.MovePoint(markedSource,vertexIndex,candidate[vertexIndex],cancellation.Token,allowMarkedVertexMove:true);if(!SamePointBits(verified.Points,candidate))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");return verified.Notches; } if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token);return null; },cancellation.Token);
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed)return;
             if(owner.ActiveTool!="Seç" || owner.SelectedId!=id || !ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Proje veya seçim değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
@@ -782,7 +784,7 @@ public sealed class CadCanvas : FrameworkElement
             owner.CommitObserved("Büyük parçanın noktası taşındı",()=>
             {
                 var target=owner.Document.Pieces.First(p=>p.Id==id);
-                target.Points=candidate.ToList();
+                target.Points=candidate.ToList();if(verifiedMarks is not null)target.Notches=verifiedMarks;
                 if(target.Grainline is not null)target.Grainline.NeedsReview=true;
             },()=>committed=true);
             if(owner.Document.GradingRules.Any(rule=>rule.SourcePieceId==id))
@@ -910,7 +912,7 @@ public sealed class CadCanvas : FrameworkElement
                 var notchBrush=B("#FF8FAF");var notchPen=new Pen(notchBrush,2);
                 foreach(var notch in p.Notches)
                 {
-                    var notchPosition=p.Id==dragId && dragVertex<0 && dragPreview is not null && notch.VertexIndex>=0 && notch.VertexIndex<visible.Count ? visible[notch.VertexIndex] : notch.Position;
+                    var notchPosition=p.Id==dragId && dragPreview is not null && notch.VertexIndex>=0 && notch.VertexIndex<visible.Count && (dragVertex<0 || notch.VertexIndex==dragVertex || (p.Closed && dragVertex==p.Points.Count-1 && notch.VertexIndex==0 && p.Points[0]==p.Points[^1])) ? visible[notch.VertexIndex] : notch.Position;
                     var point=Screen(notchPosition);
                     if(!MarkerCanAffectViewport(point,RenderSize))continue;
                     dc.DrawEllipse(null,notchPen,point,7,7);
