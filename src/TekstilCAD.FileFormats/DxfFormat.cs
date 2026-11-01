@@ -52,6 +52,7 @@ public sealed record DxfSupplementalChildRecord(int SourceOrdinal, string Entity
 /// <summary>Uninterpreted source geometry; this is not a validated contour, notch, drill mark, or placed instance.</summary>
 public sealed record DxfSupplementalGeometryRecord(int SourceOrdinal, string Section, string? Block, string EntityType, ImmutableArray<DxfAnnotationGroup> Groups)
 {
+    internal int? BlockHeaderOrdinal { get; init; }
     public ImmutableArray<DxfSupplementalChildRecord> Children { get; init; } = ImmutableArray<DxfSupplementalChildRecord>.Empty;
 }
 /// <summary>Bounded whole records for selected geometry. Inspection includes unassessed polyline candidates; this is not a complete loss report.</summary>
@@ -77,6 +78,7 @@ public sealed record DxfSkippedSourceDetailReport(ImmutableArray<DxfSkippedSourc
 /// <summary>Original decoded non-private groups for one source record; this does not establish textile meaning or placement.</summary>
 public sealed record DxfSourceGeometryRecord(int SourceOrdinal, string Section, string? Block, string EntityType, ImmutableArray<DxfAnnotationGroup> Groups)
 {
+    internal int? BlockHeaderOrdinal { get; init; }
     /// <summary>One-based positions parallel to Groups, counting all groups after the code-0 marker, including private groups. Opaque metadata may be truncated.</summary>
     public ImmutableArray<int> GroupOrdinals { get; init; } = ImmutableArray<int>.Empty;
 }
@@ -87,6 +89,7 @@ public sealed record DxfSourceInsert(string BlockName, int SourceOrdinal);
 /// <summary>Entity records for a created piece, not vertex correspondence. Ordinals index parsed code-0 records. In the general reader block geometry is a definition, not a placement.</summary>
 public sealed record DxfPieceSource(Guid PieceId, string Section, string? Block, string Layer, string EntityType, ImmutableArray<int> SourceOrdinals)
 {
+    internal int? BlockHeaderOrdinal { get; init; }
     /// <summary>Actual INSERT path for controlled placements; empty for direct geometry and general-reader definitions.</summary>
     public ImmutableArray<DxfSourceInsert> InsertPath { get; init; } = ImmutableArray<DxfSourceInsert>.Empty;
     /// <summary>Legacy POLYLINE VERTEX and SEQEND record ordinals in source order, not a point correspondence.</summary>
@@ -695,15 +698,15 @@ public static class DxfFormat
         const int maxSourceGeometryRecords=4096,maxSourceGeometryGroups=32768,maxSourceGeometryCharacters=1_000_000;
         var rawGeometry=ImmutableArray.CreateBuilder<DxfSourceGeometryRecord>();
         var rawGeometryTruncated=false;var rawGeometryGroups=0;var rawGeometryCharacters=0;
-        string rawSection="",rawBlock="";
+        string rawSection="",rawBlock="";int? rawBlockHeader=null;
         for(var ordinal=0;ordinal<entities.Count;ordinal++)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var item=entities[ordinal];
-            if(item.Type=="SECTION") { rawSection=item.Text(2);rawBlock="";continue; }
-            if(item.Type=="ENDSEC") { rawSection="";rawBlock="";continue; }
-            if(rawSection=="BLOCKS" && item.Type=="BLOCK") { rawBlock=item.Text(2);continue; }
-            if(item.Type=="ENDBLK") { rawBlock="";continue; }
+            if(item.Type=="SECTION") { rawSection=item.Text(2);rawBlock="";rawBlockHeader=null;continue; }
+            if(item.Type=="ENDSEC") { rawSection="";rawBlock="";rawBlockHeader=null;continue; }
+            if(rawSection=="BLOCKS" && item.Type=="BLOCK") { rawBlock=item.Text(2);rawBlockHeader=ordinal;continue; }
+            if(item.Type=="ENDBLK") { rawBlock="";rawBlockHeader=null;continue; }
             if(rawSection is not ("ENTITIES" or "BLOCKS") || item.Type is not ("LINE" or "LWPOLYLINE" or "POLYLINE" or "VERTEX" or "SEQEND" or "INSERT"))continue;
             if(rawGeometry.Count>=maxSourceGeometryRecords || item.Data.Count>maxSourceGeometryGroups-rawGeometryGroups)
             { rawGeometryTruncated=true;break; }
@@ -720,7 +723,7 @@ public static class DxfFormat
             var groupOrdinals=ImmutableArray.CreateBuilder<int>(item.Data.Count);
             foreach(var group in item.Data) { cancellationToken.ThrowIfCancellationRequested();groups.Add(new DxfAnnotationGroup(group.Code,group.RawValue) { GroupOrdinal=group.GroupOrdinal });groupOrdinals.Add(group.GroupOrdinal); }
             rawGeometry.Add(new DxfSourceGeometryRecord(ordinal,rawSection,rawBlock.Length==0 ? null : rawBlock,item.Type,groups.MoveToImmutable())
-                { GroupOrdinals=groupOrdinals.MoveToImmutable() });
+                { GroupOrdinals=groupOrdinals.MoveToImmutable(),BlockHeaderOrdinal=rawBlockHeader });
             rawGeometryGroups+=item.Data.Count;rawGeometryCharacters+=characters;
         }
         var sourceGeometry=new DxfSourceGeometryReport(rawGeometry.ToImmutable(),rawGeometryTruncated);
@@ -759,7 +762,7 @@ public static class DxfFormat
         var pieceSources=ImmutableArray.CreateBuilder<DxfPieceSource>();
         void AddPiece(string name, List<Point2> points, bool closed, string? sourceSection=null,
             string? sourceBlock=null, string? sourceLayer=null, string? sourceType=null, IEnumerable<int>? ordinals=null,
-            IEnumerable<int>? childOrdinals=null)
+            IEnumerable<int>? childOrdinals=null,int? blockHeaderOrdinal=null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if(points.Count>=2)
@@ -771,7 +774,7 @@ public static class DxfFormat
             Add(doc,name,points,closed);
             if(!strictImport && points.Count>=2 && sourceSection is not null && sourceLayer is not null && sourceType is not null && ordinals is not null)
                 pieceSources.Add(new DxfPieceSource(doc.Pieces[^1].Id,sourceSection,sourceBlock,sourceLayer,sourceType,ordinals.ToImmutableArray())
-                    { ChildSourceOrdinals=childOrdinals?.ToImmutableArray() ?? ImmutableArray<int>.Empty });
+                    { ChildSourceOrdinals=childOrdinals?.ToImmutableArray() ?? ImmutableArray<int>.Empty,BlockHeaderOrdinal=blockHeaderOrdinal });
         }
         long bulgeValidationComparisons = 0;
         int convertedBulgeSegments = 0, convertedBulgeContours = 0;
@@ -893,7 +896,7 @@ public static class DxfFormat
         const int maxSkipRecords=4096;
         var skippedRecords=ImmutableArray.CreateBuilder<DxfSkippedSourceRecord>();
         var skippedRecordsTruncated=false;
-        string section = "", block = ""; int blockOccurrence=0, nextBlockOccurrence=0;
+        string section = "", block = ""; int blockOccurrence=0, nextBlockOccurrence=0; int? blockHeaderOrdinal=null;
         string? excludedBlockReason=null;
         bool excludedBlockCertain=false;
         bool blockGeometry = false, skippedInsertEntities=false, skippedRelevantInsertEntities=false, unknownLayerUsed=false, nonPlotLayerUsed=false,modelLayerExamined=false,viewportLayerUsed=false,unknownLineTypeUsed=false,colorsUsed=false,unknownColorUsed=false,opaqueLinesSeparated=false; int lineCount = 0;
@@ -902,7 +905,7 @@ public static class DxfFormat
             cancellationToken.ThrowIfCancellationRequested();
             var e = entities[i];
             if (e.Type == "SECTION") { section = e.Text(2); continue; }
-            if (e.Type == "ENDSEC") { section = ""; block=""; excludedBlockReason=null; excludedBlockCertain=false; continue; }
+            if (e.Type == "ENDSEC") { section = ""; block=""; blockHeaderOrdinal=null; excludedBlockReason=null; excludedBlockCertain=false; continue; }
             if (section is not ("ENTITIES" or "BLOCKS")) continue;
             if (bulgeToleranceMm is not null && e.Type == "INSERT")
                 throw new InvalidDataException("Bulge incelemesinde INSERT yerleşimleri desteklenmiyor; dosya aktarılmadı.");
@@ -936,12 +939,13 @@ public static class DxfFormat
                 try { block=DecodeLayerName(names[0].RawValue); }
                 catch(InvalidDataException ex) { throw new InvalidDataException("DXF blok adında geçersiz veya belirsiz Unicode, ters bölü ya da boşluk var.",ex); }
                 blockOccurrence=++nextBlockOccurrence;
+                blockHeaderOrdinal=i;
                 excludedBlockReason=ExcludedSpaceOrVisibility(e,cancellationToken) ??
                     (block.StartsWith("*Paper_Space",StringComparison.OrdinalIgnoreCase) ? "kağıt alanı blok geometrisi" : null);
                 excludedBlockCertain=excludedBlockReason is not null && HasUnambiguousExclusionMetadata(e,cancellationToken);
                 continue;
             }
-            if (e.Type == "ENDBLK") { block = ""; blockOccurrence=0; excludedBlockReason=null; excludedBlockCertain=false; continue; }
+            if (e.Type == "ENDBLK") { block = ""; blockOccurrence=0; blockHeaderOrdinal=null; excludedBlockReason=null; excludedBlockCertain=false; continue; }
             if (e.Type is "EOF" or "SEQEND") continue;
             var layer=e.LayerName();
             var sourceOrdinal=i;
@@ -1131,7 +1135,7 @@ public static class DxfFormat
                 if (HasNonzeroPolylineWidth(e, cancellationToken, 40, 41, 43)) { RecordSkipped("genişlikli LWPOLYLINE (kontur atlandı)"); continue; }
                 if (bulgeToleranceMm is not null) points = ApproximateBulge(sourceVertices, (lightweightFlags & 1) != 0, points);
                 else if (hasLightweightBulge) { RecordSkipped("bulge eğrisi (kontur atlandı)"); continue; }
-                AddPiece(name, points, (lightweightFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal]);
+                AddPiece(name, points, (lightweightFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal],blockHeaderOrdinal:blockHeaderOrdinal);
                 blockGeometry |= section == "BLOCKS";
             }
             else if (e.Type == "POLYLINE")
@@ -1201,7 +1205,7 @@ public static class DxfFormat
                 }
                 if (bulgeToleranceMm is not null) points=ApproximateBulge(sourceVertices,(polylineFlags & 1) != 0,points);
                 AddPiece(name, points, (polylineFlags & 1) != 0,section,block.Length==0 ? null : block,layer,e.Type,[sourceOrdinal],
-                    Enumerable.Range(sourceOrdinal+1,vertices.Count+1));
+                    Enumerable.Range(sourceOrdinal+1,vertices.Count+1),blockHeaderOrdinal);
                 blockGeometry |= section == "BLOCKS";
             }
             else
@@ -1314,7 +1318,7 @@ public static class DxfFormat
         const int maxRecords=4096,maxGroups=32768,maxCharacters=1_000_000;
         var records=ImmutableArray.CreateBuilder<DxfSourceGeometryRecord>();
         var groupCount=0;var characterCount=0;var truncated=false;
-        string section="",block="";
+        string section="",block="";int? blockHeaderOrdinal=null;
         for(var ordinal=0;ordinal<entities.Count;ordinal++)
         {
             token.ThrowIfCancellationRequested();
@@ -1389,10 +1393,10 @@ public static class DxfFormat
         {
             token.ThrowIfCancellationRequested();
             var entity=entities[ordinal];
-            if(entity.Type=="SECTION") { section=entity.Text(2);block="";continue; }
-            if(entity.Type=="ENDSEC") { section="";block="";continue; }
-            if(section=="BLOCKS" && entity.Type=="BLOCK") { block=entity.Text(2);continue; }
-            if(entity.Type=="ENDBLK") { block="";continue; }
+            if(entity.Type=="SECTION") { section=entity.Text(2);block="";blockHeaderOrdinal=null;continue; }
+            if(entity.Type=="ENDSEC") { section="";block="";blockHeaderOrdinal=null;continue; }
+            if(section=="BLOCKS" && entity.Type=="BLOCK") { block=entity.Text(2);blockHeaderOrdinal=ordinal;continue; }
+            if(entity.Type=="ENDBLK") { block="";blockHeaderOrdinal=null;continue; }
             if(section is not ("ENTITIES" or "BLOCKS"))continue;
             if(entity.Type is not ("POINT" or "ARC" or "CIRCLE" or "ELLIPSE" or "SPLINE") &&
                !((entity.Type is "POLYLINE" or "LWPOLYLINE") && (includePolylineCandidates || skippedPolylines?.Contains(ordinal)==true)))continue;
@@ -1429,7 +1433,7 @@ public static class DxfFormat
             var children=ImmutableArray.CreateBuilder<DxfSupplementalChildRecord>(last-ordinal);
             for(var index=ordinal+1;index<=last;index++)
             { token.ThrowIfCancellationRequested();children.Add(new(index,entities[index].Type,CopyGroups(entities[index]))); }
-            records.Add(new DxfSupplementalGeometryRecord(ordinal,section,block.Length==0 ? null : block,entity.Type,CopyGroups(entity)) { Children=children.MoveToImmutable() });
+            records.Add(new DxfSupplementalGeometryRecord(ordinal,section,block.Length==0 ? null : block,entity.Type,CopyGroups(entity)) { Children=children.MoveToImmutable(),BlockHeaderOrdinal=blockHeaderOrdinal });
             totalRecords+=recordCount;totalGroups+=groupCount;totalCharacters+=characters;
             ordinal=last;
         }
