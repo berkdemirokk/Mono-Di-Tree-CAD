@@ -54,11 +54,12 @@ public enum ModelStorePrototype {
         return try body(handle)
     }
 
-    private static func transaction<T>(_ db: OpaquePointer, _ action: () throws -> T) throws -> T {
+    private static func transaction<T>(_ db: OpaquePointer, commit: ((() throws -> Void) throws -> Void)? = nil, _ action: () throws -> T) throws -> T {
         try execute(db, "BEGIN IMMEDIATE")
         do {
             let result = try action()
-            try execute(db, "COMMIT")
+            if let commit { try commit { try execute(db, "COMMIT") } }
+            else { try execute(db, "COMMIT") }
             return result
         } catch {
             try? execute(db, "ROLLBACK")
@@ -96,6 +97,18 @@ public enum ModelStorePrototype {
         }
     }
 
+    #if DEBUG
+    static func saveGuarded(at url: URL, id: String, name: String, data: Data,
+                            afterInsert: () throws -> Void,
+                            commit: @escaping (() throws -> Void) throws -> Void) throws {
+        try connection(url, create: true) { db in
+            try transaction(db, commit: commit) {
+                try insert(Record(id: id, name: name, data: data), into: db)
+                try afterInsert()
+            }
+        }
+    }
+    #endif
     // Explicit caller-provided snapshots only; source files are never touched.
     // Duplicate IDs or any insertion error roll back the entire batch.
     public static func importSnapshots(at url: URL, records: [Record], afterInsert: ((Int) throws -> Void)? = nil) throws {

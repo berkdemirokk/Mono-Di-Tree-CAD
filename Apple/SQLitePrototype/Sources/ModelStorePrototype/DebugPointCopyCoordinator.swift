@@ -76,16 +76,17 @@ public final class DebugPointCopyCoordinator {
     /// Synchronous, potentially blocking I/O. Call off the UI thread and do not
     /// reenter this coordinator from the test hook or the storage implementation.
     public func save(at database: URL, id: UUID = UUID(), snapshot: DebugPointCopyStore.Snapshot,
+                     cancellation: DebugSaveCancellation? = nil,
                      beforeAuthorization: (() throws -> Void)? = nil) throws -> UUID {
         lock.lock(); defer { lock.unlock() }
         let documentID = self.documentID, revision = self.revision
         guard snapshot.documentID == documentID, snapshot.revision == revision, snapshot.data == data else {
             throw DebugPointCopyStore.Error.staleSnapshot
         }
-        return try DebugPointCopyStore.saveAuthorized(at: database, id: id, snapshot: snapshot) { document, version in
+        return try DebugPointCopyStore.saveAuthorized(at: database, id: id, snapshot: snapshot, cancellation: cancellation, isCurrent: { document, version in
             try beforeAuthorization?()
             return document == documentID && version == revision
-        }
+        })
     }
 }
 #endif

@@ -23,3 +23,5 @@ The coordinator can conditionally install a completed edit against its captured 
 A single pending edit request can be cancelled under the coordinator lock. Cancellation prevents application only if it acquires that lock first; after an application wins, cancellation cannot undo it. This does not interrupt computation or cancel a SQLite save, and has no effect on app state outside the prototype.
 
 An oversized result consumes its matching edit request before failing, so retry requires a new request. Cancellation/application tests exercise sequential orderings; they do not prove an actual concurrent race on Apple platforms. Ordering is inferred from the shared-lock implementation.
+
+DEBUG save cancellation is serialized against SQLite COMMIT with a separate one-shot gate: cancellation winning the gate rejects COMMIT and requests rollback; cancellation after COMMIT starts reports false and cannot undo it. It does not interrupt SQLite I/O, is not connected to the app, and has not been tested on Apple platforms.

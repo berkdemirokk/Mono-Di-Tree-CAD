@@ -105,6 +105,25 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         XCTAssertEqual(after.revision, source.revision)
         XCTAssertEqual(after.data, source.data)
     }
+    func testCancelledSaveRollsBackAndCommittedSaveCannotBeCancelled() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = root.appendingPathComponent("copy.sqlite")
+        let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1, 255]))
+        let snapshot = coordinator.snapshot(name: "point"), id = UUID()
+        try ModelStorePrototype.save(at: db, id: "existing", name: "old", data: Data([9]))
+        let cancelled = DebugSaveCancellation()
+        XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot, cancellation: cancelled) {
+            XCTAssertTrue(cancelled.cancel())
+        })
+        XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
+        XCTAssertEqual(try ModelStorePrototype.read(at: db, id: "existing")?.data, Data([9]))
+        let committed = DebugSaveCancellation()
+        try coordinator.save(at: db, id: id, snapshot: snapshot, cancellation: committed)
+        XCTAssertFalse(committed.cancel())
+        XCTAssertEqual(try ModelStorePrototype.read(at: db, id: id.uuidString)?.data, snapshot.data)
+    }
     func testConcurrentSaveAndChangeLeaveOldSnapshotStale() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
