@@ -31,3 +31,5 @@ If a transaction fails while still active and ROLLBACK also fails, RollbackFailu
 Applying an edit returns the exact applied snapshot while holding the same lock. If the document changes before save, saving that snapshot is rejected; callers must not replace it with a later unrelated snapshot. This remains a standalone DEBUG prototype.
 
 DebugOpenState is an independent, locked open/load/cancel state experiment. A new or cancelled request invalidates stale completion, and an oversize failure preserves the prior document. Content validation and source reading remain caller responsibilities; it is not wired to SwiftUI or the point-copy coordinator and does not protect state changed elsewhere.
+
+The point-copy coordinator also serializes begin/cancel/finish-open with edits and saves; a pending open invalidates edit requests and blocks new edits/saves. Synchronous SQLite saves hold its lock until commit, so open requests can block and must not run on the UI thread. It does not own the app's actual document or selection state and is not integrated into the app.

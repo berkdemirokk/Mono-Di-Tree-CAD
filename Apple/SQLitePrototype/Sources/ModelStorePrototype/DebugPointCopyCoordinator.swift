@@ -9,6 +9,7 @@ public final class DebugPointCopyCoordinator {
     private var revision: UUID
     private var data: Data
     private var pendingEdit: UUID?
+    private var pendingOpen: UUID?
 
     public init(documentID: UUID, data: Data) throws {
         guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
@@ -26,17 +27,48 @@ public final class DebugPointCopyCoordinator {
         self.revision = UUID()
         self.data = data
         pendingEdit = nil
+        pendingOpen = nil
         return self.revision
     }
 
+    public struct OpenRequest { fileprivate let id: UUID }
+
+    /// Invalidates outstanding edits before a replacement document is read.
+    public func beginOpen() -> OpenRequest {
+        lock.lock(); defer { lock.unlock() }
+        let id = UUID()
+        pendingOpen = id
+        pendingEdit = nil
+        return .init(id: id)
+    }
+
+    @discardableResult public func cancelOpen(_ request: OpenRequest) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard pendingOpen == request.id else { return false }
+        pendingOpen = nil
+        return true
+    }
+
+    /// Caller validates the content before completing; rejection preserves the old document.
+    public func finishOpen(_ request: OpenRequest, documentID: UUID, data: Data) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard pendingOpen == request.id else { throw DebugPointCopyStore.Error.staleSnapshot }
+        pendingOpen = nil
+        guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
+        self.documentID = documentID
+        self.data = data
+        revision = UUID()
+        pendingEdit = nil
+    }
     public struct EditRequest {
         fileprivate let id: UUID
         public let source: DebugPointCopyStore.Snapshot
     }
 
     /// Only one worker may be pending; a new request invalidates the previous one.
-    public func beginEdit(name: String) -> EditRequest {
+    public func beginEdit(name: String) throws -> EditRequest {
         lock.lock(); defer { lock.unlock() }
+        guard pendingOpen == nil else { throw DebugPointCopyStore.Error.staleSnapshot }
         let id = UUID()
         pendingEdit = id
         return .init(id: id, source: .init(documentID: documentID, revision: revision, name: name, data: data))
@@ -56,7 +88,7 @@ public final class DebugPointCopyCoordinator {
     @discardableResult
     public func applyEdit(_ request: EditRequest, data: Data) throws -> DebugPointCopyStore.Snapshot {
         lock.lock(); defer { lock.unlock() }
-        guard pendingEdit == request.id else { throw DebugPointCopyStore.Error.staleSnapshot }
+        guard pendingOpen == nil, pendingEdit == request.id else { throw DebugPointCopyStore.Error.staleSnapshot }
         pendingEdit = nil
         guard data.count <= DebugPointCopyStore.maximumBytes else { throw DebugPointCopyStore.Error.tooLarge }
         let source = request.source
@@ -80,7 +112,7 @@ public final class DebugPointCopyCoordinator {
                      beforeAuthorization: (() throws -> Void)? = nil) throws -> UUID {
         lock.lock(); defer { lock.unlock() }
         let documentID = self.documentID, revision = self.revision
-        guard snapshot.documentID == documentID, snapshot.revision == revision, snapshot.data == data else {
+        guard pendingOpen == nil, snapshot.documentID == documentID, snapshot.revision == revision, snapshot.data == data else {
             throw DebugPointCopyStore.Error.staleSnapshot
         }
         return try DebugPointCopyStore.saveAuthorized(at: database, id: id, snapshot: snapshot, cancellation: cancellation, isCurrent: { document, version in

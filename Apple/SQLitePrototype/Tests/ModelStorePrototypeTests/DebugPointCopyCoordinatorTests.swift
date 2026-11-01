@@ -64,9 +64,9 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let db = root.appendingPathComponent("copy.sqlite"), oldID = UUID(), newID = UUID()
         let coordinator = try DebugPointCopyCoordinator(documentID: oldID, data: Data([1]))
-        let editSource = coordinator.beginEdit(name: "old")
+        let editSource = try coordinator.beginEdit(name: "old")
         try coordinator.replaceDocument(documentID: newID, data: Data([2]))
-        let newSource = coordinator.beginEdit(name: "new")
+        let newSource = try coordinator.beginEdit(name: "new")
         XCTAssertThrowsError(try coordinator.applyEdit(editSource, data: Data([3])))
         let after = coordinator.snapshot(name: "new")
         XCTAssertEqual(after.documentID, newID)
@@ -82,11 +82,11 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
 
     func testCancellationWinsBeforeApplyAndDoesNotCancelNewRequest() throws {
         let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1]))
-        let cancelled = coordinator.beginEdit(name: "point")
+        let cancelled = try coordinator.beginEdit(name: "point")
         XCTAssertTrue(coordinator.cancelEdit(cancelled))
         XCTAssertThrowsError(try coordinator.applyEdit(cancelled, data: Data([2])))
         XCTAssertEqual(coordinator.snapshot(name: "point").data, Data([1]))
-        let current = coordinator.beginEdit(name: "point")
+        let current = try coordinator.beginEdit(name: "point")
         XCTAssertFalse(coordinator.cancelEdit(cancelled))
         try coordinator.applyEdit(current, data: Data([3]))
         XCTAssertFalse(coordinator.cancelEdit(current))
@@ -99,7 +99,7 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let db = root.appendingPathComponent("copy.sqlite"), sourceID = UUID(), otherID = UUID()
         let coordinator = try DebugPointCopyCoordinator(documentID: sourceID, data: Data([1]))
-        let request = coordinator.beginEdit(name: "edited copy")
+        let request = try coordinator.beginEdit(name: "edited copy")
         let applied = try coordinator.applyEdit(request, data: Data([2]))
         XCTAssertEqual(applied.documentID, sourceID)
         XCTAssertEqual(applied.data, Data([2]))
@@ -113,7 +113,7 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
     }
     func testOversizedEditLeavesStateUnchanged() throws {
         let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1]))
-        let request = coordinator.beginEdit(name: "point")
+        let request = try coordinator.beginEdit(name: "point")
         let source = request.source
         XCTAssertThrowsError(try coordinator.applyEdit(request, data: Data(count: DebugPointCopyStore.maximumBytes + 1)))
         XCTAssertThrowsError(try coordinator.applyEdit(request, data: Data([2])))
@@ -141,6 +141,38 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         try coordinator.save(at: db, id: id, snapshot: snapshot, cancellation: committed)
         XCTAssertFalse(committed.cancel())
         XCTAssertEqual(try ModelStorePrototype.read(at: db, id: id.uuidString)?.data, snapshot.data)
+    }
+    func testPendingOpenInvalidatesEditAndBlocksSaveUntilCancellation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = root.appendingPathComponent("copy.sqlite"), originalID = UUID()
+        let coordinator = try DebugPointCopyCoordinator(documentID: originalID, data: Data([1]))
+        let snapshot = coordinator.snapshot(name: "original")
+        let edit = try coordinator.beginEdit(name: "original")
+        let oldOpen = coordinator.beginOpen(), activeOpen = coordinator.beginOpen()
+        XCTAssertFalse(coordinator.cancelOpen(oldOpen))
+        XCTAssertThrowsError(try coordinator.finishOpen(oldOpen, documentID: UUID(), data: Data([2])))
+        XCTAssertThrowsError(try coordinator.applyEdit(edit, data: Data([3])))
+        XCTAssertThrowsError(try coordinator.beginEdit(name: "blocked"))
+        XCTAssertThrowsError(try coordinator.save(at: db, snapshot: snapshot))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: db.path))
+        XCTAssertTrue(coordinator.cancelOpen(activeOpen))
+        XCTAssertThrowsError(try coordinator.finishOpen(activeOpen, documentID: UUID(), data: Data([4])))
+        XCTAssertEqual(coordinator.snapshot(name: "original").documentID, originalID)
+        let id = UUID()
+        try coordinator.save(at: db, id: id, snapshot: snapshot)
+        XCTAssertEqual(try ModelStorePrototype.read(at: db, id: id.uuidString)?.data, Data([1]))
+    }
+
+    func testSuccessfulOpenRejectsPreviousDocumentSnapshot() throws {
+        let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1]))
+        let before = coordinator.snapshot(name: "old"), open = coordinator.beginOpen(), newID = UUID()
+        try coordinator.finishOpen(open, documentID: newID, data: Data([2]))
+        let current = coordinator.snapshot(name: "new")
+        XCTAssertEqual(current.documentID, newID)
+        XCTAssertEqual(current.data, Data([2]))
+        XCTAssertNotEqual(current.revision, before.revision)
     }
     func testConcurrentSaveAndChangeLeaveOldSnapshotStale() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
