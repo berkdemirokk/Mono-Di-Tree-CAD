@@ -2325,7 +2325,7 @@ internal static class DesktopVerification
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
             "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
             "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n10\n20\n0\n0\nENDBLK\n"+
-            "0\nBLOCK\n2\nB\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n30\n20\n0\n0\nVERTEX\n10\n40\n20\n0\n0\nVERTEX\n10\n30\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n30\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+            "0\nBLOCK\n2\nB\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n30\n20\n0\n0\nVERTEX\n10\n40\n20\n0\n0\nVERTEX\n10\n30\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nA\n10\n30\n20\n0\n0\nLINE\n8\nL\n10\n100\n20\n100\n11\n120\n21\n100\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
         var import=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(text)),"test");var before=import.Project.Clone();
         var window=new DxfBlockDefinitionReviewWindow(studio,import);
         try
@@ -2334,7 +2334,7 @@ internal static class DesktopVerification
             var root=(FrameworkElement)window.Content;
             var block=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
             var point=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
-            var piece=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef POLYLINE parçası");
+            var piece=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok parçası");
             var vertex=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
             block.SelectedIndex=0;point.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;
             var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla"));
@@ -2418,7 +2418,7 @@ internal static class DesktopVerification
         {
             var root=(FrameworkElement)plainWindow.Content;Render(plainWindow,Path.Combine(work,"block-plain-review-minimum.png"),500,380);
             var blocks=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
-            var pieceBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef POLYLINE parçası");
+            var pieceBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok parçası");
             var pointBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
             var vertexBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
             var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
@@ -2448,10 +2448,49 @@ internal static class DesktopVerification
                 "An explicitly selected unmarked piece can be accepted without changing the imported document",checks);
         }
         finally { plainWindow.Close(); }
+        var lineWindow=new DxfBlockDefinitionReviewWindow(studio,import);
+        try
+        {
+            var root=(FrameworkElement)lineWindow.Content;Render(lineWindow,Path.Combine(work,"block-line-minimum.png"),500,380);
+            var blocks=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var pieces=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok parçası");
+            var points=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
+            var vertices=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
+            var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
+            var queue=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            blocks.SelectedIndex=1;pieces.SelectedIndex=1;points.SelectedIndex=0;vertices.SelectedIndex=0;
+            var selectedLabel=(string)pieces.SelectedItem!.GetType().GetProperty("Label")!.GetValue(pieces.SelectedItem)!;
+            Check(selectedLabel.Contains("LINE") && selectedLabel.Contains("açık") && Descendants<DxfPiecePreview>(root).Single().DisplayedPieceId==import.Project.Pieces.Last().Id,
+                "Open LINE chain is identified and previewed as a source block piece",checks);
+            Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
+            Check(queue.Items.Count==0 && status.Text.Contains("yalnız POLYLINE"),"LINE chains cannot receive unsupported POINT mappings",checks);
+            Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili parçayı ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==1 && included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("LINE") &&
+                included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("işaretsiz"),
+                "Explicitly selected LINE chain is displayed as unmarked",checks);
+            pieces.SelectedIndex=0;Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili parçayı ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==2 && included.Items[1]!.GetType().GetProperty("Label")!.GetValue(included.Items[1])!.ToString()!.Contains("POLYLINE"),
+                "LINE and POLYLINE selections remain distinct in one project queue",checks);
+            Descendants<CheckBox>(root).Single().IsChecked=true;
+            try { Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
+            Check(lineWindow.SelectedPieces.Count==2 && lineWindow.SelectedPieces[0].PieceId==import.Project.Pieces.Last().Id && lineWindow.Selections.Count==0 &&
+                DocumentSession.ContentEquals(before,import.Project),"Accepting an unmarked LINE chain preserves the source",checks);
+        }
+        finally { lineWindow.Close(); }
         var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
         var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
         var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
         var secondLink=links.Where(p=>p.EntityType=="POLYLINE").Skip(1).Single();
+        var lineLink=links.Single(p=>p.EntityType=="LINE");
+        var lineProject=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
+            [new(lineLink.BlockHeaderOrdinal!.Value,lineLink.PieceId)],"source.dxf",true);
+        var linePath=Path.Combine(work,$"block-line-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(lineProject.WorkingCopy,linePath);
+        var lineLoaded=ProjectStorage.Load(linePath);
+        Check(lineLoaded.Pieces.Count==1 && !lineLoaded.Pieces[0].Closed && lineLoaded.Pieces[0].Notches is null &&
+            lineLoaded.Pieces[0].Points.SequenceEqual(import.Project.Pieces.Single(p=>p.Id==lineLink.PieceId).Points) &&
+            DocumentSession.ContentEquals(lineProject.WorkingCopy,lineLoaded) && DocumentSession.ContentEquals(before,import.Project),
+            "Explicit unmarked LINE chain and source history survive save and reopen",checks);
         var mixed=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),
             [new(link.BlockHeaderOrdinal!.Value,link.PieceId,rawPoints[0].SourceOrdinal,0)],
             [new(secondLink.BlockHeaderOrdinal!.Value,secondLink.PieceId)],"source.dxf",true);

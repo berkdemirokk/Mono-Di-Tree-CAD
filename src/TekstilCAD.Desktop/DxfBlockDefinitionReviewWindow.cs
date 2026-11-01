@@ -13,7 +13,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
 {
     private sealed record BlockChoice(int Header,string Label);
     private sealed record PointChoice(int Ordinal,string Label);
-    private sealed record PieceChoice(Guid Id,string Label);
+    private sealed record PieceChoice(Guid Id,string SourceType,string Label);
     private sealed record VertexChoice(int Index,string Label);
     internal sealed record BlockSelection(int Header,DxfPointVertexSelection Selection);
     internal sealed record BlockPieceSelection(int Header,Guid PieceId);
@@ -43,7 +43,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var apply=new Button { Content="Çalışma kopyasını hazırla",Margin=new Thickness(4),Padding=new Thickness(10,7,10,7) };
         actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();var scroll=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Blok tanımı eşleme seçenekleri");root.Children.Add(scroll);
-        body.Children.Add(new TextBlock { Text="Bu işlem yalnız seçtiğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları aktarılmaz. Parçaları işaretsiz ekleyebilir veya en fazla 32 POINT/köşe çifti seçebilirsiniz. Eşleme eklemek ilgili parçayı da seçer. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Kaynak dosya doğrulanır. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Bu işlem yalnız seçtiğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları aktarılmaz. POLYLINE veya desteklenen LINE zincirlerini işaretsiz ekleyebilirsiniz. POINT/köşe eşlemesi yalnız POLYLINE içindir ve ilgili parçayı da seçer; en fazla 32 eşleme seçilir. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Kaynak dosya doğrulanır. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Kaynak okuma uyarıları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         foreach(var warning in import.CapturedWarnings)
             body.Children.Add(new TextBlock { Text="• "+SafeNotice(warning),TextWrapping=TextWrapping.Wrap });
@@ -63,7 +63,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             if(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(status) is { } peer)
                 peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
         }
-        foreach(var (label,box) in new[]{("Kaynak blok tanımı",blocks),("Kaynak POINT",points),("Hedef POLYLINE parçası",pieces),("Hedef köşe",vertices)})
+        foreach(var (label,box) in new[]{("Kaynak blok tanımı",blocks),("Kaynak POINT",points),("Kaynak blok parçası",pieces),("Hedef köşe",vertices)})
         {
             body.Children.Add(new TextBlock { Text=label,FontWeight=FontWeights.SemiBold });AutomationProperties.SetName(box,label);box.MaxDropDownHeight=220;
             box.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));
@@ -73,7 +73,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var preview=new DxfPiecePreview { Height=180 };AutomationProperties.SetName(preview,"Seçilen blok konturu");body.Children.Add(preview);
         body.Children.Add(status);
         var indexText=new TextBox { Width=90,MaxLength=8,Margin=new Thickness(0,4,4,4) };AutomationProperties.SetName(indexText,"Köşe indeksine git");
-        var links=import.PieceSources!.Value.Where(p=>p.Section=="BLOCKS" && p.EntityType=="POLYLINE" && p.BlockHeaderOrdinal.HasValue).ToArray();
+        var links=import.PieceSources!.Value.Where(p=>p.Section=="BLOCKS" && (p.EntityType is "POLYLINE" or "LINE") && p.BlockHeaderOrdinal.HasValue).ToArray();
         var pointRecords=import.SupplementalGeometry!.Records.Where(p=>p.Section=="BLOCKS" && p.EntityType=="POINT" && p.BlockHeaderOrdinal.HasValue).ToArray();
         bool restoringQueuedSelection=false;
         void ClearQueueFocus() { if(!restoringQueuedSelection) { mappingList.SelectedIndex=-1;includedList.SelectedIndex=-1; } }
@@ -84,8 +84,9 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             if(blocks.SelectedItem is not BlockChoice block)return;
             points.ItemsSource=pointRecords.Where(p=>p.BlockHeaderOrdinal==block.Header).Select(p=>new PointChoice(p.SourceOrdinal,
                 $"POINT {p.SourceOrdinal} · X {Safe(p.Groups.FirstOrDefault(g=>g.Code==10)?.RawValue)} · Y {Safe(p.Groups.FirstOrDefault(g=>g.Code==20)?.RawValue)} · Z {Safe(p.Groups.FirstOrDefault(g=>g.Code==30)?.RawValue)} · katman {Safe(p.Groups.FirstOrDefault(g=>g.Code==8)?.RawValue)}")).ToArray();
-            var selectedIds=links.Where(p=>p.BlockHeaderOrdinal==block.Header).Select(p=>p.PieceId).ToHashSet();
-            pieces.ItemsSource=import.Project.Pieces.Where(p=>selectedIds.Contains(p.Id) && p.Closed).Select(p=>new PieceChoice(p.Id,$"{Safe(p.Name)} · {p.Id:D}")).ToArray();
+            var selectedLinks=links.Where(p=>p.BlockHeaderOrdinal==block.Header).ToDictionary(p=>p.PieceId);
+            pieces.ItemsSource=import.Project.Pieces.Where(p=>selectedLinks.ContainsKey(p.Id) && (p.Closed || selectedLinks[p.Id].EntityType=="LINE")).Select(p=>new PieceChoice(p.Id,selectedLinks[p.Id].EntityType,
+                $"{Safe(p.Name)} · {selectedLinks[p.Id].EntityType} · {(p.Closed ? "kapalı" : "açık")} · {p.Id:D}")).ToArray();
         };
         pieces.SelectionChanged+=(_,_)=>
         {
@@ -154,7 +155,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             { SetStatus("Önce eklenecek blok ve parçayı seçin.");return; }
             if(includedPieces.Any(p=>p.Item.PieceId==piece.Id)) { SetStatus("Parça zaten proje listesinde.");return; }
             if(UnmarkedCount()>=32) { SetStatus("En fazla 32 işaretsiz parça seçilebilir.");return; }
-            Include(block,piece);SetStatus("Parça işaretsiz olarak proje listesine eklendi; POINT eşlemesi isteğe bağlıdır.");
+            Include(block,piece);SetStatus(piece.SourceType=="LINE" ? "LINE zinciri işaretsiz olarak proje listesine eklendi; POINT eşlemesi yalnız POLYLINE içindir." : "POLYLINE parçası işaretsiz olarak proje listesine eklendi; POINT eşlemesi isteğe bağlıdır.");
         };
         removePiece.Click+=(_,_)=>
         {
@@ -184,6 +185,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         {
             if(blocks.SelectedItem is not BlockChoice b || points.SelectedItem is not PointChoice p || pieces.SelectedItem is not PieceChoice piece || vertices.SelectedItem is not VertexChoice v)
             { SetStatus("Önce blok, POINT, parça ve köşeyi seçin.");return; }
+            if(piece.SourceType!="POLYLINE") { SetStatus("POINT eşlemesi yalnız POLYLINE içindir; LINE zincirini işaretsiz ekleyebilirsiniz.");return; }
             if(mappings.Any(m=>m.Item.Selection.SourceOrdinal==p.Ordinal || (m.Item.Selection.PieceId==piece.Id && m.Item.Selection.VertexIndex==v.Index)))
             { SetStatus("Her POINT ve köşe yalnız bir kez eklenebilir.");return; }
             if(mappings.Count>=32) { SetStatus("Bir çalışma kopyasında en fazla 32 eşleme seçilebilir.");return; }
