@@ -1939,8 +1939,15 @@ private struct NotchPicker: View {
                     }
                     #endif
                     let query = NotchSearch.Query(request)
-                    let names = snapshot.indices.map { snapshot[$0].displayName(index: $0) }
-                    let details = snapshot.indices.map { snapshot[$0].selectionDetails(index: $0) }
+                    var names: [String] = [], details: [String] = []
+                    if !query.isEmpty {
+                        names.reserveCapacity(snapshot.count); details.reserveCapacity(snapshot.count)
+                        for index in snapshot.indices {
+                            guard !Task.isCancelled else { return nil }
+                            names.append(snapshot[index].displayName(index: index))
+                            details.append(snapshot[index].selectionDetails(index: index))
+                        }
+                    }
                     guard let found = NotchSearch.boundedMatchesCancellable(groups: snapshot.map(\.notches), limit: 500, cancelled: { Task.isCancelled }, matches: { pieceIndex, pointIndex in
                         if query.isEmpty { return true }
                         guard query.allows(index: pointIndex) else { return false }
