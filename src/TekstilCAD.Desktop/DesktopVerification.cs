@@ -1143,7 +1143,8 @@ internal static class DesktopVerification
         // the successful rebase; the separate proof test covers rounded moves.
         studio.Commit("Tam taşıma testi",()=> {
             var target=studio.Document.Pieces.Single(p=>p.Id==source.Id);
-            target.Closed=true;target.Points=[new(0,0),new(10,0),new(10,10),new(0,10)];target.Grainline=null;
+            target.Closed=true;target.Points=[new(0,0),new(10,0),new(10,10),new(0,10)];
+            target.Grainline=new Grainline { Start=new(1,1),End=new(1,5),NeedsReview=true };
         });
         source=studio.Selected!;
         var beforeRule=studio.Document.Clone();
@@ -1160,6 +1161,13 @@ internal static class DesktopVerification
         var movedRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==source.Id);
         Check(movedRule.SourcePoints.SequenceEqual(studio.Selected!.Points) && movedRule.Deltas.SequenceEqual(beforeMove.GradingRules.Single(r=>r.SourcePieceId==source.Id).Deltas),
             "Keyboard movement carries matching grading increments with the source",checks);
+        studio.Commit("İplik yönü değişti",()=>studio.Document.Pieces.Single(p=>p.Id==source.Id).Grainline!.End=new Point2(3,5));
+        var badGrainRejected=false;
+        try { typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null); }
+        catch(System.Reflection.TargetInvocationException ex) when(ex.InnerException is InvalidOperationException) { badGrainRejected=true; }
+        Check(badGrainRejected && table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7",
+            "Draft rebase rejects independently edited grainline without losing entered values",checks);
+        Invoke(studio,"Undo");
         studio.Commit("Parça bilgisi değişti",()=>studio.Document.Pieces.Single(p=>p.Id==source.Id).Name+=" değişti");
         var rejected=false;
         try { typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null); }
@@ -1170,7 +1178,7 @@ internal static class DesktopVerification
         typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null);
         Check(table.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7" &&
             (bool)typeof(TextileToolsWindow).GetMethod("SavedRuleMatchesDraft",PrivateInstance)!.Invoke(tools,[source.Id,typeof(TextileToolsWindow).GetField("activeDraft",PrivateInstance)!.GetValue(tools)])!,
-            "Explicit draft rebase keeps entered values and matches the moved rule",checks);
+            "Explicit draft rebase keeps entered values and matches the moved rule and grainline",checks);
         tools.Close();
         Invoke(studio,"Undo");
         Check(DocumentSession.ContentEquals(beforeMove,studio.Document),"Keyboard move undo restores geometry and grading rule together",checks);

@@ -72,6 +72,13 @@ public sealed class GradingRuleSet
             SourceClosed != current.SourceClosed || piece.Closed != SourceClosed || SourcePoints.Count == 0 ||
             SourcePoints.Count != current.SourcePoints.Count || Deltas.Count != SourcePoints.Count ||
             !Deltas.SequenceEqual(current.Deltas) || !current.SourcePoints.SequenceEqual(piece.Points)) return false;
+        return IsExactPointTranslation(SourcePoints,current.SourcePoints);
+    }
+
+    /// <summary>Compare exact binary coordinate differences against the first point's displacement.</summary>
+    public static bool IsExactPointTranslation(IReadOnlyList<Point2> before,IReadOnlyList<Point2> after)
+    {
+        if(before is null || after is null || before.Count==0 || before.Count!=after.Count) return false;
         static System.Numerics.BigInteger Units(double value)
         {
             var bits = BitConverter.DoubleToInt64Bits(value); var exponent = (int)((bits >> 52) & 0x7ff);
@@ -80,12 +87,12 @@ public sealed class GradingRuleSet
             var units = new System.Numerics.BigInteger(mantissa) << (exponent == 0 ? 0 : exponent - 1);
             return bits < 0 ? -units : units;
         }
-        if (SourcePoints.Any(p => !p.IsFinite) || current.SourcePoints.Any(p => !p.IsFinite)) return false;
-        var dx = Units(current.SourcePoints[0].X) - Units(SourcePoints[0].X);
-        var dy = Units(current.SourcePoints[0].Y) - Units(SourcePoints[0].Y);
-        for (var i = 1; i < SourcePoints.Count; i++)
-            if (Units(current.SourcePoints[i].X) - Units(SourcePoints[i].X) != dx ||
-                Units(current.SourcePoints[i].Y) - Units(SourcePoints[i].Y) != dy) return false;
+        if (before.Any(p => !p.IsFinite) || after.Any(p => !p.IsFinite)) return false;
+        var dx = Units(after[0].X) - Units(before[0].X);
+        var dy = Units(after[0].Y) - Units(before[0].Y);
+        for (var i = 1; i < before.Count; i++)
+            if (Units(after[i].X) - Units(before[i].X) != dx ||
+                Units(after[i].Y) - Units(before[i].Y) != dy) return false;
         return true;
     }
 
