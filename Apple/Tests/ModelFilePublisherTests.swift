@@ -12,6 +12,28 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testLibraryFilteringPreservesOrderAndCancelsWithoutPartialResults() throws {
+        func entry(_ file: String, _ name: String, _ date: Date?) -> ModelStore.Entry {
+            ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(file).tcad"), name: name, date: date,
+                             canOpen: true, requiresRecovery: false, identity: nil)
+        }
+        let rows = [entry("z", "Ön Kol", Date(timeIntervalSince1970: 10)),
+                    entry("a", "Arka Kol", Date(timeIntervalSince1970: 20)),
+                    entry("b", "Ön Beden", nil)]
+        let nameOrder = try XCTUnwrap(ModelStore.filteredModels(rows, query: "kol", newest: false, cancelled: { false }))
+        XCTAssertEqual(nameOrder.map(\.name), ["Arka Kol", "Ön Kol"])
+        let byNewest = try XCTUnwrap(ModelStore.filteredModels(rows, query: "", newest: true, cancelled: { false }))
+        XCTAssertEqual(byNewest.map(\.name), ["Arka Kol", "Ön Kol", "Ön Beden"])
+        let acrossFields = try XCTUnwrap(ModelStore.filteredModels(rows, query: "on z", newest: false, cancelled: { false }))
+        XCTAssertEqual(acrossFields.map(\.name), ["Ön Kol"])
+        var checks = 0
+        let cancelled = ModelStore.filteredModels(rows, query: "", newest: false) {
+            checks += 1
+            return checks == 2
+        }
+        XCTAssertNil(cancelled)
+    }
+
     func testOpeningSpecialModelFileFailsWithoutWaitingForWriter() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

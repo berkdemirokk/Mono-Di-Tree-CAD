@@ -825,6 +825,34 @@ enum ModelStore {
         try? url.resourceValues(forKeys: [.creationDateKey]).creationDate
     }
 
+    static func filteredModels(_ entries: [Entry], query: String, newest: Bool,
+                               cancelled: () -> Bool) -> [Entry]? {
+        let words = query.split(whereSeparator: { $0.isWhitespace }).map(String.init)
+        var matches: [Entry] = []
+        for entry in entries {
+            if cancelled() { return nil }
+            let fields = [entry.name, entry.displayIdentity, entry.readableIdentity]
+            if words.allSatisfy({ word in fields.contains { $0.localizedStandardContains(word) } }) {
+                matches.append(entry)
+            }
+        }
+        guard !cancelled() else { return nil }
+        matches.sort { first, second in
+            if newest {
+                switch (first.date, second.date) {
+                case let (left?, right?) where left != right: return left > right
+                case (_?, nil): return true
+                case (nil, _?): return false
+                default: break
+                }
+            }
+            let comparison = first.name.localizedStandardCompare(second.name)
+            if comparison != .orderedSame { return comparison == .orderedAscending }
+            return first.displayIdentity < second.displayIdentity
+        }
+        return cancelled() ? nil : matches
+    }
+
     private static func fileIdentity(_ url: URL) -> FileIdentity? {
         var info = stat()
         guard url.path.withCString({ lstat($0, &info) }) == 0 else { return nil }
@@ -907,6 +935,7 @@ private struct ModelLibrary: View {
     let open: (ModelStore.Entry) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
+    @State private var modelsRevision = UUID()
     @State private var search = ""
     @State private var sortOrder: SortOrder = .name
     @State private var error: String?
@@ -929,28 +958,19 @@ private struct ModelLibrary: View {
         var id: String { rawValue }
     }
 
-    private var matches: [ModelStore.Entry] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        return models.filter {
-            ModelSearch.matchesLibrary(name: $0.name, identities: [$0.displayIdentity, $0.readableIdentity], query: query)
-        }.sorted { first, second in
-            if sortOrder == .newest {
-                switch (first.date, second.date) {
-                case let (left?, right?) where left != right: return left > right
-                case (_?, nil): return true
-                case (nil, _?): return false
-                default: break
-                }
-            }
-            let comparison = first.name.localizedStandardCompare(second.name)
-            if comparison != .orderedSame { return comparison == .orderedAscending }
-            return first.displayIdentity < second.displayIdentity
-        }
+    private struct FilterKey: Hashable {
+        let query: String
+        let newest: Bool
+        let revision: UUID
     }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry] }
+    @State private var filterResult: FilterResult?
+    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, revision: modelsRevision) }
 
     var body: some View {
         NavigationStack {
-            let matchingModels = matches
+            let current = filterResult?.key == filterKey ? filterResult : nil
+            let matchingModels = current?.entries ?? []
             List {
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
@@ -964,6 +984,8 @@ private struct ModelLibrary: View {
                 } else if models.isEmpty {
                     Text("Henüz kayıtlı model yok. Bir .tcad açıp telefona kaydedebilirsiniz.")
                         .foregroundStyle(.secondary)
+                } else if current == nil {
+                    ProgressView("Modeller aranıyor…")
                 } else if matchingModels.isEmpty {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Eşleşen model bulunamadı.").foregroundStyle(.secondary)
@@ -1052,6 +1074,7 @@ private struct ModelLibrary: View {
                     do {
                         try ModelStore.delete(model)
                         models.removeAll { $0.id == model.id }
+                        modelsRevision = UUID()
                     } catch { self.error = error.localizedDescription }
                     modelToDelete = nil
                 }
@@ -1061,6 +1084,20 @@ private struct ModelLibrary: View {
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+            .task(id: filterKey) {
+                let request = filterKey
+                let snapshot = models
+                if !request.query.isEmpty {
+                    do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
+                }
+                guard !Task.isCancelled else { return }
+                let worker = Task.detached(priority: .userInitiated) {
+                    ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, cancelled: { Task.isCancelled })
+                }
+                let entries = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled, filterKey == request, let entries else { return }
+                filterResult = FilterResult(key: request, entries: entries)
+            }
         }
     }
 
@@ -1089,6 +1126,7 @@ private struct ModelLibrary: View {
         isLoading = true
         loadFailed = false
         models = []
+        modelsRevision = UUID()
         #if DEBUG && targetEnvironment(simulator)
         var simulateFailure = false
         if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture"),
@@ -1110,7 +1148,7 @@ private struct ModelLibrary: View {
                 guard loadID == requestID else { return }
                 isLoading = false
                 switch result {
-                case .success(let entries): models = entries
+                case .success(let entries): models = entries; modelsRevision = UUID()
                 case .failure(let failure):
                     loadFailed = true
                     error = failure.localizedDescription
