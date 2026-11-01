@@ -1462,6 +1462,7 @@ private struct Drawing {
         let points: [Point]
         let closed: Bool
         let contourLength: Double?
+        let isCollapsed: Bool
         let role: String?
         let size: String?
         let material: String?
@@ -1706,6 +1707,7 @@ private struct Drawing {
             }
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
                                 contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
+                                isCollapsed: ContourMeasure.isCollapsed(points),
                                 role: metadata?["Role"] as? String, size: metadata?["Size"] as? String,
                                 material: metadata?["Material"] as? String, quantity: quantity,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
@@ -1714,7 +1716,7 @@ private struct Drawing {
         return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid,
                        formatVersion: formatVersion, hasNonUTF8BOM: LosslessProjectName.hasNonUTF8BOM(data),
                        insufficientContourCount: pieces.filter { !$0.hasMinimumContourPoints }.count,
-                       collapsedContourCount: pieces.filter { ContourMeasure.isCollapsed($0.points) }.count)
+                       collapsedContourCount: pieces.filter { $0.isCollapsed }.count)
     }
 }
 
@@ -2235,7 +2237,7 @@ private struct DrawingView: View {
                 if piece.closed && piece.points.count > 1 { path.closeSubpath() }
                 context.stroke(path, with: .color(.accentColor), lineWidth: 1.5)
                 // A path whose vertices all coincide has no visible stroke.
-                if ContourMeasure.isCollapsed(piece.points) {
+                if piece.isCollapsed {
                     let p = position(first)
                     context.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(.accentColor))
                 }

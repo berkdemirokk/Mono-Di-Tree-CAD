@@ -1064,6 +1064,9 @@ final class ViewerUITests: XCTestCase {
         app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch.tap()
         app.buttons["Normal"].tap()
         XCTAssertTrue(warning.exists)
+        app.buttons["Yakınlaştır"].tap()
+        XCTAssertTrue(warning.exists)
+        XCTAssertTrue(app.descendants(matching: .any)["Normal kontur önizlemesi"].exists)
     }
 
     func testInsufficientContoursRemainSearchableButAreNotDrawnOrMeasured() {
