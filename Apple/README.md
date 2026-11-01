@@ -56,7 +56,7 @@ Deneysel tarihsel konturlar için ayrıca sınırlı ve ihtiyatlı basit kontur 
 
 ## Sınırlar
 
-- Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
+- Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Tek dosyalı kayıtta yayın öncesi kimlik ve içerik denetimi bazı değişiklikleri yakalar; denetim ile yayın arasındaki yarış ve kopya klasörü kaydındaki yarış giderilmedi. Başarılı kayıtta da boş geçici klasör kalır; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
 - Tanınan geçici kayıt klasörlerindeki tek ve normal proje dosyası, Modellerim'de yalnız ham kurtarma olarak gösterilir. İçerik eksik veya bozuk olabilir; dışa aktarma öncesi ve sonrası kimlik kontrolü yapılır, geçici kayıt otomatik silinmez. Bu kontrol eşzamanlı değişikliklere karşı atomik değildir ve kayıt sırasında yanlış içerik yayımlanması yarışını çözmez. Apple cihazında doğrulanmadı.
 
 Uygulamanın önceki hali GitHub'da iOS simülatöründe derlenip temel arayüz testlerinden geçti; gerçek cihazlar ve yeni dışa aktarma akışı henüz doğrulanmadı. Üretim sürümü değildir. Proje biçimini masaüstündeki doğrulayıcı kadar kapsamlı doğrulamaz. Seçili parçanın adı, bazı meta verileri ve iplik yönünün kayıt veya kontrol durumu gösterilir; kayıtlı iplik çizgisi ve yönü önizlemede gösterilebilir; üretime uygunluk doğrulanmaz. Serileme, pastal, kaynak geçmişi, DXF/SVG/HPGL üretim çıktısı, çizim araçları ve cihaz bağlantıları işlenmez. Çizim ekrana sığdırılır; ölçüm ya da üretim için kullanılmamalıdır. Dosya seçicisi tüm dosyaları gösterebilir, ancak yalnız `.tcad` uzantısı kabul edilir. UTF-8 JSON hedeflenmiştir; diğer kodlamalar doğrulanmamıştır.
@@ -94,4 +94,3 @@ macOS'ta örneğin `base64 -i dosya.p12 | tr -d '\n' | pbcopy` ile çıktıyı p
 Elle başlatırken `marketing_version` ve o sürüm için App Store Connect'te henüz kullanılmamış `build_number` girin (ör. `1.0` ve `1`). Yükleme başarıyla bittiğinde Apple derlemeyi işler; TestFlight sekmesindeki durumu, uyumluluk bilgilerini ve testçi atamalarını ayrıca kontrol edin. Başarılı CI sonucu tek başına cihazda çalışma veya TestFlight'ta kullanılabilirlik anlamına gelmez.
 
 Kaynaklar: [Apple: derleme yükleme](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/), [Apple: dağıtım ve arşiv](https://developer.apple.com/documentation/xcode/distributing-your-app-for-beta-testing-and-releases), [GitHub: imzalama sertifikası ve profil](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications).
-

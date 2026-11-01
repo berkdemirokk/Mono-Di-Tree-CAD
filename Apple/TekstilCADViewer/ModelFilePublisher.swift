@@ -3,18 +3,58 @@ import Darwin
 
 /// Rejects a staging path that already exists before this save starts.
 enum ModelFilePublisher {
+    private static func identity(_ url: URL) throws -> stat {
+        var info = stat()
+        guard url.path.withCString({ lstat($0, &info) }) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+        return info
+    }
+
+    private static func sameFile(_ a: stat, _ b: stat) -> Bool {
+        a.st_dev == b.st_dev && a.st_ino == b.st_ino && a.st_mode == b.st_mode
+    }
+
     static func publish(_ data: Data, staging: URL, destination: URL,
                         beforePublish: (() throws -> Void)? = nil) throws {
         guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
-        // Never recursively remove a path another process could have replaced.
-        // rmdir removes only an empty directory and does not follow symlinks.
-        // On failure the payload is retained for inspection.
-        defer { _ = staging.path.withCString { rmdir($0) } }
+        // Even rmdir could remove someone else's empty replacement directory.
+        // Keep the directory on both success and failure.
+        let directoryIdentity = try identity(staging)
         let payload = staging.appendingPathComponent("model.tcad")
         try data.write(to: payload, options: .withoutOverwriting)
+        let payloadIdentity = try identity(payload)
         try beforePublish?()
+        guard sameFile(directoryIdentity, try identity(staging)),
+              sameFile(payloadIdentity, try identity(payload)) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        // Check in bounded chunks so in-place edits before publication fail closed.
+        let handle = try FileHandle(forReadingFrom: payload)
+        defer { try? handle.close() }
+        var opened = stat()
+        guard fstat(handle.fileDescriptor, &opened) == 0,
+              sameFile(payloadIdentity, opened) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        var offset = 0
+        while offset < data.count {
+            let length = min(64 * 1024, data.count - offset)
+            guard let chunk = try handle.read(upToCount: length),
+                  chunk == data.subdata(in: offset..<(offset + length)) else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            offset += length
+        }
+        guard (try handle.read(upToCount: 1) ?? Data()).isEmpty,
+              sameFile(directoryIdentity, try identity(staging)),
+              sameFile(payloadIdentity, try identity(payload)) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        // These checks are not atomic with moveItem; a concurrent replacement
+        // after the final check remains possible.
         try FileManager.default.moveItem(at: payload, to: destination)
     }
 }

@@ -653,7 +653,7 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: copy.path))
     }
 
-    func testPublishesExactBytesAndRemovesStagingDirectory() throws {
+    func testPublishesExactBytesAndRetainsEmptyStagingDirectory() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -663,7 +663,7 @@ final class ModelFilePublisherTests: XCTestCase {
 
         try ModelFilePublisher.publish(data, staging: staging, destination: destination)
         XCTAssertEqual(try Data(contentsOf: destination), data)
-        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: staging.path), [])
     }
 
     func testReplacedStagingDirectoryIsNotRecursivelyDeleted() throws {
@@ -687,6 +687,44 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
     }
 
+    func testReplacementAndInPlaceChangesFailBeforePublication() throws {
+        for replace in [true, false] {
+            let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: root) }
+            let staging = root.appendingPathComponent("staging")
+            let payload = staging.appendingPathComponent("model.tcad")
+            let destination = root.appendingPathComponent("result.tcad")
+            let foreign = Data("other".utf8)
+            XCTAssertThrowsError(try ModelFilePublisher.publish(Data("model".utf8), staging: staging, destination: destination) {
+                if replace {
+                    try FileManager.default.moveItem(at: payload, to: root.appendingPathComponent("original"))
+                    try foreign.write(to: payload)
+                } else {
+                    let handle = try FileHandle(forWritingTo: payload)
+                    try handle.write(contentsOf: foreign)
+                    try handle.close()
+                }
+            })
+            XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+            XCTAssertEqual(try Data(contentsOf: payload), foreign)
+        }
+    }
+
+    func testEmptyReplacementDirectoryIsNotRemoved() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let staging = root.appendingPathComponent("staging")
+        let original = root.appendingPathComponent("original")
+        XCTAssertThrowsError(try ModelFilePublisher.publish(Data("model".utf8), staging: staging,
+                                                            destination: root.appendingPathComponent("result")) {
+            try FileManager.default.moveItem(at: staging, to: original)
+            try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false)
+        })
+        XCTAssertTrue(FileManager.default.fileExists(atPath: staging.path))
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("model.tcad")), Data("model".utf8))
+    }
     func testExistingStagingDirectoryAndItsContentsArePreserved() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
