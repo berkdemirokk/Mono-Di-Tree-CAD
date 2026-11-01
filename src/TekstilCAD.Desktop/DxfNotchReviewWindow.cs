@@ -26,7 +26,7 @@ internal sealed class DxfNotchReviewWindow : Window
     {
         DxfExportOmissionKind.PieceRole=>"Rol",DxfExportOmissionKind.Size=>"Beden",DxfExportOmissionKind.Material=>"Malzeme",
         DxfExportOmissionKind.Quantity=>"Adet",DxfExportOmissionKind.GradingRules=>"Serileme kuralları",
-        DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",DxfExportOmissionKind.ImportProvenance=>"Kaynak geçmişi",
+        DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",DxfExportOmissionKind.ImportProvenance=>"Kaynak geçmişi",DxfExportOmissionKind.PhotoTraceHistory=>"Fotoğraf taslağı geçmişi (kaynak .tcad dosyasını saklayın)",
         DxfExportOmissionKind.PieceIdentity=>"TekstilCAD parça kimliği",DxfExportOmissionKind.GrainlineReviewState=>"İplik yönü kontrol durumu ve ilişkisi",_=>"Diğer proje bilgisi"
     };
     private sealed record ContourRow(string Piece,string Id,string Layer,int MarkCount,string Grain);

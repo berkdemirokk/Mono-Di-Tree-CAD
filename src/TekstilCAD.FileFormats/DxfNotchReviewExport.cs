@@ -57,6 +57,11 @@ public static class DxfNotchReviewExport
             omissions=omissions.Add(new(null,DxfExportOmissionKind.NestingSnapshot));
         if(snapshot.GradingRules.Count>0 && !omissions.Any(item=>item.Kind==DxfExportOmissionKind.GradingRules))
             omissions=omissions.Add(new(null,DxfExportOmissionKind.GradingRules));
+        // Photo history is document-wide historical evidence. The selected
+        // subset deliberately excludes it, but the report must disclose this
+        // loss even when the recorded source piece was not selected.
+        if(snapshot.PhotoTraceHistory is { Count:>0 } && !omissions.Any(item=>item.Kind==DxfExportOmissionKind.PhotoTraceHistory))
+            omissions=omissions.Add(new(null,DxfExportOmissionKind.PhotoTraceHistory));
         cancellationToken.ThrowIfCancellationRequested();
         if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
         return new DxfNotchReviewPlan(snapshot,prepared.Text,prepared.Contours,prepared.Items,prepared.Grainlines,omissions,flipY);

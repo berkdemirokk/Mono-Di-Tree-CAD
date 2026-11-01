@@ -9194,11 +9194,29 @@ internal static class DesktopVerification
             {
                 var historyRoot=(FrameworkElement)historyWindow.Content;historyRoot.Measure(new Size(480,420));historyRoot.Arrange(new Rect(0,0,480,420));historyRoot.UpdateLayout();
                 Check(historyWindow.DetailsForVerification.Text.Contains(photoHash) && historyWindow.DetailsForVerification.Text.Contains("eşleşiyor") &&
+                    historyWindow.DetailsForVerification.Text.Contains("Uygulanan yön dönüşümü: 1 (etiket yoksa 1 varsayılır)") && !historyWindow.DetailsForVerification.Text.Contains("EXIF yönü: 1") &&
                     historyWindow.DetailsForVerification.IsReadOnly && FullyVisible(historyWindow.DetailsForVerification,historyRoot) &&
                     workspace.OutputLossNotice()!.Contains("Fotoğraf taslağı geçmişi"),
                     "Historical photo evidence is inspectable and output loss is disclosed",checks);
             }
             finally { historyWindow.Close(); }
+            byte[] noExifJpeg;using(var s=new MemoryStream()) { var encoder=new JpegBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(s);noExifJpeg=s.ToArray(); }
+            var noExif=ReferencePhotoDecoder.DecodeWithGeometry(noExifJpeg);var jpegHistory=added.Clone();
+            jpegHistory.PhotoTraceHistory![0].SourceSha256=noExif.SourceSha256;jpegHistory.PhotoTraceHistory[0].SourceByteLength=noExif.SourceByteLength;jpegHistory.PhotoTraceHistory[0].SourceOrientation=noExif.SourceOrientation;
+            var jpegHistoryWindow=new PhotoTraceHistoryWindow(workspace,jpegHistory);
+            try { Check(jpegHistoryWindow.DetailsForVerification.Text.Contains("Uygulanan yön dönüşümü: 1 (etiket yoksa 1 varsayılır)") &&
+                !jpegHistoryWindow.DetailsForVerification.Text.Contains("EXIF yönü: 1"),"History does not invent an EXIF tag for a JPEG without one",checks); }
+            finally { jpegHistoryWindow.Close(); }
+            var grainDocument=added.Clone();grainDocument.Pieces[0].Grainline=new Grainline { Start=new Point2(10,10),End=new Point2(20,20),NeedsReview=true };
+            var grainPlan=DxfGrainlineReviewExport.Prepare(grainDocument);var grainWindow=new DxfGrainlineExportReviewWindow(workspace,grainPlan);
+            try { Check(Descendants<TextBox>((FrameworkElement)grainWindow.Content).Any(t=>t.Text.Contains("Fotoğraf taslağı geçmişi") && t.Text.Contains("kaynak .tcad")),
+                "Grainline DXF review names omitted photo history",checks); }
+            finally { grainWindow.Close(); }
+            var notchDocument=added.Clone();notchDocument.Pieces[0].Notches=[new NotchMark { VertexIndex=1,Position=notchDocument.Pieces[0].Points[1] }];
+            var notchPlan=DxfNotchReviewExport.PrepareSelected(notchDocument,[draft.Id],false);var notchWindow=new DxfNotchReviewWindow(workspace,notchPlan);
+            try { Check(Descendants<TextBox>((FrameworkElement)notchWindow.Content).Any(t=>t.Text.Contains("Fotoğraf taslağı geçmişi") && t.Text.Contains("kaynak .tcad")),
+                "Selected notch DXF review names omitted photo history",checks); }
+            finally { notchWindow.Close(); }
             var edited=added.Clone();edited.Pieces[0].Points[1]=new Point2(101,0);
             var editedHistory=new PhotoTraceHistoryWindow(workspace,edited);
             try { Check(editedHistory.DetailsForVerification.Text.Contains("eşleşmiyor"),"Photo history identifies changed current geometry without erasing evidence",checks); }

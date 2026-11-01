@@ -16,7 +16,7 @@ public sealed record DxfLayerMapping(Guid PieceId, string OriginalName, string L
 {
     public bool Changed => !string.Equals(OriginalName, LayerName, StringComparison.Ordinal);
 }
-public enum DxfExportOmissionKind { PieceRole, Size, Material, Quantity, GrainlineUnsupported, GradingRules, NestingSnapshot, ImportProvenance, GrainlineReviewState, PieceIdentity }
+public enum DxfExportOmissionKind { PieceRole, Size, Material, Quantity, GrainlineUnsupported, GradingRules, NestingSnapshot, ImportProvenance, GrainlineReviewState, PieceIdentity, PhotoTraceHistory }
 /// <summary>An omitted field or unsupported feature; a null PieceId denotes project-level data.</summary>
 public sealed record DxfExportOmission(Guid? PieceId, DxfExportOmissionKind Kind);
 /// <summary>Read-only analysis of a copied project; this does not validate destination, machine use, or third-party interpretation.</summary>
@@ -2179,6 +2179,7 @@ public static class DxfFormat
         if(copy.GradingRules.Count!=0)omissions.Add(new(null,DxfExportOmissionKind.GradingRules));
         if(copy.NestingSnapshot is not null)omissions.Add(new(null,DxfExportOmissionKind.NestingSnapshot));
         if(copy.ImportProvenance is not null)omissions.Add(new(null,DxfExportOmissionKind.ImportProvenance));
+        if(copy.PhotoTraceHistory is { Count:>0 })omissions.Add(new(null,DxfExportOmissionKind.PhotoTraceHistory));
         cancellationToken.ThrowIfCancellationRequested();
         return new(fingerprint,layers,omissions.ToImmutable());
     }

@@ -28,7 +28,7 @@ internal sealed class PhotoTraceHistoryWindow : Window
             var same=piece is not null && !piece.Closed && piece.Points.SequenceEqual(r.GeneratedPoints);
             var b=new StringBuilder();b.Append("Parça kimliği: ").Append(r.PieceId.ToString("D")).Append("\n");
             b.Append(same ? "İlk açık geometriyle eşleşiyor; doğrulama değildir." : "İlk geometriyle eşleşmiyor veya kaynak parça silinmiş.").Append("\n");
-            b.Append("Fotoğraf SHA-256: ").Append(r.SourceSha256).Append("\nBayt: ").Append(r.SourceByteLength).Append(" · EXIF yönü: ").Append(r.SourceOrientation).Append("\n");
+            b.Append("Fotoğraf SHA-256: ").Append(r.SourceSha256).Append("\nBayt: ").Append(r.SourceByteLength).Append(" · Uygulanan yön dönüşümü: ").Append(r.SourceOrientation).Append(" (etiket yoksa 1 varsayılır)\n");
             b.Append("Yönlendirilmiş kaynak: ").Append(r.SourceWidth).Append(" × ").Append(r.SourceHeight).Append(" px · Önizleme: ").Append(r.PreviewWidth).Append(" × ").Append(r.PreviewHeight).Append(" px\n");
             b.Append("Referans: (").Append(MeasurementInput.Format(r.ReferenceStart.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceStart.Y)).Append(") → (").Append(MeasurementInput.Format(r.ReferenceEnd.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceEnd.Y)).Append(") px · ").Append(MeasurementInput.Format(r.ReferenceLengthMm)).Append(" mm\n");
             b.Append("İlk çizim noktaları (önizleme px → CAD mm):\n");
