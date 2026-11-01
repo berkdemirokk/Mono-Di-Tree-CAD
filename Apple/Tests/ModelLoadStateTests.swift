@@ -2,6 +2,21 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testInstallingModelKeepsDrawingBytesAndRevisionTogether() {
+        var state = LoadedModelState<Int>()
+        let initial = state.revision
+        XCTAssertNil(state.model)
+        XCTAssertNil(state.sourceData)
+        state.install(1, data: Data([0, 255]))
+        let first = state.revision
+        XCTAssertNotEqual(initial, first)
+        XCTAssertEqual(state.model, 1)
+        XCTAssertEqual(state.sourceData, Data([0, 255]))
+        state.install(2, data: Data([2]))
+        XCTAssertNotEqual(first, state.revision)
+        XCTAssertEqual(state.model, 2)
+        XCTAssertEqual(state.sourceData, Data([2]))
+    }
     func testDesktopSavedStaleV7WithNewPieceShowsVisibleContours() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))
         let data = try Data(contentsOf: url), before = data

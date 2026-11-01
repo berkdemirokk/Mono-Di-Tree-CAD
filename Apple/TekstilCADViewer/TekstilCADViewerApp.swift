@@ -66,7 +66,10 @@ private struct ContentView: View {
     @State private var exportDocument: ProjectExportDocument?
     @State private var exportName = "Model.tcad"
     @State private var importedData: Data?
-    @State private var sourceData: Data?
+    @State private var loadedModel = LoadedModelState<Drawing>()
+    private var sourceData: Data? { loadedModel.sourceData }
+    private var project: Drawing? { loadedModel.model }
+    private var drawingRevision: UUID { loadedModel.revision }
     private enum RawImportReason { case sizeLimit, invalidPreview(String) }
     private struct RawImport { let data: Data; let name: String; let request: UUID; let reason: RawImportReason }
     private enum OpenedModel { case preview(Drawing, Data, Int?); case raw(Data, RawImportReason) }
@@ -105,11 +108,9 @@ private struct ContentView: View {
     @State private var librarySaveSnapshot: (data: Data, request: UUID)?
     @State private var isSaving = false
     @State private var saveNotice: String?
-    @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
     @State private var showGrain = true
-    @State private var drawingRevision = UUID()
     @State private var notchSelectionRevision = UUID()
     @State private var modelLoad = ModelLoadState()
     @State private var modelReadCancellation: ModelReadCancellation?
@@ -646,10 +647,8 @@ private struct ContentView: View {
                 }
                 selectedPiece = nil
                 selectedNotch = nil
-                drawingRevision = UUID()
-                project = drawing
+                loadedModel.install(drawing, data: data)
                 editedName = drawing.name
-                sourceData = data
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-library-fixture") {
                     importedData = data
                     importedName = ProcessInfo.processInfo.environment["TCAD_UI_TEST_FILENAME"] ?? "Deneme Modeli.tcad"
@@ -774,10 +773,8 @@ private struct ContentView: View {
                     showingNotches = false
                     selectedPiece = matchedIndex
                     selectedNotch = nil
-                    drawingRevision = UUID()
-                    project = drawing
+                    loadedModel.install(drawing, data: data)
                     editedName = drawing.name
-                    sourceData = data
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
                 case .success(.raw(let data, let reason)):

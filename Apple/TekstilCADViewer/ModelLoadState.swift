@@ -38,3 +38,22 @@ struct ModelLoadState {
         return true
     }
 }
+
+// View state is installed as one value, so the drawing, its original bytes and
+// revision cannot temporarily describe different successfully opened models.
+struct LoadedModelState<Model> {
+    private(set) var model: Model?
+    private(set) var sourceData: Data?
+    private(set) var revision = UUID()
+
+    mutating func install(_ model: Model, data: Data) {
+        self = LoadedModelState(model: model, sourceData: data, revision: UUID())
+    }
+
+    init() {}
+    private init(model: Model, sourceData: Data, revision: UUID) {
+        self.model = model
+        self.sourceData = sourceData
+        self.revision = revision
+    }
+}
