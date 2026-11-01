@@ -20,6 +20,8 @@ Modellerim ekranında her kaydın yanındaki model işlemleri menüsünden kayı
 
 Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme arasında eşzamanlı değişiklik yarışı henüz giderilmedi. Silme akışı Mac veya cihazda doğrulanmadı.
 
+64 KiB üzerindeki kayıt bilgileri sınırlı okunur; sürümü doğrulanamayan kopya normal açılmaz. Kullanıcı ham proje baytlarını ayrı dışa aktarmayı seçebilir; kayıt bilgisi bu kopyaya dahil edilmez. Bu kurtarma akışı henüz Mac veya cihazda doğrulanmadı.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

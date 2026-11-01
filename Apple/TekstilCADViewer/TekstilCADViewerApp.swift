@@ -418,6 +418,12 @@ private struct ContentView: View {
             do {
                 try data.write(to: url, options: .atomic)
                 let drawing = try Drawing.load(url)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-oversized-metadata") {
+                    let copy = try ModelStore.directory().appendingPathComponent("recovery.tcadcopy", isDirectory: true)
+                    try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: true)
+                    try data.write(to: copy.appendingPathComponent("project.tcad"))
+                    try Data(repeating: 65, count: 65_537).write(to: copy.appendingPathComponent("metadata.json"))
+                }
                 selectedPiece = nil
                 selectedNotch = nil
                 drawingRevision = UUID()
@@ -605,6 +611,7 @@ enum ModelStore {
         let name: String
         let date: Date?
         let canOpen: Bool
+        let requiresRecovery: Bool
         var id: URL { url }
         // The complete directory entry name distinguishes records in this
         // library; actions continue to use the full URL, never a display ID.
@@ -720,12 +727,26 @@ enum ModelStore {
         url.pathExtension.lowercased() == copyExtension ? url.appendingPathComponent(payloadName) : url
     }
 
-    private static func metadata(_ url: URL) -> CopyMetadata? {
+    private enum MetadataResult {
+        case valid(CopyMetadata), oversized, invalid
+    }
+
+    private static func metadata(_ url: URL) -> MetadataResult {
+        let limit = 64 * 1024
         guard url.pathExtension.lowercased() == copyExtension,
-              let data = try? Data(contentsOf: url.appendingPathComponent(metadataName)),
-              let metadata = try? JSONDecoder().decode(CopyMetadata.self, from: data),
-              metadata.version == 1 else { return nil }
-        return metadata
+              let file = try? FileHandle(forReadingFrom: url.appendingPathComponent(metadataName)) else { return .invalid }
+        defer { try? file.close() }
+        do {
+            var data = Data()
+            while data.count <= limit {
+                let chunk = try file.read(upToCount: min(8192, limit + 1 - data.count)) ?? Data()
+                if chunk.isEmpty { break }
+                data.append(chunk)
+            }
+            if data.count > limit { return .oversized }
+            guard let metadata = try? JSONDecoder().decode(CopyMetadata.self, from: data), metadata.version == 1 else { return .invalid }
+            return .valid(metadata)
+        } catch { return .invalid }
     }
 
     static func models() throws -> [Entry] {
@@ -738,21 +759,27 @@ enum ModelStore {
             .compactMap { url in
                 let name: String
                 let canOpen: Bool
+                let requiresRecovery: Bool
                 if url.pathExtension.lowercased() == "tcad" {
                     name = displayName(url)
                     canOpen = true
+                    requiresRecovery = false
                 } else if url.pathExtension.lowercased() == copyExtension {
-                    if let metadata = metadata(url), FileManager.default.fileExists(atPath: payloadURL(url).path) {
-                        name = metadata.name.isEmpty ? "Model" : metadata.name
-                        canOpen = true
-                    } else {
+                    let hasPayload = FileManager.default.fileExists(atPath: payloadURL(url).path)
+                    switch (metadata(url), hasPayload) {
+                    case (.valid(let metadata), true):
+                        name = metadata.name.isEmpty ? "Model" : metadata.name; canOpen = true; requiresRecovery = false
+                    case (.oversized, true):
+                        name = "Kurtarma gerekli (\(url.deletingPathExtension().lastPathComponent))"; canOpen = false; requiresRecovery = true
+                    default:
                         name = "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
                         canOpen = false
+                        requiresRecovery = false
                     }
                 } else {
                     return nil
                 }
-                return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen)
+                return Entry(url: url, name: name, date: savedDate(url), canOpen: canOpen, requiresRecovery: requiresRecovery)
             }
             .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
     }
@@ -806,6 +833,11 @@ private struct ModelLibrary: View {
     @State private var sortOrder: SortOrder = .name
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
+    @State private var modelToRecover: ModelStore.Entry?
+    @State private var recoveryDocument: ProjectExportDocument?
+    @State private var showingRecoveryExporter = false
+    @State private var isRecovering = false
+    @State private var recoveryID = UUID()
     @State private var isLoading = true
     @State private var loadFailed = false
     @State private var loadID = UUID()
@@ -844,6 +876,8 @@ private struct ModelLibrary: View {
             List {
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
+                } else if isRecovering {
+                    ProgressView("Ham kopya hazırlanıyor…")
                 } else if loadFailed {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Kayıtlı modeller yüklenemedi.").foregroundStyle(.secondary)
@@ -862,6 +896,7 @@ private struct ModelLibrary: View {
                     HStack {
                     Button {
                         if model.canOpen { open(model.url) }
+                        else if model.requiresRecovery { modelToRecover = model }
                         else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
                     } label: {
                         VStack(alignment: .leading) {
@@ -879,6 +914,7 @@ private struct ModelLibrary: View {
                     .accessibilityLabel(model.name)
                     .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .buttonStyle(.plain)
+                    .disabled(isRecovering)
                     Menu {
                         Button("Kayıtlı modeli sil", role: .destructive) { modelToDelete = model }
                     } label: {
@@ -887,9 +923,10 @@ private struct ModelLibrary: View {
                     }
                     .accessibilityLabel("\(model.name) model işlemleri")
                     .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)")
+                    .disabled(isRecovering)
                     }
                     .swipeActions {
-                        Button("Sil", role: .destructive) { modelToDelete = model }
+                        Button("Sil", role: .destructive) { modelToDelete = model }.disabled(isRecovering)
                     }
                 }
             }
@@ -911,7 +948,24 @@ private struct ModelLibrary: View {
                 }
             }
             .onAppear { loadModels() }
-            .onDisappear { loadID = UUID() }
+            .onDisappear { loadID = UUID(); recoveryID = UUID(); isRecovering = false }
+            .alert("Ham kopyayı kurtar?", isPresented: Binding(get: { modelToRecover != nil }, set: { if !$0 { modelToRecover = nil } })) {
+                Button("İptal", role: .cancel) { modelToRecover = nil }
+                Button("Ham kopyayı dışa aktar") {
+                    guard let model = modelToRecover else { return }
+                    modelToRecover = nil
+                    prepareRecovery(model)
+                }
+            } message: {
+                Text("Kayıt bilgisi çok büyük; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
+            }
+            .fileExporter(isPresented: $showingRecoveryExporter, document: recoveryDocument, contentType: .data, defaultFilename: "Kurtarılan-model.tcad") { result in
+                recoveryDocument = nil
+                if case .failure(let failure) = result, !isFilePickerCancellation(failure) { error = failure.localizedDescription }
+            }
+            .onChange(of: showingRecoveryExporter) { presented in
+                if !presented { recoveryDocument = nil }
+            }
             .alert("Modeli sil?", isPresented: Binding(get: { modelToDelete != nil }, set: { if !$0 { modelToDelete = nil } })) {
                 Button("İptal", role: .cancel) { modelToDelete = nil }
                 Button("Sil", role: .destructive) {
@@ -928,6 +982,25 @@ private struct ModelLibrary: View {
             .alert("İşlem tamamlanamadı", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
                 Button("Tamam", role: .cancel) { error = nil }
             } message: { Text(error ?? "") }
+        }
+    }
+
+    private func prepareRecovery(_ model: ModelStore.Entry) {
+        let request = UUID()
+        recoveryID = request
+        isRecovering = true
+        DispatchQueue.global(qos: .userInitiated).async {
+            let result = Result { try Drawing.readData(ModelStore.payloadURL(model.url)) }
+            DispatchQueue.main.async {
+                guard recoveryID == request else { return }
+                isRecovering = false
+                switch result {
+                case .success(let data):
+                    recoveryDocument = ProjectExportDocument(data: data)
+                    showingRecoveryExporter = true
+                case .failure(let failure): error = failure.localizedDescription
+                }
+            }
         }
     }
 

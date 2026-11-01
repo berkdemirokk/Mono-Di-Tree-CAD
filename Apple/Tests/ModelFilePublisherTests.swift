@@ -11,6 +11,34 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testOversizedMetadataDoesNotBlockLibraryOrItsPayload() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let large = root.appendingPathComponent("large.tcadcopy", isDirectory: true)
+        let normal = root.appendingPathComponent("normal.tcadcopy", isDirectory: true)
+        for url in [large, normal] {
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+            try Data("model".utf8).write(to: url.appendingPathComponent("project.tcad"))
+        }
+        let longName = String(repeating: "a", count: 70_000)
+        let metadata = Data("{\"version\":1,\"name\":\"\(longName)\"}".utf8)
+        try metadata.write(to: large.appendingPathComponent("metadata.json"))
+        try Data("{\"version\":1,\"name\":\"Gömlek\"}".utf8).write(to: normal.appendingPathComponent("metadata.json"))
+
+        let entries = try ModelStore.models(in: root)
+        let largeEntry = try XCTUnwrap(entries.first { $0.url == large })
+        let normalEntry = try XCTUnwrap(entries.first { $0.url == normal })
+        XCTAssertFalse(largeEntry.canOpen)
+        XCTAssertTrue(largeEntry.requiresRecovery)
+        XCTAssertTrue(largeEntry.name.contains("Kurtarma gerekli"))
+        XCTAssertEqual(try Data(contentsOf: ModelStore.payloadURL(largeEntry.url)), Data("model".utf8))
+        XCTAssertTrue(normalEntry.canOpen)
+        XCTAssertFalse(normalEntry.requiresRecovery)
+        XCTAssertEqual(normalEntry.name, "Gömlek")
+        XCTAssertEqual(try Data(contentsOf: large.appendingPathComponent("metadata.json")), metadata)
+    }
+
     func testCopyDeletionPreservesUnknownFilesAndNestedDirectories() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

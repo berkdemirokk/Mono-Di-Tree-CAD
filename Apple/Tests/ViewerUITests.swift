@@ -1,6 +1,25 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testOversizedMetadataRequiresExplicitRecovery() {
+        let fixture = #"{"Name":"Kaynak","Pieces":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-oversized-metadata"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let library = app.buttons["Modellerim"]
+        XCTAssertTrue(library.waitForExistence(timeout: 15))
+        library.tap()
+        let entry = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Kurtarma gerekli")).firstMatch
+        XCTAssertTrue(entry.waitForExistence(timeout: 10))
+        entry.tap()
+        let warning = app.alerts["Ham kopyayı kurtar?"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        XCTAssertTrue(warning.buttons["Ham kopyayı dışa aktar"].exists)
+        warning.buttons["İptal"].tap()
+        XCTAssertTrue(entry.exists)
+    }
+
     func testLegacyDuplicateKeysAreRejectedInUTF8AndUTF16() {
         let app = XCUIApplication()
         app.launchArguments.append("--ui-test-fixture")
