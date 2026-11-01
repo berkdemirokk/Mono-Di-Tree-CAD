@@ -8,6 +8,12 @@ public enum ModelStorePrototype {
         public let id: String
         public let name: String
         public let data: Data
+        public init(id: String, name: String, data: Data) { self.id = id; self.name = name; self.data = data }
+    }
+
+    public struct Summary: Equatable {
+        public let id: String
+        public let name: String
     }
 
     public struct StoreError: Error {
@@ -31,9 +37,10 @@ public enum ModelStorePrototype {
         guard code == SQLITE_OK else { throw fail(db, code) }
     }
 
-    private static func connection<T>(_ url: URL, _ body: (OpaquePointer) throws -> T) throws -> T {
+    private static func connection<T>(_ url: URL, create: Bool = false, _ body: (OpaquePointer) throws -> T) throws -> T {
         var db: OpaquePointer?
-        let code = sqlite3_open_v2(url.path, &db, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nil)
+        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX | (create ? SQLITE_OPEN_CREATE : 0)
+        let code = sqlite3_open_v2(url.path, &db, flags, nil)
         guard code == SQLITE_OK, let handle = db else {
             let error = fail(db, code)
             if let db { sqlite3_close(db) }
@@ -43,25 +50,32 @@ public enum ModelStorePrototype {
         sqlite3_busy_timeout(handle, 10_000)
         try execute(handle, "PRAGMA journal_mode=DELETE")
         try execute(handle, "PRAGMA synchronous=FULL")
-        try execute(handle, "CREATE TABLE IF NOT EXISTS models (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, payload BLOB NOT NULL)")
+        if create { try execute(handle, "CREATE TABLE IF NOT EXISTS models (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, payload BLOB NOT NULL)") }
         return try body(handle)
     }
 
-    // afterInsert is a test seam for an error before COMMIT; never pass one in production.
-    public static func save(at url: URL, id: String = UUID().uuidString, name: String, data: Data,
-                            afterInsert: (() throws -> Void)? = nil) throws {
-        try connection(url) { db in
-            try execute(db, "BEGIN IMMEDIATE")
-            do {
+    private static func transaction<T>(_ db: OpaquePointer, _ action: () throws -> T) throws -> T {
+        try execute(db, "BEGIN IMMEDIATE")
+        do {
+            let result = try action()
+            try execute(db, "COMMIT")
+            return result
+        } catch {
+            try? execute(db, "ROLLBACK")
+            throw error
+        }
+    }
+
+    private static func insert(_ record: Record, into db: OpaquePointer) throws {
                 var statement: OpaquePointer?
                 let prepared = sqlite3_prepare_v2(db, "INSERT INTO models(id,name,payload) VALUES(?,?,?)", -1, &statement, nil)
                 guard prepared == SQLITE_OK, let stmt = statement else { throw fail(db, prepared) }
                 defer { sqlite3_finalize(stmt) }
-                let idResult = bindText(stmt, 1, id)
+                let idResult = bindText(stmt, 1, record.id)
                 guard idResult == SQLITE_OK else { throw fail(db, idResult) }
-                let nameResult = bindText(stmt, 2, name)
+                let nameResult = bindText(stmt, 2, record.name)
                 guard nameResult == SQLITE_OK else { throw fail(db, nameResult) }
-                let bound: Int32 = data.withUnsafeBytes { bytes in
+                let bound: Int32 = record.data.withUnsafeBytes { bytes in
                     if bytes.isEmpty { return sqlite3_bind_zeroblob(stmt, 3, 0) }
                     guard bytes.count <= Int(Int32.max) else { return SQLITE_TOOBIG }
                     return sqlite3_bind_blob(stmt, 3, bytes.baseAddress, Int32(bytes.count), transient)
@@ -69,13 +83,67 @@ public enum ModelStorePrototype {
                 guard bound == SQLITE_OK else { throw fail(db, bound) }
                 let inserted = sqlite3_step(stmt)
                 guard inserted == SQLITE_DONE else { throw fail(db, inserted) }
+    }
+
+    // afterInsert is a test seam for an error before COMMIT.
+    public static func save(at url: URL, id: String = UUID().uuidString, name: String, data: Data,
+                            afterInsert: (() throws -> Void)? = nil) throws {
+        try connection(url, create: true) { db in
+            try transaction(db) {
+                try insert(Record(id: id, name: name, data: data), into: db)
                 try afterInsert?()
-                try execute(db, "COMMIT")
-            } catch {
-                try? execute(db, "ROLLBACK")
-                throw error
             }
         }
+    }
+
+    // Explicit caller-provided snapshots only; source files are never touched.
+    // Duplicate IDs or any insertion error roll back the entire batch.
+    public static func importSnapshots(at url: URL, records: [Record], afterInsert: ((Int) throws -> Void)? = nil) throws {
+        try connection(url, create: true) { db in
+            try transaction(db) {
+                for (index, record) in records.enumerated() {
+                    try insert(record, into: db)
+                    try afterInsert?(index)
+                }
+            }
+        }
+    }
+
+    public static func list(at url: URL) throws -> [Summary] {
+        try connection(url) { db in
+            var statement: OpaquePointer?
+            let result = sqlite3_prepare_v2(db, "SELECT id,name FROM models ORDER BY id", -1, &statement, nil)
+            guard result == SQLITE_OK, let stmt = statement else { throw fail(db, result) }
+            defer { sqlite3_finalize(stmt) }
+            var rows: [Summary] = []
+            while true {
+                let step = sqlite3_step(stmt)
+                if step == SQLITE_DONE { return rows }
+                guard step == SQLITE_ROW, let id = textColumn(stmt, 0), let name = textColumn(stmt, 1) else { throw fail(db, step) }
+                rows.append(Summary(id: id, name: name))
+            }
+        }
+    }
+
+    public static func delete(at url: URL, id: String) throws -> Bool {
+        try connection(url) { db in
+            try transaction(db) {
+                var statement: OpaquePointer?
+                let prepared = sqlite3_prepare_v2(db, "DELETE FROM models WHERE id=?", -1, &statement, nil)
+                guard prepared == SQLITE_OK, let stmt = statement else { throw fail(db, prepared) }
+                defer { sqlite3_finalize(stmt) }
+                let bound = bindText(stmt, 1, id)
+                guard bound == SQLITE_OK else { throw fail(db, bound) }
+                let step = sqlite3_step(stmt)
+                guard step == SQLITE_DONE else { throw fail(db, step) }
+                return sqlite3_changes(db) == 1
+            }
+        }
+    }
+
+    private static func textColumn(_ statement: OpaquePointer, _ index: Int32) -> String? {
+        guard let text = sqlite3_column_text(statement, index) else { return nil }
+        return String(decoding: UnsafeBufferPointer(start: text, count: Int(sqlite3_column_bytes(statement, index))), as: UTF8.self)
     }
 
     public static func read(at url: URL, id: String) throws -> Record? {
@@ -88,12 +156,13 @@ public enum ModelStorePrototype {
             guard bound == SQLITE_OK else { throw fail(db, bound) }
             let result = sqlite3_step(stmt)
             if result == SQLITE_DONE { return nil }
-            guard result == SQLITE_ROW, let name = sqlite3_column_text(stmt, 0) else { throw fail(db, result) }
+            guard result == SQLITE_ROW, let name = textColumn(stmt, 0) else { throw fail(db, result) }
             let count = Int(sqlite3_column_bytes(stmt, 1))
-            let data = count == 0 ? Data() : Data(bytes: sqlite3_column_blob(stmt, 1)!, count: count)
-            let nameCount = Int(sqlite3_column_bytes(stmt, 0))
-            let nameBytes = UnsafeBufferPointer(start: name, count: nameCount)
-            return Record(id: id, name: String(decoding: nameBytes, as: UTF8.self), data: data)
+            let data: Data
+            if count == 0 { data = Data() }
+            else if let blob = sqlite3_column_blob(stmt, 1) { data = Data(bytes: blob, count: count) }
+            else { throw fail(db, sqlite3_errcode(db)) }
+            return Record(id: id, name: name, data: data)
         }
     }
 }

@@ -4,6 +4,54 @@ import CSQLite
 @testable import ModelStorePrototype
 
 final class ModelStoreTests: XCTestCase {
+    func testExplicitImportIsAtomicAndLeavesCallerSourceUntouched() throws {
+        struct Interrupted: Error { }
+        try withDatabase { url in
+            let source = url.deletingLastPathComponent().appendingPathComponent("legacy.tcad")
+            let original = Data([0, 1, 255])
+            try original.write(to: source)
+            try ModelStorePrototype.save(at: url, id: "existing", name: "Existing", data: Data([9]))
+            let snapshots = [ModelStorePrototype.Record(id: "a", name: "A", data: try Data(contentsOf: source)),
+                             ModelStorePrototype.Record(id: "b", name: "B", data: Data([2]))]
+            XCTAssertThrowsError(try ModelStorePrototype.importSnapshots(at: url, records: snapshots) { index in
+                if index == 0 { throw Interrupted() }
+            })
+            XCTAssertNil(try ModelStorePrototype.read(at: url, id: "a"))
+            XCTAssertNil(try ModelStorePrototype.read(at: url, id: "b"))
+            XCTAssertEqual(try Data(contentsOf: source), original)
+            try ModelStorePrototype.importSnapshots(at: url, records: snapshots)
+            XCTAssertEqual(try ModelStorePrototype.read(at: url, id: "a")?.data, original)
+            XCTAssertThrowsError(try ModelStorePrototype.importSnapshots(at: url, records: [
+                .init(id: "new", name: "New", data: Data([3])), snapshots[0]
+            ]))
+            XCTAssertNil(try ModelStorePrototype.read(at: url, id: "new"))
+            XCTAssertEqual(try ModelStorePrototype.read(at: url, id: "existing")?.data, Data([9]))
+            XCTAssertEqual(try Data(contentsOf: source), original)
+        }
+    }
+
+    func testListAndDeleteUseIdentityAndKeepOtherSameNamedModels() throws {
+        try withDatabase { url in
+            try ModelStorePrototype.save(at: url, id: "b", name: "Aynı", data: Data([2]))
+            try ModelStorePrototype.save(at: url, id: "a", name: "Aynı", data: Data([1]))
+            XCTAssertEqual(try ModelStorePrototype.list(at: url).map(\.id), ["a", "b"])
+            XCTAssertTrue(try ModelStorePrototype.delete(at: url, id: "a"))
+            XCTAssertFalse(try ModelStorePrototype.delete(at: url, id: "a"))
+            XCTAssertNil(try ModelStorePrototype.read(at: url, id: "a"))
+            XCTAssertEqual(try ModelStorePrototype.read(at: url, id: "b")?.data, Data([2]))
+            XCTAssertEqual(try ModelStorePrototype.list(at: url).map(\.id), ["b"])
+        }
+    }
+
+    func testReadListAndDeleteDoNotCreateMissingDatabase() throws {
+        try withDatabase { url in
+            XCTAssertThrowsError(try ModelStorePrototype.read(at: url, id: "x"))
+            XCTAssertThrowsError(try ModelStorePrototype.list(at: url))
+            XCTAssertThrowsError(try ModelStorePrototype.delete(at: url, id: "x"))
+            XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        }
+    }
+
     private func withDatabase(_ body: (URL) throws -> Void) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
