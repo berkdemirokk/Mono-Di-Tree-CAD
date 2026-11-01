@@ -2670,6 +2670,7 @@ private struct PointDistanceView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var first = "0"
     @State private var second = "1"
+    @State private var pathForward = true
 
     private var indices: (Int, Int)? {
         guard let a = Int(first), let b = Int(second),
@@ -2688,10 +2689,16 @@ private struct PointDistanceView: View {
                     TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
                     NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $second) }
                     if let (a, b) = indices {
+                        if piece.closed {
+                            Picker("Çizimde gösterilen kontur yolu", selection: $pathForward) {
+                                Text("İleri").tag(true)
+                                Text("Geri").tag(false)
+                            }.pickerStyle(.segmented)
+                        }
                         if piece.hasMinimumContourPoints, piece.contourBounds != nil {
-                            PointDistancePreview(piece: piece, first: a, second: b)
+                            PointDistancePreview(piece: piece, first: a, second: b, pathForward: pathForward)
                                 .frame(height: 180)
-                            Text("A: ilk nokta · B: ikinci nokta · kesik çizgi: doğrusal mesafe")
+                            Text("A: ilk nokta · B: ikinci nokta · yeşil: seçili kontur yolu · kesik çizgi: doğrusal mesafe")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         let firstPoint = piece.points[a], secondPoint = piece.points[b]
@@ -2732,6 +2739,7 @@ private struct PointDistancePreview: View {
     let piece: Drawing.Piece
     let first: Int
     let second: Int
+    let pathForward: Bool
 
     var body: some View {
         Canvas { context, size in
@@ -2744,6 +2752,14 @@ private struct PointDistancePreview: View {
             for point in piece.points.dropFirst() { contour.addLine(to: viewport.position(point)) }
             if piece.closed { contour.closeSubpath() }
             context.stroke(contour, with: .color(.accentColor), lineWidth: 1.5)
+            if ContourMeasure.pathLength(piece.points, from: first, to: second, closed: piece.closed, forward: pathForward) != nil,
+               let indices = ContourMeasure.pathIndices(piece.points, from: first, to: second, closed: piece.closed, forward: pathForward),
+               let firstIndex = indices.first {
+                var selectedPath = Path()
+                selectedPath.move(to: viewport.position(piece.points[firstIndex]))
+                for index in indices.dropFirst() { selectedPath.addLine(to: viewport.position(piece.points[index])) }
+                context.stroke(selectedPath, with: .color(.green), lineWidth: 4)
+            }
             let a = viewport.position(piece.points[first]), b = viewport.position(piece.points[second])
             var segment = Path()
             segment.move(to: a); segment.addLine(to: b)
@@ -2757,7 +2773,7 @@ private struct PointDistancePreview: View {
         }
         .background(Color.secondary.opacity(0.08))
         .accessibilityLabel("Ölçüm önizlemesi")
-        .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). İki nokta bir çizgiyle birleştirilir.")
+        .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). İki nokta bir çizgiyle birleştirilir. Gösterilen kontur yolu: \(piece.closed ? (pathForward ? "ileri" : "geri") : "açık yol").")
     }
 }
 // A lazy list keeps large contours navigable without creating a picker with

@@ -43,6 +43,15 @@ final class ContourMeasureTests: XCTestCase {
         XCTAssertNil(ContourMeasure.distance([p(.infinity, 0), p(0, 0)], from: 0, to: 1))
         XCTAssertNil(ContourMeasure.distance([p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)], from: 0, to: 1))
     }
+    func testHighlightedPathUsesSameOpenAndClosedVertexOrder() throws {
+        let triangle = [p(0, 0), p(3, 0), p(3, 4)]
+        XCTAssertEqual(ContourMeasure.pathIndices(triangle, from: 2, to: 0, closed: false), [0, 1, 2])
+        XCTAssertEqual(ContourMeasure.pathIndices(triangle, from: 0, to: 1, closed: true), [0, 1])
+        XCTAssertEqual(ContourMeasure.pathIndices(triangle, from: 0, to: 1, closed: true, forward: false), [1, 2, 0])
+        XCTAssertEqual(ContourMeasure.pathIndices(triangle + [p(0, 0)], from: 3, to: 1, closed: true), [0, 1])
+        XCTAssertEqual(ContourMeasure.pathIndices(triangle + [p(0, 0)], from: 3, to: 0, closed: true), [0])
+        XCTAssertNil(ContourMeasure.pathIndices(triangle, from: 3, to: 0, closed: true))
+    }
     func testPathBetweenVerticesHandlesOpenClosedAndClosingAlias() throws {
         let triangle = [p(0, 0), p(3, 0), p(3, 4)]
         XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(triangle, from: 2, to: 0, closed: false)), 7, accuracy: 1e-12)
