@@ -1284,7 +1284,7 @@ public sealed class TextileToolsWindow : Window
         if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
            !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==MappedMarkIndex(pair.First.VertexIndex) && (normalizedMove==pair.First.VertexIndex || pair.First.Position==pair.Second.Position) &&
                pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position &&
-               (normalizedMove!=pair.First.VertexIndex || (BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].X)==BitConverter.DoubleToInt64Bits(pair.Second.Position.X) && BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].Y)==BitConverter.DoubleToInt64Bits(pair.Second.Position.Y)))))
+               (normalizedMove!=pair.First.VertexIndex || (BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].X)==BitConverter.DoubleToInt64Bits(pair.Second.Position.X) && BitConverter.DoubleToInt64Bits(edited.Points[pair.Second.VertexIndex].Y)==BitConverter.DoubleToInt64Bits(pair.Second.Position.Y))))))
             throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
