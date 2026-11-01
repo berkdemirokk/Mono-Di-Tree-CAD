@@ -8,15 +8,25 @@ public final class DebugPointCopyCoordinator {
     private var documentID: UUID
     private var revision: UUID
 
-    public init(documentID: UUID, revision: UUID) {
+    public init(documentID: UUID) {
         self.documentID = documentID
-        self.revision = revision
+        self.revision = UUID()
     }
 
-    public func replaceDocument(documentID: UUID, revision: UUID) {
+    /// Each change gets a new token; callers cannot restore an old revision.
+    @discardableResult
+    public func replaceDocument(documentID: UUID) -> UUID {
         lock.lock(); defer { lock.unlock() }
         self.documentID = documentID
-        self.revision = revision
+        self.revision = UUID()
+        return self.revision
+    }
+
+    /// The bytes must have been prepared for the state the caller serialized
+    /// with this coordinator; external document state is not inspected.
+    public func snapshot(name: String, data: Data) -> DebugPointCopyStore.Snapshot {
+        lock.lock(); defer { lock.unlock() }
+        return .init(documentID: documentID, revision: revision, name: name, data: data)
     }
 
     /// Synchronous, potentially blocking I/O. Call off the UI thread and do not

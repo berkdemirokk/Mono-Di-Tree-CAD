@@ -9,15 +9,17 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let db = root.appendingPathComponent("copy.sqlite"), doc = UUID(), old = UUID(), new = UUID()
-        let snapshot = DebugPointCopyStore.Snapshot(documentID: doc, revision: old, name: "point", data: Data([1, 0, 255]))
-        let coordinator = DebugPointCopyCoordinator(documentID: doc, revision: old)
+        let db = root.appendingPathComponent("copy.sqlite"), doc = UUID()
+        let coordinator = DebugPointCopyCoordinator(documentID: doc)
+        let snapshot = coordinator.snapshot(name: "point", data: Data([1, 0, 255]))
         let id = UUID()
-        coordinator.replaceDocument(documentID: doc, revision: new)
+        coordinator.replaceDocument(documentID: doc)
         XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot))
         XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
-        coordinator.replaceDocument(documentID: doc, revision: old)
-        XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot) { throw Cancelled() })
+        coordinator.replaceDocument(documentID: doc)
+        XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: snapshot))
+        let current = coordinator.snapshot(name: "point", data: Data([1, 0, 255]))
+        XCTAssertThrowsError(try coordinator.save(at: db, id: id, snapshot: current) { throw Cancelled() })
         XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
     }
 
@@ -25,9 +27,9 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
-        let db = root.appendingPathComponent("copy.sqlite"), doc = UUID(), old = UUID(), new = UUID()
-        let snapshot = DebugPointCopyStore.Snapshot(documentID: doc, revision: old, name: "point", data: Data([1, 2, 3]))
-        let coordinator = DebugPointCopyCoordinator(documentID: doc, revision: old)
+        let db = root.appendingPathComponent("copy.sqlite"), doc = UUID()
+        let coordinator = DebugPointCopyCoordinator(documentID: doc)
+        let snapshot = coordinator.snapshot(name: "point", data: Data([1, 2, 3]))
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
         let saveDone = expectation(description: "save completed")
         let changeDone = expectation(description: "change completed")
@@ -45,7 +47,7 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
             release.signal(); XCTFail("Save did not reach transaction"); return
         }
         DispatchQueue.global().async {
-            coordinator.replaceDocument(documentID: doc, revision: new)
+            coordinator.replaceDocument(documentID: doc)
             changeDone.fulfill()
         }
         release.signal()
