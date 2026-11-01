@@ -219,6 +219,12 @@ final class ViewerUITests: XCTestCase {
         let retry = app.buttons["Ham kopyayı yeniden kaydet…"]
         XCTAssertTrue(retry.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons[".tcad aç"].tap()
+        let pending = app.alerts["Ham kurtarma bekliyor"]
+        XCTAssertTrue(pending.waitForExistence(timeout: 5))
+        XCTAssertTrue(pending.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "bellekte korunuyor")).firstMatch.exists)
+        pending.buttons["Tamam"].tap()
+        XCTAssertTrue(retry.exists)
         app.buttons["Ham kopyayı dışa aktar…"].tap()
         let exportWarning = app.buttons["Farklı hedef seçeceğim"]
         XCTAssertTrue(exportWarning.waitForExistence(timeout: 5))

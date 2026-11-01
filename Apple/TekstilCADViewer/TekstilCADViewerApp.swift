@@ -35,6 +35,7 @@ private enum ModelLibrarySortOrder: String, CaseIterable, Identifiable {
 }
 private struct ContentView: View {
     @State private var showingImporter = false
+    @State private var showingPendingRawNotice = false
     @State private var showingPieces = false
     @State private var showingPieceComparison = false
     @State private var showingPointDistance = false
@@ -104,7 +105,9 @@ private struct ContentView: View {
         ScrollView {
         VStack(spacing: 12) {
             HStack {
-                Button(".tcad aç") { showingImporter = true }
+                Button(".tcad aç") {
+                    if rawSaveNeedsRetry { showingPendingRawNotice = true } else { showingImporter = true }
+                }
                     .accessibilityHint("Önizlemek için bir proje dosyası seçin").disabled(isSaving)
                 Button("Modellerim") { showingLibrary = true }.disabled(isSaving)
                 Spacer()
@@ -517,6 +520,11 @@ private struct ContentView: View {
                 handlePickerFailure(error)
             }
         }
+        .alert("Ham kurtarma bekliyor", isPresented: $showingPendingRawNotice) {
+            Button("Tamam", role: .cancel) { }
+        } message: {
+            Text("Yeni dosya seçmeden önce ham kopyayı yeniden kaydedin veya ham kopyadan açıkça vazgeçin. Dışa aktarırsanız da devam etmek için bellekteki kopyadan ayrıca vazgeçmeniz gerekir. Bekleyen kopya bellekte korunuyor.")
+        }
         .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in
             exportDocument = nil
             switch result {
@@ -589,7 +597,8 @@ private struct ContentView: View {
         #endif
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary(search: $librarySearch, sortOrder: $librarySortOrder,
-                         libraryFilter: $libraryFilter, searchContents: $librarySearchContents) { entry in
+                         libraryFilter: $libraryFilter, searchContents: $librarySearchContents,
+                         pendingRawRecovery: rawSaveNeedsRetry) { entry in
                 showingLibrary = false
                 openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry)
             }
@@ -1483,6 +1492,7 @@ private struct ModelLibrary: View {
     @Binding var sortOrder: ModelLibrarySortOrder
     @Binding var libraryFilter: ModelStore.LibraryFilter
     @Binding var searchContents: Bool
+    let pendingRawRecovery: Bool
     let open: (ModelStore.Entry) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
@@ -1591,7 +1601,10 @@ private struct ModelLibrary: View {
                 ForEach(matchingModels) { model in
                     HStack {
                     Button {
-                        if model.canOpen { open(model) }
+                        if model.canOpen {
+                            if pendingRawRecovery { error = "Önce bekleyen ham kopyayı ana ekranda yeniden kaydedin veya açıkça vazgeçin. Dışa aktarmadan sonra da bellekteki kopyadan ayrıca vazgeçmeniz gerekir. Arama sonuçları korunuyor." }
+                            else { open(model) }
+                        }
                         else if model.requiresRecovery { modelToRecover = model }
                         else if model.identity == nil { error = "Kayıt listelenirken değişti. Model listesini yenileyip tekrar deneyin." }
                         else { error = "Bu kayıt açılamıyor. Kayıtlı dosyayı kontrol edin." }
