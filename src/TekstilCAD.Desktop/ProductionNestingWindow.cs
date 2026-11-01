@@ -101,7 +101,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(gap,"Parça boşluğu 0 ile 100 milyon milimetre arasında olmalıdır. Ondalık için virgül veya nokta kullanın.");
         AutomationProperties.SetName(edgeMargin,"Dört kenarın her biri için kumaş kenar payı, milimetre");
         AutomationProperties.SetHelpText(edgeMargin,"Aynı pay sol, sağ, başlangıç ve bitiş kenarlarına uygulanır. Sıfır kenar payı eklemez.");
-        var warning=new TextBlock { Text="Kenar payı dört kenara uygulanır; sıfır pay eklemez. Boşluk parçalar arasındadır. 90° tüm kopyalara uygulanır, optimizasyon değildir ve yalnız önizlenir. Kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
+        var warning=new TextBlock { Text="Kenar payı dört kenarın her birine uygulanır; sıfır seçilirse pay eklenmez. Boşluk parçalar arasındadır. 90° yalnız önizleme; optimizasyon, kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
         var panel=new Grid();panel.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(300) });panel.ColumnDefinitions.Add(new ColumnDefinition());root.Children.Add(panel);
         VirtualizingPanel.SetIsVirtualizing(choices,true);
         VirtualizingPanel.SetVirtualizationMode(choices,VirtualizationMode.Recycling);
