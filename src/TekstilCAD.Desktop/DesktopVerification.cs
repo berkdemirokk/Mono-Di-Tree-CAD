@@ -168,6 +168,61 @@ internal static class DesktopVerification
             }
             finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }if(!windowClosed)window.Close(); }
         }
+        foreach(var mode in new[] { "matching", "dirty", "dirtyAfter", "stale" })
+        {
+            var source=piece.Clone();var grading=rule.Clone();
+            if(mode=="stale")grading.SourcePoints[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+            studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[grading] });studio.Select(source.Id);
+            var tools=new TextileToolsWindow(studio);
+            var callback=(Func<PatternPiece,GradingRuleSet?,bool>)typeof(TextileToolsWindow).GetMethod("HasSnapshotGradeDraft",PrivateInstance)!.CreateDelegate(typeof(Func<PatternPiece,GradingRuleSet?,bool>),tools);
+            var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            var split=new OpenPathSplitWindow(studio,tools,studio.Selected!,()=>source.Id,callback);
+            try
+            {
+                if(mode=="dirty")grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";
+                var original=studio.Document.Clone();split.CopyRulesForVerification.IsChecked=true;
+                var pending=split.CalculateForVerification();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                if(mode=="matching")
+                {
+                    Check(split.ApplyForVerification.IsEnabled && split.StatusForVerification.Contains("ortak noktanın artışı"),"Split grading preview explains the shared increment",checks);
+                    split.CommitForVerification();var after=studio.Document.Clone();
+                    Check(after.Pieces.Count==3 && after.GradingRules.Count==3 && after.GradingRules[1].SourcePieceId==after.Pieces[1].Id &&
+                        after.GradingRules[2].SourcePieceId==after.Pieces[2].Id && after.GradingRules[1].Deltas.SequenceEqual(grading.Deltas.Take(2)) &&
+                        after.GradingRules[2].Deltas.SequenceEqual(grading.Deltas.Skip(1)) && session.UndoCount==1,
+                        "Split copies the exact grading slices to the two marked outputs",checks);
+                    Check(session.Undo() && DocumentSession.ContentEquals(original,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                        "Split grading and both outputs form one undoable edit",checks);
+                }
+                else if(mode=="dirtyAfter")
+                {
+                    Check(split.ApplyForVerification.IsEnabled,"Clean split grading preview is ready",checks);
+                    grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";split.CommitForVerification();
+                    Check(DocumentSession.ContentEquals(original,studio.Document) && session.UndoCount==0 && grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99" &&
+                        split.StatusForVerification.Contains("taslağı değişti"),"Dirty draft after preview is retained and blocks applying split grading",checks);
+                }
+                else Check(!split.ApplyForVerification.IsEnabled && DocumentSession.ContentEquals(original,studio.Document) && session.UndoCount==0 &&
+                    (mode!="dirty" || grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99"),$"Split rejects {mode} grading without changing the document or draft",checks);
+            }
+            finally { split.Close();tools.Close(); }
+        }
+        {
+            var source=piece.Clone();var sourceRule=rule.Clone();var full=new ProjectDocument { Pieces=[source],GradingRules=[sourceRule] };
+            for(var i=0;i<20;i++)
+            {
+                var count=i==19 ? 9996 : 10000;var filler=new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] };
+                full.Pieces.Add(filler);full.GradingRules.Add(new GradingRuleSet { SourcePieceId=filler.Id,SourceClosed=false,
+                    SourcePoints=Enumerable.Repeat(new Point2(0,0),count).ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),count).ToList() });
+            }
+            studio.LoadDocument(full);studio.Select(source.Id);var saved=studio.Document.Clone();
+            var split=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>source.Id,(_,_)=>false);
+            try
+            {
+                split.CopyRulesForVerification.IsChecked=true;var pending=split.CalculateForVerification();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(!split.ApplyForVerification.IsEnabled && split.StatusForVerification.Contains("Serileme noktası sınırı") &&
+                    DocumentSession.ContentEquals(saved,studio.Document) && session.UndoCount==0,"Split grading preflight rejects the total rule-point limit without mutation",checks);
+            }
+            finally { split.Close(); }
+        }
         foreach(var limit in new[] { "piece", "point", "marker" })
         {
             var source=piece.Clone();source.Metadata=null;

@@ -896,8 +896,9 @@ public sealed class TextileToolsWindow : Window
         },()=>workspace.Document.Pieces.Any(p=>!p.Closed));
         Button(panel,"Açık konturu böl…",()=>
         {
+            if(!CommitGradeEdit())throw new InvalidOperationException("Önce serileme tablosundaki hücreyi tamamlayın.");
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
-            var selected=Piece();new OpenPathSplitWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
+            var selected=Piece();new OpenPathSplitWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id,HasSnapshotGradeDraft).ShowDialog();
             RefreshSources((source.SelectedItem as PatternPiece)?.Id);
         },()=>source.SelectedItem is PatternPiece { Closed:false,Points.Count:>=3 });
         Button(panel,"İki açık konturu birleştir…",()=>

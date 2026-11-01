@@ -211,6 +211,28 @@ public sealed class GradingRuleSet
         return result;
     }
 
+    /// <summary>Slice an exact open-path rule onto two independently identified split outputs.</summary>
+    public (GradingRuleSet First,GradingRuleSet Second)? SplitOpenPathFor(PatternPiece source,PatternPiece first,PatternPiece second,int index,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(first);ArgumentNullException.ThrowIfNull(second);token.ThrowIfCancellationRequested();
+        if(source.Id!=SourcePieceId || source.Closed || SourceClosed || first.Closed || second.Closed ||
+           first.Id==Guid.Empty || second.Id==Guid.Empty || first.Id==second.Id || first.Id==source.Id || second.Id==source.Id ||
+           source.Points is null || first.Points is null || second.Points is null || SourcePoints is null || Deltas is null ||
+           index<=0 || index>=source.Points.Count-1 || SourcePoints.Count!=source.Points.Count || Deltas.Count!=source.Points.Count ||
+           first.Points.Count!=index+1 || second.Points.Count!=source.Points.Count-index)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();var p=source.Points[i];
+            if(!p.IsFinite || !Deltas[i].IsFinite || !Bits(SourcePoints[i],p) ||
+               (i<=index && !Bits(first.Points[i],p)) || (i>=index && !Bits(second.Points[i-index],p)))return null;
+        }
+        token.ThrowIfCancellationRequested();
+        return (new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=false,SourcePoints=[..first.Points],Deltas=Deltas.Take(index+1).ToList() },
+                new GradingRuleSet { SourcePieceId=second.Id,SourceClosed=false,SourcePoints=[..second.Points],Deltas=Deltas.Skip(index).ToList() });
+    }
+
     /// <summary>Retain increments only for a proven single-vertex move of the exact saved source.</summary>
     public GradingRuleSet? WithVertexMoveFor(PatternPiece source,IReadOnlyList<Point2> moved,int index)
     {
