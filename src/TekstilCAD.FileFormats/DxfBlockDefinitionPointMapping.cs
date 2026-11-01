@@ -108,7 +108,7 @@ public static class DxfBlockDefinitionPointMapping
             if(!sourceByOrdinal.TryGetValue(link.ChildSourceOrdinals[^1],out var end) || end.EntityType!="SEQEND" || end.BlockHeaderOrdinal!=item.BlockHeaderOrdinal)
                 throw new InvalidDataException("POLYLINE bitiş kaydı doğrulanamadı.");
             result.Pieces.Add(piece);
-            warnings.Add($"İşaretsiz blok {item.BlockHeaderOrdinal}; parça {item.PieceId:D}; POLYLINE {link.SourceOrdinals[0]}; katman \"{EscapeAuditText(link.Layer)}\".");
+            warnings.Add($"İşaretsiz blok {item.BlockHeaderOrdinal}; parça {item.PieceId:D}; POLYLINE {link.SourceOrdinals[0]}; katman \"{EscapeAuditText(link.Layer)}\". Konturun basitliği, alanı ve üretime uygunluğu doğrulanmadı; konturu kontrol edin.");
         }
         result.ImportProvenance=new DxfImportProvenance { SourceFileName=sourceFileName,SourceSha256=import.SourceSha256!,SourceByteLength=import.SourceByteLength ?? -1,
             MillimetersPerUnit=parameters.MillimetersPerUnit,Warnings=warnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };

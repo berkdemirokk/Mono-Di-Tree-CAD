@@ -6,6 +6,21 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Fact]
+    public void PlainSelfIntersectingContourCarriesPersistentUnverifiedGeometryWarning()
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n10\n0\nVERTEX\n10\n0\n20\n10\n0\nVERTEX\n10\n10\n20\n0\n0\nSEQEND\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var original=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var result=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
+            [new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true);
+        Assert.True(TekstilCAD.Core.Geometry.HasSelfIntersections(Assert.Single(result.WorkingCopy.Pieces).Points));
+        var reopened=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(result.WorkingCopy)));
+        Assert.Contains(reopened.ImportProvenance!.Warnings,w=>w.Contains("Konturun basitliği, alanı ve üretime uygunluğu doğrulanmadı"));
+        Assert.Equal(original,bytes);Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+    }
+
+    [Fact]
     public void ExplicitPlainAndMarkedBlockPiecesShareOneProjectAtomically()
     {
         string Block(string name,string x,bool point)=>"0\nBLOCK\n2\n"+name+"\n0\nPOLYLINE\n8\nA\n70\n1\n"+
