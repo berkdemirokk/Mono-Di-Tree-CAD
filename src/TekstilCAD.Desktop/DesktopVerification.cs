@@ -9125,6 +9125,16 @@ internal static class DesktopVerification
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
                 "Dress request reports explicitly stated chest and asks for missing measurements",checks);
+            var themeRoot=(FrameworkElement)window.Content;
+            foreach(var size in new[] { new Size(480,420),new Size(900,700) })
+            {
+                themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
+                var requestBody=(StackPanel)Descendants<ScrollViewer>(themeRoot).First().Content;
+                var advanced=(StackPanel)requestBody.Children.OfType<Expander>().Single().Content;
+                var labels=requestBody.Children.OfType<Label>().Concat(advanced.Children.OfType<Label>()).ToArray();
+                Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,StudioTheme.Text)),
+                    "All design request labels use the readable theme text brush at "+size,checks);
+            }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
             var root=(FrameworkElement)window.Content;root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
