@@ -1048,6 +1048,7 @@ enum ModelStore {
         var matches: [Entry] = []
         for entry in entries {
             if cancelled() { return nil }
+            if words.isEmpty { matches.append(entry); continue }
             let fields = [entry.name, entry.displayIdentity, entry.readableIdentity]
             if words.allSatisfy({ word in fields.contains { $0.localizedStandardContains(word) } }) {
                 matches.append(entry)

@@ -194,6 +194,8 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(nameOrder.map(\.name), ["Arka Kol", "Ön Kol"])
         let byNewest = try XCTUnwrap(ModelStore.filteredModels(rows, query: "", newest: true, cancelled: { false }))
         XCTAssertEqual(byNewest.map(\.name), ["Arka Kol", "Ön Kol", "Ön Beden"])
+        let whitespace = try XCTUnwrap(ModelStore.filteredModels(rows, query: "  \n ", newest: true, cancelled: { false }))
+        XCTAssertEqual(whitespace.map(\.id), byNewest.map(\.id))
         let acrossFields = try XCTUnwrap(ModelStore.filteredModels(rows, query: "on z", newest: false, cancelled: { false }))
         XCTAssertEqual(acrossFields.map(\.name), ["Ön Kol"])
         var checks = 0
