@@ -17,6 +17,28 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertEqual(state.model, 2)
         XCTAssertEqual(state.sourceData, Data([2]))
     }
+    func testPreviewCompletionInstallsOnlyCurrentLoadAndPreservesCancelledModel() {
+        var state = LoadedModelState<Int>()
+        state.install(1, data: Data([1]), selectedPiece: 2)
+        let originalRevision = state.revision
+        let stale = state.load.begin()
+        let latest = state.load.begin()
+        XCTAssertFalse(state.completePreview(stale, model: 2, data: Data([2]), selectedPiece: 0))
+        XCTAssertEqual(state.model, 1)
+        XCTAssertEqual(state.sourceData, Data([1]))
+        XCTAssertEqual(state.selectedPiece, 2)
+        XCTAssertEqual(state.revision, originalRevision)
+        state.load.invalidate()
+        XCTAssertFalse(state.completePreview(latest, model: 3, data: Data([3]), selectedPiece: nil))
+        XCTAssertEqual(state.model, 1)
+        let accepted = state.load.begin()
+        XCTAssertTrue(state.completePreview(accepted, model: 4, data: Data([4]), selectedPiece: 0))
+        XCTAssertEqual(state.model, 4)
+        XCTAssertEqual(state.sourceData, Data([4]))
+        XCTAssertEqual(state.selectedPiece, 0)
+        XCTAssertNotEqual(state.revision, originalRevision)
+        XCTAssertFalse(state.load.isLoading)
+    }
     func testInstallingModelReplacesSelectionWithMatchedOrDefaultSelection() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]), selectedPiece: 2)

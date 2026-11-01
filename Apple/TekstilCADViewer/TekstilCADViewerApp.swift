@@ -762,9 +762,9 @@ private struct ContentView: View {
                 }
             }
             DispatchQueue.main.async {
-                guard loadedModel.load.finish(request) else { return }
                 switch loaded {
                 case .success(.preview(let drawing, let data, let matchedIndex)):
+                    guard loadedModel.completePreview(request, model: drawing, data: data, selectedPiece: matchedIndex) else { return }
                     rawImport = nil
                     rawSaveNeedsRetry = false
                     #if DEBUG
@@ -773,15 +773,16 @@ private struct ContentView: View {
                     showingPieces = false
                     showingNotches = false
                     selectedNotch = nil
-                    loadedModel.install(drawing, data: data, selectedPiece: matchedIndex)
                     editedName = drawing.name
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent
                 case .success(.raw(let data, let reason)):
+                    guard loadedModel.load.finish(request) else { return }
                     rawSaveNeedsRetry = false
                     rawImport = RawImport(data: data, name: url.lastPathComponent, request: request, reason: reason)
                     showingRawImport = true
                 case .failure(let failure):
+                    guard loadedModel.load.finish(request) else { return }
                     if rawSaveNeedsRetry, let retained = rawImport {
                         rawImport = RawImport(data: retained.data, name: retained.name, request: request, reason: retained.reason)
                     }

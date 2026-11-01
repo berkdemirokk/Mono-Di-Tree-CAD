@@ -48,6 +48,12 @@ struct LoadedModelState<Model> {
     var load = ModelLoadState()
     var selectedPiece: Int?
 
+    /// A successful asynchronous preview can install only while its load is current.
+    mutating func completePreview(_ request: UUID, model: Model, data: Data, selectedPiece: Int?) -> Bool {
+        guard load.finish(request) else { return false }
+        install(model, data: data, selectedPiece: selectedPiece)
+        return true
+    }
     mutating func install(_ model: Model, data: Data, selectedPiece: Int? = nil) {
         self.model = model
         self.sourceData = data
