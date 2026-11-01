@@ -5,6 +5,24 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Fact]
+    public void ExplicitBlockDefinitionCopiesOnlyMatchingOccurrence()
+    {
+        const string block="0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n0\nVERTEX\n10\n4662.231\n20\n1\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n0\nPOINT\n8\nB\n10\n4662.2310\n20\n1\n0\nENDBLK\n";
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n"+block+block+"0\nENDSEC\n0\nEOF\n");
+        var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var pieces=import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE").ToArray();
+        var points=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
+        var selected=new DxfPointVertexSelection(points[0].SourceOrdinal,pieces[0].PieceId,0);
+        var result=DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),selected,pieces[0].BlockHeaderOrdinal!.Value,true);
+        Assert.Single(Assert.Single(result.WorkingCopy.Pieces).Notches!);Assert.Contains("Yerleştirilmemiş",result.Notice);
+        Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),selected,pieces[1].BlockHeaderOrdinal!.Value,true));
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),selected,pieces[0].BlockHeaderOrdinal!.Value,false));
+        var changed=bytes.ToArray();changed[^2]^=1;
+        Assert.ThrowsAny<Exception>(()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(changed),selected,pieces[0].BlockHeaderOrdinal!.Value,true));
+    }
+
     [Theory]
     [InlineData("0\nSECTION\n2\nENTITIES\n0\nBLOCK\n2\nA\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n")]
     [InlineData("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")]
