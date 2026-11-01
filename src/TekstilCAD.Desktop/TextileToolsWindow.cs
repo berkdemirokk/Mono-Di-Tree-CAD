@@ -894,6 +894,12 @@ public sealed class TextileToolsWindow : Window
             new OpenPathClosureWindow(workspace,this).ShowDialog();
             RefreshSources((source.SelectedItem as PatternPiece)?.Id);
         },()=>workspace.Document.Pieces.Any(p=>!p.Closed));
+        Button(panel,"Açık konturu böl…",()=>
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");
+            var selected=Piece();new OpenPathSplitWindow(workspace,this,selected,()=> (source.SelectedItem as PatternPiece)?.Id).ShowDialog();
+            RefreshSources((source.SelectedItem as PatternPiece)?.Id);
+        },()=>source.SelectedItem is PatternPiece { Closed:false,Points.Count:>=3 });
         Button(panel,"İki açık konturu birleştir…",()=>
         {
             if(workspace.HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce tamamlanmamış çizimi veya alan taslaklarını tamamlayın ya da iptal edin.");

@@ -123,6 +123,89 @@ internal static class DesktopVerification
         }
         finally { closure.Close();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" }); }
     }
+    private static void VerifyOpenPathSplit(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Kol kenarı",Closed=false,Points=[new(0,0),new(10,0),new(20,10),new(30,10)],
+            Metadata=new PieceMetadata { Quantity=2 },Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) },new NotchMark { VertexIndex=3,Position=new(30,10) }] };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=[..piece.Points],Deltas=Enumerable.Repeat(new Point2(1,2),piece.Points.Count).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var before=studio.Document.Clone();var window=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>piece.Id);
+        try
+        {
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            Check(window.ApplyForVerification.IsEnabled && window.StatusForVerification.Contains("A 2") && window.StatusForVerification.Contains("B 3") && DocumentSession.ContentEquals(before,studio.Document),
+                "Open path split previews both lengths without changing the source",checks);
+            window.CommitForVerification();var after=studio.Document.Clone();
+            Check(after.Pieces.Count==3 && after.Pieces[0].Points.SequenceEqual(piece.Points) && after.GradingRules.Count==1 &&
+                after.Pieces[1].Notches!.Single().VertexIndex==1 && after.Pieces[2].Notches!.Select(m=>m.VertexIndex).SequenceEqual(new[] { 0,2 }) &&
+                after.Pieces.Skip(1).All(p=>!p.Closed && p.Metadata is null && p.Grainline is null) && session.UndoCount==1,
+                "Split adds two open paths with the shared mark while retaining source and grading",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                "Both split outputs are one undoable and redoable change",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(piece.Id);window=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>piece.Id);
+        try
+        {
+            var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+            studio.Commit("Kaynak değişti",()=>studio.Document.Name="Yeni ad");var changed=studio.Document.Clone();var undo=session.UndoCount;
+            window.CommitForVerification();
+            Check(DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==undo && window.StatusForVerification.Contains("değişti"),
+                "Split rejects a stale document without adding either result",checks);
+        }
+        finally { window.Close(); }
+        studio.LoadDocument(before.Clone());studio.Select(piece.Id);window=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>piece.Id);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? task=null;var windowClosed=false;
+            try
+            {
+                window.BeforeSplitForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                task=window.CalculateForVerification();PumpUntil(()=>reached.IsSet);window.Close();windowClosed=true;release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,"Cancelling split validation leaves the source intact",checks);
+            }
+            finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }if(!windowClosed)window.Close(); }
+        }
+        foreach(var limit in new[] { "piece", "point", "marker" })
+        {
+            var source=piece.Clone();source.Metadata=null;
+            var limited=new ProjectDocument { Pieces=[source] };
+            if(limit=="piece")
+            {
+                for(var i=0;i<9998;i++)limited.Pieces.Add(new PatternPiece { Closed=false,Points=[new(0,0),new(1,0)] });
+            }
+            else
+            {
+                if(limit=="marker")source.Notches=Enumerable.Range(0,source.Points.Count).Select(i=>new NotchMark { VertexIndex=i,Position=source.Points[i] }).ToList();
+                else source.Notches=null;
+                for(var i=0;i<20;i++)
+                {
+                    var count=i==19 ? 9996 : 10000;
+                    var pts=Enumerable.Range(0,count).Select(n=>new Point2(n,0)).ToList();
+                    limited.Pieces.Add(new PatternPiece { Closed=false,Points=pts,
+                        Notches=limit=="marker" ? pts.Select((point,index)=>new NotchMark { VertexIndex=index,Position=point }).ToList() : null });
+                }
+            }
+            studio.LoadDocument(limited);studio.Select(source.Id);var originalLimit=studio.Document.Clone();
+            var limitWindow=new OpenPathSplitWindow(studio,studio,studio.Selected!,()=>source.Id);
+            try
+            {
+                var pending=limitWindow.CalculateForVerification();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(!limitWindow.ApplyForVerification.IsEnabled && limitWindow.StatusForVerification.Contains("Önizleme oluşturulamadı") &&
+                    limitWindow.StatusForVerification.Contains(limit=="piece" ? "parça listesi" : limit=="point" ? "toplam nokta" : "Çentik sayısı",StringComparison.OrdinalIgnoreCase) &&
+                    DocumentSession.ContentEquals(originalLimit,studio.Document) && session.UndoCount==0,
+                    $"Split reports the {limit} project limit without changing source or history",checks);
+                limitWindow.CommitForVerification();
+                Check(DocumentSession.ContentEquals(originalLimit,studio.Document) && session.UndoCount==0,
+                    $"Split cannot bypass the {limit} project limit",checks);
+            }
+            finally { limitWindow.Close(); }
+        }
+        SynchronizationContext.SetSynchronizationContext(previous);
+    }
+
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(4,10),new(4,8)] };
@@ -568,6 +651,7 @@ internal static class DesktopVerification
             VerifyOpenPathJoinExactEndpoints(studio,checks);
             VerifyOpenPathSourceLabels(studio,checks);
             VerifyOpenPathClosure(studio,checks);
+            VerifyOpenPathSplit(studio,checks);
             VerifyOpenPathProductionInformation(studio,checks);
             VerifyDuplicatePiece(studio,checks);
             VerifyDuplicateOptions(studio,checks);
