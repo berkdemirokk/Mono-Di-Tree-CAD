@@ -48,6 +48,8 @@ Deneysel karşılaştırma kapalı kontur, iplik yönünün kontrol edilmiş olm
 
 Deneysel yerleşim ayrıca parça çevre kutularının kumaş sınırında ve istenen aralıkta olduğunu denetler; olası çift sayısı iki milyonu aşarsa reddeder. Bu kutu kontrolü kontur topolojisini veya fiziksel üretim uygunluğunu kanıtlamaz; kaynak parmak izi ve signed-zero işaret bitleri henüz yeniden doğrulanmaz.
 
+Deneysel tarihsel konturlar için ayrıca sınırlı ve ihtiyatlı basit kontur taraması vardır; çakışan, tekrarlı veya sayısal olarak belirsiz kenarlar reddedilir. Bu tarama geçerli bazı konturları da reddedebilir ve masaüstü geometrisiyle tam eşdeğerlik veya üretim güvenliği kanıtı değildir. Toplam tarama bütçesi 50 milyon nokta-kare işlemidir.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

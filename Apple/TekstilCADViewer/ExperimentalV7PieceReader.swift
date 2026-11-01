@@ -33,6 +33,7 @@ struct ExperimentalV7PieceReader {
     private var mappingArray: String? = nil, mappingDepth = 0
     private var mappingToken: [UInt8]? = nil
     private var sourceIDs = Set<UUID>(), historyIDs = Set<UUID>(), historicalPoints = 0, historicalMarks = 0
+    private var topologyWork: Int64 = 0
     private var sourceOrder: [UUID] = []
     private var sourceQuantities: [UUID: Int] = [:]
     private var sourceGeometry: [UUID: Drawing.Piece] = [:], historyGeometry: [UUID: Drawing.Piece] = [:]
@@ -334,6 +335,9 @@ struct ExperimentalV7PieceReader {
                     let candidates = try ExperimentalV7Contours.decode([Data(token)], cancelled: cancelled)
                     guard let item = candidates.first, let id = item.id, item.grain != nil, item.closed,
                           item.points.count <= 2_000, item.role == "Kesim", item.material != nil else { throw Failure.invalid }
+                    topologyWork += Int64(item.points.count) * Int64(item.points.count)
+                    guard topologyWork <= 50_000_000 else { throw Failure.limit }
+                    try ExperimentalV7Topology.verify(item, cancelled: cancelled)
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity
@@ -396,6 +400,7 @@ struct ExperimentalV7PieceReader {
         validator = ExperimentalJSONStream(); projectName = nil; potentialKey = nil; rootValueKey = nil; scopedValue = nil
         scopedStringKey = nil; scopedNumberKey = nil; snapshotNumbers = [:]; traceNumbers = [:]
         snapshotFingerprint = nil; traceFingerprint = nil; grainDirection = nil
+        topologyWork = 0
     }
 
     #if DEBUG

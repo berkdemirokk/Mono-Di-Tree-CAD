@@ -100,6 +100,21 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalV7Layout.verify([a, b], width: 25, length: 10, gap: 0, margin: 0, cancelled: { true }))
         XCTAssertFalse(ExperimentalV7Geometry.differenceAtLeast(0.3, 0.2, 0.1), "Rounded subtraction must not invent clearance")
     }
+    func testConservativeTopologyScreenRejectsCrossingsAndBacktracking() throws {
+        func piece(_ points: String) throws -> Drawing.Piece {
+            let json = "{\"Id\":\"11111111-1111-1111-1111-111111111111\",\"Name\":\"A\",\"Closed\":true,\"Points\":[\(points)]}"
+            return try XCTUnwrap(ExperimentalV7Contours.decode([Data(json.utf8)]).first)
+        }
+        let square = try piece(#"{"X":0,"Y":0},{"X":5,"Y":0},{"X":10,"Y":0},{"X":10,"Y":10},{"X":0,"Y":10},{"X":0,"Y":0}"#)
+        XCTAssertNoThrow(try ExperimentalV7Topology.verify(square))
+        let crossing = try piece(#"{"X":0,"Y":0},{"X":10,"Y":10},{"X":0,"Y":10},{"X":10,"Y":0}"#)
+        XCTAssertThrowsError(try ExperimentalV7Topology.verify(crossing))
+        let backward = try piece(#"{"X":0,"Y":0},{"X":10,"Y":0},{"X":5,"Y":0},{"X":5,"Y":10},{"X":0,"Y":10}"#)
+        XCTAssertThrowsError(try ExperimentalV7Topology.verify(backward))
+        let repeated = try piece(#"{"X":0,"Y":0},{"X":10,"Y":0},{"X":0,"Y":10},{"X":10,"Y":0}"#)
+        XCTAssertThrowsError(try ExperimentalV7Topology.verify(repeated))
+        XCTAssertThrowsError(try ExperimentalV7Topology.verify(square, cancelled: { true }))
+    }
     func testSignedIntegerTokensUseFieldRangeAfterSyntax() throws {
         let template = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":INDEX,"Position":{"X":0,"Y":0}}],"Metadata":{"Role":"Kesim","Quantity":QUANTITY}}"#
         func input(_ index: String, _ quantity: String) -> Data {
