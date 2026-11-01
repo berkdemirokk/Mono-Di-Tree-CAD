@@ -4,6 +4,32 @@ import CSQLite
 @testable import ModelStorePrototype
 
 final class ModelStoreTests: XCTestCase {
+    #if DEBUG
+    func testRollbackFailureRetainsBothErrorsAndAutocommitSkipsRollback() throws {
+        enum Injected: Error, Equatable { case operation, rollback }
+        try withDatabase { db in
+            var rollbackCalled = false
+            XCTAssertThrowsError(try ModelStorePrototype.exerciseRollback(
+                at: db, endBeforeFailure: false, operationError: Injected.operation,
+                rollback: { rollbackCalled = true; throw Injected.rollback })) { error in
+                    guard let failure = error as? ModelStorePrototype.RollbackFailure else {
+                        return XCTFail("Expected both errors, got \(error)")
+                    }
+                    XCTAssertEqual(failure.operationError as? Injected, .operation)
+                    XCTAssertEqual(failure.rollbackError as? Injected, .rollback)
+                }
+            XCTAssertTrue(rollbackCalled)
+            rollbackCalled = false
+            XCTAssertThrowsError(try ModelStorePrototype.exerciseRollback(
+                at: db, endBeforeFailure: true, operationError: Injected.operation,
+                rollback: { rollbackCalled = true; throw Injected.rollback })) { error in
+                    XCTAssertEqual(error as? Injected, .operation)
+                    XCTAssertFalse(error is ModelStorePrototype.RollbackFailure)
+                }
+            XCTAssertFalse(rollbackCalled)
+        }
+    }
+    #endif
     func testExplicitImportIsAtomicAndLeavesCallerSourceUntouched() throws {
         struct Interrupted: Error { }
         try withDatabase { url in

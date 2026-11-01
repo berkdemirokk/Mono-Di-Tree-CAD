@@ -60,7 +60,7 @@ public enum ModelStorePrototype {
         return try body(handle)
     }
 
-    private static func transaction<T>(_ db: OpaquePointer, commit: ((() throws -> Void) throws -> Void)? = nil, _ action: () throws -> T) throws -> T {
+    private static func transaction<T>(_ db: OpaquePointer, commit: ((() throws -> Void) throws -> Void)? = nil, rollbackOverride: ((OpaquePointer) throws -> Void)? = nil, _ action: () throws -> T) throws -> T {
         try execute(db, "BEGIN IMMEDIATE")
         do {
             let result = try action()
@@ -70,13 +70,28 @@ public enum ModelStorePrototype {
         } catch {
             let operationError = error
             if sqlite3_get_autocommit(db) == 0 {
-                do { try execute(db, "ROLLBACK") }
+                do {
+                    if let rollbackOverride { try rollbackOverride(db) }
+                    else { try execute(db, "ROLLBACK") }
+                }
                 catch { throw RollbackFailure(operationError: operationError, rollbackError: error) }
             }
             throw operationError
         }
     }
 
+    #if DEBUG
+    // Test seam: a real transaction, with controllable operation and rollback errors.
+    static func exerciseRollback(at url: URL, endBeforeFailure: Bool,
+                                 operationError: Error, rollback: @escaping () throws -> Void) throws {
+        try connection(url, create: true) { db in
+            try transaction(db, rollbackOverride: { _ in try rollback() }) {
+                if endBeforeFailure { try execute(db, "ROLLBACK") }
+                throw operationError
+            }
+        }
+    }
+    #endif
     private static func insert(_ record: Record, into db: OpaquePointer) throws {
                 var statement: OpaquePointer?
                 let prepared = sqlite3_prepare_v2(db, "INSERT INTO models(id,name,payload) VALUES(?,?,?)", -1, &statement, nil)
