@@ -9213,6 +9213,15 @@ internal static class DesktopVerification
             canvas.SetSourceAspect(100,50);
             foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })
                 Check(canvas.TryAddPixelPoint(p),"Photo tracing accepts an explicitly selected point",checks);
+            var beforeZoom=canvas.Points.ToArray();var beforeZoomRevision=trace.DraftRevision;
+            canvas.ZoomAtCursor(2);var viewSize=new Size(200,200);
+            Check(canvas.Zoom==2 && canvas.TryMapPixelToView(new Point(20,20),viewSize,out var zoomView) && Math.Abs(zoomView.X-100)<1e-9 && Math.Abs(zoomView.Y-100)<1e-9 &&
+                canvas.TryMapViewToPixel(zoomView,viewSize,out var zoomPixel) && Math.Abs(zoomPixel.X-20)<1e-9 && Math.Abs(zoomPixel.Y-20)<1e-9 &&
+                !canvas.TryMapViewToPixel(new Point(-1,100),viewSize,out _) && canvas.Points.SequenceEqual(beforeZoom) && trace.DraftRevision==beforeZoomRevision,
+                "Zoom centers on the selected pixel and preserves trace and reversible mapping",checks);
+            canvas.ZoomAtCursor(100);Check(canvas.Zoom==8,"Photo zoom is bounded",checks);
+            canvas.ResetZoom();Check(canvas.Zoom==1 && canvas.Points.SequenceEqual(beforeZoom) && trace.DraftRevision==beforeZoomRevision,
+                "Fitting the photo preserves trace and draft revision",checks);
             trace.LengthForVerification.Text="100";trace.TryApply();
             Check(DocumentSession.ContentEquals(initial,workspace.Document) && session.UndoCount==0 && trace.StatusForVerification.Text.Contains("iptal"),
                 "Cancelling photo draft confirmation leaves project and undo unchanged",checks);

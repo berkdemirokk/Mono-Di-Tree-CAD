@@ -19,12 +19,14 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private BitmapSource? image;
     private int sourceWidth,sourceHeight;
     private Point cursor;
+    private double zoom=1;
+    private Point zoomCenter=new(0.5,0.5);
 
     internal PhotoTraceCanvas()
     {
         Focusable=true;MinHeight=160;ClipToBounds=true;
         AutomationProperties.SetName(this,"Referans fotoğrafta elle nokta seçimi");
-        AutomationProperties.SetHelpText(this,"Fotoğraf üzerinde tıklayın. Klavyeyle ok tuşları imleci taşır, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Çizim otomatik kalıp değildir.");
+        AutomationProperties.SetHelpText(this,"Fotoğraf üzerinde tıklayın. Klavyeyle ok tuşları imleci taşır, Shift ile on piksel ilerler, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Yakınlaştırmada imleç kenara ulaşınca görünüm onu izler. Çizim otomatik kalıp değildir.");
     }
 
     internal BitmapSource? Image
@@ -46,6 +48,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             }
             sourceWidth=image?.PixelWidth ?? 0;sourceHeight=image?.PixelHeight ?? 0;
             points.Clear();cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
+            zoom=1;zoomCenter=new Point(0.5,0.5);
             InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
         }
     }
@@ -58,7 +61,19 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
 
     internal IReadOnlyList<Point> Points=>points.AsReadOnly();
     internal Point CursorForVerification=>cursor;
+    internal double Zoom=>zoom;
     internal event EventHandler? PointsChanged;
+
+    // View-only state: never change selected pixel coordinates or draft revision.
+    internal void ZoomAtCursor(double factor)
+    {
+        if(image is null || !double.IsFinite(factor) || factor<=0)return;
+        var next=Math.Clamp(zoom*factor,1,8);
+        if(next==1)zoomCenter=new Point(0.5,0.5);
+        else zoomCenter=new Point((cursor.X+0.5)/image.PixelWidth,(cursor.Y+0.5)/image.PixelHeight);
+        zoom=next;InvalidateVisual();
+    }
+    internal void ResetZoom() { zoom=1;zoomCenter=new Point(0.5,0.5);InvalidateVisual(); }
 
     internal bool TryAddPixelPoint(Point point)
     {
@@ -85,13 +100,13 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || !double.IsFinite(viewport.Width) || !double.IsFinite(viewport.Height) || viewport.Width<=0 || viewport.Height<=0)return Rect.Empty;
         var scale=Math.Min(viewport.Width/sourceWidth,viewport.Height/sourceHeight);
         if(!double.IsFinite(scale) || scale<=0)return Rect.Empty;
-        var width=sourceWidth*scale;var height=sourceHeight*scale;
-        return new Rect((viewport.Width-width)/2,(viewport.Height-height)/2,width,height);
+        var width=sourceWidth*scale*zoom;var height=sourceHeight*scale*zoom;
+        return new Rect(viewport.Width/2-zoomCenter.X*width,viewport.Height/2-zoomCenter.Y*height,width,height);
     }
     internal bool TryMapViewToPixel(Point viewPoint,Size viewport,out Point pixel)
     {
         pixel=default;
-        if(image is null || !double.IsFinite(viewPoint.X) || !double.IsFinite(viewPoint.Y))return false;
+        if(image is null || !double.IsFinite(viewPoint.X) || !double.IsFinite(viewPoint.Y) || viewPoint.X<0 || viewPoint.Y<0 || viewPoint.X>=viewport.Width || viewPoint.Y>=viewport.Height)return false;
         var bounds=ImageBounds(viewport);
         if(bounds.IsEmpty || viewPoint.X<bounds.Left || viewPoint.Y<bounds.Top || viewPoint.X>=bounds.Right || viewPoint.Y>=bounds.Bottom)return false;
         var scaleX=bounds.Width/image.PixelWidth;var scaleY=bounds.Height/image.PixelHeight;
@@ -130,6 +145,8 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             case Key.Back: UndoPoint();break;
             default:return;
         }
+        if(zoom>1 && TryMapPixelToView(cursor,RenderSize,out var view) && (view.X<16 || view.Y<16 || view.X>RenderSize.Width-16 || view.Y>RenderSize.Height-16))
+            zoomCenter=new Point((cursor.X+0.5)/image.PixelWidth,(cursor.Y+0.5)/image.PixelHeight);
         InvalidateVisual();e.Handled=true;
     }
 
