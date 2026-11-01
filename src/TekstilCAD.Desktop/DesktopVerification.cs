@@ -4377,6 +4377,10 @@ internal static class DesktopVerification
             Check(studio.ExportWasCancelled && !File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document),"Declined notch review leaves project and target unchanged",checks);
             Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { studio.Commit("Test değişikliği",()=>studio.Document.Pieces[0].Name="Değişti");return true; };Run(path);
             Check(!File.Exists(path) && studio.ExportError is not null,"Notch review rejects a source change during approval",checks);
+            Reset();studio.Commit("Katman adı",()=>studio.Document.Pieces[0].Name="Ön\u202Eparça");before=studio.Document.Clone();path=Target();
+            var wasAsked=false;studio.ConfirmDxfNotchReviewForVerification=_=> { wasAsked=true;return true; };Run(path);
+            Check(!wasAsked && !File.Exists(path) && studio.ExportError?.Contains("katman",StringComparison.OrdinalIgnoreCase)==true && DocumentSession.ContentEquals(before,studio.Document),
+                "Notch review rejects misleading directional layer names before approval or output",checks);
             Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { File.WriteAllText(path,"korunan");return true; };Run(path);
             Check(studio.ExportError is not null && File.ReadAllText(path)=="korunan","Notch review never overwrites a newly created destination",checks);
         }

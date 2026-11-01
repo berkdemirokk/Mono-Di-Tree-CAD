@@ -40,6 +40,16 @@ public static class DxfNotchReviewExport
         // contour/layer and omission validation. Source and output retain marks.
         var analysisCopy=snapshot.Clone();foreach(var p in analysisCopy.Pieces)p.Notches=null;
         var analysis=DxfFormat.AnalyzeExport(analysisCopy,cancellationToken);
+        // Review labels must be unambiguous both in our table and in the DXF.
+        // PlanLayers can preserve bidi/format characters, which can make two
+        // distinct layer names appear deceptively similar in a recipient CAD.
+        foreach(var mapping in analysis.Layers)
+        foreach(var rune in mapping.LayerName.EnumerateRunes())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                throw new InvalidDataException("Kontur katman adında görünmez yönlendirme veya kontrol karakteri var. Parça adını düzeltip inceleme çıktısını yeniden hazırlayın.");
+        }
         var used=analysis.Layers.Select(x=>x.LayerName).ToHashSet(StringComparer.OrdinalIgnoreCase);used.Add("0");
         var markerLayers=new string?[snapshot.Pieces.Count];var items=ImmutableArray.CreateBuilder<DxfNotchReviewItem>();
         for(int i=0;i<snapshot.Pieces.Count;i++)

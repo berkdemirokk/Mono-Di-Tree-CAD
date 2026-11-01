@@ -61,6 +61,23 @@ public class DxfNotchReviewExportTests
         }
         finally { if(File.Exists(path))File.Delete(path); }
     }
+    [Theory]
+    [InlineData("Ön\u202Eparça")]
+    [InlineData("Ön\u200Fparça")]
+    [InlineData("Ön\u2066parça")]
+    public void MisleadingContourLayerNamesAreRejectedWithoutChangingSource(string name)
+    {
+        var project=Project();project.Pieces[0].Name=name;var before=project.Clone();
+        var error=Assert.Throws<InvalidDataException>(()=>DxfNotchReviewExport.Prepare(project,false));
+        Assert.Contains("katman",error.Message);Assert.True(DocumentSession.ContentEquals(before,project));
+    }
+    [Fact]
+    public void OrdinaryTurkishAndSupplementaryCharactersRemainUsable()
+    {
+        var project=Project();project.Pieces[0].Name="Ön İğne 😀";
+        var plan=DxfNotchReviewExport.Prepare(project,false);
+        Assert.Equal(3,plan.Items.Length);Assert.True(plan.Matches(project));
+    }
     [Fact]
     public void CancellationAndInvalidMarksAreRejectedBeforeOutput()
     {
