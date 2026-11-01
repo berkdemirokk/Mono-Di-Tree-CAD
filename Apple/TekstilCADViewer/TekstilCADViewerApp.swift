@@ -147,7 +147,7 @@ private struct ContentView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if project.insufficientContourCount > 0 {
-                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
+                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Tekrarlı kapanış ayrı bir köşe sayılmaz. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if project.collapsedContourCount > 0 {
@@ -1482,7 +1482,10 @@ private struct Drawing {
         let grainStatus: String
         let grain: Grain?
         let notches: [Int]
-        var hasMinimumContourPoints: Bool { points.count >= (closed ? 3 : 2) }
+        var hasMinimumContourPoints: Bool {
+            let repeatsFirst = closed && points.count > 1 && points.first!.x == points.last!.x && points.first!.y == points.last!.y
+            return points.count - (repeatsFirst ? 1 : 0) >= (closed ? 3 : 2)
+        }
 
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

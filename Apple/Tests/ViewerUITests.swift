@@ -1110,6 +1110,25 @@ final class ViewerUITests: XCTestCase {
         picker.tap();XCTAssertTrue(app.buttons["Tek"].waitForExistence(timeout: 5))
     }
 
+    func testRepeatedClosureDoesNotCountAsThirdVertex() {
+        let fixture = #"{"Name":"Kapanış","Pieces":[{"Name":"Eksik","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":0,"Y":0}]},{"Name":"Üçgen","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":0,"Y":4},{"X":0,"Y":0}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let incomplete = app.buttons["Eksik"]
+        XCTAssertTrue(incomplete.waitForExistence(timeout: 5))
+        XCTAssertTrue((incomplete.value as? String ?? "").contains("nokta sayısı yetersiz"))
+        incomplete.tap()
+        XCTAssertTrue(app.staticTexts["Bu parça asgari nokta sayısını karşılamıyor; kontur çizimi ve ölçüsü gösterilemiyor."].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["Eksik kontur önizlemesi"].exists)
+        let selected = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Eksik")).firstMatch
+        selected.tap(); app.buttons["Üçgen"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Üçgen kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
     func testContourLengthTracksSelectedOpenAndClosedPiece() {
         let fixture = #"{"Name":"Ölçü","Pieces":[{"Name":"Açık","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]},{"Name":"Kapalı","Closed":true,"Points":[{"X":0,"Y":0},{"X":3,"Y":0},{"X":3,"Y":4}]}]}"#
         let app = XCUIApplication()
