@@ -88,7 +88,8 @@ enum ContourOverlay {
     // all operations (conservative, including duplicate boundary points).
     static func errorBound(first: [ContourMeasure.Point], firstBounds: ContourBounds,
                            second: [ContourMeasure.Point], secondBounds: ContourBounds,
-                           dx: Double = 0, dy: Double = 0) -> Double? {
+                           dx: Double = 0, dy: Double = 0, cancelled: () -> Bool = { false }) -> Double? {
+        guard !cancelled() else { return nil }
         var budget = ErrorBudget()
         guard let aw = budget.add(firstBounds.maxX, -firstBounds.minX),
               let ah = budget.add(firstBounds.maxY, -firstBounds.minY),
@@ -101,9 +102,9 @@ enum ContourOverlay {
                   budget.add(nx, x) != nil, budget.add(ny, y) != nil else { return false }
             return true
         }
-        for point in first { if !include(point, firstBounds, 0, 0, &budget) { return nil } }
-        for point in second { if !include(point, secondBounds, dx, dy, &budget) { return nil } }
-        return budget.total
+        for point in first { if cancelled() || !include(point, firstBounds, 0, 0, &budget) { return nil } }
+        for point in second { if cancelled() || !include(point, secondBounds, dx, dy, &budget) { return nil } }
+        return cancelled() ? nil : budget.total
     }
 
     // Caller must assess the complete set before rendering or changing shift.

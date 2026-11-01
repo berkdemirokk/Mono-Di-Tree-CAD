@@ -2855,6 +2855,9 @@ private struct PieceOverlayView: View {
     @State private var shiftY = 0.0
     @State private var shiftStep = 1.0
     @State private var shiftError: String?
+    @State private var shiftCheck: Task<Void, Never>?
+    @State private var shiftRequest = UUID()
+    @State private var isCheckingShift = false
     @State private var showingNumericShift = false
     @State private var showingAnchorSelection = false
     @State private var firstAnchor = ""
@@ -2876,23 +2879,43 @@ private struct PieceOverlayView: View {
     private func pan(x: CGFloat, y: CGFloat) {
         offset = boundedOffset(CGSize(width: offset.width + x, height: offset.height + y), size: canvasSize, zoom: zoom)
     }
-    private func shift(dx: Double, dy: Double) {
-        _ = applyShift(x: shiftX + dx, y: shiftY + dy)
+    private enum ShiftDestination { case overlay, numeric, anchor }
+    private func cancelShift() {
+        shiftRequest = UUID(); shiftCheck?.cancel(); shiftCheck = nil; isCheckingShift = false
     }
-    @discardableResult private func applyShift(x: Double, y: Double) -> Bool {
-
-        guard abs(x) <= 10_000, abs(y) <= 10_000,
-              let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
-              ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil,
-              ContourOverlay.errorBound(first: first.points, firstBounds: firstBounds,
-                                        second: second.points, secondBounds: secondBounds, dx: x, dy: y) != nil else {
-
+    private func shift(dx: Double, dy: Double) {
+        applyShift(x: shiftX + dx, y: shiftY + dy, destination: .overlay)
+    }
+    private func applyShift(x: Double, y: Double, destination: ShiftDestination) {
+        cancelShift()
+        guard x.isFinite, y.isFinite, abs(x) <= 10_000, abs(y) <= 10_000,
+              let firstBounds = first.contourBounds, let secondBounds = second.contourBounds else {
             shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
-            return false
+            return
         }
-        shiftX = x; shiftY = y; shiftError = nil
-        return true
-
+        let request = UUID(), firstPoints = first.points, secondPoints = second.points
+        shiftRequest = request; isCheckingShift = true; shiftError = nil
+        shiftCheck = Task {
+            let worker = Task.detached(priority: .userInitiated) {
+                guard ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil else { return false }
+                return ContourOverlay.errorBound(first: firstPoints, firstBounds: firstBounds,
+                                                 second: secondPoints, secondBounds: secondBounds,
+                                                 dx: x, dy: y, cancelled: { Task.isCancelled }) != nil
+            }
+            let valid = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+            guard !Task.isCancelled, shiftRequest == request else { return }
+            isCheckingShift = false; shiftCheck = nil
+            guard valid else {
+                shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
+                return
+            }
+            shiftX = x; shiftY = y
+            switch destination {
+            case .overlay: break
+            case .numeric: showingNumericShift = false
+            case .anchor: showingAnchorSelection = false
+            }
+        }
     }
     var body: some View {
         NavigationStack {
@@ -2912,22 +2935,23 @@ private struct PieceOverlayView: View {
                     Text("10 mm").tag(10.0)
                 }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
-                    Button("İkinciyi sola") { shift(dx: -shiftStep, dy: 0) }
-                    Button("İkinciyi sağa") { shift(dx: shiftStep, dy: 0) }
-                    Button("İkinciyi yukarı") { shift(dx: 0, dy: -shiftStep) }
-                    Button("İkinciyi aşağı") { shift(dx: 0, dy: shiftStep) }
+                    Button("İkinciyi sola") { shift(dx: -shiftStep, dy: 0) }.disabled(isCheckingShift)
+                    Button("İkinciyi sağa") { shift(dx: shiftStep, dy: 0) }.disabled(isCheckingShift)
+                    Button("İkinciyi yukarı") { shift(dx: 0, dy: -shiftStep) }.disabled(isCheckingShift)
+                    Button("İkinciyi aşağı") { shift(dx: 0, dy: shiftStep) }.disabled(isCheckingShift)
                 }.font(.caption)
                 Button("Seçilen köşeleri hizala…") { shiftError = nil; showingAnchorSelection = true }
-                    .font(.caption)
+                    .font(.caption).disabled(isCheckingShift)
                 Button("Kaydırmayı sayısal gir…") {
                     shiftXText = String(shiftX); shiftYText = String(shiftY)
                     shiftError = nil; showingNumericShift = true
                 }
-                .font(.caption)
-                Button("Görsel hizalamayı sıfırla") { shiftX = 0; shiftY = 0; shiftError = nil }
+                .font(.caption).disabled(isCheckingShift)
+                Button("Görsel hizalamayı sıfırla") { cancelShift(); shiftX = 0; shiftY = 0; shiftError = nil }
                     .font(.caption)
                 Text("Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
                     .font(.caption).foregroundStyle(.secondary)
+                if isCheckingShift { ProgressView("Hizalama doğrulanıyor…") }
                 if let shiftError { Text(shiftError).font(.caption).foregroundStyle(.secondary) }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
                     Button("Görünümü uzaklaştır") { zoom = boundedZoom(zoom / 1.25) }.disabled(zoom <= 0.5)
@@ -2974,6 +2998,7 @@ private struct PieceOverlayView: View {
                         Text("İkinci parça: \(secondIndex + 1). \(second.displayName(index: secondIndex))")
                         TextField("İkinci parça köşe indeksi", text: $secondAnchor).keyboardType(.numberPad)
                         NavigationLink("İkinci köşeyi seç") { PointIndexPicker(points: second.points, selected: $secondAnchor) }
+                        if isCheckingShift { ProgressView("Hizalama doğrulanıyor…") }
                         if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
                         Button("Köşeleri görsel olarak hizala") {
                             guard let a = Int(firstAnchor), let b = Int(secondAnchor),
@@ -2984,11 +3009,11 @@ private struct PieceOverlayView: View {
                                 shiftError = "Geçerli köşeleri seçin. Tam ve yarım mm ile güvenli hizalanamayan değerler desteklenmez."
                                 return
                             }
-                            if applyShift(x: target.x, y: target.y) { showingAnchorSelection = false }
-                        }
+                            applyShift(x: target.x, y: target.y, destination: .anchor)
+                        }.disabled(isCheckingShift)
                     }
                     .navigationTitle("Köşeleri hizala")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { showingAnchorSelection = false; shiftError = nil } } }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { cancelShift(); showingAnchorSelection = false; shiftError = nil } } }
                 }
             }
             .sheet(isPresented: $showingNumericShift) {
@@ -2997,19 +3022,23 @@ private struct PieceOverlayView: View {
                         Text("İkinci parçanın yalnızca görsel kaydırmasını tam veya yarım milimetre olarak girin (−10.000 ile 10.000). Ondalık için nokta veya virgül kullanın. Kaynak dosya değişmez.")
                         TextField("X kaydırması (mm)", text: $shiftXText).keyboardType(.numbersAndPunctuation)
                         TextField("Y kaydırması (mm)", text: $shiftYText).keyboardType(.numbersAndPunctuation)
+                        if isCheckingShift { ProgressView("Hizalama doğrulanıyor…") }
                         if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
                         Button("Görsel kaydırmayı uygula") {
                             guard let x = ContourOverlay.halfMillimeterShift(shiftXText), let y = ContourOverlay.halfMillimeterShift(shiftYText) else {
                                 shiftError = "Her iki eksen için −10.000 ile 10.000 arasında tam veya yarım milimetre girin."
                                 return
                             }
-                            if applyShift(x: x, y: y) { showingNumericShift = false }
-                        }
+                            applyShift(x: x, y: y, destination: .numeric)
+                        }.disabled(isCheckingShift)
                     }
                     .navigationTitle("Görsel kaydırma")
-                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { showingNumericShift = false; shiftError = nil } } }
+                    .toolbar { ToolbarItem(placement: .cancellationAction) { Button("İptal") { cancelShift(); showingNumericShift = false; shiftError = nil } } }
                 }
             }
+            .onChange(of: showingAnchorSelection) { if !$0 && isCheckingShift { cancelShift() } }
+            .onChange(of: showingNumericShift) { if !$0 && isCheckingShift { cancelShift() } }
+            .onDisappear { cancelShift() }
             .navigationTitle("Parçaları üst üste göster")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }

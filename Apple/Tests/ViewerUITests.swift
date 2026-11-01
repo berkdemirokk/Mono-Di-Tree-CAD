@@ -58,7 +58,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(overlay.waitForExistence(timeout: 5)); overlay.tap()
         XCTAssertTrue(app.descendants(matching: .any)["Aynı ölçekte üst üste parça görünümü"].waitForExistence(timeout: 5))
         app.buttons["İkinciyi sağa"].tap()
-        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 1, Y 0 mm"].exists)
+        XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 1, Y 0 mm"].waitForExistence(timeout: 5))
         app.buttons["Görsel hizalamayı sıfırla"].tap()
         XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X 0, Y 0 mm"].exists)
         app.buttons["Kaydırmayı sayısal gir…"].tap()

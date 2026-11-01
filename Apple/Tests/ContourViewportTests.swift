@@ -32,6 +32,17 @@ final class ContourViewportTests: XCTestCase {
         XCTAssertNil(ContourOverlay.halfMillimeterShift("NaN"))
         XCTAssertNil(ContourOverlay.halfMillimeterShift(String(repeating: "9", count: 1000)))
     }
+    func testOverlayErrorBoundStopsWhenCancelled() throws {
+        let points = (0..<10_000).map { p(Double($0), 0) }
+        let bounds = try XCTUnwrap(ContourBounds(points: points))
+        var checks = 0
+        let result = ContourOverlay.errorBound(first: points, firstBounds: bounds, second: points, secondBounds: bounds) {
+            checks += 1
+            return checks >= 50
+        }
+        XCTAssertNil(result)
+        XCTAssertEqual(checks, 50)
+    }
     func testOverlayBoundAcceptsOrdinaryDecimalsButRejectsLargeAndAccumulatedErrors() throws {
         let ordinaryPoints = [p(-0.1, 0), p(0.3, 1)]
         let ordinary = try XCTUnwrap(ContourBounds(points: ordinaryPoints))
