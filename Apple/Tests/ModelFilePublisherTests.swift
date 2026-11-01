@@ -307,6 +307,18 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertNil(cancelled)
     }
 
+    func testContentSearchPageReportsWhenTimeExpiresBeforeFirstCandidate() {
+        var budget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
+        var page = ModelStore.ContentPageGate(start: 7)
+        XCTAssertFalse(page.shouldScan(index: 7, bytes: 20, now: 5, budget: &budget))
+        XCTAssertTrue(page.stalled)
+        XCTAssertNil(page.next)
+        XCTAssertFalse(page.includes(8))
+        var retryBudget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 10, duration: 5)
+        var retry = ModelStore.ContentPageGate(start: 7)
+        XCTAssertTrue(retry.shouldScan(index: 7, bytes: 20, now: 10, budget: &retryBudget))
+        XCTAssertFalse(retry.stalled)
+    }
     func testContentSearchPagesResumeAtFirstUnscannedCandidate() {
         var budget = ModelStore.ContentSearchBudget(maximumFiles: 2, maximumBytes: 100, start: 0, duration: 5)
         var first = ModelStore.ContentPageGate(start: 0)

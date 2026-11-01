@@ -1173,11 +1173,15 @@ enum ModelStore {
     struct ContentPageGate {
         let start: Int
         private(set) var next: Int?
+        private(set) var stalled = false
         init(start: Int) { self.start = start }
-        func includes(_ index: Int) -> Bool { index >= start && next == nil }
+        func includes(_ index: Int) -> Bool { index >= start && next == nil && !stalled }
         mutating func shouldScan(index: Int, bytes: Int64, now: TimeInterval, budget: inout ContentSearchBudget) -> Bool {
             guard includes(index) else { return false }
-            guard budget.reserve(bytes: bytes, now: now) else { next = index; return false }
+            guard budget.reserve(bytes: bytes, now: now) else {
+                if index == start { stalled = true } else { next = index }
+                return false
+            }
             return true
         }
     }
@@ -1398,6 +1402,7 @@ private struct ModelLibrary: View {
     @State private var libraryFilter: ModelStore.LibraryFilter = .all
     @State private var searchContents = false
     @State private var contentOffset = 0
+    @State private var contentRetry = UUID()
     @State private var error: String?
     @State private var modelToDelete: ModelStore.Entry?
     @State private var modelToRecover: ModelStore.Entry?
@@ -1426,10 +1431,11 @@ private struct ModelLibrary: View {
         let revision: UUID
         let searchContents: Bool
         let contentOffset: Int
+        let retry: UUID
     }
-    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let evidence: [URL: String] }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let stalled: Bool; let evidence: [URL: String] }
     @State private var filterResult: FilterResult?
-    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentOffset) }
+    private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentOffset, retry: contentRetry) }
 
     var body: some View {
         NavigationStack {
@@ -1444,9 +1450,14 @@ private struct ModelLibrary: View {
                         Text("İçerik araması açık: parça adı, beden, malzeme")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if current.next != nil || current.key.contentOffset > 0 {
+                    if current.next != nil || current.stalled || current.key.contentOffset > 0 {
                         Text("İçerik sonuçları yalnızca bu kayıt grubunu kapsar; diğer gruplarda eşleşmeler olabilir. Ad araması seçili kayıtların tamamında yapıldı.")
                             .font(.caption).foregroundStyle(.secondary)
+                    }
+                    if current.stalled {
+                        Text("İçerik araması bu gruba başlayamadı; sonuçlar eksik. Tekrar deneyebilirsiniz.")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("İçerik aramasını tekrar dene") { contentRetry = UUID() }
                     }
                     if let next = current.next {
                         Button("Sonraki kayıt grubunda ara") { contentOffset = next }
@@ -1628,10 +1639,10 @@ private struct ModelLibrary: View {
                     do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
                 }
                 guard !Task.isCancelled else { return }
-                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Int?, [URL: String])? in
+                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Int?, Bool, [URL: String])? in
                     let cancelled = { Task.isCancelled }
                     guard let names = ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
-                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, nil, [:]) }
+                    guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, nil, false, [:]) }
                     guard let candidates = ModelStore.filteredModels(snapshot, query: "", newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
                     let named = Set(names.map(\.id))
                     var selected: [ModelStore.Entry] = []
@@ -1671,11 +1682,11 @@ private struct ModelLibrary: View {
                             skipped += 1
                         }
                     }
-                    return (selected, skipped, page.next, evidence)
+                    return (selected, skipped, page.next, page.stalled, evidence)
                 }
                 let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
                 guard ModelStore.acceptsSearchResult(request: request, current: filterKey, cancelled: Task.isCancelled), let result else { return }
-                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1, next: result.2, evidence: result.3)
+                filterResult = FilterResult(key: request, entries: result.0, skipped: result.1, next: result.2, stalled: result.3, evidence: result.4)
             }
         }
     }
