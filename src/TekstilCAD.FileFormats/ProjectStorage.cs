@@ -46,7 +46,6 @@ public static class ProjectStorage
         cancellationToken.ThrowIfCancellationRequested();
         if (bytes.Length > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor.");
         ProjectDocument project;
-        string? rotatedRaw=null;
         long rotatedVisiblePoints=0;
         try
         {
@@ -72,7 +71,6 @@ public static class ProjectStorage
                 {
                     var raw=nesting.GetProperty("RotationTrace");
                     if(raw.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Döndürme izi nesnesi eksik veya geçersiz.");
-                    rotatedRaw=raw.GetRawText();
                     foreach(var piece in root[1].GetProperty("Pieces").EnumerateArray())
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -82,7 +80,7 @@ public static class ProjectStorage
                     }
                     // Reject missing/unknown/duplicate trace fields before model
                     // constructors or JSON defaults can synthesize any values.
-                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),rotatedVisiblePoints,cancellationToken);
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(raw.GetRawText()),rotatedVisiblePoints,cancellationToken);
                 }
                 ValidateSerializedImportProvenance(root[1], version);
                 project = root[1].Deserialize<ProjectDocument>(Options) ?? throw new InvalidDataException("Proje dosyası boş.");
@@ -101,11 +99,9 @@ public static class ProjectStorage
         }
         catch (JsonException ex) { throw new InvalidDataException("Proje dosyası geçersiz veya bu sürümün tanımadığı alanlar içeriyor. Veri kaybını önlemek için dosya açılmadı.", ex); }
         Validate(project,cancellationToken);
-        if(rotatedRaw is not null)
-        {
-            var trace=project.NestingSnapshot!.RotationTrace!;
-            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces },project,cancellationToken);
-        }
+        // Validate above rechecks the deserialized trace and historical layout via
+        // RotatedProjectValidation. Raw required fields and the combined point
+        // budget were already checked before model defaults could be applied.
         cancellationToken.ThrowIfCancellationRequested();
         return project;
     }
