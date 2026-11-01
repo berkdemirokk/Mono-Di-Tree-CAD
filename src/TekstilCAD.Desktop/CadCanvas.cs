@@ -332,6 +332,19 @@ public sealed class CadCanvas : FrameworkElement
             minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
             maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
         }
+        // Grainlines can lie outside a contour, particularly when an edit
+        // marked them for review. They must remain visible in an all-fit view.
+        foreach(var piece in owner.Document.Pieces)
+        {
+            if(piece.Points.Count==0 || piece.Grainline is not { } grain)continue;
+            foreach(var point in new[] { grain.Start,grain.End })
+            {
+                if(!point.IsFinite)
+                { owner.SetStatus("İplik yönü koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+                minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+                maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+            }
+        }
         // Coordinate entry can put an unfinished contour far from existing
         // pieces, or be the first drawing in an empty document. Include its
         // actual points without completing or changing the draft.
@@ -383,6 +396,16 @@ public sealed class CadCanvas : FrameworkElement
             { owner.SetStatus("Seçili parçanın koordinatları geçersiz; görünüm değiştirilmedi.");return; }
             minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
             maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+        }
+        if(selected.Grainline is { } grain)
+        {
+            foreach(var point in new[] { grain.Start,grain.End })
+            {
+                if(!point.IsFinite)
+                { owner.SetStatus("İplik yönü koordinatları geçersiz; görünüm değiştirilmedi.");return; }
+                minX=Math.Min(minX,point.X);minY=Math.Min(minY,point.Y);
+                maxX=Math.Max(maxX,point.X);maxY=Math.Max(maxY,point.Y);
+            }
         }
         var extentX=maxX-minX;var extentY=maxY-minY;
         if(!double.IsFinite(extentX) || !double.IsFinite(extentY))

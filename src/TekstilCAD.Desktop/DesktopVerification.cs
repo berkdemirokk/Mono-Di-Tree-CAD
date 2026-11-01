@@ -430,6 +430,7 @@ internal static class DesktopVerification
             GroupMoveVerification.Run(studio,checks);
             VerifyDraftRemovalConfirmationRace(studio,checks);
             VerifyFitSelectedPiece(studio,checks);
+            VerifyFitGrainlines(studio,checks);
             VerifyFitPendingDrawing(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);
             VerifyDxfEncodingChoice(studio,work,reportPath,checks);
@@ -5834,6 +5835,34 @@ internal static class DesktopVerification
         finally { studio.ConfirmClearPropertyDraftsForVerification=null;studio.LoadDocument(new ProjectDocument { Name="Test temizliği" }); }
     }
 
+    private static void VerifyFitGrainlines(MainWindow studio,List<string> checks)
+    {
+        var selected=new PatternPiece { Name="Ön",Points=[new(0,0),new(100,0),new(0,100)],
+            Grainline=new Grainline { Start=new(500,30),End=new(700,30),NeedsReview=true } };
+        var other=new PatternPiece { Name="Arka",Points=[new(-1000,-1000),new(-900,-1000),new(-1000,-900)],
+            Grainline=new Grainline { Start=new(-1100,-950),End=new(-1050,-950) } };
+        studio.LoadDocument(new ProjectDocument { Pieces=[selected,other] });studio.Select(selected.Id);
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var scaleField=typeof(CadCanvas).GetField("scale",PrivateInstance)!;var offsetField=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        canvas.Measure(new Size(600,400));canvas.Arrange(new Rect(0,0,600,400));canvas.UpdateLayout();
+        var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;var dirty=session.IsDirty;
+        bool Visible(Point2 point)
+        {
+            var scale=(double)scaleField.GetValue(canvas)!;var offset=(Vector)offsetField.GetValue(canvas)!;
+            var x=point.X*scale+offset.X;var y=point.Y*scale+offset.Y;
+            return x>=0 && x<=canvas.ActualWidth && y>=0 && y<=canvas.ActualHeight;
+        }
+        canvas.FitSelectedPiece();
+        Check(selected.Points.All(Visible) && Visible(selected.Grainline!.Start) && Visible(selected.Grainline.End) && !Visible(other.Grainline!.Start),
+            "Fit selected includes its outside review grainline without fitting unrelated pieces",checks);
+        canvas.Fit();
+        Check(selected.Points.All(Visible) && other.Points.All(Visible) && Visible(selected.Grainline.Start) && Visible(selected.Grainline.End) &&
+            Visible(other.Grainline.Start) && Visible(other.Grainline.End) && DocumentSession.ContentEquals(before,studio.Document) &&
+            session.UndoCount==undo && session.RedoCount==redo && session.IsDirty==dirty,
+            "Fit all includes grainlines outside both contours without changing project or history",checks);
+        studio.LoadDocument(new ProjectDocument());
+    }
     private static void VerifyFitPendingDrawing(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
