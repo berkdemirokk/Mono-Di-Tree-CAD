@@ -878,6 +878,22 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: root.appendingPathComponent("\(id.uuidString).tcadcopy").path))
     }
 
+    func testPointCopyRejectsStagingReplacementBetweenPrepareAndFinish() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let bytes = Data("edited".utf8), other = Data("other".utf8)
+        let prepared = try ModelStore.preparePointCopy(bytes, projectName: "test", directoryOverride: root)
+        let original = root.appendingPathComponent("original")
+        try FileManager.default.moveItem(at: prepared.staging, to: original)
+        try FileManager.default.createDirectory(at: prepared.staging, withIntermediateDirectories: false)
+        let replacement = prepared.staging.appendingPathComponent("project.tcad")
+        try other.write(to: replacement)
+        XCTAssertThrowsError(try ModelStore.finishPointCopy(prepared))
+        XCTAssertEqual(try Data(contentsOf: replacement), other)
+        XCTAssertEqual(try Data(contentsOf: original.appendingPathComponent("project.tcad")), bytes)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: prepared.destination.path))
+    }
     func testPointCopyDestinationCollisionPreservesBothCopies() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

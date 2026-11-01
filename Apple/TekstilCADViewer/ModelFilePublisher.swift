@@ -17,9 +17,10 @@ enum ModelFilePublisher {
 
     // The caller still has to publish the directory. This only anchors writes
     // after opening it; mkdir-to-open and later rename races remain.
+    @discardableResult
     static func writeCopyFiles(_ data: Data, metadata: Data, staging: URL,
                                beforeVerification: (() throws -> Void)? = nil,
-                               afterOpen: (() throws -> Void)? = nil) throws {
+                               afterOpen: (() throws -> Void)? = nil) throws -> stat {
         guard staging.path.withCString({ mkdir($0, 0o700) }) == 0 else {
             throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
         }
@@ -72,7 +73,15 @@ enum ModelFilePublisher {
         guard sameFile(expected, try identity(staging)) else {
             throw CocoaError(.fileWriteUnknown)
         }
+        return expected
     }
+
+    static func verifyStagingIdentity(_ staging: URL, expected: stat) throws {
+        guard sameFile(expected, try identity(staging)) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+    }
+
     static func publish(_ data: Data, staging: URL, destination: URL,
                         beforePayloadCreation: (() throws -> Void)? = nil,
                         beforePublish: (() throws -> Void)? = nil) throws {

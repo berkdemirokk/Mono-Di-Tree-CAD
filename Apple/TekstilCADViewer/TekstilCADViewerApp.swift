@@ -1093,6 +1093,7 @@ enum ModelStore {
     struct PreparedPointCopy {
         let staging: URL
         let destination: URL
+        let identity: stat
     }
     static func preparePointCopy(_ data: Data, projectName: String,
                                  directoryOverride: URL? = nil, id: UUID = UUID(),
@@ -1104,11 +1105,12 @@ enum ModelStore {
         let staging = directory.appendingPathComponent(".\(id.uuidString).partial", isDirectory: true)
         let destination = directory.appendingPathComponent("\(id.uuidString).\(copyExtension)", isDirectory: true)
         let metadata = try JSONEncoder().encode(CopyMetadata(version: 1, name: projectName))
-        try ModelFilePublisher.writeCopyFiles(data, metadata: metadata, staging: staging,
-                                              beforeVerification: beforeVerification, afterOpen: afterOpen)
-        return PreparedPointCopy(staging: staging, destination: destination)
+        let identity = try ModelFilePublisher.writeCopyFiles(data, metadata: metadata, staging: staging,
+                                                              beforeVerification: beforeVerification, afterOpen: afterOpen)
+        return PreparedPointCopy(staging: staging, destination: destination, identity: identity)
     }
     static func finishPointCopy(_ prepared: PreparedPointCopy) throws {
+        try ModelFilePublisher.verifyStagingIdentity(prepared.staging, expected: prepared.identity)
         try FileManager.default.moveItem(at: prepared.staging, to: prepared.destination)
     }
     static func discardPointCopy(_ prepared: PreparedPointCopy) throws {
