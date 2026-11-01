@@ -126,4 +126,10 @@ final class NotchSearchTests: XCTestCase {
         }
         XCTAssertFalse(NotchSearch.matches(query: "Nokta 1", index: 0, x: "12,5", y: "-3"))
     }
+
+    func testSmallNotchCoordinatesRemainVisibleAndSearchable() {
+        let value = NotchSearch.coordinate(0.0004, locale: Locale(identifier: "en_US"))
+        XCTAssertNotEqual(value, "0")
+        XCTAssertTrue(NotchSearch.matches(query: value, index: 0, x: value, y: "0"))
+    }
 }

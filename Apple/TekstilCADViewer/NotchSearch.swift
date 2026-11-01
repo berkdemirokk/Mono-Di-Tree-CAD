@@ -33,6 +33,9 @@ enum ModelSearch {
 
 /// Shared by the notch list and its search so visible labels are searchable.
 enum NotchSearch {
+    static func coordinate(_ value: Double, locale: Locale = .current) -> String {
+        MeasurementDisplay.format(value, locale: locale) ?? "—"
+    }
     static func exceedsDrawingLimit(_ counts: [(visible: Bool, count: Int)], limit: Int) -> Bool {
         var remaining = max(0, limit)
         for item in counts where item.visible {

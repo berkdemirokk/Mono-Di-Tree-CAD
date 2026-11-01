@@ -156,6 +156,8 @@ private struct ContentView: View {
                 if project.pieces.contains(where: { !$0.notches.isEmpty }) {
                     Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
                         .font(.caption).foregroundStyle(.secondary)
+                    Text("İşaret koordinatları yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
+                        .font(.caption).foregroundStyle(.secondary)
                     Text("Sürüm 6 önizlemesinde dosya ve doğrulama metni en fazla 8 MB olabilir. UTF-8 ve BOM'lu UTF-16/UTF-32 desteklenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
@@ -171,7 +173,7 @@ private struct ContentView: View {
                     if let selectedNotch, selectedNotch.piece == selectedPiece {
                         let piece = project.pieces[selectedNotch.piece]
                         let point = piece.points[selectedNotch.point]
-                        let coordinates = NotchSearch.label(index: selectedNotch.point, x: point.x.formatted(), y: point.y.formatted())
+                        let coordinates = NotchSearch.label(index: selectedNotch.point, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y))
                         Text(piece.hasMinimumContourPoints
                              ? "Seçili köşe işareti: \(coordinates). Önizlemede sarı halka ile gösterilir."
                              : "Seçili köşe işareti: \(coordinates). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
@@ -401,11 +403,13 @@ private struct ContentView: View {
                                 .padding(.horizontal)
                                 if let current {
                                     let point = piece.points[current]
-                                    Text("Seçili işaret: \(NotchSearch.label(index: current, x: point.x.formatted(), y: point.y.formatted()))")
+                                    Text("Seçili işaret: \(NotchSearch.label(index: current, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y)))")
                                         .font(.caption).foregroundStyle(.secondary)
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                         .padding(.horizontal)
                                         .accessibilityIdentifier("largePreviewNotchLabel")
+                                    Text("Koordinatlar yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
+                                        .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
                                 }
                             }
                             if let selectedPiece, !project.pieces[selectedPiece].hasMinimumContourPoints {
@@ -1890,6 +1894,8 @@ private struct NotchPicker: View {
         NavigationStack {
             let current = result?.query == search ? result : nil
             List {
+                Text("Koordinatlar yaklaşık gösterilir; kesin değerler kaynak dosyada korunur.")
+                    .font(.caption).foregroundStyle(.secondary)
                 if current == nil { ProgressView("İşaretler aranıyor…") }
                 if current?.hasMore == true {
                     Text("İlk 500 eşleşme gösteriliyor. Diğer işaretleri bulmak için aramayı daraltın.")
@@ -1902,7 +1908,7 @@ private struct NotchPicker: View {
                         Section {
                             ForEach(indices, id: \.self) { pointIndex in
                                 let point = piece.points[pointIndex]
-                                Button(NotchSearch.label(index: pointIndex, x: point.x.formatted(), y: point.y.formatted())) {
+                                Button(NotchSearch.label(index: pointIndex, x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y))) {
                                     select(pieceIndex, pointIndex)
                                 }
                                 .accessibilityValue("\(piece.displayName(index: pieceIndex)) · \(piece.selectionDetails(index: pieceIndex))")
@@ -1954,7 +1960,7 @@ private struct NotchPicker: View {
                         guard query.allows(index: pointIndex) else { return false }
                         let point = snapshot[pieceIndex].points[pointIndex]
                         return query.matches(pieceName: names[pieceIndex], details: details[pieceIndex], index: pointIndex,
-                                             x: point.x.formatted(), y: point.y.formatted())
+                                             x: NotchSearch.coordinate(point.x), y: NotchSearch.coordinate(point.y))
                     }) else { return nil }
                     return SearchResult(query: request, groups: found.groups, hasMore: found.hasMore)
                 }
