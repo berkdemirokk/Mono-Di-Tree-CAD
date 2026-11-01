@@ -1,6 +1,32 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLargePreviewCanSearchAndSelectPiecesWithoutClosing() {
+        let fixture = #"[5,{"Name":"Bedenler","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Metadata":{"Size":"S"}},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":20,"Y":30}],"Metadata":{"Size":"XL"}}],"GradingRules":[]}]"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let large = app.buttons["Konturu büyük görünümde incele"]
+        XCTAssertTrue(large.waitForExistence(timeout: 15))
+        for _ in 0..<5 where !large.isHittable { app.swipeUp() }
+        XCTAssertTrue(large.isHittable); large.tap()
+        let pick = app.buttons["Büyük görünümde parça seç"]
+        XCTAssertTrue(pick.waitForExistence(timeout: 5)); pick.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("kol xl")
+        let piece = app.buttons["Kol"]
+        XCTAssertTrue(piece.waitForExistence(timeout: 5)); piece.tap()
+        let details = app.staticTexts["largePreviewPieceDetails"]
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertTrue(details.label.contains("Beden: XL"))
+        XCTAssertTrue(app.navigationBars["Kontur inceleme"].exists)
+        pick.tap()
+        let all = app.buttons["Tüm parçalar"]
+        XCTAssertTrue(all.waitForExistence(timeout: 5)); all.tap()
+        XCTAssertTrue(app.otherElements["2 parçalı kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
     func testSlowOldNotchSearchCannotReplaceNewResults() {
         let fixture = #"[6,{"Name":"Arama","Pieces":[{"Name":"old","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":10}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}},{"VertexIndex":1,"Position":{"X":10,"Y":10}}]}],"GradingRules":[]}]"#
         let app = XCUIApplication()

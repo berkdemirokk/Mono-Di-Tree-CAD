@@ -32,6 +32,7 @@ private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
     @State private var showingFullScreenDrawing = false
+    @State private var showingLargePiecePicker = false
     @State private var showingNotches = false
     @State private var selectedNotch: (piece: Int, point: Int)?
     @State private var showingLibrary = false
@@ -306,8 +307,16 @@ private struct ContentView: View {
                                 }
                                 .disabled(modelLoad.isLoading || selectedPiece == nil || selectedPiece == 0)
                                 Spacer()
-                                Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
-                                    .font(.headline).lineLimit(2)
+                                Button { showingLargePiecePicker = true } label: {
+                                    HStack(spacing: 4) {
+                                        Text(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
+                                            .font(.headline).lineLimit(2)
+                                        Image(systemName: "chevron.up.chevron.down")
+                                    }
+                                }
+                                .disabled(modelLoad.isLoading)
+                                .accessibilityLabel("Büyük görünümde parça seç")
+                                .accessibilityValue(selectedPiece.map { project.pieces[$0].displayName(index: $0) } ?? "Tüm parçalar")
                                 Spacer()
                                 Button("Sonraki parça") {
                                     let next = selectedPiece.map { $0 + 1 } ?? 0
@@ -345,8 +354,20 @@ private struct ContentView: View {
                     }
                     .navigationTitle("Kontur inceleme")
                     .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { showingFullScreenDrawing = false } } }
+                    .sheet(isPresented: $showingLargePiecePicker) {
+                        PiecePicker(pieces: project.pieces, selection: Binding(
+                            get: { selectedPiece },
+                            set: { selection in
+                                if selection != selectedPiece { selectedNotch = nil }
+                                selectedPiece = selection
+                            }
+                        ))
+                    }
                 }
             }
+        }
+        .onChange(of: showingFullScreenDrawing) { presented in
+            if !presented { showingLargePiecePicker = false }
         }
         .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.item]) { result in
             do {
