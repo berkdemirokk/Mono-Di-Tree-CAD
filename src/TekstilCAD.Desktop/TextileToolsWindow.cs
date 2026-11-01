@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Input;
 using TekstilCAD.Core;
+using TekstilCAD.FileFormats;
 using TekstilCAD.Grading;
 using TekstilCAD.Nesting;
 using TekstilCAD.Patterns;
@@ -678,14 +679,17 @@ public sealed class TextileToolsWindow : Window
         var metadataPanel=new StackPanel();
         var includeSize=new CheckBox { Content="Yeni beden adını beden bilgisi olarak ekle",IsChecked=false,Margin=new Thickness(0,3,0,3) };
         var copyRoleMaterial=new CheckBox { Content="Kaynağın rol ve malzemesini kopyala",IsChecked=false,Margin=new Thickness(0,3,0,3) };
+        var copyGradeRule=new CheckBox { Content="Kullanılan artışları yeni bedene de kaydet",IsChecked=false,Margin=new Thickness(0,3,0,3) };
         AutomationProperties.SetName(includeSize,"Yeni beden adını beden bilgisi olarak ekle");
         AutomationProperties.SetName(copyRoleMaterial,"Kaynağın rol ve malzemesini kopyala");
         AutomationProperties.SetHelpText(copyRoleMaterial,"Yalnız mevcut rol ve malzeme kopyalanır; adet hiçbir zaman kopyalanmaz.");
-        metadataPanel.Children.Add(includeSize);metadataPanel.Children.Add(copyRoleMaterial);
+        AutomationProperties.SetName(copyGradeRule,"Kullanılan serileme artışlarını yeni bedene kaydet");
+        AutomationProperties.SetHelpText(copyGradeRule,"Yeni beden için bağımsız bir kural oluşturur. Sonraki bedenler bu yeni kaynaktan hesaplanır; sonuçları kontrol edin.");
+        metadataPanel.Children.Add(includeSize);metadataPanel.Children.Add(copyRoleMaterial);metadataPanel.Children.Add(copyGradeRule);
         metadataPanel.Children.Add(new TextBlock { Text="Adet aktarılmaz; adetli pastal için yeni parçada ayrıca girin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
         metadataPanel.Children.Add(batchEdit);
         metadataOptions.Content=metadataPanel;resetRow.Children.Add(metadataOptions);
-        source.SelectionChanged+=(_,_)=> { if(!refreshingSource) { includeSize.IsChecked=false;copyRoleMaterial.IsChecked=false; } };
+        source.SelectionChanged+=(_,_)=> { if(!refreshingSource) { includeSize.IsChecked=false;copyRoleMaterial.IsChecked=false;copyGradeRule.IsChecked=false; } };
         var apply=Button(fields,"Artışları projeye uygula",()=>
         {
             if(!grades.CommitEdit(DataGridEditingUnit.Cell,true)||!grades.CommitEdit(DataGridEditingUnit.Row,true))throw new ArgumentException("Serileme tablosundaki hücreyi tamamlayın.");
@@ -732,7 +736,7 @@ public sealed class TextileToolsWindow : Window
                 var increments=ParseGradeIncrements(rows);
                 var stepCount=Number(stepText);
                 var transferSize=includeSize.IsChecked==true;
-                var transferRoleMaterial=copyRoleMaterial.IsChecked==true;
+                var transferRoleMaterial=copyRoleMaterial.IsChecked==true;var transferRule=copyGradeRule.IsChecked==true;
                 var document=workspace.Document;
                 var original=document.Clone();
                 var snapshot=piece.Clone();
@@ -752,17 +756,18 @@ public sealed class TextileToolsWindow : Window
                     if(transferSize || role is not null || material is not null)
                         item.Metadata=new PieceMetadata { Size=transferSize ? sizeName : null,Role=role,Material=material,Quantity=null };
                     token.ThrowIfCancellationRequested();
-                    var candidate=original.Clone();candidate.Pieces.Add(item.Clone());MainWindow.Validate(candidate);
+                    var copiedRule=transferRule ? GradingEngine.CreateDerivedRule(item,increments,token) : null;
+                    var candidate=original.Clone();candidate.Pieces.Add(item.Clone());if(copiedRule is not null)candidate.GradingRules.Add(copiedRule.Clone());ProjectStorage.Validate(candidate,token);
                     afterGrade?.Invoke();
                     token.ThrowIfCancellationRequested();
-                    return item;
+                    return (item,copiedRule);
                 });
                 if(windowClosed)return;
                 token.ThrowIfCancellationRequested();
                 if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,document) ||
                    !DocumentSession.ContentEquals(workspace.Document,original) || source.SelectedItem is not PatternPiece current || current.Id!=snapshot.Id ||
                    activeSourceId!=snapshot.Id || rulesNeedReset || activeDraft is null || activeDraft.Closed!=snapshot.Closed || !activeDraft.Points.SequenceEqual(snapshot.Points) ||
-                   size.Text!=sizeText || steps.Text!=stepText || (includeSize.IsChecked==true)!=transferSize || (copyRoleMaterial.IsChecked==true)!=transferRoleMaterial ||
+                   size.Text!=sizeText || steps.Text!=stepText || (includeSize.IsChecked==true)!=transferSize || (copyRoleMaterial.IsChecked==true)!=transferRoleMaterial || (copyGradeRule.IsChecked==true)!=transferRule ||
                    !rows.Select(r=>(r.Dx,r.Dy)).SequenceEqual(rowText))
                 {
                     result.Foreground=StudioTheme.Warning;result.Text="Proje veya serileme girdileri hesaplama sırasında değişti; yeni beden eklenmedi. Kontrol edip yeniden deneyin.";return;
@@ -775,14 +780,15 @@ public sealed class TextileToolsWindow : Window
                 // The dispatcher cannot process a new cancellation while this commit runs.
                 // A request already received before this point must leave the project untouched.
                 token.ThrowIfCancellationRequested();
-                var grainNotice=generated.Grainline is null ? "" : " İplik yönü aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
-                var markNotice=generated.Notches is { Count:>0 } ? $" {generated.Notches.Count} köşe işareti aynı indeksli yeni noktalara aktarıldı; konumlarını kontrol edin. İşaretler fiziksel çentik değildir." : "";
-                AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}{markNotice}");
-                if(generated.Grainline is not null)result.Foreground=StudioTheme.Warning;
-                if(generated.Points.SequenceEqual(snapshot.Points))
+                var copiedRule=generated.copiedRule;var generatedPiece=generated.item;
+                var grainNotice=generatedPiece.Grainline is null ? "" : " İplik yönü aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
+                var markNotice=generatedPiece.Notches is { Count:>0 } ? $" {generatedPiece.Notches.Count} köşe işareti aynı indeksli yeni noktalara aktarıldı; konumlarını kontrol edin. İşaretler fiziksel çentik değildir." : "";
+                AddGenerated(generatedPiece,true,onCommitted:()=>gradeCommitted=true,generatedRule:copiedRule);Success($"{generatedPiece.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}{markNotice}"+(copiedRule is null ? "" : " Kullanılan artışlar yeni bedene bağımsız kural olarak kaydedildi; sonraki bedenleri kontrol edin."));
+                if(generatedPiece.Grainline is not null)result.Foreground=StudioTheme.Warning;
+                if(generatedPiece.Points.SequenceEqual(snapshot.Points))
                 {
                     result.Foreground=StudioTheme.Warning;
-                    result.Text=$"{generated.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}{markNotice}";
+                    result.Text=$"{generatedPiece.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}{markNotice}"+(copiedRule is null ? "" : " Kullanılan artışlar yeni bedene bağımsız kural olarak kaydedildi; sonraki bedenleri kontrol edin.");
                     workspace.SetStatus(result.Text);
                 }
             }
@@ -1323,10 +1329,10 @@ public sealed class TextileToolsWindow : Window
             if(!windowClosed) { source.IsEnabled=true;if(offsetAllowance is not null)offsetAllowance.IsEnabled=true;RefreshCommands(); }
         }
     }
-    private void AddGenerated(PatternPiece generated,bool keepBaseSource=false,string? detail=null,string? notice=null,Action? onCommitted=null)
+    private void AddGenerated(PatternPiece generated,bool keepBaseSource=false,string? detail=null,string? notice=null,Action? onCommitted=null,GradingRuleSet? generatedRule=null)
     {
         var sourcePiece=source.SelectedItem as PatternPiece; var baseId=sourcePiece?.Id; var metadataNotCopied=sourcePiece?.Metadata is not null && generated.Metadata is null;
-        workspace.CommitObserved("Kalıp aracı uygulandı",()=>workspace.Document.Pieces.Add(generated),onCommitted);workspace.Select(generated.Id);workspace.FitView();RefreshSources(keepBaseSource?baseId:generated.Id);
+        workspace.CommitObserved("Kalıp aracı uygulandı",()=> { workspace.Document.Pieces.Add(generated);if(generatedRule is not null)workspace.Document.GradingRules.Add(generatedRule); },onCommitted);workspace.Select(generated.Id);workspace.FitView();RefreshSources(keepBaseSource?baseId:generated.Id);
         Success(notice+generated.Name+" projeye eklendi. Kaynak parça korundu."+(metadataNotCopied ? " Kaynağın rol, beden, malzeme ve adet bilgileri yeni parçaya aktarılmadı; gerekiyorsa Parça bilgileri bölümünde girin." : "")+detail);
     }
     private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null,int? deletedIndex=null,int? movedIndex=null,bool closureCleanup=false,GradingRuleSet? cleanedRule=null)

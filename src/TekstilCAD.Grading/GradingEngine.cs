@@ -113,6 +113,33 @@ public static class GradingEngine
     // Two quadratic contour validations are bounded by the same 50 million work budget.
     public const int MaximumGradePoints = 7071;
     public const long MaximumBatchValidationWork = 50_000_000;
+    /// <summary>Create an independent rule for a generated piece, preserving every coordinate bit.</summary>
+    public static GradingRuleSet CreateDerivedRule(PatternPiece generated, IReadOnlyList<Point2> increments, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(generated);
+        ArgumentNullException.ThrowIfNull(increments);
+        if (generated.Id == Guid.Empty || generated.Points is null || generated.Points.Count != increments.Count ||
+            increments.Count < (generated.Closed ? 3 : 2) || increments.Count > MaximumGradePoints)
+            throw new ArgumentException("Yeni beden ve artışların nokta sayıları uyuşmuyor.");
+        static bool SameBits(Point2 a, Point2 b) => BitConverter.DoubleToInt64Bits(a.X) == BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y) == BitConverter.DoubleToInt64Bits(b.Y);
+        if (generated.Closed && generated.Points[0] == generated.Points[^1] &&
+            (!SameBits(generated.Points[0], generated.Points[^1]) || !SameBits(increments[0], increments[^1])))
+            throw new ArgumentException("Yinelenen kapanış noktasının koordinatları ve artışları bit düzeyinde eşleşmelidir.");
+        var rule = new GradingRuleSet { SourcePieceId = generated.Id, SourceClosed = generated.Closed };
+        for (var i = 0; i < increments.Count; i++)
+        {
+            if ((i & 255) == 0) cancellationToken.ThrowIfCancellationRequested();
+            ValidatePoint(generated.Points[i]);
+            ValidatePoint(increments[i]);
+            rule.SourcePoints.Add(generated.Points[i]);
+            rule.Deltas.Add(increments[i]);
+        }
+        cancellationToken.ThrowIfCancellationRequested();
+        return rule;
+    }
+
     /// <summary>Generate a new size without mutating the base contour. A rule is matched by point index;
     /// visual vertex marks retain that index and follow its graded point.</summary>
     public static PatternPiece Generate(PatternPiece basePiece, IReadOnlyList<Point2> increments, double steps, string sizeName)

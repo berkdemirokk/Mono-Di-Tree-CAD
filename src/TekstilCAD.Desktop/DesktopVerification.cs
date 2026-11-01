@@ -9843,14 +9843,25 @@ internal static class DesktopVerification
             {
                 var root=(FrameworkElement)tools.Content;root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
                 var create=Descendants<Button>(root).Single(b=>Equals(b.Content,"Yeni bedeni projeye ekle"));
+                var metadata=Descendants<Expander>(root).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar"));
+                metadata.IsExpanded=true;root.UpdateLayout();
+                var copyRule=Descendants<CheckBox>(metadata).Single(c=>AutomationProperties.GetName(c)=="Kullanılan serileme artışlarını yeni bedene kaydet");
+                Check(copyRule.IsChecked!=true,"Derived grading rule is opt-in",checks);
+                copyRule.IsChecked=true;
                 ClickAndWaitForGrade(tools,create);
                 var graded=studio.Document.Pieces.Single(p=>p.Id!=source.Id);
                 var mark=graded.Notches!.Single();
                 var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                var rule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==graded.Id);
+                var afterRule=studio.Document.Clone();
                 Check(mark.VertexIndex==1 && mark.Position==graded.Points[1] && !ReferenceEquals(mark,studio.Document.Pieces.Single(p=>p.Id==source.Id).Notches![0]) &&
                     status.Text.Contains("köşe işareti",StringComparison.OrdinalIgnoreCase),
                     "Single grading preserves independent marked vertices and reports them",checks);
-                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo removes marked single grade without changing source",checks);
+                Check(rule.SourceClosed==graded.Closed && rule.SourcePoints.SequenceEqual(graded.Points) && rule.Deltas.Count==graded.Points.Count,
+                    "Opt-in grading saves independent rule for marked generated piece",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() &&
+                    DocumentSession.ContentEquals(afterRule,studio.Document) && session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
+                    "Derived grading piece and rule undo and redo together",checks);
             }
             finally { tools.Close(); }
             var live=studio.Document.Pieces.Single();var added=false;
