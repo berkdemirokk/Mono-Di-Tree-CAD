@@ -258,6 +258,7 @@ public class MainWindow : Window
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
+        AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
         notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; köşe POINT ve varsa iplik yönü LINE işaretleri üretim veya kesim komutu değildir.");
@@ -2018,6 +2019,46 @@ public class MainWindow : Window
     }
     private static void EnsureWritableDestination(string path) => ProjectStorage.EnsureWritableDestination(path);
     internal Func<(bool Accepted,double? ToleranceMm)>? ConfirmDxfBulgeOptionsForVerification { get; set; }
+    private async void CreateBlockDefinitionCopy()
+    {
+        if(DxfImportRunning || ExportRunning || windowClosed)return;
+        var open=new OpenFileDialog { Filter="DXF dosyası (*.dxf)|*.dxf",CheckFileExists=true };
+        if(open.ShowDialog(this)!=true)return;
+        if(MessageBox.Show(this,"Dosya UTF-8 olarak ve 1 dosya birimi = 1 mm ölçeğiyle okunacak. Yerleştirilmemiş blok tanımından ayrı bir çalışma kopyası hazırlanır; yerleşim veya üretim doğrulanmaz. Devam edilsin mi?","Blok tanımı",MessageBoxButton.YesNo,MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
+        using var cancellation=new CancellationTokenSource();dxfImportCancellation=cancellation;DxfImportRunning=true;
+        dxfCancel.Visibility=Visibility.Visible;dxfCancel.IsEnabled=true;SetStatus("Blok tanımları okunuyor; açık proje korunuyor.");
+        try
+        {
+            var path=open.FileName;
+            var import=await Task.Run(()=>DxfFormat.Import(path,1,DxfTextEncoding.Utf8,cancellation.Token));
+            cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
+            if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault)
+                throw new InvalidDataException("Blok kaynak envanteri eksik; çalışma kopyası hazırlanmadı.");
+            var review=new DxfBlockDefinitionReviewWindow(this,import);
+            if(review.ShowDialog()!=true || review.Selection is not { } selection)return;
+            cancellation.Token.ThrowIfCancellationRequested();
+            var blockOrdinal=review.BlockHeaderOrdinal;
+            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.Create(import,source,selection,blockOrdinal,true,cancellation.Token); });
+            cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
+            var save=new SaveFileDialog { Filter="TekstilCAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",AddExtension=true,OverwritePrompt=false };
+            if(save.ShowDialog(this)!=true)return;
+            if(!string.Equals(Path.GetExtension(save.FileName),".tcad",StringComparison.OrdinalIgnoreCase))throw new InvalidDataException("Çalışma kopyası .tcad uzantısıyla kaydedilmelidir.");
+            EnsureWritableDestination(save.FileName);
+            var expected=ProjectStorage.CaptureVersion(save.FileName,cancellation.Token);
+            if(expected.Sha256 is not null)throw new IOException("Mevcut dosya korunuyor; yeni bir dosya adı seçin.");
+            await Task.Run(()=>ProjectStorage.SaveIfUnchanged(result.WorkingCopy,save.FileName,expected,cancellation.Token));
+            if(!windowClosed)SetStatus("Blok tanımı ayrı çalışma dosyasına kaydedildi. Yerleşim veya üretim uygunluğu doğrulanmadı.");
+        }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { if(!windowClosed)SetStatus("Blok tanımı işlemi iptal edildi; açık proje korundu."); }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        { if(!windowClosed)MessageBox.Show(this,ex.Message,"Blok tanımı hazırlanamadı",MessageBoxButton.OK,MessageBoxImage.Warning); }
+        finally
+        {
+            if(ReferenceEquals(dxfImportCancellation,cancellation))dxfImportCancellation=null;
+            DxfImportRunning=false;dxfCancel.Visibility=Visibility.Collapsed;dxfCancel.IsEnabled=false;
+        }
+    }
+
     private async void ImportDxf()
     {
         if(BlockForDxfImport() || BlockForExport())return;

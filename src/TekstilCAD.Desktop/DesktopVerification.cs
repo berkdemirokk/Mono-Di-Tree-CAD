@@ -1251,6 +1251,7 @@ internal static class DesktopVerification
             VerifyAsyncDxfBulgeImport(studio,work,reportPath,checks);
             VerifyDxfGrainlineReview(studio,work,checks);
             VerifyDxfPointReview(studio,work,checks);
+            VerifyDxfBlockDefinitionReview(studio,checks);
             VerifyDxfGrainlineReviewControls(studio,reportPath,checks);
             VerifyDxfImportCancellation(studio,work,checks);
             VerifyDxfSourceCheckWorkflow(studio,work,checks);
@@ -2300,6 +2301,29 @@ internal static class DesktopVerification
             catch(InvalidOperationException) { nonModal=true; }
             Check(nonModal && window.Selections.Count==0 && DocumentSession.ContentEquals(before,project),
                 "Headless empty-continue handler clears selections without changing the import",checks);
+        }
+        finally { window.Close(); }
+    }
+
+    private static void VerifyDxfBlockDefinitionReview(MainWindow studio,List<string> checks)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var import=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(text)),"test");var before=import.Project.Clone();
+        var window=new DxfBlockDefinitionReviewWindow(studio,import);
+        try
+        {
+            var root=(FrameworkElement)window.Content;
+            var block=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var point=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
+            var piece=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef POLYLINE parçası");
+            var vertex=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
+            block.SelectedIndex=0;point.SelectedIndex=0;piece.SelectedIndex=0;vertex.SelectedIndex=0;
+            var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla"));
+            apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.Selection is null && DocumentSession.ContentEquals(before,import.Project),"Block definition selection requires explicit unplaced-copy acknowledgment",checks);
+            Check(Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Yerleşim") && t.Text.Contains("fiziksel çentik")),"Block definition review explains placement and marker limitations",checks);
         }
         finally { window.Close(); }
     }
