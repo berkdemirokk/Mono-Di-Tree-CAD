@@ -19,9 +19,12 @@ public static class PdfTiledFormat
         ArgumentNullException.ThrowIfNull(project);ArgumentNullException.ThrowIfNull(expectedVersion);
         ProjectStorage.Validate(project);var copy=project.Clone();ProjectStorage.Validate(copy);
         NotchExportGuard.EnsureSupported(copy);
-        GrainlineExportGuard.EnsureSupported(copy);
         if(copy.Pieces.Count==0)throw new InvalidDataException("A4 PDF için en az bir parça gerekir.");
-        var points=copy.Pieces.SelectMany(p=>p.Points).ToArray();
+        // Include every grainline endpoint in the physical sheet bounds.
+        // A line outside its contour must never be silently clipped away.
+        var points=copy.Pieces.SelectMany(p=>p.Grainline is { } line
+            ? p.Points.Concat([line.Start,line.End]) : p.Points).ToArray();
+        var hasGrainlines=copy.Pieces.Any(p=>p.Grainline is not null);
         // One millimetre clearance keeps exterior contours away from joins.
         var minX=points.Min(p=>p.X)-1;var minY=points.Min(p=>p.Y)-1;
         var width=points.Max(p=>p.X)-minX+1;var height=points.Max(p=>p.Y)-minY+1;
@@ -40,6 +43,7 @@ public static class PdfTiledFormat
             body.Append($"0.65 G 0.3 w {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re S\n");
             body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (SATIR {row+1}/{rows}  SUTUN {col+1}/{cols}  SAYFA {row*cols+col+1}/{pageCount}  YAZDIRMA 100%) Tj ET\n");
             body.Append($"0 G 0.5 w {F(10*Scale)} {F(15*Scale)} m {F(60*Scale)} {F(15*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(14*Scale)} Td (50 MM KONTROL) Tj ET\n");
+            if(hasGrainlines)body.Append($"BT /F1 8 Tf {F(115*Scale)} {F(14*Scale)} Td (KESIK: IPLIK YONU) Tj ET\n");
             body.Append($"q {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re W n 0 G 0.5 w 1 J 1 j\n");
             foreach(var piece in copy.Pieces)
             {
@@ -55,6 +59,19 @@ public static class PdfTiledFormat
                 if(piece.Closed && piece.Points[0]!=piece.Points[^1] && first==previous)
                     throw new InvalidDataException("A4 PDF koordinat hassasiyeti kapanış kenarını sıfıra indirdi; çıktı oluşturulmadı.");
                 if(piece.Closed)body.Append("h\n");body.Append("S\n");
+            }
+            if(hasGrainlines)
+            {
+                body.Append("[4 2] 0 d 0 G 0.5 w\n");
+                foreach(var piece in copy.Pieces)
+                {
+                    if(piece.Grainline is not { } line)continue;
+                    string Map(Point2 p) => F((Margin+p.X-minX-col*TileWidth)*Scale)+" "+F((FrameY+TileHeight+row*TileHeight-(p.Y-minY))*Scale);
+                    var first=Map(line.Start);var last=Map(line.End);
+                    if(first==last)throw new InvalidDataException("A4 PDF koordinat hassasiyeti iplik yönünü sıfıra indirdi; çıktı oluşturulmadı.");
+                    body.Append(first).Append(" m ").Append(last).Append(" l S\n");
+                }
+                body.Append("[] 0 d\n");
             }
             body.Append("Q\n");streams.Add(body.ToString());
         }

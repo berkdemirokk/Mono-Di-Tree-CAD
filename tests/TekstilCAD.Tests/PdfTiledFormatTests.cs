@@ -60,14 +60,51 @@ public class PdfTiledFormatTests
     }
 
     [Fact]
-    public void TargetConflictAndUnsupportedGrainlineDoNotOverwrite()
+    public void TargetConflictAndCollapsedGrainlineDoNotOverwrite()
     {
         var path=Path.Combine(Path.GetTempPath(),$"tekstil-tiled-{Guid.NewGuid():N}.pdf");
         var expected=ProjectStorage.CaptureVersion(path);File.WriteAllText(path,"external");
         var source=new ProjectDocument { Pieces=[new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)] }] };
         Assert.Throws<ProjectConflictException>(()=>PdfTiledFormat.Export(source,path,expected));
-        source.Pieces[0].Grainline=new Grainline { Start=new(1,1),End=new(1,5) };
+        source.Pieces[0].Grainline=new Grainline { Start=new(1,1),End=new(1+1e-9,1) };
         Assert.Throws<InvalidDataException>(()=>PdfTiledFormat.Export(source,path,ProjectStorage.CaptureVersion(path)));
         Assert.Equal("external",File.ReadAllText(path));
     }
+    [Fact]
+    public void GrainlineUsesSameScaleAndClipAcrossAllSheets()
+    {
+        var path=Path.Combine(Path.GetTempPath(),$"tekstil-tiled-grain-{Guid.NewGuid():N}.pdf");
+        try
+        {
+            var piece=new PatternPiece { Points=[new(0,0),new(300,0),new(300,300),new(0,300)],Grainline=new Grainline { Start=new(100,100),End=new(250,200),NeedsReview=true } };
+            var source=new ProjectDocument { Pieces=[piece] };var before=source.Clone();
+            PdfTiledFormat.Export(source,path,ProjectStorage.CaptureVersion(path));
+            var pdf=File.ReadAllText(path,Encoding.ASCII);
+            var sections=pdf.Split("[4 2] 0 d 0 G 0.5 w\n").Skip(1).ToArray();
+            Assert.Equal(4,sections.Length);Assert.Equal(4,pdf.Split("KESIK: IPLIK YONU").Length-1);
+            var lines=sections.Select(section=>section[..section.IndexOf('\n')].Split(' '))
+                .Select(v=>(X1:double.Parse(v[0],CultureInfo.InvariantCulture),Y1:double.Parse(v[1],CultureInfo.InvariantCulture),X2:double.Parse(v[3],CultureInfo.InvariantCulture),Y2:double.Parse(v[4],CultureInfo.InvariantCulture))).ToArray();
+            const double scale=72.0/25.4;
+            Assert.InRange(Math.Abs((lines[0].X2-lines[0].X1)-150*scale),0,0.000002);
+            Assert.InRange(Math.Abs((lines[0].Y1-lines[0].Y2)-100*scale),0,0.000002);
+            Assert.InRange(Math.Abs((lines[0].X1-lines[1].X1)-190*scale),0,0.000002);
+            Assert.InRange(Math.Abs((lines[2].Y1-lines[0].Y1)-257*scale),0,0.000002);
+            Assert.True(DocumentSession.ContentEquals(before,source));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+
+    [Fact]
+    public void GrainlineOutsideContourExpandsSheetCoverage()
+    {
+        var path=Path.Combine(Path.GetTempPath(),$"tekstil-tiled-grain-bounds-{Guid.NewGuid():N}.pdf");
+        try
+        {
+            var source=new ProjectDocument { Pieces=[new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],Grainline=new Grainline { Start=new(400,0),End=new(400,5) } }] };
+            PdfTiledFormat.Export(source,path,ProjectStorage.CaptureVersion(path));
+            Assert.Contains("/Count 3",File.ReadAllText(path,Encoding.ASCII));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+
 }
