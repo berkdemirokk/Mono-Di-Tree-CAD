@@ -4,6 +4,20 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testOverlayRejectsRoundedShiftEvenIfMaximumMoves() throws {
+        let ordinary = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(10, 10)]))
+        let roundedMax = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(9_007_199_254_740_994, 1)]))
+        // In binary64, max + 1 rounds up by 2: checking only != would accept it.
+        XCTAssertNotEqual(roundedMax.maxX + 1, roundedMax.maxX)
+        XCTAssertNil(ContourOverlay.bounds(ordinary, roundedMax, dx: 1))
+        let points = [p(0, 0), p(9_007_199_254_740_991, 0), p(9_007_199_254_740_992, 1)]
+        let bounds = try XCTUnwrap(ContourBounds(points: points))
+        // Maximum + 2 is exact, but the interior vertex + 2 is not.
+        XCTAssertNotNil(ContourOverlay.bounds(ordinary, bounds, dx: 2))
+        XCTAssertFalse(ContourOverlay.isExact(points: points, bounds: bounds, dx: 2))
+        XCTAssertNil(ContourOverlay.aligned(points[1], bounds: bounds, dx: 2))
+        XCTAssertTrue(ContourOverlay.isExact(points: [p(0, 0), p(10, 10)], bounds: ordinary, dx: 1))
+    }
     func testOverlayTranslationChangesOnlySecondRelativePositionAndFits() throws {
         let a = try XCTUnwrap(ContourBounds(points: [p(100, 20), p(200, 70)]))
         let b = try XCTUnwrap(ContourBounds(points: [p(-70, 10), p(-20, 60)]))

@@ -29,21 +29,35 @@ struct ContourBounds {
 // Align each bounding-box minimum at the same origin without scaling either
 // piece independently. Reject overflow instead of drawing misleading geometry.
 enum ContourOverlay {
+    // Error-free TwoSum: reject additions that rounded, including when a
+    // requested 1 mm shift rounds to 2 mm at large binary64 coordinates.
+    private static func exactSum(_ a: Double, _ b: Double) -> Double? {
+        guard a.isFinite, b.isFinite else { return nil }
+        if b == 0 { return a }
+        let sum = a + b
+        guard sum.isFinite else { return nil }
+        let bVirtual = sum - a
+        guard bVirtual.isFinite else { return nil }
+        let error = (a - (sum - bVirtual)) + (b - bVirtual)
+        return error == 0 ? sum : nil
+    }
     static func bounds(_ first: ContourBounds, _ second: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourBounds? {
-        let widths = [first.maxX - first.minX, second.maxX - second.minX]
-        let heights = [first.maxY - first.minY, second.maxY - second.minY]
-        guard widths.allSatisfy({ $0.isFinite && $0 >= 0 }), heights.allSatisfy({ $0.isFinite && $0 >= 0 }),
-              dx.isFinite, dy.isFinite else { return nil }
-        let maxX = widths[1] + dx, maxY = heights[1] + dy
-        guard maxX.isFinite, maxY.isFinite,
-              (dx == 0 || maxX != widths[1]), (dy == 0 || maxY != heights[1]) else { return nil }
-        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: widths[0], y: heights[0]),
+        guard let firstWidth = exactSum(first.maxX, -first.minX),
+              let secondWidth = exactSum(second.maxX, -second.minX),
+              let firstHeight = exactSum(first.maxY, -first.minY),
+              let secondHeight = exactSum(second.maxY, -second.minY),
+              firstWidth >= 0, secondWidth >= 0, firstHeight >= 0, secondHeight >= 0,
+              let maxX = exactSum(secondWidth, dx), let maxY = exactSum(secondHeight, dy) else { return nil }
+        return ContourBounds(points: [.init(x: 0, y: 0), .init(x: firstWidth, y: firstHeight),
                                       .init(x: dx, y: dy), .init(x: maxX, y: maxY)])
     }
     static func aligned(_ point: ContourMeasure.Point, bounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> ContourMeasure.Point? {
-        let x = (point.x - bounds.minX) + dx, y = (point.y - bounds.minY) + dy
-        guard x.isFinite, y.isFinite else { return nil }
+        guard let baseX = exactSum(point.x, -bounds.minX), let baseY = exactSum(point.y, -bounds.minY),
+              let x = exactSum(baseX, dx), let y = exactSum(baseY, dy) else { return nil }
         return .init(x: x, y: y)
+    }
+    static func isExact(points: [ContourMeasure.Point], bounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> Bool {
+        points.allSatisfy { aligned($0, bounds: bounds, dx: dx, dy: dy) != nil }
     }
 }
 // Fits finite model coordinates without multiplying by an enormous scale.

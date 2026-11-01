@@ -2774,13 +2774,15 @@ private struct PieceComparisonView: View {
 
                     if a.hasMinimumContourPoints, b.hasMinimumContourPoints,
                        let firstBounds = a.contourBounds, let secondBounds = b.contourBounds,
-                       ContourOverlay.bounds(firstBounds, secondBounds) != nil {
+                       ContourOverlay.bounds(firstBounds, secondBounds) != nil,
+                       ContourOverlay.isExact(points: a.points, bounds: firstBounds),
+                       ContourOverlay.isExact(points: b.points, bounds: secondBounds) {
                         Button("Parçaları üst üste göster…") { showingOverlay = true }
                             .sheet(isPresented: $showingOverlay) {
                                 PieceOverlayView(first: a, firstIndex: first, second: b, secondIndex: second)
                             }
                     } else {
-                        Text("Bu konturlar üst üste gösterilemiyor.").foregroundStyle(.secondary)
+                        Text("Bu konturlar sayı hassasiyeti veya geometri nedeniyle güvenle üst üste gösterilemiyor.").foregroundStyle(.secondary)
                     }
                     if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second, firstSpan: firstSpan, secondSpan: secondSpan) {
                         Button("Karşılaştırma özetini önizle…") { reportPreview = ReportPreview(text: report) }
@@ -2856,8 +2858,10 @@ private struct PieceOverlayView: View {
         let x = shiftX + dx, y = shiftY + dy
         guard abs(x) <= 10_000, abs(y) <= 10_000,
               let firstBounds = first.contourBounds, let secondBounds = second.contourBounds,
-              ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil else {
-            shiftError = "Bu görsel kaydırma sayı veya 10.000 mm sınırı nedeniyle uygulanamadı."
+              ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil,
+              ContourOverlay.isExact(points: first.points, bounds: firstBounds),
+              ContourOverlay.isExact(points: second.points, bounds: secondBounds, dx: x, dy: y) else {
+            shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
             return
         }
         shiftX = x; shiftY = y; shiftError = nil
