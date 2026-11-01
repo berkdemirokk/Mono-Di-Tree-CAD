@@ -377,6 +377,13 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(ModelStore.pieceSearchMatches(query: "kol yün", modelFields: model, pieceFields: back))
         XCTAssertTrue(ModelStore.pieceSearchMatches(query: "XL yün", modelFields: model, pieceFields: back))
     }
+    func testRawExportNamesAvoidSourceNameAndDifferPerAttempt() {
+        let first = ModelStore.newRawExportName(source: "model.tcad")
+        let second = ModelStore.newRawExportName(source: first)
+        XCTAssertNotEqual(first.lowercased(), second.lowercased())
+        XCTAssertTrue(first.hasPrefix("Kurtarılan-ham-"))
+        XCTAssertTrue(first.hasSuffix(".tcad"))
+    }
     func testContentSearchMatchesWordsAcrossModelAndPieceFields() {
         let fields = ["Fabrika 42", "Ön kol", "XL", "Pamuk"]
         XCTAssertTrue(ModelStore.contentSearchMatches(query: "42 kol pamuk", fields: fields))

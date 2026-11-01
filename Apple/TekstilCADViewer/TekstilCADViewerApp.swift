@@ -49,6 +49,7 @@ private struct ContentView: View {
     @State private var showingRawImport = false
     @State private var rawSaveNeedsRetry = false
     @State private var rawExportDocument: ProjectExportDocument?
+    @State private var rawExportName = "Kurtarılan-ham-model.tcad"
     @State private var showingRawExportWarning = false
     @State private var showingRawExporter = false
     #if DEBUG && targetEnvironment(simulator)
@@ -120,6 +121,7 @@ private struct ContentView: View {
                 Button("Ham kopyayı dışa aktar…") {
                     guard let rawImport else { return }
                     rawExportDocument = ProjectExportDocument(data: rawImport.data)
+                    rawExportName = ModelStore.newRawExportName(source: rawImport.name)
                     showingRawExportWarning = true
                 }
                 .disabled(isSaving || modelLoad.isLoading)
@@ -513,12 +515,12 @@ private struct ContentView: View {
             if !presented { exportDocument = nil }
         }
         .confirmationDialog("Ham kopyayı dışa aktar", isPresented: $showingRawExportWarning, titleVisibility: .visible) {
-            Button("Hedef seç") { showingRawExporter = true }
+            Button("Farklı hedef seçeceğim") { showingRawExporter = true }
             Button("Vazgeç", role: .cancel) { rawExportDocument = nil }
         } message: {
-            Text("Bu dosya doğrulanmadı ve bozuk olabilir. Bellekteki özgün baytlar dışa aktarılır. Kaynağı korumak için farklı bir ad ve hedef seçin; aynı hedef üzerine yazılabilir. Ham kopya siz vazgeçene kadar bellekte kalır.")
+            Text("Bu ham kopya doğrulanmadı ve bozuk olabilir. Açılış anındaki eski baytlar dışa aktarılır. Kaynağın sonraki değişiklikleri üzerine yazılabilir ve kaybolabilir. Farklı bir dosya adı ve konumu seçin. Dosya sağlayıcısındaki farklı adlar aynı dosyayı gösterebilir; uygulama hedefi yazmadan önce doğrulayamaz.")
         }
-        .fileExporter(isPresented: $showingRawExporter, document: rawExportDocument, contentType: .data, defaultFilename: "Kurtarılan-ham-model.tcad") { result in
+        .fileExporter(isPresented: $showingRawExporter, document: rawExportDocument, contentType: .data, defaultFilename: rawExportName) { result in
             rawExportDocument = nil
             switch result {
             case .success: saveNotice = "Ham kopya dışa aktarıldı; içerik doğrulanmadı."
@@ -883,6 +885,12 @@ private struct ContentView: View {
 enum ModelStore {
     // Display only: make line breaks and directional formatting explicit.
     // The stored name, path, and payload remain untouched.
+    static func newRawExportName(source: String) -> String {
+        var name: String
+        repeat { name = "Kurtarılan-ham-\(UUID().uuidString).tcad" }
+        while name.caseInsensitiveCompare(source) == .orderedSame
+        return name
+    }
     static func safeLabel(_ value: String) -> String {
         var result = ""
         for scalar in value.unicodeScalars {
