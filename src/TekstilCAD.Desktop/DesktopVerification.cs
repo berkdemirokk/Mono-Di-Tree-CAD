@@ -2462,6 +2462,7 @@ internal static class DesktopVerification
             var selectedLabel=(string)pieces.SelectedItem!.GetType().GetProperty("Label")!.GetValue(pieces.SelectedItem)!;
             Check(selectedLabel.Contains("LINE") && selectedLabel.Contains("açık") && Descendants<DxfPiecePreview>(root).Single().DisplayedPieceId==import.Project.Pieces.Last().Id,
                 "Open LINE chain is identified and previewed as a source block piece",checks);
+            points.SelectedIndex=-1;
             Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var status=Descendants<TextBlock>(root).Single(t=>AutomationProperties.GetName(t).StartsWith("Blok eşleme durumu"));
             Check(queue.Items.Count==0 && status.Text.Contains("yalnız POLYLINE"),"LINE chains cannot receive unsupported POINT mappings",checks);

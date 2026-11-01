@@ -183,9 +183,9 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         mappingList.ItemsSource=mappings;AutomationProperties.SetName(mappingList,"Seçilen POINT ve köşe çiftleri");body.Children.Add(mappingList);
         add.Click+=(_,_)=>
         {
+            if(pieces.SelectedItem is PieceChoice { SourceType:"LINE" }) { SetStatus("POINT eşlemesi yalnız POLYLINE içindir; LINE zincirini işaretsiz ekleyebilirsiniz.");return; }
             if(blocks.SelectedItem is not BlockChoice b || points.SelectedItem is not PointChoice p || pieces.SelectedItem is not PieceChoice piece || vertices.SelectedItem is not VertexChoice v)
             { SetStatus("Önce blok, POINT, parça ve köşeyi seçin.");return; }
-            if(piece.SourceType!="POLYLINE") { SetStatus("POINT eşlemesi yalnız POLYLINE içindir; LINE zincirini işaretsiz ekleyebilirsiniz.");return; }
             if(mappings.Any(m=>m.Item.Selection.SourceOrdinal==p.Ordinal || (m.Item.Selection.PieceId==piece.Id && m.Item.Selection.VertexIndex==v.Index)))
             { SetStatus("Her POINT ve köşe yalnız bir kez eklenebilir.");return; }
             if(mappings.Count>=32) { SetStatus("Bir çalışma kopyasında en fazla 32 eşleme seçilebilir.");return; }
