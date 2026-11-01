@@ -23,13 +23,14 @@ public sealed class DxfPointVertexMappingTests
     }
 
     [Fact]
-    public void ForeignLayerAndPrecancelledMappingAreRejected()
+    public void ExplicitDifferentLayerMappingIsAllowedAndCancellationPreservesSource()
     {
         var text=Encoding.ASCII.GetString(Fixture()).Replace("0\nPOINT\n8\nA", "0\nPOINT\n8\nB");
         var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
         var piece=Assert.Single(import.Project.Pieces);var point=Assert.Single(import.SupplementalGeometry!.Records.Where(r=>r.EntityType=="POINT"));
         var fingerprint=DxfTextileGrainlineMapping.CaptureFingerprint(import);var choice=new DxfPointVertexSelection(point.SourceOrdinal,piece.Id,0);
-        Assert.Throws<InvalidDataException>(()=>DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[choice],fingerprint));
+        var result=DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[choice],fingerprint);
+        Assert.Equal(0,Assert.Single(Assert.Single(result.Project.Pieces).Notches!).VertexIndex);
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>DxfPointVertexMapping.Apply(import,new MemoryStream(bytes),[choice],fingerprint,cancellationToken:cancellation.Token));
         Assert.Null(piece.Notches);
