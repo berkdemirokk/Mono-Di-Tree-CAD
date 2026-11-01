@@ -554,6 +554,8 @@ internal static class DesktopVerification
             VerifyLargeVertexValidation(studio,checks);
             VerifyAsyncExport(studio,work,checks);
             VerifyDxfGrainlineReviewExport(studio,work,checks);
+            VerifyDxfNotchReviewExport(studio,work,checks);
+            VerifyDxfNotchReviewWindow(studio,reportPath,checks);
             VerifyDxfGrainlineExportReviewWindow(studio,reportPath,checks);
             VerifyHpglExportCancellation(studio,work,checks);
             VerifyHpglPreparationFlow(studio,work,checks);
@@ -4295,6 +4297,51 @@ internal static class DesktopVerification
             viewer.ScrollToTop();
             root.UpdateLayout();
         }
+    }
+    private static void VerifyDxfNotchReviewWindow(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(20,0),new(0,20)],Metadata=new PieceMetadata { Size="M" } };
+        piece.Notches=[new NotchMark { VertexIndex=2,Position=piece.Points[2] }];
+        var plan=DxfNotchReviewExport.Prepare(new ProjectDocument { Pieces=[piece] },true);
+        var window=new DxfNotchReviewWindow(studio,plan);var root=(FrameworkElement)window.Content;
+        try
+        {
+            Render(window,Path.ChangeExtension(reportPath,".dxf-notch-review.png"),980,720);
+            var grid=Descendants<DataGrid>(root).Single(g=>AutomationProperties.GetName(g)=="Tüm köşe işaretleri ve katmanları");
+            var omission=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="DXF'ye aktarılmayan bilgiler");
+            var warning=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("DXF POINT"));
+            var accept=Descendants<Button>(root).Single(b=>Equals(b.Content,"İnceleme dosyasını yaz"));
+            var cancel=Descendants<Button>(root).Single(b=>Equals(b.Content,"İptal"));
+            Check(grid.Items.Count==1 && omission.Text.Contains("Beden") && warning.Text.Contains("kesim") && cancel.IsDefault && !accept.IsDefault,
+                "Notch review presents each marker, omitted metadata and explicit review-only warning",checks);
+            Render(window,Path.ChangeExtension(reportPath,".dxf-notch-review-small.png"),680,480);
+            Check(FullyVisible(accept,root) && FullyVisible(cancel,root),"Notch review approval and cancel remain reachable at minimum size",checks);
+        }
+        finally { window.Close(); }
+    }
+    private static void VerifyDxfNotchReviewExport(MainWindow studio,string work,List<string> checks)
+    {
+        var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(20,0),new(0,20)] };
+        piece.Notches=[new NotchMark { VertexIndex=2,Position=piece.Points[2] }];
+        void Reset() { studio.LoadDocument(new ProjectDocument { Name="Köşe incelemesi",Pieces=[piece.Clone()] });studio.Select(piece.Id); }
+        string Target()=>Path.Combine(work,$"notch-review-{Guid.NewGuid():N}.dxf");
+        void Run(string path) { var task=studio.StartDxfNotchReviewExportAsync(path,ProjectStorage.CaptureVersion(path),true);PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            Reset();var before=studio.Document.Clone();var path=Target();var approved=false;
+            studio.ConfirmDxfNotchReviewForVerification=plan=> { approved=plan.Matches(before) && plan.FlipY && plan.Items.Single().VertexIndex==2;return true; };
+            Run(path);
+            Check(approved && studio.ExportError is null && File.Exists(path) && File.ReadAllText(path).Contains("100\nAcDbPoint\n10\n0\n20\n-20\n") &&
+                DocumentSession.ContentEquals(before,studio.Document),"Approved notch review writes the reflected marker and preserves the project",checks);
+            Reset();before=studio.Document.Clone();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=>false;Run(path);
+            Check(studio.ExportWasCancelled && !File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document),"Declined notch review leaves project and target unchanged",checks);
+            Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { studio.Commit("Test değişikliği",()=>studio.Document.Pieces[0].Name="Değişti");return true; };Run(path);
+            Check(!File.Exists(path) && studio.ExportError is not null,"Notch review rejects a source change during approval",checks);
+            Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { File.WriteAllText(path,"korunan");return true; };Run(path);
+            Check(studio.ExportError is not null && File.ReadAllText(path)=="korunan","Notch review never overwrites a newly created destination",checks);
+        }
+        finally { studio.ConfirmDxfNotchReviewForVerification=null;studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(old); }
     }
     private static void VerifyDxfGrainlineExportReviewWindow(MainWindow studio,string reportPath,List<string> checks)
     {

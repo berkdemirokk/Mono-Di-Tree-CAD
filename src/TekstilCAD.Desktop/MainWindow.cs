@@ -81,7 +81,9 @@ public class MainWindow : Window
     private Button? recoveryRescan;
     private readonly List<Button> selectionCommands = [];
     private Button? undoCommand, redoCommand, exportCommand, fitCommand;
-    private Button? grainReviewExportCommand;
+    private Button? grainReviewExportCommand, notchReviewExportCommand;
+    internal Func<DxfNotchReviewPlan,bool>? ConfirmDxfNotchReviewForVerification { get; set; }
+    internal Action? BeforeNotchReviewPreparationForVerification { get; set; }
     internal Func<DxfGrainlineReviewPlan,bool>? ConfirmDxfGrainlineExportForVerification { get; set; }
     internal Action? BeforeGrainlineExportPreparationForVerification { get; set; }
     private readonly TextBox name = new(), x = new(), y = new();
@@ -253,6 +255,7 @@ public class MainWindow : Window
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
+        notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; POINT işaretleri üretim veya kesim komutu değildir.");
         var textile = CommandGroup(commandArea, "TEKSTİL");
         AddButton(textile, "Tekstil araçları…", OpenTextileTools, "Serileme, dikiş payı, nokta düzenleme ve temel pastal");
         var machineControls=new StackPanel();textile.Children.Add(machineControls);
@@ -876,6 +879,7 @@ public class MainWindow : Window
         UpdateHistoryCapacityNotice();
         if (exportCommand is not null) exportCommand.IsEnabled = Document.Pieces.Count > 0 && !ExportRunning && !DxfImportRunning;
         if (grainReviewExportCommand is not null) grainReviewExportCommand.IsEnabled = Document.Pieces.Count > 0 && !ExportRunning && !DxfImportRunning;
+        if (notchReviewExportCommand is not null) notchReviewExportCommand.IsEnabled = Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !ExportRunning && !DxfImportRunning;
         if (fitCommand is not null) fitCommand.IsEnabled = Document.Pieces.Any(piece => piece.Points.Count > 0);
         canvas?.InvalidateVisual();
     }
@@ -2900,6 +2904,65 @@ public class MainWindow : Window
         {
             MachineQueueLoading=false;
             if(!windowClosed && machineQueueCommand is not null)machineQueueCommand.IsEnabled=true;
+        }
+    }
+    private void ExportNotchReview()
+    {
+        EnsureNoExport();EnsurePropertyDraftsApplied();
+        if(HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Önce çizimi ve alan taslaklarını tamamlayın veya iptal edin.");
+        var stamp=CaptureDxfPreparationStamp();
+        var choice=MessageBox.Show(this,"DXF Y yönü: Evet = ekran yönüne uygun ters çevir; Hayır = kaynak koordinatlarını koru. İptal işlemi durdurur.","İnceleme koordinat yönü",MessageBoxButton.YesNoCancel,MessageBoxImage.Question,MessageBoxResult.Cancel);
+        if(choice==MessageBoxResult.Cancel)return;
+        if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Proje veya seçim değişti; incelemeyi yeniden başlatın.");
+        var dialog=new SaveFileDialog { Title="Yalnız inceleme için yeni DXF dosyası",Filter="DXF (*.dxf)|*.dxf",FileName=SafeFileName(Document.Name)+"-kose-inceleme.dxf",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Proje veya seçim değişti; incelemeyi yeniden başlatın.");
+        var expected=ProjectStorage.CaptureVersion(dialog.FileName);
+        _=StartDxfNotchReviewExportAsync(dialog.FileName,expected,choice==MessageBoxResult.Yes,stamp);
+    }
+    internal Task StartDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY)
+    {
+        EnsureNoExport();return StartDxfNotchReviewExportAsync(path,expected,flipY,CaptureDxfPreparationStamp());
+    }
+    private Task StartDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp)
+    {
+        EnsureNoExport();ArgumentNullException.ThrowIfNull(expected);
+        if(HasPendingCanvasOrPropertyWork || !DxfStampMatches(stamp))throw new InvalidOperationException("Proje veya bekleyen çalışma değişti; inceleme başlatılmadı.");
+        ExportDestination.ValidateExtension(path,1);EnsureWritableDestination(path);EnsureExportDoesNotReplaceOpenProject(path);
+        if(expected.Sha256 is not null)throw new InvalidOperationException("İnceleme için yeni bir dosya adı seçin.");
+        ExportRunning=true;ExportError=null;ExportWasCancelled=false;var cancellation=new CancellationTokenSource();exportCancellation=cancellation;
+        exportCancel.Content="DXF inceleme aktarımını iptal et";exportCancel.Visibility=Visibility.Visible;exportCancel.IsEnabled=true;
+        if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;if(notchReviewExportCommand is not null)notchReviewExportCommand.IsEnabled=false;
+        exportNotice.Foreground=StudioTheme.Muted;exportNotice.Text="Köşe işaretli inceleme dosyası hazırlanıyor.";exportNotice.Visibility=Visibility.Visible;
+        return ExportTask=RunDxfNotchReviewExportAsync(path,expected,flipY,stamp,cancellation);
+    }
+    private async Task RunDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp,CancellationTokenSource cancellation)
+    {
+        var token=cancellation.Token;
+        try
+        {
+            var before=BeforeNotchReviewPreparationForVerification;
+            var plan=await Task.Run(()=> { before?.Invoke();return DxfNotchReviewExport.Prepare(stamp.Snapshot,flipY,token); });
+            token.ThrowIfCancellationRequested();
+            if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork || !plan.Matches(Document))throw new InvalidOperationException("Proje veya seçim değişti; dosya yazılmadı.");
+            var approved=ConfirmDxfNotchReviewForVerification is { } confirm ? confirm(plan) : new DxfNotchReviewWindow(this,plan).ShowDialog()==true;
+            token.ThrowIfCancellationRequested();
+            if(!approved) { ExportWasCancelled=true;exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="DXF incelemesi iptal edildi; dosya yazılmadı.";SetStatus(exportNotice.Text);return; }
+            if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork || !plan.Matches(Document))throw new InvalidOperationException("Proje veya seçim inceleme sırasında değişti; dosya yazılmadı.");
+            EnsureWritableDestination(path);EnsureExportDoesNotReplaceOpenProject(path);token.ThrowIfCancellationRequested();exportCancel.IsEnabled=false;
+            var wasEnabled=IsEnabled;IsEnabled=false;
+            try { await Task.Run(()=>DxfNotchReviewExport.Write(plan,path,expected,token)); } finally { if(!windowClosed)IsEnabled=wasEnabled; }
+            exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="İnceleme DXF yazıldı; POINT işaretlerini hedefte kontrol edin. Üretim çıktısı değildir.";exportNotice.ToolTip=path;SetStatus(exportNotice.Text);
+        }
+        catch(OperationCanceledException) when(token.IsCancellationRequested) { ExportWasCancelled=true;exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="DXF incelemesi iptal edildi; dosya yazılmadı.";SetStatus(exportNotice.Text); }
+        catch(ProjectConflictException) { ExportError="Hedef oluşturuldu veya değişti; dosya yazılmadı.";exportNotice.Foreground=StudioTheme.Danger;exportNotice.Text=ExportError;SetStatus(ExportError); }
+        catch(Exception ex) { ExportError=ex.Message;exportNotice.Foreground=StudioTheme.Danger;exportNotice.Text="DXF incelemesi tamamlanamadı: "+ex.Message;SetStatus(exportNotice.Text); }
+        finally
+        {
+            ExportRunning=false;if(ReferenceEquals(exportCancellation,cancellation))exportCancellation=null;cancellation.Dispose();exportCancel.IsEnabled=false;exportCancel.Visibility=Visibility.Collapsed;exportCancel.Content="HPGL aktarımını iptal et";
+            if(exportCommand is not null)exportCommand.IsEnabled=Document.Pieces.Count>0 && !DxfImportRunning;
+            if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !DxfImportRunning;
+            if(notchReviewExportCommand is not null)notchReviewExportCommand.IsEnabled=Document.Pieces.Count>0 && !DxfImportRunning;
         }
     }
     private void ExportGrainlineReview()
