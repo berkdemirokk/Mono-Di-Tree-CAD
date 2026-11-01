@@ -1627,6 +1627,9 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Tüm parçalar"].tap()
         XCTAssertTrue(picker.waitForExistence(timeout: 10))
         XCTAssertTrue(app.descendants(matching: .any)["2 parçalı kontur önizlemesi"].exists)
+        XCTAssertTrue(app.buttons["İplik yönlerini göster"].waitForExistence(timeout: 5))
+        app.buttons["Konturu büyük görünümde incele"].tap()
+        XCTAssertTrue(app.buttons["İplik yönlerini göster"].waitForExistence(timeout: 5))
     }
 
     func testNotchSearchDistinguishesSameNamedPiecesBySize() {

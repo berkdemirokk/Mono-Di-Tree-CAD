@@ -78,6 +78,7 @@ private struct ContentView: View {
     @State private var project: Drawing?
     @State private var error: String?
     @State private var selectedPiece: Int?
+    @State private var showGrain = true
     @State private var drawingRevision = UUID()
     @State private var notchSelectionRevision = UUID()
     @State private var modelLoad = ModelLoadState()
@@ -308,7 +309,7 @@ private struct ContentView: View {
                         pieces: selectedPiece.map { [project.pieces[$0]] } ?? project.pieces.filter { $0.hasMinimumContourPoints },
                         label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
                         highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
-                        selectionRevision: notchSelectionRevision
+                        selectionRevision: notchSelectionRevision, showGrain: $showGrain
                         )
                         .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                         .background(Color.secondary.opacity(0.08))
@@ -421,7 +422,7 @@ private struct ContentView: View {
                                 label: selectedPiece.map { "\(project.pieces[$0].displayName(index: $0)) kontur önizlemesi" } ?? "\(project.pieces.filter { $0.hasMinimumContourPoints }.count) parçalı kontur önizlemesi",
                                 highlightedNotch: selectedNotch?.piece == selectedPiece ? selectedNotch?.point : nil,
                                 selectionRevision: notchSelectionRevision,
-                                drawingHeight: max(320, geometry.size.height - 180)
+                                drawingHeight: max(320, geometry.size.height - 180), showGrain: $showGrain
                             )
                             .id("\(drawingRevision)-\(selectedPiece.map(String.init) ?? "all")")
                             .padding()
@@ -1748,6 +1749,7 @@ private struct ExperimentalPointEditor: View {
     @State private var saveGeneration = UUID()
     @State private var saveActiveID: UUID?
     @State private var cancellingSave = false
+    @State private var showPreviewGrain = true
 
     private func invalidate() { generation = UUID(); candidate = nil; preview = nil; message = "" }
     private func updatePoint() {
@@ -1862,7 +1864,7 @@ private struct ExperimentalPointEditor: View {
                 #endif
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
-                    DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil, selectionRevision: nil)
+                    DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil, selectionRevision: nil, showGrain: $showPreviewGrain)
                         .id(generation)
                         .frame(height: 240)
                     Button("Yeni kopyayı kaydet") { saveCopy() }
@@ -2112,7 +2114,7 @@ private struct DrawingView: View {
     var drawingHeight: CGFloat = 320
     @State private var zoom: CGFloat = 1
     @State private var offset: CGSize = .zero
-    @State private var showGrain = true
+    @Binding var showGrain: Bool
     @State private var panEnabled = false
     @State private var canvasSize: CGSize = .zero
     @State private var cachedBounds: ContourBounds?
