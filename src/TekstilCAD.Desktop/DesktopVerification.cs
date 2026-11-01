@@ -1138,6 +1138,7 @@ internal static class DesktopVerification
             VerifyDxfReviewRetry(studio,work,checks);
             VerifyBasicNestingLengthPrecision(studio,checks);
             VerifyNestingAndGrading(studio,checks);
+            VerifyDraftDoesNotAutomaticallyRebase(studio,checks);
             VerifyBasicNestingGradingRules(studio,checks);
             VerifyConcaveAllowance(studio,checks);
             VerifyProductionPreview(studio,reportPath,work,checks);
@@ -2945,6 +2946,38 @@ internal static class DesktopVerification
             }
         }
         finally { System.Globalization.CultureInfo.CurrentCulture=originalCulture; }
+    }
+    private static void VerifyDraftDoesNotAutomaticallyRebase(MainWindow studio,List<string> checks)
+    {
+        foreach(var deform in new[] { false,true })
+        {
+            var piece=new PatternPiece { Name="Ön",Points=[new(100,100),new(200,100),new(200,200),new(100,200)],Metadata=new PieceMetadata { Size="M" } };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+            var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="7";
+                var source=studio.Document.Pieces.Single();var original=source.Points.ToArray();
+                studio.Commit("Kaynak değişikliği",()=>
+                {
+                    source.Points=source.Points.Select(p=>new Point2(p.X+1,p.Y)).ToList();
+                    if(deform)source.Points[1]=source.Points[1] with { X=Math.BitIncrement(source.Points[1].X) };
+                    else source.Metadata!.Size="L";
+                });
+                Check(TextileToolsWindow.IsTranslation(original,source.Points),"Fixture is accepted by the old approximate translation check",checks);
+                var before=studio.Document.Clone();
+                typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[piece.Id,true]);
+                var root=(FrameworkElement)tools.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+                var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula"));
+                Check(grid.IsReadOnly && !apply.IsEnabled && grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7" &&
+                    studio.Document.GradingRules.Count==0 && DocumentSession.ContentEquals(before,studio.Document),
+                    deform ? "Approximately translated deformation cannot automatically reassociate a grading draft" :
+                        "Translation with changed production data cannot automatically reassociate a grading draft",checks);
+            }
+            finally { tools.Close(); }
+        }
+        studio.LoadDocument(new ProjectDocument());
     }
     private static void VerifyNestingAndGrading(MainWindow studio,List<string> checks)
     {

@@ -326,16 +326,6 @@ public sealed class TextileToolsWindow : Window
         activeSourceId=piece.Id;
         if(!gradeDrafts.TryGetValue(piece.Id,out var draft))
             gradeDrafts[piece.Id]=draft=DraftFromProject(piece);
-        if(draft.Closed==piece.Closed && !draft.Points.SequenceEqual(piece.Points) && IsTranslation(draft.AnchorPoints,piece.Points))
-        {
-            // A placement changes coordinates, not the per-point size increments.
-            // Keep the original anchor across rebases so small shape changes cannot accumulate unnoticed.
-            // Persistence changes on explicit Apply.
-            draft=new([..piece.Points],draft.AnchorPoints,piece.Closed,draft.Rows.Select((row,index)=>new GradeRow {
-                Index=index,X=piece.Points[index].X,Y=piece.Points[index].Y,Dx=row.Dx,Dy=row.Dy
-            }).ToList(),draft.BaselineRule,draft.BaselinePiece);
-            gradeDrafts[piece.Id]=draft;
-        }
         activeDraft=draft;
         rulesNeedReset=draft.Closed!=piece.Closed||!draft.Points.SequenceEqual(piece.Points);
         foreach(var row in draft.Rows)rows.Add(row);
@@ -346,7 +336,7 @@ public sealed class TextileToolsWindow : Window
         if(rulesNeedReset)
         {
             sourceInfo.Foreground=StudioTheme.Warning;
-            sourceInfo.Text="Geometri değişti · Önce artışları sıfırlayın.\n"+sourceInfo.Text;
+            sourceInfo.Text="Geometri değişti · Taslağı kontrol edin; uygunsa eşleştirin veya sıfırlayın.\n"+sourceInfo.Text;
         }
         sourceInfo.ToolTip=sourceInfo.Text;
         RefreshCommands();
