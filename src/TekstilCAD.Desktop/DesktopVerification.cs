@@ -1119,6 +1119,7 @@ internal static class DesktopVerification
             VerifyDxfGrainlineReviewExport(studio,work,checks);
             VerifyDxfNotchReviewExport(studio,work,checks);
             VerifyDxfNotchReviewWindow(studio,reportPath,checks);
+            VerifySelectedMarkedDxfReview(studio,work,checks);
             VerifyDxfGrainlineExportReviewWindow(studio,reportPath,checks);
             VerifyHpglExportCancellation(studio,work,checks);
             VerifyHpglPreparationFlow(studio,work,checks);
@@ -6169,6 +6170,42 @@ internal static class DesktopVerification
         }
         finally { studio.ConfirmDxfNotchReviewForVerification=null;studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(old); }
     }
+    private static void VerifySelectedMarkedDxfReview(MainWindow studio,string work,List<string> checks)
+    {
+        var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var first=new PatternPiece { Name="FRONT",Points=[new(0,0),new(20,0),new(0,20)],Notches=[new NotchMark { VertexIndex=2,Position=new(0,20) }],Grainline=new Grainline { Start=new(1,2),End=new(3,4),NeedsReview=true } };
+        var second=new PatternPiece { Name="BACK",Points=[new(40,0),new(60,0),new(40,20)],Notches=[new NotchMark { VertexIndex=1,Position=new(60,0) }] };
+        var plain=new PatternPiece { Name="PLAIN",Points=[new(80,0),new(100,0),new(80,20)] };
+        var source=new ProjectDocument { Pieces=[first,second,plain] };
+        void Reset() { studio.LoadDocument(source.Clone());studio.Select(first.Id); }
+        string Target()=>Path.Combine(work,$"selected-mark-review-{Guid.NewGuid():N}.dxf");
+        void Run(IReadOnlyCollection<Guid> ids,string path) { var task=studio.StartSelectedDxfNotchReviewForVerification(ids,path,ProjectStorage.CaptureVersion(path),true);PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        try
+        {
+            Reset();var before=studio.Document.Clone();var picker=new SelectedDxfExportWindow(studio,before,reviewMode:true);
+            try
+            {
+                Check(picker.AllChoices[0].Eligible && picker.AllChoices[1].Eligible && !picker.AllChoices[2].Eligible,"Review selector permits only pieces with corner marks",checks);
+                picker.AllChoices[0].IsSelected=true;picker.Search.Text="BACK";
+                Check(picker.SelectedIds.SequenceEqual(new[] { first.Id }) && picker.Summary.Text.Contains("1 seçili parça aramada gizli"),"Review selection survives search filtering",checks);
+            }
+            finally { picker.Close(); }
+            var path=Target();var approved=false;
+            studio.ConfirmDxfNotchReviewForVerification=plan=> { approved=plan.Matches(before) && plan.Items.All(item=>item.PieceId==first.Id) && plan.Items.Length==1 && plan.Grainlines.Length==1;return true; };
+            Run([first.Id],path);var text=File.ReadAllText(path);
+            Check(approved && studio.ExportError is null && text.Split("\nPOINT\n").Length-1==1 && text.Contains("100\nAcDbPoint\n10\n0\n20\n-20\n") &&
+                text.Contains("100\nAcDbLine\n10\n1\n20\n-2\n") && DocumentSession.ContentEquals(before,studio.Document),
+                "Selected marked DXF writes only approved reflected marker and grainline without changing source",checks);
+            Reset();before=studio.Document.Clone();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=>false;Run([first.Id],path);
+            Check(studio.ExportWasCancelled && !File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document),"Declined selected marked DXF writes nothing",checks);
+            Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { studio.Commit("Başka parça değişti",()=>studio.Document.Pieces[1].Name="Changed");return true; };Run([first.Id],path);
+            Check(studio.ExportError is not null && !File.Exists(path),"Selected review rejects changes in unselected source pieces during approval",checks);
+            Reset();path=Target();var prompted=false;studio.ConfirmDxfNotchReviewForVerification=_=> { prompted=true;return true; };Run([plain.Id],path);
+            Check(studio.ExportError is not null && !prompted && !File.Exists(path),"Selected review rejects unmarked pieces before confirmation",checks);
+        }
+        finally { studio.ConfirmDxfNotchReviewForVerification=null;studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(old); }
+    }
+
     private static void VerifyDxfGrainlineExportReviewWindow(MainWindow studio,string reportPath,List<string> checks)
     {
         var piece=new PatternPiece { Name="Ön beden",Closed=true,Points=[new(0,0),new(20,0),new(0,20)],

@@ -29,10 +29,41 @@ public static class DxfNotchReviewExport
 {
     private const int MaxBytes=64*1024*1024, MaxMarkers=10_000;
     private static string Number(double n)=>n.ToString("G17",CultureInfo.InvariantCulture);
+    /// <summary>Review only explicitly selected marked pieces while binding approval to the full source snapshot.</summary>
+    public static DxfNotchReviewPlan PrepareSelected(ProjectDocument source,IReadOnlyCollection<Guid> selectedIds,bool flipY,CancellationToken cancellationToken=default)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(selectedIds);cancellationToken.ThrowIfCancellationRequested();
+        ProjectStorage.ValidateForDxfExport(source,cancellationToken);var snapshot=source.Clone();ProjectStorage.ValidateForDxfExport(snapshot,cancellationToken);
+        if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
+        if(selectedIds.Count is < 1 or > ProjectStorage.MaximumPieces)throw new ArgumentException("İnceleme için işaretli parça seçin.");
+        var ids=new HashSet<Guid>();var visited=0;
+        foreach(var id in selectedIds)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(++visited>selectedIds.Count || id==Guid.Empty || !ids.Add(id))throw new ArgumentException("Parça seçimi yinelenmiş veya geçersiz.");
+        }
+        if(visited!=selectedIds.Count)throw new ArgumentException("Parça seçimi geçersiz.");
+        var pieces=snapshot.Pieces.Where(piece=>ids.Contains(piece.Id)).Select(piece=>piece.Clone()).ToList();
+        if(pieces.Count!=ids.Count || pieces.Any(piece=>piece.Notches is not { Count:>0 }))
+            throw new ArgumentException("Her seçili parça bulunmalı ve en az bir köşe işareti içermelidir.");
+        var subset=new ProjectDocument { Name=snapshot.Name,Pieces=pieces,
+            GradingRules=snapshot.GradingRules.Where(rule=>ids.Contains(rule.SourcePieceId)).Select(rule=>rule.Clone()).ToList(),
+            ImportProvenance=snapshot.ImportProvenance?.Clone() };
+        var prepared=Prepare(subset,flipY,cancellationToken);
+        var omissions=prepared.Omissions;
+        if(snapshot.NestingSnapshot is not null && !omissions.Any(item=>item.Kind==DxfExportOmissionKind.NestingSnapshot))
+            omissions=omissions.Add(new(null,DxfExportOmissionKind.NestingSnapshot));
+        if(snapshot.GradingRules.Count>0 && !omissions.Any(item=>item.Kind==DxfExportOmissionKind.GradingRules))
+            omissions=omissions.Add(new(null,DxfExportOmissionKind.GradingRules));
+        cancellationToken.ThrowIfCancellationRequested();
+        if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
+        return new DxfNotchReviewPlan(snapshot,prepared.Text,prepared.Items,prepared.Grainlines,omissions,flipY);
+    }
+
     public static DxfNotchReviewPlan Prepare(ProjectDocument source,bool flipY,CancellationToken cancellationToken=default)
     {
-        ArgumentNullException.ThrowIfNull(source);cancellationToken.ThrowIfCancellationRequested();ProjectStorage.ValidateForDxfExport(source);
-        var snapshot=source.Clone();ProjectStorage.ValidateForDxfExport(snapshot);
+        ArgumentNullException.ThrowIfNull(source);cancellationToken.ThrowIfCancellationRequested();ProjectStorage.ValidateForDxfExport(source,cancellationToken);
+        var snapshot=source.Clone();ProjectStorage.ValidateForDxfExport(snapshot,cancellationToken);
         if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
         var markerCount=snapshot.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0));
         if(markerCount==0)throw new InvalidDataException("İncelenecek köşe işareti bulunamadı.");

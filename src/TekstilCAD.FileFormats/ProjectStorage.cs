@@ -434,6 +434,7 @@ public static class ProjectStorage
     // DXF layer planning explicitly reports and replaces unsupported name characters;
     // the permanent project format must continue rejecting lossy UTF-16 strings.
     internal static void ValidateForDxfExport(ProjectDocument project) => ValidateCore(project, allowInvalidPieceNameUtf16: true);
+    internal static void ValidateForDxfExport(ProjectDocument project,CancellationToken token) => ValidateCore(project,allowInvalidPieceNameUtf16:true,token);
 
     private static void ValidateCore(ProjectDocument project, bool allowInvalidPieceNameUtf16,CancellationToken token=default)
     {

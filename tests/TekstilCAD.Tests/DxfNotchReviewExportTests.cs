@@ -178,4 +178,43 @@ public class DxfNotchReviewExportTests
         project.Pieces[0].Notches![0].Position=new(1,1);
         Assert.Throws<InvalidDataException>(()=>DxfNotchReviewExport.Prepare(project,false));
     }
+    [Theory]
+    [InlineData(false,"20")] [InlineData(true,"-20")]
+    public void SelectedReviewIncludesOnlyChosenMarkedPieceAndBindsFullSource(bool flip,string y)
+    {
+        var source=Project();source.Pieces[0].Grainline=new Grainline { Start=new(2,3),End=new(4,8),NeedsReview=true };
+        source.Pieces[1].Name="Gizli\u202Ekontrol";
+        source.GradingRules.Add(new GradingRuleSet { SourcePieceId=source.Pieces[1].Id,SourceClosed=false,SourcePoints=[..source.Pieces[1].Points],Deltas=[new(0,0),new(0,0)] });
+        source.ImportProvenance=new DxfImportProvenance { SourceFileName="source.dxf",SourceSha256=new string('A',64),SourceByteLength=12,MillimetersPerUnit=1 };
+        source.NestingSnapshot=new NestingSnapshot { FabricWidth=100,UsedLength=100,LayoutFingerprint=new string('A',64),Placements=[new NestingPlacementSnapshot(Guid.NewGuid(),1,Guid.NewGuid())] };
+        var before=source.Clone();var plan=DxfNotchReviewExport.PrepareSelected(source,[source.Pieces[0].Id],flip);
+        Assert.Equal(2,plan.Items.Length);Assert.Single(plan.Grainlines);Assert.All(plan.Items,item=>Assert.Equal(source.Pieces[0].Id,item.PieceId));
+        Assert.Contains(plan.Omissions,item=>item.Kind==DxfExportOmissionKind.GradingRules);
+        Assert.Contains(plan.Omissions,item=>item.Kind==DxfExportOmissionKind.ImportProvenance);
+        Assert.Contains(plan.Omissions,item=>item.Kind==DxfExportOmissionKind.NestingSnapshot);
+        Assert.True(plan.Matches(before));Assert.True(DocumentSession.ContentEquals(before,source));
+        var path=PathForTest();try
+        {
+            var text=Write(plan,path);Assert.Equal(2,text.Split("\nPOINT\n").Length-1);
+            Assert.Contains($"100\nAcDbPoint\n10\n10\n20\n{y}\n",text);
+            Assert.DoesNotContain("Gizli",text);
+            Assert.Throws<InvalidDataException>(()=>DxfFormat.Export(source,path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+        source.Pieces[1].Points[0]=new(11,20);Assert.False(plan.Matches(source));
+    }
+
+    [Fact]
+    public void SelectedReviewRejectsDuplicatesMissingUnmarkedAndCancellation()
+    {
+        var source=Project();var before=source.Clone();var id=source.Pieces[0].Id;
+        Assert.Throws<ArgumentException>(()=>DxfNotchReviewExport.PrepareSelected(source,[],false));
+        Assert.Throws<ArgumentException>(()=>DxfNotchReviewExport.PrepareSelected(source,[id,id],false));
+        Assert.Throws<ArgumentException>(()=>DxfNotchReviewExport.PrepareSelected(source,[Guid.NewGuid()],false));
+        source.Pieces[1].Notches=null;
+        Assert.Throws<ArgumentException>(()=>DxfNotchReviewExport.PrepareSelected(source,[source.Pieces[1].Id],false));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>DxfNotchReviewExport.PrepareSelected(before,[id],false,cancellation.Token));
+    }
+
 }

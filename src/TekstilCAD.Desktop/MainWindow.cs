@@ -263,6 +263,7 @@ public class MainWindow : Window
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
+        AddButton(exchange,"Seçilen işaretli parçaları inceleme DXF…",ExportSelectedNotchReview,"Yalnız seçtiğiniz işaretli parçaları ve varsa iplik yönlerini inceleme için dışa aktarır; üretim çıktısı değildir.");
         AddButton(exchange,"Seçilen parçaları DXF aktar…",ExportSelectedDxf,"Yalnız seçtiğiniz parçaları ayrı DXF dosyasına aktarır; kaynak proje değişmez.");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
@@ -3105,6 +3106,27 @@ public class MainWindow : Window
             if(!windowClosed && machineQueueCommand is not null)machineQueueCommand.IsEnabled=true;
         }
     }
+    private void ExportSelectedNotchReview()
+    {
+        EnsureNoExport();EnsurePropertyDraftsApplied();
+        var stamp=CaptureDxfPreparationStamp();
+        if(stamp.Snapshot.Pieces.All(piece=>piece.Notches is not { Count:>0 })) { SetStatus("İncelenecek köşe işareti bulunamadı.");return; }
+        var picker=new SelectedDxfExportWindow(this,stamp.Snapshot,reviewMode:true);
+        if(picker.ShowDialog()!=true)return;
+        var ids=picker.SelectedIds.ToArray();
+        if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Proje veya seçim değişti; incelemeyi yeniden başlatın.");
+        var choice=MessageBox.Show(this,"DXF Y yönü: Evet = ekran yönüne uygun ters çevir; Hayır = kaynak koordinatlarını koru. İptal işlemi durdurur.","İnceleme koordinat yönü",MessageBoxButton.YesNoCancel,MessageBoxImage.Question,MessageBoxResult.Cancel);
+        if(choice==MessageBoxResult.Cancel)return;
+        if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Proje veya seçim değişti; incelemeyi yeniden başlatın.");
+        var dialog=new SaveFileDialog { Title=$"Seçilen {ids.Length} parça · yalnız inceleme DXF",Filter="DXF (*.dxf)|*.dxf",FileName=SafeFileName(Document.Name)+"-secili-isaret-inceleme.dxf",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork)throw new InvalidOperationException("Proje veya seçim değişti; incelemeyi yeniden başlatın.");
+        var expected=ProjectStorage.CaptureVersion(dialog.FileName);
+        _=StartDxfNotchReviewExportAsync(dialog.FileName,expected,choice==MessageBoxResult.Yes,stamp,ids);
+    }
+    internal Task StartSelectedDxfNotchReviewForVerification(IReadOnlyCollection<Guid> ids,string path,ProjectFileVersion expected,bool flipY)
+        => StartDxfNotchReviewExportAsync(path,expected,flipY,CaptureDxfPreparationStamp(),ids);
+
     private void ExportNotchReview()
     {
         EnsureNoExport();EnsurePropertyDraftsApplied();
@@ -3123,7 +3145,7 @@ public class MainWindow : Window
     {
         EnsureNoExport();return StartDxfNotchReviewExportAsync(path,expected,flipY,CaptureDxfPreparationStamp());
     }
-    private Task StartDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp)
+    private Task StartDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp,IReadOnlyCollection<Guid>? selectedIds=null)
     {
         EnsureNoExport();ArgumentNullException.ThrowIfNull(expected);
         if(HasPendingCanvasOrPropertyWork || !DxfStampMatches(stamp))throw new InvalidOperationException("Proje veya bekleyen çalışma değişti; inceleme başlatılmadı.");
@@ -3133,18 +3155,18 @@ public class MainWindow : Window
         exportCancel.Content="DXF inceleme aktarımını iptal et";exportCancel.Visibility=Visibility.Visible;exportCancel.IsEnabled=true;
         if(exportCommand is not null)exportCommand.IsEnabled=false;if(grainReviewExportCommand is not null)grainReviewExportCommand.IsEnabled=false;if(notchReviewExportCommand is not null)notchReviewExportCommand.IsEnabled=false;
         exportNotice.Foreground=StudioTheme.Muted;exportNotice.Text="Köşe işaretli inceleme dosyası hazırlanıyor.";exportNotice.Visibility=Visibility.Visible;
-        return ExportTask=RunDxfNotchReviewExportAsync(path,expected,flipY,stamp,cancellation);
+        return ExportTask=RunDxfNotchReviewExportAsync(path,expected,flipY,stamp,cancellation,selectedIds?.ToArray());
     }
-    private async Task RunDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp,CancellationTokenSource cancellation)
+    private async Task RunDxfNotchReviewExportAsync(string path,ProjectFileVersion expected,bool flipY,DxfPreparationStamp stamp,CancellationTokenSource cancellation,IReadOnlyCollection<Guid>? selectedIds)
     {
         var token=cancellation.Token;
         try
         {
             var before=BeforeNotchReviewPreparationForVerification;
-            var plan=await Task.Run(()=> { before?.Invoke();return DxfNotchReviewExport.Prepare(stamp.Snapshot,flipY,token); });
+            var plan=await Task.Run(()=> { before?.Invoke();return selectedIds is null ? DxfNotchReviewExport.Prepare(stamp.Snapshot,flipY,token) : DxfNotchReviewExport.PrepareSelected(stamp.Snapshot,selectedIds,flipY,token); });
             token.ThrowIfCancellationRequested();
             if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork || !plan.Matches(Document))throw new InvalidOperationException("Proje veya seçim değişti; dosya yazılmadı.");
-            var approved=ConfirmDxfNotchReviewForVerification is { } confirm ? confirm(plan) : new DxfNotchReviewWindow(this,plan).ShowDialog()==true;
+            var approved=ConfirmDxfNotchReviewForVerification is { } confirm ? confirm(plan) : new DxfNotchReviewWindow(this,plan,selectedIds is not null).ShowDialog()==true;
             token.ThrowIfCancellationRequested();
             if(!approved) { ExportWasCancelled=true;exportNotice.Foreground=StudioTheme.Warning;exportNotice.Text="DXF incelemesi iptal edildi; dosya yazılmadı.";SetStatus(exportNotice.Text);return; }
             if(!DxfStampMatches(stamp) || HasPendingCanvasOrPropertyWork || !plan.Matches(Document))throw new InvalidOperationException("Proje veya seçim inceleme sırasında değişti; dosya yazılmadı.");
