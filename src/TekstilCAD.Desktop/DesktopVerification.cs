@@ -2191,7 +2191,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null,null,false]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null,null,false,null]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -9733,14 +9733,30 @@ internal static class DesktopVerification
                     "Consecutive duplicate cleanup is one undoable transaction",checks);
             }
             finally { tools.Close(); }
-            var graded=new ProjectDocument { Pieces=[piece.Clone()],GradingRules=[new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,
+            var gradedPiece=piece.Clone();gradedPiece.Notches=[new NotchMark { VertexIndex=1,Position=gradedPiece.Points[1] }];
+            var graded=new ProjectDocument { Pieces=[gradedPiece],GradingRules=[new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,
                 SourcePoints=piece.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),piece.Points.Count).ToList() }] };
             studio.LoadDocument(graded);studio.Select(piece.Id);var guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
             try
             {
-                var blocked=tools.CleanExtraClosureAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
+                var cleanup=tools.CleanConsecutiveAsync();PumpUntil(()=>cleanup.IsCompleted);cleanup.GetAwaiter().GetResult();
+                var after=studio.Document.Clone();
+                Check(after.Pieces.Single().Points.Count==5 && after.Pieces[0].Notches!.Single().VertexIndex==1 &&
+                    after.GradingRules.Single().SourcePoints.SequenceEqual(after.Pieces[0].Points) && after.GradingRules[0].Deltas.Count==5 && session.UndoCount==1,
+                    "Exact duplicate cleanup remaps matching grading and visual markers atomically",checks);
+                var saved=Path.Combine(work,$"graded-clean-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(after,saved);
+                Check(DocumentSession.ContentEquals(after,ProjectStorage.Load(saved)),"Cleaned grading and visual marker survive save and reopen",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(guarded,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Grading and marker cleanup supports one-step undo and redo",checks);
+            }
+            finally { tools.Close(); }
+            graded.GradingRules[0].Deltas[^1]=new Point2(1,0);
+            studio.LoadDocument(graded);studio.Select(piece.Id);guarded=studio.Document.Clone();tools=new TextileToolsWindow(studio);
+            try
+            {
+                var blocked=tools.CleanConsecutiveAsync();PumpUntil(()=>blocked.IsCompleted);blocked.GetAwaiter().GetResult();
                 Check(DocumentSession.ContentEquals(guarded,studio.Document) && session.UndoCount==0,
-                    "Closure cleanup refuses a piece with a saved grading rule",checks);
+                    "Cleanup rejects a conflicting duplicate grading increment",checks);
             }
             finally { tools.Close(); }
             var markedPiece=piece.Clone();markedPiece.Points.Insert(2,markedPiece.Points[1]);

@@ -1032,9 +1032,9 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Sonraki kenara V çentik aç",()=>VertexMoveTaskForVerification=InsertNotchAsync(index.Text,notchFraction.Text,notchWidth.Text,notchDepth.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece { Closed:true }&&IsNumber(notchFraction.Text,out _)&&IsNumber(notchDepth.Text,out _)&&IsNumber(notchWidth.Text,out _));
         Note(panel,"Açık konturun başlangıç ve bitiş yönünü ters çevirebilirsiniz. Noktaların konumu değişmez. Eşleşen kayıtlı serileme artışları noktalarla birlikte ters çevrilir; uygulanmamış taslaklar korunur.");
         Button(panel,"Açık kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseOpenPathAsync(),()=>source.SelectedItem is PatternPiece { Closed:false });
-        Note(panel,"Kapalı konturun sonundaki birden fazla aynı kapanış kopyası bir kopyaya indirilebilir. İşlem işaretli veya serileme kuralı/taslağı bulunan parçalarda reddedilir; kaynak dosya değiştirilmez. Kaynak ve pastal geçmişi önceki durumu anlatmaya devam eder. Diğer kontur hataları kalabilir; dışa aktarım veya üretim uygunluğu doğrulanmaz.");
+        Note(panel,"Kapalı konturun sonundaki birden fazla aynı kapanış kopyası bir kopyaya indirilebilir. İşaretli parçalar ve uygulanmamış serileme taslakları reddedilir; kayıtlı artışlar yalnız tam eşleşiyorsa korunur; kaynak dosya değiştirilmez. Kaynak ve pastal geçmişi önceki durumu anlatmaya devam eder. Diğer kontur hataları kalabilir; dışa aktarım veya üretim uygunluğu doğrulanmaz.");
         Button(panel,"Fazla kapanış noktalarını temizle",()=>VertexMoveTaskForVerification=CleanExtraClosureAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
-        Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaretler yalnız benzersiz ve bitçe tam eşlenebiliyorsa korunur; serileme kuralı/taslağı bulunan parçalar reddedilir.");
+        Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaretler yalnız benzersiz ve bitçe tam eşlenebiliyorsa korunur; kayıtlı serileme kuralı yalnız tam eşleşirse korunur; uygulanmamış taslaklar reddedilir.");
         Button(panel,"Bitişik eş noktaları temizle",()=>VertexMoveTaskForVerification=CleanConsecutiveAsync(),()=>HasPiece());
         Button(panel,"Projedeki tekrarları topluca incele…",()=>
         {
@@ -1109,7 +1109,7 @@ public sealed class TextileToolsWindow : Window
             if(operation==VertexEdit.Move && BitConverter.DoubleToInt64Bits(snapshot.Points[index].X)==BitConverter.DoubleToInt64Bits(position.X) &&
                BitConverter.DoubleToInt64Bits(snapshot.Points[index].Y)==BitConverter.DoubleToInt64Bits(position.Y))
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
-            bool ClosureHasUnsafeDependencies()=>(operation==VertexEdit.CleanClosure && snapshot.Notches is not null) || document.GradingRules.Any(rule=>rule.SourcePieceId==sourceId) ||
+            bool ClosureHasUnsafeDependencies()=>(operation==VertexEdit.CleanClosure && snapshot.Notches is not null) ||
                 (gradeDrafts.TryGetValue(sourceId,out var pendingDraft) && HasUnsavedGradeDraft(sourceId,pendingDraft));
             if((operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive) && ClosureHasUnsafeDependencies())
                 throw new InvalidOperationException("İşaret veya serileme bilgisi bu işlemle güvenle korunamıyor; tekrarlı noktalar temizlenmedi.");
@@ -1150,9 +1150,19 @@ public sealed class TextileToolsWindow : Window
             token.ThrowIfCancellationRequested();
             if((operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive) && ClosureHasUnsafeDependencies())
                 throw new InvalidOperationException("İşaret veya serileme bilgisi değişti; kapanış temizlenmedi.");
+            GradingRuleSet? cleanedRule=null;
+            if(operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive)
+            {
+                var savedRule=document.GradingRules.FirstOrDefault(rule=>rule.SourcePieceId==sourceId);
+                if(savedRule is not null)
+                {
+                    cleanedRule=savedRule.WithDuplicateRemovalFor(snapshot,edited,token);
+                    if(cleanedRule is null)throw new InvalidOperationException("Kayıtlı serileme kuralı kaynakla veya birleştirilen nokta artışlarıyla bitçe eşleşmiyor; temizlik uygulanmadı.");
+                }
+            }
             ReplacePiece(edited,operation is VertexEdit.Reverse or VertexEdit.ReverseClosed,
                 operation is VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage ? index : null,
-                operation is VertexEdit.Distance or VertexEdit.Percentage,operation is VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage or VertexEdit.Notch ? index : null,operation==VertexEdit.Delete ? index : null,operation==VertexEdit.Move ? index : null,operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive);
+                operation is VertexEdit.Distance or VertexEdit.Percentage,operation is VertexEdit.Insert or VertexEdit.Midpoint or VertexEdit.Distance or VertexEdit.Percentage or VertexEdit.Notch ? index : null,operation==VertexEdit.Delete ? index : null,operation==VertexEdit.Move ? index : null,operation is VertexEdit.CleanClosure or VertexEdit.CleanConsecutive,cleanedRule);
         }
         catch(OperationCanceledException) when(vertexMoveCancellation?.IsCancellationRequested==true)
         { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Nokta düzenleme doğrulaması iptal edildi; proje değiştirilmedi."; } }
@@ -1296,7 +1306,7 @@ public sealed class TextileToolsWindow : Window
         workspace.CommitObserved("Kalıp aracı uygulandı",()=>workspace.Document.Pieces.Add(generated),onCommitted);workspace.Select(generated.Id);workspace.FitView();RefreshSources(keepBaseSource?baseId:generated.Id);
         Success(notice+generated.Name+" projeye eklendi. Kaynak parça korundu."+(metadataNotCopied ? " Kaynağın rol, beden, malzeme ve adet bilgileri yeni parçaya aktarılmadı; gerekiyorsa Parça bilgileri bölümünde girin." : "")+detail);
     }
-    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null,int? deletedIndex=null,int? movedIndex=null,bool closureCleanup=false)
+    private void ReplacePiece(PatternPiece edited,bool reverseOpenPath=false,int? midpointIndex=null,bool fractionalSplit=false,int? insertedAfter=null,int? deletedIndex=null,int? movedIndex=null,bool closureCleanup=false,GradingRuleSet? cleanedRule=null)
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
@@ -1344,13 +1354,13 @@ public sealed class TextileToolsWindow : Window
         if(grainNeedsReview)edited.Grainline!.NeedsReview=true;
         var rule=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==previous.Id);
         var hasDraft=gradeDrafts.TryGetValue(previous.Id,out var draft) && HasUnsavedGradeDraft(previous.Id,draft);
-        var reversedRule=!hasDraft ? (reverseOpenPath ? (previous.Closed ? rule?.ReversedClosedFor(previous) : rule?.ReversedFor(previous)) : midpointIndex is { } midpoint ? (fractionalSplit ? rule?.WithEdgeSplitFor(previous,edited,midpoint) : rule?.WithEdgeMidpointFor(previous,edited,midpoint)) : null) : null;
+        var reversedRule=!hasDraft ? (cleanedRule ?? (reverseOpenPath ? (previous.Closed ? rule?.ReversedClosedFor(previous) : rule?.ReversedFor(previous)) : midpointIndex is { } midpoint ? (fractionalSplit ? rule?.WithEdgeSplitFor(previous,edited,midpoint) : rule?.WithEdgeMidpointFor(previous,edited,midpoint)) : null)) : null;
         var gradingNeedsReview=(edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points)) && rule is not null && reversedRule is null;
         CommitToolChange("Kontur noktası düzenlemesi",()=> {
             workspace.Document.Pieces[index]=edited;
             if(reversedRule is not null) { var ruleIndex=workspace.Document.GradingRules.IndexOf(rule!);workspace.Document.GradingRules[ruleIndex]=reversedRule; }
         },()=>
-        { if(reversedRule is not null || closureCleanup)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success((closureCleanup ? "Tekrarlı nokta kopyaları temizlendi; diğer kontur hataları kalabilir. Dışa aktarım ve üretim uygunluğu doğrulanmadı. Kaynak dosya değiştirilmedi; kaynak ve pastal geçmişi önceki durumu anlatır." : "Kontur noktası düzenlendi ve doğrulandı.")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
+        { if(reversedRule is not null || closureCleanup)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success((closureCleanup ? "Tekrarlı nokta kopyaları temizlendi; diğer kontur hataları kalabilir. Dışa aktarım ve üretim uygunluğu doğrulanmadı. Kaynak dosya değiştirilmedi; kaynak ve pastal geçmişi önceki durumu anlatır." : "Kontur noktası düzenlendi ve doğrulandı.")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : closureCleanup ? " Kayıtlı serileme kuralı eşleşen noktalara bitçe korunarak aktarıldı." : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
     }
     private UIElement NestingPanel()
     {

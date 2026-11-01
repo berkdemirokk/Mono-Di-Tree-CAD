@@ -211,6 +211,30 @@ public sealed class GradingRuleSet
         return result;
     }
 
+    /// <summary>Remap a rule only when removed consecutive copies carry bit-identical increments.</summary>
+    public GradingRuleSet? WithDuplicateRemovalFor(PatternPiece source,PatternPiece edited,CancellationToken token=default)
+    {
+        ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(edited);token.ThrowIfCancellationRequested();
+        if(source.Id!=SourcePieceId || edited.Id!=source.Id || source.Closed!=SourceClosed || edited.Closed!=SourceClosed ||
+           SourcePoints is null || Deltas is null || source.Points is null || edited.Points is null ||
+           SourcePoints.Count!=source.Points.Count || Deltas.Count!=source.Points.Count || edited.Points.Count<1 ||
+           edited.Points.Count>=source.Points.Count)return null;
+        static bool Bits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+            BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+        var outputPoints=new List<Point2>(edited.Points.Count);var outputDeltas=new List<Point2>(edited.Points.Count);var target=0;
+        for(var i=0;i<source.Points.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();var point=source.Points[i];var delta=Deltas[i];
+            if(!point.IsFinite || !delta.IsFinite || !Bits(SourcePoints[i],point))return null;
+            if(target<edited.Points.Count && Bits(point,edited.Points[target]))
+            { outputPoints.Add(point);outputDeltas.Add(delta);target++; }
+            else if(outputPoints.Count==0 || !Bits(point,outputPoints[^1]) || !Bits(delta,outputDeltas[^1]))return null;
+        }
+        if(target!=edited.Points.Count)return null;
+        if(SourceClosed && outputPoints.Count>1 && outputPoints[0]==outputPoints[^1] &&
+           (!Bits(outputPoints[0],outputPoints[^1]) || !Bits(outputDeltas[0],outputDeltas[^1])))return null;
+        token.ThrowIfCancellationRequested();return new GradingRuleSet { SourcePieceId=SourcePieceId,SourceClosed=SourceClosed,SourcePoints=outputPoints,Deltas=outputDeltas };
+    }
     /// <summary>Reorder a matching closed-contour rule with its vertices, keeping the first vertex fixed.</summary>
     public GradingRuleSet? ReversedClosedFor(PatternPiece source)
     {
