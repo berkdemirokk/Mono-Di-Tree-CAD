@@ -1350,10 +1350,16 @@ public sealed class TextileToolsWindow : Window
             : normalizedInsertion is { } at && oldIndex>at ? oldIndex+insertedCount : normalizedDeletion is { } deleted && oldIndex>deleted ? oldIndex-1 : oldIndex;
         if(deletedIndex is not null && (deletedIndex<0 || deletedIndex>=previous.Points.Count || edited.Points.Count!=previous.Points.Count-1))
             throw new InvalidOperationException("Silinen nokta kaynakla eşleşmedi; kontur değiştirilmedi.");
+        bool MovedMarkBitsMatch(NotchMark oldMark,NotchMark newMark)
+        {
+            var before=previous.Points[oldMark.VertexIndex];var after=edited.Points[newMark.VertexIndex];
+            static double Axis(double source,double target,double mark) => BitConverter.DoubleToInt64Bits(source)==BitConverter.DoubleToInt64Bits(target) ? mark : target;
+            return SamePointBits(newMark.Position,new Point2(Axis(before.X,after.X,oldMark.Position.X),Axis(before.Y,after.Y,oldMark.Position.Y)));
+        }
         if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
            !marks.Zip(edited.Notches).All(pair=>(normalizedDeletion is not { } removed || pair.First.VertexIndex!=removed) && pair.Second.VertexIndex==MappedMarkIndex(pair.First.VertexIndex) && (normalizedMove==pair.First.VertexIndex || (closureCleanup ? SamePointBits(pair.First.Position,pair.Second.Position) : pair.First.Position==pair.Second.Position)) &&
                pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position &&
-               ((normalizedMove!=pair.First.VertexIndex && !closureCleanup) || SamePointBits(edited.Points[pair.Second.VertexIndex],pair.Second.Position)))))
+               ((normalizedMove!=pair.First.VertexIndex && !closureCleanup) || (closureCleanup ? SamePointBits(edited.Points[pair.Second.VertexIndex],pair.Second.Position) : MovedMarkBitsMatch(pair.First,pair.Second))))))
             throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
@@ -1361,14 +1367,14 @@ public sealed class TextileToolsWindow : Window
         var grainNeedsReview=edited.Grainline is not null && !reverseOpenPath && (edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points));
         if(grainNeedsReview)edited.Grainline!.NeedsReview=true;
         var rule=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==previous.Id);
-        var hasDraft=gradeDrafts.TryGetValue(previous.Id,out var draft) && HasUnsavedGradeDraft(previous.Id,draft);
-        var reversedRule=!hasDraft ? (cleanedRule ?? (reverseOpenPath ? (previous.Closed ? rule?.ReversedClosedFor(previous) : rule?.ReversedFor(previous)) : midpointIndex is { } midpoint ? (fractionalSplit ? rule?.WithEdgeSplitFor(previous,edited,midpoint) : rule?.WithEdgeMidpointFor(previous,edited,midpoint)) : deletedIndex is { } deleted ? rule?.WithVertexDeletionFor(previous,edited,deleted) : null)) : null;
-        var gradingNeedsReview=(edited.Closed!=previous.Closed || !edited.Points.SequenceEqual(previous.Points)) && rule is not null && reversedRule is null;
+        var hasDraft=movedIndex.HasValue ? HasSnapshotGradeDraft(previous,rule) : gradeDrafts.TryGetValue(previous.Id,out var draft) && HasUnsavedGradeDraft(previous.Id,draft);
+        var reversedRule=!hasDraft ? (cleanedRule ?? (reverseOpenPath ? (previous.Closed ? rule?.ReversedClosedFor(previous) : rule?.ReversedFor(previous)) : midpointIndex is { } midpoint ? (fractionalSplit ? rule?.WithEdgeSplitFor(previous,edited,midpoint) : rule?.WithEdgeMidpointFor(previous,edited,midpoint)) : deletedIndex is { } deleted ? rule?.WithVertexDeletionFor(previous,edited,deleted) : movedIndex is { } moved ? rule?.WithVertexMoveFor(previous,edited.Points,moved) : null)) : null;
+        var gradingNeedsReview=(edited.Closed!=previous.Closed || edited.Points.Count!=previous.Points.Count || !edited.Points.Zip(previous.Points).All(pair=>SamePointBits(pair.First,pair.Second))) && rule is not null && reversedRule is null;
         CommitToolChange("Kontur noktası düzenlemesi",()=> {
             workspace.Document.Pieces[index]=edited;
             if(reversedRule is not null) { var ruleIndex=workspace.Document.GradingRules.IndexOf(rule!);workspace.Document.GradingRules[ruleIndex]=reversedRule; }
         },()=>
-        { if(reversedRule is not null || closureCleanup)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success((closureCleanup ? "Tekrarlı nokta kopyaları temizlendi; diğer kontur hataları kalabilir. Dışa aktarım ve üretim uygunluğu doğrulanmadı. Kaynak dosya değiştirilmedi; kaynak ve pastal geçmişi önceki durumu anlatır." : "Kontur noktası düzenlendi ve doğrulandı.")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : closureCleanup ? " Kayıtlı serileme kuralı eşleşen noktalara bitçe korunarak aktarıldı." : deletedIndex.HasValue ? " Silinen noktanın artışı çıkarıldı; diğer serileme artışları korundu." : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
+        { if(reversedRule is not null || closureCleanup)gradeDrafts.Remove(edited.Id);RefreshSources(edited.Id);workspace.Select(edited.Id);workspace.FitView();Success((closureCleanup ? "Tekrarlı nokta kopyaları temizlendi; diğer kontur hataları kalabilir. Dışa aktarım ve üretim uygunluğu doğrulanmadı. Kaynak dosya değiştirilmedi; kaynak ve pastal geçmişi önceki durumu anlatır." : "Kontur noktası düzenlendi ve doğrulandı.")+(grainNeedsReview ? " İplik yönü korundu; değişen konturla ilişkisini yeniden kontrol edin." : "")+(reversedRule is not null ? (midpointIndex.HasValue ? (fractionalSplit ? " Yeni noktanın serileme artışı kenar oranına göre hesaplandı; kontrol edin." : " Yeni noktanın serileme artışı komşu artışların ortalamasından oluşturuldu; kontrol edin.") : closureCleanup ? " Kayıtlı serileme kuralı eşleşen noktalara bitçe korunarak aktarıldı." : deletedIndex.HasValue ? " Silinen noktanın artışı çıkarıldı; diğer serileme artışları korundu." : movedIndex.HasValue ? " Kayıtlı serileme artışları taşınan noktalarla korundu; yeni bedenleri kontrol edin." : " Kayıtlı serileme artışları nokta sırasıyla ters çevrildi.") : "")+(gradingNeedsReview ? " Mevcut serileme kuralı önceki kontura aittir; yeniden gözden geçirin." : "")); });
     }
     private UIElement NestingPanel()
     {

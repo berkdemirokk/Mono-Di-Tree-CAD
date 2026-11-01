@@ -10044,6 +10044,34 @@ internal static class DesktopVerification
         }
         finally { tools.Close(); }
 
+        foreach(var mode in new[] { "matching","dirty","stale" })
+        {
+            var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+            var markedSource=first.Clone();markedSource.Notches=[new NotchMark { VertexIndex=0,Position=new Point2(negativeZero,0) }];
+            var rule=new GradingRuleSet { SourcePieceId=markedSource.Id,SourceClosed=true,SourcePoints=[..markedSource.Points],
+                Deltas=[new(1,2),new(3,4),new(5,6),new(7,8),new(1,2)] };
+            if(mode=="stale")rule.SourcePoints[1]=new Point2(11,0);
+            studio.LoadDocument(new ProjectDocument { Pieces=[markedSource],GradingRules=[rule] });studio.Select(markedSource.Id);tools=new TextileToolsWindow(studio);
+            try
+            {
+                var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                if(mode=="dirty")grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="99";
+                var before=studio.Document.Clone();var undo=session.UndoCount;
+                Finish(tools.MoveVertexAsync("4","0","-1"));
+                var after=studio.Document.Clone();var moved=after.Pieces.Single();var actual=after.GradingRules.Single();
+                var message=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                Check(moved.Points[0]==new Point2(0,-1) && moved.Points[^1]==moved.Points[0] &&
+                    BitConverter.DoubleToInt64Bits(moved.Notches!.Single().Position.X)==long.MinValue && moved.Notches[0].Position.Y==-1 &&
+                    actual.Deltas.SequenceEqual(before.GradingRules.Single().Deltas) &&
+                    (mode=="matching" ? actual.SourcePoints.SequenceEqual(moved.Points) : actual.SourcePoints.SequenceEqual(before.GradingRules.Single().SourcePoints) && message.Text.Contains("serileme kuralı")) &&
+                    (mode!="dirty" || grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="99") && session.UndoCount==undo+1,
+                    $"Numeric marked closure move preserves rule and draft safely: {mode}",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    $"Numeric marked move and grading remain one undoable edit: {mode}",checks);
+            }
+            finally { tools.Close(); }
+        }
+
         foreach(var scenario in new[]{"project","selection","input","pending","cancel"})
         {
             tools=Prepare();using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
