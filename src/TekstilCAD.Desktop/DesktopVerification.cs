@@ -10052,6 +10052,13 @@ internal static class DesktopVerification
             var selector=(ComboBox)side.GetType().GetField("Piece",PrivateInstance)!.GetValue(side)!;
             var identity=(TextBox)side.GetType().GetField("Identity",PrivateInstance)!.GetValue(side)!;
             var choice=selector.Items[0];var label=(string)choice.GetType().GetProperty("Label")!.GetValue(choice)!;
+            var searchLabel=(string)choice.GetType().GetProperty("SearchLabel")!.GetValue(choice)!;
+            var otherSide=typeof(SeamLengthComparisonWindow).GetField("second",PrivateInstance)!.GetValue(window)!;
+            var otherSelector=(ComboBox)otherSide.GetType().GetField("Piece",PrivateInstance)!.GetValue(otherSide)!;
+            Check(selector.IsTextSearchEnabled && otherSelector.IsTextSearchEnabled && TextSearch.GetTextPath(selector)=="SearchLabel" &&
+                TextSearch.GetTextPath(otherSelector)=="SearchLabel" && searchLabel==CadCanvas.CanvasPieceLabel(first.Name) &&
+                searchLabel.StartsWith("Ön",StringComparison.Ordinal) && searchLabel.Contains("\\u202E") && !searchLabel.Contains('\u202E'),
+                "Both seam selectors search the safe name rather than the visible identity prefix",checks);
             Check(label.StartsWith("12345678 · ",StringComparison.Ordinal) && label.Contains("\\u202E") && label.Contains("\\u000A") &&
                 !label.Contains('\u202E') && !label.Contains('\n') && label.Length<=91 && label.EndsWith('…') &&
                 identity.IsReadOnly && identity.Text==first.Id.ToString("D") && Equals(identity.ToolTip,identity.Text) && AutomationProperties.GetName(identity).Contains("tam parça kimliği"),

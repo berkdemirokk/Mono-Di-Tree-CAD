@@ -22,11 +22,11 @@ internal sealed class SeamLengthComparisonWindow : Window
     private readonly TextBox expectedEase=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
     private readonly TextBox tolerance=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
     private bool stale;
-    private sealed record PieceChoice(PatternPiece Piece,string Label);
+    private sealed record PieceChoice(PatternPiece Piece,string Label,string SearchLabel);
     private sealed record PointChoice(int Index,string Label);
     private sealed class Side
     {
-        internal readonly ComboBox Piece=new() { DisplayMemberPath=nameof(PieceChoice.Label),MinWidth=240,MaxWidth=270 };
+        internal readonly ComboBox Piece=new() { DisplayMemberPath=nameof(PieceChoice.Label),IsTextSearchEnabled=true,MinWidth=240,MaxWidth=270 };
         internal readonly TextBox Identity=new() { IsReadOnly=true,MinWidth=240,MaxWidth=270,Margin=new Thickness(0,4,0,0),HorizontalAlignment=HorizontalAlignment.Left };
         internal readonly ComboBox Start=Selector(),End=Selector();
         internal readonly ComboBox Direction=new() { ItemsSource=new[]{"İleri (indeks artar)","Geri (indeks azalır)"},SelectedIndex=0 };
@@ -51,7 +51,10 @@ internal sealed class SeamLengthComparisonWindow : Window
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled });
         body.Children.Add(new TextBlock { Text="Dikiş kenarı uzunluklarını karşılaştır",FontSize=20,FontWeight=FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text="İki parçanın mevcut kontur noktaları arasındaki çoklu çizgi yolunu karşılaştırır. Kapalı konturda yönü seçin; açık konturda iki nokta arasındaki tek yol kullanılır. Kapanışın tekrarlanan son noktası ilk noktayla aynıdır; aynı nokta seçimi normalde sıfırdır; tam çevre için ilgili kutuyu işaretleyin. Parça başına en fazla 10.000 kayıtlı nokta desteklenir. Önizlemede kırmızı seçilen yolu, mavi başlangıcı, yeşil bitişi gösterir. Sonuç fiziksel ölçüm veya üretim kabulü değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
-        var choices=snapshot.Pieces.Select(p=>new PieceChoice(p,$"{p.Id.ToString("D")[..8]} · {CadCanvas.CanvasPieceLabel(p.Name)}")).ToArray();
+        var choices=snapshot.Pieces.Select(p=> {
+            var safeName=CadCanvas.CanvasPieceLabel(p.Name);
+            return new PieceChoice(p,$"{p.Id.ToString("D")[..8]} · {safeName}",safeName);
+        }).ToArray();
         first=new Side();second=new Side();
         var grid=new Grid();grid.ColumnDefinitions.Add(new ColumnDefinition());grid.ColumnDefinitions.Add(new ColumnDefinition());
         AddSide(grid,first,"1. parça",choices,0);AddSide(grid,second,"2. parça",choices,1);body.Children.Add(grid);
@@ -70,7 +73,7 @@ internal sealed class SeamLengthComparisonWindow : Window
     {
         var panel=new StackPanel { Margin=new Thickness(column==0?0:8,0,column==0?8:0,0) };Grid.SetColumn(panel,column);grid.Children.Add(panel);
         panel.Children.Add(new TextBlock { Text=title,FontWeight=FontWeights.SemiBold });
-        AutomationProperties.SetName(side.Piece,title);side.Piece.ItemsSource=choices;panel.Children.Add(side.Piece);
+        AutomationProperties.SetName(side.Piece,title);TextSearch.SetTextPath(side.Piece,nameof(PieceChoice.SearchLabel));side.Piece.ItemsSource=choices;panel.Children.Add(side.Piece);
         AutomationProperties.SetName(side.Identity,title+" tam parça kimliği");
         AutomationProperties.SetHelpText(side.Identity,"Seçili parçanın tam kimliği; aynı isim veya kimlik öneki taşıyan parçaları ayırt etmek için kullanın.");
         panel.Children.Add(side.Identity);
