@@ -1,10 +1,50 @@
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
+using System.Text;
 
 namespace TekstilCAD.Tests;
 
 public sealed class DocumentSessionTests
 {
+    [Theory]
+    [InlineData("point")]
+    [InlineData("mark")]
+    [InlineData("grain")]
+    [InlineData("rule-source")]
+    [InlineData("rule-delta")]
+    public void SignedZeroChangesAreSavedAndUndoable(string field)
+    {
+        var piece=new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }],
+            Grainline=new Grainline { Start=new(0,0),End=new(1,1) } };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],
+            Deltas=[new(0,0),new(0,0),new(0,0)] };
+        var original=new ProjectDocument { Pieces=[piece],GradingRules=[rule] };
+        var session=new DocumentSession(original);var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+        var saved=ProjectStorage.SerializeProject(session.Document);
+        Assert.True(session.Execute(d=>
+        {
+            switch(field)
+            {
+                case "point":d.Pieces[0].Points[0]=new(negativeZero,0);break;
+                case "mark":d.Pieces[0].Notches![0].Position=new(negativeZero,0);break;
+                case "grain":d.Pieces[0].Grainline!.Start=new(negativeZero,0);break;
+                case "rule-source":d.GradingRules[0].SourcePoints[0]=new(negativeZero,0);break;
+                case "rule-delta":d.GradingRules[0].Deltas[0]=new(negativeZero,0);break;
+            }
+        },ProjectStorage.Validate));
+        Assert.True(session.IsDirty);Assert.Equal(1,session.UndoCount);
+        var changed=ProjectStorage.SerializeProject(session.Document);
+        Assert.NotEqual(saved,changed);
+        var loaded=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(changed));
+        Assert.True(DocumentSession.ContentEquals(session.Document,loaded));
+        Assert.True(session.Undo());Assert.False(session.IsDirty);
+        Assert.Equal(saved,ProjectStorage.SerializeProject(session.Document));
+        Assert.True(session.Redo());Assert.True(session.IsDirty);
+        Assert.Equal(changed,ProjectStorage.SerializeProject(session.Document));
+        session.MarkSaved();Assert.False(session.IsDirty);
+    }
+
     private static ProjectDocument Example() => new()
     {
         Name = "A",

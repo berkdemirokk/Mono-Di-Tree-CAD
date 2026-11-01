@@ -129,10 +129,21 @@ public sealed class DocumentSession
 
     /// <summary>Exact equality of persisted model fields; selection and object identity are excluded.</summary>
     private static bool MetadataEquals(PieceMetadata? a, PieceMetadata? b) => ReferenceEquals(a,b) || (a is not null && b is not null && a.Role == b.Role && a.Size == b.Size && a.Material == b.Material && a.Quantity == b.Quantity);
+    // Coordinate bits are persisted, including signed zero. Snapshot equality
+    // must notice changes that a later grade or save would otherwise discard.
+    private static bool PointBitsEqual(Point2 a,Point2 b) =>
+        BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) &&
+        BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+    private static bool PointListsEqual(IReadOnlyList<Point2> a,IReadOnlyList<Point2> b)
+    {
+        if(a.Count!=b.Count)return false;
+        for(var i=0;i<a.Count;i++)if(!PointBitsEqual(a[i],b[i]))return false;
+        return true;
+    }
     private static bool GrainlineEquals(Grainline? a, Grainline? b) => ReferenceEquals(a,b) ||
-        (a is not null && b is not null && a.Start == b.Start && a.End == b.End && a.NeedsReview == b.NeedsReview);
+        (a is not null && b is not null && PointBitsEqual(a.Start,b.Start) && PointBitsEqual(a.End,b.End) && a.NeedsReview == b.NeedsReview);
     private static bool NotchesEqual(List<NotchMark>? a,List<NotchMark>? b) => ReferenceEquals(a,b) ||
-        (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && pair.First.Position==pair.Second.Position));
+        (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && PointBitsEqual(pair.First.Position,pair.Second.Position)));
     private static bool NestingEquals(NestingSnapshot? a, NestingSnapshot? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.FabricWidth == b.FabricWidth && a.UsedLength == b.UsedLength &&
          a.Gap == b.Gap && a.EdgeMargin == b.EdgeMargin && a.Algorithm == b.Algorithm &&
@@ -151,14 +162,14 @@ public sealed class DocumentSession
             var a = left.Pieces[i]; var b = right.Pieces[i];
             if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
             for (var j = 0; j < a.Points.Count; j++)
-                if (a.Points[j] != b.Points[j]) return false;
+                if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
         if (left.GradingRules.Count != right.GradingRules.Count) return false;
         for (var i = 0; i < left.GradingRules.Count; i++)
         {
             var a = left.GradingRules[i]; var b = right.GradingRules[i];
             if (a.SourcePieceId != b.SourcePieceId || a.SourceClosed != b.SourceClosed ||
-                !a.SourcePoints.SequenceEqual(b.SourcePoints) || !a.Deltas.SequenceEqual(b.Deltas)) return false;
+                !PointListsEqual(a.SourcePoints,b.SourcePoints) || !PointListsEqual(a.Deltas,b.Deltas)) return false;
         }
         return true;
     }
