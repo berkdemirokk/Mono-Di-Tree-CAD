@@ -12,6 +12,24 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testFileReplacedByDirectoryDuringDeleteIsNeverRecursivelyRemoved() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let path = root.appendingPathComponent("model.tcad")
+        let original = root.appendingPathComponent("original.saved")
+        let originalBytes = Data("model".utf8)
+        let foreignBytes = Data("preserve".utf8)
+        try originalBytes.write(to: path)
+        XCTAssertThrowsError(try ModelStore.delete(path, in: root) {
+            try FileManager.default.moveItem(at: path, to: original)
+            try FileManager.default.createDirectory(at: path, withIntermediateDirectories: false)
+            try foreignBytes.write(to: path.appendingPathComponent("important.txt"))
+        })
+        XCTAssertEqual(try Data(contentsOf: original), originalBytes)
+        XCTAssertEqual(try Data(contentsOf: path.appendingPathComponent("important.txt")), foreignBytes)
+    }
+
     func testDirectoryNamedTcadCannotBeOpenedOrRecursivelyDeleted() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

@@ -952,7 +952,7 @@ enum ModelStore {
         try delete(url, in: directory())
     }
 
-    static func delete(_ url: URL, in library: URL) throws {
+    static func delete(_ url: URL, in library: URL, afterValidation: (() throws -> Void)? = nil) throws {
         let directory = library.standardizedFileURL
         guard url.standardizedFileURL.deletingLastPathComponent() == directory,
               ["tcad", copyExtension].contains(url.pathExtension.lowercased()) else {
@@ -965,6 +965,15 @@ enum ModelStore {
         let expectedType = url.pathExtension.lowercased() == copyExtension ? S_IFDIR : S_IFREG
         guard (rootInfo.st_mode & S_IFMT) == expectedType else {
             throw ViewerError.message("Kayıt beklenen dosya türünde değil; içeriği korumak için silinmedi.")
+        }
+        if url.pathExtension.lowercased() == "tcad" {
+            try afterValidation?()
+            // Unlike recursive removal, unlink cannot recursively remove a
+            // directory substituted after the type check.
+            guard url.path.withCString({ Darwin.unlink($0) }) == 0 else {
+                throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            }
+            return
         }
         if url.pathExtension.lowercased() == copyExtension {
             let names = try FileManager.default.contentsOfDirectory(atPath: url.path)
