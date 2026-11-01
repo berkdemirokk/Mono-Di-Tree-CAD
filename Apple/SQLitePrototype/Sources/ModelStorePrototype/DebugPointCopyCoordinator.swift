@@ -7,24 +7,26 @@ public final class DebugPointCopyCoordinator {
     private let lock = NSLock()
     private var documentID: UUID
     private var revision: UUID
+    private var data: Data
 
-    public init(documentID: UUID) {
+    public init(documentID: UUID, data: Data) {
         self.documentID = documentID
         self.revision = UUID()
+        self.data = data
     }
 
     /// Each change gets a new token; callers cannot restore an old revision.
     @discardableResult
-    public func replaceDocument(documentID: UUID) -> UUID {
+    public func replaceDocument(documentID: UUID, data: Data) -> UUID {
         lock.lock(); defer { lock.unlock() }
         self.documentID = documentID
         self.revision = UUID()
+        self.data = data
         return self.revision
     }
 
-    /// The bytes must have been prepared for the state the caller serialized
-    /// with this coordinator; external document state is not inspected.
-    public func snapshot(name: String, data: Data) -> DebugPointCopyStore.Snapshot {
+    /// Returns the bytes and revision owned by this coordinator under one lock.
+    public func snapshot(name: String) -> DebugPointCopyStore.Snapshot {
         lock.lock(); defer { lock.unlock() }
         return .init(documentID: documentID, revision: revision, name: name, data: data)
     }
@@ -35,6 +37,9 @@ public final class DebugPointCopyCoordinator {
                      beforeAuthorization: (() throws -> Void)? = nil) throws -> UUID {
         lock.lock(); defer { lock.unlock() }
         let documentID = self.documentID, revision = self.revision
+        guard snapshot.documentID == documentID, snapshot.revision == revision, snapshot.data == data else {
+            throw DebugPointCopyStore.Error.staleSnapshot
+        }
         return try DebugPointCopyStore.saveAuthorized(at: database, id: id, snapshot: snapshot) { document, version in
             try beforeAuthorization?()
             return document == documentID && version == revision

@@ -15,3 +15,5 @@ The DEBUG snapshot authorization experiment checks caller-supplied document iden
 DebugPointCopyCoordinator serializes its own document identity/revision updates and synchronous transaction using one lock. It is not connected to SwiftUI; any state changes bypassing it invalidate the guarantee. It performs blocking I/O and must not be called on the UI thread. Apple build/device validation remains outstanding.
 
 The concurrency test checks the completed save and stale follow-up; scheduling alone does not prove that the competing thread attempted the lock while the transaction was held. The serialization claim rests on code inspection of the shared lock and requires Apple-platform concurrency testing.
+
+The coordinator now owns the snapshot bytes and revision together under its lock, and rejects a forged snapshot whose bytes do not match the current state. Callers must route every real document change into that coordinator; external document state and independent direct prototype APIs are not protected by it.
