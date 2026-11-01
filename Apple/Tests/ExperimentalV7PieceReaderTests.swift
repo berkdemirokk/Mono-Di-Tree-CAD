@@ -5,7 +5,9 @@ import XCTest
 final class ExperimentalV7PieceReaderTests: XCTestCase {
     private var minimalSnapshot: String {
         let hash = String(repeating: "A", count: 64)
-        return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(hash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[],\"LayoutPieces\":[],\"Selections\":[],\"Copies\":[],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
+        let source = "11111111-1111-1111-1111-111111111111", placed = "22222222-2222-2222-2222-222222222222"
+        func piece(_ id: String) -> String { "{\"Id\":\"\(id)\",\"Name\":\"A\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":0},{\"X\":0,\"Y\":1}],\"Metadata\":{\"Role\":\"Kesim\",\"Material\":\"Pamuk\",\"Quantity\":1},\"Grainline\":{\"Start\":{\"X\":0,\"Y\":0},\"End\":{\"X\":0,\"Y\":1},\"NeedsReview\":false}}" }
+        return "{\"FabricWidth\":1,\"UsedLength\":1,\"Gap\":0,\"EdgeMargin\":0,\"Algorithm\":\"deterministic-shelf-v1\",\"LayoutFingerprint\":\"\(hash)\",\"Placements\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\"}],\"RotationTrace\":{\"Schema\":\"per-copy-orthogonal-trace-v1\",\"Algorithm\":\"explicit-per-copy-shelf-v1\",\"TransformConvention\":\"origin-quarter-turn-then-translate-v1\",\"SourceFingerprint\":\"\(hash)\",\"LayoutFingerprint\":\"\(hash)\",\"SourcePieces\":[\(piece(source))],\"LayoutPieces\":[\(piece(placed))],\"Selections\":[\"\(source)\"],\"Copies\":[{\"SourcePieceId\":\"\(source)\",\"CopyNumber\":1,\"PlacedPieceId\":\"\(placed)\",\"Degrees\":0}],\"FabricWidth\":1,\"Gap\":0,\"EdgeMargin\":0,\"UsedLength\":1,\"MaxLength\":null,\"GrainDirection\":\"TwoWay\",\"ToleranceDegrees\":0}}"
     }
     private func extract(_ data: Data, chunk: Int) throws -> [Data] {
         var reader = ExperimentalV7PieceReader()
@@ -159,6 +161,21 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         snapshot["RotationTrace"] = trace; try rejected(snapshot)
         trace = originalTrace; trace["SourcePieces"] = "not an array"
         snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace
+        var copies = try XCTUnwrap(trace["Copies"] as? [[String: Any]])
+        copies[0]["CopyNumber"] = 999; trace["Copies"] = copies
+        snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace; copies = try XCTUnwrap(trace["Copies"] as? [[String: Any]])
+        copies[0]["Degrees"] = 45; trace["Copies"] = copies
+        snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        snapshot = originalSnapshot; snapshot["Gap"] = 123; try rejected(snapshot)
+        snapshot = originalSnapshot; snapshot["LayoutFingerprint"] = String(repeating: "A", count: 64); try rejected(snapshot)
+        trace = originalTrace; trace["Selections"] = []
+        snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        trace = originalTrace
+        var sources = try XCTUnwrap(trace["SourcePieces"] as? [[String: Any]])
+        sources[0]["Points"] = []
+        trace["SourcePieces"] = sources; snapshot["RotationTrace"] = trace; try rejected(snapshot)
     }
     func testLimitsAndCancelledReadsNeverReturnPartialResults() {
         let json = Data(#"[7,{"Name":"P","Pieces":[{"Name":"one"},{"Name":"two"}],"GradingRules":[],"NestingSnapshot":{}}]"#.utf8)

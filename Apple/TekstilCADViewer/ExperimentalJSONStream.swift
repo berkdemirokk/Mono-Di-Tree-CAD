@@ -161,7 +161,7 @@ struct ExperimentalJSONStream {
         guard let text = String(bytes: token, encoding: .utf8) else { throw Failure.invalid }
         if strictIntegerKeys, let frame = frames.last, frame.phase == .objectValue,
            let key = frame.currentKey,
-           key == Array("Quantity".unicodeScalars.map(\.value)) || key == Array("VertexIndex".unicodeScalars.map(\.value)) {
+           ["Quantity", "VertexIndex", "CopyNumber", "Degrees"].contains(where: { key == $0.unicodeScalars.map(\.value) }) {
             if text != "null" {
                 let digits = text.first == "-" ? text.dropFirst() : Substring(text)
                 guard !digits.isEmpty, digits.utf8.allSatisfy({ (48...57).contains($0) }),

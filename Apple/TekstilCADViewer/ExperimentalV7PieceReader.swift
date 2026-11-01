@@ -1,4 +1,5 @@
 import Foundation
+import CoreFoundation
 
 /// Experimental UTF-8 v7 visible-piece extractor. Not connected to the viewer.
 /// Successful extraction checks JSON syntax, unique keys and v7 root/history
@@ -20,6 +21,17 @@ struct ExperimentalV7PieceReader {
     private var scopedValue: String? = nil
     private var scopedStringToken: [UInt8]? = nil
     private var scopedStringKey: String? = nil
+    private var scopedNumberToken: [UInt8]? = nil, scopedNumberKey: String? = nil
+    private var scopedNumberIsTrace = false
+    private var snapshotNumbers: [String: UInt64] = [:], traceNumbers: [String: UInt64] = [:]
+    private var snapshotFingerprint: String?, traceFingerprint: String?
+    private struct Mapping: Equatable { let source: UUID; let number: Int; let placed: UUID }
+    private var placementMappings: [Mapping] = [], traceMappings: [Mapping] = []
+    private var mappingArray: String? = nil, mappingDepth = 0
+    private var mappingToken: [UInt8]? = nil
+    private var sourceIDs = Set<UUID>(), historyIDs = Set<UUID>(), historicalPoints = 0, historicalMarks = 0
+    private var sourceQuantities: [UUID: Int] = [:]
+    private var selectionIDs = Set<UUID>()
     private var expectingPiecesArray = false
     private var inPieces = false, foundPieces = false
     private var piece: [UInt8]? = nil
@@ -43,7 +55,7 @@ struct ExperimentalV7PieceReader {
             try validator.feed(data, cancelled: cancelled)
             for byte in data {
                 if cancelled() { throw Failure.cancelled }
-                try extract(byte)
+                try extract(byte, cancelled: cancelled)
             }
         } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
     }
@@ -56,7 +68,21 @@ struct ExperimentalV7PieceReader {
             guard header == 4, foundPieces, !inPieces, piece == nil, stack.isEmpty,
                   projectName != nil, rootKeys.isSuperset(of: ["Name", "Pieces", "GradingRules", "NestingSnapshot"]),
                   snapshotKeys == Set(["FabricWidth", "UsedLength", "Gap", "EdgeMargin", "Algorithm", "LayoutFingerprint", "Placements", "RotationTrace"]),
-                  traceKeys == Set(["Schema", "Algorithm", "TransformConvention", "SourceFingerprint", "LayoutFingerprint", "SourcePieces", "LayoutPieces", "Selections", "Copies", "FabricWidth", "Gap", "EdgeMargin", "UsedLength", "MaxLength", "GrainDirection", "ToleranceDegrees"]) else { throw Failure.invalid }
+                  traceKeys == Set(["Schema", "Algorithm", "TransformConvention", "SourceFingerprint", "LayoutFingerprint", "SourcePieces", "LayoutPieces", "Selections", "Copies", "FabricWidth", "Gap", "EdgeMargin", "UsedLength", "MaxLength", "GrainDirection", "ToleranceDegrees"]),
+                  !placementMappings.isEmpty, placementMappings == traceMappings,
+                  !sourceIDs.isEmpty, selectionIDs == sourceIDs, historyIDs.count == traceMappings.count,
+                  let fingerprint = snapshotFingerprint, fingerprint == traceFingerprint,
+                  ["FabricWidth", "UsedLength", "Gap", "EdgeMargin"].allSatisfy({ snapshotNumbers[$0] != nil && snapshotNumbers[$0] == traceNumbers[$0] }),
+                  traceMappings.allSatisfy({ sourceIDs.contains($0.source) && historyIDs.contains($0.placed) }) else { throw Failure.invalid }
+            var seenPlaced = Set<UUID>(), seenCopies = Set<String>(), counts: [UUID: Int] = [:]
+            for mapping in traceMappings {
+                if cancelled() { throw Failure.cancelled }
+                guard let quantity = sourceQuantities[mapping.source], mapping.number <= quantity,
+                      seenPlaced.insert(mapping.placed).inserted,
+                      seenCopies.insert("\(mapping.source.uuidString)#\(mapping.number)").inserted else { throw Failure.invalid }
+                counts[mapping.source, default: 0] += 1
+            }
+            guard sourceQuantities.allSatisfy({ counts[$0.key] == $0.value }) else { throw Failure.invalid }
             finished = true
             return pieces
         } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
@@ -66,10 +92,13 @@ struct ExperimentalV7PieceReader {
     mutating func finishPreview(cancelled: () -> Bool = { false }) throws -> ExperimentalV7Preview {
         let parts = try finish(cancelled: cancelled)
         guard let name = projectName else { throw Failure.invalid }
-        return try ExperimentalV7Contours.preview(name: name, input: parts, cancelled: cancelled)
+        let preview = try ExperimentalV7Contours.preview(name: name, input: parts, cancelled: cancelled)
+        guard preview.pieces.reduce(historicalPoints, { $0 + $1.points.count }) <= 200_000,
+              preview.pieces.reduce(historicalMarks, { $0 + $1.notches.count }) <= 200_000 else { throw Failure.limit }
+        return preview
     }
 
-    private mutating func extract(_ byte: UInt8) throws {
+    private mutating func extract(_ byte: UInt8, cancelled: () -> Bool) throws {
         if header < 4 {
             if [9, 10, 13, 32].contains(byte) { return }
             let expected: [UInt8] = [91, 55, 44, 123]
@@ -81,6 +110,22 @@ struct ExperimentalV7PieceReader {
         if piece != nil {
             guard piece!.count < maximumPieceBytes else { throw Failure.limit }
             piece!.append(byte)
+        }
+        if mappingToken != nil {
+            let limit = mappingArray == "SourcePieces" || mappingArray == "LayoutPieces" ? maximumPieceBytes : 4096
+            guard mappingToken!.count < limit else { throw Failure.limit }
+            mappingToken!.append(byte)
+        }
+        if scopedNumberToken != nil {
+            if (48...57).contains(byte) || [43, 45, 46, 69, 101].contains(byte) {
+                guard scopedNumberToken!.count < 128 else { throw Failure.limit }
+                scopedNumberToken!.append(byte); return
+            }
+            guard let token = scopedNumberToken, let key = scopedNumberKey,
+                  let text = String(bytes: token, encoding: .utf8), let value = Double(text), value.isFinite else { throw Failure.invalid }
+            if scopedNumberIsTrace { traceNumbers[key] = value.bitPattern }
+            else { snapshotNumbers[key] = value.bitPattern }
+            scopedNumberToken = nil; scopedNumberKey = nil
         }
         if string {
             if scopedStringToken != nil {
@@ -99,6 +144,12 @@ struct ExperimentalV7PieceReader {
             if byte == 92 { escaped = true; return }
             if byte == 34 {
                 string = false
+                if mappingArray == "Selections", let token = mappingToken {
+                    guard let text = (try? JSONSerialization.jsonObject(with: Data(token), options: [.fragmentsAllowed])) as? String,
+                          let id = UUID(uuidString: text), id.uuidString != "00000000-0000-0000-0000-000000000000",
+                          selectionIDs.count < maximumPieces, selectionIDs.insert(id).inserted else { throw Failure.invalid }
+                    mappingToken = nil
+                }
                 if let token = scopedStringToken, let key = scopedStringKey {
                     guard let value = (try? JSONSerialization.jsonObject(with: Data(token), options: [.fragmentsAllowed])) as? String else { throw Failure.invalid }
                     switch key {
@@ -108,6 +159,9 @@ struct ExperimentalV7PieceReader {
                     case "GrainDirection": guard value == "OneWay" || value == "TwoWay" else { throw Failure.invalid }
                     case "SourceFingerprint", "LayoutFingerprint":
                         guard value.utf8.count == 64, value.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }) else { throw Failure.invalid }
+                        if key == "LayoutFingerprint" {
+                            if traceActive { traceFingerprint = value } else { snapshotFingerprint = value }
+                        }
                     default: throw Failure.invalid
                     }
                     scopedStringToken = nil; scopedStringKey = nil
@@ -142,8 +196,15 @@ struct ExperimentalV7PieceReader {
                 guard byte == 34 else { throw Failure.invalid }; isScopedStringValue = true; scopedStringKey = key
             } else if arrays.contains(key) {
                 guard byte == 91 else { throw Failure.invalid }
+                if ["Placements", "Copies", "SourcePieces", "LayoutPieces", "Selections"].contains(key) {
+                    guard mappingArray == nil else { throw Failure.invalid }
+                    mappingArray = key; mappingDepth = stack.count + 1
+                }
             } else {
                 guard (48...57).contains(byte) || byte == 45 || (key == "MaxLength" && byte == 110) else { throw Failure.invalid }
+                if byte != 110 {
+                    scopedNumberToken = [byte]; scopedNumberKey = key; scopedNumberIsTrace = traceActive
+                }
             }
             scopedValue = nil
         }
@@ -154,6 +215,17 @@ struct ExperimentalV7PieceReader {
         if inPieces && stack.count == 3 && piece == nil && byte != 93 && byte != 44 {
             guard byte == 123, pieces.count < maximumPieces else { throw Failure.invalid }
             piece = [byte]; stack.append(byte); return
+        }
+        if let array = mappingArray, stack.count == mappingDepth, mappingToken == nil, byte != 93 && byte != 44 {
+            if array == "Selections" {
+                guard byte == 34 else { throw Failure.invalid }
+                mappingToken = [byte]; string = true; escaped = false; return
+            }
+            let count: Int
+            switch array { case "Placements": count = placementMappings.count; case "Copies": count = traceMappings.count
+            case "SourcePieces": count = sourceIDs.count; default: count = historyIDs.count }
+            guard byte == 123, count < maximumPieces else { throw Failure.invalid }
+            mappingToken = [byte]; stack.append(byte); return
         }
         switch byte {
         case 34:
@@ -186,6 +258,26 @@ struct ExperimentalV7PieceReader {
             guard !stack.isEmpty else { throw Failure.invalid }
             let prior = stack.removeLast()
             guard (byte == 125 && prior == 123) || (byte == 93 && prior == 91) else { throw Failure.invalid }
+            if let array = mappingArray, let token = mappingToken, byte == 125 && stack.count == mappingDepth {
+                if array == "SourcePieces" || array == "LayoutPieces" {
+                    let candidates = try ExperimentalV7Contours.decode([Data(token)], cancelled: cancelled)
+                    guard let item = candidates.first, let id = item.id, item.grain != nil, item.role == "Kesim", item.material != nil else { throw Failure.invalid }
+                    if array == "SourcePieces" {
+                        guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
+                        sourceQuantities[id] = quantity
+                    } else {
+                        guard item.quantity == 1, historyIDs.insert(id).inserted else { throw Failure.invalid }
+                    }
+                    historicalPoints += item.points.count; historicalMarks += item.notches.count
+                    guard historicalPoints <= 200_000, historicalMarks <= 200_000 else { throw Failure.limit }
+                } else {
+                    let mapping = try decodeMapping(Data(token), trace: array == "Copies", cancelled: cancelled)
+                    if array == "Copies" { traceMappings.append(mapping) } else { placementMappings.append(mapping) }
+                }
+                mappingToken = nil
+            } else if mappingArray != nil && byte == 93 && stack.count == mappingDepth - 1 {
+                mappingArray = nil
+            }
             if traceActive && stack.count == 3 && byte == 125 { traceActive = false }
             if snapshotActive && stack.count == 2 && byte == 125 { snapshotActive = false }
             if piece != nil && stack.count == 3 {
@@ -196,5 +288,21 @@ struct ExperimentalV7PieceReader {
             } else if inPieces && byte == 93 && stack.count == 2 { inPieces = false }
         default: break
         }
+    }
+
+    private func decodeMapping(_ data: Data, trace: Bool, cancelled: () -> Bool) throws -> Mapping {
+        var scanner = ExperimentalJSONStream(maximumBytes: 4096, strictIntegerKeys: true)
+        try scanner.feed(data, cancelled: cancelled); try scanner.finish(cancelled: cancelled)
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(object.keys) == Set(trace ? ["SourcePieceId", "CopyNumber", "PlacedPieceId", "Degrees"] : ["SourcePieceId", "CopyNumber", "PlacedPieceId"]),
+              let sourceText = object["SourcePieceId"] as? String, let source = UUID(uuidString: sourceText),
+              let placedText = object["PlacedPieceId"] as? String, let placed = UUID(uuidString: placedText),
+              let n = object["CopyNumber"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
+              n.intValue >= 1, n.intValue <= 100_000 else { throw Failure.invalid }
+        if trace {
+            guard let degrees = object["Degrees"] as? NSNumber, CFGetTypeID(degrees) != CFBooleanGetTypeID(),
+                  [0, 90, 180, 270].contains(degrees.intValue) else { throw Failure.invalid }
+        }
+        return Mapping(source: source, number: n.intValue, placed: placed)
     }
 }
