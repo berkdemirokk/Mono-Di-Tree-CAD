@@ -3,7 +3,7 @@ namespace TekstilCAD.FileFormats;
 /// <summary>Checks that an export filename identifies the format chosen by the user.</summary>
 public static class ExportDestination
 {
-    /// <param name="format">The export dialog's one-based format index: 1 DXF, 2 SVG, 3 HPGL, 4 PDF.</param>
+    /// <param name="format">One-based export format index: DXF, SVG, HPGL, PDF, A4 PDF, or Y-inverted DXF.</param>
     public static void ValidateExtension(string path, int format)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -14,6 +14,7 @@ public static class ExportDestination
             3 => ("HPGL", new[] { ".plt", ".hpgl" }),
             4 => ("PDF", new[] { ".pdf" }),
             5 => ("A4 PDF", new[] { ".pdf" }),
+            6 => ("DXF", new[] { ".dxf" }),
             _ => throw new ArgumentOutOfRangeException(nameof(format), "Bilinmeyen dışa aktarım biçimi.")
         };
         var extension = Path.GetExtension(path);

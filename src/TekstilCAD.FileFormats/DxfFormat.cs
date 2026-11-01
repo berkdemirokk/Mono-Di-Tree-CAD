@@ -2116,7 +2116,13 @@ public static class DxfFormat
         ArgumentNullException.ThrowIfNull(expectedVersion);
         ExportCore(project, path, expectedVersion);
     }
-    private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion)
+    /// <summary>Export a mirrored-Y copy for external CAD viewers whose Y axis points upward.</summary>
+    public static void ExportCanvasOrientation(ProjectDocument project,string path,ProjectFileVersion expectedVersion)
+    {
+        ArgumentNullException.ThrowIfNull(expectedVersion);
+        ExportCore(project,path,expectedVersion,flipY:true);
+    }
+    private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion, bool flipY=false)
     {
         var layers = PlanLayers(project);
         GrainlineExportGuard.EnsureSupported(project);
@@ -2151,7 +2157,7 @@ public static class DxfFormat
             for (var pointIndex = 0; pointIndex < count; pointIndex++)
             {
                 var pt = p.Points[pointIndex];
-                b.Append("10\n").Append(F(pt.X)).Append("\n20\n").Append(F(pt.Y)).Append('\n');
+                b.Append("10\n").Append(F(pt.X)).Append("\n20\n").Append(F(flipY ? -pt.Y : pt.Y)).Append('\n');
             }
         }
         b.Append("0\nENDSEC\n0\nEOF\n");

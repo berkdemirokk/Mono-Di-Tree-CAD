@@ -4149,8 +4149,19 @@ internal static class DesktopVerification
         PumpUntil(()=>tiledTask!.IsCompleted);tiledTask!.GetAwaiter().GetResult();
         Check(studio.ExportError is null && File.ReadAllText(tiledPath).Contains("50 MM CHECK") && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
             "A4 PDF export produces calibration and preserves source",checks);
+        var flippedPath=Path.Combine(work,"canvas-orientation.dxf");
+        var flippedVersion=ProjectStorage.CaptureVersion(flippedPath);string? flippedWarning=null;
+        var flippedDeclined=studio.StartExportAfterPreflight(studio.Document.Clone(),flippedPath,6,flippedVersion,message=> { flippedWarning=message;return false; });
+        Check(flippedDeclined is null && !studio.ExportRunning && flippedWarning is not null && flippedWarning.Contains("işaretini ters",StringComparison.Ordinal),
+            "Canvas-oriented DXF explains the coordinate change before export",checks);
+        var flippedTask=studio.StartExportAfterPreflight(studio.Document.Clone(),flippedPath,6,flippedVersion,_=>true);
+        Check(flippedTask is not null,"Canvas-oriented DXF starts after confirmation",checks);
+        PumpUntil(()=>flippedTask!.IsCompleted);flippedTask!.GetAwaiter().GetResult();
+        var flippedDxf=DxfFormat.Import(flippedPath,1).Project.Pieces.Single();
+        Check(studio.ExportError is null && flippedDxf.Points.SequenceEqual(mismatchDocument.Pieces[0].Points.Select(p=>new Point2(p.X,-p.Y)))
+            && DocumentSession.ContentEquals(mismatchDocument,studio.Document),"Canvas-oriented DXF changes only exported Y coordinates",checks);
         previousTask=studio.ExportTask;
-        foreach(var format in new[] { 1,2,3,4,5 })
+        foreach(var format in new[] { 1,2,3,4,5,6 })
         {
             try { studio.StartExportAsync(studio.Document.Clone(),mismatchPath,format,mismatchVersion);throw new InvalidOperationException("Mismatched export extension was accepted."); }
             catch(InvalidDataException) { }

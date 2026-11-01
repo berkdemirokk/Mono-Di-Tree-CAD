@@ -13,6 +13,7 @@ public class ExportDestinationTests
     [InlineData("model.HPGL", 3)]
     [InlineData("model.pdf", 4)]
     [InlineData("model.pdf", 5)]
+    [InlineData("model.dxf", 6)]
     public void MatchingExtensionsAreAccepted(string path, int format)
         => ExportDestination.ValidateExtension(path, format);
 
@@ -27,7 +28,7 @@ public class ExportDestinationTests
 
     [Theory]
     [InlineData(0)]
-    [InlineData(6)]
+    [InlineData(7)]
     public void UnknownFormatIsRejected(int format)
         => Assert.Throws<ArgumentOutOfRangeException>(() => ExportDestination.ValidateExtension("model.dxf", format));
 }

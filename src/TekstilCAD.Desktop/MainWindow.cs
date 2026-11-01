@@ -2627,7 +2627,7 @@ public class MainWindow : Window
         {
             DockPanel.SetDock(riskNotices,Dock.Top);panel.Children.Add(riskNotices);
         }
-        var replacement=new TextBlock { Text="İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. İncelenen kopya kaynakla artık eşleşmeyebilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
+        var replacement=new TextBlock { Text="İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. Tuvalde Y aşağı artar; kaynak CAD'de Y yukarıysa görüntü dikey ters görünebilir. İncelenen kopyayı kaynakla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
         DockPanel.SetDock(replacement,Dock.Top);panel.Children.Add(replacement);
         var body=new StackPanel();
         var notesViewer=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
@@ -2920,7 +2920,7 @@ public class MainWindow : Window
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF · koordinatları koru (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf|PDF A4 sayfalar (*.pdf)|*.pdf|DXF · ekran yönü, Y ters (*.dxf)|*.dxf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dlg.ShowDialog(this)!=true)return;
         ExportDestination.ValidateExtension(dlg.FileName,dlg.FilterIndex);
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje dosya seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
@@ -2935,7 +2935,7 @@ public class MainWindow : Window
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje onay sırasında değişti; dışa aktarımı yeniden başlatın.");
         EnsureWritableDestination(dlg.FileName);
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
-        if(dlg.FilterIndex==1)
+        if(dlg.FilterIndex is 1 or 6)
         {
             var layers=DxfFormat.PlanLayers(snapshot);
             if(layers.Any(layer=>layer.Changed) && new DxfLayerReviewWindow(this,layers).ShowDialog()!=true)return;
@@ -2952,6 +2952,7 @@ public class MainWindow : Window
     internal Task? StartExportAfterPreflight(ProjectDocument snapshot,string path,int format,ProjectFileVersion expected,Func<string,bool> confirm)
     {
         ArgumentNullException.ThrowIfNull(confirm);
+        if(format==6 && !confirm("Bu seçenek dış dosyadaki Y koordinatlarının işaretini ters çevirir; proje değişmez. Y ekseni yukarı olan CAD programlarında kalıp ekrandaki yönde görünür. Dosyanın koordinatları ve konumu değişeceğinden hedef programda ölçü ve yönü kontrol edin. Devam edilsin mi?")) { SetStatus("DXF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==3 && !confirm(HpglPreflightMessage)) { SetStatus("HPGL dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==4 && !confirm("PDF tek özel boyutlu sayfada inceleme içindir. Çok sayfalı yazdırma yoktur. Sayısal yuvarlama küçük kontur ayrıntılarını değiştirebilir. Yazıcı ve PDF uygulaması sayfayı ölçekleyebilir; fiziksel ölçüyü bağımsız kontrol edin. İplik yönü içeren parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         if(format==5 && !confirm("A4 PDF inceleme sayfalarını dikey yönde ve %100 / gerçek boyutta yazdırın; sayfaya sığdırma ve otomatik ölçeklemeyi kapatın. Her sayfadaki 50 mm kontrol çizgisini ölçün. Sayfaları ROW satırı ve COL sütununa göre soldan sağa, yukarıdan aşağıya; gri çerçeveleri kenar kenara getirerek birleştirin. Yazıcı kenarları kırpabilir; birleşimleri ve ölçüleri kontrol edin. Sayısal yuvarlama küçük ayrıntıları değiştirebilir; fiziksel baskı ve üretim uygunluğu doğrulanmadı. İplik yönlü parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("A4 PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
@@ -3040,7 +3041,7 @@ public class MainWindow : Window
                 try { await Task.Run(()=>HpglFormat.WritePrepared(prepared,path,expected,token)); }
                 finally { if(!windowClosed)IsEnabled=previouslyEnabled; }
             }
-            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; } });
+            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; case 5: PdfTiledFormat.Export(snapshot,path,expected); break; case 6: DxfFormat.ExportCanvasOrientation(snapshot,path,expected); break; } });
             var stale=!DocumentSession.ContentEquals(snapshot,Document) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
             exportNotice.Text=stale?"Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı.":"Dosya dışa aktarıldı.";
