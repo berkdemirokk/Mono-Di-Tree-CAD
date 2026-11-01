@@ -163,8 +163,9 @@ struct ExperimentalJSONStream {
            let key = frame.currentKey,
            key == Array("Quantity".unicodeScalars.map(\.value)) || key == Array("VertexIndex".unicodeScalars.map(\.value)) {
             if text != "null" {
-                guard !text.isEmpty, text.utf8.allSatisfy({ (48...57).contains($0) }),
-                      (text == "0" || text.first != "0"), Int32(text) != nil else { throw Failure.invalid }
+                let digits = text.first == "-" ? text.dropFirst() : Substring(text)
+                guard !digits.isEmpty, digits.utf8.allSatisfy({ (48...57).contains($0) }),
+                      (digits == "0" || digits.first != "0"), Int32(text) != nil else { throw Failure.invalid }
             }
         }
         if text != "true" && text != "false" && text != "null" {

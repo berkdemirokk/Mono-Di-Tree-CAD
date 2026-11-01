@@ -53,7 +53,6 @@ enum ExperimentalV7Contours {
                     if offset % 256 == 0 && cancelled() { throw Failure.cancelled }
                     guard Set(mark.keys) == Set(["VertexIndex", "Position"]),
                           let n = mark["VertexIndex"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID(),
-                          !["f", "d"].contains(String(cString: n.objCType)),
                           n.doubleValue >= 0, n.doubleValue < Double(points.count), let position = point(mark["Position"]) else { throw Failure.invalid }
                     let index = n.intValue
                     guard seen.insert(index).inserted, points[index].x == position.x, points[index].y == position.y,

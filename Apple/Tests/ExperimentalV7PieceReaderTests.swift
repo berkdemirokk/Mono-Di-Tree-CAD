@@ -55,6 +55,19 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
             XCTAssertThrowsError(try ExperimentalV7Contours.decode([Data(json.utf8)]))
         }
     }
+    func testSignedIntegerTokensUseFieldRangeAfterSyntax() throws {
+        let template = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":INDEX,"Position":{"X":0,"Y":0}}],"Metadata":{"Role":"Kesim","Quantity":QUANTITY}}"#
+        func input(_ index: String, _ quantity: String) -> Data {
+            Data(template.replacingOccurrences(of: "INDEX", with: index).replacingOccurrences(of: "QUANTITY", with: quantity).utf8)
+        }
+        XCTAssertEqual(try ExperimentalV7Contours.decode([input("-0", "1")]).first?.notches, [0])
+        for index in ["-1", "-01", "-0.0", "-0e0"] {
+            XCTAssertThrowsError(try ExperimentalV7Contours.decode([input(index, "1")]), index)
+        }
+        for quantity in ["-0", "-1", "1.0"] {
+            XCTAssertThrowsError(try ExperimentalV7Contours.decode([input("0", quantity)]), quantity)
+        }
+    }
     func testOptionalExternalLargeDesktopV7Fixture() throws {
         guard let path = ProcessInfo.processInfo.environment["TCAD_LARGE_V7_FIXTURE"], !path.isEmpty else {
             throw XCTSkip("Set TCAD_LARGE_V7_FIXTURE to the external synthetic desktop v7 file")
