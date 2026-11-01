@@ -1881,10 +1881,21 @@ internal static class DesktopVerification
             var orientationWarning=new List<string> { "Kullanıcı seçimiyle tüm geometride Y işareti ters çevrildi; kaynakla karşılaştırın." };
             var orientationPreview=(Window)typeof(MainWindow).GetMethod("BuildImportPreview",PrivateInstance)!.Invoke(studio,[previewCopy,orientationWarning,1d,"grain-review.dxf",imported.Units])!;
             var orientationRoot=(FrameworkElement)orientationPreview.Content;
-            var previewItems=Descendants<ListBox>(orientationRoot).Single(l=>AutomationProperties.GetName(l)=="İçe alınacak tüm parça adları").Items.Cast<PatternPiece>().ToArray();
+            Render(orientationPreview,Path.Combine(work,"dxf-reflected-review-info.png"),500,380);
+            var orientationTabs=Descendants<TabControl>(orientationRoot).Single();orientationTabs.SelectedIndex=1;
+            Render(orientationPreview,Path.Combine(work,"dxf-reflected-review-names.png"),500,380);
+            var orientationList=Descendants<ListBox>(orientationRoot).Single(l=>AutomationProperties.GetName(l)=="İçe alınacak tüm parça adları");
+            var previewItems=orientationList.Items.Cast<PatternPiece>().ToArray();
             Check(previewItems.Single(p=>p.Closed).Points[2]==new Point2(0,-20) &&
                 Descendants<TextBlock>(orientationRoot).Any(t=>t.Text.Contains("kontur yönü yansıtıldı",StringComparison.Ordinal)),
                 "Reflected import preview displays the transformed geometry and direction notice",checks);
+            orientationList.SelectedItem=previewItems.Single(p=>p.Closed);
+            Descendants<Button>(orientationRoot).Single(b=>Equals(b.Content,"Parçayı gör")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Render(orientationPreview,Path.Combine(work,"dxf-reflected-review-piece.png"),500,380);
+            var visiblePiece=Descendants<DxfPiecePreview>(orientationRoot).Single();
+            var pieceDetail=Descendants<TextBox>(orientationRoot).Single(t=>AutomationProperties.GetName(t)=="İçe alınacak parça geometrisi ve ölçüleri");
+            Check(visiblePiece.DisplayedPieceId==previewItems.Single(p=>p.Closed).Id && pieceDetail.Text.Contains("min Y -20 mm",StringComparison.Ordinal),
+                "Reflected geometry is shown in the selected piece view",checks);
             orientationPreview.Close();
             var reflectedReview=false;
             studio.ConfirmDxfGrainlineReviewForVerification=i=> {
