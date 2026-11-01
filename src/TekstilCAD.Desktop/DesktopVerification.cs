@@ -3751,7 +3751,7 @@ internal static class DesktopVerification
             var changedTrace=studio.Document.NestingSnapshot!.RotationTrace!;
             changedTrace.Copies[0]=changedTrace.Copies[0] with { Degrees=0 };
             var generationField=typeof(MainWindow).GetField("nestingHistoryGeneration",PrivateInstance)!;
-            var generation=(int)generationField.GetValue(studio)!+1;generationField.SetValue(studio,generation);
+            var generation=(long)generationField.GetValue(studio)!+1;generationField.SetValue(studio,generation);
             var compare=(Task)typeof(MainWindow).GetMethod("CompareNestingHistoryAsync",PrivateInstance)!.Invoke(studio,[studio.Document.Clone(),studio.Document,generation])!;
             PumpUntil(()=>compare.IsCompleted);compare.GetAwaiter().GetResult();
             var notice=(TextBlock)typeof(MainWindow).GetField("nestingHistoryNotice",PrivateInstance)!.GetValue(studio)!;
