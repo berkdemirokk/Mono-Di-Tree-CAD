@@ -1,0 +1,32 @@
+using TekstilCAD.Core;
+using TekstilCAD.Patterns;
+namespace TekstilCAD.Tests;
+
+public class SelectedNotchComparisonTests
+{
+    private static readonly Point2[] Source=[new(0,0),new(100,0),new(100,100),new(60,100),
+        new(50,90),new(40,100),new(0,100)];
+    [Fact]
+    public void ExplicitDifferentIndicesDetectCollapsedNotch()
+    {
+        Point2[] output=[new(60,100),new(50,99.999999),new(40,100)];
+        var result=SelectedNotchComparison.Compare(Source,output,3,4,5,0,1,2,0,0.001);
+        Assert.False(result.WithinTolerance);Assert.Equal(10,result.SourceDepth);
+        Assert.InRange(result.CandidateDepth,0,0.000002);
+    }
+    [Fact]
+    public void ExplicitDifferentIndicesCanMatchWithinUserTolerance()
+    {
+        Point2[] output=[new(60,100),new(50,91),new(40,100)];
+        var result=SelectedNotchComparison.Compare(Source,output,3,4,5,0,1,2,0,1);
+        Assert.True(result.WithinTolerance);Assert.Equal(20,result.SourceWidth);Assert.Equal(9,result.CandidateDepth);
+    }
+    [Fact]
+    public void InvalidOrReversedWitnessIsRejected()
+    {
+        Point2[] output=[new(60,100),new(50,101),new(40,100)];
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,output,3,4,5,0,1,2,0,1));
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,output,3,4,5,0,0,2,0,1));
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,output,3,4,5,0,1,2,-1,1));
+    }
+}

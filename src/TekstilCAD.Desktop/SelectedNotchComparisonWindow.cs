@@ -1,0 +1,94 @@
+using System.Globalization;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using TekstilCAD.Core;
+using TekstilCAD.Patterns;
+
+namespace TekstilCAD.Desktop;
+
+/// <summary>Read-only comparison of explicitly selected notch triples.</summary>
+internal sealed class SelectedNotchComparisonWindow : Window
+{
+    private readonly MainWindow workspace;
+    private readonly ProjectDocument originalDocument,originalContent;
+    private readonly PatternPiece source;
+    private readonly ComboBox target=new() { MinWidth=260,HorizontalAlignment=HorizontalAlignment.Left,DisplayMemberPath="Label" };
+    private readonly TextBox[] indices=new TextBox[6];
+    private readonly TextBox widthTolerance=new() { Text="0",MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBox depthTolerance=new() { Text="0",MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,0),Focusable=true };
+    private sealed record Choice(string Label,PatternPiece Piece);
+
+    internal SelectedNotchComparisonWindow(MainWindow workspace,Window owner,PatternPiece source)
+    {
+        this.workspace=workspace;this.source=source.Clone();originalDocument=workspace.Document;originalContent=workspace.Document.Clone();
+        Owner=owner;Title="Seçili çentik ölçülerini karşılaştır";Width=700;Height=740;MinWidth=430;MinHeight=400;
+        WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        var panel=new StackPanel { Margin=new Thickness(18) };
+        var warning=new TextBlock { TextWrapping=TextWrapping.Wrap,Focusable=true,Margin=new Thickness(0,0,0,12),
+            Text="Yalnız sizin iki konturda eşlediğiniz üç nokta karşılaştırılır. Dikiş payının doğru olduğu, diğer çentiklerin korunduğu veya üretime uygunluk doğrulanmaz. Kontur yönleri tersse aynı ağız ucunu aynı sırada seçin. Proje değiştirilmez." };
+        AutomationProperties.SetName(warning,warning.Text);panel.Children.Add(warning);
+        panel.Children.Add(new TextBlock { Text=$"Kaynak parça kimliği: {source.Id:D}",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        panel.Children.Add(new TextBlock { Text="Karşılaştırılacak parça",Margin=new Thickness(0,4,0,4) });
+        AutomationProperties.SetName(target,"Karşılaştırılacak parça ve kimliği");
+        target.ItemsSource=workspace.Document.Pieces.Select(p=>new Choice($"{p.Id:D} · {SafeName(p.Name)}",p.Clone())).ToArray();
+        target.SelectedIndex=target.Items.Count>0?0:-1;target.SelectionChanged+=(_,_)=>InvalidateResult();panel.Children.Add(target);
+        string[] labels=["Kaynak ağız başlangıcı indeksi (0 tabanlı)","Kaynak dip noktası indeksi (0 tabanlı)","Kaynak ağız bitişi indeksi (0 tabanlı)",
+            "Karşılaştırma ağız başlangıcı indeksi (0 tabanlı)","Karşılaştırma dip noktası indeksi (0 tabanlı)","Karşılaştırma ağız bitişi indeksi (0 tabanlı)"];
+        for(int i=0;i<indices.Length;i++)
+        {
+            panel.Children.Add(new TextBlock { Text=labels[i],Margin=new Thickness(0,7,0,3) });
+            indices[i]=new TextBox { MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
+            AutomationProperties.SetName(indices[i],labels[i]);indices[i].TextChanged+=(_,_)=>InvalidateResult();panel.Children.Add(indices[i]);
+        }
+        panel.Children.Add(new TextBlock { Text="Ağız genişliğinde izin verilen mutlak değişim (mm)",Margin=new Thickness(0,9,0,3) });
+        AutomationProperties.SetName(widthTolerance,"Ağız genişliği değişim toleransı, mm");widthTolerance.TextChanged+=(_,_)=>InvalidateResult();panel.Children.Add(widthTolerance);
+        panel.Children.Add(new TextBlock { Text="Dip derinliğinde izin verilen mutlak değişim (mm)",Margin=new Thickness(0,9,0,3) });
+        AutomationProperties.SetName(depthTolerance,"Dip derinliği değişim toleransı, mm");depthTolerance.TextChanged+=(_,_)=>InvalidateResult();panel.Children.Add(depthTolerance);
+        var compare=new Button { Content="Seçili ölçüleri karşılaştır",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,12,0,0) };
+        compare.Click+=(_,_)=>Compare();panel.Children.Add(compare);
+        AutomationProperties.SetName(result,"Seçili çentik ölçümü sonucu");AutomationProperties.SetLiveSetting(result,AutomationLiveSetting.Polite);
+        panel.Children.Add(result);
+        var close=new Button { Content="Kapat",IsCancel=true,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,12,0,0) };
+        close.Click+=(_,_)=>Close();panel.Children.Add(close);
+        Content=new ScrollViewer { Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    }
+    private void InvalidateResult()
+    {
+        if(result.Text.Length==0)return;
+        result.Text="Giriş değişti; yeniden karşılaştırın.";
+        AutomationProperties.SetName(result,result.Text);
+    }
+    private void Compare()
+    {
+        try
+        {
+            if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,originalDocument) ||
+               !DocumentSession.ContentEquals(workspace.Document,originalContent))
+                throw new InvalidOperationException("Proje veya bekleyen çalışma değişti; pencereyi kapatıp güncel parçalarla yeniden açın.");
+            if(target.SelectedItem is not Choice choice)throw new ArgumentException("Karşılaştırılacak parçayı seçin.");
+            var values=new int[6];
+            for(int i=0;i<values.Length;i++)
+                if(!int.TryParse(indices[i].Text,NumberStyles.None,CultureInfo.InvariantCulture,out values[i]))
+                    throw new ArgumentException("Altı nokta indeksini sıfırdan başlayan tam sayı olarak girin.");
+            if(!MeasurementInput.TryParseMillimeters(widthTolerance.Text,out var w) || !MeasurementInput.TryParseMillimeters(depthTolerance.Text,out var d))
+                throw new ArgumentException("İki toleransı milimetre cinsinden girin.");
+            var measurement=SelectedNotchComparison.Compare(source.Points,choice.Piece.Points,values[0],values[1],values[2],
+                values[3],values[4],values[5],w,d);
+            result.Text=(measurement.WithinTolerance?"Seçili iki ölçü tolerans içinde. ":"Seçili ölçüler toleransı aşıyor. ")+
+                $"Kaynak ağız: {MeasurementInput.Format(measurement.SourceWidth)} mm, karşılaştırma ağız: {MeasurementInput.Format(measurement.CandidateWidth)} mm. "+
+                $"Kaynak derinlik: {MeasurementInput.Format(measurement.SourceDepth)} mm, karşılaştırma derinlik: {MeasurementInput.Format(measurement.CandidateDepth)} mm. "+
+                $"Kaynak: {source.Id:D}; karşılaştırma: {choice.Piece.Id:D}. Genişlik toleransı: {MeasurementInput.Format(w)} mm; derinlik toleransı: {MeasurementInput.Format(d)} mm. "+
+                "Gösterilen ölçüler yaklaşıktır. Yalnız bu üç nokta karşılaştırıldı; dikiş payı, diğer çentikler ve üretim uygunluğu doğrulanmadı.";
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException)
+        { result.Text="Karşılaştırma yapılamadı: "+ex.Message; }
+        AutomationProperties.SetName(result,result.Text);
+        if(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(result) is { } peer)
+            peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
+    }
+    private static string SafeName(string name)=>new(name.Take(80).Select(c=>char.IsControl(c)||char.GetUnicodeCategory(c)==UnicodeCategory.Format?'�':c).ToArray());
+}
+
+
