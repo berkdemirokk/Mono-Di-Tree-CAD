@@ -8636,7 +8636,7 @@ internal static class DesktopVerification
             var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=false,SourcePoints=piece.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(1,2),piece.Points.Count).ToList() };
             var document=new ProjectDocument { Pieces=[piece],GradingRules=[rule] };studio.LoadDocument(document);studio.Select(piece.Id);
             var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
-            var window=new HalfTurnWindow(studio);
+            var window=new OrthogonalTransformWindow(studio,OrthogonalGradingTransform.RotateHalf);
             try
             {
                 var task=window.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
@@ -8648,9 +8648,49 @@ internal static class DesktopVerification
                     "Large half turn supports atomic undo and redo",checks);
             }
             finally { window.Close(); }
+            foreach(var operation in new[] { OrthogonalGradingTransform.RotateLeft,OrthogonalGradingTransform.RotateRight,
+                OrthogonalGradingTransform.MirrorVertical,OrthogonalGradingTransform.MirrorHorizontal })
+            {
+                studio.LoadDocument(document);studio.Select(piece.Id);var sourceBefore=studio.Document.Clone();
+                var operationWindow=new OrthogonalTransformWindow(studio,operation);
+                try
+                {
+                    var task=operationWindow.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    var center=TekstilCAD.Core.Geometry.Bounds(piece.Points).Center;
+                    var expected=operation switch {
+                        OrthogonalGradingTransform.RotateLeft=>TekstilCAD.Core.Geometry.Rotate(piece.Points,90,center),
+                        OrthogonalGradingTransform.RotateRight=>TekstilCAD.Core.Geometry.Rotate(piece.Points,-90,center),
+                        OrthogonalGradingTransform.MirrorVertical=>TekstilCAD.Core.Geometry.Mirror(piece.Points,true,center.X),
+                        _=>TekstilCAD.Core.Geometry.Mirror(piece.Points,false,center.Y) };
+                    var expectedDelta=operation switch {
+                        OrthogonalGradingTransform.RotateLeft=>new Point2(-2,1),OrthogonalGradingTransform.RotateRight=>new Point2(2,-1),
+                        OrthogonalGradingTransform.MirrorVertical=>new Point2(-1,2),_=>new Point2(1,-2) };
+                    var after=studio.Document.Clone();var actual=after.Pieces.Single();
+                    Check(actual.Points.SequenceEqual(expected) && actual.Notches!.Single().Position==actual.Points[1] && actual.Grainline is not null &&
+                        after.GradingRules.Single().Deltas.All(p=>p==expectedDelta) && session.UndoCount==1,
+                        $"Large {operation} transforms geometry, marker, grainline and rule in one transaction",checks);
+                    Check(session.Undo() && DocumentSession.ContentEquals(sourceBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                        $"Large {operation} supports atomic undo and redo",checks);
+                }
+                finally { operationWindow.Close(); }
+            }
+            foreach(var operation in new[] { OrthogonalGradingTransform.MirrorVertical,OrthogonalGradingTransform.RotateRight })
+            {
+                studio.LoadDocument(document);studio.Select(piece.Id);var cancelBefore=studio.Document.Clone();
+                var cancelWindow=new OrthogonalTransformWindow(studio,operation);
+                using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+                try
+                {
+                    cancelWindow.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                    pending=cancelWindow.RunForVerification();PumpUntil(()=>reached.IsSet);cancelWindow.CancelForVerification();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(DocumentSession.ContentEquals(cancelBefore,studio.Document) && session.UndoCount==0 && cancelWindow.StatusForVerification.Contains("iptal"),
+                        $"Cancelling large {operation} preserves the source and history",checks);
+                }
+                finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }cancelWindow.Close(); }
+            }
             var unchangedPiece=new PatternPiece { Name="Aynı nokta",Closed=false,Points=Enumerable.Repeat(new Point2(1,1),4097).ToList() };
             studio.LoadDocument(new ProjectDocument { Pieces=[unchangedPiece] });studio.Select(unchangedPiece.Id);var unchanged=studio.Document.Clone();
-            var noOp=new HalfTurnWindow(studio);
+            var noOp=new OrthogonalTransformWindow(studio,OrthogonalGradingTransform.RotateHalf);
             try
             {
                 var task=noOp.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
@@ -8658,7 +8698,7 @@ internal static class DesktopVerification
                     "An unchanged large half turn reports no change and creates no undo",checks);
             }
             finally { noOp.Close(); }
-            studio.LoadDocument(document);studio.Select(piece.Id);before=studio.Document.Clone();window=new HalfTurnWindow(studio);
+            studio.LoadDocument(document);studio.Select(piece.Id);before=studio.Document.Clone();window=new OrthogonalTransformWindow(studio,OrthogonalGradingTransform.RotateHalf);
             using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
             {
                 Task? task=null;
@@ -8671,7 +8711,7 @@ internal static class DesktopVerification
                 }
                 finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }window.Close(); }
             }
-            studio.LoadDocument(document);studio.Select(piece.Id);window=new HalfTurnWindow(studio);
+            studio.LoadDocument(document);studio.Select(piece.Id);window=new OrthogonalTransformWindow(studio,OrthogonalGradingTransform.RotateHalf);
             using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
             {
                 Task? task=null;

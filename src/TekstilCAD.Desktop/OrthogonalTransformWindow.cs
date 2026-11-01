@@ -7,10 +7,12 @@ using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
 
-/// <summary>Detached 180-degree calculation with a cancellable, snapshot-guarded commit.</summary>
-internal sealed class HalfTurnWindow : Window
+/// <summary>Detached orthogonal transformation with a cancellable, snapshot-guarded commit.</summary>
+internal sealed class OrthogonalTransformWindow : Window
 {
     private readonly MainWindow workspace;
+    private readonly OrthogonalGradingTransform operation;
+    private readonly string operationName;
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,12) };
     private readonly Button cancel=new() { Content="İptal et",Padding=new Thickness(12,7,12,7),IsCancel=true };
     private CancellationTokenSource? cancellation;private bool closed,started;
@@ -19,9 +21,13 @@ internal sealed class HalfTurnWindow : Window
     internal string StatusForVerification=>status.Text;
     internal void CancelForVerification()=>cancellation?.Cancel();
     internal Task RunForVerification()=>RunAsync();
-    internal HalfTurnWindow(MainWindow workspace)
+    internal OrthogonalTransformWindow(MainWindow workspace,OrthogonalGradingTransform operation)
     {
-        this.workspace=workspace;Owner=workspace;Title="180° dönüşüm hesaplanıyor";Width=460;SizeToContent=SizeToContent.Height;MinWidth=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
+        this.workspace=workspace;this.operation=operation;operationName=operation switch {
+            OrthogonalGradingTransform.RotateLeft=>"90° sağa döndürme",OrthogonalGradingTransform.RotateRight=>"90° sola döndürme",
+            OrthogonalGradingTransform.RotateHalf=>"180° döndürme",OrthogonalGradingTransform.MirrorVertical=>"Dikey eksene göre aynalama",
+            OrthogonalGradingTransform.MirrorHorizontal=>"Yatay eksene göre aynalama",_=>throw new ArgumentOutOfRangeException(nameof(operation)) };
+        Owner=workspace;Title=operationName+" hesaplanıyor";Width=460;SizeToContent=SizeToContent.Height;MinWidth=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(20) };Content=body;
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);body.Children.Add(cancel);
         cancel.Click+=(_,_)=> { cancellation?.Cancel();SetStatus("İptal istendi; süren hesap tamamlandığında sonucu uygulanmadan bırakılacak."); };
@@ -53,11 +59,18 @@ internal sealed class HalfTurnWindow : Window
                 hook?.Invoke();var token=cts.Token;token.ThrowIfCancellationRequested();
                 if(source.Notches is not null)_=MarkedPieceTranslation.Translate(source,0,0,token);
                 var center=Geometry.Bounds(source.Points).Center;
-                var rotated=Geometry.Rotate(source.Points,180,center);token.ThrowIfCancellationRequested();
+                List<Point2> Transform(IReadOnlyList<Point2> points)=>operation switch {
+                    OrthogonalGradingTransform.RotateLeft=>Geometry.Rotate(points,90,center),
+                    OrthogonalGradingTransform.RotateRight=>Geometry.Rotate(points,-90,center),
+                    OrthogonalGradingTransform.RotateHalf=>Geometry.Rotate(points,180,center),
+                    OrthogonalGradingTransform.MirrorVertical=>Geometry.Mirror(points,true,center.X),
+                    OrthogonalGradingTransform.MirrorHorizontal=>Geometry.Mirror(points,false,center.Y),
+                    _=>throw new ArgumentOutOfRangeException(nameof(operation)) };
+                var rotated=Transform(source.Points);token.ThrowIfCancellationRequested();
                 var marks=source.Notches?.Select(m=>new NotchMark { VertexIndex=m.VertexIndex,Position=rotated[m.VertexIndex] }).ToList();
                 var rule=before.GradingRules.FirstOrDefault(r=>r.SourcePieceId==id);
-                var rotatedRule=rule?.OrthogonalFor(source,rotated,OrthogonalGradingTransform.RotateHalf);
-                var grain=GrainlineTransform.Transform(source.Grainline,source.Points[0],rotated[0],points=>Geometry.Rotate(points,180,center));
+                var rotatedRule=rule?.OrthogonalFor(source,rotated,operation);
+                var grain=GrainlineTransform.Transform(source.Grainline,source.Points[0],rotated[0],Transform);
                 token.ThrowIfCancellationRequested();
                 var candidate=before.Clone();var target=candidate.Pieces.Single(p=>p.Id==id);target.Points=rotated;target.Notches=marks;target.Grainline=grain;
                 if(rotatedRule is not null)candidate.GradingRules[candidate.GradingRules.FindIndex(r=>r.SourcePieceId==id)]=rotatedRule;
@@ -69,7 +82,7 @@ internal sealed class HalfTurnWindow : Window
             if(workspace.GrainlineEditProblem(stamp) is not null || !workspace.CanRetainCurrentUndoSnapshot)
             { SetStatus("Proje, seçim veya bekleyen çalışma değişti; dönüşüm uygulanmadı.");return; }
             cts.Token.ThrowIfCancellationRequested();
-            workspace.CommitObserved("180° dönüşüm uygulandı",()=>
+            workspace.CommitObserved(operationName+" uygulandı",()=>
             {
                 var live=workspace.Document.Pieces.FindIndex(p=>p.Id==id);var result=prepared.candidate.Pieces.Single(p=>p.Id==id);
                 workspace.Document.Pieces[live]=result;
@@ -78,7 +91,7 @@ internal sealed class HalfTurnWindow : Window
                 if(mapped is not null && liveRule>=0)workspace.Document.GradingRules[liveRule]=mapped;
             },()=>committed=true);
             if(prepared.stale)workspace.ShowCanvasError("Dönüşüm uygulandı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
-            SetStatus(committed ? "180° dönüşüm uygulandı; tek adımda geri alınabilir." : "Dönüşümde değişiklik yok; proje ve geri alma geçmişi korundu.");
+            SetStatus(committed ? operationName+" uygulandı; tek adımda geri alınabilir." : "Dönüşümde değişiklik yok; proje ve geri alma geçmişi korundu.");
             if(IsVisible)CloseAfterCompletion();
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested && !committed)
