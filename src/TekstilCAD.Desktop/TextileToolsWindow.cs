@@ -1081,7 +1081,8 @@ public sealed class TextileToolsWindow : Window
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
             var inputIndex=vertexIndexInput?.Text;var inputX=vertexXInput?.Text;var inputY=vertexYInput?.Text;var inputFraction=notchFractionInput?.Text;var inputDepth=notchDepthInput?.Text;var inputWidth=notchWidthInput?.Text;var inputDistance=edgeDistanceInput?.Text;var inputPercentage=edgePercentageInput?.Text;
             if(index<0 || index>=snapshot.Points.Count)throw new ArgumentOutOfRangeException(nameof(index),"Nokta indeksi kaynak parçada bulunmuyor.");
-            if(operation==VertexEdit.Move && snapshot.Points[index]==position)
+            if(operation==VertexEdit.Move && BitConverter.DoubleToInt64Bits(snapshot.Points[index].X)==BitConverter.DoubleToInt64Bits(position.X) &&
+               BitConverter.DoubleToInt64Bits(snapshot.Points[index].Y)==BitConverter.DoubleToInt64Bits(position.Y))
             { result.Foreground=StudioTheme.Muted;result.Text="Nokta zaten bu konumda; proje ve işlem geçmişi değişmedi.";return; }
             var before=BeforeVertexMoveForVerification;var after=AfterVertexMoveForVerification;
             vertexMoveCancellation=new CancellationTokenSource();var token=vertexMoveCancellation.Token;

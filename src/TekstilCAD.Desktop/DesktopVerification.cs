@@ -9421,6 +9421,20 @@ internal static class DesktopVerification
             using var json=JsonDocument.Parse(saved);
             Check(json.RootElement.ValueKind==JsonValueKind.Array && json.RootElement[0].GetInt32()==6 && DocumentSession.ContentEquals(marked,ProjectStorage.Load(path)),
                 "Notch survives version 6 save and reload",checks);
+            Check(MeasurementInput.TryParseMillimeters("-0",out var parsedNegativeZero) && BitConverter.DoubleToInt64Bits(parsedNegativeZero)==long.MinValue,
+                "Numeric point input preserves negative zero",checks);
+            var sameMove=tools.MoveVertexAsync("3","0","0");PumpUntil(()=>sameMove.IsCompleted);sameMove.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(marked,studio.Document) && session.UndoCount==count+1,
+                "Bit-identical numeric move remains a no-op",checks);
+            var zeroMove=tools.MoveVertexAsync("3","-0","0");PumpUntil(()=>zeroMove.IsCompleted);zeroMove.GetAwaiter().GetResult();
+            var zeroMoved=studio.Document.Clone();var zeroPiece=zeroMoved.Pieces[0];
+            Check(BitConverter.DoubleToInt64Bits(zeroPiece.Points[0].X)==long.MinValue &&
+                BitConverter.DoubleToInt64Bits(zeroPiece.Points[^1].X)==long.MinValue &&
+                BitConverter.DoubleToInt64Bits(zeroPiece.Notches!.Single().Position.X)==long.MinValue && session.UndoCount==count+2,
+                "Signed-zero numeric move updates both closure vertices and their marker",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(marked,studio.Document) && session.Redo() && DocumentSession.ContentEquals(zeroMoved,studio.Document) && session.Undo(),
+                "Signed-zero marked move is preserved atomically by undo and redo",checks);
+            tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
             var markedMove=tools.MoveVertexAsync("3","-1","0");PumpUntil(()=>markedMove.IsCompleted);markedMove.GetAwaiter().GetResult();
             var markedMoved=studio.Document.Clone();var movedMark=markedMoved.Pieces[0].Notches!.Single();
             Check(markedMoved.Pieces[0].Points[0]==new Point2(-1,0) && markedMoved.Pieces[0].Points[^1]==new Point2(-1,0) &&
