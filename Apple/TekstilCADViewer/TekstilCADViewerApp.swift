@@ -109,7 +109,10 @@ private struct ContentView: View {
     @State private var isSaving = false
     @State private var saveNotice: String?
     @State private var error: String?
-    @State private var selectedPiece: Int?
+    private var selectedPiece: Int? {
+        get { loadedModel.selectedPiece }
+        nonmutating set { loadedModel.selectedPiece = newValue }
+    }
     @State private var showGrain = true
     @State private var notchSelectionRevision = UUID()
     @State private var modelReadCancellation: ModelReadCancellation?
@@ -644,7 +647,6 @@ private struct ContentView: View {
                     let corrupt = try ModelStore.directory().appendingPathComponent("Bozuk.tcad")
                     try Data([0xff, 0x00, 0x91]).write(to: corrupt)
                 }
-                selectedPiece = nil
                 selectedNotch = nil
                 loadedModel.install(drawing, data: data)
                 editedName = drawing.name
@@ -770,9 +772,8 @@ private struct ContentView: View {
                     #endif
                     showingPieces = false
                     showingNotches = false
-                    selectedPiece = matchedIndex
                     selectedNotch = nil
-                    loadedModel.install(drawing, data: data)
+                    loadedModel.install(drawing, data: data, selectedPiece: matchedIndex)
                     editedName = drawing.name
                     importedData = imported ? data : nil
                     importedName = url.lastPathComponent

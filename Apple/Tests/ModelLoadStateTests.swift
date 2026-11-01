@@ -17,6 +17,17 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertEqual(state.model, 2)
         XCTAssertEqual(state.sourceData, Data([2]))
     }
+    func testInstallingModelReplacesSelectionWithMatchedOrDefaultSelection() {
+        var state = LoadedModelState<Int>()
+        state.install(1, data: Data([1]), selectedPiece: 2)
+        XCTAssertEqual(state.selectedPiece, 2)
+        state.install(2, data: Data([2]), selectedPiece: 0)
+        XCTAssertEqual(state.model, 2)
+        XCTAssertEqual(state.sourceData, Data([2]))
+        XCTAssertEqual(state.selectedPiece, 0)
+        state.install(3, data: Data([3]))
+        XCTAssertNil(state.selectedPiece)
+    }
     func testInstallingModelKeepsDrawingBytesAndRevisionTogether() {
         var state = LoadedModelState<Int>()
         let initial = state.revision
