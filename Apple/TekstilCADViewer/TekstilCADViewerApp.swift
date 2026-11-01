@@ -1972,14 +1972,21 @@ private struct PiecePicker: View {
             let matches = current?.indices ?? []
             List {
                 selectionRow(title: "Tüm parçalar", index: nil)
+                if let current {
+                    Text("\(current.indices.count) / \(pieces.count) parça gösteriliyor")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .accessibilityLabel("\(pieces.count) parçadan \(current.indices.count) tanesi gösteriliyor")
+                }
                 if current == nil { ProgressView("Parçalar aranıyor…") }
                 ForEach(matches, id: \.self) { index in
                     selectionRow(title: pieces[index].displayName(index: index), index: index,
                                  details: pieces[index].selectionDetails(index: index))
                 }
                 if current != nil && matches.isEmpty && !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("Eşleşen parça bulunamadı.")
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Eşleşen parça bulunamadı.").foregroundStyle(.secondary)
+                        Button("Aramayı temizle") { search = "" }
+                    }
                 }
             }
             .searchable(text: $search, prompt: "Parça ara")

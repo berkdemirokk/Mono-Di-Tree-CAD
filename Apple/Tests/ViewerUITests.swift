@@ -1170,6 +1170,24 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
     }
 
+    func testPieceSearchShowsResultCountAndCanClearNoMatch() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Kol")
+        XCTAssertTrue(app.staticTexts["2 parçadan 1 tanesi gösteriliyor"].waitForExistence(timeout: 5))
+        search.typeText("olmayan")
+        XCTAssertTrue(app.staticTexts["2 parçadan 0 tanesi gösteriliyor"].waitForExistence(timeout: 5))
+        app.buttons["Aramayı temizle"].tap()
+        XCTAssertTrue(app.staticTexts["2 parçadan 2 tanesi gösteriliyor"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Beden"].exists)
+    }
+
     func testFailedPieceRenameRetainsEditOnlyForSameSelectionUntilCancel() {
         // The viewer accepts duplicate keys, while the lossless editor rejects them.
         let fixture = #"{"Name":"Deneme","Name":"Deneme","Pieces":[{"Name":"Ilk","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Diger","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
