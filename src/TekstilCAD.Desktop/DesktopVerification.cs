@@ -9149,6 +9149,25 @@ internal static class DesktopVerification
                 Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Örnek eklenemedi") && t.Text.Contains("Mevcut metin korundu")) &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && window.MeasurementsForVerification.Text==input.Measurements,
                 "Both model choices refuse over-limit additions without changing text, image, measurements or review",checks);
+            window.LoadForVerification(new DesignRequest("Düz elbise", "",input.Reference));
+            var send=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
+            window.ChatInputForVerification.Text="göğüs çevresi 96 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().Prompt.Replace("\r\n","\n")=="Düz elbise\ngöğüs çevresi 96 cm" && window.ChatInputForVerification.Text.Length==0 &&
+                window.ConversationForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ConversationForVerification.Text.Contains("bel çevresi") &&
+                window.ConversationForVerification.Text.Contains("kalıp veya plotter çıktısı oluşturulmaz"),
+                "Chat appends explicit measurements, asks the next question and honestly describes its scope",checks);
+            window.ChatInputForVerification.Text="bel çevresi 72 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.ConversationForVerification.Text.Contains("bel çevresi: 720 mm") && window.ConversationForVerification.Text.Contains("kalça çevresi") &&
+                window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && DocumentSession.ContentEquals(before,studio.Document),
+                "Chat continues with the next missing measurement while preserving reference and project",checks);
+            window.PromptForVerification.Text=new string('x',DesignRequestStorage.MaximumTextLength);window.ChatInputForVerification.Text="kaybolmamalı";
+            send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.ChatInputForVerification.Text=="kaybolmamalı" && window.PromptForVerification.Text.Length==DesignRequestStorage.MaximumTextLength,
+                "Over-limit chat message remains editable and leaves the request unchanged",checks);
+            typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
+            Check(window.ChatInputForVerification.Text=="kaybolmamalı" && Descendants<TextBlock>(root).Any(t=>t.Text.Contains("mesajı gönderin veya silin")),
+                "Unsent chat blocks saving instead of losing the message",checks);
+            window.ChatInputForVerification.Clear();
             window.PromptForVerification.Text="Değişen elbise isteği";
             Check(window.DirtyForVerification && window.ReviewForVerification.Text.Length==0 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                 "Editing a design request leaves the open project and undo untouched",checks);

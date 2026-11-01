@@ -13,6 +13,8 @@ internal sealed class DesignRequestWindow : Window
 {
     private readonly TextBox prompt=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBox measurements=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    private readonly TextBox conversation=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,Height=170,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=54,MaxHeight=100,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
@@ -24,6 +26,8 @@ internal sealed class DesignRequestWindow : Window
     internal void LoadForVerification(DesignRequest value)=>Apply(value);
     internal bool DirtyForVerification=>dirty;
     internal TextBox ReviewForVerification=>measurementReview;
+    internal TextBox ChatInputForVerification=>chatInput;
+    internal TextBox ConversationForVerification=>conversation;
     internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
@@ -44,26 +48,67 @@ internal sealed class DesignRequestWindow : Window
             button.Click+=(_,_)=>
             {
                 var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
-                if(prompt.Text.Length+addition.Length>prompt.MaxLength) { status.Text="Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.";return; }
-                prompt.AppendText(addition);prompt.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
+                if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { status.Text="Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.";return; }
+                prompt.AppendText(addition);chatInput.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
             };
             models.Children.Add(button);
         }
         ModelChoice("Düz elbise", "Düz elbise; detaylar: ");
         ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ");
-        body.Children.Add(new Label { Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");body.Children.Add(prompt);
-        body.Children.Add(new Label { Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");body.Children.Add(measurements);
-        body.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
+        body.Children.Add(new Label { Content="Konuşma ve sıradaki soru",Target=conversation });
+        AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(conversation);
+        body.Children.Add(new Label { Content="Mesajınız",Target=chatInput });AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");body.Children.Add(chatInput);
+        var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
+        AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");body.Children.Add(send);send.Click+=(_,_)=>SendMessage();
+        AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
+        body.Children.Add(new TextBlock { Text="Ölçüyü açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        var editBody=new StackPanel();body.Children.Add(new Expander { Header="İstek ve ölçüleri düzenle",Content=editBody,Margin=new Thickness(0,8,0,8) });
+        editBody.Children.Add(new Label { Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
+        editBody.Children.Add(new Label { Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");editBody.Children.Add(measurements);
+        editBody.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
         var checkMeasurements=new Button { Content="Açık ölçüleri denetle",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };
-        body.Children.Add(checkMeasurements);checkMeasurements.Click+=(_,_)=>ReviewMeasurements();
-        body.Children.Add(new Label { Content="Ölçü denetimi sonucu",Target=measurementReview });AutomationProperties.SetName(measurementReview,"Ölçü denetimi sonucu");body.Children.Add(measurementReview);
+        editBody.Children.Add(checkMeasurements);checkMeasurements.Click+=(_,_)=>ReviewMeasurements();
+        editBody.Children.Add(new Label { Content="Ölçü denetimi sonucu",Target=measurementReview });AutomationProperties.SetName(measurementReview,"Ölçü denetimi sonucu");editBody.Children.Add(measurementReview);
         body.Children.Add(new TextBlock { Text="Referans görseli",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,12,0,4) });body.Children.Add(referenceLabel);
         var refActions=new WrapPanel();body.Children.Add(refActions);
         var choose=new Button { Content="Görsel seç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,8,4) };refActions.Children.Add(choose);choose.Click+=(_,_)=>ChooseReference();
         var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=> { if(reference is not null) { reference=null;dirty=true;UpdateReference(); } };
         body.Children.Add(new TextBlock { Text="Görsel dosyanın tüm baytları ve varsa içindeki metadata isteğe eklenir. Yalnızca PNG/JPEG imzası kontrol edilir; görsel içeriği, ölçüler veya üretime uygunluk doğrulanmaz. Kaydetme yeni ve ayrı bir dosya oluşturur; kalıp çizimi ve plotter çıktısı için sonraki işlem ve kullanıcı kontrolü gerekir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,10,0,0) });
-        AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading)dirty=true; };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading)dirty=true; };UpdateReference();Closing+=OnClosing;
+
+        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;
+    }
+    private void SendMessage()
+    {
+        var message=chatInput.Text;
+        if(string.IsNullOrWhiteSpace(message)) { status.Text="Göndermek için bir mesaj yazın.";return; }
+        var addition=(prompt.Text.Length==0 ? "" : "\n")+message;
+        if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
+        { status.Text="Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.";return; }
+        prompt.AppendText(addition);chatInput.Clear();chatInput.Focus();status.Text="Mesaj isteğe eklendi; henüz kalıp oluşturulmadı.";
+    }
+    private void RefreshConversation()
+    {
+        DressMeasurementReview review;
+        try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        var lines=new List<string> { "Siz:",string.IsNullOrEmpty(prompt.Text) ? "Henüz istek yazılmadı." : prompt.Text };
+        if(!string.IsNullOrEmpty(measurements.Text)) { lines.Add("Ölçü notlarınız:");lines.Add(measurements.Text); }
+        lines.Add("Yardımcı:");
+        if(review.Measurements.Count>0)lines.Add("Açıkça bulunanlar: "+string.Join(", ",review.Measurements.Select(m=>$"{m.Label}: {m.Millimeters.ToString(System.Globalization.CultureInfo.InvariantCulture)} mm"))+".");
+        if(review.Questions.Count>0)
+        {
+            var question=review.Questions[0];
+            var example=question.StartsWith("göğüs çevresi",StringComparison.Ordinal) ? "göğüs çevresi 96 cm" :
+                question.StartsWith("bel çevresi",StringComparison.Ordinal) ? "bel çevresi 72 cm" :
+                question.StartsWith("kalça çevresi",StringComparison.Ordinal) ? "kalça çevresi 100 cm" :
+                question.StartsWith("elbise boyu",StringComparison.Ordinal) ? "elbise boyu 110 cm" : "kol boyu 62 cm";
+            lines.Add(question+" Örnek: "+example+".");
+            if(question.Contains("çelişiyor",StringComparison.Ordinal))lines.Add("Çelişen önceki ifadeyi İstek ve ölçüleri düzenle bölümünde düzeltin.");
+        }
+        else lines.Add("Temel ölçüler açıkça yazıldı. Ölçülerin niteliğini ve model ayrıntılarını kontrol edin.");
+        if(review.Unrecognized.Count>0)lines.Add("Diğer ifadeler ölçü olarak yorumlanmadı; açıklamanız aynen korundu.");
+        lines.Add("Bu aşamada kalıp veya plotter çıktısı oluşturulmaz.");
+        conversation.Text=string.Join(Environment.NewLine,lines);conversation.ScrollToEnd();
     }
     private void ReviewMeasurements()
     {
@@ -85,10 +130,10 @@ internal sealed class DesignRequestWindow : Window
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };UpdateReference();dirty=false; }
+        try { prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;RefreshConversation(); }
         finally { loading=false; }
     }
-    private bool ConfirmDiscard()=>!dirty || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+    private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     private void OnClosing(object? sender,CancelEventArgs e) { if(!ConfirmDiscard())e.Cancel=true; }
     private void ChooseReference()
     {
@@ -115,6 +160,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void Save()
     {
+        if(!string.IsNullOrEmpty(chatInput.Text)) { status.Text="Kaydetmeden önce mesajı gönderin veya silin; mevcut mesaj korunuyor.";return; }
         try { DesignRequestStorage.Validate(Capture()); }
         catch(InvalidDataException ex) { status.Text=ex.Message;return; }
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
