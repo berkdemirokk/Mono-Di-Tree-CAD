@@ -308,6 +308,7 @@ public class MainWindow : Window
             toolButtons[tool] = button;
         }
         AddButton(tools, "Koordinatla nokta gir…", OpenCoordinateDrawing, "Önce çizim aracını seçin; X ve Y koordinatlarını milimetre olarak girin.");
+        AddButton(tools,"Açık çizgiyi bitir",FinishOpenDrawing,"Çoklu çizgiyi en az iki noktayla uçları birleştirmeden bitirir.");
         tools.Children.Add(new Border { Height = 1, Background = StudioTheme.Border, Margin = new Thickness(3, 14, 3, 10) });
         selectionCommands.Add(AddButton(tools, "Parçayı çoğalt…", DuplicateSelectedPiece, "Geometriyi aynı konumda kopyalar; parça bilgileri, iplik yönü ve uygun serileme kuralı isteğe bağlıdır. Pastal geçmişi kopyalanmaz."));
         selectionCommands.Add(AddButton(tools, "Parçayı sil", DeleteSelectionFromKeyboard, "Seçili parçayı sil · Delete"));
@@ -674,13 +675,13 @@ public class MainWindow : Window
         var window = new CoordinateDrawingWindow(this,
             () => canvas.ToolGuidance(ActiveTool),
             point => recoveryRestoreIncomplete ? "Kurtarma işlemi tamamlanmadı; önce kurtarma durumunu çözün." : canvas.AddDrawingPointAt(point),
-            CoordinateDrawingFinishProblem, RemoveCoordinateDrawingPoint, CoordinateDrawingSummary);
+            CoordinateDrawingFinishProblem, RemoveCoordinateDrawingPoint, CoordinateDrawingSummary,CoordinateDrawingOpenFinishProblem);
         if(window.ShowDialog()==true)
         {
             if(BlockForIncompleteRecovery())return;
             if(ActiveTool != "Çoklu çizgi")
             { SetStatus("Konturu bitirmek için Çoklu çizgi aracını seçin."); return; }
-            canvas.FinishPolyline();
+            if(window.FinishAsOpen)canvas.FinishOpenPolyline();else canvas.FinishPolyline();
         }
     }
     internal string? CoordinateDrawingFinishProblem() =>
@@ -689,6 +690,18 @@ public class MainWindow : Window
         : canvas.PendingDrawingPointCount < 3 ? "Konturu bitirmek için en az üç nokta ekleyin."
         : canvas.LargeCompletionRunning || canvas.LargeVertexValidationRunning ? "Doğrulama sürüyor; bitmesini bekleyin."
         : null;
+    internal string? CoordinateDrawingOpenFinishProblem() =>
+        recoveryRestoreIncomplete ? "Kurtarma işlemi tamamlanmadı; önce kurtarma durumunu çözün."
+        : ActiveTool != "Çoklu çizgi" ? "Açık çizgi için önce Çoklu çizgi aracını seçin."
+        : canvas.PendingDrawingPointCount < 2 ? "Açık çizgiyi bitirmek için en az iki nokta ekleyin."
+        : canvas.LargeCompletionRunning || canvas.LargeVertexValidationRunning ? "Doğrulama sürüyor; bitmesini bekleyin."
+        : canvas.HasActiveDragPreview ? "Önce sürüklemeyi tamamlayın veya iptal edin."
+        : null;
+    private void FinishOpenDrawing()
+    {
+        if(CoordinateDrawingOpenFinishProblem() is { } problem) { SetStatus(problem);return; }
+        canvas.FinishOpenPolyline();
+    }
     internal string? RemoveCoordinateDrawingPoint()
     {
         if(recoveryRestoreIncomplete)return "Kurtarma işlemi tamamlanmadı; önce kurtarma durumunu çözün.";

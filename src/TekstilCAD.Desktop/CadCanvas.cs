@@ -60,9 +60,7 @@ public sealed class CadCanvas : FrameworkElement
             1 => "Başlangıca tıklayın; merkezden uzaklık yarıçapı belirler. Esc iptal eder.",
             _ => "Saat yönünde bitiş yönüne tıklayın; yarıçap değişmez. Esc iptal eder."
         },
-        "Çoklu çizgi" => drawing.Count < 3
-            ? $"Noktaları tıklayın ({drawing.Count} nokta); kapatmak için en az 3 nokta gerekir. Esc iptal eder."
-            : $"Noktaları tıklayın ({drawing.Count} nokta); kapatmak için Enter, iptal için Esc.",
+        "Çoklu çizgi" => $"Noktaları tıklayın ({drawing.Count} nokta); açık bitirmek için en az 2 nokta ve Açık çizgiyi bitir düğmesi, kapatmak için en az 3 nokta ve Enter kullanın. Esc iptal eder.",
         _ => "Başlamak için çizim alanına tıklayın."
     };
 
@@ -265,29 +263,34 @@ public sealed class CadCanvas : FrameworkElement
         owner.AddPiece(points,closed,()=> { observedCommits++;drawing.Clear(); });
     }
     public void FinishPolyline()
+        => FinishPolylineCore(true);
+    internal void FinishOpenPolyline()
+        => FinishPolylineCore(false);
+    private void FinishPolylineCore(bool closed)
     {
-        if(owner.ActiveTool!="Çoklu çizgi" || drawing.Count<3)return;
-        if(LargeCompletionRunning) { owner.SetStatus("Çizim zaten doğrulanıyor; lütfen bekleyin.");return; }
+        if(owner.ActiveTool!="Çoklu çizgi" || drawing.Count<(closed ? 3 : 2))
+        { owner.SetStatus(closed ? "Kapalı kontur için Çoklu çizgi aracında en az 3 nokta gerekir." : "Açık çizgi için Çoklu çizgi aracında en az 2 nokta gerekir.");return; }
+        if(LargeCompletionRunning || LargeVertexValidationRunning) { owner.SetStatus("Çizim veya nokta doğrulaması sürüyor; lütfen bekleyin.");return; }
         if(drawing.Count<=Geometry.MaxValidatedContourVertices)
-        { Safe(()=> { AddValidated([..drawing],true);InvalidateVisual(); }, restoreDrawingOnFailure:true);return; }
+        { Safe(()=> { AddValidated([..drawing],closed);InvalidateVisual(); }, restoreDrawingOnFailure:true);return; }
         var points=drawing.ToArray();
         var document=owner.Document;
         var cancellation=new CancellationTokenSource();
         largeCompletionCancellation=cancellation;
-        LargeCompletionTask=FinishLargePolylineAsync(points,document,cancellation);
+        LargeCompletionTask=FinishLargePolylineAsync(points,document,cancellation,closed);
     }
-    private async Task FinishLargePolylineAsync(Point2[] points, ProjectDocument document, CancellationTokenSource cancellation)
+    private async Task FinishLargePolylineAsync(Point2[] points, ProjectDocument document, CancellationTokenSource cancellation,bool closed)
     {
         owner.SetStatus("Büyük çizim arka planda doğrulanıyor. Dikiş payı ve serileme 4096; pastal 2000 noktayla sınırlıdır. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
         var committed=false;
         try
         {
-            await Task.Run(()=>LargeContourValidator.Validate(points,cancellation.Token),cancellation.Token);
+            await Task.Run(()=> { if(closed)LargeContourValidator.Validate(points,cancellation.Token);else LargeOpenPathValidator.Validate(points,cancellation.Token); },cancellation.Token);
             // No await occurs between checking the snapshot and committing it.
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed || owner.ActiveTool!="Çoklu çizgi" || !drawing.SequenceEqual(points))return;
             if(!ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Doğrulama sırasında proje değişti; çizim korunuyor. Tamamlamak için yeniden deneyin.");return; }
-            owner.AddPiece(points.ToList(),true,()=> { committed=true;drawing.Clear(); });owner.ClearCanvasError();
+            owner.AddPiece(points.ToList(),closed,()=> { committed=true;drawing.Clear(); });owner.ClearCanvasError();
             InvalidateVisual();
             owner.SetStatus("Büyük çizim tamamlandı. Dikiş payı ve serileme 4096; pastal 2000 noktayla sınırlıdır. HPGL iş yükü sınırı nedeniyle büyük veya çok parçalı iş reddedilebilir.");
         }

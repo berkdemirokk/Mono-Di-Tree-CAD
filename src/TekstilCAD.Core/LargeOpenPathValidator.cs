@@ -3,7 +3,7 @@ namespace TekstilCAD.Core;
 /// <summary>
 /// Cancellable validation of an open path with at most 10,000 stored points.
 /// Edge intersection semantics match <see cref="Geometry.HasSelfIntersections"/>.
-/// Work is bounded but quadratic in the worst case. Not connected to desktop editing.
+/// Work is bounded but quadratic in the worst case; desktop large-path completion runs it off the UI thread.
 /// </summary>
 public static class LargeOpenPathValidator
 {

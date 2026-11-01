@@ -361,6 +361,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
+            VerifyOpenPolylineDrawing(studio,work,checks);
             VerifyOpenPathJoin(studio,checks);
             VerifyOpenPathClosure(studio,checks);
             VerifyDuplicatePiece(studio,checks);
@@ -6529,6 +6530,45 @@ internal static class DesktopVerification
         finally { canvas.CancelDrawing();studio.SetTool("Seç"); }
     }
 
+    private static void VerifyOpenPolylineDrawing(MainWindow studio,string work,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var error=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+        studio.LoadDocument(new ProjectDocument { Name="Açık çizgi" });studio.SetTool("Çoklu çizgi");
+        var before=studio.Document.Clone();
+        var window=new CoordinateDrawingWindow(studio,()=>canvas.ToolGuidance(studio.ActiveTool),canvas.AddDrawingPointAt,
+            studio.CoordinateDrawingFinishProblem,studio.RemoveCoordinateDrawingPoint,studio.CoordinateDrawingSummary,studio.CoordinateDrawingOpenFinishProblem);
+        try
+        {
+            Check(window.FinishOpenButton.Focusable && AutomationProperties.GetName(window.FinishOpenButton).Contains("açık",StringComparison.OrdinalIgnoreCase),
+                "Coordinate drawing exposes an accessible open-polyline completion action",checks);
+            canvas.AddDrawingPointAt(new(0,0));window.RequestFinishOpen();
+            Check(window.Feedback.Text.Contains("en az iki") && canvas.PendingDrawingPointCount==1 && DocumentSession.ContentEquals(before,studio.Document),
+                "Open polyline requires two points without losing the first",checks);
+            canvas.AddDrawingPointAt(new(10,0));canvas.AddDrawingPointAt(new(10,10));
+            var expected=canvas.CapturePendingDrawing()!.Points.ToArray();
+            var toolbar=Descendants<Button>((FrameworkElement)studio.Content).Single(b=>Equals(b.Content,"Açık çizgiyi bitir"));
+            toolbar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(studio.Document.Pieces.Count==1 && !studio.Document.Pieces[0].Closed && studio.Document.Pieces[0].Points.SequenceEqual(expected) && !canvas.HasPendingDrawing && session.UndoCount==1,
+                "Open polyline toolbar commits exactly the entered vertices without a closing edge",checks);
+            var result=studio.Document.Clone();
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(result,studio.Document),
+                "Open polyline is one undoable and redoable edit",checks);
+            var projectPath=Path.Combine(work,"open-polyline.tcad");ProjectStorage.Save(result,projectPath);
+            var dxfPath=Path.Combine(work,"open-polyline.dxf");DxfFormat.Export(result,dxfPath,ProjectStorage.CaptureVersion(dxfPath));
+            Check(DocumentSession.ContentEquals(result,ProjectStorage.Load(projectPath)) &&
+                DxfFormat.Import(dxfPath,1).Project.Pieces.Single() is { Closed:false } exported && exported.Points.SequenceEqual(expected),
+                "Open polyline retains its open topology through project and DXF round trips",checks);
+            studio.LoadDocument(before);studio.SetTool("Çoklu çizgi");
+            foreach(var point in new[] { new Point2(0,0),new Point2(10,10),new Point2(0,10),new Point2(10,0) })canvas.AddDrawingPointAt(point);
+            var crossing=canvas.CapturePendingDrawing()!.Points.ToArray();toolbar.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(DocumentSession.ContentEquals(before,studio.Document) && canvas.CapturePendingDrawing()!.Points.SequenceEqual(crossing) && error.Text.Contains("kesişen",StringComparison.OrdinalIgnoreCase),
+                "Invalid self-crossing open polyline preserves all pending points",checks);
+        }
+        finally { window.Close();canvas.CancelDrawing();studio.ClearCanvasError();studio.SetTool("Seç"); }
+    }
+
     private static void VerifyCoordinateDrawing(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
@@ -9914,6 +9954,20 @@ internal static class DesktopVerification
             var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
             Check(session.UndoCount==undoBefore+1 && session.Undo() && studio.Document.Pieces.Count==0,
                 "Large drawing completion is a single undoable edit",checks);
+
+            studio.LoadDocument(new ProjectDocument { Name="Büyük açık çizgi" });studio.SetTool("Çoklu çizgi");
+            canvas.RestorePendingDrawing(pending);canvas.FinishOpenPolyline();
+            var openTask=canvas.LargeCompletionTask ?? throw new InvalidOperationException("Large open drawing task missing.");
+            PumpUntil(()=>openTask.IsCompleted);openTask.GetAwaiter().GetResult();
+            Check(!canvas.LargeCompletionRunning && !canvas.HasPendingDrawing && studio.Document.Pieces.Count==1 &&
+                !studio.Document.Pieces[0].Closed && studio.Document.Pieces[0].Points.SequenceEqual(points) && session.UndoCount==1,
+                "A valid large open drawing is checked off the dispatcher and commits without a closing edge",checks);
+            Check(session.Undo() && studio.Document.Pieces.Count==0,"Large open drawing is a single undoable edit",checks);
+            canvas.RestorePendingDrawing(pending);canvas.FinishOpenPolyline();var cancelledOpen=canvas.LargeCompletionTask!;
+            var openReplacement=new RecoveryPendingDrawing("Çoklu çizgi",[new(5,5),new(8,5)]);
+            canvas.RestorePendingDrawing(openReplacement);PumpUntil(()=>cancelledOpen.IsCompleted);cancelledOpen.GetAwaiter().GetResult();
+            Check(canvas.CapturePendingDrawing()!.Points.SequenceEqual(openReplacement.Points) && studio.Document.Pieces.Count==0,
+                "Replacing a large open drawing cancels validation and preserves the new preview",checks);
 
             studio.LoadDocument(new ProjectDocument { Name="Geçersiz büyük çizim" });
             var invalid=points.ToArray(); invalid[2048]=invalid[0];

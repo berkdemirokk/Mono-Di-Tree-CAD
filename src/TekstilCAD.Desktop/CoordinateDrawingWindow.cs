@@ -12,6 +12,7 @@ internal sealed class CoordinateDrawingWindow : Window
     private readonly Func<string> guidance;
     private readonly Func<Point2,string?> addPoint;
     private readonly Func<string?> canFinish;
+    private readonly Func<string?>? canFinishOpen;
     private readonly Func<string?> removePoint;
     private readonly Func<string> summary;
     internal TextBox XInput { get; } = new() { MinWidth=160, Margin=new Thickness(0,4,0,10), Padding=new Thickness(7) };
@@ -22,15 +23,18 @@ internal sealed class CoordinateDrawingWindow : Window
     internal Button AddPointButton { get; }
     internal Button FinishButton { get; }
     internal Button RemovePointButton { get; }
+    internal Button FinishOpenButton { get; }
+    internal bool FinishAsOpen { get; private set; }
 
     // A null callback result means success; an explanatory string means the
     // operation was not accepted or its completion needs the user's attention.
-    internal CoordinateDrawingWindow(Window owner, Func<string> guidance, Func<Point2,string?> addPoint, Func<string?> canFinish, Func<string?> removePoint, Func<string> summary)
+    internal CoordinateDrawingWindow(Window owner, Func<string> guidance, Func<Point2,string?> addPoint, Func<string?> canFinish, Func<string?> removePoint, Func<string> summary, Func<string?>? canFinishOpen=null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         this.guidance=guidance ?? throw new ArgumentNullException(nameof(guidance));
         this.addPoint=addPoint ?? throw new ArgumentNullException(nameof(addPoint));
         this.canFinish=canFinish ?? throw new ArgumentNullException(nameof(canFinish));
+        this.canFinishOpen=canFinishOpen;
         this.removePoint=removePoint ?? throw new ArgumentNullException(nameof(removePoint));
         this.summary=summary ?? throw new ArgumentNullException(nameof(summary));
         Owner=owner; Title="Koordinatla çizim · Mono Di Tree CAD";
@@ -57,7 +61,10 @@ internal sealed class CoordinateDrawingWindow : Window
         var xLabel=new Label { Content="X koordinatı (mm)", Target=XInput, Padding=new Thickness(0) }; body.Children.Add(xLabel); body.Children.Add(XInput);
         var yLabel=new Label { Content="Y koordinatı (mm)", Target=YInput, Padding=new Thickness(0) }; body.Children.Add(yLabel); body.Children.Add(YInput);
         AutomationProperties.SetName(XInput,"X koordinatı, milimetre"); AutomationProperties.SetName(YInput,"Y koordinatı, milimetre");
-        body.Children.Add(new TextBlock { Text="Kapat, tamamlanmamış çizimi silmez. Çoklu çizgiyi kapatmak için en az üç nokta ekleyin ve Çoklu çizgiyi bitir'i seçin.", TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(0,4,0,0) });
+        body.Children.Add(new TextBlock { Text="Kapat, tamamlanmamış çizimi silmez. Çoklu çizgiyi kapatmak için en az üç nokta; açık bitirmek için en az iki nokta gerekir.", TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(0,4,0,0) });
+        FinishOpenButton=new Button { Content="Açık çizgiyi bitir",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,8,0,0),HorizontalAlignment=HorizontalAlignment.Left,Visibility=canFinishOpen is null ? Visibility.Collapsed : Visibility.Visible };
+        AutomationProperties.SetName(FinishOpenButton,"Çoklu çizgiyi açık olarak bitir");body.Children.Add(FinishOpenButton);
+        FinishOpenButton.Click+=(_,_)=>RequestFinishOpen();
         AutomationProperties.SetName(Feedback,"Koordinat girişi durumu"); AutomationProperties.SetLiveSetting(Feedback,AutomationLiveSetting.Polite); body.Children.Add(Feedback);
         XInput.TextChanged+=(_,_)=>ClearFeedback(); YInput.TextChanged+=(_,_)=>ClearFeedback();
         AddPointButton.Click+=(_,_)=>AddPoint(); RemovePointButton.Click+=(_,_)=>RemoveLastPoint(); FinishButton.Click+=(_,_)=>RequestFinish();
@@ -125,6 +132,17 @@ internal sealed class CoordinateDrawingWindow : Window
         { ShowFeedback("Çizimin bitirilip bitirilemeyeceği doğrulanamadı: "+ex.Message,true); return; }
         if(problem is not null) { ShowFeedback(problem,true); return; }
         DialogResult=true;
+    }
+
+    internal void RequestFinishOpen()
+    {
+        if(canFinishOpen is null) { ShowFeedback("Açık çizgi bu pencerede kullanılamıyor.",true);return; }
+        string? problem;
+        try { problem=canFinishOpen(); }
+        catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        { ShowFeedback("Açık çizginin bitirilip bitirilemeyeceği doğrulanamadı: "+ex.Message,true);return; }
+        if(problem is not null) { ShowFeedback(problem,true);return; }
+        FinishAsOpen=true;DialogResult=true;
     }
 
 }
