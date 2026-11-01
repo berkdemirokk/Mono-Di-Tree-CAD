@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Input;
 using System.Windows.Media;
 using TekstilCAD.Core;
@@ -42,6 +43,12 @@ internal sealed class OffsetTriplePreview : FrameworkElement
         var found=-1;for(var i=0;i<points.Length;i++) { var p=Map(points[i]);var dx=p.X-cursor.X;var dy=p.Y-cursor.Y;
             if(dx*dx+dy*dy>81)continue;if(found>=0)return -2;found=i; }
         return found;
+    }
+    protected override AutomationPeer OnCreateAutomationPeer()=>new PreviewPeer(this);
+    private sealed class PreviewPeer(OffsetTriplePreview owner) : FrameworkElementAutomationPeer(owner)
+    {
+        protected override string GetClassNameCore()=>nameof(OffsetTriplePreview);
+        protected override AutomationControlType GetAutomationControlTypeCore()=>AutomationControlType.Image;
     }
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e) { base.OnMouseLeftButtonDown(e);Focus();PointRequested?.Invoke(HitTestPoint(e.GetPosition(this)));e.Handled=true; }
     protected override void OnRender(DrawingContext dc)

@@ -9991,8 +9991,15 @@ internal static class DesktopVerification
                     var strokes=GeometryDrawings(VisualTreeHelper.GetDrawing(visual)).Select(d=>d.Pen?.Brush).OfType<SolidColorBrush>().Select(b=>b.Color).ToArray();
                     Check(strokes.Contains(Colors.RoyalBlue) && strokes.Contains(Colors.DarkOrange) && strokes.Contains(Colors.ForestGreen),
                         "Visual selection renders three distinct role colors",checks);
+                    var selectorPeer=UIElementAutomationPeer.CreatePeerForElement(measure.Previews[0]);
+                    Check(selectorPeer is not null && selectorPeer.GetAutomationControlType()==AutomationControlType.Image &&
+                        selectorPeer.GetName()=="Kaynak kontur nokta seçicisi" && selectorPeer.GetHelpText().Contains("T 1"),
+                        "Offset selector exposes its accessible name, image role and selected-index help",checks);
+                    var announcements=new List<(string Text,string Name)>();
+                    measure.LiveAnnouncementForVerification=control=>announcements.Add((control.Text,AutomationProperties.GetName(control)));
                     measure.Previews[0].RequestPointForVerification(-2);
-                    Check(measure.Selectors[0].SelectedIndex==0,"Ambiguous visual selection preserves the list choice",checks);
+                    Check(measure.Selectors[0].SelectedIndex==0 && announcements.Count>0 && announcements[^1].Text.Contains("Birden fazla yakın nokta") &&
+                        announcements[^1].Text==announcements[^1].Name,"Ambiguous visual selection preserves the choice and announces the list fallback",checks);
                     measure.Previews[0].RequestPointForVerification(2);
                     Check(measure.Selectors[0].SelectedIndex==2 && measure.Previews[0].Selected[0]==2,"Unambiguous visual selection updates its matching list",checks);
                     measure.Selectors[0].SelectedIndex=0;
@@ -10002,6 +10009,12 @@ internal static class DesktopVerification
                         !measure.Result.Text.Contains("tolerans",StringComparison.OrdinalIgnoreCase) &&
                         DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                         "Unverified preview compares independently selected detached triples without a production verdict or document change",checks);
+                    var previousResult=measure.Result.Text;announcements.Clear();measure.Selectors[0].SelectedIndex=2;
+                    var resultPeer=UIElementAutomationPeer.CreatePeerForElement(measure.Result);
+                    Check(resultPeer is not null && measure.Result.Text.Contains("Seçim değişti") && resultPeer.GetName()==measure.Result.Text &&
+                        resultPeer.GetName()!=previousResult && announcements.Any(a=>a.Text==measure.Result.Text && a.Name==measure.Result.Text),
+                        "Changing a selection replaces the accessible measurement and announces invalidation",checks);
+                    measure.Selectors[0].SelectedIndex=0;
                     var duplicate=new OffsetTriplePreview([new Point2(0,0),new Point2(0,0),new Point2(10,10)],"Çakışık seçim");
                     duplicate.Measure(new Size(300,210));duplicate.Arrange(new Rect(0,0,300,210));duplicate.UpdateLayout();
                     Check(duplicate.HitTestPoint(duplicate.Map(new Point2(0,0)))==-2 && duplicate.HitTestPoint(duplicate.Map(new Point2(10,10)))==2 &&

@@ -13,6 +13,7 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
 {
     private sealed record Choice(int Index,string Label);
     private readonly Point2[] source,candidate;
+    internal Action<TextBlock>? LiveAnnouncementForVerification { get; set; }
     internal ComboBox[] Selectors { get; }=new ComboBox[6];
     internal OffsetTriplePreview[] Previews { get; }=new OffsetTriplePreview[2];
     internal TextBlock Result { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,0),Focusable=true };
@@ -45,14 +46,14 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
                 body.Children.Add(roles);
                 var status=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
                 var preview=new OffsetTriplePreview(group==0 ? this.source : this.candidate,group==0 ? "Kaynak kontur nokta seçicisi" : "Aday kontur nokta seçicisi");
-                preview.PointRequested+=index=> { if(index<0) { status.Text=index==-2 ? "Birden fazla yakın nokta var; kesin indeksi listeden seçin." : "Yakında nokta bulunamadı.";return; }
-                    Selectors[offset+activeRole[group]].SelectedIndex=index;status.Text=$"{roleNames[activeRole[group]]}: {index}. nokta seçildi."; };
+                preview.PointRequested+=index=> { if(index<0) { SetLiveText(status,index==-2 ? "Birden fazla yakın nokta var; kesin indeksi listeden seçin." : "Yakında nokta bulunamadı.");return; }
+                    Selectors[offset+activeRole[group]].SelectedIndex=index;SetLiveText(status,$"{roleNames[activeRole[group]]}: {index}. nokta seçildi."); };
                 Previews[group]=preview;body.Children.Add(preview);body.Children.Add(status);
             }
             body.Children.Add(new TextBlock { Text=labels[i]+" (indeks)",Margin=new Thickness(0,7,0,3) });
             var box=new ComboBox { ItemsSource=i<3 ? originalChoices : candidateChoices,DisplayMemberPath=nameof(Choice.Label),IsTextSearchEnabled=true,MaxDropDownHeight=220,HorizontalAlignment=HorizontalAlignment.Stretch };
             box.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));VirtualizingPanel.SetIsVirtualizing(box,true);ScrollViewer.SetCanContentScroll(box,true);
-            var field=i;AutomationProperties.SetName(box,labels[i]);box.SelectionChanged+=(_,_)=> { Previews[field/3].SetSelection(field%3,box.SelectedIndex);Result.Text="Seçim değişti; ölçümü yenileyin."; };Selectors[i]=box;body.Children.Add(box);
+            var field=i;AutomationProperties.SetName(box,labels[i]);box.SelectionChanged+=(_,_)=> { Previews[field/3].SetSelection(field%3,box.SelectedIndex);SetLiveText(Result,"Seçim değişti; ölçümü yenileyin."); };Selectors[i]=box;body.Children.Add(box);
         }
         var compare=new Button { Content="Seçili ölçüleri karşılaştır",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,12,0,0) };
         compare.Click+=(_,_)=>Compare();body.Children.Add(compare);
@@ -71,7 +72,12 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
             if(value.CandidateDepth==0)Result.Text+=" Adaydaki seçili tanık ağız çizgisi üzerindedir; ölçülen derinlik sıfırdır.";
         }
         catch(ArgumentException ex) { Result.Text="Ölçüm yapılamadı: "+ex.Message; }
-        AutomationProperties.SetName(Result,Result.Text);
-        if(UIElementAutomationPeer.CreatePeerForElement(Result) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        SetLiveText(Result,Result.Text);
+    }
+    private void SetLiveText(TextBlock control,string text)
+    {
+        control.Text=text;AutomationProperties.SetName(control,text);
+        if(UIElementAutomationPeer.CreatePeerForElement(control) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+        LiveAnnouncementForVerification?.Invoke(control);
     }
 }
