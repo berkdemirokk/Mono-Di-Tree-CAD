@@ -11,3 +11,5 @@ On a suitable Apple development host, run `swift test` in this directory; integr
 The DEBUG-only DebugPointCopyStore is an isolated point-copy insertion experiment, not wired into the app. It accepts caller-validated snapshot bytes up to 8 MiB and uses the prototype transaction; freshness, app-private database placement and coordination remain caller responsibilities. No Apple build, device, or power-loss validation is claimed.
 
 The DEBUG snapshot authorization experiment checks caller-supplied document identity and revision inside the transaction before commit. The caller must hold its own document serialization gate through the complete synchronous call, including commit; the prototype cannot enforce this or coordinate SwiftUI state. It is not connected to the app.
+
+DebugPointCopyCoordinator serializes its own document identity/revision updates and synchronous transaction using one lock. It is not connected to SwiftUI; any state changes bypassing it invalidate the guarantee. It performs blocking I/O and must not be called on the UI thread. Apple build/device validation remains outstanding.
