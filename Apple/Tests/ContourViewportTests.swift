@@ -4,6 +4,28 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testCachedBoundsMatchDirectViewportAcrossSizesAndExtremeCoordinates() throws {
+        let cases: [[ContourMeasure.Point]] = [
+            [p(0, 0), p(20, 30), p(-10, 5)],
+            [p(4, 4), p(4, 4)],
+            [p(-Double.greatestFiniteMagnitude, 1), p(Double.greatestFiniteMagnitude, -1)],
+            [p(0, 0), p(1e-200, 1e-200)]
+        ]
+        for points in cases {
+            let bounds = try XCTUnwrap(ContourBounds(points: points))
+            for size in [CGSize(width: 232, height: 132), CGSize(width: 120, height: 450)] {
+                let cached = try XCTUnwrap(ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)))
+                let direct = try XCTUnwrap(ContourViewport(points: points, width: Double(size.width), height: Double(size.height)))
+                for point in points {
+                    XCTAssertEqual(cached.position(point).x, direct.position(point).x, accuracy: 1e-9)
+                    XCTAssertEqual(cached.position(point).y, direct.position(point).y, accuracy: 1e-9)
+                }
+            }
+        }
+        XCTAssertNil(ContourBounds(points: []))
+        XCTAssertNil(ContourBounds(points: [p(.nan, 0)]))
+    }
+
     func testRevealPreservesVisiblePositionAndMovesOnlyOffscreenAxes() throws {
         let size = CGSize(width: 200, height: 100)
         let unchanged = try XCTUnwrap(ContourViewport.visibleOffset(point: CGPoint(x: 100, y: 50), size: size, zoom: 2, offset: .zero))

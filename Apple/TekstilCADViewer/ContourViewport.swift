@@ -1,5 +1,21 @@
 import Foundation
 
+// Geometry bounds are independent of canvas size and gesture state.
+struct ContourBounds {
+    let minX: Double, maxX: Double, minY: Double, maxY: Double
+
+    init?(points: [ContourMeasure.Point]) {
+        guard let first = points.first else { return nil }
+        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
+        for p in points {
+            guard p.x.isFinite, p.y.isFinite else { return nil }
+            minX = min(minX, p.x); maxX = max(maxX, p.x)
+            minY = min(minY, p.y); maxY = max(maxY, p.y)
+        }
+        self.minX = minX; self.maxX = maxX; self.minY = minY; self.maxY = maxY
+    }
+}
+
 // Fits finite model coordinates without multiplying by an enormous scale.
 struct ContourViewport {
     let coordinateScale: Double
@@ -12,13 +28,13 @@ struct ContourViewport {
     let height: Double
 
     init?(points: [ContourMeasure.Point], width: Double, height: Double) {
-        guard let first = points.first, width.isFinite, height.isFinite, width > 0, height > 0 else { return nil }
-        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-        for p in points {
-            guard p.x.isFinite, p.y.isFinite else { return nil }
-            minX = min(minX, p.x); maxX = max(maxX, p.x)
-            minY = min(minY, p.y); maxY = max(maxY, p.y)
-        }
+        guard let bounds = ContourBounds(points: points) else { return nil }
+        self.init(bounds: bounds, width: width, height: height)
+    }
+
+    init?(bounds: ContourBounds, width: Double, height: Double) {
+        guard width.isFinite, height.isFinite, width > 0, height > 0 else { return nil }
+        var minX = bounds.minX, maxX = bounds.maxX, minY = bounds.minY, maxY = bounds.maxY
         // Finite opposite-sign endpoints can overflow when subtracted.
         let coordinateScale = (maxX - minX).isFinite && (maxY - minY).isFinite ? 1.0 : 0.5
         minX *= coordinateScale; maxX *= coordinateScale

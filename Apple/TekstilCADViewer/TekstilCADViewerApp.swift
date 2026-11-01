@@ -1578,6 +1578,7 @@ private struct ExperimentalPointEditor: View {
                 if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
                 if let preview {
                     DrawingView(pieces: [preview], label: "Düzenlenmiş kontur önizlemesi", highlightedNotch: nil, selectionRevision: nil)
+                        .id(generation)
                         .frame(height: 240)
                     Button("Yeni kopyayı kaydet") { saveCopy() }
                     .disabled(candidate == nil || working || saving)
@@ -1795,6 +1796,7 @@ private struct DrawingView: View {
     @State private var showGrain = true
     @State private var panEnabled = false
     @State private var canvasSize: CGSize = .zero
+    @State private var cachedBounds: ContourBounds?
     @GestureState private var pinch: CGFloat = 1
     @GestureState private var drag: CGSize = .zero
 
@@ -1854,10 +1856,10 @@ private struct DrawingView: View {
                         offset = limitedOffset(offset, size: geometry.size, scale: zoom)
                     }
             )
-            .onAppear { canvasSize = geometry.size; revealSelectedNotch(size: geometry.size) }
+            .onAppear { canvasSize = geometry.size; refreshBounds(size: geometry.size) }
             .onChange(of: geometry.size) { canvasSize = $0; revealSelectedNotch(size: $0) }
             .onChange(of: selectionRevision) { _ in revealSelectedNotch(size: geometry.size) }
-            .onChange(of: showGrain) { _ in revealSelectedNotch(size: geometry.size) }
+            .onChange(of: showGrain) { _ in refreshBounds(size: geometry.size) }
         }
         .frame(height: drawingHeight)
                 VStack(alignment: .leading, spacing: 8) {
@@ -1906,17 +1908,24 @@ private struct DrawingView: View {
         return points
     }
 
+    private func refreshBounds(size: CGSize) {
+        cachedBounds = ContourBounds(points: viewportPoints)
+        revealSelectedNotch(size: size)
+    }
+
     private func revealSelectedNotch(size: CGSize) {
         guard pieces.count == 1, let index = highlightedNotch,
               pieces[0].points.indices.contains(index), pieces[0].notches.contains(index),
-              let viewport = ContourViewport(points: viewportPoints, width: Double(size.width), height: Double(size.height)),
+              let cachedBounds,
+              let viewport = ContourViewport(bounds: cachedBounds, width: Double(size.width), height: Double(size.height)),
               let result = ContourViewport.visibleOffset(point: viewport.position(pieces[0].points[index]), size: size, zoom: zoom, offset: offset) else { return }
         offset = limitedOffset(result, size: size, scale: zoom)
     }
 
     private var drawing: some View {
         Canvas { context, size in
-            guard let viewport = ContourViewport(points: viewportPoints, width: Double(size.width), height: Double(size.height)) else { return }
+            guard let cachedBounds,
+                  let viewport = ContourViewport(bounds: cachedBounds, width: Double(size.width), height: Double(size.height)) else { return }
             func position(_ p: Drawing.Point) -> CGPoint { viewport.position(p) }
             var remainingNotches = Self.maximumVisibleNotches
             for piece in pieces {
