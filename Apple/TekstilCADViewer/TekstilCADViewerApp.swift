@@ -1062,6 +1062,7 @@ private struct Drawing {
     }
 
     static func load(_ data: Data) throws -> Drawing {
+        guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let root = try JSONSerialization.jsonObject(with: data)
         let object: [String: Any]
         let formatVersion: Int
@@ -1074,6 +1075,19 @@ private struct Drawing {
             guard data.count <= LosslessProjectName.maximumEditBytes else { throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.") }
             do { try LosslessProjectName.validateUniqueKeys(data) }
             catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları ve UTF-8 kodlamasını kontrol edin.") }
+        } else {
+            // JSONSerialization keeps only one value for a repeated key, while
+            // desktop rejects duplicates. Scan decoded bytes but keep the
+            // original snapshot untouched for saving and export.
+            let encoding: String.Encoding
+            if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) { encoding = .utf32LittleEndian }
+            else if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) { encoding = .utf32BigEndian }
+            else if data.starts(with: [0xff, 0xfe]) { encoding = .utf16LittleEndian }
+            else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
+            else { encoding = .utf8 }
+            guard let decoded = String(data: data, encoding: encoding) else { throw ViewerError.message("Proje metni okunamadı.") }
+            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false) }
+            catch { throw ViewerError.message("Proje alanları yinelenmiş veya güvenli biçimde okunamadı.") }
         }
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")

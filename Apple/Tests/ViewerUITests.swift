@@ -1,6 +1,21 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testLegacyDuplicateKeysAreRejectedInUTF8AndUTF16() {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        let duplicate = #"[5,{"Name":"Kontur","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"\u0058":999,"Y":0},{"X":10,"Y":20}]}],"GradingRules":[]}]"#
+        var utf16 = Data([0xff, 0xfe])
+        utf16.append(duplicate.data(using: .utf16LittleEndian)!)
+        for data in [Data(duplicate.utf8), utf16] {
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15))
+            XCTAssertFalse(app.otherElements["1 parçalı kontur önizlemesi"].exists)
+            app.terminate()
+        }
+    }
+
     func testInvalidFiniteFlagDoesNotProduceAContourPreview() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-fixture"]

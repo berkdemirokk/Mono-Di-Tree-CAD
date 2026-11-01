@@ -11,13 +11,13 @@ enum LosslessProjectName {
 
     // The viewer already parsed JSON; scan the original UTF-8 bytes for
     // duplicate keys without rewriting or normalizing the project.
-    static func validateUniqueKeys(_ data: Data) throws {
+    static func validateUniqueKeys(_ data: Data, strictV6: Bool = true) throws {
         // Bound the second scan until a streaming parser is available.
-        guard data.count <= maximumEditBytes, String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
+        guard data.count <= (strictV6 ? maximumEditBytes : 96 * 1024 * 1024), String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
         try data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
-            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: true)
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: strictV6)
             _ = try scanner.projectName()
         }
     }
