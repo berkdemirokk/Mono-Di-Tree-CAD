@@ -547,6 +547,7 @@ internal static class DesktopVerification
             VerifyPendingDrawingOutputGuards(studio,checks);
             VerifyPendingExportPreflightGuards(studio,work,checks);
             VerifyFractionalSelectionWithSnap(studio,checks);
+            VerifyMixedMouseButtons(studio,checks);
             VerifyNearestVertexSelection(studio,checks);
             VerifyClosingEdgeDragSafety(studio,checks);
             VerifyOpenVertexDrag(studio,checks);
@@ -1612,6 +1613,45 @@ internal static class DesktopVerification
             }
         }
         finally { snap.IsChecked=previousSnap;scaleField.SetValue(canvas,previousScale);offsetField.SetValue(canvas,previousOffset); }
+    }
+    private static void VerifyMixedMouseButtons(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var snap=(CheckBox)typeof(MainWindow).GetField("snap",PrivateInstance)!.GetValue(studio)!;
+        var scale=typeof(CadCanvas).GetField("scale",PrivateInstance)!;
+        var offset=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var pan=typeof(CadCanvas).GetField("panStart",PrivateInstance)!;
+        var preview=typeof(CadCanvas).GetField("dragPreview",PrivateInstance)!;
+        var down=typeof(CadCanvas).GetMethod("Down",PrivateInstance)!;
+        var up=typeof(CadCanvas).GetMethod("Up",PrivateInstance)!;
+        var left=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left);
+        var middle=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Middle);
+        var oldSnap=snap.IsChecked;var oldScale=scale.GetValue(canvas);var oldOffset=offset.GetValue(canvas);
+        try
+        {
+            var piece=new PatternPiece { Points=[new(20,20),new(100,20),new(100,100),new(20,100)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.SetTool("Seç");studio.Select(piece.Id);
+            snap.IsChecked=false;scale.SetValue(canvas,1d);
+            var pos=left.GetPosition(canvas);offset.SetValue(canvas,new Vector(pos.X-20,pos.Y-20));
+            var before=studio.Document.Clone();
+            down.Invoke(canvas,[canvas,left]);canvas.UpdateDragPreview(new Point(pos.X+15,pos.Y+10));
+            var proposed=((List<Point2>)preview.GetValue(canvas)!).ToArray();
+            down.Invoke(canvas,[canvas,middle]);up.Invoke(canvas,[middle]);
+            Check(canvas.HasActiveDragPreview && pan.GetValue(canvas) is null && ((List<Point2>)preview.GetValue(canvas)!).SequenceEqual(proposed),
+                "Middle-button press and release preserve an active left-drag preview",checks);
+            up.Invoke(canvas,[left]);
+            Check(studio.Document.Pieces[0].Points.SequenceEqual(proposed),"Left release still commits the original drag",checks);
+            Invoke(studio,"Undo");Check(DocumentSession.ContentEquals(before,studio.Document),"Mixed-button drag remains undoable",checks);
+
+            studio.SetTool("Çoklu çizgi");down.Invoke(canvas,[canvas,middle]);
+            Check(pan.GetValue(canvas) is not null,"Middle button starts view pan",checks);
+            down.Invoke(canvas,[canvas,left]);up.Invoke(canvas,[left]);
+            Check(pan.GetValue(canvas) is not null && !canvas.HasPendingDrawing && !canvas.HasActiveDragPreview && DocumentSession.ContentEquals(before,studio.Document),
+                "Left click during pan cannot start a drawing or drag",checks);
+            up.Invoke(canvas,[middle]);
+            Check(pan.GetValue(canvas) is null && DocumentSession.ContentEquals(before,studio.Document),"Pan ends without a project edit",checks);
+        }
+        finally { canvas.CancelDrawing();snap.IsChecked=oldSnap;scale.SetValue(canvas,oldScale);offset.SetValue(canvas,oldOffset); }
     }
     private static void VerifyClosingEdgeDragSafety(MainWindow studio,List<string> checks)
     {

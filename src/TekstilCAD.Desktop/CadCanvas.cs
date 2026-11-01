@@ -460,7 +460,16 @@ public sealed class CadCanvas : FrameworkElement
     private void Down(object sender,MouseButtonEventArgs e)
     {
         if(LargeVertexValidationRunning || LargeCompletionRunning) { owner.SetStatus("Doğrulama sürüyor; bekleyin veya Esc ile iptal edin.");return; }
-        Focus(); if(e.ChangedButton==MouseButton.Middle) { panStart=e.GetPosition(this);CaptureMouse();return; } if(e.ChangedButton!=MouseButton.Left)return;
+        Focus();
+        if(e.ChangedButton==MouseButton.Middle)
+        {
+            if(dragId is not null) { owner.SetStatus("Önce sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
+            if(panStart is null) { panStart=e.GetPosition(this);CaptureMouse(); }
+            return;
+        }
+        if(e.ChangedButton!=MouseButton.Left)return;
+        if(panStart is not null || dragId is not null)
+        { owner.SetStatus("Önce geçerli fare hareketini tamamlayın veya Esc ile iptal edin.");return; }
         var screenPosition=e.GetPosition(this);
         // Selection is based on what is visibly under the pointer. Grid snapping
         // applies to editing, not hit testing of fractional imported coordinates.
@@ -666,7 +675,12 @@ public sealed class CadCanvas : FrameworkElement
     }
     private void Up(MouseButtonEventArgs e)
     {
-        if(e.ChangedButton==MouseButton.Middle) { panStart=null;ReleaseMouseCapture();return; }
+        if(e.ChangedButton==MouseButton.Middle)
+        {
+            // A middle-button release must not release a left-drag capture.
+            if(panStart is not null) { panStart=null;ReleaseMouseCapture(); }
+            return;
+        }
         if(e.ChangedButton!=MouseButton.Left || dragId is null)return;
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==dragId);
         var result=dragPreview;
