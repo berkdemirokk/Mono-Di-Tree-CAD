@@ -9189,6 +9189,18 @@ internal static class DesktopVerification
         var edgePixels=new byte[20*20*4];
         for(int y=0;y<20;y++)for(int x=0;x<20;x++) { var i=(y*20+x)*4;edgePixels[i]=edgePixels[i+1]=edgePixels[i+2]=(byte)(x<10 ? 0 : 255);edgePixels[i+3]=255; }
         var edgeBitmap=BitmapSource.Create(20,20,96,96,PixelFormats.Bgra32,null,edgePixels,80);
+        Check(PhotoEdgePath.TryFind(edgeBitmap,new Point(9,2),new Point(9,17),out var edgePath) && edgePath.Count>=2 &&
+            edgePath[0]==new Point(9,2) && edgePath[^1]==new Point(9,17) && edgePath.Distinct().Count()==edgePath.Count &&
+            edgePath.All(p=>p.X>=0 && p.X<20 && p.Y>=0 && p.Y<20),
+            "Experimental photo path stays in the image and joins the selected endpoints without repeating pixels",checks);
+        Check(!PhotoEdgePath.TryFind(edgeBitmap,new Point(9,2),new Point(9,2),out _) &&
+            !PhotoEdgePath.TryFind(edgeBitmap,new Point(double.NaN,2),new Point(9,17),out _),
+            "Experimental photo path rejects coincident and invalid endpoints",checks);
+        try { PhotoEdgePath.TryFind(edgeBitmap,new Point(9,2),new Point(9,17),out _,new CancellationToken(true));throw new InvalidOperationException("Photo path ignored cancellation."); }
+        catch(OperationCanceledException) { Check(true,"Experimental photo path honors cancellation",checks); }
+        var largeEdgeBitmap=BitmapSource.Create(500,500,96,96,PixelFormats.Bgra32,null,new byte[500*500*4],500*4);
+        Check(!PhotoEdgePath.TryFind(largeEdgeBitmap,new Point(0,0),new Point(499,499),out _),
+            "Experimental photo path rejects a search outside its work budget",checks);
         Check(PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(7,10),out var edge) && edge==new Point(9,10) &&
             !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(0,0),out _) && !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(double.NaN,0),out _),
             "Photo edge suggestion finds nearby synthetic contrast and declines absent or invalid input",checks);
