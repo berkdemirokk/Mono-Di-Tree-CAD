@@ -173,6 +173,13 @@ public static class PatternTools
             // source edge lines; an on-edge or inward result is unsafe.
             if (Cross(u, displacement) * orientation >= 0 || Cross(v, displacement) * orientation >= 0)
                 throw new ArgumentException("Dikiş payı bu koordinatlarda sayısal olarak temsil edilemiyor; işlem uygulanmadı.");
+            // Match the relative dimensional precision already required for
+            // generated notch dimensions; positive movement by itself can be a
+            // badly rounded fraction or multiple of the requested allowance.
+            var firstOffset = -orientation * Cross(u, displacement) / ul;
+            var secondOffset = -orientation * Cross(v, displacement) / vl;
+            if (Math.Abs(firstOffset - mm) > mm * 1e-9 || Math.Abs(secondOffset - mm) > mm * 1e-9)
+                throw new ArgumentException("Dikiş payı bu koordinatlarda sayısal olarak temsil edilemiyor; işlem uygulanmadı.");
             if (Geometry.Distance(intersection, b) > mm * 1000)
                 throw new ArgumentException("Çok dar köşe güvenli dikiş payı sınırını aşıyor.");
             result.Add(intersection);
