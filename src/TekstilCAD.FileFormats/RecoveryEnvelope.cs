@@ -70,20 +70,24 @@ internal static class RecoveryEnvelope
             catch (ArgumentException ex) { throw new InvalidDataException("Tamamlanmamış çizim noktası geçersiz.", ex); }
     }
 
-    internal static RecoverySnapshot Deserialize(byte[] bytes)
+    internal static RecoverySnapshot Deserialize(byte[] bytes, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (bytes.Length > MaximumBytes) throw new InvalidDataException("Kurtarma kaydı boyut sınırını aşıyor.");
         try
         {
             using var json = JsonDocument.Parse(bytes, new JsonDocumentOptions { MaxDepth = 64 });
-            ProjectStorage.RejectDuplicateProperties(json.RootElement);
+            ProjectStorage.RejectDuplicateProperties(json.RootElement, cancellationToken);
             var root = json.RootElement;
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("Version", out _) || !root.TryGetProperty("Project", out _) || !root.TryGetProperty("Drafts", out var list) || list.ValueKind != JsonValueKind.Array)
                 throw new InvalidDataException("Kurtarma kaydı eksik.");
             if (list.GetArrayLength() > ProjectStorage.MaximumPieces) throw new InvalidDataException("Kurtarma taslağı sayısı sınırı aşıyor.");
             foreach (var entry in list.EnumerateArray())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (entry.ValueKind != JsonValueKind.Object || new[] { "PieceId", "Name", "X", "Y", "BaseName", "BaseX", "BaseY" }.Any(p => !entry.TryGetProperty(p, out _)))
                     throw new InvalidDataException("Kurtarma taslağı eksik.");
+            }
             var versionJson = root.GetProperty("Version");
             if (versionJson.ValueKind != JsonValueKind.Number || !versionJson.TryGetInt32(out var version) || version is not (1 or 2))
                 throw new InvalidDataException("Kurtarma sürümü desteklenmiyor.");
@@ -111,7 +115,7 @@ internal static class RecoveryEnvelope
                     pending = new RecoveryPendingDrawing(drawing.Tool, drawing.Points.Select(p => new Point2(p.X, p.Y)).ToArray());
                 ValidatePendingDrawing(pending);
             }
-            var project = ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(projectJson.GetRawText()));
+            var project = ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(projectJson.GetRawText()),cancellationToken);
             var drafts = draftDtos.Select(d => new RecoveryPropertyDraft(d.PieceId, Decode(d.Name), Decode(d.X), Decode(d.Y), Decode(d.BaseName), d.BaseX, d.BaseY)).ToArray();
             Validate(drafts);
             return new RecoverySnapshot(project, drafts) { PendingDrawing = pending };

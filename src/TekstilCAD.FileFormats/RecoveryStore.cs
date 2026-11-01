@@ -299,7 +299,7 @@ public sealed class RecoveryStore : IDisposable
     {
         var bytes = ReadBounded(stream, 64 * 1024 * 1024, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var result = ProjectStorage.DeserializeProject(bytes);
+        var result = ProjectStorage.DeserializeProject(bytes,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return result;
     }
@@ -308,7 +308,7 @@ public sealed class RecoveryStore : IDisposable
     {
         var bytes = ReadBounded(stream, RecoveryEnvelope.MaximumBytes, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var result = RecoveryEnvelope.Deserialize(bytes);
+        var result = RecoveryEnvelope.Deserialize(bytes,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return result;
     }
@@ -327,6 +327,8 @@ public sealed class RecoveryStore : IDisposable
             memory.Write(buffer, 0, count);
         }
         cancellationToken.ThrowIfCancellationRequested();
+        if(memory.TryGetBuffer(out var snapshot) && snapshot.Offset==0 &&
+           snapshot.Array is { } exact && snapshot.Count==exact.Length)return exact;
         return memory.ToArray();
     }
     private static bool IsKnownLease(FileStream stream)
