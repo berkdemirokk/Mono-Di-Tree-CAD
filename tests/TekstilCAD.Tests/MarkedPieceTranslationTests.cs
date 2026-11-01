@@ -39,6 +39,29 @@ public class MarkedPieceTranslationTests
         Assert.Equal(points[1],marks![0].Position);
         Assert.Equal(points[3],marks[1].Position);
     }
+    [Theory]
+    [InlineData(0,0)] [InlineData(5,0)] [InlineData(0,5)]
+    public void UnmovedAxesPreserveContourAndIndependentMarkSignedZeroBits(double dx,double dy)
+    {
+        var negativeZero = BitConverter.Int64BitsToDouble(long.MinValue);
+        var source = new PatternPiece { Points = [new(negativeZero,negativeZero),new(20,negativeZero),
+            new(20,20),new(negativeZero,20)],
+            Notches = [new NotchMark { VertexIndex = 0, Position = new Point2(0,0) }] };
+        var (points,marks) = MarkedPieceTranslation.Translate(source,dx,dy);
+        if (dx == 0)
+        {
+            Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(points[0].X));
+            Assert.Equal(0,BitConverter.DoubleToInt64Bits(marks![0].Position.X));
+        }
+        if (dy == 0)
+        {
+            Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(points[0].Y));
+            Assert.Equal(0,BitConverter.DoubleToInt64Bits(marks![0].Position.Y));
+        }
+        Assert.Equal(points[0],marks![0].Position);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(source.Points[0].X));
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(source.Points[0].Y));
+    }
     [Fact]
     public void InvalidOrDuplicateAnchorsAreRejectedWithoutMutation()
     {

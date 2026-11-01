@@ -52,7 +52,11 @@ public static class MarkedPieceTranslation
                 throw new ArgumentException("Taşıma miktarı bir noktada sayısal hassasiyetle temsil edilemiyor.", nameof(source));
         }
         cancellationToken.ThrowIfCancellationRequested();
-        var translatedMarks = marks?.Select(mark => new NotchMark { VertexIndex = mark.VertexIndex, Position = translated[mark.VertexIndex] }).ToList();
+        // A valid mark can have the opposite signed-zero representation from
+        // its equal vertex. Keep its own bits on each axis that did not move.
+        var translatedMarks = marks?.Select(mark => new NotchMark { VertexIndex = mark.VertexIndex,
+            Position = new Point2(dx == 0 ? mark.Position.X : translated[mark.VertexIndex].X,
+                                  dy == 0 ? mark.Position.Y : translated[mark.VertexIndex].Y) }).ToList();
         cancellationToken.ThrowIfCancellationRequested();
         return (translated, translatedMarks);
     }

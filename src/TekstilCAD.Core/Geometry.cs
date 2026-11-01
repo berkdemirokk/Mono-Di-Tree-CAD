@@ -96,7 +96,9 @@ public static class Geometry
         // Displacements may span the whole supported world (200,000,000 mm).
         // The resulting coordinates, rather than the delta, have world limits.
         if (!double.IsFinite(dx) || !double.IsFinite(dy)) throw new ArgumentOutOfRangeException(nameof(dx), "Taşıma miktarı sonlu olmalıdır.");
-        var moved = Map(points, p => new(p.X + dx, p.Y + dy));
+        // Adding +0 to -0 changes its stored bits. An unmoved axis should
+        // retain the source representation, including signed zero.
+        var moved = Map(points, p => new(dx == 0 ? p.X : p.X + dx, dy == 0 ? p.Y : p.Y + dy));
         TranslationPrecision.Validate(points, moved);
         return moved;
     }
