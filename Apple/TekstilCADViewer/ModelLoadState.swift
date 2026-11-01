@@ -1,5 +1,13 @@
 import Foundation
 
+// A read may run off the main thread while a newer selection supersedes it.
+final class ModelReadCancellation {
+    private let lock = NSLock()
+    private var cancelled = false
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+}
+
 // Tracks the most recent explicit model choice. A rejected selection still
 // supersedes an earlier asynchronous read; cancelling the picker does not.
 struct ModelLoadState {

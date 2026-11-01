@@ -289,6 +289,18 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url).count, bytes.count + 1)
     }
 
+    func testSupersededReadStopsAfterCurrentChunkWithoutChangingSource() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let bytes = Data(repeating: 0x41, count: 128 * 1024)
+        try bytes.write(to: url)
+        let cancellation = ModelReadCancellation()
+        XCTAssertThrowsError(try ModelStore.readFileSnapshot(url, cancelled: { cancellation.isCancelled }, afterFirstChunk: {
+            cancellation.cancel()
+        })) { error in XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(try Data(contentsOf: url), bytes)
+    }
+
     func testOpenedDescriptorMustMatchListedFileIdentity() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

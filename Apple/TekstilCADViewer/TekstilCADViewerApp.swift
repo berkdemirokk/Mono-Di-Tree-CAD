@@ -82,6 +82,7 @@ private struct ContentView: View {
     @State private var drawingRevision = UUID()
     @State private var notchSelectionRevision = UUID()
     @State private var modelLoad = ModelLoadState()
+    @State private var modelReadCancellation: ModelReadCancellation?
 
     var body: some View {
         ScrollView {
@@ -606,6 +607,7 @@ private struct ContentView: View {
 
     private func handlePickerFailure(_ failure: Error) {
         guard modelLoad.rejectPickerFailure(failure) else { return }
+        modelReadCancellation?.cancel()
         // A rejected picker result did not open a replacement file. Retain a
         // failed raw-save snapshot explicitly under the new request generation.
         if rawSaveNeedsRetry, let retained = rawImport {
@@ -618,6 +620,9 @@ private struct ContentView: View {
         saveNotice = nil
         rawImport = nil
         rawSaveNeedsRetry = false
+        modelReadCancellation?.cancel()
+        let cancellation = ModelReadCancellation()
+        modelReadCancellation = cancellation
         let request = modelLoad.begin()
         // Acquire the picker grant while still handling its result. Keep it
         // alive until the background coordinated read has finished.
@@ -629,8 +634,9 @@ private struct ContentView: View {
             #endif
             let loaded = Result { () -> OpenedModel in
                 let data: Data
-                if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
-                else { data = try Drawing.readData(url) }
+                if let listedEntry { data = try ModelStore.readListedPayload(listedEntry, cancelled: { cancellation.isCancelled }) }
+                else { data = try Drawing.readData(url, cancelled: { cancellation.isCancelled }) }
+                if cancellation.isCancelled { throw CancellationError() }
                 if imported && LosslessProjectName.requiresVersionSixRawRecovery(data) { return .raw(data, .sizeLimit) }
                 do { return .preview(try Drawing.load(data), data) }
                 catch {
@@ -1092,8 +1098,9 @@ enum ModelStore {
 
     // Detect common concurrent in-place changes while reading an imported file.
     // Metadata checks are not an atomic snapshot against uncoordinated writers.
-    static func readFileSnapshot(_ url: URL, expectedIdentity: FileIdentity? = nil, afterFirstChunk: (() throws -> Void)? = nil) throws -> Data {
+    static func readFileSnapshot(_ url: URL, expectedIdentity: FileIdentity? = nil, cancelled: () -> Bool = { false }, afterFirstChunk: (() throws -> Void)? = nil) throws -> Data {
         let limit = 64 * 1024 * 1024
+        if cancelled() { throw CancellationError() }
         let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_NONBLOCK) }
         guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         var initial = stat()
@@ -1109,6 +1116,7 @@ enum ModelStore {
         guard initial.st_size <= Int64(limit) else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         var data = Data(), didRead = false
         while true {
+            if cancelled() { throw CancellationError() }
             let remaining = limit + 1 - data.count
             let chunk = try file.read(upToCount: min(64 * 1024, remaining)) ?? Data()
             if chunk.isEmpty { break }
@@ -1117,6 +1125,7 @@ enum ModelStore {
             if !didRead { didRead = true; try afterFirstChunk?() }
         }
         var final = stat()
+        if cancelled() { throw CancellationError() }
         guard fstat(descriptor, &final) == 0, fileIdentity(initial) == fileIdentity(final),
               Int64(data.count) == Int64(final.st_size) else {
             throw ViewerError.message("Dosya okunurken değişti; yeniden seçin.")
@@ -1140,13 +1149,13 @@ enum ModelStore {
 
     // Reject a row that was replaced or modified before or during the read.
     // Filesystem identity checks are not atomic with another writer.
-    static func readListedPayload(_ entry: Entry, afterRead: (() throws -> Void)? = nil) throws -> Data {
+    static func readListedPayload(_ entry: Entry, cancelled: @escaping () -> Bool = { false }, afterRead: (() throws -> Void)? = nil) throws -> Data {
         try requireCurrent(entry)
         let payload = entry.url.pathExtension.lowercased() == copyExtension ? entry.identity?.payload : entry.identity?.entry
         guard let payload, (payload.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) else {
             throw ViewerError.message("Kayıt içeriği normal bir dosya değil; açılamadı.")
         }
-        let data = try Drawing.readData(payloadURL(entry.url), expectedIdentity: payload)
+        let data = try Drawing.readData(payloadURL(entry.url), expectedIdentity: payload, cancelled: cancelled)
         try afterRead?()
         try requireCurrent(entry)
         return data
@@ -1588,22 +1597,22 @@ private struct Drawing {
     }
     static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
 
-    static func readData(_ url: URL, expectedIdentity: ModelStore.FileIdentity? = nil) throws -> Data {
+    static func readData(_ url: URL, expectedIdentity: ModelStore.FileIdentity? = nil, cancelled: @escaping () -> Bool = { false }) throws -> Data {
         // File providers can replace or materialize a document while it is
         // being read. Capture one coordinated snapshot before parsing it.
         let coordinator = NSFileCoordinator(filePresenter: nil)
         var coordinationError: NSError?
         var snapshot: Result<Data, Error>?
         coordinator.coordinate(readingItemAt: url, options: [], error: &coordinationError) { coordinatedURL in
-            snapshot = Result { try readCoordinatedData(coordinatedURL, expectedIdentity: expectedIdentity) }
+            snapshot = Result { try readCoordinatedData(coordinatedURL, expectedIdentity: expectedIdentity, cancelled: cancelled) }
         }
         if let coordinationError { throw coordinationError }
         guard let snapshot else { throw ViewerError.message("Dosya okuması tamamlanamadı.") }
         return try snapshot.get()
     }
 
-    private static func readCoordinatedData(_ url: URL, expectedIdentity: ModelStore.FileIdentity?) throws -> Data {
-        try ModelStore.readFileSnapshot(url, expectedIdentity: expectedIdentity)
+    private static func readCoordinatedData(_ url: URL, expectedIdentity: ModelStore.FileIdentity?, cancelled: () -> Bool) throws -> Data {
+        try ModelStore.readFileSnapshot(url, expectedIdentity: expectedIdentity, cancelled: cancelled)
     }
 
     static func load(_ data: Data) throws -> Drawing {
