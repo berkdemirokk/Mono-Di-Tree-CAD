@@ -53,15 +53,17 @@ internal sealed class PointPickerWindow : Window
         var scroller=new ScrollViewer { Content=panel,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(scroller,"Kontur noktası seçim içeriği");root.Children.Add(scroller);
         panel.Children.Add(new TextBlock { Text="Kontur noktası seç",FontSize=20,FontWeight=FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text="Noktalar 0'dan başlayan indekslerle listelenir. Listeden veya önizlemeden bir nokta seçin. Yakın ya da üst üste noktaları kesin ayırt etmek için listeyi kullanın. Bu seçim X/Y girişlerini değiştirmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) });
+        panel.Children.Add(new TextBlock { Text="Noktalar 0'dan başlayan indekslerle listelenir; işaretli köşeler listede belirtilir. Listeden veya önizlemeden bir nokta seçin. Yakın ya da üst üste noktaları kesin ayırt etmek için listeyi kullanın. Bu seçim X/Y girişlerini değiştirmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,6,0,8) });
         var identity=new TextBox { Text=sourceId.ToString("D"),IsReadOnly=true,Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetName(identity,"Kaynak parça tam kimliği");panel.Children.Add(identity);
         var list=new List<PointChoice>(piece.Points.Count);
+        var markedIndices=piece.Notches?.Select(mark=>mark.VertexIndex).ToHashSet() ?? [];
         for(var i=0;i<piece.Points.Count;i++)
         {
             var p=piece.Points[i];
             var closing=piece.Closed && i>0 && i==piece.Points.Count-1 && p==piece.Points[0];
-            list.Add(new PointChoice(i,$"{i} · X {MeasurementInput.Format(p.X)} · Y {MeasurementInput.Format(p.Y)} mm"+(closing ? " · kapanış noktası, ilk nokta ile aynı" : "")));
+            var marked=markedIndices.Contains(closing ? 0 : i);
+            list.Add(new PointChoice(i,$"{i} · X {MeasurementInput.Format(p.X)} · Y {MeasurementInput.Format(p.Y)} mm"+(closing ? " · kapanış noktası, ilk nokta ile aynı" : "")+(marked ? " · işaretli köşe" : ""),marked));
         }
         var label=new Label { Content="Kontur noktası",Target=PointSelector,Padding=new Thickness(0) };panel.Children.Add(label);
         AutomationProperties.SetName(PointSelector,"Kontur noktası indeksi ve koordinatları");
@@ -78,7 +80,7 @@ internal sealed class PointPickerWindow : Window
         {
             CheckCurrent(); if(IsStale)return;
             if(index<0) SetStatus(index==-2 ? "Bu konumda birden fazla yakın nokta var; istediğiniz indeksi listeden seçin." : "Yakında nokta bulunamadı; daha yakın tıklayın veya listeden seçin.");
-            else { PointSelector.SelectedIndex=index;SetStatus($"{index} numaralı nokta seçildi."); }
+            else { PointSelector.SelectedIndex=index;UpdateSelection(); }
         };
         monitor.Tick+=(_,_)=>CheckCurrent();Loaded+=(_,_)=>monitor.Start();Closed+=(_,_)=>monitor.Stop();
         UpdateSelection();
@@ -101,7 +103,8 @@ internal sealed class PointPickerWindow : Window
         if(IsStale)return;
         var index=PointSelector.SelectedItem is PointChoice choice ? choice.Index : -1;
         Preview.SetSelection(index,-1);UseButton.IsEnabled=index>=0;
-        SetStatus(index>=0 ? $"{index} numaralı nokta seçildi. X/Y girişlerini değiştirmek için ayrıca düzenleyin." : "Bir nokta seçin.");
+        var marked=PointSelector.SelectedItem is PointChoice selected && selected.Marked;
+        SetStatus(index>=0 ? $"{index} numaralı nokta seçildi. "+(marked ? "Bu köşe işaretli. " : "Bu köşede işaret yok. ")+"X/Y girişlerini değiştirmek için ayrıca düzenleyin." : "Bir nokta seçin.");
     }
     internal void CheckCurrent()
     {
@@ -120,5 +123,5 @@ internal sealed class PointPickerWindow : Window
         { SetStatus("Önce bir nokta seçin.");return; }
         SelectedPointIndex=choice.Index;DialogResult=true;
     }
-    private sealed record PointChoice(int Index,string Label);
+    private sealed record PointChoice(int Index,string Label,bool Marked);
 }

@@ -9867,6 +9867,31 @@ internal static class DesktopVerification
                 "Point picker disables selection when its source becomes stale",checks);
         }
         finally { picker.Close(); }
+        var closed=new PatternPiece { Closed=true,Points=[new(0,0),new(20,0),new(0,20),new(0,0)],
+            Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[closed] });studio.Select(closed.Id);
+        var markedBefore=studio.Document.Clone();var markedSource=studio.Selected!;
+        picker=new PointPickerWindow(studio,studio,markedSource,()=>markedSource.Id,0);
+        try
+        {
+            string Label(int index)
+            {
+                var item=picker.PointSelector.Items[index];
+                return (string)item.GetType().GetProperty("Label")!.GetValue(item)!;
+            }
+            Check(Label(0).Contains("işaretli köşe") && !Label(1).Contains("işaretli köşe") &&
+                Label(3).Contains("kapanış noktası") && Label(3).Contains("işaretli köşe") &&
+                picker.PickStatus.Text.Contains("işaretli") && AutomationProperties.GetName(picker.PickStatus)==picker.PickStatus.Text,
+                "Point picker identifies a marked vertex and its repeated closing alias in the list and accessible status",checks);
+            picker.PointSelector.SelectedIndex=1;
+            Check(picker.PickStatus.Text.Contains("işaret yok") && DocumentSession.ContentEquals(markedBefore,studio.Document),
+                "Point picker identifies an unmarked vertex without editing the project",checks);
+            picker.PointSelector.SelectedIndex=3;
+            Check(picker.PickStatus.Text.Contains("işaretli"),"Repeated closing alias reports the first vertex marker",checks);
+            studio.Document.Pieces[0].Notches![0].Position=new Point2(1,1);picker.CheckCurrent();
+            Check(picker.IsStale && !picker.UseButton.IsEnabled,"Point picker rejects a changed marker snapshot",checks);
+        }
+        finally { picker.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
     private static void VerifyGradePointPicker(MainWindow studio,string reportPath,List<string> checks)
