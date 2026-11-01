@@ -53,7 +53,7 @@ public sealed class SeamEdgeComparisonTests
     {
         double signed = negative ? -1 : 1;
         double target = Math.ScaleB(negative ? 1 : -1, -54);
-        var comparison = new SeamEdgeComparison(0, 1, signed, 1);
+        var comparison = new SeamEdgeComparison(negative ? 1 : 0, negative ? 0 : 1, signed, 1);
         var assessment = ContourMeasurement.AssessEase(comparison, target, 1);
         // The displayed subtraction rounds to ±1, but the exact difference
         // between the represented values is 1 + 2^-54, outside the tolerance.
@@ -61,5 +61,20 @@ public sealed class SeamEdgeComparisonTests
         Assert.False(assessment.WithinTolerance);
         Assert.True(ContourMeasurement.AssessEase(comparison, target, Math.BitIncrement(1)).WithinTolerance);
         Assert.True(ContourMeasurement.AssessEase(comparison, 0, 1).WithinTolerance);
+    }
+
+    [Fact]
+    public void EaseVerdictDoesNotLoseShortMeasuredLengthInDisplayedDifference()
+    {
+        var first = new ContourPath([new(0,0),new(0.000000011,0)], false, 0, 1);
+        var second = new ContourPath([new(-100_000_000,0),new(100_000_000,0)], false, 0, 1);
+        var comparison = ContourMeasurement.ComparePaths(first, second);
+        Assert.Equal(200_000_000, comparison.SignedDifference);
+        var assessment = ContourMeasurement.AssessEase(comparison, 200_000_000, 0);
+        Assert.Equal(0, assessment.Deviation);
+        Assert.False(assessment.WithinTolerance);
+        Assert.True(ContourMeasurement.AssessEase(comparison, 200_000_000, 0.000000011).WithinTolerance);
+        var inconsistent = comparison with { SignedDifference = 0 };
+        Assert.Throws<ArgumentException>(() => ContourMeasurement.AssessEase(inconsistent, 0, 0));
     }
 }

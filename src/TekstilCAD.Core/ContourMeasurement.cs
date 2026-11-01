@@ -72,13 +72,20 @@ public static class ContourMeasurement
         return new(a, b, difference, Math.Abs(difference));
     }
 
-    /// <summary>Compares the represented signed target and measured difference
+    /// <summary>Compares the represented measured lengths and signed target
     /// against a nonnegative tolerance. Deviation is a rounded display value;
-    /// the tolerance decision uses the exact values of its binary64 inputs.</summary>
+    /// the verdict uses exact arithmetic on those binary64 inputs, not exact
+    /// geometric lengths.</summary>
     public static SeamEaseAssessment AssessEase(SeamEdgeComparison comparison, double expectedDifference, double tolerance)
     {
         ArgumentNullException.ThrowIfNull(comparison);
+        if (!double.IsFinite(comparison.FirstLength) || comparison.FirstLength < 0 ||
+            !double.IsFinite(comparison.SecondLength) || comparison.SecondLength < 0)
+            throw new ArgumentOutOfRangeException(nameof(comparison));
         if (!double.IsFinite(comparison.SignedDifference)) throw new ArgumentOutOfRangeException(nameof(comparison));
+        if (comparison.SignedDifference != comparison.SecondLength - comparison.FirstLength ||
+            comparison.AbsoluteDifference != Math.Abs(comparison.SignedDifference))
+            throw new ArgumentException("Ölçülen uzunluklar ile fark birbiriyle uyuşmuyor.", nameof(comparison));
         if (!double.IsFinite(expectedDifference)) throw new ArgumentOutOfRangeException(nameof(expectedDifference));
         if (!double.IsFinite(tolerance) || tolerance < 0) throw new ArgumentOutOfRangeException(nameof(tolerance));
         var deviation = comparison.SignedDifference - expectedDifference;
@@ -92,9 +99,9 @@ public static class ContourMeasurement
             var result = mantissa << (exponent == 0 ? 0 : exponent - 1);
             return bits < 0 ? -result : result;
         }
-        // Compare the represented values before the subtraction rounds to a
-        // double; e.g. 1 - (-2^-54) rounds to 1 but is strictly greater than 1.
-        bool within = BigInteger.Abs(Units(comparison.SignedDifference) - Units(expectedDifference)) <= Units(tolerance);
+        // Compare the represented lengths directly: subtracting them into the
+        // displayed difference first may erase a short first length entirely.
+        bool within = BigInteger.Abs(Units(comparison.SecondLength) - Units(comparison.FirstLength) - Units(expectedDifference)) <= Units(tolerance);
         return new(expectedDifference, tolerance, deviation, within);
     }
 
