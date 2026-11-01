@@ -5804,6 +5804,29 @@ internal static class DesktopVerification
             mixedStatus.Text.Contains("Proje kaydedildi",StringComparison.Ordinal) && mixedStatus.Text.Contains("eski serileme kuralı",StringComparison.Ordinal) &&
             mixedStatus.Text.Contains(second.Id.ToString("D"),StringComparison.Ordinal) && !mixedStatus.Text.Contains(first.Id.ToString("D"),StringComparison.Ordinal),
             "Saving mixed property drafts identifies the stale rule and persists both pieces",checks);
+        var marked=new PatternPiece { Name="İşaretli",Points=[new(0,0),new(10,0),new(10,10)],
+            Grainline=new Grainline { Start=new(1,1),End=new(1,5) },
+            Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) }] };
+        var markedRule=new GradingRuleSet { SourcePieceId=marked.Id,SourceClosed=true,SourcePoints=[..marked.Points],Deltas=[new(1,0),new(1,0),new(1,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule] });studio.Select(marked.Id);
+        var markedBefore=studio.Document.Clone();x.Text="5";y.Text="3";
+        Invoke(studio,"ApplyPropertyDrafts",new Guid[]{marked.Id});
+        var moved=studio.Document.Pieces.Single();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        Check(moved.Points[1]==new Point2(15,3) && moved.Notches?.Single().Position==moved.Points[1] &&
+              moved.Grainline?.Start==new Point2(6,4) && moved.Grainline?.End==new Point2(6,8) &&
+              studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(moved.Points),
+              "Property position translates marks, grainline and matching grading source together",checks);
+        var markedAfter=studio.Document.Clone();
+        Check(session.Undo() && DocumentSession.ContentEquals(markedBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedAfter,studio.Document),
+              "Marked property translation restores geometry, marks, grain and rules on undo and redo",checks);
+        var far=new PatternPiece { Name="Hassas",Points=[new(0,0),new(0.000000000001,0),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[marked,far] });studio.Select(marked.Id);x.Text="5";
+        studio.Select(far.Id);x.Text="50000000";
+        var failedBefore=studio.Document.Clone();var undoBefore=session.UndoCount;Exception? failure=null;
+        try { Invoke(studio,"ApplyPropertyDrafts",new Guid[]{marked.Id,far.Id}); } catch(Exception ex) { failure=ex; }
+        Check(failure is InvalidDataException && DocumentSession.ContentEquals(failedBefore,studio.Document) && session.UndoCount==undoBefore,
+              "An unsafe marked position rejects the entire draft batch and preserves history",checks);
         Check(!studio.IsVisible,"Property draft verification remains hidden",checks);
     }
     private static void VerifyDraftRemovalConfirmationRace(MainWindow studio,List<string> checks)

@@ -1212,18 +1212,18 @@ public class MainWindow : Window
     {
         // Prepare the entire batch before changing any piece. A precision or
         // bounds failure must leave every property draft applicable/reviewable.
-        var prepared=new List<(PatternPiece Piece, string Name, List<Point2>? Points, Grainline? Grainline, GradingRuleSet? Rule, GradingRuleSet? MovedRule)>(changes.Count);
+        var prepared=new List<(PatternPiece Piece, string Name, List<Point2>? Points, List<NotchMark>? Notches, Grainline? Grainline, GradingRuleSet? Rule, GradingRuleSet? MovedRule)>(changes.Count);
         foreach(var change in changes)
         {
             var piece=document.Pieces.First(p=>p.Id==change.Id);var bounds=Geometry.Bounds(piece.Points);
             var dx=change.X-bounds.MinX;var dy=change.Y-bounds.MinY;
-            if((dx!=0 || dy!=0) && piece.Notches is { Count:>0 })
-                throw new InvalidDataException("İşaretli parçayı taşımadan önce köşe işaretlerini kaldırın. Taslak korunuyor.");
             List<Point2>? translated;
             Grainline? translatedGrain;
+            List<NotchMark>? translatedNotches=null;
             try
             {
-                translated=dx!=0 || dy!=0 ? Geometry.Translate(piece.Points,dx,dy) : null;
+                translated=null;
+                if(dx!=0 || dy!=0) (translated,translatedNotches)=MarkedPieceTranslation.Translate(piece,dx,dy);
                 translatedGrain=translated is null ? piece.Grainline?.Clone()
                     : GrainlineTransform.Translate(piece.Grainline,piece.Points[0],translated[0],dx,dy);
             }
@@ -1239,11 +1239,11 @@ public class MainWindow : Window
             }
             var rule=translated is null ? null : document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
             var movedRule=rule?.TranslatedFor(piece,translated!,dx,dy);
-            prepared.Add((piece,change.Name,translated,translatedGrain,rule,movedRule));
+            prepared.Add((piece,change.Name,translated,translatedNotches,translatedGrain,rule,movedRule));
         }
         foreach(var item in prepared)
         {
-            if(item.Points is not null) { item.Piece.Points=item.Points;item.Piece.Grainline=item.Grainline; }
+            if(item.Points is not null) { item.Piece.Points=item.Points;item.Piece.Notches=item.Notches;item.Piece.Grainline=item.Grainline; }
             if(item.MovedRule is not null)document.GradingRules[document.GradingRules.IndexOf(item.Rule!)]=item.MovedRule;
             item.Piece.Name=item.Name;
         }
