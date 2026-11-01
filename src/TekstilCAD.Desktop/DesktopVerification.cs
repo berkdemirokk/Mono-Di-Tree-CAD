@@ -516,6 +516,7 @@ internal static class DesktopVerification
 
             VerifyReverseOpenPath(studio,checks);
             VerifyReverseClosedContour(studio,checks);
+            VerifyVertexSourceReplacement(studio,checks);
             VerifyReverseOpenPathGradingReview(studio,checks);
             VerifyNestingErrorIdentity(checks);
             VerifyNestingErrorNavigation(studio,reportPath,checks);
@@ -8261,6 +8262,32 @@ internal static class DesktopVerification
         }
         canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument { Name="Doğrulama" });studio.SetTool("Seç");
         SynchronizationContext.SetSynchronizationContext(previousContext);
+    }
+
+    private static void VerifyVertexSourceReplacement(MainWindow studio,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Points=[new(0,0),new(20,0),new(20,10),new(0,10)],
+            Metadata=new PieceMetadata { Quantity=2 },Grainline=new Grainline { Start=new(5,2),End=new(5,8) },
+            Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var tools=new TextileToolsWindow(studio);var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();Task? pending=null;
+        try
+        {
+            var detached=studio.Selected!;var before=studio.Document.Clone();var undo=session.UndoCount;
+            tools.BeforeVertexMoveForVerification=()=> { reached.Set();release.Wait(); };
+            pending=tools.ReverseClosedContourAsync();PumpUntil(()=>reached.IsSet);
+            studio.Document.Pieces[0]=detached.Clone();
+            detached.Metadata!.Quantity=9;detached.Grainline!.Start=new Point2(9,2);
+            detached.Notches![0].Position=new Point2(99,99);
+            release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo &&
+                result.Text.Contains("uygulanmadı",StringComparison.OrdinalIgnoreCase),
+                "Vertex worker rejects a detached selected source after an equivalent live replacement",checks);
+        }
+        finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); } tools.Close();studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyReverseClosedContour(MainWindow studio,List<string> checks)

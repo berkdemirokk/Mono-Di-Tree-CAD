@@ -972,6 +972,7 @@ public sealed class TextileToolsWindow : Window
             if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,document) ||
                !DocumentSession.ContentEquals(workspace.Document,original) || workspace.SelectedId!=workspaceSelection ||
                source.SelectedItem is not PatternPiece selectedNow || selectedNow.Id!=sourceId ||
+               !ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selectedNow) ||
                vertexIndexInput?.Text!=inputIndex || vertexXInput?.Text!=inputX || vertexYInput?.Text!=inputY || notchFractionInput?.Text!=inputFraction || notchDepthInput?.Text!=inputDepth || notchWidthInput?.Text!=inputWidth || edgeDistanceInput?.Text!=inputDistance || edgePercentageInput?.Text!=inputPercentage)
                 throw new InvalidOperationException("Proje, seçim veya bekleyen çalışma değişti. Nokta düzenlemesi uygulanmadı; güncel durumu kontrol edin.");
             token.ThrowIfCancellationRequested();
