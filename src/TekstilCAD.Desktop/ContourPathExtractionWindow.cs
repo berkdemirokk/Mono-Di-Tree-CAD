@@ -16,6 +16,7 @@ internal sealed class ContourPathExtractionWindow : Window
     private readonly Func<Guid?> selectedSource;
     private readonly Guid sourceId;
     private readonly Func<PatternPiece,GradingRuleSet?,bool>? hasDraft;
+    private readonly CheckBox reverse=new() { Content="Seçilen kenarın yönünü ters çevir",Margin=new Thickness(0,8,0,4) };
     private readonly CheckBox copyRules=new() { Content="Kayıtlı serileme artışlarını açık kenara aktar",Margin=new Thickness(0,8,0,8) };
     private readonly ProjectDocument openingDocument,openingSnapshot;
     private readonly Guid? openingSelection;
@@ -32,6 +33,7 @@ internal sealed class ContourPathExtractionWindow : Window
     private GradingRuleSet? proposalRule;
     private bool closed;
     internal CheckBox CopyRulesForVerification=>copyRules;
+    internal CheckBox ReverseForVerification=>reverse;
     internal TextBox StartForVerification=>start;
     internal TextBox EndForVerification=>end;
     internal Button ApplyForVerification=>apply;
@@ -53,8 +55,10 @@ internal sealed class ContourPathExtractionWindow : Window
         buttons.Children.Add(calculate);buttons.Children.Add(apply);var close=new Button { Content="Kapat / iptal et",Padding=new Thickness(12,7,12,7) };buttons.Children.Add(close);
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
         body.Children.Add(new TextBlock { Text="Konturdan açık kenar çıkar",FontSize=20,FontWeight=FontWeights.SemiBold });
-        body.Children.Add(new TextBlock { Text="Başlangıç ve bitiş köşelerini seçin. Kenar, saklanan nokta sırasını ileri izler; bitiş indeksi küçükse kapanıştan geçer. Başlangıç ve bitişi değiştirmek karşı taraftaki aralığı seçer; çıkardığınız kenarın yönünü sonradan ters çevirebilirsiniz. Tekrarlı kapanış son indeksi ilk köşeyle aynıdır. Kaynak parça değişmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
+        body.Children.Add(new TextBlock { Text="Başlangıç ve bitiş köşelerini seçin. Kenar, saklanan nokta sırasını ileri izler; bitiş indeksi küçükse kapanıştan geçer. Başlangıç ve bitişi değiştirmek karşı taraftaki aralığı seçer; aynı aralığın yönünü ters çevirmek için aşağıdaki seçeneği kullanın. Tekrarlı kapanış son indeksi ilk köşeyle aynıdır. Kaynak parça değişmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
         body.Children.Add(new TextBlock { Text="Yalnız seçilen aralıktaki görsel köşe işaretleri kopyalanır; diğerleri kaynakta kalır. Serileme kuralı yalnız açıkça seçilirse ve kaynakla tam eşleşirse aktarılır. Yeni parçada üretim bilgisi, iplik yönü veya kaynak ilişkisi bulunmaz. İşaretler fiziksel çentik değildir; sonucu üretim öncesi inceleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
+        AutomationProperties.SetName(reverse,"Seçilen açık kenarın yönünü ters çevir");
+        AutomationProperties.SetHelpText(reverse,"Aynı kontur aralığının nokta sırası, görsel işaretleri ve seçilirse serileme artışları birlikte ters çevrilir.");body.Children.Add(reverse);
         AutomationProperties.SetHelpText(copyRules,"Yalnız kayıtlı kural kaynakla bitçe eşleşiyorsa ve uygulanmamış serileme taslağı yoksa seçilen aralığın artışları kopyalanır.");body.Children.Add(copyRules);
         body.Children.Add(new TextBlock { Text="Kaynak: "+CadCanvas.CanvasPieceLabel(source.Name)+"\nKimlik: "+sourceId.ToString("D"),TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
         void AddPoint(string title,TextBox input,string automationName)
@@ -72,7 +76,7 @@ internal sealed class ContourPathExtractionWindow : Window
         }
         AddPoint("Başlangıç indeksi",start,"Kenar başlangıç noktası indeksi");AddPoint("Bitiş indeksi",end,"Kenar bitiş noktası indeksi");
         body.Children.Add(preview);AutomationProperties.SetName(status,"Kenar çıkarma durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
-        start.TextChanged+=(_,_)=>Invalidate();end.TextChanged+=(_,_)=>Invalidate();copyRules.Checked+=(_,_)=>Invalidate();copyRules.Unchecked+=(_,_)=>Invalidate();calculate.Click+=async (_,_)=>await CalculateAsync();apply.Click+=(_,_)=>Apply();close.Click+=(_,_)=>Close();
+        start.TextChanged+=(_,_)=>Invalidate();end.TextChanged+=(_,_)=>Invalidate();reverse.Checked+=(_,_)=>Invalidate();reverse.Unchecked+=(_,_)=>Invalidate();copyRules.Checked+=(_,_)=>Invalidate();copyRules.Unchecked+=(_,_)=>Invalidate();calculate.Click+=async (_,_)=>await CalculateAsync();apply.Click+=(_,_)=>Apply();close.Click+=(_,_)=>Close();
         Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
     private void SetStatus(string text) { status.Text=text;AutomationProperties.SetName(status,text);if(UIElementAutomationPeer.CreatePeerForElement(status) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged); }
@@ -90,13 +94,13 @@ internal sealed class ContourPathExtractionWindow : Window
         { SetStatus("Geçerli iki tam sayı indeksi girin.");return; }
         var original=workspace.Document;var copy=original.Clone();var selection=workspace.SelectedId;var source=copy.Pieces.FirstOrDefault(p=>p.Id==sourceId);
         if(source is null) { SetStatus("Kaynak parça bulunamadı.");return; }
-        var carry=copyRules.IsChecked==true;var rule=copy.GradingRules.FirstOrDefault(r=>r.SourcePieceId==sourceId);
+        var reverseOutput=reverse.IsChecked==true;var carry=copyRules.IsChecked==true;var rule=copy.GradingRules.FirstOrDefault(r=>r.SourcePieceId==sourceId);
         if(carry && (rule is null || hasDraft is null || hasDraft(source,rule))) { SetStatus("Kayıtlı kural ve kaynakla eşleşen temiz taslak gereklidir; önce taslağı kontrol edin.");return; }
         using var tokenSource=new CancellationTokenSource();cancellation=tokenSource;calculate.IsEnabled=false;SetStatus("Kenar doğrulanıyor; kapatmak hesabı iptal eder.");
         try
         {
             var calculated=await Task.Run(()=> { BeforeExtractionForVerification?.Invoke();tokenSource.Token.ThrowIfCancellationRequested();
-                var extracted=ContourPathExtraction.Extract(source,a,b,tokenSource.Token);
+                var extracted=ContourPathExtraction.Extract(source,a,b,reverseOutput,tokenSource.Token);
                 var mapped=carry ? ContourPathExtraction.ExtractGrading(source,rule!,extracted,tokenSource.Token) : null;
                 if(carry && mapped is null)throw new InvalidOperationException("Kayıtlı serileme kuralı kaynak veya kenarla bitçe eşleşmiyor.");
                 var candidate=copy.Clone();candidate.Pieces.Add(extracted.Piece);if(mapped is not null)candidate.GradingRules.Add(mapped);
@@ -106,7 +110,7 @@ internal sealed class ContourPathExtractionWindow : Window
             if(!Current(original,copy,selection) || (carry && hasDraft!(source,rule))) { SetStatus("Kaynak veya proje değişti; önizlemeyi yenileyin.");return; }
             var display=new PointMeasurePreview(result.Piece,showMarkedVertices:true);display.SetSelection(0,result.Piece.Points.Count-1);preview.Content=display;
             document=original;snapshot=copy;selected=selection;proposal=result;proposalRule=calculated.mapped;apply.IsEnabled=true;
-            SetStatus($"Önizleme: {result.StartIndex} → {result.EndIndex}; {(result.CrossesClosure ? "kapanıştan geçer" : "kapanıştan geçmez")}. {result.Piece.Points.Count} nokta, {result.Piece.Notches?.Count ?? 0} görsel işaret; kaynakta kalan {result.OmittedMarks} işaret sonuca aktarılmaz. "+
+            SetStatus($"Önizleme: {result.StartIndex} → {result.EndIndex}; {(result.CrossesClosure ? "kapanıştan geçer" : "kapanıştan geçmez")}. {result.Piece.Points.Count} nokta, {result.Piece.Notches?.Count ?? 0} görsel işaret; kaynakta kalan {result.OmittedMarks} işaret sonuca aktarılmaz. "+(result.Reversed ? "Kenar yönü ters çevrildi. " : "")+
                 (display.MarkersSuppressed ? "500'den fazla işaret önizlemede gösterilmiyor. " : "")+(carry ? "Kayıtlı artışlar açık kenara eşlendi; kullanım öncesi kontrol edin. " : "Yeni parçada serileme kuralı yoktur. ")+"Yeni parçada üretim bilgisi yoktur.");
         }
         catch(OperationCanceledException) { if(!closed)SetStatus("İşlem iptal edildi; proje değişmedi."); }

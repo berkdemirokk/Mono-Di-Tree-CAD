@@ -2,10 +2,12 @@ using TekstilCAD.Core;
 namespace TekstilCAD.Patterns;
 
 /// <summary>Independent open path extracted in the stored order from a closed contour.</summary>
-public sealed record ContourPathExtractionResult(PatternPiece Piece,int StartIndex,int EndIndex,int OmittedMarks,bool CrossesClosure);
+public sealed record ContourPathExtractionResult(PatternPiece Piece,int StartIndex,int EndIndex,int OmittedMarks,bool CrossesClosure,bool Reversed=false);
 public static class ContourPathExtraction
 {
     public static ContourPathExtractionResult Extract(PatternPiece source,int start,int end,CancellationToken token=default)
+        => Extract(source,start,end,false,token);
+    public static ContourPathExtractionResult Extract(PatternPiece source,int start,int end,bool reverse,CancellationToken token=default)
     {
         ArgumentNullException.ThrowIfNull(source);token.ThrowIfCancellationRequested();
         if(source.Id==Guid.Empty || !source.Closed || source.Points is null || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints)
@@ -22,7 +24,8 @@ public static class ContourPathExtraction
         if(start==end)throw new ArgumentException("Başlangıç ve bitiş farklı köşeler olmalıdır.");
         var count=end>start ? end-start+1 : logical-start+end+1;
         var path=new List<Point2>(count);var map=new Dictionary<int,int>(count);
-        for(var i=0;i<count;i++) { token.ThrowIfCancellationRequested();var original=(start+i)%logical;map.Add(original,i);path.Add(points[original]); }
+        for(var i=0;i<count;i++) { token.ThrowIfCancellationRequested();var original=(start+i)%logical;map.Add(original,reverse ? count-1-i : i);path.Add(points[original]); }
+        if(reverse)path.Reverse();
         LargeOpenPathValidator.Validate(path,token);
         var marks=new List<NotchMark>();
         if(source.Notches is not null)foreach(var mark in source.Notches)
@@ -32,7 +35,7 @@ public static class ContourPathExtraction
         }
         token.ThrowIfCancellationRequested();
         var result=new PatternPiece { Name="Kontur kenarı · "+source.Id.ToString("N"),Closed=false,Points=path,Notches=marks.Count==0 ? null : marks };
-        return new(result,start,end,(source.Notches?.Count ?? 0)-marks.Count,end<start);
+        return new(result,start,end,(source.Notches?.Count ?? 0)-marks.Count,end<start,reverse);
     }
     /// <summary>Copy a bit-matched saved rule to exactly the extracted interval.</summary>
     public static GradingRuleSet? ExtractGrading(PatternPiece source,GradingRuleSet rule,ContourPathExtractionResult extraction,CancellationToken token=default)
@@ -58,7 +61,8 @@ public static class ContourPathExtraction
         for(var i=0;i<count;i++)
         {
             if((i & 255)==0)token.ThrowIfCancellationRequested();
-            var index=(extraction.StartIndex+i)%logical;
+            var offset=extraction.Reversed ? count-1-i : i;
+            var index=(extraction.StartIndex+offset)%logical;
             if(!Bits(source.Points[index],result.Points[i]))return null;
             deltas.Add(rule.Deltas[index]);
         }

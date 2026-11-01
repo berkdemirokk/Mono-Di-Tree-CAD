@@ -76,4 +76,30 @@ public class ContourPathExtractionTests
         Assert.Throws<OperationCanceledException>(()=>ContourPathExtraction.ExtractGrading(source,rule,result,cancellation.Token));
     }
 
+    [Theory]
+    [InlineData(false)] [InlineData(true)]
+    public void ReversingChosenIntervalPreservesMarksAndReversesSavedRule(bool repeated)
+    {
+        var source=Source(repeated);var before=source.Clone();
+        var deltas=new List<Point2> { new(0,1),new(1,2),new(2,3),new(3,4) };if(repeated)deltas.Add(deltas[0]);
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=deltas };
+        var result=ContourPathExtraction.Extract(source,0,2,true);
+        Assert.True(result.Reversed);Assert.False(result.CrossesClosure);
+        Assert.Equal(new[] { source.Points[2],source.Points[1],source.Points[0] },result.Piece.Points);
+        Assert.Equal(2,result.Piece.Notches!.Single(mark=>mark.Position==source.Points[0]).VertexIndex);
+        Assert.Equal(0,result.Piece.Notches.Single(mark=>mark.Position==source.Points[2]).VertexIndex);
+        var mapped=ContourPathExtraction.ExtractGrading(source,rule,result)!;
+        Assert.Equal(new[] { deltas[2],deltas[1],deltas[0] },mapped.Deltas);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[source] },new ProjectDocument { Pieces=[before] }));
+        result.Piece.Points[0]=new(55,55);Assert.Null(ContourPathExtraction.ExtractGrading(source,rule,result));
+    }
+    [Fact]
+    public void ReversedWrappingIntervalRetainsCanonicalClosureOrder()
+    {
+        var source=Source(true);var result=ContourPathExtraction.Extract(source,3,1,true);
+        Assert.True(result.Reversed && result.CrossesClosure);
+        Assert.Equal(new[] { source.Points[1],source.Points[0],source.Points[3] },result.Piece.Points);
+        Assert.Equal(1,result.Piece.Notches!.Single().VertexIndex);
+    }
+
 }

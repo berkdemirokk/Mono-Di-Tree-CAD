@@ -128,7 +128,7 @@ internal static class DesktopVerification
         var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         var source=new PatternPiece { Name="Kalıp",Points=[new(0,0),new(10,0),new(10,10),new(0,10),new(0,0)],
             Metadata=new PieceMetadata { Quantity=2 },Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) },new NotchMark { VertexIndex=2,Position=new(10,10) }] };
-        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=Enumerable.Repeat(new Point2(1,2),source.Points.Count).ToList() };
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,1),new(1,2),new(2,3),new(3,4),new(0,1)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;var before=studio.Document.Clone();
         var window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id);
@@ -150,15 +150,18 @@ internal static class DesktopVerification
         window=new ContourPathExtractionWindow(studio,studio,studio.Selected!,()=>source.Id,(_,_)=>dirtyDraft);
         try
         {
-            window.CopyRulesForVerification.IsChecked=true;window.StartForVerification.Text="3";window.EndForVerification.Text="1";
+            window.CopyRulesForVerification.IsChecked=true;window.ReverseForVerification.IsChecked=true;window.StartForVerification.Text="3";window.EndForVerification.Text="1";
             var task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
-            Check(window.ApplyForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Contour rule mapping previews without changing the source",checks);
+            Check(window.ApplyForVerification.IsEnabled && window.StatusForVerification.Contains("yönü ters") && DocumentSession.ContentEquals(before,studio.Document),"Reversed contour rule mapping previews without changing the source",checks);
+            window.ReverseForVerification.IsChecked=false;
+            Check(!window.ApplyForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),"Changing extraction direction invalidates preview",checks);
+            window.ReverseForVerification.IsChecked=true;task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             dirtyDraft=true;window.CommitForVerification();
             Check(DocumentSession.ContentEquals(before,studio.Document) && window.StatusForVerification.Contains("taslağı değişti"),"Contour rule mapping rejects draft changes after preview",checks);
             dirtyDraft=false;task=window.CalculateForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();window.CommitForVerification();
             var after=studio.Document.Clone();var extracted=after.Pieces.Single(p=>p.Id!=source.Id);
             var copied=after.GradingRules.Single(r=>r.SourcePieceId==extracted.Id);
-            Check(after.GradingRules.Count==2 && copied.SourcePoints.SequenceEqual(extracted.Points) && copied.Deltas.SequenceEqual(new[] { rule.Deltas[3],rule.Deltas[0],rule.Deltas[1] }) &&
+            Check(after.GradingRules.Count==2 && copied.SourcePoints.SequenceEqual(extracted.Points) && extracted.Points.SequenceEqual(new[] { source.Points[1],source.Points[0],source.Points[3] }) && copied.Deltas.SequenceEqual(new[] { rule.Deltas[1],rule.Deltas[0],rule.Deltas[3] }) &&
                 DocumentSession.ContentEquals(before,new ProjectDocument { Pieces=[after.Pieces[0]],GradingRules=[after.GradingRules.Single(r=>r.SourcePieceId==source.Id)] }),
                 "Contour interval carries saved rule across closure while retaining source",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
