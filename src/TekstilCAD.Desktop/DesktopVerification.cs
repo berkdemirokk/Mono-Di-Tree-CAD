@@ -26,6 +26,30 @@ internal static class DesktopVerification
     [return:MarshalAs(UnmanagedType.Bool)]
     private static extern bool CreateHardLink(string newFileName,string existingFileName,IntPtr securityAttributes);
     private const BindingFlags PrivateInstance = BindingFlags.NonPublic | BindingFlags.Instance;
+    private static bool OpenPathPreviewRunsDownward(Window window)
+    {
+        var preview=(FrameworkElement)window.GetType().GetField("preview",PrivateInstance)!.GetValue(window)!;
+        return PreviewEndDirection(preview,Colors.DarkBlue,downward:true);
+    }
+    private static bool PreviewEndDirection(FrameworkElement preview,Color color,bool downward)
+    {
+        preview.Measure(new Size(300,200));preview.Arrange(new Rect(0,0,300,200));preview.UpdateLayout();
+        var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(preview);
+        static IEnumerable<GeometryDrawing> Drawings(Drawing? drawing)
+        {
+            if(drawing is GeometryDrawing geometry)yield return geometry;
+            else if(drawing is DrawingGroup group)
+                foreach(var child in group.Children)foreach(var item in Drawings(child))yield return item;
+        }
+        var stroke=Drawings(VisualTreeHelper.GetDrawing(preview)).Single(d=>d.Pen?.Brush is SolidColorBrush b && b.Color==color);
+        var figure=stroke.Geometry.GetFlattenedPathGeometry().Figures.Single();var end=figure.StartPoint;
+        foreach(var segment in figure.Segments)
+        {
+            if(segment is LineSegment line)end=line.Point;
+            else if(segment is PolyLineSegment poly && poly.Points.Count>0)end=poly.Points[^1];
+        }
+        return downward ? end.Y>figure.StartPoint.Y : end.Y<figure.StartPoint.Y;
+    }
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
@@ -40,6 +64,7 @@ internal static class DesktopVerification
             Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("Kapanış kenarı") &&
                 DocumentSession.ContentEquals(initial,studio.Document) && session.UndoCount==0,
                 "Open path closure preview leaves the project unchanged and reports the closing edge",checks);
+            Check(OpenPathPreviewRunsDownward(window),"Closure preview shows increasing Y downward like the canvas",checks);
             window.ApplyForVerification();
             Check(studio.Document.Pieces.Count==2 && studio.Document.Pieces[1].Closed &&
                 studio.Document.Pieces[1].Id!=a.Id && studio.Document.Pieces[1].Points.SequenceEqual(a.Points) &&
@@ -65,7 +90,7 @@ internal static class DesktopVerification
     private static void VerifyOpenPathJoin(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Ön",Closed=false,Points=[new(0,0),new(10,0)] };
-        var b=new PatternPiece { Name="Arka",Closed=false,Points=[new(10.1,0),new(20,0)] };
+        var b=new PatternPiece { Name="Arka",Closed=false,Points=[new(10.1,0),new(20,10)] };
         var other=new PatternPiece { Name="Bilgili",Points=[new(0,10),new(10,10),new(10,20)],Metadata=new PieceMetadata { Size="M" } };
         var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(1,0)] };
         studio.LoadDocument(new ProjectDocument { Name="Birleştirme doğrulaması",Pieces=[a,b,other],GradingRules=[rule] });
@@ -83,8 +108,9 @@ internal static class DesktopVerification
             Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("Kırmızı çizgi") &&
                 DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
                 "Open path preview describes the bridge without changing the project",checks);
+            Check(OpenPathPreviewRunsDownward(window),"Join preview shows increasing Y downward like the canvas",checks);
             window.ApplyForVerification();
-            Check(studio.Document.Pieces.Count==4 && studio.Document.Pieces[3].Points.SequenceEqual(new[] { new Point2(0,0),new(10,0),new(10.1,0),new(20,0) }) &&
+            Check(studio.Document.Pieces.Count==4 && studio.Document.Pieces[3].Points.SequenceEqual(new[] { new Point2(0,0),new(10,0),new(10.1,0),new(20,10) }) &&
                 studio.Document.Pieces.Take(3).Select(p=>p.Id).SequenceEqual(before.Pieces.Select(p=>p.Id)) &&
                 JsonSerializer.Serialize(studio.Document.Pieces.Take(3))==JsonSerializer.Serialize(before.Pieces) &&
                 JsonSerializer.Serialize(studio.Document.GradingRules)==JsonSerializer.Serialize(before.GradingRules) && session.UndoCount==1,
@@ -1899,6 +1925,8 @@ internal static class DesktopVerification
             var pieceDetail=Descendants<TextBox>(orientationRoot).Single(t=>AutomationProperties.GetName(t)=="İçe alınacak parça geometrisi ve ölçüleri");
             Check(visiblePiece.DisplayedPieceId==previewItems.Single(p=>p.Closed).Id && pieceDetail.Text.Contains("min Y -20 mm",StringComparison.Ordinal),
                 "Reflected geometry is shown in the selected piece view",checks);
+            Check(PreviewEndDirection(visiblePiece,Colors.DeepSkyBlue,downward:false),
+                "Reflected DXF geometry preview uses the same Y-down direction as the canvas",checks);
             orientationPreview.Close();
             var reflectedReview=false;
             studio.ConfirmDxfGrainlineReviewForVerification=i=> {
@@ -4946,6 +4974,7 @@ internal static class DesktopVerification
                 && status.Text.Contains("Yükseklik: 10 mm") && status.Text.Contains("min X 0 mm") && status.Text.Contains("max Y 10 mm")
                 && !status.Text.Contains("Başlangıç:") && status.Text.Contains(closed.Id.ToString("D")) && summary.Text=="Kapalı · 20 × 10 mm",
                 "DXF selected closed piece shows distinct geometry and actual scaled bounds",checks);
+            Check(PreviewEndDirection(view,Colors.DeepSkyBlue,downward:true),"DXF piece preview matches the Y-down drawing canvas",checks);
             var a=new Point2(99999990.125,-99999990.5);var b=new Point2(99999990.25,-99999990.0);
             var distant=new PatternPiece { Name="Uzak açık çizgi",Closed=false,Points=[a,b] };
             var distantStatus=view.ShowPiece(distant);

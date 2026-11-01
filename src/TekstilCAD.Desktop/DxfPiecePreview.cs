@@ -74,7 +74,8 @@ internal sealed class DxfPiecePreview : FrameworkElement
         var bounds=Geometry.Bounds(points);var width=Math.Max(bounds.Width,1e-9);var height=Math.Max(bounds.Height,1e-9);
         var factor=Math.Min((ActualWidth-20)/width,(ActualHeight-20)/height);
         var ox=(ActualWidth-width*factor)/2;var oy=(ActualHeight-height*factor)/2;
-        Point Map(Point2 p)=>new(ox+(p.X-bounds.MinX)*factor,ActualHeight-oy-(p.Y-bounds.MinY)*factor);
+        // The preview must match the CAD canvas, where model Y increases downwards.
+        Point Map(Point2 p)=>new(ox+(p.X-bounds.MinX)*factor,oy+(p.Y-bounds.MinY)*factor);
         var path=new StreamGeometry();using(var context=path.Open())
         {
             context.BeginFigure(Map(points[0]),false,closed);

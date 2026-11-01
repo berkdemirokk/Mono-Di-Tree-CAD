@@ -114,7 +114,8 @@ internal sealed class OpenPathClosureWindow : Window
             var w=maxX-minX;var h=maxY-minY;
             var scale=Math.Min(w>0 ? (ActualWidth-24)/w : double.PositiveInfinity,h>0 ? (ActualHeight-24)/h : double.PositiveInfinity);
             if(!double.IsFinite(scale))return;
-            Point Map(Point2 p)=>new(12+(p.X-minX)*scale,ActualHeight-12-(p.Y-minY)*scale);
+            // Match the CAD canvas: increasing model Y appears lower on screen.
+            Point Map(Point2 p)=>new(12+(p.X-minX)*scale,12+(p.Y-minY)*scale);
             var geometry=new StreamGeometry();using(var context=geometry.Open()) { context.BeginFigure(Map(points[0]),false,false);foreach(var p in points.Skip(1))context.LineTo(Map(p),true,false); }
             geometry.Freeze();dc.DrawGeometry(null,new Pen(Brushes.DarkBlue,1.5),geometry);
             if(points[0]!=points[^1])dc.DrawLine(new Pen(Brushes.Red,3),Map(points[^1]),Map(points[0]));

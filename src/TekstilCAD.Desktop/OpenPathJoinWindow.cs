@@ -146,7 +146,8 @@ internal sealed class OpenPathJoinWindow : Window
             var scale=Math.Min(w>0 ? (ActualWidth-24)/w : double.PositiveInfinity,h>0 ? (ActualHeight-24)/h : double.PositiveInfinity);
             if(!double.IsFinite(scale))return;
             var geometry=new StreamGeometry();
-            Point Map(Point2 p)=>new(12+(p.X-minX)*scale,ActualHeight-12-(p.Y-minY)*scale);
+            // Match the CAD canvas: increasing model Y appears lower on screen.
+            Point Map(Point2 p)=>new(12+(p.X-minX)*scale,12+(p.Y-minY)*scale);
             using(var context=geometry.Open())
             {
                 context.BeginFigure(Map(points[0]),false,false);
