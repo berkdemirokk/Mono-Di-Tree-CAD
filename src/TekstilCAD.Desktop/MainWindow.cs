@@ -1347,6 +1347,36 @@ public class MainWindow : Window
 
     internal sealed record GrainlineEditStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid PieceId);
 
+    internal sealed record PhotoTraceStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid? Selection);
+    internal PhotoTraceStamp? CapturePhotoTrace()
+    {
+        if(!EnsureMainMutationReady() || BlockForIncompleteRecovery() || BlockForDxfImport() || BlockForExport())return null;
+        if(HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim ve alan taslaklarını tamamlayın.");return null; }
+        var current=Document;return new(current,current.Clone(),projectEpoch,SelectedId);
+    }
+    internal string? PhotoTraceProblem(PhotoTraceStamp stamp)
+    {
+        if(windowClosed || recoveryClosing || recoveryRestoreIncomplete || DxfImportRunning || ExportRunning || HasPendingCanvasOrPropertyWork ||
+           projectEpoch!=stamp.Epoch || !ReferenceEquals(Document,stamp.Document) || SelectedId!=stamp.Selection || !DocumentSession.ContentEquals(Document,stamp.Snapshot))
+            return "Proje, seçim veya bekleyen çalışma değişti. Taslak eklenmedi; güncel projeyle yeniden başlayın.";
+        return null;
+    }
+    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points)
+    {
+        if(PhotoTraceProblem(stamp) is { } problem) { SetStatus(problem);return false; }
+        var copied=points.ToList();LargeOpenPathValidator.Validate(copied);
+        var piece=new PatternPiece { Name="Fotoğraftan elle çizilen taslak",Closed=false,Points=copied };
+        var candidate=stamp.Snapshot.Clone();candidate.Pieces.Add(piece.Clone());ProjectStorage.Validate(candidate);
+        if(!CanRetainCurrentUndoSnapshot || !CanRetainUndoSnapshot(candidate))
+            throw new InvalidOperationException("Taslak geri alma kapasitesine sığmıyor; proje değiştirilmedi.");
+        if(PhotoTraceProblem(stamp) is { } changed) { SetStatus(changed);return false; }
+        bool committed=false;
+        try { CommitObserved("Fotoğraftan elle çizilmiş açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());SelectedId=piece.Id; },()=>committed=true); }
+        catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
+        { mainMutationReviewRequired=true;SetStatus("Taslak eklendi ancak görünüm yenilenemedi; projeyi kontrol edin. İşlem geri alınabilir.");return true; }
+        return committed;
+    }
+
     // The window holds only a detached drawing; this stamp must be rechecked
     // immediately before the single document transaction.
     internal GrainlineEditStamp? CaptureGrainlineEdit()

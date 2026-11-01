@@ -12,6 +12,8 @@ internal sealed class ReferencePhotoWindow : Window
 {
     private readonly byte[] data;
     private readonly Image photo=new() { Stretch=Stretch.Uniform,SnapsToDevicePixels=true };
+    private readonly Button traceButton=new() { Content="Fotoğrafta elle taslak çiz…",Padding=new Thickness(10,7,10,7),Margin=new Thickness(0,0,8,4),IsEnabled=false };
+    private PhotoTraceWindow? traceWindow;
     internal Image PhotoForVerification=>photo;
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };
     private bool closed;
@@ -23,8 +25,18 @@ internal sealed class ReferencePhotoWindow : Window
         StudioTheme.Apply(this);Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });
         Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(14) };Content=root;
-        var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
-        close.Click+=(_,_)=>Close();DockPanel.SetDock(close,Dock.Bottom);root.Children.Add(close);
+        var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
+        var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,4) };
+        close.Click+=(_,_)=>Close();actions.Children.Add(traceButton);actions.Children.Add(close);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        AutomationProperties.SetHelpText(traceButton,"Bilinen mesafeyle fotoğraf üzerinde elle açık taslak çizgi oluşturur; otomatik veya doğrulanmış kalıp değildir.");
+        traceButton.Click+=(_,_)=>
+        {
+            if(traceWindow is not null) { traceWindow.Activate();return; }
+            var studio=Owner as MainWindow ?? (Owner as Window)?.Owner as MainWindow;
+            if(studio is null || photo.Source is not BitmapSource bitmap) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
+            var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
+            var window=new PhotoTraceWindow(studio,bitmap,stamp);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+        };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
         var explanation=new TextBlock { Text="Referans yalnız görsel inceleme içindir; ölçü veya kalıp çıkarılmaz. JPEG EXIF yön etiketi uygulanır; diğer yön bilgileri uygulanmayabilir.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
@@ -40,7 +52,7 @@ internal sealed class ReferencePhotoWindow : Window
         {
             var decoded=await Task.Run(()=>ReferencePhotoDecoder.Decode(data));
             if(closed)return;
-            photo.Source=decoded;StatusForVerification.Text="Referans görseli gösteriliyor.";
+            photo.Source=decoded;traceButton.IsEnabled=true;StatusForVerification.Text="Referans görseli gösteriliyor.";
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {

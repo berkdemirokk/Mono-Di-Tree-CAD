@@ -1014,6 +1014,7 @@ internal static class DesktopVerification
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
+            VerifyPhotoTrace(reportPath,checks);
             VerifyArcStartPoint(studio,checks);
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
@@ -9138,6 +9139,67 @@ internal static class DesktopVerification
         foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
 
     }
+    private static void VerifyPhotoTrace(string reportPath,List<string> checks)
+    {
+        var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
+        var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+        var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
+        PhotoTraceWindow? trace=null;
+        try
+        {
+            var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
+            trace=new PhotoTraceWindow(workspace,bitmap,stamp);trace.ConfirmForVerification=_=>false;
+            Render(trace,Path.ChangeExtension(reportPath,".photo-trace-compact.png"),560,480);
+            var root=(FrameworkElement)trace.Content;var canvas=trace.CanvasForVerification;
+            Check(canvas.Focusable && FullyVisible(canvas,root) && FullyVisible(trace.LengthForVerification,root) &&
+                AutomationProperties.GetHelpText(canvas).Contains("otomatik kalıp değildir"),
+                "Photo tracing canvas and calibration input are accessible at minimum size",checks);
+            Check(!canvas.TryMapViewToPixel(new Point(100,10),new Size(200,200),out _) &&
+                canvas.TryMapViewToPixel(new Point(100,100),new Size(200,200),out var center) && Math.Abs(center.X-49.5)<1e-9 && Math.Abs(center.Y-24.5)<1e-9 &&
+                canvas.TryMapPixelToView(center,new Size(200,200),out var roundtrip) && Math.Abs(roundtrip.X-100)<1e-9 && Math.Abs(roundtrip.Y-100)<1e-9,
+                "Photo tracing mapping rejects letterbox and reversibly maps displayed pixel centres",checks);
+            foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })
+                Check(canvas.TryAddPixelPoint(p),"Photo tracing accepts an explicitly selected point",checks);
+            trace.LengthForVerification.Text="100";trace.TryApply();
+            Check(DocumentSession.ContentEquals(initial,workspace.Document) && session.UndoCount==0 && trace.StatusForVerification.Text.Contains("iptal"),
+                "Cancelling photo draft confirmation leaves project and undo unchanged",checks);
+            canvas.ClearPoints();
+            foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,20),new Point(10,20),new Point(20,10) })canvas.TryAddPixelPoint(p);
+            var confirmCalls=0;trace.ConfirmForVerification=_=> { confirmCalls++;return true; };trace.TryApply();
+            Check(confirmCalls==0 && DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("eklenemedi"),
+                "Self-crossing photo trace is rejected before confirmation without changing project",checks);
+            canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })canvas.TryAddPixelPoint(p);
+            trace.ConfirmForVerification=_=>true;trace.TryApply();
+            var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
+            Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(100,100) }) && session.UndoCount==1,
+                "Confirmed manual photo trace adds one scaled open draft",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
+                "Manual photo draft participates in undo and redo",checks);
+            var file=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-trace-"+Guid.NewGuid().ToString("N")+".tcad");
+            try { ProjectStorage.Save(added,file);Check(DocumentSession.ContentEquals(added,ProjectStorage.Load(file)),"Manual photo draft persists as ordinary open geometry",checks); }
+            finally { if(File.Exists(file))File.Delete(file); }
+            trace=null;
+            var stale=workspace.CapturePhotoTrace()!;var staleWindow=new PhotoTraceWindow(workspace,bitmap,stale);
+            try
+            {
+                foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10) })staleWindow.CanvasForVerification.TryAddPixelPoint(p);
+                staleWindow.LengthForVerification.Text="100";
+                staleWindow.ConfirmForVerification=_=> { workspace.Commit("test",()=>workspace.Document.Name="Değişmiş proje");return true; };
+                staleWindow.TryApply();
+                Check(workspace.Document.Name=="Değişmiş proje" && workspace.Document.Pieces.Count==1 && staleWindow.StatusForVerification.Text.Contains("değişti"),
+                    "Project changes during photo trace confirmation prevent the stale draft from being applied",checks);
+            }
+            finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(staleWindow,true);staleWindow.Close(); }
+        }
+        finally
+        {
+            if(trace is not null) { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
+            typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
+        }
+    }
+
+    private static T AssertSingle<T>(IReadOnlyList<T> items) => items.Count==1 ? items[0] : throw new InvalidOperationException("Expected exactly one item.");
+
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
         var before=studio.Document.Clone();
