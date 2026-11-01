@@ -1281,6 +1281,28 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
     }
 
+    func testPiecePickerDistinguishesSameNamedPiecesByDimensions() {
+        let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":17,"Y":8}]},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":43,"Y":9}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let rows = app.buttons.matching(identifier: "Kol")
+        let first = rows.element(boundBy: 0)
+        XCTAssertTrue(first.waitForExistence(timeout: 5))
+        XCTAssertTrue((first.value as? String ?? "").contains("Yaklaşık en: 17 mm"))
+        XCTAssertTrue((rows.element(boundBy: 1).value as? String ?? "").contains("Yaklaşık en: 43 mm"))
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("43")
+        let count = app.staticTexts["2 parçadan 1 tanesi gösteriliyor"]
+        XCTAssertTrue(count.waitForExistence(timeout: 5))
+        XCTAssertTrue((rows.firstMatch.value as? String ?? "").contains("Yaklaşık en: 43 mm"))
+        rows.firstMatch.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Kol kontur önizlemesi"].waitForExistence(timeout: 5))
+    }
+
     func testPieceSearchCanDistinguishOpenAndClosedContours() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Closed":true,"Points":[{"X":0,"Y":0},{"X":2,"Y":0},{"X":0,"Y":2}]}]}"#
         let app = XCUIApplication()

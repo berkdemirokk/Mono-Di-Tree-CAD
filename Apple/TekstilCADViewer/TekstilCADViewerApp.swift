@@ -1583,8 +1583,16 @@ struct Drawing {
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
                 return "\(label): \(value)"
             }
+            let dimensions: [String]
+            if let bounds = contourBounds,
+               let width = MeasurementDisplay.format(bounds.maxX - bounds.minX),
+               let height = MeasurementDisplay.format(bounds.maxY - bounds.minY) {
+                dimensions = ["Yaklaşık en: \(width) mm", "boy: \(height) mm"]
+            } else {
+                dimensions = []
+            }
             let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
-            return (["Parça \(index + 1)", closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
+            return (["Parça \(index + 1)", closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + dimensions + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
     }
     let name: String
