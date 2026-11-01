@@ -37,7 +37,16 @@ public sealed class DocumentHistory
         ArgumentNullException.ThrowIfNull(document);
         return CountPoints(document)<=maximumPoints;
     }
-    private static long CountPoints(ProjectDocument document) => document.Pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0)) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
+    private static long CountPoints(ProjectDocument document)
+    {
+        static long Pieces(IEnumerable<PatternPiece> pieces) => pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0));
+        var points = Pieces(document.Pieces) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
+        // Rotation history is deep-cloned with every undo entry. Count both
+        // historical source and placed geometry, including their visual marks.
+        if (document.NestingSnapshot?.RotationTrace is { } trace)
+            points += Pieces(trace.SourcePieces) + Pieces(trace.LayoutPieces);
+        return points;
+    }
     public ProjectDocument? Undo(ProjectDocument current) => UndoState(current)?.Document;
     public ProjectDocument? Redo(ProjectDocument current) => RedoState(current)?.Document;
     public DocumentHistoryState? UndoState(ProjectDocument current, Guid? selectedId = null) => Transfer(undo, redo, current, selectedId);
