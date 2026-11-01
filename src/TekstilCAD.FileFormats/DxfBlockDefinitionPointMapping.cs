@@ -15,6 +15,21 @@ public sealed record DxfBlockProjectResult(ProjectDocument WorkingCopy,Immutable
 /// <summary>Explicitly selects one unplaced block definition and one coincident visual vertex marker.</summary>
 public static class DxfBlockDefinitionPointMapping
 {
+    // UTF-16 code units are escaped individually so the stored text is
+    // reversible, including isolated surrogates; separators cannot imitate
+    // the surrounding audit fields and display controls cannot spoof rows.
+    private static string EscapeAuditText(string text)
+    {
+        var result=new System.Text.StringBuilder(text.Length);
+        foreach(var c in text)
+        {
+            var category=char.GetUnicodeCategory(c);
+            if(c is '\\' or ';' or '"' || char.IsControl(c) || category is UnicodeCategory.Format or UnicodeCategory.Surrogate or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                result.Append("\\u").Append(((int)c).ToString("X4",CultureInfo.InvariantCulture));
+            else result.Append(c);
+        }
+        return result.ToString();
+    }
     /// <summary>Builds a detached project from explicitly selected unplaced block
     /// definitions. Source stream and import must remain stable during the call.
     /// A failed selection or cancellation never returns a partial project.</summary>
@@ -65,8 +80,8 @@ public static class DxfBlockDefinitionPointMapping
         }
         var result=new ProjectDocument { Name=import.Project.Name+" · blok tanımları",Pieces=copies.Values.ToList() };
         var audit=assignments.MoveToImmutable();
-        var warnings=import.CapturedWarnings.Concat([notice]).Concat(audit.Select(a=>
-            $"Blok {a.BlockHeaderOrdinal}; parça {a.PieceId:D}; POINT {a.PointOrdinal}; VERTEX {a.VertexOrdinal}; köşe {a.VertexIndex}; kontur katmanı {a.SourceLayer}; POINT katmanı {a.PointLayer}." )).ToList();
+        var warnings=import.CapturedWarnings.Select(EscapeAuditText).Concat([notice]).Concat(audit.Select(a=>
+            $"Blok {a.BlockHeaderOrdinal}; parça {a.PieceId:D}; POINT {a.PointOrdinal}; VERTEX {a.VertexOrdinal}; köşe {a.VertexIndex}; kontur katmanı \"{EscapeAuditText(a.SourceLayer)}\"; POINT katmanı \"{EscapeAuditText(a.PointLayer)}\"." )).ToList();
         result.ImportProvenance=new DxfImportProvenance { SourceFileName=sourceFileName,SourceSha256=import.SourceSha256 ?? "",SourceByteLength=import.SourceByteLength ?? -1,
             MillimetersPerUnit=parameters.MillimetersPerUnit,Warnings=warnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };
         token.ThrowIfCancellationRequested();ProjectStorage.Validate(result,token);

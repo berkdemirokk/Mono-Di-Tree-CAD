@@ -6,6 +6,25 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Fact]
+    public void ProvenanceEscapesUntrustedLayerDelimitersAndUnicodeControls()
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nB; POINT 123\\U+202E\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        var result=DxfBlockDefinitionPointMapping.CreateProject(import,new MemoryStream(bytes),
+            [new(link.BlockHeaderOrdinal!.Value,link.PieceId,point.SourceOrdinal,0)],"source.dxf",true);
+        var reloaded=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(result.WorkingCopy)));
+        var warning=Assert.Single(reloaded.ImportProvenance!.Warnings.Where(w=>w.Contains("POINT katmanı")));
+        Assert.Contains(@"B\u003B POINT 123\u005CU+202E",warning);
+        Assert.DoesNotContain("B; POINT 123",warning);
+        var escape=typeof(DxfBlockDefinitionPointMapping).GetMethod("EscapeAuditText",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static)!;
+        Assert.Equal(@"a\u003Bb\u005Cc\u202Ed\u2028e\u2029f",(string)escape.Invoke(null,["a;b\\c\u202ed\u2028e\u2029f"])!);
+    }
+
+    [Fact]
     public void MultipleBlockDefinitionsProduceOneDetachedProjectWithTrace()
     {
         string Block(string x)=>"0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
