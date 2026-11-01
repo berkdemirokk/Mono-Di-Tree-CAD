@@ -1787,7 +1787,13 @@ internal static class DesktopVerification
                 studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);studio.SetTool("Seç");
                 var beforeDrag=studio.Document.Clone();var beforeUndo=session.UndoCount;
                 var pointer=click.GetPosition(canvas);var hit=vertex ? new Point2(0,0) : new Point2(50,50);
+                // LoadDocument fits the new piece and changes the canvas scale.
+                // Keep the offset calculation and the pointer hit in the same transform.
+                scale.SetValue(canvas,1d);
                 offset.SetValue(canvas,new Vector(pointer.X-hit.X,pointer.Y-hit.Y));
+                var pick=canvas.ResolvePointerSelection(hit);
+                Check(pick.Piece?.Id==piece.Id && !pick.Ambiguous && (vertex ? pick.Vertex==0 : pick.Vertex==-1),
+                    $"{(vertex?"Vertex":"Whole-piece")} fixture targets the intended location",checks);
                 down.Invoke(canvas,[canvas,click]);
                 var dragVertex=(int)typeof(CadCanvas).GetField("dragVertex",PrivateInstance)!.GetValue(canvas)!;
                 Check(canvas.HasActiveDragPreview && (vertex ? dragVertex==0 : dragVertex==-1),
