@@ -14,13 +14,14 @@ internal sealed class DesignRequestWindow : Window
 {
     private readonly TextBox prompt=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBox measurements=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=95,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
-    private readonly TextBox conversation=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,Height=170,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
-    private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=54,MaxHeight=100,MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    private readonly TextBox conversation=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,Height=128,Background=StudioTheme.Surface,Foreground=StudioTheme.Text,BorderThickness=new Thickness(0),Padding=new Thickness(8),VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+    private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=48,MaxHeight=100,Background=StudioTheme.Background,Foreground=StudioTheme.Text,Padding=new Thickness(10),MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private DesignReference? reference;
-    private bool dirty,loading;
+    private bool dirty,loading,preservingLastModel;
+    private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
     internal DesignRequest CaptureForVerification()=>Capture();
@@ -32,15 +33,16 @@ internal sealed class DesignRequestWindow : Window
     internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
-        Owner=owner;Title="Kalıp isteği hazırla";Width=680;Height=680;MinWidth=480;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
+        Owner=owner;Title="Elbise isteği";Width=900;Height=700;MinWidth=480;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string text,Action action) { var b=new Button { Content=text,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };b.Click+=(_,_)=>action();actions.Children.Add(b);return b; }
         Action("İstek aç…",Open);Action("Yeni istek dosyası kaydet…",Save);Action("Kapat",Close);
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
-        body.Children.Add(new TextBlock { Text="Kalıp isteği hazırla",FontSize=20,FontWeight=FontWeights.SemiBold });
-        body.Children.Add(new TextBlock { Text="Bir başlangıç modeli seçin, sonra isteğinizi ve bildiğiniz ölçüleri yazın. Eksik ölçüler tahmin edilmez. Bu çevrimdışı adım henüz kalıp veya plotter çıktısı oluşturmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
-        body.Children.Add(new TextBlock { Text="Model fikri seçin · Kartlar yalnız açıklama başlangıcıdır; hazır kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) });
+        body.Children.Add(new TextBlock { Text="Elbisenizi tarif edin",FontSize=24,FontWeight=FontWeights.SemiBold });
+        body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan yazın. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
+        body.Children.Add(new TextBlock { Text="1  ·  MODEL FİKRİ",FontWeight=FontWeights.SemiBold,Foreground=StudioTheme.Text,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        body.Children.Add(new TextBlock { Text="Kartlar tarife fikir ekler; hazır kalıp değildir.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         var models=new WrapPanel { Margin=new Thickness(0,0,0,6) };body.Children.Add(models);
         void ModelChoice(string label,string template,string silhouette,string? detail)
         {
@@ -48,31 +50,34 @@ internal sealed class DesignRequestWindow : Window
             var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=new SolidColorBrush(Color.FromRgb(0x9e,0xc8,0xc0)),Stroke=new SolidColorBrush(Color.FromRgb(0xd1,0xe8,0xe2)),StrokeThickness=1.5 };
             art.Children.Add(dress);
             if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=new SolidColorBrush(Color.FromRgb(0x35,0x62,0x60)),StrokeThickness=1.5,StrokeLineJoin=PenLineJoin.Round });
-            var image=new Viewbox { Width=80,Height=80,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,1,0,4) };
+            var image=new Viewbox { Width=70,Height=70,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,1,0,3) };
             var content=new StackPanel { Width=112,IsHitTestVisible=false };
             content.Children.Add(image);
             content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
-            content.Children.Add(new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=StudioTheme.Muted });
-            var button=new Button { Content=content,Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
+            var caption=new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=StudioTheme.Muted };content.Children.Add(caption);
+            var button=new Button { Content=content,Background=StudioTheme.Surface,BorderBrush=StudioTheme.Border,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
             AutomationProperties.SetName(button,label);
             AutomationProperties.SetHelpText(button,"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
             button.Click+=(_,_)=>
             {
                 var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
                 if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { status.Text="Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.";return; }
-                prompt.AppendText(addition);chatInput.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
+                prompt.AppendText(addition);SetLastModel(button);chatInput.Focus();status.Text="Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.";
             };
-            models.Children.Add(button);
+            modelCards.Add((button,caption));models.Children.Add(button);
         }
         ModelChoice("Düz elbise", "Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,38 14,73 66,73 50,38 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Anvelop elbise", "Anvelop elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,40 17,73 63,73 50,40 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z","M 34,5 L 49,39 M 46,5 L 31,39 M 30,40 L 50,40 M 49,40 L 58,73");
         ModelChoice("Gömlek elbise", "Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
-        body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Konuşma ve sıradaki soru",Target=conversation });
-        AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(conversation);
-        body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Mesajınız",Target=chatInput });AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");body.Children.Add(chatInput);
+        body.Children.Add(new TextBlock { Text="2  ·  İSTEĞİNİZ",FontWeight=FontWeights.SemiBold,Foreground=StudioTheme.Text,Margin=new Thickness(0,10,0,4) });
+        body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Konuşma ve sıradaki soru",Target=conversation,Padding=new Thickness(0,4,0,4) });
+        AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(new Border { Child=conversation,Background=StudioTheme.Surface,BorderBrush=StudioTheme.Border,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(3),Margin=new Thickness(0,0,0,6) });
+        body.Children.Add(new Label { Foreground=StudioTheme.Text,Content="Mesajınız",Target=chatInput,Padding=new Thickness(0,4,0,4) });AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");
+        var compose=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,6) };body.Children.Add(compose);
         var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
-        AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");body.Children.Add(send);send.Click+=(_,_)=>SendMessage();
+        send.Background=StudioTheme.Accent;send.Foreground=StudioTheme.Background;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
+        AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
         body.Children.Add(new TextBlock { Text="Ölçüyü açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var editBody=new StackPanel();body.Children.Add(new Expander { Header="İstek ve ölçüleri düzenle",Content=editBody,Margin=new Thickness(0,8,0,8) });
@@ -88,7 +93,19 @@ internal sealed class DesignRequestWindow : Window
         var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=> { if(reference is not null) { reference=null;dirty=true;UpdateReference(); } };
         body.Children.Add(new TextBlock { Text="Görsel dosyanın tüm baytları ve varsa içindeki metadata isteğe eklenir. Yalnızca PNG/JPEG imzası kontrol edilir; görsel içeriği, ölçüler veya üretime uygunluk doğrulanmaz. Kaydetme yeni ve ayrı bir dosya oluşturur; kalıp çizimi ve plotter çıktısı için sonraki işlem ve kullanıcı kontrolü gerekir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,10,0,0) });
 
-        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;
+        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;
+    }
+    private void SetLastModel(Button? selected)
+    {
+        foreach(var (button,caption) in modelCards)
+        {
+            var active=ReferenceEquals(button,selected);
+            button.Background=active ? StudioTheme.Raised : StudioTheme.Surface;
+            button.BorderBrush=active ? StudioTheme.Accent : StudioTheme.Border;
+            caption.Text=active ? "Son eklenen" : "Tarife ekle";
+            caption.Foreground=active ? StudioTheme.Accent : StudioTheme.Muted;
+            AutomationProperties.SetHelpText(button,(active ? "Son eklenen model fikri. " : "")+"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
+        }
     }
     private void SendMessage()
     {
@@ -97,7 +114,10 @@ internal sealed class DesignRequestWindow : Window
         var addition=(prompt.Text.Length==0 ? "" : "\n")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { status.Text="Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.";return; }
-        prompt.AppendText(addition);chatInput.Clear();chatInput.Focus();status.Text="Mesaj isteğe eklendi; henüz kalıp oluşturulmadı.";
+        preservingLastModel=true;
+        try { prompt.AppendText(addition); }
+        finally { preservingLastModel=false; }
+        chatInput.Clear();chatInput.Focus();status.Text="Mesaj isteğe eklendi; henüz kalıp oluşturulmadı.";
     }
     private void RefreshConversation()
     {
@@ -143,7 +163,7 @@ internal sealed class DesignRequestWindow : Window
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;RefreshConversation(); }
+        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;

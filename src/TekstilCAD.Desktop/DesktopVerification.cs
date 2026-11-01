@@ -9165,10 +9165,23 @@ internal static class DesktopVerification
                 modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
                 Check(FullyVisible(card,root),"Every visual model card can be scrolled fully into view at minimum size: "+AutomationProperties.GetName(card),checks);
             }
+            var minimumSend=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
+            foreach(var control in new FrameworkElement[] { window.ChatInputForVerification,minimumSend })
+            {
+                var y=control.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;
+                modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
+                Check(FullyVisible(control,root) && control.Focusable,"Chat input and send are reachable at minimum window size",checks);
+            }
             modelScroller.ScrollToVerticalOffset(0);root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             Check(straight.Focusable && aline.Focusable && AutomationProperties.GetHelpText(straight).Contains("mevcut metin korunur") &&
                 AutomationProperties.GetHelpText(aline).Contains("kalıp oluşturulmaz"),"Dress model choices expose keyboard and honest help text",checks);
             straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(ReferenceEquals(straight.BorderBrush,StudioTheme.Accent) && ((StackPanel)straight.Content).Children.OfType<TextBlock>().Any(t=>t.Text=="Son eklenen") &&
+                AutomationProperties.GetHelpText(straight).Contains("Son eklenen") && !ReferenceEquals(aline.BorderBrush,StudioTheme.Accent),
+                "The last-added model card has a visible and accessible state",checks);
+            modelScroller.ScrollToVerticalOffset(0);root.UpdateLayout();
+            Render(window,Path.ChangeExtension(reportPath,".dress-cards-selected.png"),900,700);
+            root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             var straightResult=window.CaptureForVerification();
             Check(straightResult.Prompt.Replace("\r\n","\n")==input.Prompt+"\nDüz elbise; detaylar: " && straightResult.Measurements==input.Measurements &&
                 straightResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
@@ -9176,6 +9189,8 @@ internal static class DesktopVerification
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm"),"Review can be recalculated after model choice",checks);
             aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(ReferenceEquals(aline.BorderBrush,StudioTheme.Accent) && !ReferenceEquals(straight.BorderBrush,StudioTheme.Accent),
+                "Adding another model moves the last-added indication without deleting the request",checks);
             var alineResult=window.CaptureForVerification();
             Check(alineResult.Prompt.Replace("\r\n","\n")==straightResult.Prompt.Replace("\r\n","\n")+"\nA kesim elbise; detaylar: " && alineResult.Measurements==input.Measurements &&
                 alineResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
@@ -9195,6 +9210,8 @@ internal static class DesktopVerification
             window.LoadForVerification(new DesignRequest("Düz elbise", "",input.Reference));
             var send=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
             window.ChatInputForVerification.Text="göğüs çevresi 96 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!new[] { straight,aline,wrap,shirt }.Any(card=>ReferenceEquals(card.BorderBrush,StudioTheme.Accent)),
+                "Changing the request clears the last-added indicator instead of claiming a persistent selection",checks);
             Check(window.CaptureForVerification().Prompt.Replace("\r\n","\n")=="Düz elbise\ngöğüs çevresi 96 cm" && window.ChatInputForVerification.Text.Length==0 &&
                 window.ConversationForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ConversationForVerification.Text.Contains("bel çevresi") &&
                 window.ConversationForVerification.Text.Contains("kalıp veya plotter çıktısı oluşturulmaz"),
@@ -9214,6 +9231,13 @@ internal static class DesktopVerification
             window.PromptForVerification.Text="Değişen elbise isteği";
             Check(window.DirtyForVerification && window.ReviewForVerification.Text.Length==0 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                 "Editing a design request leaves the open project and undo untouched",checks);
+            window.LoadForVerification(input);
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.ChatInputForVerification.Text="bel çevresi 72 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(ReferenceEquals(straight.BorderBrush,StudioTheme.Accent) && window.ConversationForVerification.Text.Contains("bel çevresi: 720 mm"),
+                "The last-added model remains indicated while the user adds measurements in chat",checks);
+            window.PromptForVerification.Text="Yeni tarif";
+            Check(!ReferenceEquals(straight.BorderBrush,StudioTheme.Accent),"Manual request replacement clears the model indication",checks);
             window.LoadForVerification(input);
         }
         finally { window.Close(); }
