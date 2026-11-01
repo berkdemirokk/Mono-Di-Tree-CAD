@@ -73,6 +73,12 @@ final class ViewerUITests: XCTestCase {
         b.tap(); b.typeText("1")
         app.buttons["Köşeleri görsel olarak hizala"].tap()
         XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X -50, Y -100 mm"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        app.buttons["Görünümü yakınlaştır"].tap()
+        let view = app.descendants(matching: .any)["Aynı ölçekte üst üste parça görünümü"]
+        XCTAssertTrue((view.value as? String ?? "").contains("yüzde 125"))
+        app.buttons["Görünümü sıfırla"].tap()
+        XCTAssertTrue((view.value as? String ?? "").contains("yüzde 100"))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "üretime uygunluk doğrulaması değildir")).firstMatch.exists)
     }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {

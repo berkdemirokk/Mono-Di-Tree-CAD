@@ -2861,7 +2861,21 @@ private struct PieceOverlayView: View {
     @State private var secondAnchor = ""
     @State private var shiftXText = "0"
     @State private var shiftYText = "0"
+    @State private var zoom: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var panEnabled = false
+    @State private var canvasSize: CGSize = .zero
+    @GestureState private var pinch: CGFloat = 1
+    @GestureState private var drag: CGSize = .zero
 
+    private func boundedZoom(_ value: CGFloat) -> CGFloat { min(max(value.isFinite ? value : 1, 0.5), 10) }
+    private func boundedOffset(_ value: CGSize, size: CGSize, zoom: CGFloat) -> CGSize {
+        let x = size.width * max(zoom, 1), y = size.height * max(zoom, 1)
+        return CGSize(width: min(max(value.width, -x), x), height: min(max(value.height, -y), y))
+    }
+    private func pan(x: CGFloat, y: CGFloat) {
+        offset = boundedOffset(CGSize(width: offset.width + x, height: offset.height + y), size: canvasSize, zoom: zoom)
+    }
     private func shift(dx: Double, dy: Double) {
         _ = applyShift(x: shiftX + dx, y: shiftY + dy)
     }
@@ -2882,6 +2896,7 @@ private struct PieceOverlayView: View {
     }
     var body: some View {
         NavigationStack {
+            ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text("Başlangıçta parçaların sınır kutusu sol üstleri hizalanır; ikisi aynı ölçektedir. Kaynak konumları değiştirilmez.")
                 Text("Hizalama ve kaydırmada tüm noktalardaki toplam sayısal yuvarlama hatası en fazla 0,001 mm ile sınırlandırılır. Bu sınır kaynak verisinin sayıya dönüşümünü ve ekrandaki piksel yuvarlamasını içermez. Yalnızca görsel karşılaştırmadır; dikiş uyumu, çakışma veya üretime uygunluk doğrulaması değildir.")
@@ -2914,30 +2929,41 @@ private struct PieceOverlayView: View {
                 Text("Bu yalnızca görsel hizalamadır; parça konumuna veya paylaşılan özete yazılmaz.")
                     .font(.caption).foregroundStyle(.secondary)
                 if let shiftError { Text(shiftError).font(.caption).foregroundStyle(.secondary) }
-                Canvas { context, size in
-                    guard let aBounds = first.contourBounds, let bBounds = second.contourBounds,
-                          let bounds = ContourOverlay.bounds(aBounds, bBounds, dx: shiftX, dy: shiftY),
-                          let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)) else { return }
-                    func path(_ piece: Drawing.Piece, _ pieceBounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> Path? {
-                        guard let firstPoint = piece.points.first.flatMap({ ContourOverlay.aligned($0, bounds: pieceBounds, dx: dx, dy: dy) }) else { return nil }
-                        var path = Path()
-                        path.move(to: viewport.position(firstPoint))
-                        for point in piece.points.dropFirst() {
-                            guard let aligned = ContourOverlay.aligned(point, bounds: pieceBounds, dx: dx, dy: dy) else { return nil }
-                            path.addLine(to: viewport.position(aligned))
-                        }
-                        if piece.closed { path.closeSubpath() }
-                        return path
-                    }
-                    if showFirst, let path = path(first, aBounds) { context.stroke(path, with: .color(.orange), lineWidth: 2) }
-                    if showSecond, let path = path(second, bBounds, dx: shiftX, dy: shiftY) { context.stroke(path, with: .color(.purple), style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
+                    Button("Görünümü uzaklaştır") { zoom = boundedZoom(zoom / 1.25) }.disabled(zoom <= 0.5)
+                    Button("Görünümü yakınlaştır") { zoom = boundedZoom(zoom * 1.25) }.disabled(zoom >= 10)
+                    Button("Görünümü sıfırla") { zoom = 1; offset = .zero }
+                }.font(.caption)
+                Button(panEnabled ? "Görünümü taşımayı bitir" : "Görünümü taşı") { panEnabled.toggle() }.font(.caption)
+                if panEnabled {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())]) {
+                        Button("Görünümü sola taşı") { pan(x: -40, y: 0) }
+                        Button("Görünümü sağa taşı") { pan(x: 40, y: 0) }
+                        Button("Görünümü yukarı taşı") { pan(x: 0, y: -40) }
+                        Button("Görünümü aşağı taşı") { pan(x: 0, y: 40) }
+                    }.font(.caption)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color.secondary.opacity(0.08))
-                .accessibilityLabel("Aynı ölçekte üst üste parça görünümü")
-                .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). İkinci parçanın görsel kaydırması X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") milimetredir.")
+                GeometryReader { geometry in
+                    let activeZoom = boundedZoom(zoom * pinch)
+                    let activeOffset = boundedOffset(CGSize(width: offset.width + drag.width, height: offset.height + drag.height), size: geometry.size, zoom: activeZoom)
+                    overlayDrawing.scaleEffect(activeZoom).offset(activeOffset)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .contentShape(Rectangle()).clipped()
+                        .gesture(panEnabled ? DragGesture()
+                            .updating($drag) { value, state, _ in state = value.translation }
+                            .onEnded { value in offset = boundedOffset(CGSize(width: offset.width + value.translation.width, height: offset.height + value.translation.height), size: geometry.size, zoom: zoom) } : nil)
+                        .simultaneousGesture(MagnificationGesture()
+                            .updating($pinch) { value, state, _ in state = value }
+                            .onEnded { value in zoom = boundedZoom(zoom * value); offset = boundedOffset(offset, size: geometry.size, zoom: zoom) })
+                        .accessibilityLabel("Aynı ölçekte üst üste parça görünümü")
+                        .accessibilityValue("Birinci parça \(firstIndex + 1), ikinci parça \(secondIndex + 1). Görsel kaydırma X \(MeasurementDisplay.format(shiftX) ?? "—"), Y \(MeasurementDisplay.format(shiftY) ?? "—") milimetre. Yakınlaştırma yüzde \(Int(activeZoom * 100)).")
+                        .onAppear { canvasSize = geometry.size }
+                        .onChange(of: geometry.size) { canvasSize = $0 }
+                }.frame(height: 240)
             }
             .padding()
+            }
+            .onChange(of: zoom) { offset = boundedOffset(offset, size: canvasSize, zoom: $0) }
             .sheet(isPresented: $showingAnchorSelection) {
                 NavigationStack {
                     Form {
@@ -2988,6 +3014,28 @@ private struct PieceOverlayView: View {
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }
     }
+    private var overlayDrawing: some View {
+        Canvas { context, size in
+            guard let aBounds = first.contourBounds, let bBounds = second.contourBounds,
+                  let bounds = ContourOverlay.bounds(aBounds, bBounds, dx: shiftX, dy: shiftY),
+                  let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)) else { return }
+            func path(_ piece: Drawing.Piece, _ pieceBounds: ContourBounds, dx: Double = 0, dy: Double = 0) -> Path? {
+                guard let firstPoint = piece.points.first.flatMap({ ContourOverlay.aligned($0, bounds: pieceBounds, dx: dx, dy: dy) }) else { return nil }
+                var path = Path()
+                path.move(to: viewport.position(firstPoint))
+                for point in piece.points.dropFirst() {
+                    guard let aligned = ContourOverlay.aligned(point, bounds: pieceBounds, dx: dx, dy: dy) else { return nil }
+                    path.addLine(to: viewport.position(aligned))
+                }
+                if piece.closed { path.closeSubpath() }
+                return path
+            }
+            if showFirst, let path = path(first, aBounds) { context.stroke(path, with: .color(.orange), lineWidth: 2) }
+            if showSecond, let path = path(second, bBounds, dx: shiftX, dy: shiftY) { context.stroke(path, with: .color(.purple), style: StrokeStyle(lineWidth: 2, dash: [6, 4])) }
+        }
+        .background(Color.secondary.opacity(0.08))
+    }
+
 }
 private struct PieceSpanSelectionView: View {
     let piece: Drawing.Piece
