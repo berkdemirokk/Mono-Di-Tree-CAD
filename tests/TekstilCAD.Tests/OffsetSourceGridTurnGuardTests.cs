@@ -44,6 +44,17 @@ public class OffsetSourceGridTurnGuardTests
         }).ToArray();if(reverse)Array.Reverse(source);
         Assert.True(Guard(source,Grid(source)));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LargeOriginCannotHideLostLocalTurn(bool reverse)
+    {
+        const double origin=90_000_000;
+        Point2[] source=[new(origin,origin),new(origin+100,origin+0.0000004),
+            new(origin+200,origin),new(origin+200,origin+100),new(origin,origin+100)];
+        if(reverse)Array.Reverse(source);
+        Assert.False(Guard(source,Grid(source)));
+    }
     [Fact]
     public void SourceCollinearityChangedByGridIsRejected()
     {
@@ -66,3 +77,4 @@ public class OffsetSourceGridTurnGuardTests
         Assert.Throws<OperationCanceledException>(()=>Guard(source,Grid(source),cancelled.Token));
     }
 }
+
