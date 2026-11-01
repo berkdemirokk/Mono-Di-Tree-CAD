@@ -791,15 +791,18 @@ private struct ContentView: View {
                 #if DEBUG && targetEnvironment(simulator)
                 if simulateFailure { throw ViewerError.message("Test: ham kopya kaydedilemedi.") }
                 #endif
-                try ModelStore.saveRaw(candidate.data, name: candidate.name)
+                let savedURL = try ModelStore.saveRaw(candidate.data, name: candidate.name)
                 #if DEBUG && targetEnvironment(simulator)
                 if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-integrity") {
                     let entries = try ModelStore.models()
-                    guard entries.contains(where: { entry in
-                        entry.url.pathExtension.lowercased() == "tcadraw" &&
-                        (try? ModelStore.readListedPayload(entry)) == candidate.data
-                    }) else { throw ViewerError.message("Test: kaydedilen ham baytlar eşleşmedi.") }
+                    guard let saved = entries.first(where: { $0.url == savedURL }),
+                          saved.url.pathExtension.lowercased() == "tcadraw",
+                          try ModelStore.readListedPayload(saved) == candidate.data else {
+                        throw ViewerError.message("Test: bu kaydın ham baytları eşleşmedi.")
+                    }
                 }
+                #else
+                _ = savedURL
                 #endif
             }
             DispatchQueue.main.async {
@@ -1031,14 +1034,14 @@ enum ModelStore {
     }
 
     static func save(_ data: Data, name: String) throws {
-        try save(data, name: name, fileExtension: "tcad")
+        _ = try save(data, name: name, fileExtension: "tcad")
     }
 
-    static func saveRaw(_ data: Data, name: String) throws {
+    @discardableResult static func saveRaw(_ data: Data, name: String) throws -> URL {
         try save(data, name: name, fileExtension: rawExtension)
     }
 
-    private static func save(_ data: Data, name: String, fileExtension: String) throws {
+    private static func save(_ data: Data, name: String, fileExtension: String) throws -> URL {
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         let stem = URL(fileURLWithPath: name).deletingPathExtension().lastPathComponent
         var safeStem = ""
@@ -1053,6 +1056,7 @@ enum ModelStore {
         let destination = directory.appendingPathComponent("\(safeStem) - \(UUID().uuidString).\(fileExtension)")
         let staging = directory.appendingPathComponent(".\(UUID().uuidString).partial")
         try ModelFilePublisher.publish(data, staging: staging, destination: destination)
+        return destination
     }
 
     static func saveRenamed(_ data: Data, projectName: String) throws {
