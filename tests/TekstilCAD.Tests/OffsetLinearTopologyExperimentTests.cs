@@ -49,6 +49,29 @@ public sealed class OffsetLinearTopologyExperimentTests(ITestOutputHelper output
         Assert.Throws<OperationCanceledException>(() => Verify(source, target, c.Token));
     }
 
+    [Fact]
+    public void NonAdjacentCrossingWithNonzeroTurnsFailsPairCheck()
+    {
+        // A pentagram has no collinear adjacent triples, so a turn-only test
+        // cannot establish that its non-adjacent edges are disjoint.
+        GridPoint[] star = [new(0, 10), new(6, -8), new(-10, 3), new(10, 3), new(-6, -8)];
+        var result = Verify(star, star);
+        Assert.False(result.Ok);
+        Assert.Contains("Edges", result.Reason);
+    }
+
+    [Fact]
+    public void ExactPredicatesHandleCoordinateDifferencesLargerThanLong()
+    {
+        // Subtraction must be performed after promotion to BigInteger.
+        GridPoint[] square = [new(long.MinValue, long.MinValue), new(long.MaxValue, long.MinValue),
+            new(long.MaxValue, long.MaxValue), new(long.MinValue, long.MaxValue)];
+        var before = square.ToArray();
+        var result = Verify(square, square);
+        Assert.True(result.Ok, result.Reason);
+        Assert.Equal(before, square);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
