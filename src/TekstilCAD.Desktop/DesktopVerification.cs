@@ -352,6 +352,7 @@ internal static class DesktopVerification
             VerifyObsoleteRecoveryCleared(studio,work,checks);
             VerifyDraftRecovery(studio,work,checks);
             VerifyPendingDrawingRecovery(studio,work,checks);
+            VerifyDrawingDiscardApprovalRace(studio,checks);
             VerifyRecoveryWarningPresentation(studio,reportPath,checks);
             VerifyBackgroundRecoveryScan(studio,work,reportPath,checks);
             VerifyRecoveryPaging(studio,work,checks);
@@ -6108,6 +6109,43 @@ internal static class DesktopVerification
         }
         finally { timer.Stop();timer.Interval=originalInterval; }
     }
+    private static void VerifyDrawingDiscardApprovalRace(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            foreach(var operation in new[] { "tool", "undo", "redo", "discard" })
+            foreach(var change in new[] { "drawing", "document" })
+            {
+                studio.ConfirmDiscardDrawingForVerification=null;
+                studio.LoadDocument(new ProjectDocument { Name="Onay kaynağı",Pieces=[new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)] }] });
+                studio.SetTool("Çizgi");studio.Commit("İlk değişiklik",()=>studio.Document.Name="İlk değişiklik");
+                if(operation=="redo")Invoke(studio,"Undo");
+                canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(1,2)]));
+                ProjectDocument? expected=null;int undo=0,redo=0;
+                studio.ConfirmDiscardDrawingForVerification=()=> {
+                    if(change=="drawing")canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çizgi",[new Point2(3,4)]));
+                    else studio.Commit("Onay sırasında",()=>studio.Document.Name="Yeni çalışma");
+                    expected=studio.Document.Clone();undo=session.UndoCount;redo=session.RedoCount;return true;
+                };
+                if(operation=="tool")studio.SetTool("Seç");
+                else if(operation=="discard")
+                {
+                    var accepted=(bool)typeof(MainWindow).GetMethod("CanDiscard",PrivateInstance,null,Type.EmptyTypes,null)!.Invoke(studio,null)!;
+                    Check(!accepted,"Discard rejects changed work during drawing approval",checks);
+                }
+                else Invoke(studio,operation=="undo" ? "Undo" : "Redo");
+                Check(expected is not null && DocumentSession.ContentEquals(expected,studio.Document) && session.UndoCount==undo && session.RedoCount==redo &&
+                    canvas.CapturePendingDrawing() is { Tool:"Çizgi" } drawing && drawing.Points.SequenceEqual([change=="drawing" ? new Point2(3,4) : new Point2(1,2)]) &&
+                    studio.ActiveTool=="Çizgi" && status.Text.Contains("değişti"),
+                    $"{operation} preserves changed {change} after drawing discard approval",checks);
+            }
+        }
+        finally { studio.ConfirmDiscardDrawingForVerification=null;canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument()); }
+    }
+
     private static void VerifyPendingDrawingRecovery(MainWindow studio,string work,List<string> checks)
     {
         var storeField=typeof(MainWindow).GetField("recoveryStore",PrivateInstance)!;
