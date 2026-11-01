@@ -14,11 +14,16 @@ public static class OpenPathClosure
     {
         ArgumentNullException.ThrowIfNull(source);
         cancellationToken.ThrowIfCancellationRequested();
-        NotchSafety.RequireNoNotches(source);
         if(!double.IsFinite(tolerance) || tolerance<0 || tolerance>100_000)throw new ArgumentOutOfRangeException(nameof(tolerance));
         if(source.Id==Guid.Empty || source.Name is null || source.Name.Length>1024)throw new ArgumentException("Kaynak kimliği veya adı geçersiz.");
         if(source.Closed || source.Points is null || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints)
             throw new ArgumentException("Kapatmak için en az üç noktalı açık bir kontur gerekir.");
+        if(source.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(source,0,0,cancellationToken);
+            if(source.Points[0]==source.Points[^1] && source.Notches.Any(mark=>mark.VertexIndex==source.Points.Count-1))
+                throw new ArgumentException("Son açık uç işaretli ve ilk uçla aynı konumda; kapalı kontur bu ayrı işareti temsil edemez. Kaynak değiştirilmedi.");
+        }
         if(!omitSourceProductionData && (source.Metadata is not null || source.Grainline is not null))
             throw new ArgumentException("Üretim bilgisi veya iplik yönü olan parça otomatik kapatılamaz.");
         var points=source.Points.ToArray();
@@ -27,6 +32,7 @@ public static class OpenPathClosure
         if(length>tolerance)throw new ArgumentException("Uçlar arasındaki mesafe seçilen toleransı aşıyor.");
         LargeContourValidator.Validate(points,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points] },source.Id,source.Name,length);
+        return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points],
+            Notches=source.Notches?.Select(mark=>mark.Clone()).ToList() },source.Id,source.Name,length);
     }
 }

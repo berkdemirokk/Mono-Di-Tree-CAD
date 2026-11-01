@@ -150,7 +150,6 @@ public class NotchOperationGuardTests
     public void OpenPathOperationsRejectMarksFromEitherSource()
     {
         var marked=Open();var other=new PatternPiece { Closed=false,Points=[new(10,10),new(15,10)] };
-        Assert.Throws<ArgumentException>(()=>OpenPathClosure.Close(marked,20));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(marked,other,0));
         Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(other,marked,0));
         Assert.Single(marked.Notches!);

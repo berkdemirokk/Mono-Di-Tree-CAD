@@ -159,6 +159,16 @@ internal static class DesktopVerification
             var marked=studio.Document.Clone();var markedUndo=session.UndoCount;window.ApplyForVerification();
             Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(marked,studio.Document) && session.UndoCount==markedUndo && window.MessageForVerification.Contains("değişti"),
                 "Closure rejects a preview when a source mark is added",checks);
+            Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("1 köşe işareti"),
+                "Marked closure preview reports the copied marker",checks);
+            window.ApplyForVerification();
+            var closedMarked=studio.Document.Pieces.Single(p=>p.Id!=a.Id);
+            Check(closedMarked.Notches is { Count:1 } && closedMarked.Notches[0].VertexIndex==1 && closedMarked.Notches[0].Position==a.Points[1] &&
+                !ReferenceEquals(closedMarked.Notches[0],studio.Document.Pieces.Single(p=>p.Id==a.Id).Notches![0]) && session.UndoCount==markedUndo+1,
+                "Closure adds an independent marked piece while retaining the source",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(marked,studio.Document),"Marked closure is one undo step",checks);
             Invoke(studio,"Undo");
             Preview();window.ToleranceForVerification.Text="8";
             var before=studio.Document.Clone();var undo=session.UndoCount;
