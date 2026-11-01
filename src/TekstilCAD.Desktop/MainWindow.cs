@@ -2636,7 +2636,7 @@ public class MainWindow : Window
         {
             DockPanel.SetDock(riskNotices,Dock.Top);panel.Children.Add(riskNotices);
         }
-        var replacement=new TextBlock { Text="İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. Tuvalde Y aşağı artar; kaynak CAD'de Y yukarıysa görüntü dikey ters görünebilir. İncelenen kopyayı kaynakla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
+        var replacement=new TextBlock { Text="İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. Y aşağı artar; kaynak yönünü kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
         DockPanel.SetDock(replacement,Dock.Top);panel.Children.Add(replacement);
         var body=new StackPanel();
         var notesViewer=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
