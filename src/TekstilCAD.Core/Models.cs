@@ -483,6 +483,44 @@ public sealed class DxfImportProvenance
     }
 }
 
+/// <summary>Immutable-in-meaning historical photo trace evidence, not approval of current geometry.</summary>
+public sealed class PhotoTraceProvenance
+{
+    public int AlgorithmVersion { get; set; }
+    public Guid PieceId { get; set; }
+    public string SourceSha256 { get; set; } = "";
+    public long SourceByteLength { get; set; }
+    public int SourceOrientation { get; set; }
+    public int SourceWidth { get; set; }
+    public int SourceHeight { get; set; }
+    public int PreviewWidth { get; set; }
+    public int PreviewHeight { get; set; }
+    public Point2 ReferenceStart { get; set; }
+    public Point2 ReferenceEnd { get; set; }
+    public double ReferenceLengthMm { get; set; }
+    public List<Point2> TracePixels { get; set; } = [];
+    public List<Point2> GeneratedPoints { get; set; } = [];
+    public PhotoTraceProvenance Clone() => new() { AlgorithmVersion=AlgorithmVersion,PieceId=PieceId,SourceSha256=SourceSha256,SourceByteLength=SourceByteLength,SourceOrientation=SourceOrientation,
+        SourceWidth=SourceWidth,SourceHeight=SourceHeight,PreviewWidth=PreviewWidth,PreviewHeight=PreviewHeight,ReferenceStart=ReferenceStart,ReferenceEnd=ReferenceEnd,
+        ReferenceLengthMm=ReferenceLengthMm,TracePixels=[..TracePixels],GeneratedPoints=[..GeneratedPoints] };
+    public void Validate()
+    {
+        if(AlgorithmVersion!=1 || SourceOrientation is <1 or >8 || PieceId==Guid.Empty || SourceSha256 is null || SourceSha256.Length!=64 ||
+           SourceSha256.Any(c=>!((c>='0' && c<='9') || (c>='A' && c<='F'))) || SourceByteLength<1 || SourceByteLength>8L*1024*1024 ||
+           TracePixels is null || GeneratedPoints is null || TracePixels.Count is <2 or >512 || GeneratedPoints.Count!=TracePixels.Count)
+            throw new InvalidDataException("Fotoğraf taslağı geçmişi eksik veya geçersiz.");
+        try
+        {
+            var expected=PhotoTraceCalibration.ConvertVersion1(PreviewWidth,PreviewHeight,SourceWidth,SourceHeight,ReferenceStart,ReferenceEnd,ReferenceLengthMm,TracePixels);
+            for(var i=0;i<expected.Count;i++)
+                if(BitConverter.DoubleToInt64Bits(expected[i].X)!=BitConverter.DoubleToInt64Bits(GeneratedPoints[i].X) ||
+                   BitConverter.DoubleToInt64Bits(expected[i].Y)!=BitConverter.DoubleToInt64Bits(GeneratedPoints[i].Y))
+                    throw new InvalidDataException("Fotoğraf taslağı geçmişi hesaplanan geometriyle eşleşmiyor.");
+        }
+        catch(ArgumentException ex) { throw new InvalidDataException("Fotoğraf taslağı geçmişi geçersiz.",ex); }
+    }
+}
+
 public sealed class ProjectDocument
 {
     public string Name { get; set; } = "Yeni proje";
@@ -496,5 +534,8 @@ public sealed class ProjectDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public DxfImportProvenance? ImportProvenance { get; set; }
 
-    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<PhotoTraceProvenance>? PhotoTraceHistory { get; set; }
+
+    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone(),PhotoTraceHistory=PhotoTraceHistory?.Select(x=>x.Clone()).ToList() };
 }

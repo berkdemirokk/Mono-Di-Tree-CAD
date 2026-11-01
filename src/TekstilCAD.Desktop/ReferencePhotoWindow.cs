@@ -36,7 +36,7 @@ internal sealed class ReferencePhotoWindow : Window
             var studio=Owner as MainWindow ?? (Owner as Window)?.Owner as MainWindow;
             if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
-            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);

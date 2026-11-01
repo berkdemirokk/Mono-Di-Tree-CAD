@@ -108,6 +108,11 @@ public sealed class MachineCenterWindow : Window
             System.Windows.Automation.AutomationProperties.SetName(historyNotice,"Pastal geçmişi çıktı kapsamı uyarısı");
             body.Children.Add(Card(historyNotice));
         }
+        if(openingSnapshot.PhotoTraceHistory is { Count:>0 })
+        {
+            var photoNotice=new TextBlock { Text="Fotoğraf taslağı geçmişi hazırlanan DXF/HPGL dosyasına aktarılmaz; kaynak .tcad projesini saklayın. Geçmiş, çizimin veya üretimin doğruluğunu onaylamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
+            AutomationProperties.SetName(photoNotice,"Fotoğraf taslağı çıktı kapsamı uyarısı");body.Children.Add(Card(photoNotice));
+        }
         if(queue.RecoveryWarnings.Count>0)
             body.Children.Add(Card(new Expander { Header=$"Kuyruk açılış notları ({queue.RecoveryWarnings.Count})",IsExpanded=true,Foreground=StudioTheme.Warning,
                 Content=new TextBox { Text=string.Join("\n",queue.RecoveryWarnings),IsReadOnly=true,TextWrapping=TextWrapping.Wrap,MaxHeight=150,VerticalScrollBarVisibility=ScrollBarVisibility.Auto } }));

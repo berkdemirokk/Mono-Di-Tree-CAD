@@ -603,6 +603,7 @@ internal sealed class ProductionNestingWindow : Window
                 // separate layout project. Original piece IDs may no longer be
                 // present because placements receive new IDs.
                 layout.ImportProvenance=snapshot.ImportProvenance?.Clone();
+                layout.PhotoTraceHistory=snapshot.PhotoTraceHistory?.Select(entry=>entry.Clone()).ToList();
                 layout.NestingSnapshot=new NestingSnapshot
                 {
                     FabricWidth=result.Nesting.FabricWidth,
@@ -705,7 +706,7 @@ internal sealed class ProductionNestingWindow : Window
     internal static string FormatLayoutSaveConfirmation(ProjectDocument layout)
     {
         var rotated=layout.NestingSnapshot?.RotationTrace is not null;
-        var fileVersion=rotated ? 7 : layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
+        var fileVersion=layout.PhotoTraceHistory is { Count:>0 } ? 8 : rotated ? 7 : layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
         var extra=rotated ? " Kaynak parça geometrisi, kopya açıları ve iplik kısıtları tarihsel izde saklanır; kaynak serileme kuralları aktarılmaz. Varsa otomatik deneme politikası ve aday açı listesi saklanmaz. Desteklemeyen mobil sürümler açamaz." : "";
         return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz.{extra} Bu bir makine işi değildir ve üretim onayı değildir. Devam edilsin mi?";
     }

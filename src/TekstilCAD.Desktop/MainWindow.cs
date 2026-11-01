@@ -99,6 +99,7 @@ public class MainWindow : Window
     private bool savedFileHasGrainline;
     private bool savedFileHasImportProvenance;
     private bool savedFileHasNotches;
+    private bool savedFileHasPhotoTraceHistory;
     private RecoveredDocument? recoveredSource;
     // A saved project can still have a pending drawing omitted from that file.
     // Defer archival of its original recovery record until that drawing is resolved.
@@ -263,6 +264,7 @@ public class MainWindow : Window
         AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
+        AddButton(files, "Fotoğraf taslağı geçmişi…",()=>new PhotoTraceHistoryWindow(this,Document).ShowDialog(),"Kaydedilmiş kaynak özeti ve ilk çizim verilerini gösterir; üretim onayı değildir.");
         var exchange = CollapsibleCommands(commandArea, "Dosya aktarımı");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
@@ -833,7 +835,7 @@ public class MainWindow : Window
         projectEpoch=Guid.NewGuid();
         if(markUnsaved)session.MarkUnsaved();
         dirty=markUnsaved;
-        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
+        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;
         SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
         onLoaded?.Invoke();
         ClearRecovery();canvas.CancelDrawing();canvas.IsEnabled=true;
@@ -1390,17 +1392,20 @@ public class MainWindow : Window
             return "Proje, seçim veya bekleyen çalışma değişti. Taslak eklenmedi; güncel projeyle yeniden başlayın.";
         return null;
     }
-    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points)
+    internal bool ApplyPhotoTrace(PhotoTraceStamp stamp,IReadOnlyList<Point2> points,PhotoTraceProvenance history)
     {
+        ArgumentNullException.ThrowIfNull(history);
         if(PhotoTraceProblem(stamp) is { } problem) { SetStatus(problem);return false; }
         var copied=points.ToList();LargeOpenPathValidator.Validate(copied);
         var piece=new PatternPiece { Name="Fotoğraftan elle çizilen taslak",Closed=false,Points=copied };
-        var candidate=stamp.Snapshot.Clone();candidate.Pieces.Add(piece.Clone());ProjectStorage.Validate(candidate);
+        var captured=history.Clone();captured.PieceId=piece.Id;
+        if(!captured.GeneratedPoints.SequenceEqual(copied))throw new InvalidOperationException("Fotoğraf kaydı ile taslak uyuşmuyor; proje değiştirilmedi.");
+        var candidate=stamp.Snapshot.Clone();candidate.Pieces.Add(piece.Clone());(candidate.PhotoTraceHistory ??= []).Add(captured.Clone());ProjectStorage.Validate(candidate);
         if(!CanRetainCurrentUndoSnapshot || !CanRetainUndoSnapshot(candidate))
             throw new InvalidOperationException("Taslak geri alma kapasitesine sığmıyor; proje değiştirilmedi.");
         if(PhotoTraceProblem(stamp) is { } changed) { SetStatus(changed);return false; }
         bool committed=false;
-        try { CommitObserved("Fotoğraftan elle çizilmiş açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());SelectedId=piece.Id; },()=>committed=true); }
+        try { CommitObserved("Fotoğraftan elle çizilmiş açık taslak eklendi; ölçü ve üretim uygunluğu doğrulanmadı.",()=> { Document.Pieces.Add(piece.Clone());(Document.PhotoTraceHistory ??= []).Add(captured.Clone());SelectedId=piece.Id; },()=>committed=true); }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         { mainMutationReviewRequired=true;SetStatus("Taslak eklendi ancak görünüm yenilenemedi; projeyi kontrol edin. İşlem geri alınabilir.");return true; }
         return committed;
@@ -1900,6 +1905,7 @@ public class MainWindow : Window
                 savedFileHasGrainline=loaded.Project.Pieces.Any(p=>p.Grainline is not null);
                 savedFileHasImportProvenance=loaded.Project.ImportProvenance is not null;
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
+                savedFileHasPhotoTraceHistory=loaded.Project.PhotoTraceHistory is { Count:>0 };
                 applied=true;
             },openingProject:true);
             SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
@@ -1915,7 +1921,7 @@ public class MainWindow : Window
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
         if (filePath is null) { SaveAs(); return; }
-        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches))
+        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory))
         {
             var choice=ChooseGradingCompatibility(true);
             if(choice==GradingSaveChoice.Cancel)return;
@@ -1942,7 +1948,7 @@ public class MainWindow : Window
             ? fileVersion : ProjectStorage.CaptureVersion(path));
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
-        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
+        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };
         try
         {
             if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
@@ -1972,7 +1978,7 @@ public class MainWindow : Window
     private void SaveNewCopy()
     {
         EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
-        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 })) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
+        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 }) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         var dlg=new SaveFileDialog { Title="Yeni proje dosyası oluştur", Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+" - kopya.tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory(), OverwritePrompt=false };
         if(dlg.ShowDialog(this)!=true)return;
         SaveNewCopyTo(dlg.FileName);
@@ -1999,7 +2005,7 @@ public class MainWindow : Window
         EnsureNoActiveDrag();
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
-        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 })) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
+        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 }) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         var dlg = new SaveFileDialog { Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+".tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if (dlg.ShowDialog(this) != true) return;
         // Choosing “Farklı kaydet” in the compatibility dialog promises to
@@ -2072,7 +2078,9 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=Document.NestingSnapshot?.RotationTrace is not null
+        var description=Document.PhotoTraceHistory is { Count:>0 }
+            ? "Fotoğraf taslağı geçmişi proje biçimi sürüm 8 ile saklanır. Eski TekstilCAD sürümleri bu dosyayı açamaz. Fotoğrafın kendisi projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
+            : Document.NestingSnapshot?.RotationTrace is not null
             ? "Döndürmeli pastal geçmişi proje biçimi sürüm 7 ile saklanır. Önceki TekstilCAD ve desteklemeyen mobil sürümler bu dosyayı açamaz. Geçmiş iz üretim onayı değildir."
             : Document.Pieces.Any(p=>p.Notches is { Count:>0 })
             ? "Köşe işaretleri proje biçimi sürüm 6 ile saklanır. Eski TekstilCAD sürümleri bu dosyayı açamaz. Önceki dosyayı korumak için farklı adla kaydedin."
@@ -3069,6 +3077,8 @@ public class MainWindow : Window
             notes.Add("Pastal geçmişindeki kumaş ölçüleri, boşluk ve kenar payı ile kaynak–kopya eşleşmesi çıktı dosyasına aktarılmaz.");
         if(Document.ImportProvenance is not null)
             notes.Add("DXF içe aktarımındaki kaynak dosya adı, SHA-256 özeti, birim seçimi ve uyarı geçmişi çıktı dosyasına aktarılmaz; kaynak .tcad projesini saklayın.");
+        if(Document.PhotoTraceHistory is { Count:>0 })
+            notes.Add("Fotoğraf taslağı geçmişi çıktı dosyasına aktarılmaz; kaynak .tcad projesini saklayın. Geçmiş, mevcut çizginin veya üretim uygunluğunun onayı değildir.");
         return notes.Count==0 ? null : string.Join("\n",notes);
     }
     private void EnsurePropertyDraftsApplied()
@@ -3373,6 +3383,8 @@ public class MainWindow : Window
         var picker=new SelectedDxfExportWindow(this,snapshot);
         if(picker.ShowDialog()!=true)return;
         var capture=CaptureSelectedDxf(original,snapshot,epoch,picker.SelectedIds);
+        if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
+        if(snapshot.PhotoTraceHistory is { Count:>0 } && MessageBox.Show(this,"Fotoğraf taslağı geçmişi DXF dosyasına aktarılmaz; kaynak .tcad projesini saklayın. Geçmiş üretim uygunluğunu onaylamaz. Devam edilsin mi?","Fotoğraf taslağı geçmişi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
         if(!SelectedDxfStillCurrent(capture))throw new InvalidOperationException("Proje değişti; DXF seçimini yeniden başlatın.");
         var dialog=new SaveFileDialog { Title=$"Seçilen {capture.Output.Pieces.Count} parça · DXF",Filter="DXF (*.dxf)|*.dxf",DefaultExt=".dxf",AddExtension=true,
             FileName=SafeFileName(snapshot.Name)+" - seçili.dxf",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
@@ -3937,7 +3949,7 @@ public class MainWindow : Window
         canvas.InstallPreparedPendingDrawing(preparedDrawing);
         if(pending is not null)ActiveTool=pending.Tool;
         projectEpoch=Guid.NewGuid();session.MarkUnsaved();dirty=true;
-        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
+        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;
         SelectedId=null;recoveredSource=chosen;recoveredDocumentSaved=false;recoveryRestoreIncomplete=true;
         propertyDrafts.Clear();
         foreach(var (id,draft) in drafts)propertyDrafts.Add(id,draft);

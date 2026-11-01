@@ -35,19 +35,25 @@ public static class PhotoTraceCalibration
     /// </summary>
     public static IReadOnlyList<Point2> Convert(int previewWidth,int previewHeight,int sourceWidth,int sourceHeight,
         Point2 referenceStart,Point2 referenceEnd,double referenceLengthMm,IReadOnlyList<Point2> tracePoints)
+        => ConvertVersion1(previewWidth,previewHeight,sourceWidth,sourceHeight,referenceStart,referenceEnd,referenceLengthMm,tracePoints);
+
+    // Frozen historical algorithm. New algorithms must be added separately;
+    // persisted AlgorithmVersion=1 records continue to call this implementation.
+    internal static IReadOnlyList<Point2> ConvertVersion1(int previewWidth,int previewHeight,int sourceWidth,int sourceHeight,
+        Point2 referenceStart,Point2 referenceEnd,double referenceLengthMm,IReadOnlyList<Point2> tracePoints)
     {
         ArgumentNullException.ThrowIfNull(tracePoints);
         ValidateDimensions(previewWidth,previewHeight,nameof(previewWidth));
         ValidateDimensions(sourceWidth,sourceHeight,nameof(sourceWidth));
         if(previewWidth>sourceWidth || previewHeight>sourceHeight)
             throw new ArgumentOutOfRangeException(nameof(previewWidth),"Önizleme kaynak boyutundan büyük olamaz.");
-        if(!double.IsFinite(referenceLengthMm) || referenceLengthMm<=0 || referenceLengthMm>Geometry.MaxCoordinate)
+        if(!double.IsFinite(referenceLengthMm) || referenceLengthMm<=0 || referenceLengthMm>100_000_000d)
             throw new ArgumentOutOfRangeException(nameof(referenceLengthMm),"Bilinen mesafe pozitif, sonlu ve desteklenen aralıkta olmalıdır.");
         ValidatePixel(referenceStart,previewWidth,previewHeight,nameof(referenceStart));
         ValidatePixel(referenceEnd,previewWidth,previewHeight,nameof(referenceEnd));
         var dx=referenceEnd.X-referenceStart.X;var dy=referenceEnd.Y-referenceStart.Y;
         var previewDistance=Math.Sqrt(dx*dx+dy*dy);
-        if(!double.IsFinite(previewDistance) || previewDistance<MinimumReferencePixels)
+        if(!double.IsFinite(previewDistance) || previewDistance<1d)
             throw new ArgumentException("Kalibrasyon noktaları en az bir piksel aralıklı olmalıdır.",nameof(referenceEnd));
         var xRatio=(double)sourceWidth/previewWidth;var yRatio=(double)sourceHeight/previewHeight;
         var sourceDx=dx*xRatio;var sourceDy=dy*yRatio;
@@ -56,17 +62,21 @@ public static class PhotoTraceCalibration
         if(!double.IsFinite(scale) || scale<=0)
             throw new ArgumentOutOfRangeException(nameof(referenceLengthMm),"Kalibrasyon ölçeği hesaplanamıyor.");
         int count=tracePoints.Count;
-        if(count<2 || count>MaximumTracePoints)
+        if(count<2 || count>10_000)
             throw new ArgumentOutOfRangeException(nameof(tracePoints),"Taslak çizgi 2–10000 nokta içermelidir.");
         var result=new Point2[count];
         for(int i=0;i<count;i++)
         {
             var pixel=tracePoints[i];ValidatePixel(pixel,previewWidth,previewHeight,nameof(tracePoints));
             var world=new Point2((pixel.X-referenceStart.X)*xRatio*scale,(pixel.Y-referenceStart.Y)*yRatio*scale);
-            if(!world.IsFinite || Math.Abs(world.X)>Geometry.MaxCoordinate || Math.Abs(world.Y)>Geometry.MaxCoordinate)
+            if(!world.IsFinite || Math.Abs(world.X)>100_000_000d || Math.Abs(world.Y)>100_000_000d)
                 throw new ArgumentOutOfRangeException(nameof(tracePoints),"Ölçeklenen nokta CAD koordinat sınırını aşıyor.");
-            if(i>0 && Geometry.Distance(result[i-1],world)<=Geometry.Epsilon)
-                throw new ArgumentException("Ardışık taslak noktaları sıfır veya çok kısa bir kenar oluşturuyor.",nameof(tracePoints));
+            if(i>0)
+            {
+                var ddx=Math.Abs(result[i-1].X-world.X);var ddy=Math.Abs(result[i-1].Y-world.Y);var max=Math.Max(ddx,ddy);
+                var distance=max==0 ? 0 : max*Math.Sqrt(Math.Pow(ddx/max,2)+Math.Pow(ddy/max,2));
+                if(distance<=1e-8)throw new ArgumentException("Ardışık taslak noktaları sıfır veya çok kısa bir kenar oluşturuyor.",nameof(tracePoints));
+            }
             result[i]=world;
         }
         return Array.AsReadOnly(result);
@@ -74,7 +84,7 @@ public static class PhotoTraceCalibration
 
     private static void ValidateDimensions(int width,int height,string parameter)
     {
-        if(width<1 || height<1 || width>MaximumImageDimension || height>MaximumImageDimension || (long)width*height>MaximumImagePixels)
+        if(width<1 || height<1 || width>12_000 || height>12_000 || (long)width*height>24_000_000)
             throw new ArgumentOutOfRangeException(parameter,"Görsel boyutları desteklenen sınırların dışında.");
     }
 

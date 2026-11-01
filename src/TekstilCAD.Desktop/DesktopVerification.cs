@@ -9144,11 +9144,13 @@ internal static class DesktopVerification
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
+        byte[] encodedPhoto;using(var encodedStream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(encodedStream);encodedPhoto=encodedStream.ToArray(); }
+        var photoHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encodedPhoto));
         PhotoTraceWindow? trace=null;
         try
         {
             var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
-            trace=new PhotoTraceWindow(workspace,bitmap,stamp);trace.ConfirmForVerification=_=>false;
+            trace=new PhotoTraceWindow(workspace,bitmap,stamp,100,50,photoHash,encodedPhoto.Length);trace.ConfirmForVerification=_=>false;
             Render(trace,Path.ChangeExtension(reportPath,".photo-trace-compact.png"),560,480);
             var root=(FrameworkElement)trace.Content;var canvas=trace.CanvasForVerification;
             Check(canvas.Focusable && FullyVisible(canvas,root) && FullyVisible(trace.LengthForVerification,root) &&
@@ -9183,13 +9185,35 @@ internal static class DesktopVerification
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
             Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(100,100) }) && session.UndoCount==1,
                 "Confirmed manual photo trace adds one scaled open draft",checks);
+            var provenance=AssertSingle(added.PhotoTraceHistory!);
+            Check(provenance.PieceId==draft.Id && provenance.SourceSha256==photoHash && provenance.SourceByteLength==encodedPhoto.Length &&
+                provenance.GeneratedPoints.SequenceEqual(draft.Points) && provenance.TracePixels.Count==3,
+                "Manual photo draft retains captured source identity and historical calibration",checks);
+            var historyWindow=new PhotoTraceHistoryWindow(workspace,added);
+            try
+            {
+                var historyRoot=(FrameworkElement)historyWindow.Content;historyRoot.Measure(new Size(480,420));historyRoot.Arrange(new Rect(0,0,480,420));historyRoot.UpdateLayout();
+                Check(historyWindow.DetailsForVerification.Text.Contains(photoHash) && historyWindow.DetailsForVerification.Text.Contains("eşleşiyor") &&
+                    historyWindow.DetailsForVerification.IsReadOnly && FullyVisible(historyWindow.DetailsForVerification,historyRoot) &&
+                    workspace.OutputLossNotice()!.Contains("Fotoğraf taslağı geçmişi"),
+                    "Historical photo evidence is inspectable and output loss is disclosed",checks);
+            }
+            finally { historyWindow.Close(); }
+            var edited=added.Clone();edited.Pieces[0].Points[1]=new Point2(101,0);
+            var editedHistory=new PhotoTraceHistoryWindow(workspace,edited);
+            try { Check(editedHistory.DetailsForVerification.Text.Contains("eşleşmiyor"),"Photo history identifies changed current geometry without erasing evidence",checks); }
+            finally { editedHistory.Close(); }
+            var text=ProjectStorage.SerializeProject(added);
+            using var serializedPhotoProject=JsonDocument.Parse(text);
+            Check(serializedPhotoProject.RootElement[0].GetInt32()==8 && !text.Contains(Convert.ToBase64String(encodedPhoto),StringComparison.Ordinal),
+                "Photo evidence uses version eight without embedding reference image bytes",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
                 "Manual photo draft participates in undo and redo",checks);
             var file=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-trace-"+Guid.NewGuid().ToString("N")+".tcad");
             try { ProjectStorage.Save(added,file);Check(DocumentSession.ContentEquals(added,ProjectStorage.Load(file)),"Manual photo draft persists as ordinary open geometry",checks); }
             finally { if(File.Exists(file))File.Delete(file); }
             trace=null;
-            var stale=workspace.CapturePhotoTrace()!;var staleWindow=new PhotoTraceWindow(workspace,bitmap,stale);
+            var stale=workspace.CapturePhotoTrace()!;var staleWindow=new PhotoTraceWindow(workspace,bitmap,stale,100,50,photoHash,encodedPhoto.Length);
             try
             {
                 foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10) })staleWindow.CanvasForVerification.TryAddPixelPoint(p);
@@ -9357,6 +9381,7 @@ internal static class DesktopVerification
                 var expected=orientation==0 ? 1 : orientation;bool swap=expected>=5;
                 Check(result.IsFrozen && result.PixelWidth==(swap ? 48 : 64) && result.PixelHeight==(swap ? 64 : 48) &&
                     decoded.OrientedSourceWidth==(swap ? 48 : 64) && decoded.OrientedSourceHeight==(swap ? 64 : 48) &&
+                    decoded.SourceOrientation==expected && decoded.SourceByteLength==jpegBytes.Length && decoded.SourceSha256==Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(jpegBytes)) &&
                     CornerColors(result).SequenceEqual(expectedCorners[expected-1]) && jpegBytes.SequenceEqual(originalBytes),
                     "Actual JPEG "+(orientation==0 ? "without orientation" : "EXIF orientation "+orientation)+" preserves expected pixels and source bytes",checks);
             }

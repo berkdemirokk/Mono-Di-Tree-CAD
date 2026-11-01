@@ -14,6 +14,9 @@ internal sealed class PhotoTraceWindow : Window
     private readonly MainWindow.PhotoTraceStamp stamp;
     private readonly BitmapSource image;
     private readonly int sourceWidth,sourceHeight;
+    private readonly string? sourceSha256;
+    private readonly int sourceByteLength;
+    private readonly int sourceOrientation;
     private readonly TextBox xInput=new() { Width=60,MaxLength=24 },yInput=new() { Width=60,MaxLength=24 };
     internal long DraftRevision { get; private set; }
     internal bool HasDraft => CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
@@ -23,9 +26,9 @@ internal sealed class PhotoTraceWindow : Window
     internal Func<string,bool>? ConfirmForVerification { get; set; }
     private bool allowClose;
 
-    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0)
+    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
     {
-        this.workspace=workspace;this.stamp=stamp;image=bitmap;this.sourceWidth=sourceWidth==0 ? bitmap.PixelWidth : sourceWidth;this.sourceHeight=sourceHeight==0 ? bitmap.PixelHeight : sourceHeight;Owner=workspace;Title="Fotoğrafta elle taslak çiz";Width=820;Height=760;MinWidth=560;MinHeight=480;
+        this.workspace=workspace;this.stamp=stamp;image=bitmap;this.sourceWidth=sourceWidth==0 ? bitmap.PixelWidth : sourceWidth;this.sourceHeight=sourceHeight==0 ? bitmap.PixelHeight : sourceHeight;this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;Owner=workspace;Title="Fotoğrafta elle taslak çiz";Width=820;Height=760;MinWidth=560;MinHeight=480;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
@@ -63,16 +66,21 @@ internal sealed class PhotoTraceWindow : Window
         {
             var p=CanvasForVerification.Points;
             if(p.Count<4) { StatusForVerification.Text="İki referans ucu ve en az iki çizgi noktası seçin.";return; }
+            if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0) { StatusForVerification.Text="Fotoğraf kaynak kimliği bulunamadı; taslak eklenmedi.";return; }
             if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm) || mm<=0) { StatusForVerification.Text="Bilinen mesafeyi pozitif milimetre olarak girin.";return; }
-            var trace=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,new Point2(p[0].X,p[0].Y),new Point2(p[1].X,p[1].Y),mm,p.Skip(2).Select(q=>new Point2(q.X,q.Y)).ToArray());
+            var referenceStart=new Point2(p[0].X,p[0].Y);var referenceEnd=new Point2(p[1].X,p[1].Y);
+            var pixels=p.Skip(2).Select(q=>new Point2(q.X,q.Y)).ToList();
+            var trace=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,referenceStart,referenceEnd,mm,pixels);
+            var history=new PhotoTraceProvenance { AlgorithmVersion=1,SourceSha256=sourceSha256,SourceByteLength=sourceByteLength,SourceOrientation=sourceOrientation,SourceWidth=sourceWidth,SourceHeight=sourceHeight,PreviewWidth=image.PixelWidth,PreviewHeight=image.PixelHeight,ReferenceStart=referenceStart,ReferenceEnd=referenceEnd,ReferenceLengthMm=mm,TracePixels=pixels,GeneratedPoints=trace.ToList() };
             LargeOpenPathValidator.Validate(trace);
             if(workspace.PhotoTraceProblem(stamp) is { } stale) { StatusForVerification.Text=stale;return; }
-            const string question="Elle işaretlenen açık çizgi CAD'e taslak olarak eklenecek. Fotoğraf perspektifi, gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Kalibrasyon ve fotoğraf bu çizgiyle projeye kaydedilmez. Devam edilsin mi?";
+            var distance=Math.Sqrt(Math.Pow(p[1].X-p[0].X,2)+Math.Pow(p[1].Y-p[0].Y,2));
+            var question=$"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin.\n\nElle işaretlenen açık çizgi CAD'e taslak olarak eklenecek. Perspektif, gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Fotoğraf özeti, boyutlar, işaretler ve mesafe proje biçimi 8 ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz. Devam edilsin mi?";
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
-            if(!workspace.ApplyPhotoTrace(stamp,trace)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
+            if(!workspace.ApplyPhotoTrace(stamp,trace,history)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
             allowClose=true;Close();
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException or OverflowException)

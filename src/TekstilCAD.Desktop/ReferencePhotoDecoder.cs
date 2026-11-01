@@ -6,7 +6,7 @@ using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
 
-internal sealed record ReferencePhotoPreview(BitmapSource Bitmap,int OrientedSourceWidth,int OrientedSourceHeight);
+internal sealed record ReferencePhotoPreview(BitmapSource Bitmap,int OrientedSourceWidth,int OrientedSourceHeight,int SourceOrientation,string SourceSha256,int SourceByteLength);
 
 /// <summary>
 /// Decodes a detached, reduced still-image preview; it does not interpret a garment
@@ -92,7 +92,7 @@ internal static class ReferencePhotoDecoder
             // to display the reduced raster at the original oriented aspect ratio;
             // these values do not represent a physical photo or garment scale.
             var preview=BitmapSource.Create(outputWidth,outputHeight,96d*outputWidth/orientedWidth,96d*outputHeight/orientedHeight,PixelFormats.Bgra32,null,pixels,outputWidth*4);
-            preview.Freeze();return new ReferencePhotoPreview(preview,orientedWidth,orientedHeight);
+            preview.Freeze();return new ReferencePhotoPreview(preview,orientedWidth,orientedHeight,orientation,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)),bytes.Length);
         }
         catch(Exception ex) when(ex is IOException or FormatException or NotSupportedException or ArgumentException or InvalidOperationException or COMException or OverflowException)
         {
