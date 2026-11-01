@@ -19,7 +19,7 @@ namespace TekstilCAD.Desktop;
 
 public class MainWindow : Window
 {
-    private readonly DocumentSession session = new(Sample());
+    private readonly DocumentSession session;
     // DocumentSession clones on every commit; this token changes only when the
     // whole project is replaced, even if a loaded project reuses a piece ID.
     private Guid projectEpoch = Guid.NewGuid();
@@ -181,8 +181,12 @@ public class MainWindow : Window
     private static Brush Muted => StudioTheme.Muted;
     private const string SourceHistoryNotice = "Kaynak ve önceki aktarım uyarıları projede saklanmaz. Üretimden önce ölçüleri ve yerleşimi kaynakla karşılaştırın.";
 
-    public MainWindow()
+    public MainWindow() : this(null) { }
+
+    // Internal injection allows verification with the actual session history limits.
+    internal MainWindow(DocumentSession? sessionForVerification)
     {
+        session = sessionForVerification ?? new DocumentSession(Sample());
         Title = AppPaths.IsIsolatedPreview ? "Mono Di Tree CAD · Geliştirme Önizlemesi" : "Mono Di Tree CAD · 0.4 Önizleme"; Width = 1440; Height = 900; MinWidth = 1024; MinHeight = 640;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         StudioTheme.Apply(this);

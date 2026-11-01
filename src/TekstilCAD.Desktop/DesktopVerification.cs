@@ -1052,6 +1052,7 @@ internal static class DesktopVerification
             VerifySeamSourceIdentity(studio,checks);
             VerifyPointPicker(studio,reportPath,checks);
             VerifyBulkGrading(studio,reportPath,checks);
+            VerifyBulkGradingHistoryLimits(studio,checks);
             VerifyBulkPreviewDirection(checks);
             VerifyBulkPreviewGrainline(checks);
             VerifyBulkPreviewMarks(checks);
@@ -11931,6 +11932,51 @@ internal static class DesktopVerification
         preview.SetPieces(new PatternPiece { Points=[] },grade,"empty");
         Check(!preview.HasGeometry && Bounds(preview,160,360).Count==0,"Bulk preview clears empty geometry safely",checks);
     }
+    private static void VerifyBulkGradingHistoryLimits(MainWindow owner,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(owner.Dispatcher));
+        try
+        {
+            foreach(var limit in new long[] { 3, 15, 16 })
+            {
+                var piece=new PatternPiece { Name="Sınır",Points=[new(0,0),new(10,0),new(10,10),new(0,10)] };
+                var input=new ProjectDocument { Pieces=[piece] };
+                var session=new DocumentSession(input,maximumPoints:limit);
+                var workspace=new MainWindow(session);StopTimer(workspace);
+                var added=false;
+                var batch=new BulkGradingWindow(workspace,owner,workspace.Document.Pieces[0],
+                    [new(0,0),new(0,0),new(0,0),new(0,0)],()=>true,()=>added=true);
+                try
+                {
+                    batch.CopyRules.IsChecked=true;batch.Entries.Text="L; 1";
+                    var task=batch.CalculateAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(batch.Ready is { Count:1 } && batch.AddButton.IsEnabled,
+                        "Limited history batch has a valid preview",checks);
+                    batch.AddReady();
+                    if(limit<16)
+                    {
+                        Check(!added && DocumentSession.ContentEquals(input,workspace.Document) && session.UndoCount==0 &&
+                            session.RedoCount==0 && session.CapacityDiscardedSnapshots==0 && batch.Ready is null &&
+                            batch.Status.Text.Contains("geçmişi sınırını aşıyor"),
+                            "Actual batch add rejects oversized source or result history snapshot",checks);
+                    }
+                    else
+                    {
+                        var result=workspace.Document.Clone();
+                        Check(added && result.Pieces.Count==2 && result.GradingRules.Count==1 && session.UndoCount==1 &&
+                            session.Undo() && DocumentSession.ContentEquals(input,workspace.Document) &&
+                            session.Redo() && DocumentSession.ContentEquals(result,workspace.Document) &&
+                            session.Undo() && DocumentSession.ContentEquals(input,workspace.Document),
+                            "Actual batch add at history boundary undoes and redoes piece and rule",checks);
+                    }
+                }
+                finally { batch.Close();typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close(); }
+            }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previous); }
+    }
+
     private static void VerifyBulkGrading(MainWindow studio,string reportPath,List<string> checks)
     {
         var original=new PatternPiece { Name="Ön",Closed=true,Points=[new(0,0),new(100,0),new(100,100),new(0,100)],Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=7 } };
