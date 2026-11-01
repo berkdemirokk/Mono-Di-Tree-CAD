@@ -20,6 +20,7 @@ final class ViewerUITests: XCTestCase {
         let point = app.buttons["Nokta 2"]
         XCTAssertTrue(point.waitForExistence(timeout: 5)); point.tap()
         XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 200 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue((app.descendants(matching: .any)["Ölçüm önizlemesi"].value as? String ?? "").contains("İlk nokta 2, ikinci nokta 1"))
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "en fazla 6 anlamlı basamağa yuvarlanır")).firstMatch.exists)
         app.buttons["Kapat"].tap()
     }

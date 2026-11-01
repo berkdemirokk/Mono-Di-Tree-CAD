@@ -2688,6 +2688,12 @@ private struct PointDistanceView: View {
                     TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
                     NavigationLink("İkinci noktayı listeden seç") { PointIndexPicker(points: piece.points, selected: $second) }
                     if let (a, b) = indices {
+                        if piece.hasMinimumContourPoints, piece.contourBounds != nil {
+                            PointDistancePreview(piece: piece, first: a, second: b)
+                                .frame(height: 180)
+                            Text("A: ilk nokta · B: ikinci nokta · kesik çizgi: doğrusal mesafe")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         let firstPoint = piece.points[a], secondPoint = piece.points[b]
                         if let ax = MeasurementDisplay.format(firstPoint.x), let ay = MeasurementDisplay.format(firstPoint.y),
                            let bx = MeasurementDisplay.format(secondPoint.x), let by = MeasurementDisplay.format(secondPoint.y) {
@@ -2718,6 +2724,40 @@ private struct PointDistanceView: View {
             .navigationTitle("İki nokta mesafesi")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }
+    }
+}
+// Display only: the line connects the two chosen file vertices and never
+// changes their coordinates or the source document.
+private struct PointDistancePreview: View {
+    let piece: Drawing.Piece
+    let first: Int
+    let second: Int
+
+    var body: some View {
+        Canvas { context, size in
+            guard let bounds = piece.contourBounds,
+                  let viewport = ContourViewport(bounds: bounds, width: Double(size.width), height: Double(size.height)),
+                  piece.points.indices.contains(first), piece.points.indices.contains(second),
+                  let beginning = piece.points.first else { return }
+            var contour = Path()
+            contour.move(to: viewport.position(beginning))
+            for point in piece.points.dropFirst() { contour.addLine(to: viewport.position(point)) }
+            if piece.closed { contour.closeSubpath() }
+            context.stroke(contour, with: .color(.accentColor), lineWidth: 1.5)
+            let a = viewport.position(piece.points[first]), b = viewport.position(piece.points[second])
+            var segment = Path()
+            segment.move(to: a); segment.addLine(to: b)
+            context.stroke(segment, with: .color(.orange), style: StrokeStyle(lineWidth: 2, dash: [5, 3]))
+            context.draw(Text("A").font(.caption.bold()).foregroundColor(.orange), at: CGPoint(x: a.x + 10, y: a.y - 10))
+            context.draw(Text("B").font(.caption.bold()).foregroundColor(.purple), at: CGPoint(x: b.x + 10, y: b.y + 10))
+            for (position, color, radius) in [(a, Color.orange, CGFloat(7)), (b, Color.purple, CGFloat(4))] {
+                let circle = Path(ellipseIn: CGRect(x: position.x - radius, y: position.y - radius, width: radius * 2, height: radius * 2))
+                context.stroke(circle, with: .color(color), lineWidth: 3)
+            }
+        }
+        .background(Color.secondary.opacity(0.08))
+        .accessibilityLabel("Ölçüm önizlemesi")
+        .accessibilityValue("İlk nokta \(first), ikinci nokta \(second). İki nokta bir çizgiyle birleştirilir.")
     }
 }
 // A lazy list keeps large contours navigable without creating a picker with
