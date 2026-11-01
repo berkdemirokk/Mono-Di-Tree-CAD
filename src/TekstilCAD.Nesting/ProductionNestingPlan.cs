@@ -38,10 +38,41 @@ public static class ProductionNestingPlan
             throw NestingPieceError.Create(placement.SourcePieceId,reason,error.ParamName,error);
         }
         cancellationToken.ThrowIfCancellationRequested();
+        var originals=expanded.ToDictionary(p=>p.Id);var placed=result.Layout.Pieces.ToDictionary(p=>p.Id);
+        foreach(var pair in originals)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(!placed.TryGetValue(pair.Key,out var output) || !NestingEngine.MarkersMatchPlacement(pair.Value,output,cancellationToken))
+                throw new InvalidOperationException("Pastal köşe işaretleri kaynak kopyayla eşleşmiyor; işlem uygulanmadı.");
+        }
         return new(result, mapping);
     }
 
     internal sealed record Expansion(IReadOnlyList<PatternPiece> Pieces, IReadOnlyList<ProductionPlacement> Placements);
+
+    /// <summary>Checks marker-to-vertex mapping against source and placed copies; not a production certificate.</summary>
+    public static bool AreMarkersPreserved(ProjectDocument source,ProductionNestingResult result,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();
+        if(source?.Pieces is null || result?.Nesting?.Layout?.Pieces is null || result.Placements is null)return false;
+        try
+        {
+            var sources=source.Pieces.ToDictionary(p=>p.Id);var outputs=result.Nesting.Layout.Pieces.ToDictionary(p=>p.Id);
+            if(outputs.Count!=result.Placements.Count)return false;
+            foreach(var map in result.Placements)
+            {
+                token.ThrowIfCancellationRequested();
+                if(map is null || map.CopyNumber<1 || map.PlacedPieceId!=CopyId(map.SourcePieceId,map.CopyNumber) ||
+                   !sources.TryGetValue(map.SourcePieceId,out var original) || original.Metadata?.Quantity is not int quantity || map.CopyNumber>quantity ||
+                   !outputs.Remove(map.PlacedPieceId,out var placed))return false;
+                NestingEngine.ValidateTranslation(original,placed.Points,token);
+                if(!NestingEngine.MarkersMatchPlacement(original,placed,token))return false;
+            }
+            return outputs.Count==0;
+        }
+        catch(ArgumentException) { return false; }
+        catch(InvalidOperationException) { return false; }
+    }
 
     // Rebuild the selected source snapshot from detached expansion copies, not
     // from a source document that the caller might have edited meanwhile.
@@ -96,7 +127,6 @@ public static class ProductionNestingPlan
         foreach (var p in matches)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(p.Notches is not null)throw NestingPieceError.Create(p.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.");
             if (p.Metadata?.Role != "Kesim" || p.Metadata.Quantity is not int n || n < 1 || n > 100000)
                 throw NestingPieceError.Create(p.Id,"Parça için kesim rolü ve pozitif adet belirtilmelidir.");
             if (string.IsNullOrWhiteSpace(p.Metadata.Material)) throw NestingPieceError.Create(p.Id,"Parça için malzeme belirtilmelidir.");
@@ -105,6 +135,8 @@ public static class ProductionNestingPlan
             material ??= p.Metadata.Material;
             if (!string.Equals(material, p.Metadata.Material, StringComparison.Ordinal)) throw NestingPieceError.Create(p.Id,"Parçanın malzemesi diğer seçili parçalardan farklı; farklı malzemeler aynı pastalda yerleştirilemez.");
             if (p.Points is null || p.Points.Count > NestingEngine.MaximumVerticesPerPiece) throw NestingPieceError.Create(p.Id,"Parça noktaları eksik veya sınırı aşıyor.");
+            try { NestingEngine.ValidateMarkers(p,cancellationToken); }
+            catch(ArgumentException error) { throw NestingPieceError.Create(p.Id,error.Message,null,error); }
             // Each placed copy is checked; identical source snapshots share validation.
             copies += n; vertices += (long)n * p.Points.Count; validation += (n + 1L) * p.Points.Count * p.Points.Count;
             if (copies > NestingEngine.MaximumPieces || vertices > NestingEngine.MaximumTotalVertices || validation > NestingEngine.MaximumValidationWork)

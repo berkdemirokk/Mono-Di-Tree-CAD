@@ -147,7 +147,7 @@ public class NotchOperationGuardTests
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(repeated,4));
     }
     [Fact]
-    public void GradingRetainsMarksWhileUnsupportedNestingStillRejects()
+    public void GradingAndBasicNestingRetainMarksWhileRotationStillRejects()
     {
         var p=Closed();var original=p.Clone();var increments=Enumerable.Repeat(new Point2(0,0),p.Points.Count).ToArray();
         var graded=GradingEngine.Generate(p,increments,1,"M");
@@ -155,8 +155,8 @@ public class NotchOperationGuardTests
         Assert.Equal(p.Notches[0].Position,graded.Notches![0].Position);
         Assert.Empty(GradingEngine.GenerateSizes(p,increments,Array.Empty<GradeSize>()));
         Assert.Throws<ArgumentException>(()=>OrthogonalRotation.Rotate(p,90));
-        Assert.Throws<ArgumentException>(()=>NestingEngine.Arrange([p],100));
-        Assert.Throws<ArgumentException>(()=>ProductionNestingPlan.Arrange(new ProjectDocument { Pieces=[p] },[p.Id],100));
+        var layout=NestingEngine.Arrange([p],100).Layout.Pieces.Single();
+        Assert.Equal(layout.Points[1],layout.Notches!.Single().Position);
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[original] },new ProjectDocument { Pieces=[p] }));
     }
     [Fact]

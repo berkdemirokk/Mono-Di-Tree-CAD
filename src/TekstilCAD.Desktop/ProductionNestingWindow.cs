@@ -493,7 +493,8 @@ internal sealed class ProductionNestingWindow : Window
                 ? $"Dört kenarda {MeasurementInput.Format(planned.Nesting.EdgeMargin)} mm pay; kesik iç çerçeve kullanılabilir alanı gösterir."
                 : "Kenar payı 0 mm; kesik iç çerçeve yok.";
             var grainDescription=grainMode switch { 1 => "İplik yönü tek yön (+Y) için doğrulandı.", 2 => "İplik yönü çift yön (±Y) için doğrulandı.", _ => "İplik yönü denetlenmedi." };
-            SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.");
+            var markNotice=planned.Nesting.Layout.Pieces.Any(p=>p.Notches is { Count:>0 }) ? " Köşe işaretleri kopyalarda korunur ancak bu önizlemede gösterilmez; kayıt sonrası kontrol edin. Fiziksel çentik değildir." : "";
+            SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
         catch(Exception ex)
@@ -544,7 +545,7 @@ internal sealed class ProductionNestingWindow : Window
     }
     internal static string FormatLayoutSaveConfirmation(ProjectDocument layout)
     {
-        var fileVersion=layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
+        var fileVersion=layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
         return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz. Bu bir makine işi değildir. Devam edilsin mi?";
     }
     internal ProjectFileVersion CaptureLayoutDestination(string path,int version,ProjectDocument layout)

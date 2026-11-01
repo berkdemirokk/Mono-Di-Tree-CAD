@@ -3392,6 +3392,7 @@ internal static class DesktopVerification
     private static void VerifyNestingAndGrading(MainWindow studio,List<string> checks)
     {
         var first=new PatternPiece { Name="Ön",Points=[new(300,400),new(400,400),new(400,500),new(300,500)] };
+        first.Notches=[new NotchMark { VertexIndex=1,Position=first.Points[1] }];
         var second=new PatternPiece { Name="Arka",Points=[new(600,400),new(700,400),new(700,500),new(600,500)] };
         var rule=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=true,SourcePoints=[..first.Points],Deltas=Enumerable.Repeat(new Point2(1,2),4).ToList() };
         studio.LoadDocument(new ProjectDocument { Name="Pastal sınaması",Pieces=[first,second],GradingRules=[rule] });
@@ -3478,6 +3479,11 @@ internal static class DesktopVerification
                 moved.GradingRules.Single(r=>r.SourcePieceId==second.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints) &&
                 status.Text.Contains("serileme kuralı eski",StringComparison.Ordinal) && status.Text.Contains(second.Id.ToString("D"),StringComparison.Ordinal),
                 "Basic nesting moves matching grading and identifies an unchanged stale rule",checks);
+            var marked=moved.Pieces.Single(p=>p.Id==first.Id);
+            Check(marked.Notches!.Single().VertexIndex==1 && marked.Notches.Single().Position==marked.Points[1] &&
+                status.Text.Contains("Köşe işaretleri",StringComparison.Ordinal) &&
+                ProductionNestingWindow.FormatLayoutSaveConfirmation(moved).Contains("sürüm 6",StringComparison.Ordinal),
+                "Basic nesting carries the marked vertex and reports version 6 for marked layout saves",checks);
             typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[first.Id,true]);
             Check(grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7","Basic nesting preserves unapplied grading input",checks);
             typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null);

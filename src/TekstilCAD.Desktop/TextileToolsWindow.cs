@@ -474,6 +474,17 @@ public sealed class TextileToolsWindow : Window
                 throw new InvalidOperationException("İplik yönünün kaynakla tam aynı miktarda taşındığı doğrulanamadı; taslak değiştirilmedi.");
             beforePiece.Grainline=afterLine.Clone();
         }
+        if(beforePiece.Notches is { } beforeMarks && piece.Notches is { } afterMarks)
+        {
+            if(beforeMarks.Count!=afterMarks.Count)throw new InvalidOperationException("Köşe işaretleri değişti; taslak değiştirilmedi.");
+            for(var i=0;i<beforeMarks.Count;i++)
+            {
+                if(beforeMarks[i].VertexIndex!=afterMarks[i].VertexIndex ||
+                   !GradingRuleSet.IsExactPointTranslation([anchor[0],beforeMarks[i].Position],[piece.Points[0],afterMarks[i].Position]))
+                    throw new InvalidOperationException("Köşe işaretlerinin kaynakla tam aynı miktarda taşındığı doğrulanamadı; taslak değiştirilmedi.");
+            }
+            beforePiece.Notches=afterMarks.Select(mark=>mark.Clone()).ToList();
+        }
         if(!DocumentSession.ContentEquals(new ProjectDocument { Pieces=[beforePiece] },new ProjectDocument { Pieces=[piece.Clone()] }))
             throw new InvalidOperationException("Kaynağın başka bilgileri de değişti; taslak değiştirilmedi.");
         var rebased=new GradeDraft([..piece.Points],[..piece.Points],piece.Closed,draft.Rows.Select((row,index)=>new GradeRow {
@@ -1268,7 +1279,8 @@ public sealed class TextileToolsWindow : Window
             CommitToolChange("Raf pastal yerleşimi",()=> { workspace.Document.Pieces=layout.Result.Layout.Pieces;workspace.Document.GradingRules=layout.Rules; },()=>
             { foreach(var id in cleanDrafts)gradeDrafts.Remove(id);workspace.Select(null);workspace.FitView();RefreshSources(null);
               var staleNotice=layout.Stale.Count==0 ? "" : $" {layout.Stale.Count} parçada serileme kuralı eski konumda korundu; atölyede gözden geçirin. Kimlikler: "+string.Join(", ",layout.Stale.Take(3))+(layout.Stale.Count>3 ? " ve diğerleri." : ".");
-              Success($"Hesaplanan boy {MeasurementInput.Format(layout.Result.UsedLength)} mm  ·  Kullanım %{layout.Result.UtilizationPercent:0.##}  ·  Fire %{layout.Result.WastePercent:0.##}. Hesap: kumaş eni × kullanılan uzunluk. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı. Geri alma için atölyeyi kapatıp işlem geçmişini kontrol edin."+staleNotice);
+              var markNotice=layout.Result.Layout.Pieces.Any(p=>p.Notches is { Count:>0 }) ? " Köşe işaretleri aynı indeksli yerleştirilmiş noktalarda korundu; fiziksel çentik değildir, konumlarını kontrol edin." : "";
+              Success($"Hesaplanan boy {MeasurementInput.Format(layout.Result.UsedLength)} mm  ·  Kullanım %{layout.Result.UtilizationPercent:0.##}  ·  Fire %{layout.Result.WastePercent:0.##}. Hesap: kumaş eni × kullanılan uzunluk. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı. Geri alma için atölyeyi kapatıp işlem geçmişini kontrol edin."+staleNotice+markNotice);
               if(layout.Stale.Count>0)result.Foreground=StudioTheme.Warning; });
         }
         catch(OperationCanceledException) when(basicNestingCancellation?.IsCancellationRequested==true)

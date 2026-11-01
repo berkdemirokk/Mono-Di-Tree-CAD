@@ -154,6 +154,41 @@ public static class NestingEngine
             SameSpanWithinBudget(Math.Min(a.Start.Y, a.End.Y), Math.Max(a.Start.Y, a.End.Y), Math.Min(b.Start.Y, b.End.Y), Math.Max(b.Start.Y, b.End.Y));
     }
 
+    internal static void ValidateMarkers(PatternPiece piece,CancellationToken token)
+    {
+        if(piece.Notches is not { } marks)return;
+        if(piece.Points is null || marks.Count==0 || marks.Count>piece.Points.Count)throw new ArgumentException("Geçersiz köşe işareti listesi.");
+        var indices=new HashSet<int>();
+        foreach(var mark in marks)
+        {
+            token.ThrowIfCancellationRequested();
+            if(mark is null || mark.VertexIndex<0 || mark.VertexIndex>=piece.Points.Count ||
+                (piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && mark.VertexIndex==piece.Points.Count-1) ||
+                !indices.Add(mark.VertexIndex) || mark.Position!=piece.Points[mark.VertexIndex])
+                throw new ArgumentException("Köşe işareti kaynak konturla eşleşmiyor.");
+        }
+    }
+    internal static Point2 PlacedMarkerPosition(PatternPiece source,PatternPiece placed,NotchMark mark)
+    {
+        var oldPoint=source.Points[mark.VertexIndex];var point=placed.Points[mark.VertexIndex];
+        return new(oldPoint.X==point.X ? mark.Position.X : point.X,oldPoint.Y==point.Y ? mark.Position.Y : point.Y);
+    }
+    internal static bool MarkersMatchPlacement(PatternPiece source,PatternPiece placed,CancellationToken token)
+    {
+        ValidateMarkers(source,token);ValidateMarkers(placed,token);
+        if(source.Notches is null || placed.Notches is null)return source.Notches is null && placed.Notches is null;
+        if(source.Notches.Count!=placed.Notches.Count || source.Points.Count!=placed.Points.Count)return false;
+        for(var i=0;i<source.Notches.Count;i++)
+        {
+            token.ThrowIfCancellationRequested();var a=source.Notches[i];var b=placed.Notches[i];
+            if(a.VertexIndex!=b.VertexIndex)return false;
+            var expected=PlacedMarkerPosition(source,placed,a);
+            if(BitConverter.DoubleToInt64Bits(expected.X)!=BitConverter.DoubleToInt64Bits(b.Position.X) ||
+               BitConverter.DoubleToInt64Bits(expected.Y)!=BitConverter.DoubleToInt64Bits(b.Position.Y))return false;
+        }
+        return true;
+    }
+
     // Round outward rather than silently shaving off a requested positive gap.
     private static double AddClearance(double value, double clearance)
     {
@@ -192,7 +227,6 @@ public static class NestingEngine
             cancellationToken.ThrowIfCancellationRequested();
             if(piece is null)throw new ArgumentException("Geçersiz parça.",nameof(pieces));
             if(piece.Id==Guid.Empty || !ids.Add(piece.Id))throw new ArgumentException("Her pastal parçasının kimliği benzersiz olmalıdır.",nameof(pieces));
-            if(piece.Notches is not null)throw NestingPieceError.Create(piece.Id,"Çentik işaretli parça pastalda henüz desteklenmiyor.",nameof(pieces));
         }
         // Bound copies before taking detached snapshots. The caller must not mutate
         // input while it is being copied; all later work uses only snapshots.
@@ -203,6 +237,8 @@ public static class NestingEngine
             if (piece.Points is null) throw NestingPieceError.Create(piece.Id,"Geçersiz parça.",nameof(pieces));
             if (piece.Points.Count > MaximumVerticesPerPiece)
                 throw NestingPieceError.Create(piece.Id,$"Kontur sınırı: {MaximumVerticesPerPiece} nokta.",nameof(pieces));
+            try { ValidateMarkers(piece,cancellationToken); }
+            catch(ArgumentException error) { throw NestingPieceError.Create(piece.Id,error.Message,nameof(pieces),error); }
             totalVertices += piece.Points.Count;
             if (totalVertices > MaximumTotalVertices)
                 throw new ArgumentException("Pastal doğrulama kaynak sınırı aşıldı; daha küçük iş grupları kullanın.", nameof(pieces));
@@ -291,6 +327,12 @@ public static class NestingEngine
                 placed.Points.Add(point);
             }
             ValidateTranslation(entry.Piece, placed.Points, cancellationToken);
+            if(entry.Piece.Notches is { } marks)
+            {
+                placed.Notches=new List<NotchMark>(marks.Count);
+                foreach(var mark in marks) { cancellationToken.ThrowIfCancellationRequested();placed.Notches.Add(new NotchMark { VertexIndex=mark.VertexIndex,Position=PlacedMarkerPosition(entry.Piece,placed,mark) }); }
+                if(!MarkersMatchPlacement(entry.Piece,placed,cancellationToken))throw NestingPieceError.Create(entry.Piece.Id,"Köşe işaretleri yerleşimde korunamadı.",nameof(pieces));
+            }
             if(entry.Piece.Grainline is { } originalGrain)
             {
                 // Apply the exact same operation order used for the contour.
