@@ -16,6 +16,52 @@ public sealed record DxfBlockProjectResult(ProjectDocument WorkingCopy,Immutable
 /// <summary>Explicitly selects one unplaced block definition and one coincident visual vertex marker.</summary>
 public static class DxfBlockDefinitionPointMapping
 {
+    private readonly record struct LineEndpoint(string X,string Y,Point2 Scaled);
+    private static void ValidateLineChain(PatternPiece piece,DxfPieceSource link,DxfSourceGeometryReport geometry,double scale,CancellationToken token)
+    {
+        int count=piece.Closed ? piece.Points.Count : piece.Points.Count-1;
+        if(count<1 || link.SourceOrdinals.Length!=count || (long)count*count>2_000_000 || link.SourceOrdinals.Distinct().Count()!=count)
+            throw new InvalidDataException("LINE zinciri segment sayısı veya iş sınırı geçersiz.");
+        var lines=geometry.Records.Where(r=>r.BlockHeaderOrdinal==link.BlockHeaderOrdinal && r.EntityType=="LINE").ToDictionary(r=>r.SourceOrdinal);
+        if((long)piece.Points.Count*lines.Count>2_000_000)throw new InvalidDataException("LINE karşılaştırma iş sınırı aşıldı.");
+        LineEndpoint Endpoint(DxfSourceGeometryRecord line,int xc,int yc)
+        {
+            string Value(int code) { var groups=line.Groups.Where(g=>g.Code==code).ToArray();if(groups.Length!=1)throw new InvalidDataException("LINE ucu eksik veya yinelenmiş.");return groups[0].RawValue.Trim(); }
+            var sx=Value(xc);var sy=Value(yc);
+            if(!double.TryParse(sx,NumberStyles.Float,CultureInfo.InvariantCulture,out var x) || !double.TryParse(sy,NumberStyles.Float,CultureInfo.InvariantCulture,out var y) ||
+               !double.IsFinite(x) || !double.IsFinite(y) || !DxfExactDecimal.AreEqual(sx,x.ToString("R",CultureInfo.InvariantCulture),token) ||
+               !DxfExactDecimal.AreEqual(sy,y.ToString("R",CultureInfo.InvariantCulture),token))throw new InvalidDataException("LINE uç ondalığı güvenle temsil edilemiyor.");
+            var p=new Point2(x*scale,y*scale);if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || (x!=0 && p.X==0) || (y!=0 && p.Y==0))
+                throw new InvalidDataException("LINE uç ölçeği doğrulanamadı.");
+            return new(sx,sy,p);
+        }
+        var segments=new List<(int Ordinal,LineEndpoint Start,LineEndpoint End)>();
+        foreach(var ordinal in link.SourceOrdinals)
+        {
+            token.ThrowIfCancellationRequested();
+            if(!lines.TryGetValue(ordinal,out var line))throw new InvalidDataException("LINE kaynak kaydı veya blok oluşumu eksik.");
+            segments.Add((ordinal,Endpoint(line,10,20),Endpoint(line,11,21)));
+        }
+        var used=new HashSet<int>();LineEndpoint? first=null,previous=null;
+        for(int i=0;i<count;i++)
+        {
+            token.ThrowIfCancellationRequested();var a=piece.Points[i];var b=piece.Points[(i+1)%piece.Points.Count];
+            var matches=segments.Where(s=>!used.Contains(s.Ordinal) && ((s.Start.Scaled==a && s.End.Scaled==b) || (s.End.Scaled==a && s.Start.Scaled==b))).ToArray();
+            if(matches.Length!=1)throw new InvalidDataException("LINE segmenti tek bir kaynak kaydıyla eşleşmiyor.");
+            var m=matches[0];bool forward=m.Start.Scaled==a && m.End.Scaled==b;var start=forward ? m.Start : m.End;var end=forward ? m.End : m.Start;
+            if(previous is { } p && (!DxfExactDecimal.AreEqual(p.X,start.X,token) || !DxfExactDecimal.AreEqual(p.Y,start.Y,token)))
+                throw new InvalidDataException("LINE zinciri kaynak uçları tam birleşmiyor.");
+            first ??=start;previous=end;used.Add(m.Ordinal);
+        }
+        if(piece.Closed && first is { } f && previous is { } last && (!DxfExactDecimal.AreEqual(f.X,last.X,token) || !DxfExactDecimal.AreEqual(f.Y,last.Y,token)))
+            throw new InvalidDataException("LINE zinciri kaynak kapanışı tam değil.");
+        foreach(var other in lines.Values.Where(r=>!used.Contains(r.SourceOrdinal)))
+        {
+            token.ThrowIfCancellationRequested();var start=Endpoint(other,10,20);var end=Endpoint(other,11,21);
+            if(piece.Points.Any(p=>p==start.Scaled || p==end.Scaled))throw new InvalidDataException("LINE zinciri başka kaynak ucu ile belirsiz biçimde birleşiyor.");
+        }
+    }
+
     /// <summary>Creates one detached project with explicitly chosen unmarked
     /// POLYLINE definitions and/or explicitly mapped POINT vertices. No
     /// placement or manufacturing meaning is inferred.</summary>
@@ -64,10 +110,10 @@ public static class DxfBlockDefinitionPointMapping
         {
             token.ThrowIfCancellationRequested();
             var old=oldLinks.SingleOrDefault(p=>p.PieceId==item.PieceId);
-            if(old is null || old.Section!="BLOCKS" || old.EntityType!="POLYLINE" || old.BlockHeaderOrdinal!=item.BlockHeaderOrdinal || old.SourceOrdinals.Length!=1 || !old.InsertPath.IsDefaultOrEmpty)
-                throw new InvalidDataException("Seçilen parça doğrudan blok POLYLINE tanımı değil.");
-            var link=freshLinks.SingleOrDefault(p=>p.BlockHeaderOrdinal==item.BlockHeaderOrdinal && p.EntityType=="POLYLINE" && p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==old.SourceOrdinals[0]);
-            if(link is null || link.ChildSourceOrdinals.Length<3 || supplemental.Records.Any(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal && r.EntityType!="POINT"))
+            if(old is null || old.Section!="BLOCKS" || old.EntityType is not ("POLYLINE" or "LINE") || old.BlockHeaderOrdinal!=item.BlockHeaderOrdinal || old.SourceOrdinals.IsDefaultOrEmpty || !old.InsertPath.IsDefaultOrEmpty)
+                throw new InvalidDataException("Seçilen parça desteklenen doğrudan blok tanımı değil.");
+            var link=freshLinks.SingleOrDefault(p=>p.BlockHeaderOrdinal==item.BlockHeaderOrdinal && p.EntityType==old.EntityType && p.SourceOrdinals.SequenceEqual(old.SourceOrdinals));
+            if(link is null || (link.EntityType=="POLYLINE" && link.ChildSourceOrdinals.Length<3) || supplemental.Records.Any(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal && r.EntityType!="POINT"))
                 throw new InvalidDataException("Blok geometri envanteri eksik veya desteklenmiyor.");
             bool open=false;int count=0;
             foreach(var entry in inventory.Records.Where(r=>r.BlockHeaderOrdinal==item.BlockHeaderOrdinal))
@@ -96,19 +142,20 @@ public static class DxfBlockDefinitionPointMapping
                 }
             }
             var piece=fresh.Project.Pieces.Single(p=>p.Id==link.PieceId).Clone();var previous=import.Project.Pieces.Single(p=>p.Id==item.PieceId);piece.Id=previous.Id;
-            if(!piece.Closed || piece.Notches is not null || link.ChildSourceOrdinals.Length!=piece.Points.Count+1 ||
+            if((link.EntityType=="POLYLINE" && (!piece.Closed || link.ChildSourceOrdinals.Length!=piece.Points.Count+1)) || piece.Notches is not null ||
                !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[previous] }))
                 throw new InvalidDataException("Kaynak kontur veya köşe sayısı değişmiş.");
-            for(int i=0;i<piece.Points.Count;i++)
+            if(link.EntityType=="LINE")ValidateLineChain(piece,link,geometry,parameters.MillimetersPerUnit,token);
+            else for(int i=0;i<piece.Points.Count;i++)
             {
                 token.ThrowIfCancellationRequested();int ordinal=link.ChildSourceOrdinals[i];
                 if(!sourceByOrdinal.TryGetValue(ordinal,out var vertex) || vertex.EntityType!="VERTEX" || vertex.BlockHeaderOrdinal!=item.BlockHeaderOrdinal)
                     throw new InvalidDataException("POLYLINE köşe kaynağı doğrulanamadı.");
             }
-            if(!sourceByOrdinal.TryGetValue(link.ChildSourceOrdinals[^1],out var end) || end.EntityType!="SEQEND" || end.BlockHeaderOrdinal!=item.BlockHeaderOrdinal)
+            if(link.EntityType=="POLYLINE" && (!sourceByOrdinal.TryGetValue(link.ChildSourceOrdinals[^1],out var end) || end.EntityType!="SEQEND" || end.BlockHeaderOrdinal!=item.BlockHeaderOrdinal))
                 throw new InvalidDataException("POLYLINE bitiş kaydı doğrulanamadı.");
             result.Pieces.Add(piece);
-            warnings.Add($"İşaretsiz blok {item.BlockHeaderOrdinal}; parça {item.PieceId:D}; POLYLINE {link.SourceOrdinals[0]}; katman \"{EscapeAuditText(link.Layer)}\". Konturun basitliği, alanı ve üretime uygunluğu doğrulanmadı; konturu kontrol edin.");
+            warnings.Add($"İşaretsiz blok {item.BlockHeaderOrdinal}; parça {item.PieceId:D}; {link.EntityType} kaynak kayıtları {string.Join(",",link.SourceOrdinals)}; katman \"{EscapeAuditText(link.Layer)}\". Konturun basitliği, alanı ve üretime uygunluğu doğrulanmadı; konturu kontrol edin.");
         }
         result.ImportProvenance=new DxfImportProvenance { SourceFileName=sourceFileName,SourceSha256=import.SourceSha256!,SourceByteLength=import.SourceByteLength ?? -1,
             MillimetersPerUnit=parameters.MillimetersPerUnit,Warnings=warnings,PieceIds=result.Pieces.Select(p=>p.Id).ToList() };

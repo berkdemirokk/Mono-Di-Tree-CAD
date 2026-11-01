@@ -6,6 +6,45 @@ namespace TekstilCAD.Tests;
 public sealed class DxfBlockOccurrenceTests
 {
     [Fact]
+    public void NineSeparateBlockLinesCanBeExplicitlyCopiedWithoutProductionClaim()
+    {
+        var lines=string.Concat(Enumerable.Range(0,9).Select(i=>$"0\nLINE\n8\nA\n10\n{i*20}\n20\n0\n11\n{i*20+10}\n21\n0\n"));
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+lines+"0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
+        var original=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var links=import.PieceSources!.Value.Where(p=>p.EntityType=="LINE").ToArray();Assert.Equal(9,links.Length);
+        var choices=links.Select(p=>new DxfBlockProjectPieceSelection(p.BlockHeaderOrdinal!.Value,p.PieceId)).ToArray();
+        var result=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],choices,"source.dxf",true);
+        Assert.Equal(9,result.WorkingCopy.Pieces.Count);Assert.All(result.WorkingCopy.Pieces,p=> { Assert.False(p.Closed);Assert.Equal(2,p.Points.Count); });
+        var loaded=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(result.WorkingCopy)));
+        Assert.True(TekstilCAD.Core.DocumentSession.ContentEquals(result.WorkingCopy,loaded));
+        Assert.Contains(loaded.ImportProvenance!.Warnings,w=>w.Contains("LINE kaynak kayıtları"));Assert.Equal(original,bytes);
+    }
+
+    [Fact]
+    public void CoincidentUnselectedLineMakesSelectedLineAmbiguous()
+    {
+        const string line="0\nLINE\n8\nA\n10\n0\n20\n0\n11\n10\n21\n0\n";
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+line+line+"0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
+        var import=DxfFormat.Import(new MemoryStream(bytes),"test");var link=import.PieceSources!.Value.First(p=>p.EntityType=="LINE");
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
+            [new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true));
+    }
+
+    [Theory]
+    [InlineData("10",true)]
+    [InlineData("10.0000001",false)]
+    public void LineChainRequiresExactSourceJointEvenWhenImporterJoinsNearEndpoints(string joint,bool valid)
+    {
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+
+            "0\nLINE\n8\nA\n10\n0\n20\n0\n11\n10\n21\n0\n"+
+            "0\nLINE\n8\nA\n10\n20\n20\n0\n11\n"+joint+"\n21\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
+        var import=DxfFormat.Import(new MemoryStream(bytes),"test");var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="LINE"));
+        DxfBlockProjectResult Create()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true);
+        if(valid)Assert.Equal(3,Assert.Single(Create().WorkingCopy.Pieces).Points.Count);
+        else Assert.Throws<InvalidDataException>(()=>Create());
+    }
+
+    [Fact]
     public void PlainSelfIntersectingContourCarriesPersistentUnverifiedGeometryWarning()
     {
         var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
