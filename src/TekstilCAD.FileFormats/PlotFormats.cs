@@ -191,7 +191,7 @@ public static class HpglFormat
     /// Captures and prepares a file-only output and bounded turn reviews without writing.
     /// Caller must prevent source mutation until capture finishes. Reviews describe
     /// the captured source and units only; they are not a production certificate.
-    /// Validation and source cloning are not interruptible internally.
+    /// Validation observes cancellation; source cloning remains non-interruptible.
     /// </summary>
     public static HpglPreparedOutput Prepare(ProjectDocument project,double unitsPerMillimeter=40,CancellationToken cancellationToken=default)
         => PrepareCore(project,unitsPerMillimeter,true,cancellationToken);
@@ -209,10 +209,13 @@ public static class HpglFormat
         if(expectedVersion is null)ProjectStorage.AtomicWrite(path,prepared.Text,cancellationToken);
         else ProjectStorage.AtomicWriteIfUnchanged(path,prepared.Text,expectedVersion,cancellationToken);
     }
-    private static HpglPreparedOutput PrepareCore(ProjectDocument project,double unitsPerMillimeter,bool includeReviews,CancellationToken cancellationToken)
+    internal static HpglPreparedOutput PrepareForVerification(ProjectDocument project,double unitsPerMillimeter,CancellationToken cancellationToken,Action<int,ProjectDocument> beforeValidation)
+        => PrepareCore(project,unitsPerMillimeter,true,cancellationToken,beforeValidation);
+    private static HpglPreparedOutput PrepareCore(ProjectDocument project,double unitsPerMillimeter,bool includeReviews,CancellationToken cancellationToken,Action<int,ProjectDocument>? beforeValidationForVerification=null)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ProjectStorage.Validate(project);
+        beforeValidationForVerification?.Invoke(1,project);
+        ProjectStorage.Validate(project,cancellationToken);
         GrainlineExportGuard.EnsureSupported(project);
         NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();
@@ -220,7 +223,8 @@ public static class HpglFormat
         // detached copy. Caller must keep the source stable through capture.
         project=project.Clone();
         cancellationToken.ThrowIfCancellationRequested();
-        ProjectStorage.Validate(project);
+        beforeValidationForVerification?.Invoke(2,project);
+        ProjectStorage.Validate(project,cancellationToken);
         GrainlineExportGuard.EnsureSupported(project);
         NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();
