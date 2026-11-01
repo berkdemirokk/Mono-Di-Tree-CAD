@@ -108,6 +108,40 @@ public sealed class GradingRuleSet
         return result;
     }
 
+    /// <summary>Carry a matching rule through an exactly representable edge split.</summary>
+    public GradingRuleSet? WithEdgeSplitFor(PatternPiece source,PatternPiece edited,int afterIndex)
+    {
+        if(source.Id!=SourcePieceId || source.Closed!=SourceClosed || edited.Closed!=source.Closed ||
+           Deltas.Count!=source.Points.Count || !SourcePoints.SequenceEqual(source.Points) ||
+           afterIndex<0 || afterIndex>=source.Points.Count || edited.Points.Count!=source.Points.Count+1) return null;
+        if(source.Closed && source.Points.Count>1 && source.Points[0]==source.Points[^1] && afterIndex==source.Points.Count-1)afterIndex=0;
+        if(!source.Closed && afterIndex==source.Points.Count-1)return null;
+        var next=(afterIndex+1)%source.Points.Count;
+        var a=source.Points[afterIndex];var b=source.Points[next];var p=edited.Points[afterIndex+1];
+        var expected=source.Points.ToList();expected.Insert(afterIndex+1,p);
+        if(!expected.SequenceEqual(edited.Points) || !a.IsFinite || !b.IsFinite || !p.IsFinite || !Deltas[afterIndex].IsFinite || !Deltas[next].IsFinite)return null;
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits=BitConverter.DoubleToInt64Bits(value);var exponent=(int)((bits>>52)&0x7ff);
+            var mantissa=bits&0x000f_ffff_ffff_ffffL;if(exponent!=0)mantissa|=1L<<52;
+            var units=new System.Numerics.BigInteger(mantissa) << (exponent==0 ? 0 : exponent-1);
+            return bits<0 ? -units : units;
+        }
+        var dx=Units(b.X)-Units(a.X);var dy=Units(b.Y)-Units(a.Y);
+        var px=Units(p.X)-Units(a.X);var py=Units(p.Y)-Units(a.Y);
+        if(dx*py!=dy*px)return null;
+        var denominator=dx!=0 ? dx : dy;var numerator=dx!=0 ? px : py;
+        if(denominator.Sign<0) { denominator=-denominator;numerator=-numerator; }
+        if(denominator.IsZero || numerator<=0 || numerator>=denominator)return null;
+        var fraction=dx!=0 ? (p.X-a.X)/(b.X-a.X) : (p.Y-a.Y)/(b.Y-a.Y);
+        var da=Deltas[afterIndex];var db=Deltas[next];
+        var interpolated=new Point2(da.X+(db.X-da.X)*fraction,da.Y+(db.Y-da.Y)*fraction);
+        if(!interpolated.IsFinite ||
+           (Units(interpolated.X)-Units(da.X))*denominator!=(Units(db.X)-Units(da.X))*numerator ||
+           (Units(interpolated.Y)-Units(da.Y))*denominator!=(Units(db.Y)-Units(da.Y))*numerator)return null;
+        var result=Clone();result.SourcePoints=expected;result.Deltas.Insert(afterIndex+1,interpolated);return result;
+    }
+
     /// <summary>Carry a matching rule through an edge midpoint insertion using linearly interpolated increments.</summary>
     public GradingRuleSet? WithEdgeMidpointFor(PatternPiece source, PatternPiece edited, int afterIndex)
     {
