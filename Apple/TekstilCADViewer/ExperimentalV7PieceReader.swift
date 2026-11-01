@@ -32,6 +32,7 @@ struct ExperimentalV7PieceReader {
     private var mappingArray: String? = nil, mappingDepth = 0
     private var mappingToken: [UInt8]? = nil
     private var sourceIDs = Set<UUID>(), historyIDs = Set<UUID>(), historicalPoints = 0, historicalMarks = 0
+    private var sourceOrder: [UUID] = []
     private var sourceQuantities: [UUID: Int] = [:]
     private var sourceGeometry: [UUID: Drawing.Piece] = [:], historyGeometry: [UUID: Drawing.Piece] = [:]
     private var selectionIDs = Set<UUID>()
@@ -64,7 +65,7 @@ struct ExperimentalV7PieceReader {
             }
             sourceHasher.update(data: data)
             sourceLength += data.count
-        } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
+        } catch { discardPartialState(); throw error }
     }
 
     mutating func finish(cancelled: () -> Bool = { false }) throws -> [Data] {
@@ -94,19 +95,32 @@ struct ExperimentalV7PieceReader {
                 counts[mapping.source, default: 0] += 1
             }
             guard sourceQuantities.allSatisfy({ counts[$0.key] == $0.value }) else { throw Failure.invalid }
+            var index = 0
+            for source in sourceOrder {
+                guard let quantity = sourceQuantities[source] else { throw Failure.invalid }
+                for copy in 1...quantity {
+                    if cancelled() { throw Failure.cancelled }
+                    guard index < traceMappings.count, traceMappings[index].source == source,
+                          traceMappings[index].number == copy else { throw Failure.invalid }
+                    index += 1
+                }
+            }
+            guard index == traceMappings.count else { throw Failure.invalid }
             finished = true
             return pieces
-        } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
+        } catch { discardPartialState(); throw error }
     }
 
     /// Candidate only: rotation history and full v7 schema have not been checked.
     mutating func finishPreview(cancelled: () -> Bool = { false }) throws -> ExperimentalV7Preview {
-        let parts = try finish(cancelled: cancelled)
-        guard let name = projectName else { throw Failure.invalid }
-        let preview = try ExperimentalV7Contours.preview(name: name, input: parts, cancelled: cancelled)
-        guard preview.pieces.reduce(historicalPoints, { $0 + $1.points.count }) <= 200_000,
-              preview.pieces.reduce(historicalMarks, { $0 + $1.notches.count }) <= 200_000 else { throw Failure.limit }
-        return preview
+        do {
+            let parts = try finish(cancelled: cancelled)
+            guard let name = projectName else { throw Failure.invalid }
+            let preview = try ExperimentalV7Contours.preview(name: name, input: parts, cancelled: cancelled)
+            guard preview.pieces.reduce(historicalPoints, { $0 + $1.points.count }) <= 200_000,
+                  preview.pieces.reduce(historicalMarks, { $0 + $1.notches.count }) <= 200_000 else { throw Failure.limit }
+            return preview
+        } catch { discardPartialState(); throw error }
     }
 
     /// Experimental in-memory source retention. Caller owns the original immutable
@@ -114,18 +128,18 @@ struct ExperimentalV7PieceReader {
     /// Full v7 history and geometry are still unverified; never use as a production load.
     mutating func finishDocument(original: Data, cancelled: () -> Bool = { false }) throws -> ExperimentalV7Document {
         guard !failure, !finished else { throw Failure.invalid }
-        guard original.count == sourceLength, original.count <= 64 * 1024 * 1024 else { failure = true; throw Failure.invalid }
+        guard original.count == sourceLength, original.count <= 64 * 1024 * 1024 else { discardPartialState(); throw Failure.invalid }
         var candidateHash = SHA256()
         var offset = 0
         while offset < original.count {
-            if cancelled() { failure = true; throw Failure.cancelled }
+            if cancelled() { discardPartialState(); throw Failure.cancelled }
             let end = min(offset + 64 * 1024, original.count)
             candidateHash.update(data: original[offset..<end]); offset = end
         }
         var expectedHash = sourceHasher
-        guard candidateHash.finalize() == expectedHash.finalize() else { failure = true; throw Failure.invalid }
+        guard candidateHash.finalize() == expectedHash.finalize() else { discardPartialState(); throw Failure.invalid }
         let preview = try finishPreview(cancelled: cancelled)
-        if cancelled() { throw Failure.cancelled }
+        if cancelled() { discardPartialState(); throw Failure.cancelled }
         let visible = Set(preview.pieces.compactMap(\.id))
         let placed = Set(traceMappings.map(\.placed))
         let drawing = Drawing(name: preview.name, pieces: preview.pieces, pieceRenameIdentitiesValid: true,
@@ -303,6 +317,7 @@ struct ExperimentalV7PieceReader {
                     if array == "SourcePieces" {
                         guard let quantity = item.quantity, sourceIDs.insert(id).inserted else { throw Failure.invalid }
                         sourceQuantities[id] = quantity
+                        sourceOrder.append(id)
                         sourceGeometry[id] = item
                     } else {
                         guard item.quantity == 1, historyIDs.insert(id).inserted else { throw Failure.invalid }
@@ -350,6 +365,26 @@ struct ExperimentalV7PieceReader {
         }
         return (Mapping(source: source, number: n.intValue, placed: placed), angle)
     }
+
+    private mutating func discardPartialState() {
+        failure = true
+        pieces = []; piece = nil; mappingToken = nil; keyToken = nil; nameToken = nil; scopedStringToken = nil; scopedNumberToken = nil
+        sourceGeometry = [:]; historyGeometry = [:]; sourceQuantities = [:]; sourceOrder = []
+        sourceIDs = []; historyIDs = []; selectionIDs = []; rotationAngles = [:]
+        placementMappings = []; traceMappings = []
+        stack = []; rootKeys = []; snapshotKeys = []; traceKeys = []
+        validator = ExperimentalJSONStream(); projectName = nil; potentialKey = nil; rootValueKey = nil; scopedValue = nil
+        scopedStringKey = nil; scopedNumberKey = nil; snapshotNumbers = [:]; traceNumbers = [:]
+        snapshotFingerprint = nil; traceFingerprint = nil
+    }
+
+    #if DEBUG
+    var retainedEntriesForTesting: Int {
+        pieces.count + (piece == nil ? 0 : 1) + (mappingToken == nil ? 0 : 1) + sourceGeometry.count + historyGeometry.count +
+        sourceQuantities.count + sourceOrder.count + sourceIDs.count + historyIDs.count + selectionIDs.count + rotationAngles.count +
+        placementMappings.count + traceMappings.count
+    }
+    #endif
 
     // Guid(ReadOnlySpan<byte>) in the desktop runtime treats its first three
     // fields as little-endian. UUID text uses network byte order for them.

@@ -213,6 +213,14 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         snapshot = originalSnapshot; snapshot["LayoutFingerprint"] = String(repeating: "A", count: 64); try rejected(snapshot)
         trace = originalTrace; trace["Selections"] = []
         snapshot = originalSnapshot; snapshot["RotationTrace"] = trace; try rejected(snapshot)
+        snapshot = originalSnapshot
+        let originalPlacements = try XCTUnwrap(snapshot["Placements"] as? [[String: Any]])
+        trace = originalTrace
+        let originalCopies = try XCTUnwrap(trace["Copies"] as? [[String: Any]])
+        XCTAssertGreaterThan(originalCopies.count, 1)
+        snapshot["Placements"] = Array(originalPlacements.reversed())
+        trace["Copies"] = Array(originalCopies.reversed())
+        snapshot["RotationTrace"] = trace; try rejected(snapshot)
         trace = originalTrace
         var sources = try XCTUnwrap(trace["SourcePieces"] as? [[String: Any]])
         sources[0]["Points"] = []
@@ -245,4 +253,16 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertThrowsError(try cancelled.feed(json, cancelled: { checks += 1; return checks == 10 }))
         XCTAssertThrowsError(try cancelled.finish())
     }
+    #if DEBUG
+    func testCancelledReaderReleasesRetainedPieceAndHistoryState() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-four-angle", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        var reader = ExperimentalV7PieceReader()
+        try reader.feed(data.prefix(data.count - 2))
+        XCTAssertGreaterThan(reader.retainedEntriesForTesting, 0)
+        XCTAssertThrowsError(try reader.feed(Data([32]), cancelled: { true }))
+        XCTAssertEqual(reader.retainedEntriesForTesting, 0)
+        XCTAssertThrowsError(try reader.finish())
+    }
+    #endif
 }
