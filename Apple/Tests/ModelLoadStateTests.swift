@@ -2,6 +2,37 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testV7StaleVisiblePiecesMayHaveNullMetadataAndGrainline() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
+        let original = try Data(contentsOf: url)
+        let envelope = try XCTUnwrap(try JSONSerialization.jsonObject(with: original) as? [Any])
+        var body = try XCTUnwrap(envelope[1] as? [String: Any])
+        var pieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+        pieces[0]["Metadata"] = NSNull(); pieces[0]["Grainline"] = NSNull()
+        pieces.append(["Id": "11111111-1111-1111-1111-111111111111", "Name": "Ek parça", "Closed": false,
+                       "Points": [["X": 0, "Y": 0], ["X": 10, "Y": 20]],
+                       "Metadata": NSNull(), "Grainline": NSNull()])
+        body["Pieces"] = pieces
+        let data = try JSONSerialization.data(withJSONObject: [7, body]), before = data
+        let drawing = try Drawing.load(data)
+        XCTAssertEqual(drawing.pieces.count, 3)
+        XCTAssertNil(drawing.pieces[0].grain); XCTAssertNil(drawing.pieces[0].material)
+        XCTAssertEqual(drawing.pieces[2].name, "Ek parça")
+        XCTAssertNil(drawing.pieces[2].grain); XCTAssertNil(drawing.pieces[2].material)
+        XCTAssertEqual(data, before)
+        for key in ["Metadata", "Grainline"] {
+            var bad = pieces; bad[0][key] = "invalid"; body["Pieces"] = bad
+            XCTAssertThrowsError(try Drawing.load(JSONSerialization.data(withJSONObject: [7, body])))
+        }
+        body["Pieces"] = pieces
+        var snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+        var trace = try XCTUnwrap(snapshot["RotationTrace"] as? [String: Any])
+        var history = try XCTUnwrap(trace["SourcePieces"] as? [[String: Any]])
+        history[0]["Grainline"] = NSNull(); trace["SourcePieces"] = history
+        snapshot["RotationTrace"] = trace; body["NestingSnapshot"] = snapshot
+        XCTAssertThrowsError(try Drawing.load(JSONSerialization.data(withJSONObject: [7, body])))
+    }
+
     func testDesktopV7PreviewKeepsSourceBytesAndRejectsInvalidVisibleMarks() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
         let data = try Data(contentsOf: url)

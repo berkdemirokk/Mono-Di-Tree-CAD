@@ -1993,7 +1993,7 @@ struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            if formatVersion == 7 && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı" || raw["Grainline"] is NSNull || raw["Metadata"] is NSNull) {
+            if formatVersion == 7 && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
                 throw ViewerError.message("Sürüm 7 parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
             }
             let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
