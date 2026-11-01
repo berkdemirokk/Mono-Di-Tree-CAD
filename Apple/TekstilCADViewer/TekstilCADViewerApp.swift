@@ -1364,7 +1364,7 @@ private struct ModelLibrary: View {
                     Button {
                         if model.canOpen { open(model) }
                         else if model.requiresRecovery { modelToRecover = model }
-                        else if model.identity == nil { error = "Kayıt listelenirken değişti. Listeyi kapatıp yeniden açın." }
+                        else if model.identity == nil { error = "Kayıt listelenirken değişti. Model listesini yenileyip tekrar deneyin." }
                         else { error = "Bu kayıt açılamıyor. Kayıtlı dosyayı kontrol edin." }
                     } label: {
                         VStack(alignment: .leading) {
@@ -1410,6 +1410,8 @@ private struct ModelLibrary: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
+                        Button { loadModels() } label: { Label("Listeyi yenile", systemImage: "arrow.clockwise") }
+                            .disabled(isLoading || isRecovering)
                         Picker("Sıralama", selection: $sortOrder) {
                             ForEach(SortOrder.allCases) { order in
                                 Text(order.rawValue).tag(order)

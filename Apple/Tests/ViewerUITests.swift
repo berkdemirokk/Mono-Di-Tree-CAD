@@ -850,6 +850,11 @@ final class ViewerUITests: XCTestCase {
         search.typeText("ZEBRA")
         XCTAssertTrue(zebra.waitForExistence(timeout: 5))
         XCTAssertFalse(akasya.exists)
+        sort.tap()
+        app.buttons["Listeyi yenile"].tap()
+        XCTAssertTrue(zebra.waitForExistence(timeout: 10))
+        XCTAssertFalse(akasya.exists, "Refreshing must retain the active search")
+        XCTAssertEqual(search.value as? String, "ZEBRA")
         zebra.tap()
         XCTAssertTrue(app.staticTexts["Zebra"].waitForExistence(timeout: 10))
     }
