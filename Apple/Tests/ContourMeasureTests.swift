@@ -64,6 +64,18 @@ final class ContourMeasureTests: XCTestCase {
         XCTAssertNil(ContourMeasure.distance([p(.infinity, 0), p(0, 0)], from: 0, to: 1))
         XCTAssertNil(ContourMeasure.distance([p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)], from: 0, to: 1))
     }
+    func testSpanSelectionIsBoundToPieceAndValidIndices() throws {
+        let triangle = [p(0, 0), p(3, 0), p(3, 4), p(0, 0)]
+        var selection = ContourMeasure.SpanSelection(pieceIndex: 2)
+        XCTAssertNil(selection.length(points: triangle, closed: true, pieceIndex: 2))
+        selection.start = "3"; selection.end = "1"
+        XCTAssertEqual(try XCTUnwrap(selection.length(points: triangle, closed: true, pieceIndex: 2)), 3, accuracy: 1e-12)
+        XCTAssertNil(selection.length(points: triangle, closed: true, pieceIndex: 1))
+        selection.forward = false
+        XCTAssertEqual(try XCTUnwrap(selection.length(points: triangle, closed: true, pieceIndex: 2)), 9, accuracy: 1e-12)
+        selection.end = "999"
+        XCTAssertNil(selection.length(points: triangle, closed: true, pieceIndex: 2))
+    }
     func testHighlightedPathUsesSameOpenAndClosedVertexOrder() throws {
         let triangle = [p(0, 0), p(3, 0), p(3, 4)]
         XCTAssertEqual(ContourMeasure.pathIndices(triangle, from: 2, to: 0, closed: false), [0, 1, 2])

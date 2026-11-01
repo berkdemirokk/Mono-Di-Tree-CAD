@@ -19,6 +19,24 @@ final class ViewerUITests: XCTestCase {
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Aynı parça iki kez seçildi; farklar sıfır olabilir."].waitForExistence(timeout: 5))
     }
+    func testPieceComparisonLetsUserMeasureAnExplicitSpan() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let compare = app.buttons["İki parçayı karşılaştır…"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 15)); compare.tap()
+        app.swipeUp()
+        let span = app.buttons["Birinci parçanın aralığını seç…"]
+        XCTAssertTrue(span.waitForExistence(timeout: 5)); span.tap()
+        let start = app.textFields["Başlangıç indeksi"], end = app.textFields["Bitiş indeksi"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5)); start.tap(); start.typeText("0")
+        end.tap(); end.typeText("1")
+        XCTAssertTrue(app.staticTexts["Aralık: yaklaşık 100 mm"].waitForExistence(timeout: 5))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(app.staticTexts["Birinci aralık: 0 → 1 · ileri · yaklaşık 100 mm"].waitForExistence(timeout: 5))
+    }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()
@@ -28,6 +46,7 @@ final class ViewerUITests: XCTestCase {
         let compare = app.buttons["İki parçayı karşılaştır…"]
         XCTAssertTrue(compare.waitForExistence(timeout: 15)); compare.tap()
         XCTAssertTrue(app.navigationBars["Parçaları karşılaştır"].waitForExistence(timeout: 5))
+        app.swipeUp()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["En: -50 mm"].waitForExistence(timeout: 5))
         let previewButton = app.buttons["Karşılaştırma özetini önizle…"]

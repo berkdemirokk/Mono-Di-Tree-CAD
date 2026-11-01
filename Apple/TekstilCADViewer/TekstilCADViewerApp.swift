@@ -2712,6 +2712,8 @@ private struct PieceComparisonView: View {
     @State private var second: Int?
     @State private var choosingFirst = false
     @State private var choosingSecond = false
+    @State private var firstSpan = ContourMeasure.SpanSelection()
+    @State private var secondSpan = ContourMeasure.SpanSelection()
     private struct ReportPreview: Identifiable { let id = UUID(); let text: String }
     @State private var reportPreview: ReportPreview?
 
@@ -2756,6 +2758,25 @@ private struct PieceComparisonView: View {
                     if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second) {
                         Button("Karşılaştırma özetini önizle…") { reportPreview = ReportPreview(text: report) }
                     }
+                    Section("Seçilen kontur aralıkları") {
+                        let firstLength = firstSpan.length(points: a.points, closed: a.closed, pieceIndex: first)
+                        let secondLength = secondSpan.length(points: b.points, closed: b.closed, pieceIndex: second)
+                        NavigationLink("Birinci parçanın aralığını seç…") {
+                            PieceSpanSelectionView(piece: a, pieceIndex: first, selection: $firstSpan)
+                        }
+                        NavigationLink("İkinci parçanın aralığını seç…") {
+                            PieceSpanSelectionView(piece: b, pieceIndex: second, selection: $secondSpan)
+                        }
+                        if let value = firstLength.flatMap({ MeasurementDisplay.format($0) }) {
+                            Text("Birinci aralık: \(firstSpan.start) → \(firstSpan.end)\(a.closed ? (firstSpan.forward ? " · ileri" : " · geri") : "") · yaklaşık \(value) mm")
+                        } else { Text("Birinci aralık seçilmedi veya hesaplanamadı.") }
+                        if let value = secondLength.flatMap({ MeasurementDisplay.format($0) }) {
+                            Text("İkinci aralık: \(secondSpan.start) → \(secondSpan.end)\(b.closed ? (secondSpan.forward ? " · ileri" : " · geri") : "") · yaklaşık \(value) mm")
+                        } else { Text("İkinci aralık seçilmedi veya hesaplanamadı.") }
+                        Text("Aralık farkı (ikinci − birinci): \(difference(firstLength, secondLength))")
+                        Text("Aralıklar dosyadaki köşeler arasında düz çizgileri izler; dikiş uyumu doğrulanmaz. Paylaşım özeti yalnız toplam kontur bilgilerini içerir.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Section("Yaklaşık fark: ikinci − birinci") {
                         Text("En: \(difference(a.contourBounds.map { $0.maxX - $0.minX }, b.contourBounds.map { $0.maxX - $0.minX }))")
                         Text("Boy: \(difference(a.contourBounds.map { $0.maxY - $0.minY }, b.contourBounds.map { $0.maxY - $0.minY }))")
@@ -2789,6 +2810,39 @@ private struct PieceComparisonView: View {
                     }
                 }
             }
+        }
+    }
+}
+private struct PieceSpanSelectionView: View {
+    let piece: Drawing.Piece
+    let pieceIndex: Int
+    @Binding var selection: ContourMeasure.SpanSelection
+
+    var body: some View {
+        Form {
+            Section("Parça") { Text("\(pieceIndex + 1). \(piece.displayName(index: pieceIndex))") }
+            Section("Dosya nokta indeksleri") {
+                TextField("Başlangıç indeksi", text: $selection.start).keyboardType(.numberPad)
+                NavigationLink("Başlangıç noktasını seç") { PointIndexPicker(points: piece.points, selected: $selection.start) }
+                TextField("Bitiş indeksi", text: $selection.end).keyboardType(.numberPad)
+                NavigationLink("Bitiş noktasını seç") { PointIndexPicker(points: piece.points, selected: $selection.end) }
+                if piece.closed {
+                    Picker("Yol yönü", selection: $selection.forward) {
+                        Text("İleri").tag(true)
+                        Text("Geri").tag(false)
+                    }.pickerStyle(.segmented)
+                }
+                if let value = selection.length(points: piece.points, closed: piece.closed, pieceIndex: pieceIndex).flatMap({ MeasurementDisplay.format($0) }) {
+                    Text("Aralık: yaklaşık \(value) mm")
+                } else { Text("Geçerli başlangıç ve bitiş noktalarını seçin.").foregroundStyle(.secondary) }
+            }
+            Section {
+                Text("İleri yön dosya sırasını izler; kapalı konturda geri yön diğer yolu seçer. Aynı nokta sıfır uzunluktur, tam tur değildir. Bu sonuç dikiş uyumu veya üretim onayı değildir.")
+            }
+        }
+        .navigationTitle("Kontur aralığı")
+        .onAppear {
+            if selection.pieceIndex != pieceIndex { selection = ContourMeasure.SpanSelection(pieceIndex: pieceIndex) }
         }
     }
 }

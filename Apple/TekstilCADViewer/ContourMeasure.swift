@@ -38,6 +38,16 @@ enum ContourMeasure {
         let value = hypot(b.x - a.x, b.y - a.y)
         return value.isFinite ? value : nil
     }
+    struct SpanSelection {
+        var pieceIndex: Int? = nil
+        var start = ""
+        var end = ""
+        var forward = true
+        func length(points: [Point], closed: Bool, pieceIndex: Int) -> Double? {
+            guard self.pieceIndex == pieceIndex, let first = Int(start), let second = Int(end) else { return nil }
+            return ContourMeasure.pathLength(points, from: first, to: second, closed: closed, forward: forward)
+        }
+    }
     // Polyline length between file vertices. On a closed contour forward follows
     // file order and backward follows the other direction; selecting the same
     // logical vertex yields zero in both directions, not a complete lap.
