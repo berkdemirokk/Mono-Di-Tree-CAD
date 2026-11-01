@@ -177,6 +177,8 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Selected;
         if(piece is null)
         { owner.SetStatus("Taşımak için önce proje parçaları listesinden veya kalıp alanından bir parça seçin.");return; }
+        if(owner.HasPropertyDraftFor(piece.Id))
+        { owner.SetStatus("Parça taşınmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
         var step=modifiers==ModifierKeys.Control ? .1 : modifiers==ModifierKeys.Shift ? 10 : 1;
         var dx=key==Key.Left ? -step : key==Key.Right ? step : 0;
         var dy=key==Key.Up ? -step : key==Key.Down ? step : 0;
@@ -484,6 +486,8 @@ public sealed class CadCanvas : FrameworkElement
                 return;
             }
             owner.Select(piece?.Id);
+            if(piece is not null && owner.HasPropertyDraftFor(piece.Id))
+            { owner.SetStatus("Parça taşınmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
             if(vertex>=0 && piece?.Notches is not null)
             {
                 if(!CanDragMarkedVertex(piece,vertex)) { owner.SetStatus("İşaretli köşe taşınamaz; önce işareti gözden geçirin.");return; }

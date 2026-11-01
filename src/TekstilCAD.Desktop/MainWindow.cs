@@ -120,6 +120,7 @@ public class MainWindow : Window
     private bool dirty;
     private sealed record PropertyDraft(string Name, string X, string Y, string BaseName, double BaseX, double BaseY);
     private readonly Dictionary<Guid, PropertyDraft> propertyDrafts = [];
+    internal bool HasPropertyDraftFor(Guid id) => propertyDrafts.ContainsKey(id);
     private bool HasUnsavedDocumentWork => dirty || propertyDrafts.Count > 0;
     private bool HasUnsavedWork => HasUnsavedDocumentWork || (canvas?.HasPendingDrawing ?? false);
     internal bool HasPendingCanvasOrPropertyWork => propertyDrafts.Count>0 || (canvas is not null && (canvas.HasPendingDrawing || canvas.HasActiveDragPreview || canvas.LargeVertexValidationRunning || canvas.LargeCompletionRunning));
@@ -1471,6 +1472,8 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not { Points.Count: >0 } piece)return;
+        if(HasPropertyDraftFor(piece.Id))
+        { SetStatus("Dönüşüm uygulanmadı · Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");return; }
         if(piece.Notches is not null && operation is null) { SetStatus("Bu dönüşüm köşe işaretleriyle desteklenmiyor.");return; }
         if(canvas.LargeVertexValidationRunning || canvas.LargeCompletionRunning)
         { SetStatus("Dönüşüm uygulanmadı · Doğrulamanın bitmesini bekleyin veya Esc ile iptal edin.");return; }

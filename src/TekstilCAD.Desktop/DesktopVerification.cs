@@ -594,6 +594,7 @@ internal static class DesktopVerification
             VerifyPendingDrawingOutputGuards(studio,checks);
             VerifyPendingExportPreflightGuards(studio,work,checks);
             VerifyFractionalSelectionWithSnap(studio,checks);
+            VerifyPropertyDraftGeometryGuards(studio,checks);
             VerifyMixedMouseButtons(studio,checks);
             VerifyNearestVertexSelection(studio,checks);
             VerifyClosingEdgeDragSafety(studio,checks);
@@ -1709,6 +1710,52 @@ internal static class DesktopVerification
         }
         finally { canvas.CancelDrawing();snap.IsChecked=oldSnap;scale.SetValue(canvas,oldScale);offset.SetValue(canvas,oldOffset); }
     }
+    private static void VerifyPropertyDraftGeometryGuards(MainWindow studio,List<string> checks)
+    {
+        var a=new PatternPiece { Name="Taslaklı",Points=[new(0,0),new(20,0),new(20,10),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+        var b=new PatternPiece { Name="Diğer",Points=[new(200,0),new(220,0),new(220,10),new(200,10)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[a,b] });studio.SetTool("Seç");studio.Select(a.Id);
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+        var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+        var move=typeof(CadCanvas).GetMethod("MoveSelectionByKeyboard",PrivateInstance)!;
+        var down=typeof(CadCanvas).GetMethod("Down",PrivateInstance)!;
+        var scale=typeof(CadCanvas).GetField("scale",PrivateInstance)!;var offset=typeof(CadCanvas).GetField("offset",PrivateInstance)!;
+        var oldScale=scale.GetValue(canvas);var oldOffset=offset.GetValue(canvas);
+        try
+        {
+            name.Text="Korunan ad taslağı";var before=studio.Document.Clone();var undo=session.UndoCount;
+            foreach(var label in new[] { "90° sola","90° sağa","Aynala","Yatay aynala" })
+            {
+                Descendants<Button>((DependencyObject)studio.Content).Single(button=>Equals(button.Content,label)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && name.Text=="Korunan ad taslağı" && status.Text.Contains("taslağını"),
+                    $"{label} preserves the selected piece's unapplied property draft",checks);
+            }
+            move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
+            Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && status.Text.Contains("taslağını"),
+                "Keyboard movement waits for the selected piece's property draft",checks);
+            var click=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left);var position=click.GetPosition(canvas);
+            scale.SetValue(canvas,1d);offset.SetValue(canvas,new Vector(position.X,position.Y));
+            down.Invoke(canvas,[canvas,click]);
+            Check(!canvas.HasActiveDragPreview && DocumentSession.ContentEquals(before,studio.Document) && status.Text.Contains("taslağını"),
+                "Mouse selection keeps the property draft and does not start a drag",checks);
+            studio.Select(b.Id);move.Invoke(canvas,[Key.Right,ModifierKeys.None]);
+            Check(studio.Document.Pieces.Single(p=>p.Id==b.Id).Points[0]==new Point2(201,0) && studio.HasPropertyDraftFor(a.Id),
+                "A property draft on another piece does not block keyboard movement",checks);
+            studio.Select(a.Id);Check(name.Text=="Korunan ad taslağı","Switching pieces retains the original draft",checks);
+            Invoke(studio,"ApplyProperties");
+            Check(studio.Selected!.Name=="Korunan ad taslağı" && !studio.HasPropertyDraftFor(a.Id),
+                "The preserved property draft remains applicable",checks);
+            var applied=studio.Document.Clone();
+            Descendants<Button>((DependencyObject)studio.Content).Single(button=>Equals(button.Content,"90° sağa")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!studio.Selected!.Points.SequenceEqual(applied.Pieces.Single(p=>p.Id==a.Id).Points) && studio.Selected.Notches is { Count:1 },
+                "Geometry editing resumes with markers preserved once the draft is applied",checks);
+        }
+        finally { canvas.CancelDrawing();scale.SetValue(canvas,oldScale);offset.SetValue(canvas,oldOffset);studio.LoadDocument(new ProjectDocument()); }
+    }
+
     private static void VerifyClosingEdgeDragSafety(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
