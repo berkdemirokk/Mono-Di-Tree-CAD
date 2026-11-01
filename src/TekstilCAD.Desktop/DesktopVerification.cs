@@ -9899,9 +9899,12 @@ internal static class DesktopVerification
             Check(result.Text.Contains("1. yol: 10 mm") && result.Text.Contains("2. yol: 7 mm")
                 && result.Text.Contains("(2 − 1): -3 mm") && result.Text.Contains("Mutlak fark: 3 mm") && result.Text.Contains("üretim kabulü değildir"),
                 "Seam comparison reports both segment lengths and signed second-minus-first difference",checks);
+            Check(AutomationProperties.GetName(result).Contains(result.Text),"Seam comparison announces its current result through automation",checks);
             expectedEase.Text="-2";
             Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
                 "Changing the target clears the previous comparison and preview",checks);
+            Check(AutomationProperties.GetName(result).Contains(result.Text) && !AutomationProperties.GetName(result).Contains("1. yol:"),
+                "Changing seam inputs also clears the previous accessible result",checks);
             tolerance.Text="1";
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("Hedeften sapma: -1 mm") && result.Text.Contains("Tolerans: içinde (±1 mm)"),
@@ -9995,6 +9998,7 @@ internal static class DesktopVerification
             source=null;typeof(SeamLengthComparisonWindow).GetMethod("CheckCurrent",PrivateInstance)!.Invoke(window,null);
             Check(!compare.IsEnabled && result.Text.Contains("geçersiz") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
                 "Workshop source change invalidates the result and preview",checks);
+            Check(AutomationProperties.GetName(result).Contains("geçersiz"),"A stale seam comparison replaces its accessible result",checks);
         }
         finally { window.Close(); }
         foreach(var scenario in new[]{"geometry","selection","draft"})
@@ -10014,6 +10018,24 @@ internal static class DesktopVerification
             }
             finally { staleWindow.Close(); }
         }
+        var boundaryA=new PatternPiece { Closed=false,Points=[new(0,0),new(10,0)] };
+        var boundaryB=new PatternPiece { Closed=false,Points=[new(0,0),new(11,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[boundaryA,boundaryB] });studio.Select(boundaryA.Id);source=boundaryA.Id;
+        var boundaryWindow=new SeamLengthComparisonWindow(studio,studio,()=>source);
+        try
+        {
+            var boundaryTarget=(TextBox)typeof(SeamLengthComparisonWindow).GetField("expectedEase",PrivateInstance)!.GetValue(boundaryWindow)!;
+            var boundaryTolerance=(TextBox)typeof(SeamLengthComparisonWindow).GetField("tolerance",PrivateInstance)!.GetValue(boundaryWindow)!;
+            var boundaryResult=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(boundaryWindow)!;
+            var boundaryCompare=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(boundaryWindow)!;
+            boundaryTarget.Text=MeasurementInput.Format(-Math.ScaleB(1,-54));boundaryTolerance.Text="1";
+            boundaryCompare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(boundaryResult.Text.Contains("Hedeften sapma: 1 mm") && boundaryResult.Text.Contains("Tolerans: dışında (±1 mm)") &&
+                boundaryResult.Text.Contains("yuvarlanmasından önce") && boundaryResult.Text.Contains("aynı görünse de") &&
+                AutomationProperties.GetName(boundaryResult).Contains(boundaryResult.Text),
+                "Seam comparison explains an exact outside decision when rounded deviation equals the displayed tolerance",checks);
+        }
+        finally { boundaryWindow.Close(); }
         studio.LoadDocument(Fixture());
     }
 

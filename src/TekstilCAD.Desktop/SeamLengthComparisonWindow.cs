@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -79,13 +80,13 @@ internal sealed class SeamLengthComparisonWindow : Window
     }
     private void ClearResult()
     {
-        if(stale)return;result.Text="Karşılaştırma için iki yolu seçip düğmeye basın.";first?.Preview.Clear();second?.Preview.Clear();
+        if(stale)return;SetResult("Karşılaştırma için iki yolu seçip düğmeye basın.");first?.Preview.Clear();second?.Preview.Clear();
     }
     private bool CheckCurrent()
     {
         if(stale)return false;
         if(!ReferenceEquals(workspace.Document,original) || !DocumentSession.ContentEquals(snapshot,workspace.Document) || workspace.SelectedId!=selectedId || workshopSource()!=workshopSourceId || workspace.HasPendingCanvasOrPropertyWork)
-        { stale=true;compare.IsEnabled=false;first.Preview.Clear();second.Preview.Clear();result.Text="Proje, seçim veya bekleyen çalışma değişti; sonuç geçersiz. Pencereyi kapatıp güncel verilerle yeniden açın.";return false; }
+        { stale=true;compare.IsEnabled=false;first.Preview.Clear();second.Preview.Clear();SetResult("Proje, seçim veya bekleyen çalışma değişti; sonuç geçersiz. Pencereyi kapatıp güncel verilerle yeniden açın.");return false; }
         return true;
     }
     private static ContourPath Path(Side side)
@@ -105,10 +106,16 @@ internal sealed class SeamLengthComparisonWindow : Window
             if(!MeasurementInput.TryParseMillimeters(tolerance.Text,out var allowed) || allowed<0)throw new ArgumentException("Tolerans için sıfır veya pozitif bir sayı girin.");
             var assessment=ContourMeasurement.AssessEase(value,target,allowed);
             first.Preview.Set(a);second.Preview.Set(b);
-            result.Text=$"1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nHedeften sapma: {MeasurementInput.Format(assessment.Deviation)} mm\nTolerans: {(assessment.WithinTolerance ? "içinde" : "dışında")} (±{MeasurementInput.Format(allowed)} mm)\nGeometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.";
+            SetResult($"1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nHedeften sapma: {MeasurementInput.Format(assessment.Deviation)} mm\nTolerans: {(assessment.WithinTolerance ? "içinde" : "dışında")} (±{MeasurementInput.Format(allowed)} mm)\nYol uzunlukları ve gösterilen sapma yaklaşık sayısal değerlerdir. Tolerans kararı, gösterilen sapmanın yuvarlanmasından önce bilgisayarda temsil edilen fark, hedef ve tolerans değerleriyle verilir; sınırda değerler aynı görünse de sonuç tolerans dışında olabilir. Geometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.");
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
-        { first.Preview.Clear();second.Preview.Clear();result.Text="Karşılaştırma yapılamadı: "+ex.Message; }
+        { first.Preview.Clear();second.Preview.Clear();SetResult("Karşılaştırma yapılamadı: "+ex.Message); }
+    }
+    private void SetResult(string text)
+    {
+        if(result.Text==text)return;
+        result.Text=text;AutomationProperties.SetName(result,"Dikiş kenarı karşılaştırma sonucu: "+text);
+        if(UIElementAutomationPeer.CreatePeerForElement(result) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
     private sealed class PathPreview : FrameworkElement
     {
