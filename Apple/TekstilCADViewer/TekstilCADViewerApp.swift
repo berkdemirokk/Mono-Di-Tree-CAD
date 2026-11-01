@@ -1101,6 +1101,7 @@ enum ModelStore {
         }
         let file = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? file.close() }
+        guard initial.st_size <= Int64(limit) else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         var data = Data(), didRead = false
         while true {
             let remaining = limit + 1 - data.count

@@ -240,6 +240,20 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: url).count, bytes.count + 1)
     }
 
+    func testOversizedModelIsRejectedBeforeReadingAnyChunk() throws {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: url) }
+        XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: nil))
+        let writer = try FileHandle(forWritingTo: url)
+        try writer.truncate(atOffset: UInt64(64 * 1024 * 1024 + 1))
+        try writer.close()
+        var didRead = false
+        XCTAssertThrowsError(try ModelStore.readFileSnapshot(url, afterFirstChunk: { didRead = true }))
+        XCTAssertFalse(didRead)
+        let size = try XCTUnwrap(FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)
+        XCTAssertEqual(size.uint64Value, UInt64(64 * 1024 * 1024 + 1))
+    }
+
     func testSpecialMetadataFilesDoNotBlockLibraryOrFollowLinks() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
