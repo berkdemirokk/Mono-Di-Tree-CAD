@@ -5,6 +5,17 @@ namespace TekstilCAD.Tests;
 public class GradeDraftTranslationProofTests
 {
     [Fact]
+    public void GrainlineMustShareExactAnchorTranslation()
+    {
+        Point2[] before=[new(0,0),new(1,1),new(1,5)];
+        Point2[] after=[new(1,0),new(2,1),new(2,5)];
+        Assert.True(GradingRuleSet.IsExactPointTranslation(before,after));
+        after[2]=new(double.BitIncrement(2),5);
+        Assert.False(GradingRuleSet.IsExactPointTranslation(before,after));
+        after[2]=before[2];
+        Assert.False(GradingRuleSet.IsExactPointTranslation(before,after));
+    }
+    [Fact]
     public void AcceptsOnlyExactTranslationOfMatchingRuleAndSource()
     {
         var piece = new PatternPiece { Closed = false, Points = [new(0, 0), new(10, 4)] };
