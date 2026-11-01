@@ -1,6 +1,24 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testComparisonDistinguishesDuplicateNamesAndWarnsAboutSamePiece() {
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        let json = #"[5,{"Name":"Aynı ad","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":20,"Y":0}]},{"Id":"22222222-2222-2222-2222-222222222222","Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":30,"Y":0}]}]}]"#
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(json.utf8).base64EncodedString()
+        app.launch()
+        let compare = app.buttons["İki parçayı karşılaştır…"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 15)); compare.tap()
+        XCTAssertTrue(app.buttons["1. Kol"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["2. Kol"].exists)
+        XCTAssertTrue(app.staticTexts["Dosya sırası: 1 / 2"].exists)
+        XCTAssertTrue(app.staticTexts["Parça kimliği: 11111111-1111-1111-1111-111111111111"].exists)
+        app.buttons["2. Kol"].tap()
+        let row = app.buttons.matching(identifier: "Kol").firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Aynı parça iki kez seçildi; farklar sıfır olabilir."].waitForExistence(timeout: 5))
+    }
     func testCompareTwoPiecesShowsSignedSizeDifference() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()

@@ -2695,15 +2695,27 @@ private struct PieceComparisonView: View {
         NavigationStack {
             List {
                 Section("Birinci parça") {
-                    Button(first.map { pieces[$0].displayName(index: $0) } ?? "Parça seç") { choosingFirst = true }
-                    if let first { PieceDetails(piece: pieces[first]) }
+                    Button(first.map { "\($0 + 1). \(pieces[$0].displayName(index: $0))" } ?? "Parça seç") { choosingFirst = true }
+                    if let first {
+                        Text("Dosya sırası: \(first + 1) / \(pieces.count)")
+                        if let id = pieces[first].id { Text("Parça kimliği: \(id.uuidString)").textSelection(.enabled) }
+                        PieceDetails(piece: pieces[first])
+                    }
                 }
                 Section("İkinci parça") {
-                    Button(second.map { pieces[$0].displayName(index: $0) } ?? "Parça seç") { choosingSecond = true }
-                    if let second { PieceDetails(piece: pieces[second]) }
+                    Button(second.map { "\($0 + 1). \(pieces[$0].displayName(index: $0))" } ?? "Parça seç") { choosingSecond = true }
+                    if let second {
+                        Text("Dosya sırası: \(second + 1) / \(pieces.count)")
+                        if let id = pieces[second].id { Text("Parça kimliği: \(id.uuidString)").textSelection(.enabled) }
+                        PieceDetails(piece: pieces[second])
+                    }
                 }
                 if let first, let second {
                     let a = pieces[first], b = pieces[second]
+                    if first == second {
+                        Text("Aynı parça iki kez seçildi; farklar sıfır olabilir.").foregroundStyle(.secondary)
+                    }
+
                     Section("Yaklaşık fark: ikinci − birinci") {
                         Text("En: \(difference(a.contourBounds.map { $0.maxX - $0.minX }, b.contourBounds.map { $0.maxX - $0.minX }))")
                         Text("Boy: \(difference(a.contourBounds.map { $0.maxY - $0.minY }, b.contourBounds.map { $0.maxY - $0.minY }))")
