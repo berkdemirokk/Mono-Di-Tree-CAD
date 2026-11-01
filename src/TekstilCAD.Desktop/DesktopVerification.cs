@@ -7338,14 +7338,24 @@ internal static class DesktopVerification
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         try
         {
-            var start=new Point2(1,1);
+            var start=new Point2(1,1);var end=new Point2(-1,1);
             Check(canvas.AddDrawingPointAt(new(0,0)) is null && canvas.AddDrawingPointAt(start) is null &&
-                canvas.AddDrawingPointAt(new(-1,1)) is null,"Arc drawing accepts center, start and end direction",checks);
+                canvas.AddDrawingPointAt(end) is null,"Arc drawing accepts center, start and end direction",checks);
             var piece=studio.Document.Pieces.Single();
             Check(!piece.Closed && piece.Points.Count==65 &&
                 BitConverter.DoubleToInt64Bits(piece.Points[0].X)==BitConverter.DoubleToInt64Bits(start.X) &&
                 BitConverter.DoubleToInt64Bits(piece.Points[0].Y)==BitConverter.DoubleToInt64Bits(start.Y),
                 "Arc preserves the chosen start coordinate exactly",checks);
+            Check(BitConverter.DoubleToInt64Bits(piece.Points[^1].X)==BitConverter.DoubleToInt64Bits(end.X) &&
+                BitConverter.DoubleToInt64Bits(piece.Points[^1].Y)==BitConverter.DoubleToInt64Bits(end.Y),
+                "Arc preserves an exactly equal-radius end coordinate",checks);
+            var arc=typeof(CadCanvas).GetMethod("Arc",BindingFlags.Static|BindingFlags.NonPublic)!;
+            var projected=(List<Point2>)arc.Invoke(null,[new Point2(0,0),new Point2(1,0),new Point2(0,2)])!;
+            Check(Math.Abs(projected[^1].Y-1)<1e-14 && projected[^1]!=new Point2(0,2),
+                "Arc projects an end direction at a different radius",checks);
+            var near=(List<Point2>)arc.Invoke(null,[new Point2(0,0),new Point2(1,Math.ScaleB(1,-30)),new Point2(0,1)])!;
+            Check(near[^1]!=new Point2(0,1),
+                "Arc does not treat rounded-equal radii as exactly equal",checks);
             Check(session.Undo() && studio.Document.Pieces.Count==0 && session.Redo() &&
                 studio.Document.Pieces.Single().Points[0]==start,"Arc start remains attached through undo and redo",checks);
         }

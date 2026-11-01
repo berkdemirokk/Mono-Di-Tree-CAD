@@ -842,6 +842,22 @@ public sealed class CadCanvas : FrameworkElement
         // Reconstructing the first point through trigonometry can move the
         // selected start by an ulp, separating it from an adjoining contour.
         points[0]=start;
+        // The last click specifies a direction, not necessarily a point on
+        // the circle. Preserve it only when its radius is exactly the same in
+        // the represented coordinates; rounded double distances can coincide
+        // even when the actual radii differ.
+        static System.Numerics.BigInteger Units(double value)
+        {
+            var bits=BitConverter.DoubleToInt64Bits(value);var exponent=(int)((bits>>52)&0x7ff);
+            var fraction=bits&0x000f_ffff_ffff_ffffL;
+            var mantissa=exponent==0 ? fraction : fraction|(1L<<52);
+            var units=new System.Numerics.BigInteger(mantissa) << (exponent==0 ? 0 : exponent-1);
+            return bits<0 ? -units : units;
+        }
+        var cx=Units(center.X);var cy=Units(center.Y);
+        var sx=Units(start.X)-cx;var sy=Units(start.Y)-cy;
+        var ex=Units(end.X)-cx;var ey=Units(end.Y)-cy;
+        if(sx*sx+sy*sy==ex*ex+ey*ey)points[^1]=end;
         return points;
     }
     private void Wheel(object sender,MouseWheelEventArgs e) { ZoomAt(e.GetPosition(this),e.Delta);e.Handled=true; }
