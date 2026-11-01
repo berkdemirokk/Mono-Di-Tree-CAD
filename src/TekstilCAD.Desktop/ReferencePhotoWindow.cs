@@ -12,6 +12,7 @@ internal sealed class ReferencePhotoWindow : Window
 {
     private readonly byte[] data;
     private readonly Image photo=new() { Stretch=Stretch.Uniform,SnapsToDevicePixels=true };
+    private ReferencePhotoPreview? decodedPreview;
     private readonly Button traceButton=new() { Content="Fotoğrafta elle taslak çiz…",Padding=new Thickness(10,7,10,7),Margin=new Thickness(0,0,8,4),IsEnabled=false };
     private PhotoTraceWindow? traceWindow;
     internal Image PhotoForVerification=>photo;
@@ -33,9 +34,9 @@ internal sealed class ReferencePhotoWindow : Window
         {
             if(traceWindow is not null) { traceWindow.Activate();return; }
             var studio=Owner as MainWindow ?? (Owner as Window)?.Owner as MainWindow;
-            if(studio is null || photo.Source is not BitmapSource bitmap) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
+            if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
-            var window=new PhotoTraceWindow(studio,bitmap,stamp);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
@@ -50,9 +51,9 @@ internal sealed class ReferencePhotoWindow : Window
     {
         try
         {
-            var decoded=await Task.Run(()=>ReferencePhotoDecoder.Decode(data));
+            var decoded=await Task.Run(()=>ReferencePhotoDecoder.DecodeWithGeometry(data));
             if(closed)return;
-            photo.Source=decoded;traceButton.IsEnabled=true;StatusForVerification.Text="Referans görseli gösteriliyor.";
+            decodedPreview=decoded;photo.Source=decoded.Bitmap;traceButton.IsEnabled=true;StatusForVerification.Text="Referans görseli gösteriliyor.";
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {

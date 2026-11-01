@@ -17,6 +17,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal const int MaximumPoints=512;
     private readonly List<Point> points=[];
     private BitmapSource? image;
+    private int sourceWidth,sourceHeight;
     private Point cursor;
 
     internal PhotoTraceCanvas()
@@ -43,9 +44,16 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
                 if(snapshot.PixelWidth<1 || snapshot.PixelHeight<1)throw new ArgumentException("Görsel boyutu geçersiz.",nameof(value));
                 image=snapshot;
             }
+            sourceWidth=image?.PixelWidth ?? 0;sourceHeight=image?.PixelHeight ?? 0;
             points.Clear();cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
             InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
         }
+    }
+    internal void SetSourceAspect(int width,int height)
+    {
+        if(image is null || width<image.PixelWidth || height<image.PixelHeight || width>12_000 || height>12_000 || (long)width*height>24_000_000)
+            throw new ArgumentOutOfRangeException(nameof(width),"Kaynak görsel boyutu geçersiz.");
+        sourceWidth=width;sourceHeight=height;InvalidateVisual();
     }
 
     internal IReadOnlyList<Point> Points=>points.AsReadOnly();
@@ -75,9 +83,9 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal Rect ImageBounds(Size viewport)
     {
         if(image is null || !double.IsFinite(viewport.Width) || !double.IsFinite(viewport.Height) || viewport.Width<=0 || viewport.Height<=0)return Rect.Empty;
-        var scale=Math.Min(viewport.Width/image.PixelWidth,viewport.Height/image.PixelHeight);
+        var scale=Math.Min(viewport.Width/sourceWidth,viewport.Height/sourceHeight);
         if(!double.IsFinite(scale) || scale<=0)return Rect.Empty;
-        var width=image.PixelWidth*scale;var height=image.PixelHeight*scale;
+        var width=sourceWidth*scale;var height=sourceHeight*scale;
         return new Rect((viewport.Width-width)/2,(viewport.Height-height)/2,width,height);
     }
     internal bool TryMapViewToPixel(Point viewPoint,Size viewport,out Point pixel)
@@ -86,9 +94,9 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || !double.IsFinite(viewPoint.X) || !double.IsFinite(viewPoint.Y))return false;
         var bounds=ImageBounds(viewport);
         if(bounds.IsEmpty || viewPoint.X<bounds.Left || viewPoint.Y<bounds.Top || viewPoint.X>=bounds.Right || viewPoint.Y>=bounds.Bottom)return false;
-        var scale=bounds.Width/image.PixelWidth;
-        pixel=new Point(Math.Clamp((viewPoint.X-bounds.Left)/scale-0.5,0,image.PixelWidth-1),
-                        Math.Clamp((viewPoint.Y-bounds.Top)/scale-0.5,0,image.PixelHeight-1));
+        var scaleX=bounds.Width/image.PixelWidth;var scaleY=bounds.Height/image.PixelHeight;
+        pixel=new Point(Math.Clamp((viewPoint.X-bounds.Left)/scaleX-0.5,0,image.PixelWidth-1),
+                        Math.Clamp((viewPoint.Y-bounds.Top)/scaleY-0.5,0,image.PixelHeight-1));
         return true;
     }
     internal bool TryMapPixelToView(Point pixel,Size viewport,out Point viewPoint)
@@ -96,8 +104,8 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         viewPoint=default;
         if(image is null || !double.IsFinite(pixel.X) || !double.IsFinite(pixel.Y) || pixel.X<0 || pixel.Y<0 || pixel.X>image.PixelWidth-1 || pixel.Y>image.PixelHeight-1)return false;
         var bounds=ImageBounds(viewport);if(bounds.IsEmpty)return false;
-        var scale=bounds.Width/image.PixelWidth;
-        viewPoint=new Point(bounds.Left+(pixel.X+0.5)*scale,bounds.Top+(pixel.Y+0.5)*scale);return true;
+        var scaleX=bounds.Width/image.PixelWidth;var scaleY=bounds.Height/image.PixelHeight;
+        viewPoint=new Point(bounds.Left+(pixel.X+0.5)*scaleX,bounds.Top+(pixel.Y+0.5)*scaleY);return true;
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)

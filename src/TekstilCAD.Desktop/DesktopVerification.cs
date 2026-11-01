@@ -9158,6 +9158,12 @@ internal static class DesktopVerification
                 canvas.TryMapViewToPixel(new Point(100,100),new Size(200,200),out var center) && Math.Abs(center.X-49.5)<1e-9 && Math.Abs(center.Y-24.5)<1e-9 &&
                 canvas.TryMapPixelToView(center,new Size(200,200),out var roundtrip) && Math.Abs(roundtrip.X-100)<1e-9 && Math.Abs(roundtrip.Y-100)<1e-9,
                 "Photo tracing mapping rejects letterbox and reversibly maps displayed pixel centres",checks);
+            canvas.SetSourceAspect(1000,400);var bounds=canvas.ImageBounds(new Size(200,200));
+            Check(Math.Abs(bounds.Width-200)<1e-9 && Math.Abs(bounds.Height-80)<1e-9 &&
+                canvas.TryMapViewToPixel(new Point(100,100),new Size(200,200),out var aspectCenter) && Math.Abs(aspectCenter.X-49.5)<1e-9 && Math.Abs(aspectCenter.Y-24.5)<1e-9 &&
+                canvas.TryMapPixelToView(aspectCenter,new Size(200,200),out var aspectRoundtrip) && Math.Abs(aspectRoundtrip.X-100)<1e-9 && Math.Abs(aspectRoundtrip.Y-100)<1e-9,
+                "Photo tracing preserves source aspect and reversibly maps preview pixel centres",checks);
+            canvas.SetSourceAspect(100,50);
             foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })
                 Check(canvas.TryAddPixelPoint(p),"Photo tracing accepts an explicitly selected point",checks);
             trace.LengthForVerification.Text="100";trace.TryApply();
@@ -9169,6 +9175,10 @@ internal static class DesktopVerification
             Check(confirmCalls==0 && DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("eklenemedi"),
                 "Self-crossing photo trace is rejected before confirmation without changing project",checks);
             canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })canvas.TryAddPixelPoint(p);
+            trace.ConfirmForVerification=_=> { trace.LengthForVerification.Text="101";return true; };trace.TryApply();
+            Check(DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("değişti"),
+                "Photo input changed during draft confirmation prevents applying stale geometry",checks);
+            trace.LengthForVerification.Text="100";
             trace.ConfirmForVerification=_=>true;trace.TryApply();
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
             Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(100,100) }) && session.UndoCount==1,
@@ -9195,6 +9205,49 @@ internal static class DesktopVerification
         {
             if(trace is not null) { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
             typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
+        }
+        VerifyPhotoTraceOwnerClose(reportPath,checks);
+    }
+
+    private sealed class PhotoTraceCloseBarrierWriter(RecoveryStore store) : IRecoveryWriter
+    {
+        public readonly ManualResetEventSlim Entered=new(false),Release=new(false);
+        public bool Fail;
+        public void Save(ProjectDocument document,IReadOnlyList<RecoveryPropertyDraft> drafts,RecoveryPendingDrawing? drawing)=>store.Save(document,drafts,drawing);
+        public bool Clear() { Entered.Set();if(!Release.Wait(TimeSpan.FromSeconds(12)))throw new IOException("Kontrollü kapanış zaman aşımı.");if(Fail)throw new IOException("Kontrollü kapanış hatası.");return store.ClearOwn(); }
+        public void Dispose()=>store.Dispose();
+    }
+    private static void VerifyPhotoTraceOwnerClose(string reportPath,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;var workspace=new MainWindow();StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
+        var bitmap=BitmapSource.Create(4,4,96,96,PixelFormats.Bgra32,null,new byte[64],16);bitmap.Freeze();
+        var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);var closed=false;workspace.Closed+=(_,_)=>closed=true;
+        var store=new RecoveryStore(Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-close-"+Guid.NewGuid().ToString("N")));
+        var barrier=new PhotoTraceCloseBarrierWriter(store);
+        try
+        {
+            WaitRecovery(workspace.SetRecoveryForVerificationAsync(store,new RecoveryWriteCoordinator(barrier)));
+            trace.LengthForVerification.Text="10";workspace.ConfirmPhotoTraceCloseForVerification=()=>false;workspace.Close();
+            Check(!closed && trace.IsEnabled && trace.LengthForVerification.Text=="10","Declining owner close preserves photo input",checks);
+            workspace.ConfirmPhotoTraceCloseForVerification=()=> { trace.LengthForVerification.Text="20";return true; };workspace.Close();
+            Check(!closed && trace.IsEnabled && trace.LengthForVerification.Text=="20","Photo input changed during owner confirmation prevents close",checks);
+            workspace.ConfirmPhotoTraceCloseForVerification=()=>true;workspace.Close();PumpUntil(()=>barrier.Entered.IsSet);
+            Check(!closed && !trace.IsEnabled,"Photo draft is disabled during asynchronous owner close",checks);
+            trace.LengthForVerification.Text="30";barrier.Release.Set();
+            var notice=(TextBlock)typeof(MainWindow).GetField("recoveryNotice",PrivateInstance)!.GetValue(workspace)!;
+            PumpUntil(()=>notice.Visibility==Visibility.Visible && trace.IsEnabled);
+            Check(!closed && trace.LengthForVerification.Text=="30","Photo input changed during asynchronous close is preserved and re-enabled",checks);
+            barrier.Entered.Reset();barrier.Release.Reset();barrier.Fail=true;workspace.Close();PumpUntil(()=>barrier.Entered.IsSet);
+            Check(!trace.IsEnabled,"Photo draft is disabled while retrying asynchronous close",checks);
+            barrier.Release.Set();PumpUntil(()=>trace.IsEnabled);
+            Check(!closed && trace.LengthForVerification.Text=="30","Recovery close failure restores the photo draft",checks);
+        }
+        finally
+        {
+            barrier.Fail=false;barrier.Release.Set();typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close();
+            workspace.ConfirmPhotoTraceCloseForVerification=()=>true;typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();PumpUntil(()=>closed);
+            barrier.Entered.Dispose();barrier.Release.Dispose();SynchronizationContext.SetSynchronizationContext(previous);
         }
     }
 
@@ -9300,9 +9353,10 @@ internal static class DesktopVerification
                     Check(Convert.ToInt32(metadata.GetQuery("/app1/ifd/{ushort=274}"),CultureInfo.InvariantCulture)==orientation,
                         "JPEG fixture contains EXIF orientation "+orientation,checks);
                 }
-                var result=Task.Run(()=>ReferencePhotoDecoder.Decode(jpegBytes)).GetAwaiter().GetResult();
+                var decoded=Task.Run(()=>ReferencePhotoDecoder.DecodeWithGeometry(jpegBytes)).GetAwaiter().GetResult();var result=decoded.Bitmap;
                 var expected=orientation==0 ? 1 : orientation;bool swap=expected>=5;
                 Check(result.IsFrozen && result.PixelWidth==(swap ? 48 : 64) && result.PixelHeight==(swap ? 64 : 48) &&
+                    decoded.OrientedSourceWidth==(swap ? 48 : 64) && decoded.OrientedSourceHeight==(swap ? 64 : 48) &&
                     CornerColors(result).SequenceEqual(expectedCorners[expected-1]) && jpegBytes.SequenceEqual(originalBytes),
                     "Actual JPEG "+(orientation==0 ? "without orientation" : "EXIF orientation "+orientation)+" preserves expected pixels and source bytes",checks);
             }
@@ -9317,6 +9371,11 @@ internal static class DesktopVerification
             var widePhoto=EncodePhoto(2000,10,false);var scaledPreview=Task.Run(()=>ReferencePhotoDecoder.Decode(widePhoto)).GetAwaiter().GetResult();
             Check(scaledPreview.PixelWidth==1024 && scaledPreview.PixelHeight>0 && scaledPreview.PixelHeight<=1024,
                 "Large valid reference is reduced to the bounded preview size",checks);
+            var aspectPhoto=EncodePhoto(4001,1001,false);var aspectPreview=Task.Run(()=>ReferencePhotoDecoder.DecodeWithGeometry(aspectPhoto)).GetAwaiter().GetResult();
+            Check(aspectPreview.OrientedSourceWidth==4001 && aspectPreview.OrientedSourceHeight==1001 &&
+                aspectPreview.Bitmap.PixelWidth<=1024 && aspectPreview.Bitmap.PixelHeight<=1024 &&
+                Math.Abs(aspectPreview.Bitmap.Width/aspectPreview.Bitmap.Height-4001d/1001)<1e-6,
+                $"WIC reduced preview preserves oriented source dimensions and logical aspect: source={aspectPreview.OrientedSourceWidth}x{aspectPreview.OrientedSourceHeight}, pixels={aspectPreview.Bitmap.PixelWidth}x{aspectPreview.Bitmap.PixelHeight}, logical={aspectPreview.Bitmap.Width:R}x{aspectPreview.Bitmap.Height:R}",checks);
             var largePhoto=EncodePhoto(12001,1,false);var refused=false;
             try { _=Task.Run(()=>ReferencePhotoDecoder.Decode(largePhoto)).GetAwaiter().GetResult(); } catch(InvalidDataException) { refused=true; }
             Check(refused,"Oversized photo dimensions are rejected before preview",checks);

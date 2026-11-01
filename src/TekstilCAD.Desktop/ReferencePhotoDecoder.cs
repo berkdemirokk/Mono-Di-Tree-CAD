@@ -6,6 +6,8 @@ using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
 
+internal sealed record ReferencePhotoPreview(BitmapSource Bitmap,int OrientedSourceWidth,int OrientedSourceHeight);
+
 /// <summary>
 /// Decodes a detached, reduced still-image preview; it does not interpret a garment
 /// or establish measurements. JPEG EXIF orientation is applied
@@ -18,7 +20,8 @@ internal static class ReferencePhotoDecoder
     internal const long MaximumPixels=24_000_000;
     internal const int MaximumPreviewDimension=1_024;
 
-    internal static BitmapSource Decode(byte[] data)
+    internal static BitmapSource Decode(byte[] data)=>DecodeWithGeometry(data).Bitmap;
+    internal static ReferencePhotoPreview DecodeWithGeometry(byte[] data)
     {
         if(data is null || data.Length==0 || data.Length>DesignRequestStorage.MaximumReferenceBytes)
             throw new InvalidDataException("Görsel boyutu önizleme sınırının dışında.");
@@ -84,8 +87,12 @@ internal static class ReferencePhotoDecoder
                 }
                 pixels=oriented;
             }
-            var preview=BitmapSource.Create(outputWidth,outputHeight,96,96,PixelFormats.Bgra32,null,pixels,outputWidth*4);
-            preview.Freeze();return preview;
+            var orientedWidth=orientation>=5 ? height : width;var orientedHeight=orientation>=5 ? width : height;
+            // WIC rounds the reduced dimensions independently. Use logical DPI
+            // to display the reduced raster at the original oriented aspect ratio;
+            // these values do not represent a physical photo or garment scale.
+            var preview=BitmapSource.Create(outputWidth,outputHeight,96d*outputWidth/orientedWidth,96d*outputHeight/orientedHeight,PixelFormats.Bgra32,null,pixels,outputWidth*4);
+            preview.Freeze();return new ReferencePhotoPreview(preview,orientedWidth,orientedHeight);
         }
         catch(Exception ex) when(ex is IOException or FormatException or NotSupportedException or ArgumentException or InvalidOperationException or COMException or OverflowException)
         {

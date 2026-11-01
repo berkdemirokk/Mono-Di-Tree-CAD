@@ -475,21 +475,38 @@ public class MainWindow : Window
                 return;
             }
             e.Cancel=true;
-            if(recoveryClosing || !CanDiscard())return;
+            if(recoveryClosing || photoCloseCheckActive)return;
+            photoCloseCheckActive=true;
+            (PhotoTraceWindow Window,long Revision)[] photoSnapshot;
+            try
+            {
+                photoSnapshot=CapturePhotoTraceWindows();
+                if(photoSnapshot.Any(x=>x.Window.HasDraft) && !(ConfirmPhotoTraceCloseForVerification?.Invoke() ??
+                    (MessageBox.Show(this,"Fotoğraf taslağındaki işaretler ve girilen değerler kaybolacak. Pencere kapatılsın mı?","Fotoğraf taslağı",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes)))return;
+                if(!PhotoTraceWindowsMatch(photoSnapshot)) { SetStatus("Fotoğraf taslağı değişti; pencere kapatılmadı.");return; }
+                if(!CanDiscard())return;
+                if(!PhotoTraceWindowsMatch(photoSnapshot)) { SetStatus("Fotoğraf taslağı değişti; pencere kapatılmadı.");return; }
+            }
+            finally { photoCloseCheckActive=false; }
             recoveryClosing=true; autosaveTimer.Stop(); IsEnabled=false;
+            var photoEnabled=photoSnapshot.Select(x=>(x.Window,x.Window.IsEnabled)).ToArray();
+            foreach(var (window,_) in photoEnabled)window.IsEnabled=false;
             var disposingRecovery=false;
             try
             {
                 // Always leave the current Closing event before requesting Close again.
                 await Task.Yield();
                 await ClearRecoveryAsync();
+                if(!PhotoTraceWindowsMatch(photoSnapshot))throw new InvalidOperationException("Fotoğraf taslağı kapanış sırasında değişti.");
                 if(recoveryWriter is not null) { disposingRecovery=true; await recoveryWriter.DisposeAsync(); }
+                if(!PhotoTraceWindowsMatch(photoSnapshot))throw new InvalidOperationException("Fotoğraf taslağı kapanış sırasında değişti.");
                 recoveryWriter=null; recoveryStore=null;
                 recoveryCloseReady=true; Close();
             }
             catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or InvalidOperationException)
             {
                 IsEnabled=true; recoveryClosing=false; autosaveTimer.Start();
+                foreach(var (window,enabled) in photoEnabled)if(photoTraceWindows.Contains(window))window.IsEnabled=enabled;
                 if(disposingRecovery)
                 {
                     // A failed DisposeAsync cannot be retried on the same coordinator.
@@ -1348,6 +1365,18 @@ public class MainWindow : Window
     internal sealed record GrainlineEditStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid PieceId);
 
     internal sealed record PhotoTraceStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid? Selection);
+    private readonly HashSet<PhotoTraceWindow> photoTraceWindows=[];
+    private bool photoCloseCheckActive;
+    internal Func<bool>? ConfirmPhotoTraceCloseForVerification { get; set; }
+    internal void RegisterPhotoTrace(PhotoTraceWindow window)
+    {
+        if(windowClosed || recoveryClosing || photoCloseCheckActive)throw new InvalidOperationException("Ana pencere kapatılırken taslak açılamaz.");
+        photoTraceWindows.Add(window);
+    }
+    internal void UnregisterPhotoTrace(PhotoTraceWindow window)=>photoTraceWindows.Remove(window);
+    private (PhotoTraceWindow Window,long Revision)[] CapturePhotoTraceWindows()=>photoTraceWindows.Select(w=>(w,w.DraftRevision)).ToArray();
+    private bool PhotoTraceWindowsMatch((PhotoTraceWindow Window,long Revision)[] snapshot)=>snapshot.Length==photoTraceWindows.Count &&
+        snapshot.All(x=>photoTraceWindows.Contains(x.Window) && x.Window.DraftRevision==x.Revision);
     internal PhotoTraceStamp? CapturePhotoTrace()
     {
         if(!EnsureMainMutationReady() || BlockForIncompleteRecovery() || BlockForDxfImport() || BlockForExport())return null;

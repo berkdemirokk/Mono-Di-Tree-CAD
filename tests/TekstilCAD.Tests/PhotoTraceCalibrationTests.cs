@@ -5,6 +5,40 @@ namespace TekstilCAD.Tests;
 public class PhotoTraceCalibrationTests
 {
     [Fact]
+    public void UnequalPreviewRoundingUsesOrientedSourceAspectForCalibration()
+    {
+        var points=new List<Point2> { new(10,20),new(10,120) };var before=points.ToArray();
+        var result=PhotoTraceCalibration.Convert(1024,256,4001,1001,new(10,20),new(110,20),100,points);
+        var expectedY=100d*1001*1024/(256*4001);
+        Assert.Equal(0,result[0].X);Assert.Equal(0,result[0].Y);
+        Assert.Equal(expectedY,result[1].Y,10);Assert.True(result[1].Y>100);
+        Assert.Equal(before,points);
+    }
+    [Fact]
+    public void OrientedWidthHeightSwapUsesTheCorrespondingPreviewAxes()
+    {
+        var result=PhotoTraceCalibration.Convert(256,1024,1001,4001,new(20,10),new(20,110),100,
+            [new(20,10),new(120,10)]);
+        var expectedX=100d*1001*1024/(256*4001);
+        Assert.Equal(expectedX,result[1].X,10);Assert.Equal(0,result[1].Y);
+    }
+    [Fact]
+    public void EqualDimensionsPreserveTheOriginalOverloadAndReferenceThreshold()
+    {
+        Point2[] points=[new(0,0),new(60,40),new(70,65)];
+        var oldResult=PhotoTraceCalibration.Convert(100,100,new(10,10),new(20,20),250,points);
+        var sameResult=PhotoTraceCalibration.Convert(100,100,100,100,new(10,10),new(20,20),250,points);
+        Assert.Equal(oldResult,sameResult);
+        // Minimum separation is in visible preview pixels, not enlarged source pixels.
+        Assert.Throws<ArgumentException>(()=>PhotoTraceCalibration.Convert(100,100,400,400,new(1,1),new(1.5,1),10,points));
+    }
+    [Theory]
+    [InlineData(0,1,1,1)] [InlineData(1,0,1,1)] [InlineData(1,1,0,1)] [InlineData(1,1,1,0)]
+    [InlineData(12001,1,12000,1)] [InlineData(1,1,12001,1)] [InlineData(1,1,6000,6000)]
+    [InlineData(4,2,3,2)] [InlineData(2,4,2,3)]
+    public void InvalidPreviewAndSourceDimensionsAreRejected(int previewWidth,int previewHeight,int sourceWidth,int sourceHeight)
+        =>Assert.Throws<ArgumentOutOfRangeException>(()=>PhotoTraceCalibration.Convert(previewWidth,previewHeight,sourceWidth,sourceHeight,new(0,0),new(1,0),10,[new(0,0),new(1,0)]));
+    [Fact]
     public void DiagonalReferenceScalesAroundFirstPointAndKeepsDownwardY()
     {
         var input=new List<Point2> { new(15,20),new(25,45),new(23,34) };var original=input.ToArray();
