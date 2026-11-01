@@ -106,4 +106,33 @@ public sealed class RotatedProjectValidationTests
         }
         finally { if(File.Exists(path))File.Delete(path); }
     }
+
+    [Fact]
+    public void SmallVisibleLayoutDoesNotDoubleCountLargeHistoricalLayoutOnReopen()
+    {
+        const int count=8_400;
+        var piece=new PatternPiece { Name="Kaynak",Points=[new(0,0),new(2,0),new(4,0),new(6,0),new(6,1),new(6,2),
+            new(6,4),new(4,4),new(2,4),new(0,4),new(0,2),new(0,1)],
+            Grainline=new Grainline { Start=new(1,1),End=new(1,2) },
+            Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=count } };
+        var source=new ProjectDocument { Pieces=[piece] };
+        var angles=Enumerable.Range(1,count).ToDictionary(i=>(piece.Id,i),_=>0);
+        var plan=PerCopyOrthogonalNesting.Arrange(source,[piece.Id],angles,100_000,0,100,0,GrainDirectionPolicy.Direction.TwoWay,0);
+        var record=RotatedNestingRecord.Capture(source,[piece.Id],angles,plan,GrainDirectionPolicy.Direction.TwoWay,0,100_000,0,0,100);
+        var trace=record.ToTrace();Assert.True(trace.LayoutPieces.Sum(p=>p.Points.Count)>100_000);
+        var visible=new PatternPiece { Name="Düzenlenmiş",Points=[new(0,0),new(10,0),new(0,10)] };
+        var document=new ProjectDocument { Pieces=[visible],NestingSnapshot=new NestingSnapshot {
+            FabricWidth=100_000,Gap=0,EdgeMargin=0,UsedLength=plan.Plan.Nesting.UsedLength,LayoutFingerprint=trace.LayoutFingerprint,
+            Placements=plan.Plan.Placements.Select(p=>new NestingPlacementSnapshot(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId)).ToList(),RotationTrace=trace } };
+        var path=Path.Combine(AppContext.BaseDirectory,$"rotation-large-history-{Guid.NewGuid():N}.tcad");
+        try
+        {
+            ProjectStorage.Save(document,path);var loaded=ProjectStorage.Load(path);
+            Assert.True(DocumentSession.ContentEquals(document,loaded));
+            Assert.False(loaded.NestingSnapshot!.IsCurrentFor(loaded));
+            var overLimit=document.Clone();overLimit.Pieces=trace.LayoutPieces.Select(p=>p.Clone()).ToList();
+            Assert.Throws<InvalidDataException>(()=>ProjectStorage.Validate(overLimit));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
 }

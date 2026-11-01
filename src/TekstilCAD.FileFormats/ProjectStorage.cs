@@ -44,6 +44,7 @@ public static class ProjectStorage
         if (bytes.Length > MaximumProjectBytes) throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor.");
         ProjectDocument project;
         string? rotatedRaw=null;
+        long rotatedVisiblePoints=0;
         try
         {
             using var json = JsonDocument.Parse(DecodeProjectText(bytes));
@@ -69,16 +70,15 @@ public static class ProjectStorage
                     var raw=nesting.GetProperty("RotationTrace");
                     if(raw.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Döndürme izi nesnesi eksik veya geçersiz.");
                     rotatedRaw=raw.GetRawText();
-                    long visiblePoints=0;
                     foreach(var piece in root[1].GetProperty("Pieces").EnumerateArray())
                     {
                         if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("Points",out var points) || points.ValueKind!=JsonValueKind.Array ||
-                           points.GetArrayLength()>MaximumPointsPerPiece || (visiblePoints+=points.GetArrayLength())>MaximumTotalPoints)
+                           points.GetArrayLength()>MaximumPointsPerPiece || (rotatedVisiblePoints+=points.GetArrayLength())>MaximumTotalPoints)
                             throw new InvalidDataException("Görünür yerleşim nokta sınırı geçersiz.");
                     }
                     // Reject missing/unknown/duplicate trace fields before model
                     // constructors or JSON defaults can synthesize any values.
-                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),visiblePoints);
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(rotatedRaw),rotatedVisiblePoints);
                 }
                 ValidateSerializedImportProvenance(root[1], version);
                 project = root[1].Deserialize<ProjectDocument>(Options) ?? throw new InvalidDataException("Proje dosyası boş.");
@@ -100,7 +100,7 @@ public static class ProjectStorage
         if(rotatedRaw is not null)
         {
             var trace=project.NestingSnapshot!.RotationTrace!;
-            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces });
+            _=RotatedNestingTraceCodec.DeserializeAndVerify(Encoding.UTF8.GetBytes(rotatedRaw),new ProjectDocument { Pieces=trace.LayoutPieces },project);
         }
         return project;
     }
