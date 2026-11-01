@@ -17,9 +17,30 @@ public class NotchOperationGuardTests
     {
         var p=Closed();var before=p.Clone();
         Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),()=>PatternTools.InsertPoint(p,0,new(10,0)),
-            ()=>PatternTools.InsertEdgeMidpoint(p,0),()=>PatternTools.DeletePoint(p,0),()=>PatternTools.MovePoint(p,0,new(1,1))];
+            ()=>PatternTools.InsertEdgeMidpoint(p,0),()=>PatternTools.DeletePoint(p,0),()=>PatternTools.MovePoint(p,1,new(19,1))];
         foreach(var action in operations) { var ex=Assert.Throws<ArgumentException>(action);Assert.Contains("Çentik",ex.Message); }
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
+    }
+    [Fact]
+    public void MovingAnUnmarkedVertexRetainsMarksAndRejectsTheirRemoval()
+    {
+        var source=Closed();var before=source.Clone();
+        var result=PatternTools.MovePoint(source,0,new(-1,0));
+        Assert.Equal(new Point2(-1,0),result.Points[0]);
+        Assert.Equal(1,result.Notches!.Single().VertexIndex);
+        Assert.Equal(source.Points[1],result.Notches.Single().Position);
+        Assert.NotSame(source.Notches,result.Notches);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(source,1));
+        using var cancellation=new CancellationTokenSource();cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>PatternTools.MovePoint(source,0,new(-1,0),cancellation.Token));
+    }
+    [Fact]
+    public void RepeatedClosingVertexCannotMoveWhenItsFirstVertexIsMarked()
+    {
+        var source=Closed();source.Points.Add(source.Points[0]);source.Notches=[new NotchMark { VertexIndex=0,Position=source.Points[0] }];
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,0,new(-1,0)));
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,source.Points.Count-1,new(-1,0)));
     }
     [Fact]
     public void OpenPathOperationsRejectMarksFromEitherSource()

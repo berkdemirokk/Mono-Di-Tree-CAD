@@ -7955,6 +7955,7 @@ internal static class DesktopVerification
 
     private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)
     {
+        var previousContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var piece=new PatternPiece { Name="İşaret testi", Points=[new(0,0),new(10,0),new(0,10),new(0,0)] };
@@ -7975,8 +7976,14 @@ internal static class DesktopVerification
             using var json=JsonDocument.Parse(saved);
             Check(json.RootElement.ValueKind==JsonValueKind.Array && json.RootElement[0].GetInt32()==6 && DocumentSession.ContentEquals(marked,ProjectStorage.Load(path)),
                 "Notch survives version 6 save and reload",checks);
-            tools.MoveVertexAsync("1","11","0").GetAwaiter().GetResult();
-            Check(DocumentSession.ContentEquals(marked,studio.Document),"Notched geometry edit is rejected",checks);
+            var rejectedMove=tools.MoveVertexAsync("0","-1","0");PumpUntil(()=>rejectedMove.IsCompleted);rejectedMove.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(marked,studio.Document),"Moving a marked vertex is rejected",checks);
+            var move=tools.MoveVertexAsync("1","11","0");PumpUntil(()=>move.IsCompleted);move.GetAwaiter().GetResult();
+            var moved=studio.Document.Clone();
+            Check(moved.Pieces[0].Points[1]==new Point2(11,0) && moved.Pieces[0].Notches!.Single().Position==marked.Pieces[0].Points[0],
+                "Moving an unmarked vertex retains the marked vertex",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(marked,studio.Document) && session.Redo() && DocumentSession.ContentEquals(moved,studio.Document) && session.Undo(),
+                "Unmarked vertex move with a marked contour supports undo and redo",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(marked,studio.Document),
                 "Notch add supports undo and redo",checks);
             tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
@@ -7997,7 +8004,7 @@ internal static class DesktopVerification
                   && session.UndoCount==undo && session.RedoCount==redo,
                 "Stale detached selection is rejected before absent notch no-op",checks);
         }
-        finally { tools.Close(); }
+        finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
 
     private static void VerifyNumericVertexMove(MainWindow studio,List<string> checks)

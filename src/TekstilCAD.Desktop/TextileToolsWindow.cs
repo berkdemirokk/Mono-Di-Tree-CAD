@@ -935,7 +935,7 @@ public sealed class TextileToolsWindow : Window
             var position=operation is VertexEdit.Delete or VertexEdit.Midpoint or VertexEdit.Reverse or VertexEdit.ReverseClosed ? default : new Point2(Number(xText!),Number(yText!));
             var width=widthText is null ? position.Y * 2 : Number(widthText);
             var selected=Piece();var sourceId=selected.Id;
-            if(selected.Notches is { Count:>0 })throw new InvalidOperationException("Nokta düzenlemeden önce bu parçanın işaretlerini kaldırın; işaretler otomatik taşınmaz.");
+            if(selected.Notches is not null && operation!=VertexEdit.Move)throw new InvalidOperationException("Bu nokta işlemi işaretli parçada henüz desteklenmiyor.");
             var document=workspace.Document;var original=document.Clone();var snapshot=selected.Clone();var workspaceSelection=workspace.SelectedId;
             if(!ReferenceEquals(document.Pieces.FirstOrDefault(piece=>piece.Id==sourceId),selected))
                 throw new InvalidOperationException("Kaynak parça güncel değil. Atölyeyi yeniden açıp parçayı seçin.");
@@ -1125,7 +1125,10 @@ public sealed class TextileToolsWindow : Window
     {
         if(toolReviewRequired) { ReportToolReview("Son işlem",null);return; }
         var previous=Piece();var index=workspace.Document.Pieces.FindIndex(p=>p.Id==previous.Id);
-        if(previous.Notches is { Count:>0 })throw new InvalidOperationException("Konturu değiştirmeden önce köşe işaretlerini kaldırın.");
+        if(previous.Notches is { } marks && (edited.Notches is null || edited.Notches.Count!=marks.Count ||
+           !marks.Zip(edited.Notches).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && pair.First.Position==pair.Second.Position &&
+               pair.Second.VertexIndex>=0 && pair.Second.VertexIndex<edited.Points.Count && edited.Points[pair.Second.VertexIndex]==pair.Second.Position)))
+            throw new InvalidOperationException("Köşe işaretleri korunamadı; kontur değiştirilmedi.");
         if(index<0)throw new InvalidOperationException("Kaynak parça artık projede yok.");edited.Id=previous.Id;edited.Metadata=previous.Metadata?.Clone();
         edited.Grainline=previous.Grainline?.Clone();
         // Reversal changes only vertex order, not the grainline's relationship to the contour.

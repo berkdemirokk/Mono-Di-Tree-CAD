@@ -444,7 +444,20 @@ public static class PatternTools
     public static PatternPiece MovePoint(PatternPiece piece, int index, Point2 position, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(piece);
-        NotchSafety.RequireNoNotches(piece);
+        if (piece.Notches is not null)
+        {
+            // v6 marks identify vertices; only unmarked vertices may move.
+            var (_,marks)=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            var markedIndex=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && index==piece.Points.Count-1 ? 0 : index;
+            if(marks!.Any(mark=>mark.VertexIndex==markedIndex))
+                throw new ArgumentException("Çentik işaretli köşe taşınamaz; önce işareti gözden geçirin.",nameof(index));
+            var detached=piece.Clone();detached.Notches=null;
+            var moved=MovePoint(detached,index,position,cancellationToken);
+            foreach(var mark in marks)
+                if(mark.VertexIndex>=moved.Points.Count || moved.Points[mark.VertexIndex]!=mark.Position)
+                    throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
+            moved.Notches=marks;cancellationToken.ThrowIfCancellationRequested();return moved;
+        }
         cancellationToken.ThrowIfCancellationRequested();
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
