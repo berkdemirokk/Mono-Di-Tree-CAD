@@ -30,6 +30,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Parçaları karşılaştır"].waitForExistence(timeout: 5))
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["En: -50 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Karşılaştırma özetini paylaş…"].exists)
         XCTAssertTrue(app.staticTexts["Boy: -100 mm"].exists)
     }
     func testSelectedPieceShowsStraightLineMeasurement() throws {

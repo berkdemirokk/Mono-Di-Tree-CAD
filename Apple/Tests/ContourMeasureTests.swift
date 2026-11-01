@@ -4,6 +4,20 @@ import XCTest
 final class ContourMeasureTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testComparisonReportIdentifiesPiecesAndStatesItsLimits() throws {
+        let json = #"[5,{"Name":"Test","Pieces":[{"Name":"Ön\u202EKol","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":200}]},{"Name":"Arka","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":100}]}]}]"#
+        let drawing = try Drawing.load(Data(json.utf8))
+        let report = try XCTUnwrap(PieceComparisonReport.make(pieces: drawing.pieces, projectName: drawing.name, first: 0, second: 1, locale: Locale(identifier: "en_US")))
+        XCTAssertTrue(report.contains(#"Ön\u{202E}Kol"#))
+        XCTAssertTrue(report.contains("Proje: Test"))
+        XCTAssertTrue(report.contains("Dosya sırası: 1 / 2"))
+        XCTAssertTrue(report.contains("Dosya sırası: 2 / 2"))
+        XCTAssertTrue(report.contains("En: -50 mm"))
+        XCTAssertTrue(report.contains("üretime uygunluk doğrulaması değildir"))
+        XCTAssertNil(PieceComparisonReport.make(pieces: drawing.pieces, projectName: drawing.name, first: -1, second: 1))
+        let same = try XCTUnwrap(PieceComparisonReport.make(pieces: drawing.pieces, projectName: drawing.name, first: 0, second: 0))
+        XCTAssertTrue(same.contains("Aynı parça iki kez seçildi"))
+    }
     func testComparisonDifferenceIsSignedAndRejectsUnavailableOrOverflow() {
         XCTAssertEqual(ContourMeasure.difference(first: 100, second: 50), -50)
         XCTAssertEqual(ContourMeasure.difference(first: 50, second: 100), 50)

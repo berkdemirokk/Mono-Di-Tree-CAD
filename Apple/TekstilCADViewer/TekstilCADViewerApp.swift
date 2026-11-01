@@ -253,7 +253,7 @@ private struct ContentView: View {
                     Button("İki parçayı karşılaştır…") { showingPieceComparison = true }
                         .disabled(modelLoad.isLoading || project.pieces.count < 2)
                         .sheet(isPresented: $showingPieceComparison) {
-                            PieceComparisonView(pieces: project.pieces, initialIndex: selectedPiece)
+                            PieceComparisonView(pieces: project.pieces, projectName: project.name, initialIndex: selectedPiece)
                         }
                     HStack {
                         Button("Önceki parça") {
@@ -2670,17 +2670,52 @@ private struct PieceDetails: View {
         }
     }
 }
+// Plain text only: this is not a project file or a production approval.
+enum PieceComparisonReport {
+    static func make(pieces: [Drawing.Piece], projectName: String, first: Int, second: Int, locale: Locale = .current) -> String? {
+        guard pieces.indices.contains(first), pieces.indices.contains(second) else { return nil }
+        func format(_ number: Double?) -> String {
+            guard let number, let value = MeasurementDisplay.format(number, locale: locale) else { return "hesaplanamadı" }
+            return "\(value) mm"
+        }
+        func width(_ piece: Drawing.Piece) -> Double? { piece.contourBounds.map { $0.maxX - $0.minX } }
+        func height(_ piece: Drawing.Piece) -> Double? { piece.contourBounds.map { $0.maxY - $0.minY } }
+        func pieceLines(_ index: Int, _ title: String) -> [String] {
+            let piece = pieces[index]
+            let rawName = piece.name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 } ?? "Parça \(index + 1)"
+            let prefix = rawName.prefix(256)
+            let name = ModelStore.safeLabel(String(prefix)) + (prefix.endIndex == rawName.endIndex ? "" : "…")
+            return ["\(title): \(name)", "Dosya sırası: \(index + 1) / \(pieces.count)",
+                    "Parça kimliği: \(piece.id?.uuidString ?? "yok")", "Kontur: \(piece.closed ? "kapalı" : "açık")",
+                    "Yaklaşık en: \(format(width(piece)))", "Yaklaşık boy: \(format(height(piece)))",
+                    "Yaklaşık toplam kontur uzunluğu: \(format(piece.contourLength))"]
+        }
+        let a = pieces[first], b = pieces[second]
+        let projectPrefix = projectName.prefix(256)
+        let projectLabel = ModelStore.safeLabel(String(projectPrefix)) + (projectPrefix.endIndex == projectName.endIndex ? "" : "…")
+        let lines = ["PARÇA KARŞILAŞTIRMASI · YALNIZCA BİLGİ", "Proje: \(projectLabel)", ""] + pieceLines(first, "Birinci") + [""] + pieceLines(second, "İkinci") + ["",
+            first == second ? "Uyarı: Aynı parça iki kez seçildi." : "İki farklı dosya sırası karşılaştırıldı.",
+            "Yaklaşık farklar (ikinci − birinci):",
+            "En: \(format(ContourMeasure.difference(first: width(a), second: width(b))))",
+            "Boy: \(format(ContourMeasure.difference(first: height(a), second: height(b))))",
+            "Toplam kontur uzunluğu: \(format(ContourMeasure.difference(first: a.contourLength, second: b.contourLength)))", "",
+            "Değerler dosyadaki düz çizgilerden hesaplanır ve en fazla 6 anlamlı basamağa yuvarlanır. Açık ve kapalı konturların toplamları farklı anlam taşır. Bu metin proje dosyası, dikiş uyumu veya üretime uygunluk doğrulaması değildir."]
+        return lines.joined(separator: "\n")
+    }
+}
 // A read-only comparison of the currently loaded snapshot, not a production check.
 private struct PieceComparisonView: View {
     let pieces: [Drawing.Piece]
+    let projectName: String
     @Environment(\.dismiss) private var dismiss
     @State private var first: Int?
     @State private var second: Int?
     @State private var choosingFirst = false
     @State private var choosingSecond = false
 
-    init(pieces: [Drawing.Piece], initialIndex: Int?) {
+    init(pieces: [Drawing.Piece], projectName: String, initialIndex: Int?) {
         self.pieces = pieces
+        self.projectName = projectName
         let selected = initialIndex.flatMap { pieces.indices.contains($0) ? $0 : nil } ?? 0
         _first = State(initialValue: pieces.indices.contains(selected) ? selected : nil)
         _second = State(initialValue: pieces.count > 1 ? (selected == 0 ? 1 : 0) : nil)
@@ -2716,6 +2751,9 @@ private struct PieceComparisonView: View {
                         Text("Aynı parça iki kez seçildi; farklar sıfır olabilir.").foregroundStyle(.secondary)
                     }
 
+                    if let report = PieceComparisonReport.make(pieces: pieces, projectName: projectName, first: first, second: second) {
+                        ShareLink(item: report) { Label("Karşılaştırma özetini paylaş…", systemImage: "square.and.arrow.up") }
+                    }
                     Section("Yaklaşık fark: ikinci − birinci") {
                         Text("En: \(difference(a.contourBounds.map { $0.maxX - $0.minX }, b.contourBounds.map { $0.maxX - $0.minX }))")
                         Text("Boy: \(difference(a.contourBounds.map { $0.maxY - $0.minY }, b.contourBounds.map { $0.maxY - $0.minY }))")
