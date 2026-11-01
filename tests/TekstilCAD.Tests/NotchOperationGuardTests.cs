@@ -147,14 +147,6 @@ public class NotchOperationGuardTests
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(repeated,4));
     }
     [Fact]
-    public void OpenPathOperationsRejectMarksFromEitherSource()
-    {
-        var marked=Open();var other=new PatternPiece { Closed=false,Points=[new(10,10),new(15,10)] };
-        Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(marked,other,0));
-        Assert.Throws<ArgumentException>(()=>OpenPathJoin.Join(other,marked,0));
-        Assert.Single(marked.Notches!);
-    }
-    [Fact]
     public void GradingAndNestingRejectBeforeCreatingUnmarkedResults()
     {
         var p=Closed();var original=p.Clone();var increments=Enumerable.Repeat(new Point2(0,0),p.Points.Count).ToArray();

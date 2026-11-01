@@ -221,6 +221,16 @@ internal static class DesktopVerification
             var marked=studio.Document.Clone();var markedUndo=session.UndoCount;window.ApplyForVerification();
             Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(marked,studio.Document) && session.UndoCount==markedUndo && window.MessageForVerification.Contains("değişti"),
                 "Join rejects a preview when a source mark is added",checks);
+            Preview();
+            Check(window.ApplyButtonForVerification.IsEnabled && window.MessageForVerification.Contains("1 köşe işareti"),
+                "Join preview reports the preserved marker",checks);
+            window.ApplyForVerification();
+            var joined=studio.Document.Pieces.Single(p=>p.Id!=a.Id && p.Id!=b.Id && p.Id!=other.Id);
+            Check(joined.Notches is { Count:1 } && joined.Notches[0].VertexIndex==2 && joined.Notches[0].Position==b.Points[0] &&
+                !ReferenceEquals(joined.Notches[0],studio.Document.Pieces.Single(p=>p.Id==b.Id).Notches![0]) && session.UndoCount==markedUndo+1,
+                "Join adds an independently marked result and retains both sources",checks);
+            Invoke(studio,"Undo");
+            Check(DocumentSession.ContentEquals(marked,studio.Document),"Marked join is one undo step",checks);
             Invoke(studio,"Undo");Preview();
             window.ToleranceForVerification.Text="0,05";
             var beforeTolerance=studio.Document.Clone(); var undoBefore=session.UndoCount;

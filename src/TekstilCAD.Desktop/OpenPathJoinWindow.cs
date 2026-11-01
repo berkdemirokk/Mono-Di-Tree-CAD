@@ -43,7 +43,7 @@ internal sealed class OpenPathJoinWindow : Window
         var cancel=new Button { Content="Kapat / hesabı iptal et", Padding=new Thickness(12,7,12,7) }; buttons.Children.Add(cancel);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto }; root.Children.Add(scroll);
         var body=new StackPanel(); scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="İki açık konturu seçin. Kaynaklar, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir açık parça olarak eklenir. Üretim bilgisi veya iplik yönü varsa bunlar yalnız açık onayla sonuca aktarılmadan bırakılabilir.", TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="İki açık konturu seçin. Kaynaklar, serileme kuralları ve kaynak ilişkileri korunur; sonuç ayrı bir açık parça olarak eklenir. Köşe işaretleri aynı koordinatlara kopyalanır; iki işaret tek birleşim noktasına düşerse işlem reddedilir. Üretim bilgisi veya iplik yönü varsa bunlar yalnız açık onayla sonuca aktarılmadan bırakılabilir.", TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Birinci açık parça" }); body.Children.Add(first);
         body.Children.Add(new TextBlock { Text="İkinci açık parça" }); body.Children.Add(second);
         body.Children.Add(new TextBlock { Text="En fazla uç uzaklığı (mm)" }); body.Children.Add(tolerance);
@@ -71,7 +71,7 @@ internal sealed class OpenPathJoinWindow : Window
     private void InvalidateProposal()
     {
         cancellation?.Cancel(); proposal=null; beforeFirst=null; beforeSecond=null; document=null;
-        apply.IsEnabled=false; preview.Points=null; preview.Bridge=null; preview.InvalidateVisual(); message.Text="Önizleme hesaplanmadı.";
+        apply.IsEnabled=false; preview.Points=null; preview.Bridge=null; preview.Notches=null; preview.InvalidateVisual(); message.Text="Önizleme hesaplanmadı.";
     }
 
     private async Task CalculateAsync()
@@ -97,12 +97,12 @@ internal sealed class OpenPathJoinWindow : Window
             if(!ReferenceEquals(workspace.Document,currentDocument) || !SameCurrent(oneCopy) || !SameCurrent(twoCopy))
             { message.Text="Kaynak veya proje değişti; önizlemeyi yeniden hesaplayın."; return; }
             proposal=result; beforeFirst=oneCopy; beforeSecond=twoCopy; document=currentDocument;
-            preview.Points=result.Piece.Points;
+            preview.Points=result.Piece.Points;preview.Notches=result.Piece.Notches;
             var endpointsA=new[] { oneCopy.Points[0],oneCopy.Points[^1] };
             var endpointsB=new[] { twoCopy.Points[0],twoCopy.Points[^1] };
             preview.Bridge=(from x in endpointsA from y in endpointsB where TekstilCAD.Core.Geometry.Distance(x,y)<=gap select ((Point2,Point2)?)(x,y)).Single();
             preview.InvalidateVisual();
-            message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
+            message.Text=$"Önizleme: {result.Piece.Points.Count} noktalı açık kontur. {result.Piece.Notches?.Count ?? 0} köşe işareti aynı koordinatlara kopyalanır. Kırmızı çizgi köprüdür; uzunluğu {MeasurementInput.Format(result.BridgeLength)} mm. Kaynaklar projede kalır; sonuç adı kaynakları belirtir, ancak düzenlenebilir ve resmi kaynak kaydı değildir. Sonuç için kaynak kuralları, üretim bilgileri veya kaynak geçmişi oluşturulmaz. Geri al, yalnız eklenen sonucu kaldırır.";
             apply.IsEnabled=true;
         }
         catch(OperationCanceledException) { if(!closed)message.Text="Hesap iptal edildi."; }
@@ -140,6 +140,7 @@ internal sealed class OpenPathJoinWindow : Window
     private sealed class JoinPreview : FrameworkElement
     {
         internal IReadOnlyList<Point2>? Points { get; set; }
+        internal IReadOnlyList<NotchMark>? Notches { get; set; }
         internal (Point2,Point2)? Bridge { get; set; }
         protected override void OnRender(DrawingContext dc)
         {
@@ -160,6 +161,7 @@ internal sealed class OpenPathJoinWindow : Window
             geometry.Freeze(); dc.DrawGeometry(null,new Pen(Brushes.DarkBlue,1.5),geometry);
             if(Bridge is { } bridge && bridge.Item1!=bridge.Item2)
                 dc.DrawLine(new Pen(Brushes.Red,3),Map(bridge.Item1),Map(bridge.Item2));
+            if(Notches is not null)foreach(var mark in Notches)dc.DrawEllipse(null,new Pen(Brushes.DarkMagenta,2),Map(mark.Position),5,5);
         }
     }
 }

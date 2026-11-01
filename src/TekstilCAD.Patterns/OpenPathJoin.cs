@@ -23,7 +23,6 @@ public static class OpenPathJoin
         ArgumentNullException.ThrowIfNull(first);
         ArgumentNullException.ThrowIfNull(second);
         cancellationToken.ThrowIfCancellationRequested();
-        NotchSafety.RequireNoNotches(first);NotchSafety.RequireNoNotches(second);
         if (!double.IsFinite(tolerance) || tolerance < 0 || tolerance > 100_000)
             throw new ArgumentOutOfRangeException(nameof(tolerance));
         if (first.Id == Guid.Empty || second.Id == Guid.Empty || first.Id == second.Id)
@@ -37,6 +36,8 @@ public static class OpenPathJoin
         if (first.Points.Count < 2 || second.Points.Count < 2 ||
             first.Points.Count > LargeOpenPathValidator.MaximumStoredPoints || second.Points.Count > LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Kaynak kontur nokta sayısı geçersiz.");
+        if(first.Notches is not null)_=MarkedPieceTranslation.Translate(first,0,0,cancellationToken);
+        if(second.Notches is not null)_=MarkedPieceTranslation.Translate(second,0,0,cancellationToken);
         if ((long)first.Points.Count + second.Points.Count - 1 > LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Birleşik kontur nokta sınırını aşıyor.");
         var a = first.Points.ToArray(); var b = second.Points.ToArray();
@@ -65,7 +66,24 @@ public static class OpenPathJoin
         points.AddRange(shared ? b.Skip(1) : b);
         LargeOpenPathValidator.Validate(points, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points };
+        var marks=new List<NotchMark>();var used=new HashSet<int>();
+        static bool SameBits(Point2 x,Point2 y) => BitConverter.DoubleToInt64Bits(x.X)==BitConverter.DoubleToInt64Bits(y.X) && BitConverter.DoubleToInt64Bits(x.Y)==BitConverter.DoubleToInt64Bits(y.Y);
+        void AddMarks(PatternPiece source,bool reversed,int offset)
+        {
+            if(source.Notches is null)return;
+            foreach(var mark in source.Notches)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var mapped=offset+(reversed ? source.Points.Count-1-mark.VertexIndex : mark.VertexIndex);
+                if(mapped<0 || mapped>=points.Count || !SameBits(mark.Position,points[mapped]))
+                    throw new ArgumentException("Birleştirmede işaretin tam koordinatı korunamıyor; kaynaklar değiştirilmedi.");
+                if(!used.Add(mapped))throw new ArgumentException("İki kaynak işareti aynı birleşim noktasına karşılık geliyor; ayrı işaretler korunamıyor.");
+                marks.Add(new NotchMark { VertexIndex=mapped,Position=mark.Position });
+            }
+        }
+        AddMarks(first,match.ReverseA,0);
+        AddMarks(second,match.ReverseB,a.Length-(shared ? 1 : 0));
+        var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points, Notches=marks.Count==0 ? null : marks };
         return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance);
     }
 }
