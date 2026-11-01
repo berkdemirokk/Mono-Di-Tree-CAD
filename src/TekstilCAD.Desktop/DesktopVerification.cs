@@ -1012,6 +1012,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
+            VerifyDesignRequest(studio,checks);
             VerifyArcStartPoint(studio,checks);
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
@@ -9108,6 +9109,25 @@ internal static class DesktopVerification
             finally { window.Close(); }
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
+    }
+    private static void VerifyDesignRequest(MainWindow studio,List<string> checks)
+    {
+        var before=studio.Document.Clone();
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var undo=session.UndoCount;
+        var window=new DesignRequestWindow(studio);
+        try
+        {
+            var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
+            window.LoadForVerification(input);
+            Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                "Design request loads text and exact image bytes independently",checks);
+            window.PromptForVerification.Text="Değişen elbise isteği";
+            Check(window.DirtyForVerification && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                "Editing a design request leaves the open project and undo untouched",checks);
+            window.LoadForVerification(input);
+        }
+        finally { window.Close(); }
     }
     private static void VerifyCoordinateDrawing(MainWindow studio,List<string> checks)
     {

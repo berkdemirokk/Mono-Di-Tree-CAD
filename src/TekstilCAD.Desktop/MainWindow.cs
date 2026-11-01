@@ -270,6 +270,7 @@ public class MainWindow : Window
         notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; köşe POINT ve varsa iplik yönü LINE işaretleri üretim veya kesim komutu değildir.");
         var textile = CommandGroup(commandArea, "TEKSTİL");
         AddButton(textile, "Tekstil araçları…", OpenTextileTools, "Serileme, dikiş payı, nokta düzenleme ve temel pastal");
+        AddButton(textile, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "Çevrimdışı açıklama, ölçü ve referans isteğini ayrı dosyada hazırla; kalıp oluşturulmaz.");
         var machineControls=new StackPanel();textile.Children.Add(machineControls);
         machineQueueCommand=AddButton(machineControls, "Makine simülatörü…", OpenMachineCenter, "Dosya aktarım simülasyonu; fiziksel makine bağlantısı yok. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin.");
         AutomationProperties.SetName(machineQueueMessage,"Makine simülatörü hazırlık durumu");
