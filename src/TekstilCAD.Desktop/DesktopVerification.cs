@@ -1010,6 +1010,7 @@ internal static class DesktopVerification
             VerifyRecoveryPaging(studio,work,checks);
             VerifyPendingDrawingFailurePreservesPoints(studio,checks);
             VerifyToolGuidance(studio,checks);
+            VerifyMainCommandGroups(studio,reportPath,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
@@ -9109,6 +9110,17 @@ internal static class DesktopVerification
             finally { window.Close(); }
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
+    }
+    private static void VerifyMainCommandGroups(MainWindow studio,string reportPath,List<string> checks)
+    {
+        var root=(FrameworkElement)studio.Content;
+        var groups=Descendants<Expander>(root).Where(e=>AutomationProperties.GetName(e) is "Dosya aktarımı" or "Tekstil ve makine").ToArray();
+        Check(groups.Length==2 && groups.All(e=>!e.IsExpanded && e.Focusable && !string.IsNullOrWhiteSpace(AutomationProperties.GetHelpText(e))),"Secondary command groups start collapsed and expose keyboard and automation information",checks);
+        var primary=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kalıp isteği hazırla…"));
+        Check(primary.IsVisible && primary.IsEnabled,"Design request remains visible as the primary action",checks);
+        foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
+        Render(studio,Path.ChangeExtension(reportPath,".main-commands-narrow.png"),1024,640);
+        Render(studio,Path.ChangeExtension(reportPath,".main-commands-wide.png"),1440,900);
     }
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {

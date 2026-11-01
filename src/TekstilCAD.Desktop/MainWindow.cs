@@ -250,6 +250,9 @@ public class MainWindow : Window
         DockPanel.SetDock(header, Dock.Top); root.Children.Add(header);
 
         var commandArea = new WrapPanel { Margin = new Thickness(16, 0, 16, 12) };
+        var start = CommandGroup(commandArea, "BAŞLANGIÇ");
+        var design = AddButton(start, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "İstek hazırlar; kalıp oluşturmaz.");
+        design.Background=StudioTheme.Accent; design.Foreground=StudioTheme.Background;
         var files = CommandGroup(commandArea, "PROJE");
         AddButton(files, "Yeni", NewDocument, "Yeni proje · Ctrl+N");
         AddButton(files, "Aç…", Open, "Proje aç · Ctrl+O");
@@ -260,7 +263,7 @@ public class MainWindow : Window
         AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
-        var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
+        var exchange = CollapsibleCommands(commandArea, "Dosya aktarımı");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
         AddButton(exchange,"Seçilen parçalar · işaretli inceleme DXF…",ExportSelectedNotchReview,"Seçimde en az bir işaretli parça gerekir; seçilen işaretsiz parçalar ve iplik yönleri de incelemeye dahil edilir. Üretim çıktısı değildir.");
@@ -268,15 +271,15 @@ public class MainWindow : Window
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
         notchReviewExportCommand=AddButton(exchange,"Köşe işaretli DXF incelemesi…",ExportNotchReview,"Yalnız inceleme; köşe POINT ve varsa iplik yönü LINE işaretleri üretim veya kesim komutu değildir.");
-        var textile = CommandGroup(commandArea, "TEKSTİL");
+        var textile = CollapsibleCommands(commandArea, "Tekstil ve makine");
         AddButton(textile, "Tekstil araçları…", OpenTextileTools, "Serileme, dikiş payı, nokta düzenleme ve temel pastal");
-        AddButton(textile, "Kalıp isteği hazırla…", () => new DesignRequestWindow(this).ShowDialog(), "Çevrimdışı açıklama, ölçü ve referans isteğini ayrı dosyada hazırla; kalıp oluşturulmaz.");
+
         var machineControls=new StackPanel();textile.Children.Add(machineControls);
         machineQueueCommand=AddButton(machineControls, "Makine simülatörü…", OpenMachineCenter, "Dosya aktarım simülasyonu; fiziksel makine bağlantısı yok. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin.");
         AutomationProperties.SetName(machineQueueMessage,"Makine simülatörü hazırlık durumu");
         AutomationProperties.SetHelpText(machineQueueMessage,"Durum ve hata ayrıntılarını seçip kopyalayabilirsiniz; uzun metni kaydırın.");
         AutomationProperties.SetLiveSetting(machineQueueMessage,AutomationLiveSetting.Polite);
-        machineControls.Children.Add(machineQueueMessage);
+        project.Children.Add(machineQueueMessage);
         DockPanel.SetDock(commandArea, Dock.Top); root.Children.Add(commandArea);
 
         var footer = new DockPanel { LastChildFill = true };
@@ -610,6 +613,17 @@ public class MainWindow : Window
         var group = new StackPanel { Margin = new Thickness(0, 0, 14, 0) };
         group.Children.Add(new TextBlock { Text = title, FontSize = 9, Foreground = Muted, Margin = new Thickness(5, 0, 0, 5) });
         var commands = new StackPanel { Orientation = Orientation.Horizontal }; group.Children.Add(commands); parent.Children.Add(group); return commands;
+    }
+    private static StackPanel CollapsibleCommands(System.Windows.Controls.Panel parent,string title)
+    {
+        var commands=new StackPanel { Margin=new Thickness(4),MaxWidth=300 };
+        var scroll=new ScrollViewer { Content=commands,MaxHeight=210,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
+        AutomationProperties.SetName(scroll,title+" işlemleri");
+        var expander=new Expander { Header=title,Content=scroll,Margin=new Thickness(3),Foreground=StudioTheme.Text,HorizontalAlignment=HorizontalAlignment.Left };
+        AutomationProperties.SetName(expander,title);
+        AutomationProperties.SetHelpText(expander,"İşlemleri göstermek veya gizlemek için açın.");
+        parent.Children.Add(expander);
+        return commands;
     }
     private static Button AddButton(System.Windows.Controls.Panel parent, string text, Action action, string? tooltip = null, bool projectSaveAction = false)
     {
