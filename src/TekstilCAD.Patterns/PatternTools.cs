@@ -436,6 +436,22 @@ public static class PatternTools
     /// first vertex is used to close the contour.</summary>
     public static PatternPiece DeletePoint(PatternPiece piece, int index, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(piece);
+        if(piece.Notches is not null)
+        {
+            _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
+            if(index<0 || index>=piece.Points.Count)throw new ArgumentOutOfRangeException(nameof(index));
+            var removed=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && index==piece.Points.Count-1 ? 0 : index;
+            if(piece.Notches.Any(mark=>mark.VertexIndex==removed))
+                throw new ArgumentException("Çentik işaretli köşe silinemez; önce işareti gözden geçirin.",nameof(index));
+            var unmarkedSource=piece.Clone();unmarkedSource.Notches=null;
+            var edited=DeletePoint(unmarkedSource,index,cancellationToken);
+            var marks=piece.Notches.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex>removed ? mark.VertexIndex-1 : mark.VertexIndex,Position=mark.Position }).ToList();
+            foreach(var mark in marks)
+                if(mark.VertexIndex<0 || mark.VertexIndex>=edited.Points.Count || edited.Points[mark.VertexIndex]!=mark.Position)
+                    throw new ArgumentException("Çentik işareti korunamadı; nokta silinmedi.",nameof(piece));
+            edited.Notches=marks;cancellationToken.ThrowIfCancellationRequested();return edited;
+        }
         var points = SnapshotPointEdit(piece, cancellationToken);
         if (index < 0 || index >= points.Count) throw new ArgumentOutOfRangeException(nameof(index));
         var repeatedClosure = piece.Closed && points.Count > 1 && points[0] == points[^1];

@@ -17,7 +17,7 @@ public class NotchOperationGuardTests
     {
         var p=Closed();var before=p.Clone();
         Action[] operations=[()=>PatternTools.Offset(p,1),()=>PatternTools.OffsetConvex(p,1),
-            ()=>PatternTools.DeletePoint(p,0),()=>PatternTools.MovePoint(p,1,new(19,1))];
+            ()=>PatternTools.DeletePoint(p,1),()=>PatternTools.MovePoint(p,1,new(19,1))];
         foreach(var action in operations) { var ex=Assert.Throws<ArgumentException>(action);Assert.Contains("Çentik",ex.Message); }
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[p] }));
     }
@@ -118,6 +118,33 @@ public class NotchOperationGuardTests
         using var canceled=new CancellationTokenSource();canceled.Cancel();
         Assert.Throws<OperationCanceledException>(()=>PatternTools.InsertPoint(source,0,new(5,0),canceled.Token));
         Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+    }
+    [Theory]
+    [InlineData(0,0)]
+    [InlineData(2,1)]
+    [InlineData(4,0)]
+    public void DeleteUnmarkedVertexRemapsMarkersAndRetainsZeroBits(int index,int expectedIndex)
+    {
+        var source=Closed();source.Points.Add(source.Points[0]);source.Notches![0].Position=new Point2(20,BitConverter.Int64BitsToDouble(long.MinValue));var before=source.Clone();
+        var edited=PatternTools.DeletePoint(source,index);var mark=Assert.Single(edited.Notches!);
+        Assert.Equal(expectedIndex,mark.VertexIndex);Assert.Equal(edited.Points[expectedIndex],mark.Position);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(mark.Position.Y));Assert.Equal(edited.Points[0],edited.Points[^1]);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+    }
+    [Fact]
+    public void DeleteMarkedVertexAndInvalidOrCancelledDeletionAreRejected()
+    {
+        var source=Open();var before=source.Clone();
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(source,1));
+        var edited=PatternTools.DeletePoint(source,0);Assert.Equal(0,Assert.Single(edited.Notches!).VertexIndex);
+        using var canceled=new CancellationTokenSource();canceled.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>PatternTools.DeletePoint(source,0,canceled.Token));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+        var closed=new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) }] };
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(closed,0));
+        var repeated=Closed();repeated.Points.Add(repeated.Points[0]);repeated.Notches=[new NotchMark { VertexIndex=0,Position=repeated.Points[0] }];
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(repeated,0));
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.DeletePoint(repeated,4));
     }
     [Fact]
     public void OpenPathOperationsRejectMarksFromEitherSource()

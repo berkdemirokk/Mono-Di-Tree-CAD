@@ -1833,7 +1833,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -8011,6 +8011,21 @@ internal static class DesktopVerification
             Check(result.Text.Contains("güncel projeye ait değil",StringComparison.Ordinal) && DocumentSession.ContentEquals(stable,studio.Document)
                   && session.UndoCount==undo && session.RedoCount==redo,
                 "Stale detached selection is rejected before absent notch no-op",checks);
+            tools.Close();
+            var deletionPiece=new PatternPiece { Points=[new(0,0),new(20,0),new(20,20),new(0,20)],
+                Grainline=new Grainline { Start=new(3,3),End=new(3,10) },Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }] };
+            var deletionRule=new GradingRuleSet { SourcePieceId=deletionPiece.Id,SourceClosed=true,SourcePoints=[..deletionPiece.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[deletionPiece],GradingRules=[deletionRule] });studio.Select(deletionPiece.Id);tools=new TextileToolsWindow(studio);
+            var deletionBefore=studio.Document.Clone();
+            var rejected=tools.DeleteVertexAsync("1");PumpUntil(()=>rejected.IsCompleted);rejected.GetAwaiter().GetResult();
+            Check(DocumentSession.ContentEquals(deletionBefore,studio.Document),"Deleting a marked vertex is rejected",checks);
+            var deletion=tools.DeleteVertexAsync("0");PumpUntil(()=>deletion.IsCompleted);deletion.GetAwaiter().GetResult();
+            var deletionAfter=studio.Document.Clone();var deletionMark=deletionAfter.Pieces[0].Notches!.Single();
+            Check(deletionMark.VertexIndex==0 && deletionMark.Position==deletionAfter.Pieces[0].Points[0] && deletionAfter.Pieces[0].Grainline!.NeedsReview &&
+                deletionAfter.GradingRules.Single().SourcePoints.SequenceEqual(deletionBefore.GradingRules.Single().SourcePoints),
+                "Unmarked vertex deletion retains markers and keeps the old grading rule for review",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(deletionBefore,studio.Document) && session.Redo() && DocumentSession.ContentEquals(deletionAfter,studio.Document),
+                "Unmarked vertex deletion supports undo and redo",checks);
             foreach(var mode in new[] { "midpoint","distance","percentage" })
             {
                 tools.Close();
