@@ -47,7 +47,7 @@ internal sealed class ProductionNestingWindow : Window
     private readonly TextBox width = new() { Text="1500", Width=110, Margin=new Thickness(4) };
     private readonly TextBox fabricLength = new() { Width=110, Margin=new Thickness(4), ToolTip="Boş bırakılırsa kumaş boyu sınırlandırılmaz." };
     private readonly ComboBox grainPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "İplik yönü denetlenmez", "Tek yön (+Y)", "Çift yön (±Y)" }, SelectedIndex=0 };
-    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa", "Otomatik deneme: 0° / 90°" }, SelectedIndex=0 };
+    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa", "Otomatik: 0° / 90°", "Otomatik: dört dik açı" }, SelectedIndex=0 };
     private readonly TextBox gap = new() { Text="5", Width=90, Margin=new Thickness(4) };
     private readonly TextBox edgeMargin = new() { Text="0", Width=80, Margin=new Thickness(4) };
     private readonly TextBlock status = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,8,4,8) };
@@ -87,14 +87,15 @@ internal sealed class ProductionNestingWindow : Window
         {
             var lengthSummary=string.IsNullOrWhiteSpace(fabricLength.Text) ? "boy sınırsız" : "boy sınırı girildi";
             var grainSummary=grainPolicy.SelectedIndex switch { 1 => "tek yön", 2 => "çift yön", _ => "iplik denetlenmez" };
-            var rotationSummary=rotationPolicy.SelectedIndex switch { 1=>"tüm kopyalar 90°",2=>"otomatik 0°/90°",_=>"dönüş yok" };
+            var rotationSummary=rotationPolicy.SelectedIndex switch { 1=>"tüm kopyalar 90°",2=>"otomatik 0°/90°",3=>"otomatik dört dik açı",_=>"dönüş yok" };
             advanced.Header=$"Kumaş boyu ve iplik · {lengthSummary}, {grainSummary}, {rotationSummary}";
         }
         UpdateAdvancedHeader();
         AutomationProperties.SetName(grainPolicy,"İplik yönü doğrulama politikası");
         AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. 90 derece dönüşte yön doğrulaması zorunludur.");
         AutomationProperties.SetName(rotationPolicy,"Kopyaların dönüşü");
-        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa tüm kopyalara uygulanır. Otomatik deneme yalnız 0 ve 90 dereceyi kullanır; en iyi yerleşimi veya her uygun çözümü bulma garantisi yoktur. İplik yönü doğrulanır; ayrı kayıt sürüm 7 gerektirir.");
+        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa tüm kopyalara uygulanır. Otomatik seçenekler 0 ve 90 dereceyi veya 0, 90, 180 ve 270 dereceyi dener; en iyi yerleşimi veya her uygun çözümü bulma garantisi yoktur. İplik yönü doğrulanır; ayrı kayıt sürüm 7 gerektirir.");
+        rotationPolicy.ToolTip="Dört dik açı: 0°, 90°, 180°, 270°. Otomatik deneme en iyi veya her uygun sonucu garanti etmez; iplik yönü kontrolü gerekir.";
         AutomationProperties.SetName(width,"Kumaş eni, milimetre"); AutomationProperties.SetName(gap,"Parçalar arası boşluk, milimetre");
         AutomationProperties.SetName(fabricLength,"Kullanılabilir kumaş boyu, milimetre, isteğe bağlı");
         AutomationProperties.SetHelpText(fabricLength,"Boş bırakılırsa kumaş boyu sınırlandırılmaz. Bir değer girilirse pastal bu boyu aşamaz.");
@@ -441,7 +442,7 @@ internal sealed class ProductionNestingWindow : Window
         var ids=choiceItems.Where(c=>c.IsSelected).Select(c=>c.Id).ToArray();
         var grainMode=grainPolicy.SelectedIndex;
         var rotationMode=rotationPolicy.SelectedIndex;
-        if(rotationMode is <0 or >2 || (rotationMode!=0 && grainMode is not (1 or 2)))
+        if(rotationMode is <0 or >3 || (rotationMode!=0 && grainMode is not (1 or 2)))
         { InvalidatePreview();SetStatus("Dönüş için tek veya çift yön iplik kontrolü seçin.");return; }
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
@@ -472,7 +473,8 @@ internal sealed class ProductionNestingWindow : Window
                     }
                     else
                     {
-                        var allowed=ids.ToDictionary(id=>id,_=>(IReadOnlyList<int>)[0,90]);
+                        IReadOnlyList<int> candidateAngles=rotationMode==2 ? [0,90] : [0,90,180,270];
+                        var allowed=ids.ToDictionary(id=>id,_=>candidateAngles);
                         rotated=AutomaticPerCopyNesting.Arrange(snapshot,ids,allowed,w,g,length,m,direction,0,token);
                         if(!PerCopyTraceVerifier.IsValidForAllowedAngles(snapshot,ids,rotated,allowed,direction,0,w,g,m,length,token))
                             throw new InvalidOperationException("Otomatik açılar veya kopya izi doğrulanamadı; önizleme hazırlanmadı.");
@@ -544,7 +546,7 @@ internal sealed class ProductionNestingWindow : Window
             var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
                 ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
                 : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
-            var rotationNotice=previewRotation switch { 1=>" Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.",2=>" 0°/90° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",_=>"" };
+            var rotationNotice=previewRotation switch { 1=>" Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.",2=>" 0°/90° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",3=>" 0°/90°/180°/270° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",_=>"" };
             SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}{rotationNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
