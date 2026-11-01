@@ -14,8 +14,13 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Dosya sırası: 1 / 2"].exists)
         XCTAssertTrue(app.staticTexts["Parça kimliği: 11111111-1111-1111-1111-111111111111"].exists)
         app.buttons["2. Kol"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap()
+        search.typeText("11111111-1111-1111-1111-111111111111")
         let row = app.buttons.matching(identifier: "Kol").firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("11111111-1111-1111-1111-111111111111"))
+        row.tap()
         app.swipeUp()
         XCTAssertTrue(app.staticTexts["Aynı parça iki kez seçildi; farklar sıfır olabilir."].waitForExistence(timeout: 5))
     }

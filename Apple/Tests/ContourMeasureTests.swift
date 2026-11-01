@@ -4,6 +4,15 @@ import XCTest
 final class ContourMeasureTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testDuplicatePieceNamesCanBeFoundByTheirDisplayedIdentity() throws {
+        let json = #"[5,{"Name":"Test","Pieces":[{"Id":"11111111-1111-1111-1111-111111111111","Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":0}]},{"Id":"22222222-2222-2222-2222-222222222222","Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":0}]}]}]"#
+        let pieces = try Drawing.load(Data(json.utf8)).pieces
+        let hits = try XCTUnwrap(ModelSearch.matchingIndices(count: pieces.count, query: "22222222-2222-2222-2222-222222222222", cancelled: { false }) { index in
+            (pieces[index].displayName(index: index), pieces[index].selectionDetails(index: index))
+        })
+        XCTAssertEqual(hits, [1])
+        XCTAssertTrue(pieces[1].selectionDetails(index: 1).contains("Kimlik: 22222222-2222-2222-2222-222222222222"))
+    }
     func testComparisonReportIncludesOnlySpansBoundToTheirSelectedPieces() throws {
         let json = #"[5,{"Name":"Test","Pieces":[{"Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":100,"Y":0}]},{"Name":"B","Closed":false,"Points":[{"X":0,"Y":0},{"X":50,"Y":0}]}]}]"#
         let drawing = try Drawing.load(Data(json.utf8))
