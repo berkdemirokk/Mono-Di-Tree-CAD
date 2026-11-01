@@ -24,6 +24,31 @@ final class ViewerUITests: XCTestCase {
         }
     }
 
+    func testBOMEncodedModelsExplainUnavailablePieceNameEditing() throws {
+        let input = #"[1,{"Name":"Ön","Pieces":[{"Name":"Parça","Points":[]}],"GradingRules":[]}]"#
+        let encodings: [(String.Encoding, [UInt8])] = [
+            (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
+            (.utf32LittleEndian, [0xff, 0xfe, 0, 0]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])
+        ]
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-library-fixture")
+        for (encoding, bom) in encodings {
+            var bytes = Data(bom)
+            bytes.append(try XCTUnwrap(input.data(using: encoding)))
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = bytes.base64EncodedString()
+            app.launch()
+            let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+            XCTAssertTrue(picker.waitForExistence(timeout: 15))
+            picker.tap()
+            app.buttons["Parça"].tap()
+            let rename = app.buttons["Parça adını değiştir ve kopya kaydet"]
+            XCTAssertTrue(rename.waitForExistence(timeout: 5))
+            XCTAssertFalse(rename.isEnabled)
+            XCTAssertTrue(app.staticTexts["UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz."].exists)
+            app.terminate()
+        }
+    }
+
     func testFailedRawSaveCanBeRetriedWithoutSelectingSourceAgain() {
         let app = XCUIApplication()
         app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once", "--ui-test-raw-picker-lifecycle"]

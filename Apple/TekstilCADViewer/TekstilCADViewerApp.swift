@@ -276,7 +276,11 @@ private struct ContentView: View {
                             pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
                             showingPieceNameEditor = true
                         }
-                        .disabled(isSaving || modelLoad.isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        if project.hasNonUTF8BOM {
+                            Text("UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         if !project.pieceRenameIdentitiesValid {
                             Text("Parça adını değiştirmek için tüm parçaların adı ve varsa geçerli, benzersiz kimliği olmalı.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -712,7 +716,8 @@ private struct ContentView: View {
     }
 
     private func saveRenamedPieceCopy() {
-        guard let snapshot = pieceRenameSnapshot, sourceData == snapshot.data, selectedPiece == snapshot.index else {
+        guard let snapshot = pieceRenameSnapshot, sourceData == snapshot.data, selectedPiece == snapshot.index,
+              !LosslessProjectName.hasNonUTF8BOM(snapshot.data) else {
             error = "Açık model veya seçili parça değişti. Parçayı yeniden seçin."
             return
         }
