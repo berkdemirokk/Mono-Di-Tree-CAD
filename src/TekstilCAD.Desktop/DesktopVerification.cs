@@ -654,6 +654,7 @@ internal static class DesktopVerification
             VerifyClosingEdgeDragSafety(studio,checks);
             VerifyOpenVertexDrag(studio,checks);
             VerifyExplicitClosureVertexDrag(studio,checks);
+            VerifyMediumContourWorkers(studio,checks);
             VerifyLargeVertexValidation(studio,checks);
             VerifyAsyncExport(studio,work,checks);
             VerifyDxfGrainlineReviewExport(studio,work,checks);
@@ -1555,6 +1556,67 @@ internal static class DesktopVerification
         }
         finally { scaleField.SetValue(canvas,oldScale);offsetField.SetValue(canvas,oldOffset);dragField.SetValue(canvas,oldDrag);panField.SetValue(canvas,oldPan);canvas.InvalidateVisual(); }
     }
+    private static void VerifyMediumContourWorkers(MainWindow studio,List<string> checks)
+    {
+        var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var points=Enumerable.Range(0,513).Select(i=> { var angle=Math.Tau*i/513;return new Point2(1000*Math.Cos(angle),1000*Math.Sin(angle)); }).ToArray();
+        var piece=new PatternPiece { Points=points.ToList(),Notches=[new NotchMark { VertexIndex=0,Position=points[0] }] };
+        var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=points.ToList(),Deltas=Enumerable.Repeat(new Point2(1,2),points.Length).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.SetTool("Seç");studio.Select(piece.Id);
+        var before=studio.Document.Clone();var moved=points.ToArray();moved[0]=new Point2(1000.01,0);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? task=null;
+            try
+            {
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                typeof(CadCanvas).GetField("dragId",PrivateInstance)!.SetValue(canvas,piece.Id);
+                typeof(CadCanvas).GetField("dragVertex",PrivateInstance)!.SetValue(canvas,0);
+                typeof(CadCanvas).GetField("dragOriginal",PrivateInstance)!.SetValue(canvas,points.ToList());
+                typeof(CadCanvas).GetField("dragPreview",PrivateInstance)!.SetValue(canvas,moved.ToList());
+                typeof(CadCanvas).GetField("dragSourceSnapshot",PrivateInstance)!.SetValue(canvas,studio.Selected!.Clone());
+                var liveRule=studio.Document.GradingRules.Single();
+                typeof(CadCanvas).GetField("dragRuleReference",PrivateInstance)!.SetValue(canvas,liveRule);
+                typeof(CadCanvas).GetField("dragRuleSnapshot",PrivateInstance)!.SetValue(canvas,liveRule.Clone());
+                typeof(CadCanvas).GetField("dragRuleEligible",PrivateInstance)!.SetValue(canvas,true);
+                var up=typeof(CadCanvas).GetMethod("Up",PrivateInstance)!;
+                up.Invoke(canvas,[new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left)]);
+                task=canvas.LargeVertexValidationTask!;PumpUntil(()=>reached.IsSet);
+                var responsive=false;studio.Dispatcher.BeginInvoke(new Action(()=>responsive=true));PumpUntil(()=>responsive);
+                Check(responsive && DocumentSession.ContentEquals(before,studio.Document),"513-point vertex validation runs without blocking the dispatcher or committing early",checks);
+                release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                var after=studio.Document.Clone();
+                Check(after.Pieces[0].Points[0]==moved[0] && after.Pieces[0].Notches!.Single().Position==moved[0] && after.GradingRules.Single().SourcePoints.SequenceEqual(moved) && session.UndoCount==1,
+                    "513-point move preserves marker and matching grading in one commit",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"513-point marked move is undoable",checks);
+            }
+            finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
+        canvas.CancelDrawing();studio.LoadDocument(new ProjectDocument());studio.SetTool("Çoklu çizgi");
+        canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çoklu çizgi",points));
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? task=null;
+            try
+            {
+                canvas.BeforeLargeCompletionForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.FinishPolyline();task=canvas.LargeCompletionTask!;PumpUntil(()=>reached.IsSet);
+                var responsive=false;studio.Dispatcher.BeginInvoke(new Action(()=>responsive=true));PumpUntil(()=>responsive);
+                Check(responsive && canvas.PendingDrawingPointCount==513 && studio.Document.Pieces.Count==0,
+                    "513-point drawing stays pending while validation runs in the background",checks);
+                canvas.CancelLargeCompletion();release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(canvas.PendingDrawingPointCount==513 && studio.Document.Pieces.Count==0,"Cancelling medium drawing validation preserves its pending points",checks);
+            }
+            finally { release.Set();if(task is not null) { PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }canvas.BeforeLargeCompletionForVerification=null; }
+        }
+        canvas.FinishPolyline();var completed=canvas.LargeCompletionTask!;PumpUntil(()=>completed.IsCompleted);completed.GetAwaiter().GetResult();
+        Check(studio.Document.Pieces.Single().Points.SequenceEqual(points) && !canvas.HasPendingDrawing && session.UndoCount==1,
+            "Retry commits the exact 513-point drawing once",checks);
+        Check(session.Undo() && studio.Document.Pieces.Count==0,"513-point completed drawing is undoable",checks);
+        canvas.CancelDrawing();studio.SetTool("Seç");
+    }
+
     private static void VerifyLargeVertexValidation(MainWindow studio,List<string> checks)
     {
         var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;

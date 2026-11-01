@@ -15,6 +15,8 @@ namespace TekstilCAD.Desktop;
 public sealed class CadCanvas : FrameworkElement
 {
     private readonly MainWindow owner;
+    // Quadratic contour checks above this size run off the UI thread.
+    internal const int SynchronousVertexLimit=512;
     // Distinguish a committed document change from a later UI refresh failure.
     private long observedCommits;
     private double scale=1.15;
@@ -40,6 +42,7 @@ public sealed class CadCanvas : FrameworkElement
     internal Action? BeforeLargeVertexValidationForVerification { get; set; }
     internal bool LargeVertexValidationRunning => largeVertexCancellation is not null;
     internal Task? LargeCompletionTask { get; private set; }
+    internal Action? BeforeLargeCompletionForVerification { get; set; }
     internal bool LargeCompletionRunning => largeCompletionCancellation is not null;
     /// <summary>True while an unfinished drawing has points not yet committed to the document.</summary>
     internal bool HasPendingDrawing => drawing.Count > 0;
@@ -285,7 +288,7 @@ public sealed class CadCanvas : FrameworkElement
         if(owner.ActiveTool!="Çoklu çizgi" || drawing.Count<(closed ? 3 : 2))
         { owner.SetStatus(closed ? "Kapalı kontur için Çoklu çizgi aracında en az 3 nokta gerekir." : "Açık çizgi için Çoklu çizgi aracında en az 2 nokta gerekir.");return; }
         if(LargeCompletionRunning || LargeVertexValidationRunning) { owner.SetStatus("Çizim veya nokta doğrulaması sürüyor; lütfen bekleyin.");return; }
-        if(drawing.Count<=Geometry.MaxValidatedContourVertices)
+        if(drawing.Count<=SynchronousVertexLimit)
         { Safe(()=> { AddValidated([..drawing],closed);InvalidateVisual(); }, restoreDrawingOnFailure:true);return; }
         var points=drawing.ToArray();
         var document=owner.Document;
@@ -299,7 +302,7 @@ public sealed class CadCanvas : FrameworkElement
         var committed=false;
         try
         {
-            await Task.Run(()=> { if(closed)LargeContourValidator.Validate(points,cancellation.Token);else LargeOpenPathValidator.Validate(points,cancellation.Token); },cancellation.Token);
+            await Task.Run(()=> { BeforeLargeCompletionForVerification?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(closed && points.Length<=Geometry.MaxValidatedContourVertices)Geometry.ValidateContour(points,cancellation.Token);else if(closed)LargeContourValidator.Validate(points,cancellation.Token);else LargeOpenPathValidator.Validate(points,cancellation.Token); },cancellation.Token);
             // No await occurs between checking the snapshot and committing it.
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed || owner.ActiveTool!="Çoklu çizgi" || !drawing.SequenceEqual(points))return;
             if(!ReferenceEquals(owner.Document,document))
@@ -557,9 +560,8 @@ public sealed class CadCanvas : FrameworkElement
         {
             if(drawing.Count==0 || Geometry.Distance(drawing[^1],p)>.001)
             {
-                // FinishPolyline uses the bounded synchronous validator through
-                // 4096 points and the background large-contour validator beyond
-                // that. Keep input aligned with its actual stored-point limit.
+                // Input remains bounded by the persisted contour size; larger
+                // validation runs asynchronously before committing the drawing.
                 if(drawing.Count>=LargeContourValidator.MaximumStoredPoints)
                     throw new System.IO.InvalidDataException($"Çoklu çizgi en fazla {LargeContourValidator.MaximumStoredPoints:N0} nokta içerebilir. Çizimi tamamlayın veya iptal edin.");
                 drawing.Add(p);
@@ -706,7 +708,7 @@ public sealed class CadCanvas : FrameworkElement
             }
             foreach(var p in result) Geometry.Validate(p);
             if(dragVertex>=0) ValidateClosingEdgePreserved(dragOriginal,result,piece.Closed);
-            if(dragVertex>=0 && result.Count>Geometry.MaxValidatedContourVertices)
+            if(dragVertex>=0 && result.Count>SynchronousVertexLimit)
             {
                 if(dragSourceSnapshot is not null && !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[dragSourceSnapshot] }))
                     throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
@@ -762,7 +764,7 @@ public sealed class CadCanvas : FrameworkElement
             throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
         if(piece.Notches is not null && (vertexIndex<0 || vertexIndex>=piece.Points.Count || !CanDragMarkedVertex(piece,vertexIndex)))
             throw new InvalidOperationException("İşaret koordinat bitleri kaynak köşeyle eşleşmiyor; işlem uygulanmadı.");
-        if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
+        if(proposed.Count!=original.Count || proposed.Count<=SynchronousVertexLimit || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
         ValidateClosingEdgePreserved(original,proposed,closed);
         var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();var sourcePiece=piece.Clone();var markedSource=piece.Notches is null ? null : sourcePiece;
@@ -778,7 +780,7 @@ public sealed class CadCanvas : FrameworkElement
         try
         {
             var before=BeforeLargeVertexValidationForVerification;
-            var verifiedMarks=await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(markedSource is not null) { var verified=PatternTools.MovePoint(markedSource,vertexIndex,candidate[vertexIndex],cancellation.Token,allowMarkedVertexMove:true);if(!SamePointBits(verified.Points,candidate))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");return verified.Notches; } if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token);return null; },cancellation.Token);
+            var verifiedMarks=await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(markedSource is not null) { var verified=PatternTools.MovePoint(markedSource,vertexIndex,candidate[vertexIndex],cancellation.Token,allowMarkedVertexMove:true);if(!SamePointBits(verified.Points,candidate))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");return verified.Notches; } if(candidate.Length<=Geometry.MaxValidatedContourVertices)ValidateDraggedVertex(candidate,closed,cancellation.Token);else if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token);return null; },cancellation.Token);
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed)return;
             if(owner.ActiveTool!="Seç" || owner.SelectedId!=id || !ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Proje veya seçim değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
@@ -837,12 +839,12 @@ public sealed class CadCanvas : FrameworkElement
     }
     // Persistence accepts draft geometry, so vertex editing must enforce the
     // same bounded open-path integrity checks as the pattern editing tools.
-    internal static void ValidateDraggedVertex(IReadOnlyList<Point2> points,bool closed)
+    internal static void ValidateDraggedVertex(IReadOnlyList<Point2> points,bool closed,CancellationToken cancellationToken=default)
     {
-        if(closed) { Geometry.ValidateContour(points); return; }
+        if(closed) { Geometry.ValidateContour(points,cancellationToken); return; }
         if(points.Count<2 || points.Count>Geometry.MaxValidatedContourVertices)
             throw new ArgumentException($"Açık çizgi düzenlemesi 2–{Geometry.MaxValidatedContourVertices} nokta destekler.");
-        if(Geometry.HasSelfIntersections(points,false))
+        if(Geometry.HasSelfIntersections(points,false,cancellationToken))
             throw new ArgumentException("Nokta taşınamadı: açık çizgi sıfır uzunluklu, üst üste binen veya kesişen bir kenar oluşturuyor.");
     }
     private static List<Point2> Arc(Point2 center,Point2 start,Point2 end)
