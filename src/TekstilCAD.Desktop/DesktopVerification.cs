@@ -4153,7 +4153,7 @@ internal static class DesktopVerification
         var flippedPath=Path.Combine(work,"canvas-orientation.dxf");
         var flippedVersion=ProjectStorage.CaptureVersion(flippedPath);string? flippedWarning=null;
         var flippedDeclined=studio.StartExportAfterPreflight(studio.Document.Clone(),flippedPath,6,flippedVersion,message=> { flippedWarning=message;return false; });
-        Check(flippedDeclined is null && !studio.ExportRunning && flippedWarning is not null && flippedWarning.Contains("işaretini ters",StringComparison.Ordinal),
+        Check(flippedDeclined is null && !studio.ExportRunning && flippedWarning is not null && flippedWarning.Contains("işaretini ters",StringComparison.Ordinal) && flippedWarning.Contains("yansımadır",StringComparison.Ordinal) && flippedWarning.Contains("saat yönünü",StringComparison.Ordinal),
             "Canvas-oriented DXF explains the coordinate change before export",checks);
         var flippedTask=studio.StartExportAfterPreflight(studio.Document.Clone(),flippedPath,6,flippedVersion,_=>true);
         Check(flippedTask is not null,"Canvas-oriented DXF starts after confirmation",checks);
