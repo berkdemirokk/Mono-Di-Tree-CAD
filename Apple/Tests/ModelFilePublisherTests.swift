@@ -182,6 +182,24 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
     }
 
+    func testCopyWithSymlinkPayloadCannotBeOpenedOrRecovered() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let target = root.appendingPathComponent("source.txt")
+        let bytes = Data("preserve source".utf8)
+        try bytes.write(to: target)
+        let copy = root.appendingPathComponent("linked.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        try Data(#"{"version":1,"name":"Model"}"#.utf8).write(to: copy.appendingPathComponent("metadata.json"))
+        try FileManager.default.createSymbolicLink(at: copy.appendingPathComponent("project.tcad"), withDestinationURL: target)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == copy })
+        XCTAssertFalse(entry.canOpen)
+        XCTAssertFalse(entry.requiresRecovery)
+        XCTAssertThrowsError(try ModelStore.readListedPayload(entry))
+        XCTAssertEqual(try Data(contentsOf: target), bytes)
+    }
+
     func testLibraryFilteringPreservesOrderAndCancelsWithoutPartialResults() throws {
         func entry(_ file: String, _ name: String, _ date: Date?) -> ModelStore.Entry {
             ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(file).tcad"), name: name, date: date,

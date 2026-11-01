@@ -1015,16 +1015,13 @@ enum ModelStore {
                     requiresRecovery = regular
                 } else if url.pathExtension.lowercased() == copyExtension {
                     let directory = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR) } ?? false
-                    let hasPayload = directory && FileManager.default.fileExists(atPath: payloadURL(url).path)
+                    let hasPayload = directory && (initialIdentity?.payload.map { ($0.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) } ?? false)
                     switch (directory ? metadata(url) : .invalid, hasPayload) {
                     case (.valid(let metadata), true):
                         name = metadata.name.isEmpty ? "Model" : metadata.name; canOpen = true; requiresRecovery = false
                     case (.oversized, true), (.invalid, true):
-                        var info = stat()
-                        let payload = payloadURL(url)
-                        let regular = payload.path.withCString { lstat($0, &info) } == 0 && (info.st_mode & S_IFMT) == S_IFREG
-                        name = regular ? "Kurtarma gerekli (\(url.deletingPathExtension().lastPathComponent))" : "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
-                        canOpen = false; requiresRecovery = regular
+                        name = "Kurtarma gerekli (\(url.deletingPathExtension().lastPathComponent))"
+                        canOpen = false; requiresRecovery = true
                     default:
                         name = "Okunamayan model (\(url.deletingPathExtension().lastPathComponent))"
                         canOpen = false
@@ -1137,6 +1134,10 @@ enum ModelStore {
     // Filesystem identity checks are not atomic with another writer.
     static func readListedPayload(_ entry: Entry, afterRead: (() throws -> Void)? = nil) throws -> Data {
         try requireCurrent(entry)
+        let payload = entry.url.pathExtension.lowercased() == copyExtension ? entry.identity?.payload : entry.identity?.entry
+        guard let payload, (payload.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) else {
+            throw ViewerError.message("Kayıt içeriği normal bir dosya değil; açılamadı.")
+        }
         let data = try Drawing.readData(payloadURL(entry.url))
         try afterRead?()
         try requireCurrent(entry)
