@@ -54,7 +54,7 @@ public final class DebugPointCopyCoordinator {
     /// Cancellation and application are ordered by the same lock. Once apply
     /// wins, a later cancel cannot undo the already installed result.
     @discardableResult
-    public func applyEdit(_ request: EditRequest, data: Data) throws -> UUID {
+    public func applyEdit(_ request: EditRequest, data: Data) throws -> DebugPointCopyStore.Snapshot {
         lock.lock(); defer { lock.unlock() }
         guard pendingEdit == request.id else { throw DebugPointCopyStore.Error.staleSnapshot }
         pendingEdit = nil
@@ -65,7 +65,7 @@ public final class DebugPointCopyCoordinator {
         }
         self.data = data
         revision = UUID()
-        return revision
+        return .init(documentID: documentID, revision: revision, name: source.name, data: data)
     }
     /// Returns the bytes and revision owned by this coordinator under one lock.
     public func snapshot(name: String) -> DebugPointCopyStore.Snapshot {

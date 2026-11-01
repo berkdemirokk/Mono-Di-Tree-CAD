@@ -27,3 +27,5 @@ An oversized result consumes its matching edit request before failing, so retry 
 DEBUG save cancellation is serialized against SQLite COMMIT with a separate one-shot gate: cancellation winning the gate rejects COMMIT and requests rollback; cancellation after COMMIT starts reports false and cannot undo it. It does not interrupt SQLite I/O, is not connected to the app, and has not been tested on Apple platforms.
 
 If a transaction fails while still active and ROLLBACK also fails, RollbackFailure retains both errors. Callers must treat the outcome as uncertain and preserve their original bytes. SQLite may already have ended a transaction on some failures; this prototype cannot infer durable state solely from an error or replace device/power-loss tests.
+
+Applying an edit returns the exact applied snapshot while holding the same lock. If the document changes before save, saving that snapshot is rejected; callers must not replace it with a later unrelated snapshot. This remains a standalone DEBUG prototype.

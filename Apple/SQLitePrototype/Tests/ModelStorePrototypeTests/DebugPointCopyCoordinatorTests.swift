@@ -93,6 +93,24 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         XCTAssertThrowsError(try coordinator.applyEdit(current, data: Data([4])))
         XCTAssertEqual(coordinator.snapshot(name: "point").data, Data([3]))
     }
+    func testAppliedEditSnapshotCannotSaveAfterAnotherDocumentOpens() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let db = root.appendingPathComponent("copy.sqlite"), sourceID = UUID(), otherID = UUID()
+        let coordinator = try DebugPointCopyCoordinator(documentID: sourceID, data: Data([1]))
+        let request = coordinator.beginEdit(name: "edited copy")
+        let applied = try coordinator.applyEdit(request, data: Data([2]))
+        XCTAssertEqual(applied.documentID, sourceID)
+        XCTAssertEqual(applied.data, Data([2]))
+        XCTAssertEqual(applied.name, "edited copy")
+        try coordinator.replaceDocument(documentID: otherID, data: Data([3]))
+        XCTAssertThrowsError(try coordinator.save(at: db, snapshot: applied))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: db.path))
+        let current = coordinator.snapshot(name: "other")
+        XCTAssertEqual(current.documentID, otherID)
+        XCTAssertEqual(current.data, Data([3]))
+    }
     func testOversizedEditLeavesStateUnchanged() throws {
         let coordinator = try DebugPointCopyCoordinator(documentID: UUID(), data: Data([1]))
         let request = coordinator.beginEdit(name: "point")
