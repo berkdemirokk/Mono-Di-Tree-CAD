@@ -1012,7 +1012,7 @@ internal static class DesktopVerification
             VerifyToolGuidance(studio,checks);
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
-            VerifyDesignRequest(studio,checks);
+            VerifyDesignRequest(studio,reportPath,checks);
             VerifyArcStartPoint(studio,checks);
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
@@ -9110,7 +9110,7 @@ internal static class DesktopVerification
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");studio.LoadDocument(new ProjectDocument()); }
     }
-    private static void VerifyDesignRequest(MainWindow studio,List<string> checks)
+    private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
         var before=studio.Document.Clone();
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -9125,9 +9125,25 @@ internal static class DesktopVerification
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
                 "Dress request reports explicitly stated chest and asks for missing measurements",checks);
+            Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
+            Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
             var root=(FrameworkElement)window.Content;root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
-            var straight=Descendants<Button>(root).Single(b=>Equals(b.Content,"Düz elbise"));
-            var aline=Descendants<Button>(root).Single(b=>Equals(b.Content,"A kesim elbise"));
+            var straight=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Düz elbise");
+            var aline=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="A kesim elbise");
+            var wrap=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
+            var shirt=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Gömlek elbise");
+            Check(new[] { straight,aline,wrap,shirt }.All(b=>b.Focusable && KeyboardNavigation.GetIsTabStop(b) && b.Content is StackPanel &&
+                AutomationProperties.GetHelpText(b).Contains("kalıp oluşturulmaz")),
+                "All four visual model cards remain keyboard accessible and clearly describe their non-pattern scope",checks);
+            root.Measure(new Size(480,420));root.Arrange(new Rect(0,0,480,420));root.UpdateLayout();
+            var modelScroller=Descendants<ScrollViewer>(root).First();
+            foreach(var card in new[] { straight,aline,wrap,shirt })
+            {
+                var y=card.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;
+                modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
+                Check(FullyVisible(card,root),"Every visual model card can be scrolled fully into view at minimum size: "+AutomationProperties.GetName(card),checks);
+            }
+            modelScroller.ScrollToVerticalOffset(0);root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             Check(straight.Focusable && aline.Focusable && AutomationProperties.GetHelpText(straight).Contains("mevcut metin korunur") &&
                 AutomationProperties.GetHelpText(aline).Contains("kalıp oluşturulmaz"),"Dress model choices expose keyboard and honest help text",checks);
             straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -9142,13 +9158,18 @@ internal static class DesktopVerification
             Check(alineResult.Prompt.Replace("\r\n","\n")==straightResult.Prompt.Replace("\r\n","\n")+"\nA kesim elbise; detaylar: " && alineResult.Measurements==input.Measurements &&
                 alineResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
                 "A-line model appends without replacing existing data and clears stale review",checks);
+            wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var fourResult=window.CaptureForVerification();
+            Check(fourResult.Prompt.Replace("\r\n","\n")==alineResult.Prompt.Replace("\r\n","\n")+"\nAnvelop elbise; detaylar: \nGömlek elbise; detaylar: " &&
+                fourResult.Measurements==input.Measurements && fourResult.Reference!.Data.SequenceEqual(input.Reference!.Data),
+                "Wrap and shirt model cards append suggestions without changing measurements or reference",checks);
             window.PromptForVerification.Text="Göğüs çevresi 96 cm;"+new string('x',DesignRequestStorage.MaximumTextLength-"Göğüs çevresi 96 cm;".Length-1);
             var longPrompt=window.PromptForVerification.Text;window.ReviewMeasurementsForVerification();var priorReview=window.ReviewForVerification.Text;
-            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.PromptForVerification.Text==longPrompt && window.ReviewForVerification.Text==priorReview &&
                 Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Örnek eklenemedi") && t.Text.Contains("Mevcut metin korundu")) &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && window.MeasurementsForVerification.Text==input.Measurements,
-                "Both model choices refuse over-limit additions without changing text, image, measurements or review",checks);
+                "All model cards refuse over-limit additions without changing text, image, measurements or review",checks);
             window.LoadForVerification(new DesignRequest("Düz elbise", "",input.Reference));
             var send=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
             window.ChatInputForVerification.Text="göğüs çevresi 96 cm";send.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

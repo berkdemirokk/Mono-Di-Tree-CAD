@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 using Microsoft.Win32;
 using TekstilCAD.FileFormats;
 
@@ -38,12 +39,22 @@ internal sealed class DesignRequestWindow : Window
         Action("İstek aç…",Open);Action("Yeni istek dosyası kaydet…",Save);Action("Kapat",Close);
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true });
         body.Children.Add(new TextBlock { Text="Kalıp isteği hazırla",FontSize=20,FontWeight=FontWeights.SemiBold });
-        body.Children.Add(new TextBlock { Text="Kadın elbisenin modelini ve istediğiniz özellikleri kendi sözlerinizle yazın; ölçüleri birimleriyle belirtin. Örneğin elbise boyu, göğüs, bel, kalça ve kol ölçülerini biliniyorsa ekleyin. Eksik ölçüler tahmin edilmez. İsteğe bağlı tek PNG/JPEG görseli dosyaya kopyalanır. Bu çevrimdışı istek kalıp oluşturmaz; veri hiçbir servise gönderilmez. Açık proje ve çizim değiştirilmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
-        body.Children.Add(new TextBlock { Text="İsteğe bağlı başlangıç: Bir model seçin; açıklama alanına örnek metin eklenir. Seçim kalıp oluşturmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) });
+        body.Children.Add(new TextBlock { Text="Bir başlangıç modeli seçin, sonra isteğinizi ve bildiğiniz ölçüleri yazın. Eksik ölçüler tahmin edilmez. Bu çevrimdışı adım henüz kalıp veya plotter çıktısı oluşturmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
+        body.Children.Add(new TextBlock { Text="Model fikri seçin · Kartlar yalnız açıklama başlangıcıdır; hazır kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) });
         var models=new WrapPanel { Margin=new Thickness(0,0,0,6) };body.Children.Add(models);
-        void ModelChoice(string label,string template)
+        void ModelChoice(string label,string template,string silhouette,string? detail)
         {
-            var button=new Button { Content=label,Margin=new Thickness(0,0,8,4),Padding=new Thickness(10,5,10,5) };
+            var art=new Canvas { Width=80,Height=80,IsHitTestVisible=false };
+            var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=new SolidColorBrush(Color.FromRgb(0x9e,0xc8,0xc0)),Stroke=new SolidColorBrush(Color.FromRgb(0xd1,0xe8,0xe2)),StrokeThickness=1.5 };
+            art.Children.Add(dress);
+            if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=new SolidColorBrush(Color.FromRgb(0x35,0x62,0x60)),StrokeThickness=1.5,StrokeLineJoin=PenLineJoin.Round });
+            var image=new Viewbox { Width=80,Height=80,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,1,0,4) };
+            var content=new StackPanel { Width=112,IsHitTestVisible=false };
+            content.Children.Add(image);
+            content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
+            content.Children.Add(new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=StudioTheme.Muted });
+            var button=new Button { Content=content,Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
+            AutomationProperties.SetName(button,label);
             AutomationProperties.SetHelpText(button,"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
             button.Click+=(_,_)=>
             {
@@ -53,8 +64,10 @@ internal sealed class DesignRequestWindow : Window
             };
             models.Children.Add(button);
         }
-        ModelChoice("Düz elbise", "Düz elbise; detaylar: ");
-        ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ");
+        ModelChoice("Düz elbise", "Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
+        ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,38 14,73 66,73 50,38 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
+        ModelChoice("Anvelop elbise", "Anvelop elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,40 17,73 63,73 50,40 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z","M 34,5 L 49,39 M 46,5 L 31,39 M 30,40 L 50,40 M 49,40 L 58,73");
+        ModelChoice("Gömlek elbise", "Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
         body.Children.Add(new Label { Content="Konuşma ve sıradaki soru",Target=conversation });
         AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(conversation);
         body.Children.Add(new Label { Content="Mesajınız",Target=chatInput });AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");body.Children.Add(chatInput);
