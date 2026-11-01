@@ -2413,10 +2413,60 @@ internal static class DesktopVerification
                 "Pairs across two blocks are accepted together only after acknowledgment",checks);
         }
         finally { window.Close(); }
+        var plainWindow=new DxfBlockDefinitionReviewWindow(studio,import);
+        try
+        {
+            var root=(FrameworkElement)plainWindow.Content;Render(plainWindow,Path.Combine(work,"block-plain-review-minimum.png"),500,380);
+            var blocks=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var pieceBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef POLYLINE parçası");
+            var pointBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
+            var vertexBox=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
+            var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
+            var queue=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            var addPiece=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili parçayı ekle"));
+            var removePiece=Descendants<Button>(root).Single(b=>Equals(b.Content,"Listeden parçayı kaldır"));
+            var addPair=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle"));
+            var removePair=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili çifti kaldır"));
+            var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Çalışma kopyasını hazırla"));
+            var confirmation=Descendants<CheckBox>(root).Single();
+            blocks.SelectedIndex=1;pieceBox.SelectedIndex=0;addPiece.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==1 && included.Items[0]!.GetType().GetProperty("Label")!.GetValue(included.Items[0])!.ToString()!.Contains("işaretsiz"),
+                "User can explicitly select an unmarked block piece",checks);
+            addPiece.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(included.Items.Count==1,"Duplicate plain piece is not added twice",checks);
+            blocks.SelectedIndex=0;pieceBox.SelectedIndex=0;pointBox.SelectedIndex=0;vertexBox.SelectedIndex=0;addPair.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==2 && queue.Items.Count==1 && included.Items[1]!.GetType().GetProperty("Label")!.GetValue(included.Items[1])!.ToString()!.Contains("1 görsel işaret"),
+                "POINT mapping explicitly includes its piece and shows its mark count beside unmarked pieces",checks);
+            included.SelectedIndex=1;removePiece.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==2 && queue.Items.Count==1,"Removing a marked piece requires removing its associations first",checks);
+            queue.SelectedIndex=0;removePair.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==2 && queue.Items.Count==0 && included.Items[1]!.GetType().GetProperty("Label")!.GetValue(included.Items[1])!.ToString()!.Contains("işaretsiz"),
+                "Removing the last association retains the selected piece as unmarked",checks);
+            included.SelectedIndex=1;removePiece.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==1,"An unmarked selected piece can be removed independently",checks);
+            confirmation.IsChecked=true;try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
+            Check(plainWindow.SelectedPieces.Count==1 && plainWindow.Selections.Count==0 && DocumentSession.ContentEquals(before,import.Project),
+                "An explicitly selected unmarked piece can be accepted without changing the imported document",checks);
+        }
+        finally { plainWindow.Close(); }
         var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
         var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
         var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();
         var secondLink=links.Where(p=>p.EntityType=="POLYLINE").Skip(1).Single();
+        var mixed=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),
+            [new(link.BlockHeaderOrdinal!.Value,link.PieceId,rawPoints[0].SourceOrdinal,0)],
+            [new(secondLink.BlockHeaderOrdinal!.Value,secondLink.PieceId)],"source.dxf",true);
+        var mixedPath=Path.Combine(work,$"block-mixed-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(mixed.WorkingCopy,mixedPath);
+        var mixedLoaded=ProjectStorage.Load(mixedPath);
+        Check(mixedLoaded.Pieces.Count==2 && mixedLoaded.Pieces.Single(p=>p.Id==link.PieceId).Notches is { Count:1 } &&
+            mixedLoaded.Pieces.Single(p=>p.Id==secondLink.PieceId).Notches is null && mixedLoaded.ImportProvenance is not null &&
+            DocumentSession.ContentEquals(mixed.WorkingCopy,mixedLoaded) && DocumentSession.ContentEquals(before,import.Project),
+            "Marked and explicitly selected unmarked block pieces round-trip without changing the source",checks);
+        var plain=DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],
+            [new(secondLink.BlockHeaderOrdinal!.Value,secondLink.PieceId)],"source.dxf",true);
+        var plainPath=Path.Combine(work,$"block-plain-{Guid.NewGuid():N}.tcad");ProjectStorage.Save(plain.WorkingCopy,plainPath);
+        Check(plain.WorkingCopy.Pieces.Count==1 && plain.WorkingCopy.Pieces[0].Notches is null && plain.WorkingCopy.ImportProvenance is not null &&
+            DocumentSession.ContentEquals(plain.WorkingCopy,ProjectStorage.Load(plainPath)),
+            "A project with one explicit unmarked piece and no POINT associations survives save and reopen",checks);
         var project=DxfBlockDefinitionPointMapping.CreateProject(import,new MemoryStream(bytes),
             [new(link.BlockHeaderOrdinal!.Value,link.PieceId,rawPoints[0].SourceOrdinal,0),
              new(secondLink.BlockHeaderOrdinal!.Value,secondLink.PieceId,rawPoints[2].SourceOrdinal,0)],"source.dxf",true);

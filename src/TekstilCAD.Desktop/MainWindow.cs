@@ -2036,11 +2036,13 @@ public class MainWindow : Window
             if(import.SupplementalGeometry is not { Truncated:false } || import.PieceSources is not { } links || links.IsDefault || import.CapturedWarnings.IsDefault)
                 throw new InvalidDataException("Blok kaynak envanteri eksik; çalışma kopyası hazırlanmadı.");
             var review=new DxfBlockDefinitionReviewWindow(this,import);
-            if(review.ShowDialog()!=true || review.Selections.Count==0)return;
+            if(review.ShowDialog()!=true || review.SelectedPieces.Count==0)return;
             cancellation.Token.ThrowIfCancellationRequested();
             var selections=review.Selections.Select(s=>new DxfBlockProjectPointSelection(s.Header,s.Selection.PieceId,s.Selection.SourceOrdinal,s.Selection.VertexIndex)).ToArray();
-            SetStatus($"{selections.Length} POINT eşlemesi kaynak üzerinden doğrulanıyor; büyük dosyalarda uzun sürebilir.");
-            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.CreateProject(import,source,selections,Path.GetFileName(path),true,cancellation.Token); });
+            var markedIds=selections.Select(s=>s.PieceId).ToHashSet();
+            var plain=review.SelectedPieces.Where(p=>!markedIds.Contains(p.PieceId)).Select(p=>new DxfBlockProjectPieceSelection(p.Header,p.PieceId)).ToArray();
+            SetStatus($"{review.SelectedPieces.Count} parça ve {selections.Length} POINT eşlemesi kaynak üzerinden doğrulanıyor; büyük dosyalarda uzun sürebilir.");
+            var result=await Task.Run(()=> { using var source=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);return DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,source,selections,plain,Path.GetFileName(path),true,cancellation.Token); });
             cancellation.Token.ThrowIfCancellationRequested();if(windowClosed)return;
             var save=new SaveFileDialog { Filter="TekstilCAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",AddExtension=true,OverwritePrompt=false };
             if(save.ShowDialog(this)!=true)return;

@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Globalization;
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -15,10 +16,23 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
     private sealed record PieceChoice(Guid Id,string Label);
     private sealed record VertexChoice(int Index,string Label);
     internal sealed record BlockSelection(int Header,DxfPointVertexSelection Selection);
+    internal sealed record BlockPieceSelection(int Header,Guid PieceId);
     private sealed record Mapping(BlockSelection Item,string Label);
+    private sealed class IncludedPiece : INotifyPropertyChanged
+    {
+        public required BlockPieceSelection Item { get; init; }
+        public required string Description { get; init; }
+        private int marks;
+        public string Label=>$"{Description} · {(marks==0 ? "işaretsiz" : $"{marks} görsel işaret")}";
+        public void SetMarks(int count) { if(marks==count)return;marks=count;PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(nameof(Label))); }
+        public event PropertyChangedEventHandler? PropertyChanged;
+    }
     private readonly ObservableCollection<Mapping> mappings=[];
+    private readonly ObservableCollection<IncludedPiece> includedPieces=[];
+    private readonly ListBox includedList=new() { DisplayMemberPath=nameof(IncludedPiece.Label),Height=110,Margin=new Thickness(0,4,0,8) };
     private readonly ListBox mappingList=new() { DisplayMemberPath=nameof(Mapping.Label),Height=110,Margin=new Thickness(0,4,0,8) };
     internal IReadOnlyList<BlockSelection> Selections { get; private set; }=Array.Empty<BlockSelection>();
+    internal IReadOnlyList<BlockPieceSelection> SelectedPieces { get; private set; }=Array.Empty<BlockPieceSelection>();
 
     internal DxfBlockDefinitionReviewWindow(Window owner,DxfImportResult import)
     {
@@ -29,7 +43,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var apply=new Button { Content="Çalışma kopyasını hazırla",Margin=new Thickness(4),Padding=new Thickness(10,7,10,7) };
         actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();var scroll=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Blok tanımı eşleme seçenekleri");root.Children.Add(scroll);
-        body.Children.Add(new TextBlock { Text="Bu işlem yalnız eşleme eklediğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları projeye aktarılmaz. Farklı blok ve parçalardan en fazla 32 POINT/köşe çifti ekleyin. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Eşleşmeler kaynak dosyadan doğrulanır. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Bu işlem yalnız seçtiğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları aktarılmaz. Parçaları işaretsiz ekleyebilir veya en fazla 32 POINT/köşe çifti seçebilirsiniz. Eşleme eklemek ilgili parçayı da seçer. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Kaynak dosya doğrulanır. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Kaynak okuma uyarıları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         foreach(var warning in import.CapturedWarnings)
             body.Children.Add(new TextBlock { Text="• "+SafeNotice(warning),TextWrapping=TextWrapping.Wrap });
@@ -62,7 +76,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var links=import.PieceSources!.Value.Where(p=>p.Section=="BLOCKS" && p.EntityType=="POLYLINE" && p.BlockHeaderOrdinal.HasValue).ToArray();
         var pointRecords=import.SupplementalGeometry!.Records.Where(p=>p.Section=="BLOCKS" && p.EntityType=="POINT" && p.BlockHeaderOrdinal.HasValue).ToArray();
         bool restoringQueuedSelection=false;
-        void ClearQueueFocus() { if(!restoringQueuedSelection)mappingList.SelectedIndex=-1; }
+        void ClearQueueFocus() { if(!restoringQueuedSelection) { mappingList.SelectedIndex=-1;includedList.SelectedIndex=-1; } }
         blocks.ItemsSource=links.GroupBy(p=>p.BlockHeaderOrdinal!.Value).Select(g=>new BlockChoice(g.Key,$"Blok kaydı {g.Key} · {Safe(g.First().Block)}")).ToArray();
         blocks.SelectionChanged+=(_,_)=>
         {
@@ -116,6 +130,52 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var indexRow=new WrapPanel();
         indexText.TextChanged+=(_,_)=> { if(changingText)return;changingSelection=true;try { vertices.SelectedIndex=-1; } finally { changingSelection=false; } SetStatus(""); };
         var go=new Button { Content="Köşeye git",Margin=new Thickness(4) };go.Click+=(_,_)=> { if(int.TryParse(indexText.Text,out var index) && index>=0 && index<vertices.Items.Count) { selectingBySearch=true;try { vertices.SelectedIndex=index; } finally { selectingBySearch=false; } SetStatus(""); } else { changingSelection=true;try { vertices.SelectedIndex=-1; } finally { changingSelection=false; } SetStatus("Geçerli bir köşe indeksi girin."); } };indexRow.Children.Add(indexText);indexRow.Children.Add(go);body.Children.Add(indexRow);
+        body.Children.Add(new TextBlock { Text="Çalışma projesine seçilen parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,0) });
+        var pieceActions=new WrapPanel();var addPiece=new Button { Content="Seçili parçayı ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
+        var removePiece=new Button { Content="Listeden parçayı kaldır",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
+        pieceActions.Children.Add(addPiece);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
+        includedList.ItemsSource=includedPieces;ScrollViewer.SetHorizontalScrollBarVisibility(includedList,ScrollBarVisibility.Auto);
+        AutomationProperties.SetName(includedList,"Çalışma projesine seçilen parçalar ve işaret sayıları");body.Children.Add(includedList);
+        IncludedPiece Include(BlockChoice block,PieceChoice piece)
+        {
+            var existing=includedPieces.FirstOrDefault(p=>p.Item.PieceId==piece.Id);
+            if(existing is not null)return existing;
+            var item=new IncludedPiece { Item=new(block.Header,piece.Id),Description=$"{block.Label} · {piece.Label}" };includedPieces.Add(item);return item;
+        }
+        void UpdateMarkCount(Guid id)
+        {
+            var selected=includedPieces.FirstOrDefault(p=>p.Item.PieceId==id);
+            selected?.SetMarks(mappings.Count(m=>m.Item.Selection.PieceId==id));
+        }
+        int UnmarkedCount()=>includedPieces.Count(p=>!mappings.Any(m=>m.Item.Selection.PieceId==p.Item.PieceId));
+        addPiece.Click+=(_,_)=>
+        {
+            if(blocks.SelectedItem is not BlockChoice block || pieces.SelectedItem is not PieceChoice piece)
+            { SetStatus("Önce eklenecek blok ve parçayı seçin.");return; }
+            if(includedPieces.Any(p=>p.Item.PieceId==piece.Id)) { SetStatus("Parça zaten proje listesinde.");return; }
+            if(UnmarkedCount()>=32) { SetStatus("En fazla 32 işaretsiz parça seçilebilir.");return; }
+            Include(block,piece);SetStatus("Parça işaretsiz olarak proje listesine eklendi; POINT eşlemesi isteğe bağlıdır.");
+        };
+        removePiece.Click+=(_,_)=>
+        {
+            if(includedList.SelectedItem is not IncludedPiece selected) { SetStatus("Kaldırılacak parçayı proje listesinden seçin.");return; }
+            if(mappings.Any(m=>m.Item.Selection.PieceId==selected.Item.PieceId))
+            { SetStatus("Önce parçaya ait POINT eşlemelerini kaldırın; parça ve işaretler korundu.");return; }
+            includedPieces.Remove(selected);SetStatus("Parça proje listesinden kaldırıldı.");
+        };
+        includedList.SelectionChanged+=(_,_)=>
+        {
+            if(includedList.SelectedItem is not IncludedPiece selected)return;
+            restoringQueuedSelection=true;
+            try
+            {
+                blocks.SelectedItem=blocks.Items.Cast<BlockChoice>().FirstOrDefault(b=>b.Header==selected.Item.Header);
+                pieces.SelectedItem=pieces.Items.Cast<PieceChoice>().FirstOrDefault(p=>p.Id==selected.Item.PieceId);
+                vertices.SelectedIndex=-1;points.SelectedIndex=-1;mappingList.SelectedIndex=-1;
+            }
+            finally { restoringQueuedSelection=false; }
+            SetStatus("Seçilen parça önizleniyor; mevcut POINT eşlemeleri aşağıdaki listede korunur.");
+        };
         var mappingActions=new WrapPanel();var add=new Button { Content="Seçilen çifti ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         var remove=new Button { Content="Seçili çifti kaldır",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         mappingActions.Children.Add(add);mappingActions.Children.Add(remove);body.Children.Add(mappingActions);
@@ -127,7 +187,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             if(mappings.Any(m=>m.Item.Selection.SourceOrdinal==p.Ordinal || (m.Item.Selection.PieceId==piece.Id && m.Item.Selection.VertexIndex==v.Index)))
             { SetStatus("Her POINT ve köşe yalnız bir kez eklenebilir.");return; }
             if(mappings.Count>=32) { SetStatus("Bir çalışma kopyasında en fazla 32 eşleme seçilebilir.");return; }
-            mappings.Add(new(new(b.Header,new(p.Ordinal,piece.Id,v.Index)),$"{b.Label} · {piece.Label}\n{p.Label} → köşe {v.Label}"));
+            Include(b,piece);mappings.Add(new(new(b.Header,new(p.Ordinal,piece.Id,v.Index)),$"{b.Label} · {piece.Label}\n{p.Label} → köşe {v.Label}"));UpdateMarkCount(piece.Id);
             SetStatus($"{mappings.Count} çift listede; kaynakla tam eşleşme henüz doğrulanmadı.");
         };
         mappingList.SelectionChanged+=(_,_ )=>
@@ -136,6 +196,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             restoringQueuedSelection=true;
             try
             {
+                includedList.SelectedIndex=-1;
                 blocks.SelectedItem=blocks.Items.Cast<BlockChoice>().FirstOrDefault(b=>b.Header==selected.Item.Header);
                 pieces.SelectedItem=pieces.Items.Cast<PieceChoice>().FirstOrDefault(p=>p.Id==selected.Item.Selection.PieceId);
                 points.SelectedItem=points.Items.Cast<PointChoice>().FirstOrDefault(p=>p.Ordinal==selected.Item.Selection.SourceOrdinal);
@@ -144,15 +205,25 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             finally { restoringQueuedSelection=false; }
             SetStatus("Yalnız hedef köşe gösteriliyor; POINT koordinatını listeden kontrol edin. Eşleşme işlem sırasında doğrulanacak.");
         };
-        remove.Click+=(_,_)=> { if(mappingList.SelectedItem is Mapping selected)mappings.Remove(selected);SetStatus($"{mappings.Count} çift listede."); };
+        remove.Click+=(_,_)=>
+        {
+            if(mappingList.SelectedItem is Mapping selected)
+            {
+                if(mappings.Count(m=>m.Item.Selection.PieceId==selected.Item.Selection.PieceId)==1 && UnmarkedCount()>=32)
+                { SetStatus("Bu eşleme kaldırılırsa işaretsiz parça sınırı aşılır. Önce başka bir işaretsiz parçayı kaldırın.");return; }
+                mappings.Remove(selected);UpdateMarkCount(selected.Item.Selection.PieceId);
+            }
+            SetStatus($"{mappings.Count} çift listede; parça proje listesinde korunuyor.");
+        };
         var confirm=new CheckBox { Content="Bunların yerleştirilmemiş blok tanımları olduğunu anladım",Margin=new Thickness(0,12,0,8) };body.Children.Add(confirm);
         apply.Click+=(_,_)=>
         {
             if((pointOrdinalText.Text.Length>0 && points.SelectedItem is null) || (indexText.Text.Length>0 && vertices.SelectedItem is null))
             { SetStatus("Yazılan POINT veya köşe aramasını tamamlayın ya da temizleyin; listedeki çiftler korunuyor.");return; }
-            if(confirm.IsChecked!=true || mappings.Count==0)
-            { SetStatus("En az bir çifti listeye ekleyin ve açık onay verin.");return; }
-            Selections=Array.AsReadOnly(mappings.Select(m=>m.Item).ToArray());DialogResult=true;
+            if(confirm.IsChecked!=true || includedPieces.Count==0)
+            { SetStatus("En az bir parçayı listeye ekleyin ve açık onay verin.");return; }
+            Selections=Array.AsReadOnly(mappings.Select(m=>m.Item).ToArray());
+            SelectedPieces=Array.AsReadOnly(includedPieces.Select(p=>p.Item).ToArray());DialogResult=true;
         };
     }
     private static bool Escape(char c)=>char.IsControl(c) || char.GetUnicodeCategory(c) is System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.Surrogate or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator;
