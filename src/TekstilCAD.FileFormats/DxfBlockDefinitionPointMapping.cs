@@ -35,11 +35,7 @@ public static class DxfBlockDefinitionPointMapping
             p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==oldLink.SourceOrdinals[0]);
         if(link is null || link.ChildSourceOrdinals.Length<2 || selection.VertexIndex<0 || selection.VertexIndex>=link.ChildSourceOrdinals.Length-1)
             throw new InvalidDataException("POLYLINE çocuk sırası doğrulanamadı.");
-        // Legacy LINE chain provenance does not yet carry its owning block
-        // occurrence. Do not claim uniqueness while any LINE in this block
-        // could contribute an untracked coincident endpoint.
-        if(geometry.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="LINE") ||
-           supplemental.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType!="POINT"))
+        if(supplemental.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType!="POINT"))
             throw new InvalidDataException("Bu blokta desteklenmeyen geometrinin köşe eşlemesi doğrulanamıyor.");
         var piece=fresh.Project.Pieces.Single(p=>p.Id==link.PieceId).Clone();piece.Id=oldPiece.Id;
         if(!DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[oldPiece] }) ||
@@ -66,7 +62,26 @@ public static class DxfBlockDefinitionPointMapping
         var position=new Point2(x*parameters.MillimetersPerUnit,y*parameters.MillimetersPerUnit);
         if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || position!=piece.Points[selection.VertexIndex])
             throw new InvalidDataException("Hedef köşe belirsiz veya ölçek sonrası farklı.");
-        var blockPieceIds=freshLinks.Where(p=>p.BlockHeaderOrdinal==blockHeaderOrdinal).Select(p=>p.PieceId).ToHashSet();
+        // Inspect every raw LINE, including lines excluded by the contour importer.
+        // Unknown 3-D plane semantics or a rounded endpoint collision fail closed.
+        foreach(var line in geometry.Records.Where(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType=="LINE"))
+        {
+            token.ThrowIfCancellationRequested();
+            foreach(var code in new[]{30,31,38,39,210,220,230})
+                if(!DxfExactDecimal.AreEqual(Value(line.Groups,code,true),code==230 && line.Groups.Any(g=>g.Code==230) ? "1" : "0",token))
+                    throw new InvalidDataException("LINE düzlemi doğrulanamadı.");
+            foreach(var codes in new[]{(10,20),(11,21)})
+            {
+                var rx=Value(line.Groups,codes.Item1);var ry=Value(line.Groups,codes.Item2);
+                if(!double.TryParse(rx,NumberStyles.Float,CultureInfo.InvariantCulture,out var lx) ||
+                   !double.TryParse(ry,NumberStyles.Float,CultureInfo.InvariantCulture,out var ly) || !double.IsFinite(lx) || !double.IsFinite(ly))
+                    throw new InvalidDataException("LINE uç koordinatı doğrulanamadı.");
+                if((DxfExactDecimal.AreEqual(rx,px,token) && DxfExactDecimal.AreEqual(ry,py,token)) ||
+                   (lx*parameters.MillimetersPerUnit==position.X && ly*parameters.MillimetersPerUnit==position.Y))
+                    throw new InvalidDataException("POINT aynı blokta LINE ucuyla da eşleşiyor.");
+            }
+        }
+        var blockPieceIds=freshLinks.Where(p=>p.BlockHeaderOrdinal==blockHeaderOrdinal && p.EntityType!="LINE").Select(p=>p.PieceId).ToHashSet();
         int matches=0;
         foreach(var candidate in fresh.Project.Pieces.Where(p=>blockPieceIds.Contains(p.Id)))
             for(int i=0;i<candidate.Points.Count;i++)

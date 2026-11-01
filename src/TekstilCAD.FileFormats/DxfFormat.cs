@@ -1262,6 +1262,7 @@ public static class DxfFormat
             }
         }
         var ambiguousLineGroups = 0;
+        var lineBlockHeaders=sourceGeometry.Records.Where(r=>r.EntityType=="LINE").ToDictionary(r=>r.SourceOrdinal,r=>r.BlockHeaderOrdinal);
         foreach (var (key, list) in segments)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -1276,7 +1277,7 @@ public static class DxfFormat
                 foreach (var edge in list)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    AddPiece(name, [edge.A, edge.B], false,key.Section,key.Block.Length==0 ? null : key.Block,key.Layer,"LINE",[edge.Ordinal]);
+                    AddPiece(name, [edge.A, edge.B], false,key.Section,key.Block.Length==0 ? null : key.Block,key.Layer,"LINE",[edge.Ordinal],blockHeaderOrdinal:lineBlockHeaders.GetValueOrDefault(edge.Ordinal));
                 }
                 continue;
             }
@@ -1304,7 +1305,7 @@ public static class DxfFormat
                 } while (extended && !Near(points[0], points[^1]));
                 var closed = points.Count > 2 && Near(points[0], points[^1]);
                 if (closed) points.RemoveAt(points.Count - 1);
-                AddPiece(name, points, closed,key.Section,key.Block.Length==0 ? null : key.Block,key.Layer,"LINE",lineOrdinals);
+                AddPiece(name, points, closed,key.Section,key.Block.Length==0 ? null : key.Block,key.Layer,"LINE",lineOrdinals,blockHeaderOrdinal:lineBlockHeaders.GetValueOrDefault(first.Ordinal));
             }
         }
         if (ambiguousLineGroups > 0)
