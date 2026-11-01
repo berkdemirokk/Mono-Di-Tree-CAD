@@ -3,6 +3,34 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
+    func testVersionSixValidationAcceptsBOMEncodingsWithoutChangingSource() throws {
+        let text = #"[6,{"Name":"Ön","Pieces":[{"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0}}]}]}]"#
+        let encodings: [(String.Encoding, [UInt8])] = [
+            (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
+            (.utf32LittleEndian, [0xff, 0xfe, 0, 0]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])
+        ]
+        for (encoding, bom) in encodings {
+            var original = Data(bom)
+            original.append(try XCTUnwrap(text.data(using: encoding)))
+            let snapshot = original
+            let validation = try LosslessProjectName.versionSixValidationData(original)
+            XCTAssertNoThrow(try LosslessProjectName.validateUniqueKeys(validation))
+            XCTAssertEqual(original, snapshot)
+            let duplicate = #"[6,{"Name":"Ön","Name":"Arka","Pieces":[]}]"#
+            var invalid = Data(bom)
+            invalid.append(try XCTUnwrap(duplicate.data(using: encoding)))
+            XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(LosslessProjectName.versionSixValidationData(invalid)))
+        }
+    }
+
+    func testVersionSixValidationEnforcesDecodedSizeLimit() throws {
+        let text = "[6,{\"Name\":\"" + String(repeating: "€", count: 3_000_000) + "\",\"Pieces\":[]}]"
+        var encoded = Data([0xfe, 0xff])
+        encoded.append(try XCTUnwrap(text.data(using: .utf16BigEndian)))
+        XCTAssertLessThan(encoded.count, LosslessProjectName.maximumEditBytes)
+        XCTAssertThrowsError(try LosslessProjectName.versionSixValidationData(encoded))
+    }
+
     func testOversizedVersionSixPreflightRecognizesExactEncodedEnvelope() {
         let limit = LosslessProjectName.maximumEditBytes
         func sample(_ prefix: [UInt8], count: Int) -> Data {

@@ -1,6 +1,26 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testVersionSixBOMEncodingsShowNotchPreview() throws {
+        let text = #"[6,{"Name":"Kodlanmış","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+        let variants: [(String.Encoding, [UInt8])] = [
+            (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
+            (.utf32LittleEndian, [0xff, 0xfe, 0, 0]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])
+        ]
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        for (encoding, bom) in variants {
+            var data = Data(bom)
+            data.append(try XCTUnwrap(text.data(using: encoding)))
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+            app.launch()
+            XCTAssertTrue(app.staticTexts["Kodlanmış"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.buttons["Köşe işaretlerini ara ve seç…"].exists)
+            XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
+            app.terminate()
+        }
+    }
+
     func testOversizedV6ImportOffersUnvalidatedRawRecovery() {
         assertOversizedV6RawRecovery(utf16: false)
     }

@@ -16,6 +16,8 @@ iPhone ana ekranı kaydırılabilir; önizleme alanındaki sürükleme hareketiy
 
 Kontur önizlemesinde Y koordinatı masaüstü tuvaliyle aynı yönde aşağı doğru artar. Bu düzeltme ve çentik işaretlerinin görünümü henüz Xcode veya gerçek cihazda doğrulanmadı.
 
+Sürüm 6 önizlemesi için hem kaynak dosya hem doğrulamada kullanılan geçici UTF-8 metin en fazla 8 MB olabilir. BOM'lu UTF-16/UTF-32 girdiler için geçici dönüşüm yapılır; saklama ve dışa aktarma özgün baytları kullanır. Daha büyük, uygun başlığı tanınan dosyalar 64 MB sınırına kadar yalnız doğrulanmamış ham kurtarma kaydı olarak saklanabilir. Bu kodlama ve kurtarma yolları Apple ortamında henüz doğrulanmadı.
+
 Modellerim ekranında her kaydın yanındaki model işlemleri menüsünden kayıtlı kopya silinebilir; silme işleminden önce kayıt kimliğiyle onay istenir. Bu menü ve erişilebilirlik davranışı henüz Mac, simülatör veya cihazda doğrulanmadı.
 
 Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme arasında eşzamanlı değişiklik yarışı henüz giderilmedi. Silme akışı Mac veya cihazda doğrulanmadı.

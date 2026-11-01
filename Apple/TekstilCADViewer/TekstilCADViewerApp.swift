@@ -133,7 +133,7 @@ private struct ContentView: View {
                 if project.pieces.contains(where: { !$0.notches.isEmpty }) {
                     Text("Köşe işaretleri halkayla gösterilir; kesim derinliği veya yönü belirtilmez. Önizleme üretim çıktısı değildir.")
                         .font(.caption).foregroundStyle(.secondary)
-                    Text("Sürüm 6 için yalnız UTF-8 ve en fazla 8 MB desteklenir. İşaretler ve konturlar önizlenir; tüm masaüstü proje kuralları doğrulanmaz.")
+                    Text("Sürüm 6 önizlemesinde dosya ve doğrulama metni en fazla 8 MB olabilir. UTF-8 ve BOM'lu UTF-16/UTF-32 desteklenir; tüm masaüstü proje kuralları doğrulanmaz.")
                         .font(.caption).foregroundStyle(.secondary)
                     Button("Köşe işaretlerini ara ve seç…") { showingNotches = true }
                         .disabled(modelLoad.isLoading)
@@ -1485,8 +1485,10 @@ private struct Drawing {
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
         if formatVersion == 6 {
             guard data.count <= LosslessProjectName.maximumEditBytes else { throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.") }
-            do { try LosslessProjectName.validateUniqueKeys(data) }
-            catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları ve UTF-8 kodlamasını kontrol edin.") }
+            do {
+                let validationData = try LosslessProjectName.versionSixValidationData(data)
+                try LosslessProjectName.validateUniqueKeys(validationData)
+            } catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları, kodlamayı ve 8 MB doğrulama sınırını kontrol edin.") }
         } else {
             // JSONSerialization keeps only one value for a repeated key, while
             // desktop rejects duplicates. Scan decoded bytes but keep the

@@ -34,6 +34,25 @@ enum LosslessProjectName {
             return next() == 91 && next() == 54 && next() == 44
         }
     }
+
+    // Only for checking the v6 JSON structure. The caller must retain and
+    // save the original bytes, not this temporary UTF-8 representation.
+    static func versionSixValidationData(_ data: Data) throws -> Data {
+        guard data.count <= maximumEditBytes else { throw Failure.invalid }
+        let encoding: String.Encoding
+        if data.starts(with: [0xff, 0xfe, 0x00, 0x00]) { encoding = .utf32LittleEndian }
+        else if data.starts(with: [0x00, 0x00, 0xfe, 0xff]) { encoding = .utf32BigEndian }
+        else if data.starts(with: [0xff, 0xfe]) { encoding = .utf16LittleEndian }
+        else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
+        else { encoding = .utf8 }
+        if encoding == .utf8 {
+            guard String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
+            return data
+        }
+        guard let text = String(data: data, encoding: encoding),
+              text.utf8.count <= maximumEditBytes else { throw Failure.invalid }
+        return Data(text.utf8)
+    }
     enum Failure: LocalizedError {
         case invalid
         var errorDescription: String? { "Proje adı güvenli biçimde değiştirilemedi. En fazla 8 MB boyutunda UTF-8 proje ve en fazla 1024 UTF-16 birimlik bir ad kullanın; UTF-16 ve UTF-32 dosyaları desteklenmez." }
