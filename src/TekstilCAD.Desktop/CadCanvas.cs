@@ -727,7 +727,7 @@ public sealed class CadCanvas : FrameworkElement
             },()=>observedCommits++);
             if(rule is not null && translatedRule is null)
                 owner.ShowCanvasError("Kontur değiştirildi; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
-            else if(dragVertex<0) owner.ClearCanvasError();
+            else owner.ClearCanvasError();
         }
         ClearDrag();ReleaseMouseCapture();InvalidateVisual();
     }

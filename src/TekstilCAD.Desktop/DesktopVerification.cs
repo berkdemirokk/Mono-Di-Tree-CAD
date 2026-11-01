@@ -1690,6 +1690,14 @@ internal static class DesktopVerification
                 Check(!canvas.HasActiveDragPreview && error.Text.Contains("kapanış kenarını") && DocumentSession.ContentEquals(before,studio.Document) &&
                     session.UndoCount==undo && session.RedoCount==redo,
                     $"Closing endpoint {index} collapse is rejected without changing document or history",checks);
+                down.Invoke(canvas,[canvas,click]);
+                canvas.UpdateDragPreview(new Point(pointer.X+10,pointer.Y));
+                safe.Invoke(canvas,[new Action(()=>up(click)),false,null]);
+                Check(studio.Document.Pieces[0].Points[index]==new Point2(selected.X+10,selected.Y) &&
+                    session.UndoCount==undo+1 && string.IsNullOrEmpty(error.Text),
+                    $"A valid endpoint {index} retry commits and clears the previous failure",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
+                    $"Successful endpoint {index} retry is undoable",checks);
             }
             var large=new PatternPiece { Points=Enumerable.Range(0,4097).Select(i=> { var angle=Math.Tau*i/4097;return new Point2(100*Math.Cos(angle),100*Math.Sin(angle)); }).ToList() };
             studio.LoadDocument(new ProjectDocument { Pieces=[large] });studio.SetTool("Seç");studio.Select(large.Id);
