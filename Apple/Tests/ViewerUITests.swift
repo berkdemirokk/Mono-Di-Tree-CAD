@@ -1295,6 +1295,21 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "3 nokta • Kapalı kontur")).firstMatch.waitForExistence(timeout: 5))
     }
 
+    func testPiecePickerShowsAndFindsEscapedDirectionalName() {
+        let fixture = #"{"Name":"Proje","Pieces":[{"Name":"A\u202EB","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("202E")
+        let row = app.buttons[#"A\u{202E}B"#]
+        XCTAssertTrue(row.waitForExistence(timeout: 5)); row.tap()
+        XCTAssertTrue(app.descendants(matching: .any)[#"A\u{202E}B kontur önizlemesi"#].waitForExistence(timeout: 5))
+    }
+
     func testPieceSearchShowsResultCountAndCanClearNoMatch() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Beden","Closed":false,"Points":[{"X":0,"Y":0},{"X":2,"Y":2}]}]}"#
         let app = XCUIApplication()

@@ -92,7 +92,7 @@ private struct ContentView: View {
                     .accessibilityHint("Önizlemek için bir proje dosyası seçin").disabled(isSaving)
                 Button("Modellerim") { showingLibrary = true }.disabled(isSaving)
                 Spacer()
-                if let project { Text(project.name).font(.headline).lineLimit(1) }
+                if let project { Text(ModelStore.safeLabel(project.name)).font(.headline).lineLimit(1) }
             }
             Text("Proje adını yeni bir kopyada değiştirebilirsiniz. Pastal ve üretim çıktıları desteklenmez.")
                 .font(.caption).foregroundStyle(.secondary)
@@ -1565,7 +1565,7 @@ struct Drawing {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return "Parça \(index + 1)"
             }
-            return name
+            return ModelStore.safeLabel(name)
         }
 
         func selectionDetails(index: Int) -> String {
@@ -2053,7 +2053,7 @@ private struct NotchPicker: View {
                         for index in snapshot.indices {
                             guard !Task.isCancelled else { return nil }
                             names.append(snapshot[index].displayName(index: index))
-                            details.append(snapshot[index].selectionDetails(index: index))
+                            details.append(snapshot[index].selectionDetails(index: index) + " " + (snapshot[index].name ?? ""))
                         }
                     }
                     guard let found = NotchSearch.boundedMatchesCancellable(groups: snapshot.map(\.notches), limit: 500, cancelled: { Task.isCancelled }, matches: { pieceIndex, pointIndex in
@@ -2125,7 +2125,7 @@ private struct PiecePicker: View {
                     }
                     #endif
                     guard let indices = ModelSearch.matchingIndices(count: snapshot.count, query: request, cancelled: { Task.isCancelled }, fields: { index in
-                        (snapshot[index].displayName(index: index), snapshot[index].selectionDetails(index: index))
+                        (snapshot[index].displayName(index: index), snapshot[index].selectionDetails(index: index) + " " + (snapshot[index].name ?? ""))
                     }) else { return nil }
                     return SearchResult(query: request, indices: indices)
                 }

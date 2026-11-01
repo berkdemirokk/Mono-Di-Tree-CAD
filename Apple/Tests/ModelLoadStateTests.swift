@@ -2,6 +2,12 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testPieceDisplayEscapesBidiWithoutChangingSourceName() throws {
+        let bytes = Data(#"{"Name":"Proje","Pieces":[{"Name":"A\u202EB","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#.utf8)
+        let drawing = try Drawing.load(bytes)
+        XCTAssertEqual(drawing.pieces[0].name, "A\u{202E}B")
+        XCTAssertEqual(drawing.pieces[0].displayName(index: 0), #"A\u{202E}B"#)
+    }
     func testDrawingParsingStopsDuringSupersededLargePiece() throws {
         let point = #"{"X":1,"Y":2}"#
         let points = Array(repeating: point, count: 4096).joined(separator: ",")
