@@ -3,6 +3,20 @@ import Foundation
 enum ContourMeasure {
     struct Point { let x: Double; let y: Double }
 
+    // Closing a stored path or repeating another vertex does not create a
+    // third distinct corner. Inputs from the viewer have finite coordinates.
+    static func hasMinimumContourPoints(_ points: [Point], closed: Bool) -> Bool {
+        if !closed { return points.count >= 2 }
+        guard let first = points.first else { return false }
+        var second: Point?
+        for point in points.dropFirst() {
+            if point.x == first.x && point.y == first.y { continue }
+            guard let other = second else { second = point; continue }
+            if point.x != other.x || point.y != other.y { return true }
+        }
+        return false
+    }
+
     // A single point is handled by the separate minimum-point warning.
     static func isCollapsed(_ points: [Point]) -> Bool {
         guard points.count > 1, let first = points.first else { return false }

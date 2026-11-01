@@ -147,7 +147,7 @@ private struct ContentView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if project.insufficientContourCount > 0 {
-                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Tekrarlı kapanış ayrı bir köşe sayılmaz. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
+                    Text("\(project.insufficientContourCount) parça asgari nokta sayısını karşılamıyor. Kapalı kontur için üç farklı köşe gerekir; tekrarlanan noktalar ayrı sayılmaz. Bu parçalar çizilmez veya ölçülmez; dosya masaüstünde açılamayabilir. Diğer dosya koşulları doğrulanmadı.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 if project.collapsedContourCount > 0 {
@@ -1502,6 +1502,7 @@ private struct Drawing {
         let contourLength: Double?
         let isCollapsed: Bool
         let contourBounds: ContourBounds?
+        let hasMinimumContourPoints: Bool
         let role: String?
         let roleUnreadable: Bool
         let size: String?
@@ -1514,11 +1515,6 @@ private struct Drawing {
         let grainStatus: String
         let grain: Grain?
         let notches: [Int]
-        var hasMinimumContourPoints: Bool {
-            let repeatsFirst = closed && points.count > 1 && points.first!.x == points.last!.x && points.first!.y == points.last!.y
-            return points.count - (repeatsFirst ? 1 : 0) >= (closed ? 3 : 2)
-        }
-
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return "Parça \(index + 1)"
@@ -1753,10 +1749,12 @@ private struct Drawing {
                 if let id, id.uuidString != "00000000-0000-0000-0000-000000000000", pieceIDs.insert(id).inserted { }
                 else { pieceRenameIdentitiesValid = false }
             }
+            let hasMinimum = ContourMeasure.hasMinimumContourPoints(points, closed: closed)
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
-                                contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
+                                contourLength: hasMinimum ? ContourMeasure.length(points, closed: closed) : nil,
                                 isCollapsed: ContourMeasure.isCollapsed(points),
                                 contourBounds: points.count > 1 ? ContourBounds(points: points) : nil,
+                                hasMinimumContourPoints: hasMinimum,
                                 role: role, roleUnreadable: roleUnreadable, size: size,
                                 material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable, metadataEmpty: metadataEmpty,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))

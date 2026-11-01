@@ -11,6 +11,13 @@ final class ContourMeasureTests: XCTestCase {
         XCTAssertFalse(ContourMeasure.isCollapsed([p(1, 2), p(1, 2), p(1, 3)]))
     }
 
+    func testClosedContourRequiresThreeDistinctVerticesBeyondClosingAlias() {
+        XCTAssertFalse(ContourMeasure.hasMinimumContourPoints([p(0, 0), p(0, 0), p(1, 0)], closed: true))
+        XCTAssertFalse(ContourMeasure.hasMinimumContourPoints([p(0, 0), p(1, 0), p(1, 0), p(0, 0)], closed: true))
+        XCTAssertTrue(ContourMeasure.hasMinimumContourPoints([p(0, 0), p(1, 0), p(0, 1), p(0, 0)], closed: true))
+        XCTAssertTrue(ContourMeasure.hasMinimumContourPoints([p(0, 0), p(0, 0)], closed: false))
+    }
+
     func testOpenClosedAndExplicitClosingPoint() throws {
         let triangle = [p(0, 0), p(3, 0), p(3, 4)]
         XCTAssertEqual(try XCTUnwrap(ContourMeasure.length(triangle, closed: false)), 7, accuracy: 1e-12)
