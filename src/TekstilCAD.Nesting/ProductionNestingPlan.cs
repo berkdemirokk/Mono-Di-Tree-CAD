@@ -38,31 +38,45 @@ public static class ProductionNestingPlan
             throw NestingPieceError.Create(placement.SourcePieceId,reason,error.ParamName,error);
         }
         cancellationToken.ThrowIfCancellationRequested();
-        var originals=expanded.ToDictionary(p=>p.Id);var placed=result.Layout.Pieces.ToDictionary(p=>p.Id);
-        foreach(var pair in originals)
+        var sourceCopies=new Dictionary<Guid,PatternPiece>();
+        for(var i=0;i<mapping.Count;i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if(!placed.TryGetValue(pair.Key,out var output) || !NestingEngine.MarkersMatchPlacement(pair.Value,output,cancellationToken))
-                throw new InvalidOperationException("Pastal köşe işaretleri kaynak kopyayla eşleşmiyor; işlem uygulanmadı.");
+            var entry=mapping[i];
+            if(!sourceCopies.TryGetValue(entry.SourcePieceId,out var original))
+            { original=expanded[i].Clone();original.Id=entry.SourcePieceId;original.Metadata!.Quantity=0;sourceCopies.Add(original.Id,original); }
+            original.Metadata!.Quantity++;
         }
-        return new(result, mapping);
+        var complete=new ProductionNestingResult(result,mapping);
+        if(!AreMarkersPreserved(new ProjectDocument { Pieces=sourceCopies.Values.ToList() },sourceCopies.Keys.ToArray(),complete,cancellationToken))
+            throw new InvalidOperationException("Pastal köşe işaretleri veya kopya kapsamı kaynakla eşleşmiyor; işlem uygulanmadı.");
+        return complete;
     }
 
     internal sealed record Expansion(IReadOnlyList<PatternPiece> Pieces, IReadOnlyList<ProductionPlacement> Placements);
 
-    /// <summary>Checks marker-to-vertex mapping against source and placed copies; not a production certificate.</summary>
-    public static bool AreMarkersPreserved(ProjectDocument source,ProductionNestingResult result,CancellationToken token=default)
+    /// <summary>Checks every selected source's declared copies and marker-to-vertex mapping; not a production certificate.</summary>
+    public static bool AreMarkersPreserved(ProjectDocument source,IReadOnlyCollection<Guid> selectedIds,ProductionNestingResult result,CancellationToken token=default)
     {
         token.ThrowIfCancellationRequested();
-        if(source?.Pieces is null || result?.Nesting?.Layout?.Pieces is null || result.Placements is null)return false;
+        if(source?.Pieces is null || selectedIds is null || selectedIds.Count is < 1 or > NestingEngine.MaximumPieces || result?.Nesting?.Layout?.Pieces is null || result.Placements is null ||
+           source.Pieces.Count>NestingEngine.MaximumTotalVertices || result.Nesting.Layout.Pieces.Count>NestingEngine.MaximumPieces || result.Placements.Count>NestingEngine.MaximumPieces ||
+           source.Pieces.Any(p=>p is null) || result.Nesting.Layout.Pieces.Any(p=>p is null))return false;
         try
         {
             var sources=source.Pieces.ToDictionary(p=>p.Id);var outputs=result.Nesting.Layout.Pieces.ToDictionary(p=>p.Id);
-            if(outputs.Count!=result.Placements.Count)return false;
+            var selected=new HashSet<Guid>();long expectedCount=0;
+            foreach(var id in selectedIds)
+            {
+                token.ThrowIfCancellationRequested();
+                if(id==Guid.Empty || !selected.Add(id) || !sources.TryGetValue(id,out var piece) || piece.Metadata?.Quantity is not int quantity || quantity<1 || quantity>100000)return false;
+                expectedCount+=quantity;if(expectedCount>NestingEngine.MaximumPieces)return false;
+            }
+            if(selected.Count!=selectedIds.Count || outputs.Count!=expectedCount || result.Placements.Count!=expectedCount)return false;
             foreach(var map in result.Placements)
             {
                 token.ThrowIfCancellationRequested();
-                if(map is null || map.CopyNumber<1 || map.PlacedPieceId!=CopyId(map.SourcePieceId,map.CopyNumber) ||
+                if(map is null || !selected.Contains(map.SourcePieceId) || map.CopyNumber<1 || map.PlacedPieceId!=CopyId(map.SourcePieceId,map.CopyNumber) ||
                    !sources.TryGetValue(map.SourcePieceId,out var original) || original.Metadata?.Quantity is not int quantity || map.CopyNumber>quantity ||
                    !outputs.Remove(map.PlacedPieceId,out var placed))return false;
                 NestingEngine.ValidateTranslation(original,placed.Points,token);

@@ -21,7 +21,7 @@ public sealed class MarkedNestingTests
         var piece=Source();var source=new ProjectDocument { Pieces=[piece] };var before=source.Clone();
         var result=ProductionNestingPlan.Arrange(source,[piece.Id],100,5);
         Assert.True(DocumentSession.ContentEquals(before,source));Assert.Equal(2,result.Nesting.Layout.Pieces.Count);
-        Assert.True(ProductionNestingPlan.AreMarkersPreserved(source,result));
+        Assert.True(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
         ShelfLayoutVerifier.Verify(result.Nesting);
         var json=ProjectStorage.SerializeProject(result.Nesting.Layout);
         using(var parsed=System.Text.Json.JsonDocument.Parse(json))Assert.Equal(6,parsed.RootElement[0].GetInt32());
@@ -36,10 +36,25 @@ public sealed class MarkedNestingTests
         var first=result.Nesting.Layout.Pieces[0];
         Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(first.Notches![0].Position.X));
         var originalMark=first.Notches[0].Position;first.Notches[0].Position=new Point2(3,3);
-        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,result));
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
         Assert.Throws<InvalidOperationException>(()=>ShelfLayoutVerifier.Verify(result.Nesting));
         first.Notches[0].Position=originalMark;
-        first.Notches=null;Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,result));
+        first.Notches=null;Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
+    }
+
+    [Fact]
+    public void MarkerAuditRejectsMissingCopiesEmptyResultsAndWrongSelection()
+    {
+        var piece=Source();var other=Source();var source=new ProjectDocument { Pieces=[piece,other] };
+        var result=ProductionNestingPlan.Arrange(source,[piece.Id],100,5);
+        Assert.True(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id,other.Id],result));
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[],result));
+        var one=result.Nesting with { Layout=new ProjectDocument { Pieces=[result.Nesting.Layout.Pieces[0].Clone()] } };
+        var incomplete=new ProductionNestingResult(one,[result.Placements[0]]);
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],incomplete));
+        var empty=result.Nesting with { Layout=new ProjectDocument() };
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],new ProductionNestingResult(empty,[])));
     }
 
     [Fact]
