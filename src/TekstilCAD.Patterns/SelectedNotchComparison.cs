@@ -6,9 +6,25 @@ namespace TekstilCAD.Patterns;
 public sealed record SelectedNotchComparisonResult(bool WithinTolerance,double SourceWidth,double CandidateWidth,
     double SourceDepth,double CandidateDepth);
 
+/// <summary>Approximate displayed measurements without a tolerance verdict.</summary>
+public sealed record SelectedNotchMeasurements(double SourceWidth,double CandidateWidth,double SourceDepth,double CandidateDepth);
+
 /// <summary>Compares only the two explicitly identified mouth/witness triples.</summary>
 public static class SelectedNotchComparison
 {
+    /// <summary>Measures two explicitly selected triples without an acceptance verdict.</summary>
+    /// <remarks>The caller must choose corresponding mouth endpoints in the same order.
+    /// Measurements are approximate display values, not proof of an offset or feature preservation.</remarks>
+    public static SelectedNotchMeasurements Measure(IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate,
+        int sourceStart,int sourceWitness,int sourceEnd,int candidateStart,int candidateWitness,int candidateEnd,
+        CancellationToken cancellationToken=default)
+    {
+        // Reuse the exact nondegeneracy, orientation and projection checks used
+        // by Compare; discard its tolerance verdict completely.
+        var value=Compare(source,candidate,sourceStart,sourceWitness,sourceEnd,candidateStart,candidateWitness,candidateEnd,
+            double.MaxValue,double.MaxValue,cancellationToken);
+        return new(value.SourceWidth,value.CandidateWidth,value.SourceDepth,value.CandidateDepth);
+    }
     /// <remarks>All indices are zero-based. The caller is responsible for matching the same physical feature.
     /// Neither contour validity nor the correctness of a seam allowance is established.</remarks>
     public static SelectedNotchComparisonResult Compare(IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate,

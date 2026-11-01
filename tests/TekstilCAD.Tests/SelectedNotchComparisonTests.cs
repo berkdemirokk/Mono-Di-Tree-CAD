@@ -7,6 +7,18 @@ public class SelectedNotchComparisonTests
     private static readonly Point2[] Source=[new(0,0),new(100,0),new(100,100),new(60,100),
         new(50,90),new(40,100),new(0,100)];
     [Fact]
+    public void MeasureOnlyUsesIndependentIndicesWithoutToleranceVerdictOrMutation()
+    {
+        Point2[] output=[new(99,99),new(60,100),new(50,91),new(40,100)];
+        var before=output.ToArray();
+        var result=SelectedNotchComparison.Measure(Source,output,3,4,5,1,2,3);
+        Assert.Equal(20,result.SourceWidth);Assert.Equal(20,result.CandidateWidth);
+        Assert.Equal(10,result.SourceDepth);Assert.Equal(9,result.CandidateDepth);
+        Assert.Equal(before,output);
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Measure(Source,output,3,4,5,1,1,3));
+        Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Measure(Source,output,3,4,5,1,2,4));
+    }
+    [Fact]
     public void ExplicitDifferentIndicesDetectCollapsedNotch()
     {
         Point2[] output=[new(60,100),new(50,99.999999),new(40,100)];

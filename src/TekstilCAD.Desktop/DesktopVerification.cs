@@ -9934,8 +9934,8 @@ internal static class DesktopVerification
             {
                 var panel=(DockPanel)preview.Content;
                 var warning=panel.Children.OfType<TextBlock>().Single();
-                var buttons=panel.Children.OfType<Button>().ToArray();
-                var drawing=panel.Children.OfType<FrameworkElement>().Single(c=>c is not TextBlock && c is not Button);
+                var buttons=panel.Children.OfType<WrapPanel>().Single().Children.OfType<Button>().ToArray();
+                var drawing=panel.Children.OfType<FrameworkElement>().Single(c=>AutomationProperties.GetName(c)=="Doğrulanmamış kaynak ve aday kontur görseli");
                 var top=OffsetUnverifiedPreviewWindow.MapPoint(new Point2(0,0),0,0,1,100,100,0,0);
                 var bottom=OffsetUnverifiedPreviewWindow.MapPoint(new Point2(0,10),0,0,1,100,100,0,0);
                 Check(bottom.Y>top.Y,"Offset preview uses the same Y direction as the main canvas",checks);
@@ -9943,9 +9943,28 @@ internal static class DesktopVerification
                     warning.Text.Contains("çentik korunumu kanıtı değildir",StringComparison.Ordinal) &&
                     AutomationProperties.GetName(warning)==warning.Text && drawing.Focusable &&
                     AutomationProperties.GetHelpText(drawing).Contains("ok tuşlarıyla",StringComparison.Ordinal) &&
-                    buttons.Length==1 && Equals(buttons[0].Content,"Kapat") && buttons[0].IsCancel &&
+                    buttons.Length==2 && buttons.Any(b=>Equals(b.Content,"Kapat") && b.IsCancel) && buttons.Any(b=>Equals(b.Content,"Seçili noktaları ölç…")) &&
                     DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                     "Preview declares its limitations, has keyboard guidance and no save or export action",checks);
+                Point2[] originalFeature=[new(0,0),new(5,-3),new(10,0)];
+                Point2[] candidateFeature=[new(99,99),new(0,0),new(5,-2),new(10,0)];
+                new System.Windows.Interop.WindowInteropHelper(preview).EnsureHandle();
+                var measure=new OffsetPreviewMeasurementWindow(preview,originalFeature,candidateFeature);
+                try
+                {
+                    originalFeature[1]=new(5,-99);candidateFeature[2]=new(5,-99);
+                    int[] chosen=[0,1,2,1,2,3];for(var n=0;n<chosen.Length;n++)measure.Selectors[n].SelectedIndex=chosen[n];
+                    measure.Compare();
+                    Check(measure.Result.Text.Contains("Kaynak ağız: 10 mm") && measure.Result.Text.Contains("Kaynak derinlik: 3 mm") &&
+                        measure.Result.Text.Contains("Aday derinlik: 2 mm") && measure.Result.Text.Contains("doğrulanmadı") &&
+                        !measure.Result.Text.Contains("tolerans",StringComparison.OrdinalIgnoreCase) &&
+                        DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                        "Unverified preview compares independently selected detached triples without a production verdict or document change",checks);
+                    measure.Selectors[4].SelectedIndex=1;measure.Compare();
+                    Check(measure.Result.Text.Contains("Ölçüm yapılamadı") && DocumentSession.ContentEquals(before,studio.Document),
+                        "Unverified preview measurement rejects repeated vertices without changing the project",checks);
+                }
+                finally { measure.Close(); }
             }
             finally { preview.Close(); }
             source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==narrow.Id);

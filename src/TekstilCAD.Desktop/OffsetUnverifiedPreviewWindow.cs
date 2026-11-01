@@ -23,9 +23,14 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
             Text="DOĞRULANMAMIŞ ÖNİZLEME — Kaynak: mavi; aday: turuncu. Bu görüntü ölçü veya çentik korunumu kanıtı değildir. Projeye eklenmez, kaydedilmez ve dışa aktarılmaz. Yakınlaştırmak için fare tekerleğini, görüntüyü taşımak için sürüklemeyi kullanın." };
         AutomationProperties.SetName(warning,warning.Text);
         DockPanel.SetDock(warning,Dock.Top); panel.Children.Add(warning);
-        var close=new Button { Content="Kapat", IsCancel=true, HorizontalAlignment=HorizontalAlignment.Right, MinWidth=90, Margin=new Thickness(0,10,0,0) };
-        close.Click += (_,_) => Close(); DockPanel.SetDock(close,Dock.Bottom); panel.Children.Add(close);
-        var drawing=new PreviewDrawing(source,candidate);
+        var sourceSnapshot=source.ToArray();var candidateSnapshot=candidate.ToArray();
+        var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,10,0,0) };
+        var measure=new Button { Content="Seçili noktaları ölç…",MinWidth=160,Margin=new Thickness(0,0,8,0) };
+        AutomationProperties.SetName(measure,"Doğrulanmamış adayın seçili noktalarını ölç");
+        measure.Click+=(_,_)=>new OffsetPreviewMeasurementWindow(this,sourceSnapshot,candidateSnapshot).ShowDialog();actions.Children.Add(measure);
+        var close=new Button { Content="Kapat", IsCancel=true, MinWidth=90 };
+        close.Click += (_,_) => Close();actions.Children.Add(close);DockPanel.SetDock(actions,Dock.Bottom);panel.Children.Add(actions);
+        var drawing=new PreviewDrawing(sourceSnapshot,candidateSnapshot);
         AutomationProperties.SetName(drawing,"Doğrulanmamış kaynak ve aday kontur görseli");
         AutomationProperties.SetHelpText(drawing,"Artı ve eksi ile yakınlaştırın; ok tuşlarıyla taşıyın, Home ile ilk görünüme dönün. Renk: kaynak mavi, aday turuncu. Bu görüntü güvenlik kanıtı değildir.");
         panel.Children.Add(drawing); Content=panel;
