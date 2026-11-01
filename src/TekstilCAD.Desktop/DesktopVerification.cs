@@ -9124,6 +9124,13 @@ internal static class DesktopVerification
             var timer=(DispatcherTimer)typeof(SelectedNotchComparisonWindow).GetField("staleTimer",PrivateInstance)!.GetValue(dialog)!;
             Check(timer.IsEnabled && result.Text.Contains("toleransı aşıyor",StringComparison.Ordinal),
                 "A valid comparison remains visible while its document is current",checks);
+            var nameInput=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+            nameInput.Text="Kaynak taslağı";
+            PumpUntil(()=>!timer.IsEnabled);
+            Check(result.Text.Contains("eski sonuç geçersiz",StringComparison.Ordinal) && DocumentSession.ContentEquals(before,studio.Document),
+                "A pending property draft automatically expires the displayed notch result",checks);
+            nameInput.Text="Kaynak";compare.Invoke(dialog,null);
+            Check(timer.IsEnabled,"Notch comparison can be repeated after a draft is cleared",checks);
             studio.Commit("Karşılaştırma kaynağını değiştir",()=>studio.Document.Pieces[0].Points[0]=new Point2(-1,0));
             var changed=studio.Document.Clone();var changedUndo=session.UndoCount;
             PumpUntil(()=>!timer.IsEnabled);
@@ -9779,5 +9786,6 @@ internal static class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
+
 
 
