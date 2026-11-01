@@ -12,6 +12,45 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testCopyDeleteRejectsNewFileAfterValidationWithoutDeletingModel() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let payload = copy.appendingPathComponent("project.tcad")
+        let metadata = copy.appendingPathComponent("metadata.json")
+        let foreign = copy.appendingPathComponent("notes.txt")
+        try Data("model".utf8).write(to: payload)
+        try Data("metadata".utf8).write(to: metadata)
+        XCTAssertThrowsError(try ModelStore.delete(copy, in: root) {
+            try Data("keep".utf8).write(to: foreign)
+        })
+        XCTAssertEqual(try Data(contentsOf: payload), Data("model".utf8))
+        XCTAssertEqual(try Data(contentsOf: metadata), Data("metadata".utf8))
+        XCTAssertEqual(try Data(contentsOf: foreign), Data("keep".utf8))
+    }
+
+    func testCopyDeleteRejectsReplacedPayloadAfterValidation() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let payload = copy.appendingPathComponent("project.tcad")
+        let moved = root.appendingPathComponent("original.saved")
+        let metadata = copy.appendingPathComponent("metadata.json")
+        try Data("original".utf8).write(to: payload)
+        try Data("metadata".utf8).write(to: metadata)
+        XCTAssertThrowsError(try ModelStore.delete(copy, in: root) {
+            try FileManager.default.moveItem(at: payload, to: moved)
+            try Data("replacement".utf8).write(to: payload)
+        })
+        XCTAssertEqual(try Data(contentsOf: moved), Data("original".utf8))
+        XCTAssertEqual(try Data(contentsOf: payload), Data("replacement".utf8))
+        XCTAssertEqual(try Data(contentsOf: metadata), Data("metadata".utf8))
+    }
+
     func testFileReplacedByDirectoryDuringDeleteIsNeverRecursivelyRemoved() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

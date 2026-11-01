@@ -910,6 +910,10 @@ enum ModelStore {
     private static func fileIdentity(_ url: URL) -> FileIdentity? {
         var info = stat()
         guard url.path.withCString({ lstat($0, &info) }) == 0 else { return nil }
+        return fileIdentity(info)
+    }
+
+    private static func fileIdentity(_ info: stat) -> FileIdentity {
         return FileIdentity(device: Int64(info.st_dev), inode: UInt64(info.st_ino), size: Int64(info.st_size), mode: UInt32(info.st_mode),
                             modifiedSeconds: Int64(info.st_mtimespec.tv_sec), modifiedNanoseconds: Int64(info.st_mtimespec.tv_nsec),
                             changedSeconds: Int64(info.st_ctimespec.tv_sec), changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
@@ -980,18 +984,53 @@ enum ModelStore {
             guard Set(names).isSubset(of: [payloadName, metadataName]) else {
                 throw ViewerError.message("Bu kayıtta tanınmayan dosyalar var; kayıp olmaması için silinmedi.")
             }
-            // A known entry must be a regular file, never a directory whose
-            // contents recursive deletion would remove.
+            var children: [String: FileIdentity] = [:]
             for name in names {
-                var info = stat()
                 let child = url.appendingPathComponent(name)
-                guard child.path.withCString({ lstat($0, &info) }) == 0,
-                      (info.st_mode & S_IFMT) == S_IFREG else {
+                guard let identity = fileIdentity(child),
+                      (identity.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) else {
                     throw ViewerError.message("Bu kaydın içeriği güvenle silinemedi.")
                 }
+                children[name] = identity
             }
+            let descriptor = url.path.withCString { Darwin.open($0, O_RDONLY | O_DIRECTORY | O_NOFOLLOW) }
+            guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+            defer { close(descriptor) }
+            var opened = stat()
+            guard fstat(descriptor, &opened) == 0,
+                  opened.st_dev == rootInfo.st_dev, opened.st_ino == rootInfo.st_ino else {
+                throw ViewerError.message("Kayıt değişti; listeyi yenileyin.")
+            }
+            try afterValidation?()
+            // Recheck before deleting anything. This is not an atomic lock,
+            // so the removal below is deliberately never recursive.
+            var currentRoot = stat()
+            guard url.path.withCString({ lstat($0, &currentRoot) }) == 0,
+                  currentRoot.st_dev == opened.st_dev, currentRoot.st_ino == opened.st_ino,
+                  Set(try FileManager.default.contentsOfDirectory(atPath: url.path)) == Set(names) else {
+                throw ViewerError.message("Kayıt içeriği değişti; hiçbir dosya silinmedi.")
+            }
+            for name in names {
+                var current = stat()
+                guard name.withCString({ fstatat(descriptor, $0, &current, AT_SYMLINK_NOFOLLOW) }) == 0,
+                      fileIdentity(current) == children[name] else {
+                    throw ViewerError.message("Kayıt içeriği değişti; hiçbir dosya silinmedi.")
+                }
+            }
+            // Remove only the two known regular-file names from the opened
+            // directory. Unknown/new entries are never traversed or removed.
+            for name in [metadataName, payloadName] where children[name] != nil {
+                guard name.withCString({ unlinkat(descriptor, $0, 0) }) == 0 else {
+                    throw ViewerError.message("Kayıt tamamen silinemedi; bazı kayıt dosyaları silinmiş olabilir.")
+                }
+            }
+            guard url.path.withCString({ lstat($0, &currentRoot) }) == 0,
+                  currentRoot.st_dev == opened.st_dev, currentRoot.st_ino == opened.st_ino,
+                  url.path.withCString({ rmdir($0) }) == 0 else {
+                throw ViewerError.message("Kayıt klasörü silinemedi; bazı kayıt dosyaları silinmiş olabilir.")
+            }
+            return
         }
-        try FileManager.default.removeItem(at: url)
     }
 
     static func displayName(_ url: URL) -> String {
