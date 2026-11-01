@@ -2507,6 +2507,45 @@ internal static class DesktopVerification
                 DocumentSession.ContentEquals(before,import.Project),"Accepting open POLYLINE keeps source unchanged",checks);
         }
         finally { openPolylineWindow.Close(); }
+        var bulkWindow=new DxfBlockDefinitionReviewWindow(studio,import);
+        try
+        {
+            var root=(FrameworkElement)bulkWindow.Content;Render(bulkWindow,Path.Combine(work,"block-bulk-minimum.png"),500,380);
+            var block=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok tanımı");
+            var points=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak POINT");
+            var pieces=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Kaynak blok parçası");
+            var vertices=Descendants<ComboBox>(root).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe");
+            var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
+            var mappings=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Seçilen POINT ve köşe çiftleri");
+            var bulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Tüm aday parçaları ekle"));
+            block.SelectedIndex=0;points.SelectedIndex=0;pieces.SelectedIndex=0;vertices.SelectedIndex=0;
+            Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen çifti ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            bulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var summary=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("aday işaretsiz eklendi") && AutomationProperties.GetName(t)==t.Text);
+            Check(included.Items.Count==4 && mappings.Items.Count==1 && summary.Text.Contains("3 aday işaretsiz eklendi") &&
+                summary.Text.Contains("POINT eşlemesi eklenmedi") && summary.Text.Contains("üretim parçaları değildir") &&
+                AutomationProperties.GetHelpText(bulk).Contains("hiçbir parça eklenmez"),
+                "Explicit bulk candidate selection keeps existing marker and reports its scope",checks);
+            bulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(included.Items.Count==4 && mappings.Items.Count==1 && DocumentSession.ContentEquals(before,import.Project),
+                "Repeating bulk selection preserves choices and imported source",checks);
+        }
+        finally { bulkWindow.Close(); }
+        var manyBlock="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nMANY\n"+
+            string.Concat(Enumerable.Range(0,33).Select(i=>$"0\nPOLYLINE\n8\nA\n70\n0\n0\nVERTEX\n10\n{i*20}\n20\n0\n0\nVERTEX\n10\n{i*20+10}\n20\n0\n0\nSEQEND\n"))+"0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var manyImport=DxfFormat.Import(new MemoryStream(Encoding.UTF8.GetBytes(manyBlock)),"many");
+        var manyBefore=manyImport.Project.Clone();var manyWindow=new DxfBlockDefinitionReviewWindow(studio,manyImport);
+        try
+        {
+            var root=(FrameworkElement)manyWindow.Content;Render(manyWindow,Path.Combine(work,"block-bulk-limit.png"),500,380);
+            var included=Descendants<ListBox>(root).Single(l=>AutomationProperties.GetName(l)=="Çalışma projesine seçilen parçalar ve işaret sayıları");
+            var bulk=Descendants<Button>(root).Single(b=>Equals(b.Content,"Tüm aday parçaları ekle"));
+            bulk.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var summary=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("sınırına sığmıyor") && AutomationProperties.GetName(t)==t.Text);
+            Check(included.Items.Count==0 && summary.Text.Contains("hiçbir parça eklenmedi") && DocumentSession.ContentEquals(manyBefore,manyImport.Project),
+                "Bulk selection exceeding 32 rejects the entire request without changing the source",checks);
+        }
+        finally { manyWindow.Close(); }
         var links=import.PieceSources!.Value;var link=links.First(p=>p.EntityType=="POLYLINE");
         var rawPoint=import.SupplementalGeometry!.Records.First(p=>p.EntityType=="POINT");var bytes=Encoding.UTF8.GetBytes(text);
         var rawPoints=import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT").ToArray();

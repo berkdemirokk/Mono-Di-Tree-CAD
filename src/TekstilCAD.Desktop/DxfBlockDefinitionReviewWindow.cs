@@ -43,7 +43,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var apply=new Button { Content="Çalışma kopyasını hazırla",Margin=new Thickness(4),Padding=new Thickness(10,7,10,7) };
         actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();var scroll=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Blok tanımı eşleme seçenekleri");root.Children.Add(scroll);
-        body.Children.Add(new TextBlock { Text="Bu işlem yalnız seçtiğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları aktarılmaz. Açık veya kapalı POLYLINE ve desteklenen LINE zincirlerini işaretsiz ekleyebilirsiniz. POINT/köşe eşlemesi yalnız kapalı POLYLINE içindir ve ilgili parçayı da seçer; en fazla 32 eşleme seçilir. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Kaynak dosya doğrulanır. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Bu işlem yalnız seçtiğiniz yerleştirilmemiş blok parçalarından ayrı bir çalışma projesi hazırlar; diğer kaynak parçaları aktarılmaz. Açık veya kapalı POLYLINE ve LINE zincirleri aday olarak işaretsiz seçilebilir; uygunlukları kaynak üzerinden ayrıca doğrulanır. POINT/köşe eşlemesi yalnız kapalı POLYLINE içindir ve ilgili parçayı da seçer; en fazla 32 eşleme seçilir. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Kaynak okuma uyarıları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         foreach(var warning in import.CapturedWarnings)
             body.Children.Add(new TextBlock { Text="• "+SafeNotice(warning),TextWrapping=TextWrapping.Wrap });
@@ -133,8 +133,11 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var go=new Button { Content="Köşeye git",Margin=new Thickness(4) };go.Click+=(_,_)=> { if(int.TryParse(indexText.Text,out var index) && index>=0 && index<vertices.Items.Count) { selectingBySearch=true;try { vertices.SelectedIndex=index; } finally { selectingBySearch=false; } SetStatus(""); } else { changingSelection=true;try { vertices.SelectedIndex=-1; } finally { changingSelection=false; } SetStatus("Geçerli bir köşe indeksi girin."); } };indexRow.Children.Add(indexText);indexRow.Children.Add(go);body.Children.Add(indexRow);
         body.Children.Add(new TextBlock { Text="Çalışma projesine seçilen parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,0) });
         var pieceActions=new WrapPanel();var addPiece=new Button { Content="Seçili parçayı ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
+        var addAllCandidates=new Button { Content="Tüm aday parçaları ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
+        AutomationProperties.SetHelpText(addAllCandidates,"Tüm bloklardaki henüz seçilmemiş LINE ve POLYLINE adaylarını işaretsiz ekler; POINT eşlemesi yapmaz. 32 işaretsiz parça sınırı aşılırsa hiçbir parça eklenmez. Destek ve üretim uygunluğu bu işlemle doğrulanmaz.");
         var removePiece=new Button { Content="Listeden parçayı kaldır",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
-        pieceActions.Children.Add(addPiece);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
+        pieceActions.Children.Add(addPiece);pieceActions.Children.Add(addAllCandidates);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
+        var bulkSummary=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(4,0,4,4) };AutomationProperties.SetName(bulkSummary,"Toplu aday seçimi sonucu");body.Children.Add(bulkSummary);
         includedList.ItemsSource=includedPieces;ScrollViewer.SetHorizontalScrollBarVisibility(includedList,ScrollBarVisibility.Auto);
         AutomationProperties.SetName(includedList,"Çalışma projesine seçilen parçalar ve işaret sayıları");body.Children.Add(includedList);
         IncludedPiece Include(BlockChoice block,PieceChoice piece)
@@ -149,6 +152,29 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             selected?.SetMarks(mappings.Count(m=>m.Item.Selection.PieceId==id));
         }
         int UnmarkedCount()=>includedPieces.Count(p=>!mappings.Any(m=>m.Item.Selection.PieceId==p.Item.PieceId));
+        addAllCandidates.Click+=(_,_ )=>
+        {
+            var byId=import.Project.Pieces.ToDictionary(p=>p.Id);
+            var selectedIds=includedPieces.Select(p=>p.Item.PieceId).ToHashSet();
+            var candidates=links.Where(l=>byId.ContainsKey(l.PieceId)).Select(l=>
+            {
+                var piece=byId[l.PieceId];
+                return (Block:new BlockChoice(l.BlockHeaderOrdinal!.Value,$"Blok kaydı {l.BlockHeaderOrdinal.Value} · {Safe(l.Block)}"),
+                    Piece:new PieceChoice(piece.Id,l.EntityType,piece.Closed,$"{Safe(piece.Name)} · {l.EntityType} · {(piece.Closed ? "kapalı" : "açık")} · {piece.Id:D}"));
+            }).ToArray();
+            var newItems=candidates.Where(c=>!selectedIds.Contains(c.Piece.Id)).ToArray();
+            var skipped=import.SkippedSourceRecords;
+            var skippedNotice=skipped is null ? "Atlanan kaynak kayıtları raporu yok; kapsam doğrulanmadı." :
+                $"BLOCKS bölümünde {skipped.Records.Count(r=>r.Section=="BLOCKS")} atlanmış kaynak kaydı raporlandı"+(skipped.Truncated ? "; rapor kesildi ve sayı eksik olabilir." : "; kayıt sayısı parça sayısı değildir.");
+            if(newItems.Length>32-UnmarkedCount())
+            {
+                bulkSummary.Text=$"{newItems.Length} yeni aday 32 işaretsiz parça sınırına sığmıyor; hiçbir parça eklenmedi. Mevcut seçimler ve POINT eşlemeleri korundu. {skippedNotice}";
+                AutomationProperties.SetName(bulkSummary,bulkSummary.Text);SetStatus(bulkSummary.Text);return;
+            }
+            foreach(var item in newItems)Include(item.Block,item.Piece);
+            bulkSummary.Text=$"{newItems.Length} aday işaretsiz eklendi; {candidates.Length-newItems.Length} önceden seçili parça korundu. POINT eşlemesi eklenmedi. Bunlar doğrulanmış üretim parçaları değildir. {skippedNotice}";
+            AutomationProperties.SetName(bulkSummary,bulkSummary.Text);SetStatus(bulkSummary.Text);
+        };
         addPiece.Click+=(_,_)=>
         {
             if(blocks.SelectedItem is not BlockChoice block || pieces.SelectedItem is not PieceChoice piece)
