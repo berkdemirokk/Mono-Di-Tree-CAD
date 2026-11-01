@@ -11531,15 +11531,17 @@ internal static class DesktopVerification
         var expander=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz"));expander.IsExpanded=true;root.UpdateLayout();
         var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
         var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+        Check(table.SelectionUnit==DataGridSelectionUnit.FullRow && table.SelectionMode==DataGridSelectionMode.Extended,"Grading table explicitly supports Ctrl/Shift row selection",checks);
         var x=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Seçili satırlar için ΔX mm");
         var y=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Seçili satırlar için ΔY mm");
         var write=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili satırlara yaz"));
         table.SelectedItems.Clear();x.Text="1";y.Text="2";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(rows.All(r=>r.Dx=="0" && r.Dy=="0") && DocumentSession.ContentEquals(before,studio.Document),"Empty bulk grading selection does not modify the draft",checks);
         table.SelectedItems.Clear();table.SelectedItems.Add(rows[0]);table.SelectedItems.Add(rows[2]);
-        x.Text="1,5";y.Text="hatalı";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Check(rows.All(r=>r.Dx=="0" && r.Dy=="0") && DocumentSession.ContentEquals(before,studio.Document),
-            "Invalid bulk grading input leaves all draft rows and project unchanged",checks);
+        rows[1].Dx="7";x.Text="1,5";y.Text="hatalı";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="0" && rows[1].Dx=="7" && rows[2].Dx=="0" && rows.All(r=>r.Dy=="0") && DocumentSession.ContentEquals(before,studio.Document),
+            "Invalid bulk grading input preserves existing draft edits and project",checks);
+        rows[1].Dx="0";
         var changed=0;rows[0].PropertyChanged+=(_,_)=>changed++;
         y.Text="-2";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(rows[0].Dx=="1,5" && rows[0].Dy=="-2" && rows[1].Dx=="0" && rows[1].Dy=="0" &&

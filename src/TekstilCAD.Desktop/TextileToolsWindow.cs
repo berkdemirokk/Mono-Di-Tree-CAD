@@ -19,7 +19,7 @@ public sealed class TextileToolsWindow : Window
     private readonly MainWindow workspace;
     private readonly ComboBox source = new() { MinWidth=200, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,0) };
     private readonly ObservableCollection<GradeRow> rows = [];
-    private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
+    private readonly DataGrid grades = new() { AutoGenerateColumns=false, CanUserAddRows=false, CanUserDeleteRows=false, SelectionUnit=DataGridSelectionUnit.FullRow, SelectionMode=DataGridSelectionMode.Extended, MinHeight=80, RowHeight=34, ColumnHeaderHeight=32, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock sourceInfo = new() { TextWrapping=TextWrapping.Wrap, MaxHeight=44, TextTrimming=TextTrimming.CharacterEllipsis, VerticalAlignment=VerticalAlignment.Center };
     private readonly TextBox sourceIdentity = new() { IsReadOnly=true, TextWrapping=TextWrapping.Wrap, AcceptsReturn=true, MaxHeight=42, VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Margin=new Thickness(16,3,0,0) };
     private readonly TextBlock result = new() { TextWrapping=TextWrapping.Wrap, Text="Artışları girip yeni bedeni oluşturun veya diğer araç sekmelerini kullanın." };
@@ -557,18 +557,29 @@ public sealed class TextileToolsWindow : Window
         batchFields.Children.Add(new TextBlock { Text="ΔY (mm)",VerticalAlignment=VerticalAlignment.Center });batchFields.Children.Add(batchY);
         var writeBatch=Button(batchPanel,"Seçili satırlara yaz",()=>
         {
-            if(!CommitGradeEdit()) { ShowGradeEditError();return; }
             if(rulesNeedReset || activeDraft is null || source.SelectedItem is not PatternPiece piece || activeSourceId!=piece.Id ||
                !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
                activeDraft.Closed!=piece.Closed || !activeDraft.Points.SequenceEqual(piece.Points))
-            { result.Text="Kaynak veya taslak güncel değil; artışlar değiştirilmedi.";return; }
-            var selected=grades.SelectedItems.Cast<GradeRow>().ToArray();
-            if(selected.Length==0) { result.Text="Önce tabloda en az bir nokta satırı seçin; artışlar değiştirilmedi.";return; }
-            if(!IsNumber(batchX.Text,out _) || !IsNumber(batchY.Text,out _))
-            { result.Text="İki artış için geçerli mm değerleri girin; hiçbir satır değiştirilmedi.";return; }
-            if(selected.Any(row=>row.Index<0 || row.Index>=rows.Count || !ReferenceEquals(rows[row.Index],row)))
-            { result.Text="Seçim değişti; artışlar değiştirilmedi.";return; }
-            foreach(var row in selected) { row.Dx=batchX.Text.Trim();row.Dy=batchY.Text.Trim(); }
+            { result.Text="Kaynak veya taslak güncel değil; toplu işlem uygulanmadı.";return; }
+            var draft=activeDraft;var selected=grades.SelectedItems.Cast<GradeRow>().ToArray();
+            if(selected.Length==0) { result.Text="Önce tabloda en az bir nokta satırı seçin; toplu işlem uygulanmadı.";return; }
+            var textX=batchX.Text;var textY=batchY.Text;
+            if(!IsNumber(textX,out _) || !IsNumber(textY,out _))
+            { result.Text="İki artış için geçerli mm değerleri girin; toplu işlem uygulanmadı.";return; }
+            bool SelectionMatches()
+            {
+                var current=grades.SelectedItems.Cast<GradeRow>().ToHashSet();
+                return selected.Length==current.Count && selected.All(row=>current.Contains(row) &&
+                    row.Index>=0 && row.Index<rows.Count && ReferenceEquals(rows[row.Index],row));
+            }
+            if(!SelectionMatches()) { result.Text="Seçim değişti; toplu işlem uygulanmadı.";return; }
+            if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+            if(rulesNeedReset || !ReferenceEquals(activeDraft,draft) || source.SelectedItem is not PatternPiece current ||
+               !ReferenceEquals(current,piece) || !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
+               activeSourceId!=piece.Id || draft.Closed!=piece.Closed || !draft.Points.SequenceEqual(piece.Points) ||
+               textX!=batchX.Text || textY!=batchY.Text || !SelectionMatches())
+            { result.Text="Kaynak, seçim veya değerler değişti; toplu işlem uygulanmadı. Açık hücre düzenlemesini kontrol edin.";return; }
+            foreach(var row in selected) { row.Dx=textX.Trim();row.Dy=textY.Trim(); }
             result.Text=$"{selected.Length} satırın taslak artışları değişti; projeye henüz uygulanmadı. Tekrarlı kapanış varsa ilk ve son satırı kontrol edin.";
         },()=>HasPiece()&&!rulesNeedReset);
         writeBatch.Margin=new Thickness(0,4,0,4);writeBatch.Padding=new Thickness(10,5,10,5);
