@@ -37,6 +37,35 @@ public class NotchExportGuardTests
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void PdfExportRejectsMarksWithoutChangingSourceOrDestination(bool tiled, bool destinationExists)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "tekstilcad-notch-pdf-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "output.pdf");
+            if (destinationExists) File.WriteAllText(path, "original content");
+            var project = Marked();
+            var before = project.Clone();
+            var version = ProjectStorage.CaptureVersion(path);
+            var error = Assert.Throws<InvalidDataException>(() =>
+            {
+                if (tiled) PdfTiledFormat.Export(project, path, version);
+                else PdfFormat.Export(project, path, version);
+            });
+            Assert.Contains("Çentik", error.Message);
+            Assert.True(DocumentSession.ContentEquals(before, project));
+            if (destinationExists) Assert.Equal("original content", File.ReadAllText(path));
+            else Assert.False(File.Exists(path));
+            Assert.Equal(destinationExists ? 1 : 0, Directory.EnumerateFileSystemEntries(directory).Count());
+        }
+        finally { Directory.Delete(directory, true); }
+    }
+    [Theory]
     [InlineData(JobFormat.Dxf)]
     [InlineData(JobFormat.Hpgl)]
     public void SimulationPreparationRejectsMarkersBeforeCreatingAJob(JobFormat format)

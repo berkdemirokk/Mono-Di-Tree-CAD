@@ -124,6 +124,16 @@ internal static class DesktopVerification
     private static void VerifyOpenPathClosure(MainWindow studio,List<string> checks)
     {
         var a=new PatternPiece { Name="Açık",Closed=false,Points=[new(0,0),new(10,0),new(10,10),new(4,10),new(4,8)] };
+        var markedSnapshot=a.Clone();markedSnapshot.Notches=[new NotchMark { VertexIndex=1,Position=markedSnapshot.Points[1] }];
+        var sameMarks=markedSnapshot.Clone();
+        Check(OpenPathSourceSnapshot.Matches(markedSnapshot,sameMarks) && !OpenPathSourceSnapshot.Matches(a,markedSnapshot),
+            "Open path snapshot distinguishes absent marks and compares cloned marks by value",checks);
+        sameMarks.Notches![0].VertexIndex=2;
+        Check(!OpenPathSourceSnapshot.Matches(markedSnapshot,sameMarks),"Open path snapshot rejects a changed mark index",checks);
+        sameMarks=markedSnapshot.Clone();sameMarks.Notches![0].Position=new Point2(11,0);
+        Check(!OpenPathSourceSnapshot.Matches(markedSnapshot,sameMarks),"Open path snapshot rejects a changed mark position",checks);
+        sameMarks=markedSnapshot.Clone();sameMarks.Notches!.Add(new NotchMark { VertexIndex=2,Position=sameMarks.Points[2] });
+        Check(!OpenPathSourceSnapshot.Matches(markedSnapshot,sameMarks),"Open path snapshot rejects a changed mark count",checks);
         var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=false,SourcePoints=[..a.Points],Deltas=[new(0,0),new(0,0),new(0,0),new(0,0),new(0,0)] };
         studio.LoadDocument(new ProjectDocument { Name="Kapatma doğrulaması",Pieces=[a],GradingRules=[rule] });
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
@@ -144,6 +154,12 @@ internal static class DesktopVerification
                 "Closure adds one closed piece while preserving the source and its grading rule",checks);
             Invoke(studio,"Undo");
             Check(DocumentSession.ContentEquals(initial,studio.Document),"Closure undo restores the original project",checks);
+            Preview();
+            studio.Commit("Köşe işareti",()=> { var p=studio.Document.Pieces.Single(p=>p.Id==a.Id);p.Notches=[new NotchMark { VertexIndex=1,Position=p.Points[1] }]; });
+            var marked=studio.Document.Clone();var markedUndo=session.UndoCount;window.ApplyForVerification();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(marked,studio.Document) && session.UndoCount==markedUndo && window.MessageForVerification.Contains("değişti"),
+                "Closure rejects a preview when a source mark is added",checks);
+            Invoke(studio,"Undo");
             Preview();window.ToleranceForVerification.Text="8";
             var before=studio.Document.Clone();var undo=session.UndoCount;
             Check(!window.ApplyButtonForVerification.IsEnabled,"Changing closure tolerance invalidates preview",checks);
@@ -191,6 +207,11 @@ internal static class DesktopVerification
 
             Preview();
             Check(window.ApplyButtonForVerification.IsEnabled,"Open path preview can be recalculated after undo",checks);
+            studio.Commit("Köşe işareti",()=> { var p=studio.Document.Pieces.Single(p=>p.Id==b.Id);p.Notches=[new NotchMark { VertexIndex=0,Position=p.Points[0] }]; });
+            var marked=studio.Document.Clone();var markedUndo=session.UndoCount;window.ApplyForVerification();
+            Check(!window.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(marked,studio.Document) && session.UndoCount==markedUndo && window.MessageForVerification.Contains("değişti"),
+                "Join rejects a preview when a source mark is added",checks);
+            Invoke(studio,"Undo");Preview();
             window.ToleranceForVerification.Text="0,05";
             var beforeTolerance=studio.Document.Clone(); var undoBefore=session.UndoCount;
             Check(!window.ApplyButtonForVerification.IsEnabled,"Changing tolerance invalidates the preview",checks);

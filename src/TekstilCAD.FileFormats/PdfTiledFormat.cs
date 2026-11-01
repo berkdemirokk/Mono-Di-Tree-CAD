@@ -18,6 +18,7 @@ public static class PdfTiledFormat
     {
         ArgumentNullException.ThrowIfNull(project);ArgumentNullException.ThrowIfNull(expectedVersion);
         ProjectStorage.Validate(project);var copy=project.Clone();ProjectStorage.Validate(copy);
+        NotchExportGuard.EnsureSupported(copy);
         GrainlineExportGuard.EnsureSupported(copy);
         if(copy.Pieces.Count==0)throw new InvalidDataException("A4 PDF için en az bir parça gerekir.");
         var points=copy.Pieces.SelectMany(p=>p.Points).ToArray();
