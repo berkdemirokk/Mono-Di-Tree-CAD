@@ -37,8 +37,8 @@ public static class PdfTiledFormat
             // The grey frame is the exact joining edge; only contour ink inside
             // the frame is printed. Neighbouring frames share the same model edge.
             body.Append($"0.65 G 0.3 w {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re S\n");
-            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (ROW {row+1}/{rows}  COL {col+1}/{cols}  PAGE {row*cols+col+1}/{pageCount}  PRINT 100 PERCENT) Tj ET\n");
-            body.Append($"0 G 0.5 w {F(10*Scale)} {F(15*Scale)} m {F(60*Scale)} {F(15*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(14*Scale)} Td (50 MM CHECK) Tj ET\n");
+            body.Append($"BT /F1 8 Tf {F(Margin*Scale)} {F(282*Scale)} Td (SATIR {row+1}/{rows}  SUTUN {col+1}/{cols}  SAYFA {row*cols+col+1}/{pageCount}  YAZDIRMA 100%) Tj ET\n");
+            body.Append($"0 G 0.5 w {F(10*Scale)} {F(15*Scale)} m {F(60*Scale)} {F(15*Scale)} l S BT /F1 8 Tf {F(63*Scale)} {F(14*Scale)} Td (50 MM KONTROL) Tj ET\n");
             body.Append($"q {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re W n 0 G 0.5 w 1 J 1 j\n");
             foreach(var piece in copy.Pieces)
             {

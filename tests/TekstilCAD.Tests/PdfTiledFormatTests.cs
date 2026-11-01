@@ -16,15 +16,15 @@ public class PdfTiledFormatTests
         var pdf=File.ReadAllText(path,Encoding.ASCII);
         Assert.Contains("/Count 4",pdf);
         Assert.Equal(4,pdf.Split("/MediaBox [0 0 595.275591 841.889764]").Length-1);
-        Assert.Contains("ROW 1/2  COL 1/2  PAGE 1/4",pdf);
-        Assert.Contains("ROW 1/2  COL 2/2  PAGE 2/4",pdf);
-        Assert.Contains("ROW 2/2  COL 1/2  PAGE 3/4",pdf);
-        Assert.Contains("ROW 2/2  COL 2/2  PAGE 4/4",pdf);
+        Assert.Contains("SATIR 1/2  SUTUN 1/2  SAYFA 1/4",pdf);
+        Assert.Contains("SATIR 1/2  SUTUN 2/2  SAYFA 2/4",pdf);
+        Assert.Contains("SATIR 2/2  SUTUN 1/2  SAYFA 3/4",pdf);
+        Assert.Contains("SATIR 2/2  SUTUN 2/2  SAYFA 4/4",pdf);
         Assert.Equal(4,pdf.Split(" re W n ").Length-1);
         Assert.Contains("28.346457 42.519685 m 170.07874 42.519685 l S",pdf); // 50 mm check, 15 mm from edge
         Assert.Contains("31.181102 782.362205 m",pdf); // 1 mm from top-left frame
         Assert.Contains("28.346457 56.692913 538.582677 728.503937 re W n",pdf); // 190 x 257 mm
-        Assert.Contains("28.346457 799.370079 Td (ROW 1/2",pdf); // label 15 mm from top
+        Assert.Contains("28.346457 799.370079 Td (SATIR 1/2",pdf); // label 15 mm from top
         var sections=pdf.Split(" re W n 0 G 0.5 w 1 J 1 j\n").Skip(1).ToArray();
         var positions=sections.Select(s=>s[..s.IndexOf('\n')].Split(' '))
             .Select(v=>(X:double.Parse(v[0],CultureInfo.InvariantCulture),Y:double.Parse(v[1],CultureInfo.InvariantCulture))).ToArray();

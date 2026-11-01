@@ -4143,12 +4143,12 @@ internal static class DesktopVerification
             && DocumentSession.ContentEquals(mismatchDocument,studio.Document),"PDF export preserves source and creates a PDF document",checks);
         var tiledPath=Path.Combine(work,"inspection-a4.pdf");var tiledVersion=ProjectStorage.CaptureVersion(tiledPath);string? tiledWarning=null;
         var tiledDeclined=studio.StartExportAfterPreflight(studio.Document.Clone(),tiledPath,5,tiledVersion,message=> { tiledWarning=message;return false; });
-        Check(tiledDeclined is null && !File.Exists(tiledPath) && tiledWarning is not null && tiledWarning.Contains("%100") && tiledWarning.Contains("50 mm") && tiledWarning.Contains("ROW") && tiledWarning.Contains("COL"),
+        Check(tiledDeclined is null && !File.Exists(tiledPath) && tiledWarning is not null && tiledWarning.Contains("%100") && tiledWarning.Contains("50 mm") && tiledWarning.Contains("SATIR") && tiledWarning.Contains("SUTUN"),
             "A4 PDF preflight explains actual size, calibration and page assembly",checks);
         var tiledTask=studio.StartExportAfterPreflight(studio.Document.Clone(),tiledPath,5,tiledVersion,_=>true);
         Check(tiledTask is not null,"A4 PDF starts after confirmation",checks);
         PumpUntil(()=>tiledTask!.IsCompleted);tiledTask!.GetAwaiter().GetResult();
-        Check(studio.ExportError is null && File.ReadAllText(tiledPath).Contains("50 MM CHECK") && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
+        Check(studio.ExportError is null && File.ReadAllText(tiledPath).Contains("50 MM KONTROL") && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
             "A4 PDF export produces calibration and preserves source",checks);
         var flippedPath=Path.Combine(work,"canvas-orientation.dxf");
         var flippedVersion=ProjectStorage.CaptureVersion(flippedPath);string? flippedWarning=null;
