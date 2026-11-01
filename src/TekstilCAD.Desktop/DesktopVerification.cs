@@ -2186,7 +2186,7 @@ internal static class DesktopVerification
         Check(studio.Selected!.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Redo restores piece metadata edit",checks);
         var window=new TextileToolsWindow(studio);
         var edited=TekstilCAD.Patterns.PatternTools.InsertPoint(studio.Selected!,0,new Point2(50,0));
-        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null]);
+        typeof(TextileToolsWindow).GetMethod("ReplacePiece",PrivateInstance)!.Invoke(window,[edited,false,null,false,0,null,null]);
         Check(studio.Selected!.Points.Count==5 && studio.Selected.Metadata is { Role:"Kesim",Size:"M",Material:"Pamuk",Quantity:3 },"Contour edit preserves piece metadata",checks);
         Invoke(studio,"Undo");
         Check(studio.Selected!.Points.Count==4 && studio.Selected.Metadata is { Quantity:3 },"Undo contour edit preserves metadata",checks);
@@ -9335,16 +9335,16 @@ internal static class DesktopVerification
             Button Find(string text)=>Descendants<Button>(root).Single(b=>Equals(b.Content,text));
             var add=Find("Seçili noktaya işaret ekle");var remove=Find("Seçili noktanın işaretini kaldır");
             var move=Find("Seçilen indeksteki noktayı taşı");var delete=Find("Seçilen indeksteki noktayı sil");
-            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled,
+            Check(!add.IsEnabled && remove.IsEnabled && move.IsEnabled && !delete.IsEnabled,
                 "Marked vertex disables conflicting operations and enables removal",checks);
             index.Text="4";
-            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled,
+            Check(!add.IsEnabled && remove.IsEnabled && move.IsEnabled && !delete.IsEnabled,
                 "Repeated closing index uses the first vertex marker for command availability",checks);
             index.Text="1";
             Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled,
                 "Unmarked vertex permits mark addition and valid edits",checks);
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled && studio.Selected!.Notches!.Count==2,
+            Check(!add.IsEnabled && remove.IsEnabled && move.IsEnabled && !delete.IsEnabled && studio.Selected!.Notches!.Count==2,
                 "Adding a marker immediately updates the available operations",checks);
             Check(liveResult.Text.Contains("işareti eklendi") && AutomationProperties.GetName(liveResult).Contains(liveResult.Text),
                 "Marker addition exposes its current result through automation",checks);
@@ -9405,7 +9405,7 @@ internal static class DesktopVerification
             root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
             var guidance=Descendants<TextBlock>(root).Single(t=>t.Text.StartsWith("İşaret yalnız seçili köşeyi",StringComparison.Ordinal)).Text;
             Check(guidance.Contains("işaretsiz köşeler taşınabilir veya silinebilir") && guidance.Contains("işaretler korunur") &&
-                guidance.Contains("İşaretli köşeyi taşımak veya silmek") && guidance.Contains("V çentik eklenebilir") &&
+                guidance.Contains("İşaretli köşe sayısal olarak taşındığında") && guidance.Contains("V çentik eklenebilir") &&
                 !guidance.Contains("İşaretli parçayı düzenlemeden önce işaretlerini kaldırın"),
                 "Vertex guidance distinguishes mark-preserving edits from protected marked vertices and unsupported operations",checks);
             var before=studio.Document.Clone();var count=session.UndoCount;
@@ -9421,8 +9421,18 @@ internal static class DesktopVerification
             using var json=JsonDocument.Parse(saved);
             Check(json.RootElement.ValueKind==JsonValueKind.Array && json.RootElement[0].GetInt32()==6 && DocumentSession.ContentEquals(marked,ProjectStorage.Load(path)),
                 "Notch survives version 6 save and reload",checks);
-            var rejectedMove=tools.MoveVertexAsync("0","-1","0");PumpUntil(()=>rejectedMove.IsCompleted);rejectedMove.GetAwaiter().GetResult();
-            Check(DocumentSession.ContentEquals(marked,studio.Document),"Moving a marked vertex is rejected",checks);
+            var markedMove=tools.MoveVertexAsync("3","-1","0");PumpUntil(()=>markedMove.IsCompleted);markedMove.GetAwaiter().GetResult();
+            var markedMoved=studio.Document.Clone();var movedMark=markedMoved.Pieces[0].Notches!.Single();
+            Check(markedMoved.Pieces[0].Points[0]==new Point2(-1,0) && markedMoved.Pieces[0].Points[^1]==new Point2(-1,0) &&
+                movedMark.VertexIndex==0 && movedMark.Position==markedMoved.Pieces[0].Points[0] && session.UndoCount==count+2,
+                "Numeric movement updates repeated closure and its marker in one transaction",checks);
+            var movedPath=Path.Combine(work,"desktop-marked-move-verification.tcad");
+            ProjectStorage.Save(studio.Document,movedPath);
+            Check(DocumentSession.ContentEquals(markedMoved,ProjectStorage.Load(movedPath)),
+                "Marked vertex movement survives version 6 save and reload",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(marked,studio.Document) && session.Redo() && DocumentSession.ContentEquals(markedMoved,studio.Document) && session.Undo(),
+                "Marked vertex movement supports atomic undo and redo",checks);
+            tools.Close();studio.Select(piece.Id);tools=new TextileToolsWindow(studio);
             var move=tools.MoveVertexAsync("1","11","0");PumpUntil(()=>move.IsCompleted);move.GetAwaiter().GetResult();
             var moved=studio.Document.Clone();
             Check(moved.Pieces[0].Points[1]==new Point2(11,0) && moved.Pieces[0].Notches!.Single().Position==marked.Pieces[0].Points[0],

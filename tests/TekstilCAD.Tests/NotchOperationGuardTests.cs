@@ -63,6 +63,31 @@ public class NotchOperationGuardTests
         Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,source.Points.Count-1,new(-1,0)));
     }
     [Theory]
+    [InlineData(0)]
+    [InlineData(4)]
+    public void ExplicitMarkedMoveUpdatesVertexAndMarkIncludingRepeatedClosure(int index)
+    {
+        var source=Closed();source.Points.Add(source.Points[0]);
+        source.Notches=[new NotchMark { VertexIndex=0,Position=source.Points[0] },new NotchMark { VertexIndex=2,Position=source.Points[2] }];
+        var before=source.Clone();var minusZero=BitConverter.Int64BitsToDouble(long.MinValue);
+        var moved=PatternTools.MovePoint(source,index,new Point2(-1,minusZero),allowMarkedVertexMove:true);
+        Assert.Equal(new Point2(-1,minusZero),moved.Points[0]);Assert.Equal(moved.Points[0],moved.Points[^1]);
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(moved.Points[0].Y));
+        Assert.Equal(long.MinValue,BitConverter.DoubleToInt64Bits(moved.Notches![0].Position.Y));
+        Assert.Equal(moved.Points[0],moved.Notches[0].Position);Assert.Equal(source.Notches[1].Position,moved.Notches[1].Position);
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces=[before] },new ProjectDocument { Pieces=[source] }));
+        using var cancelled=new CancellationTokenSource();cancelled.Cancel();
+        Assert.Throws<OperationCanceledException>(()=>PatternTools.MovePoint(source,index,new(-1,0),cancelled.Token,allowMarkedVertexMove:true));
+    }
+    [Fact]
+    public void ExplicitMarkedMoveRejectsBadOrDuplicateMarkerCoordinates()
+    {
+        var source=Closed();source.Notches![0].Position=new(19,0);
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,1,new(19,1),allowMarkedVertexMove:true));
+        source.Notches[0].Position=source.Points[1];source.Notches.Add(source.Notches[0].Clone());
+        Assert.ThrowsAny<ArgumentException>(()=>PatternTools.MovePoint(source,1,new(19,1),allowMarkedVertexMove:true));
+    }
+    [Theory]
     [InlineData(0,2)]
     [InlineData(1,1)]
     [InlineData(3,1)]

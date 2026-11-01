@@ -613,22 +613,26 @@ public static class PatternTools
     /// it is being copied. The caller retains responsibility for source identity,
     /// metadata, and checking whether its original document has changed.
     /// </summary>
-    public static PatternPiece MovePoint(PatternPiece piece, int index, Point2 position, CancellationToken cancellationToken = default)
+    public static PatternPiece MovePoint(PatternPiece piece, int index, Point2 position, CancellationToken cancellationToken = default, bool allowMarkedVertexMove = false)
     {
         ArgumentNullException.ThrowIfNull(piece);
         if (piece.Notches is not null)
         {
-            // v6 marks identify vertices; only unmarked vertices may move.
+            // Marked vertices move only when the caller explicitly requests it.
             _=MarkedPieceTranslation.Translate(piece,0,0,cancellationToken);
             var marks=piece.Notches.Select(mark=>mark.Clone()).ToList();
             var markedIndex=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && index==piece.Points.Count-1 ? 0 : index;
-            if(marks.Any(mark=>mark.VertexIndex==markedIndex))
+            if(!allowMarkedVertexMove && marks.Any(mark=>mark.VertexIndex==markedIndex))
                 throw new ArgumentException("Çentik işaretli köşe taşınamaz; önce işareti gözden geçirin.",nameof(index));
             var detached=piece.Clone();detached.Notches=null;
             var moved=MovePoint(detached,index,position,cancellationToken);
             foreach(var mark in marks)
-                if(mark.VertexIndex>=moved.Points.Count || moved.Points[mark.VertexIndex]!=mark.Position)
-                    throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if(mark.VertexIndex>=moved.Points.Count)throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
+                if(allowMarkedVertexMove && mark.VertexIndex==markedIndex)mark.Position=moved.Points[mark.VertexIndex];
+                else if(moved.Points[mark.VertexIndex]!=mark.Position)throw new ArgumentException("Köşe işareti korunamadı; düzenleme uygulanmadı.",nameof(piece));
+            }
             moved.Notches=marks;cancellationToken.ThrowIfCancellationRequested();return moved;
         }
         cancellationToken.ThrowIfCancellationRequested();
