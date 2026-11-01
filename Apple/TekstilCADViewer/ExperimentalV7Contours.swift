@@ -81,7 +81,8 @@ enum ExperimentalV7Contours {
                 guard let fields = value as? [String: Any],
                       Set(fields.keys).isSubset(of: ["Role", "Size", "Material", "Quantity"]) else { throw Failure.invalid }
                 if let v = fields["Role"], !(v is NSNull) {
-                    guard let text = v as? String, ["Kesim", "Yardımcı"].contains(text) else { throw Failure.invalid }; role = text
+                    guard let text = v as? String,
+                          ["Kesim", "Yardımcı"].contains(where: { $0.utf16.elementsEqual(text.utf16) }) else { throw Failure.invalid }; role = text
                 }
                 func text(_ value: Any?) throws -> String? {
                     guard let value, !(value is NSNull) else { return nil }

@@ -55,6 +55,14 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid]))
         XCTAssertThrowsError(try ExperimentalV7Contours.decode([invalid], cancelled: { true }))
     }
+    func testContourRoleUsesDesktopOrdinalRatherThanCanonicalEquality() throws {
+        func input(_ role: String) -> Data {
+            Data("{\"Id\":\"11111111-1111-1111-1111-111111111111\",\"Name\":\"A\",\"Closed\":false,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":1,\"Y\":1}],\"Metadata\":{\"Role\":\"\(role)\"}}".utf8)
+        }
+        XCTAssertEqual(try ExperimentalV7Contours.decode([input("Kesim")]).first?.role, "Kesim")
+        XCTAssertEqual(try ExperimentalV7Contours.decode([input("Yardımcı")]).first?.role, "Yardımcı")
+        XCTAssertThrowsError(try ExperimentalV7Contours.decode([input("Kesim")]))
+    }
     func testContourDecoderRejectsTooFewPointsAndNonIntegerQuantityTokens() throws {
         let prefix = #"{"Id":"11111111-1111-1111-1111-111111111111","Name":"A","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Metadata":{"Role":"Kesim","Quantity":NUMBER}}"#
         for token in ["1.0", "1e0", "1E+0"] {
