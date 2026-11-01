@@ -9073,7 +9073,32 @@ internal static class DesktopVerification
                 && result.Text.Contains("1 mm",StringComparison.Ordinal)
                 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
                 "An unverified local offset detail reports its source and measured next steps without claiming the contour is invalid",checks);
+            var previewButton=(Button)typeof(TextileToolsWindow).GetField("unverifiedOffsetPreview",PrivateInstance)!.GetValue(tools)!;
+            Check(previewButton.Visibility==Visibility.Visible && previewButton.IsEnabled &&
+                AutomationProperties.GetHelpText(previewButton).Contains("dışa aktarılmaz",StringComparison.Ordinal),
+                "Unverified offset offers an accessible display-only preview",checks);
+            new System.Windows.Interop.WindowInteropHelper(tools).EnsureHandle();
+            var preview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points);
+            try
+            {
+                var panel=(DockPanel)preview.Content;
+                var warning=panel.Children.OfType<TextBlock>().Single();
+                var buttons=panel.Children.OfType<Button>().ToArray();
+                var drawing=panel.Children.OfType<FrameworkElement>().Single(c=>c is not TextBlock && c is not Button);
+                Check(!preview.IsVisible && warning.Focusable && warning.Text.Contains("DOĞRULANMAMIŞ",StringComparison.Ordinal) &&
+                    warning.Text.Contains("çentik korunumu kanıtı değildir",StringComparison.Ordinal) &&
+                    AutomationProperties.GetName(warning)==warning.Text && drawing.Focusable &&
+                    AutomationProperties.GetHelpText(drawing).Contains("ok tuşlarıyla",StringComparison.Ordinal) &&
+                    buttons.Length==1 && Equals(buttons[0].Content,"Kapat") && buttons[0].IsCancel &&
+                    DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                    "Preview declares its limitations, has keyboard guidance and no save or export action",checks);
+            }
+            finally { preview.Close(); }
             source.SelectedItem=source.Items.Cast<PatternPiece>().Single(p=>p.Id==narrow.Id);
+            previewButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(previewButton.Visibility==Visibility.Collapsed && result.Text.Contains("eski önizleme gösterilmedi",StringComparison.Ordinal) &&
+                DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
+                "Changed selection rejects the stored preview without changing or saving the document",checks);
             task=(Task)run.Invoke(tools,["0.0000001"])!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             Check(result.Text.Contains("Dikiş payı uygulanmadı",StringComparison.Ordinal)
                 && result.Text.Contains("Dikiş payı en az 0,000001 mm olmalıdır",StringComparison.Ordinal)
@@ -9732,3 +9757,5 @@ internal static class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
+
+

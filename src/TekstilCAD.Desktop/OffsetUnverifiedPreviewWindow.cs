@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
 using System.Windows.Input;
 using System.Windows.Media;
 using TekstilCAD.Core;
@@ -15,12 +16,16 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
         Width=900; Height=700; MinWidth=450; MinHeight=350;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var panel=new DockPanel { Margin=new Thickness(12) };
-        var warning=new TextBlock { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,0,0,10),
+        var warning=new TextBlock { TextWrapping=TextWrapping.Wrap, Focusable=true, Margin=new Thickness(0,0,0,10),
             Text="DOĞRULANMAMIŞ ÖNİZLEME — Kaynak: mavi; aday: turuncu. Bu görüntü ölçü veya çentik korunumu kanıtı değildir. Projeye eklenmez, kaydedilmez ve dışa aktarılmaz. Yakınlaştırmak için fare tekerleğini, görüntüyü taşımak için sürüklemeyi kullanın." };
+        AutomationProperties.SetName(warning,warning.Text);
         DockPanel.SetDock(warning,Dock.Top); panel.Children.Add(warning);
-        var close=new Button { Content="Kapat", HorizontalAlignment=HorizontalAlignment.Right, MinWidth=90, Margin=new Thickness(0,10,0,0) };
+        var close=new Button { Content="Kapat", IsCancel=true, HorizontalAlignment=HorizontalAlignment.Right, MinWidth=90, Margin=new Thickness(0,10,0,0) };
         close.Click += (_,_) => Close(); DockPanel.SetDock(close,Dock.Bottom); panel.Children.Add(close);
-        panel.Children.Add(new PreviewDrawing(source,candidate)); Content=panel;
+        var drawing=new PreviewDrawing(source,candidate);
+        AutomationProperties.SetName(drawing,"Doğrulanmamış kaynak ve aday kontur görseli");
+        AutomationProperties.SetHelpText(drawing,"Artı ve eksi ile yakınlaştırın; ok tuşlarıyla taşıyın, Home ile ilk görünüme dönün. Renk: kaynak mavi, aday turuncu. Bu görüntü güvenlik kanıtı değildir.");
+        panel.Children.Add(drawing); Content=panel;
     }
 
     private sealed class PreviewDrawing : FrameworkElement
@@ -44,6 +49,18 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
             MouseMove += (_,e)=> { if(drag is not Point old) return; var p=e.GetPosition(this); panX+=p.X-old.X; panY+=p.Y-old.Y; drag=p; InvalidateVisual(); };
             MouseLeftButtonUp += (_,_)=> { drag=null; ReleaseMouseCapture(); };
             LostMouseCapture += (_,_)=>drag=null;
+            KeyDown += (_,e)=> {
+                switch(e.Key)
+                {
+                    case Key.Add: case Key.OemPlus: zoom=Math.Min(10000,zoom*1.25); break;
+                    case Key.Subtract: case Key.OemMinus: zoom=Math.Max(1,zoom/1.25); break;
+                    case Key.Left: panX+=30; break; case Key.Right: panX-=30; break;
+                    case Key.Up: panY+=30; break; case Key.Down: panY-=30; break;
+                    case Key.Home: zoom=1;panX=panY=0;break;
+                    default: return;
+                }
+                InvalidateVisual(); e.Handled=true;
+            };
         }
         protected override void OnRender(DrawingContext dc)
         {
@@ -61,3 +78,5 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
         }
     }
 }
+
+
