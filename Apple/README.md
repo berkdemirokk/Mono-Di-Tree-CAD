@@ -10,6 +10,8 @@ macOS, Xcode ve XcodeGen gereklidir. Terminalde `Apple` dizinine geçip `xcodege
 
 iOS ve iPadOS'ta sistem dosya seçicisinin sağladığı güvenlik kapsamlı erişim kullanılır; dosya paylaşımı veya iCloud Documents yeteneği bu temel görüntüleyici için ayrıca etkinleştirilmiş değildir. Mac sürümü bu aşamanın kapsamında değildir.
 
+Telefona kaydın geçici dosyası yayımlanmadan önce açık dosyayla adı karşılaştırılır; uyuşmazlık saptanırsa kayıt başarısız olur. Bu kontrol ile yayımlama atomik değildir: uygulamanın özel kayıt dizinine eşzamanlı müdahale eden bir işlem dosya adını veya içeriğini kontrol ile yayımlama arasında değiştirebilir. Geçici dizinin oluşturulması ve açılması arasında da yarış vardır. Adlandırılmış kopyaların ayrı kayıt yolu bu kontrolden geçmez. Bu nedenle eşzamanlı müdahale durumunda doğru içeriğin yayımlanması garanti edilmez; kaynak dosyayı koruyun. Bu değişiklik Mac, simülatör veya iPhone üzerinde doğrulanmadı.
+
 **Açık modeli dışa aktar** deneysel bir akıştır: sistemin dosya kaydetme penceresini açar ve açık proje yüklenirken okunan tam baytları kullanır. Hedefi ve varsa mevcut dosyayı değiştirme kararını kullanıcı sistem penceresinde seçer; iptal açık modeli ve uygulama kütüphanesini değiştirmez. Başarı mesajı yalnız sistem kaydetme işlemini başarılı bildirdiğinde gösterilir. Bu yeni akış henüz Xcode'da derlenmedi veya gerçek cihaz ve dosya sağlayıcılarıyla denenmedi; özellikle `.tcad` türü ve uzantısı, belge ömrü, dosya adı, iptal, hedef değiştirme ve büyük dosya belleği doğrulanmalıdır.
 
 iPhone ana ekranı kaydırılabilir; önizleme alanındaki sürükleme hareketiyle sayfa kaydırmasının etkileşimi henüz simülatör veya cihazda doğrulanmadı.
