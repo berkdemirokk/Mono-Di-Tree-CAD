@@ -13,3 +13,5 @@ The DEBUG-only DebugPointCopyStore is an isolated point-copy insertion experimen
 The DEBUG snapshot authorization experiment checks caller-supplied document identity and revision inside the transaction before commit. The caller must hold its own document serialization gate through the complete synchronous call, including commit; the prototype cannot enforce this or coordinate SwiftUI state. It is not connected to the app.
 
 DebugPointCopyCoordinator serializes its own document identity/revision updates and synchronous transaction using one lock. It is not connected to SwiftUI; any state changes bypassing it invalidate the guarantee. It performs blocking I/O and must not be called on the UI thread. Apple build/device validation remains outstanding.
+
+The concurrency test checks the completed save and stale follow-up; scheduling alone does not prove that the competing thread attempted the lock while the transaction was held. The serialization claim rests on code inspection of the shared lock and requires Apple-platform concurrency testing.

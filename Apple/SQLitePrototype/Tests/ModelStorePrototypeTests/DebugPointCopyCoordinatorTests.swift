@@ -21,7 +21,7 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         XCTAssertNil(try ModelStorePrototype.read(at: db, id: id.uuidString))
     }
 
-    func testDocumentChangeWaitsForCommitAndOldSnapshotThenFails() throws {
+    func testConcurrentSaveAndChangeLeaveOldSnapshotStale() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -29,7 +29,6 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
         let snapshot = DebugPointCopyStore.Snapshot(documentID: doc, revision: old, name: "point", data: Data([1, 2, 3]))
         let coordinator = DebugPointCopyCoordinator(documentID: doc, revision: old)
         let entered = DispatchSemaphore(value: 0), release = DispatchSemaphore(value: 0)
-        let attempted = DispatchSemaphore(value: 0), changed = DispatchSemaphore(value: 0)
         let saveDone = expectation(description: "save completed")
         let changeDone = expectation(description: "change completed")
         let id = UUID()
@@ -46,13 +45,9 @@ final class DebugPointCopyCoordinatorTests: XCTestCase {
             release.signal(); XCTFail("Save did not reach transaction"); return
         }
         DispatchQueue.global().async {
-            attempted.signal()
             coordinator.replaceDocument(documentID: doc, revision: new)
-            changed.signal()
             changeDone.fulfill()
         }
-        XCTAssertEqual(attempted.wait(timeout: .now() + 5), .success)
-        XCTAssertEqual(changed.wait(timeout: .now() + 0.1), .timedOut)
         release.signal()
         wait(for: [saveDone, changeDone], timeout: 10)
         XCTAssertEqual(try ModelStorePrototype.read(at: db, id: id.uuidString)?.data, snapshot.data)
