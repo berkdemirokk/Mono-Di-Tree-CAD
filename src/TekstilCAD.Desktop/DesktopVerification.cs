@@ -2327,6 +2327,32 @@ internal static class DesktopVerification
             Check(pointControl.Items.Count==1 && vertexControl.Items.Count==3 && AutomationProperties.GetName(vertexPreview).Contains("Köşe 0") &&
                 Descendants<TextBlock>(reviewRoot).Any(t=>t.Text.Contains("fiziksel çentik") && t.Text.Contains("POINT")),
                 "POINT review presents explicit accessible source, piece and vertex choices with highlighted vertex",checks);
+            var vertexIndex=Descendants<TextBox>(reviewRoot).Single(t=>AutomationProperties.GetName(t)=="Hedef köşe indeksine git");
+            Check(new[]{pointControl,pieceControl,vertexControl}.All(c=>c.ItemsPanel.LoadContent() is VirtualizingStackPanel &&
+                VirtualizingPanel.GetIsVirtualizing(c) && VirtualizingPanel.GetVirtualizationMode(c)==VirtualizationMode.Recycling && ScrollViewer.GetCanContentScroll(c)),
+                "POINT and vertex selectors use recycling virtualization",checks);
+            vertexIndex.Text="2";Check(vertexControl.SelectedIndex==2 && AutomationProperties.GetName(vertexPreview).Contains("Köşe 2"),
+                "Exact vertex index selects and highlights the requested source vertex",checks);
+            vertexIndex.Text="999";Check(vertexControl.SelectedIndex==-1 && !AutomationProperties.GetName(vertexPreview).Contains("Köşe 2"),
+                "Out-of-range vertex index clears the earlier selected vertex",checks);
+            vertexIndex.Text="1.0";Check(vertexControl.SelectedIndex==-1,"Non-integer vertex index cannot select a different vertex",checks);
+            vertexIndex.Text="2";pieceControl.SelectedIndex=-1;
+            Check(vertexControl.SelectedIndex==-1 && vertexIndex.Text.Length==0,"Changing the target piece clears its prior vertex index",checks);
+            var largeDisplay=imported.Project.Clone();largeDisplay.Pieces[0].Points=Enumerable.Range(0,10_000).Select(i=>new Point2(i,i%2)).ToList();
+            var largeReview=new DxfPointVertexReviewWindow(studio,imported,largeDisplay);
+            try
+            {
+                Render(largeReview,Path.Combine(work,"point-review-large.png"),560,480);
+                var largeRoot=(FrameworkElement)largeReview.Content;
+                var largePiece=Descendants<ComboBox>(largeRoot).Single(c=>AutomationProperties.GetName(c)=="Hedef kapalı parça");
+                var largeVertices=Descendants<ComboBox>(largeRoot).Single(c=>AutomationProperties.GetName(c)=="Hedef köşe indeksi ve konumu · mm");
+                var largeIndex=Descendants<TextBox>(largeRoot).Single(t=>AutomationProperties.GetName(t)=="Hedef köşe indeksine git");
+                largePiece.SelectedIndex=0;largeIndex.Text="9999";
+                Check(largeVertices.Items.Count==10_000 && largeVertices.SelectedIndex==9999 &&
+                    AutomationProperties.GetName(Descendants<DxfPiecePreview>(largeRoot).Single()).Contains("Köşe 9999"),
+                    "Large contour index search reaches the last vertex without changing the source",checks);
+            }
+            finally { largeReview.Close(); }
             reviewWindow.Close();studio.ConfirmDxfPointsForVerification=_=>null;Run();
             Check(DocumentSession.ContentEquals(before,studio.Document) && File.ReadAllBytes(path).SequenceEqual(source),"Cancelling POINT review preserves source and current document",checks);
             studio.ConfirmDxfPointsForVerification=i=>[Choice(i)];Run();
