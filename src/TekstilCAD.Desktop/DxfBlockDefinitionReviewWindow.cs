@@ -138,7 +138,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var addBlockCandidates=new Button { Content="Seçili bloktaki adayları ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         AutomationProperties.SetHelpText(addBlockCandidates,"Yalnız seçili bloktaki henüz seçilmemiş LINE ve POLYLINE adaylarını işaretsiz ekler; POINT eşlemesi yapmaz. 32 işaretsiz parça sınırı aşılırsa hiçbir parça eklenmez. Uygunluk kaynakta ayrıca doğrulanır.");
         var addBlockFitting=new Button { Content="Bloktan sığan adayları ekle",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
-        AutomationProperties.SetHelpText(addBlockFitting,"Seçili blokta henüz seçilmeyen adayları kaynak sırasıyla boş işaretsiz parça kapasitesi dolana kadar ekler. Kalan aday sayısı bildirilir; POINT eşlemesi yapılmaz ve üretim uygunluğu doğrulanmaz.");
+        AutomationProperties.SetHelpText(addBlockFitting,"Seçili blokta henüz seçilmeyen adayları içe aktarma sırasıyla boş işaretsiz parça kapasitesi dolana kadar ekler. Kalan aday sayısı bildirilir; POINT eşlemesi yapılmaz ve üretim uygunluğu doğrulanmaz.");
         var removePiece=new Button { Content="Listeden parçayı kaldır",Margin=new Thickness(4),Padding=new Thickness(8,5,8,5) };
         pieceActions.Children.Add(addPiece);pieceActions.Children.Add(addBlockCandidates);pieceActions.Children.Add(addBlockFitting);pieceActions.Children.Add(addAllCandidates);pieceActions.Children.Add(removePiece);body.Children.Add(pieceActions);
         var bulkSummary=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(4,0,4,4) };AutomationProperties.SetName(bulkSummary,"Toplu aday seçimi sonucu");body.Children.Add(bulkSummary);
@@ -179,7 +179,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             {
                 var fitting=newItems.Take(Math.Max(0,32-UnmarkedCount())).ToArray();
                 foreach(var item in fitting)Include(item.Block,item.Piece);
-                bulkSummary.Text=$"{fitting.Length} aday kaynak sırasıyla işaretsiz eklendi; {newItems.Length-fitting.Length} aday seçilmeden kaldı. Mevcut seçimler ve POINT eşlemeleri korundu. Bunlar doğrulanmış üretim parçaları değildir. {skippedNotice}";
+                bulkSummary.Text=$"{fitting.Length} aday içe aktarma sırasıyla işaretsiz eklendi; {newItems.Length-fitting.Length} aday seçilmeden kaldı. Mevcut seçimler ve POINT eşlemeleri korundu. Bunlar doğrulanmış üretim parçaları değildir. {skippedNotice}";
                 AutomationProperties.SetName(bulkSummary,bulkSummary.Text);SetStatus(bulkSummary.Text);return;
             }
             foreach(var item in newItems)Include(item.Block,item.Piece);
