@@ -25,6 +25,8 @@ public class MainWindow : Window
     private Guid projectEpoch = Guid.NewGuid();
     private long projectOpenGeneration;
     private bool projectOpenRunning;
+    private CancellationTokenSource? projectOpenCancellation;
+    internal Action<CancellationToken>? ProjectOpenTokenForVerification { get; set; }
     private Button? projectOpenCancel;
     internal Action? BeforeProjectReadForVerification { get; set; }
     internal Func<bool>? ConfirmOpenDrawingForVerification { get; set; }
@@ -1693,6 +1695,7 @@ public class MainWindow : Window
     internal void CancelProjectOpen()
     {
         projectOpenGeneration++;
+        projectOpenCancellation?.Cancel();
         if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Collapsed;
         if(projectOpenRunning && !windowClosed)SetStatus("Proje açma iptal edildi; okuma bitene kadar yeni açma işlemi bekleyecek ve sonuç kullanılmayacak.");
     }
@@ -1704,12 +1707,14 @@ public class MainWindow : Window
     {
         if(projectOpenRunning || windowClosed || recoveryClosing)return;
         projectOpenRunning=true;
+        using var cancellation=new CancellationTokenSource();
+        projectOpenCancellation=cancellation;
         var generation=++projectOpenGeneration;
         if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Visible;
         SetStatus("Proje arka planda okunuyor…");
         try
         {
-            var loaded=await Task.Run(()=> { BeforeProjectReadForVerification?.Invoke();return ProjectStorage.LoadWithVersion(path); });
+            var loaded=await Task.Run(()=> { ProjectOpenTokenForVerification?.Invoke(cancellation.Token);BeforeProjectReadForVerification?.Invoke();return ProjectStorage.LoadWithVersion(path,cancellation.Token); });
             if(generation!=projectOpenGeneration || windowClosed || recoveryClosing)return;
             if(BlockForDxfImport() || BlockForExport() || BlockForActiveDrag() || BlockForLargeVertexValidation())return;
             if(recoveryRestoreIncomplete || dxfReviewActive)
@@ -1753,6 +1758,7 @@ public class MainWindow : Window
             { SetStatus("Kaynak dosya okunduktan sonra değişti veya kaldırıldı · Proje açılmadı. Dosyayı yeniden seçin.");return; }
             ApplyOpenedProject(loaded);
         }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested) { }
         catch(Exception ex) when(ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             if(generation==projectOpenGeneration && !windowClosed && !recoveryClosing)
@@ -1764,6 +1770,7 @@ public class MainWindow : Window
         }
         finally
         {
+            if(ReferenceEquals(projectOpenCancellation,cancellation))projectOpenCancellation=null;
             projectOpenRunning=false;
             if(projectOpenCancel is not null)projectOpenCancel.Visibility=Visibility.Collapsed;
         }

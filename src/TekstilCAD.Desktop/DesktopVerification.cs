@@ -2173,10 +2173,15 @@ internal static class DesktopVerification
             Check(studio.Document.Name=="Changed during approval","Saving in discard prompt does not apply stale open approval",checks);
 
             reached.Reset();release.Reset();
+            CancellationToken observedOpenToken=default;
+            studio.ProjectOpenTokenForVerification=token=>observedOpenToken=token;
             studio.BeforeProjectReadForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
             pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>reached.IsSet);
-            studio.CancelProjectOpen();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            studio.CancelProjectOpen();
+            Check(observedOpenToken.CanBeCanceled && observedOpenToken.IsCancellationRequested,"Cancel signals the worker's project load token",checks);
+            release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             Check(studio.Document.Name=="Changed during approval","Cancelled read cannot replace current work",checks);
+            studio.ProjectOpenTokenForVerification=null;
 
             reached.Reset();release.Reset();
             pending=studio.OpenProjectFileAsync(path);PumpUntil(()=>reached.IsSet);
@@ -2205,7 +2210,7 @@ internal static class DesktopVerification
         finally
         {
             release.Set();if(pending is not null)PumpUntil(()=>pending.IsCompleted);
-            studio.BeforeProjectReadForVerification=null;studio.ConfirmOpenDiscardForVerification=null;
+            studio.BeforeProjectReadForVerification=null;studio.ProjectOpenTokenForVerification=null;studio.ConfirmOpenDiscardForVerification=null;
             studio.ConfirmOpenDrawingForVerification=null;studio.ProjectOpenErrorForVerification=null;
             SynchronizationContext.SetSynchronizationContext(previousContext);
         }
