@@ -2,6 +2,37 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    #if DEBUG
+    func testDesignBriefPreservesUserTextAndReferenceBytes() throws {
+        let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
+        let bytes = try ExperimentalDesignBrief.make(prompt: "Mavi ceket\nCepli", measurements: "Göğüs 92 cm", image: image, imageName: "ornek.png")
+        let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: bytes)
+        XCTAssertEqual(brief.format, "tekstilcad.design-request")
+        XCTAssertEqual(brief.version, 1)
+        XCTAssertEqual(brief.prompt, "Mavi ceket\nCepli")
+        XCTAssertEqual(brief.measurements, "Göğüs 92 cm")
+        let reference = try XCTUnwrap(brief.reference)
+        XCTAssertEqual(reference.name, "ornek.png")
+        XCTAssertEqual(reference.mediaType, "image/png")
+        XCTAssertEqual(reference.dataBase64, image.base64EncodedString())
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: image, imageName: "..\\ornek.png"))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: image, imageName: String(repeating: "x", count: 256)))
+        let imageOnly = try ExperimentalDesignBrief.make(prompt: "", measurements: "", image: image, imageName: "ornek.png")
+        XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: imageOnly).prompt, "")
+    }
+
+    func testDesignBriefRejectsMissingOrOversizedInputAndAllowsNoImage() throws {
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "  ", measurements: "", image: nil, imageName: nil))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: String(repeating: "x", count: 16_385), measurements: "", image: nil, imageName: nil))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: Data([0, 1]), imageName: "x.png"))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: Data(count: 8 * 1024 * 1024 + 1), imageName: "x.png"))
+        let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self,
+            from: ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: nil, imageName: nil))
+        XCTAssertNil(brief.reference)
+        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: nil, imageName: nil)) as? [String: Any])
+        XCTAssertTrue(raw["reference"] is NSNull)
+    }
+    #endif
     func testInstalledModelKeepsLoadRequestAndRejectsStaleCompletion() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]))

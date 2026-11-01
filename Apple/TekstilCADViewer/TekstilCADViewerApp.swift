@@ -58,6 +58,9 @@ struct PointEditSnapshot: Identifiable {
 }
 #endif
 private struct ContentView: View {
+    #if DEBUG
+    @State private var showingDesignBrief = false
+    #endif
     @State private var showingImporter = false
     @State private var showingPendingRawNotice = false
     @State private var showingPieces = false
@@ -127,6 +130,11 @@ private struct ContentView: View {
                 }
                     .accessibilityHint("Önizlemek için bir proje dosyası seçin").disabled(isSaving)
                 Button("Modellerim") { showingLibrary = true }.disabled(isSaving)
+                #if DEBUG
+                Button("Kalıp isteği") { showingDesignBrief = true }
+                    .disabled(isSaving || loadedModel.load.isLoading)
+                    .sheet(isPresented: $showingDesignBrief) { ExperimentalDesignBriefView() }
+                #endif
                 Spacer()
                 if let project { Text(ModelStore.safeLabel(project.name)).font(.headline).lineLimit(1) }
             }
@@ -2350,6 +2358,72 @@ struct Drawing {
     }
 }
 
+#if DEBUG
+private struct ExperimentalDesignBriefView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var description = ""
+    @State private var measurements = ""
+    @State private var image: Data?
+    @State private var imageName: String?
+    @State private var selectingImage = false
+    @State private var exporting = false
+    @State private var exportDocument: ProjectExportDocument?
+    @State private var message = ""
+
+    private func prepareExport() {
+        do {
+            let data = try ExperimentalDesignBrief.make(prompt: description, measurements: measurements, image: image, imageName: imageName)
+            exportDocument = ProjectExportDocument(data: data)
+            exporting = true
+        } catch {
+            message = "Tarif veya görsel gereklidir; metinlerin her biri en fazla 16.384 UTF-16 birimi, görsel en fazla 8 MiB olmalıdır."
+        }
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Text("Kadın elbise tarifinizi, açıkça bildiğiniz ölçüleri ve isteğe bağlı örneği masaüstünde incelenmek üzere hazırlayın. Bu dosya kalıp üretmez ve verileri otomatik göndermez. Üretim için ayrıca onaylı kalıp gerekir.")
+                Section("Elbise tarifi") { TextEditor(text: $description).frame(minHeight: 100) }
+                Section("Ölçüler ve birimler") {
+                    TextEditor(text: $measurements).frame(minHeight: 80)
+                    Text("Örneğin: göğüs 92 cm, bel 72 cm, basen 98 cm, elbise boyu 110 cm. Yalnız bildiğiniz ölçüleri girin; eksikler tamamlanmaz.").font(.caption)
+                }
+                Section("Örnek görsel · isteğe bağlı") {
+                    Button("Dosyalardan görsel seç") { selectingImage = true }
+                    if let imageName {
+                        Text("Seçilen: \(ModelStore.safeLabel(imageName))")
+                        Button("Görseli kaldır") { image = nil; self.imageName = nil }
+                    }
+                    Text("Seçilen görsel özgün baytlarıyla, içerebileceği konum ve diğer bilgiler dahil dosyaya eklenir. PNG veya JPEG, en fazla 8 MiB.").font(.caption)
+                }
+                Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
+                Button("İstek dosyasını kaydet…") { prepareExport() }
+                if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
+            }
+            .navigationTitle("Kalıp isteği · DEBUG")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .fileImporter(isPresented: $selectingImage, allowedContentTypes: [.image]) { result in
+                do {
+                    let url = try result.get()
+                    let data = try ExperimentalDesignBrief.readImage(url)
+                    // Validate before replacing a previously selected image.
+                    _ = try ExperimentalDesignBrief.make(prompt: "kontrol", measurements: "", image: data, imageName: url.lastPathComponent)
+                    image = data; imageName = url.lastPathComponent; message = "Görsel eklendi."
+                } catch {
+                    if !isFilePickerCancellation(error) { message = "Görsel okunamadı veya PNG/JPEG değil veya 8 MiB sınırını aşıyor; önceki seçim korundu." }
+                }
+            }
+            .fileExporter(isPresented: $exporting, document: exportDocument, contentType: .json,
+                          defaultFilename: "kalip-istegi.tcad-request.json") { result in
+                switch result {
+                case .success: message = "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
+                case .failure(let error): if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
+                }
+            }
+        }
+    }
+}
+#endif
 #if DEBUG
 private struct ExperimentalPointEditor: View {
     let data: Data
