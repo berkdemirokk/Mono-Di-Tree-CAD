@@ -9246,6 +9246,22 @@ internal static class DesktopVerification
             var result=(TextBlock)typeof(SelectedNotchComparisonWindow).GetField("result",PrivateInstance)!.GetValue(dialog)!;
             var compare=typeof(SelectedNotchComparisonWindow).GetMethod("Compare",PrivateInstance)!;
             target.SelectedIndex=1;
+            new System.Windows.Interop.WindowInteropHelper(dialog).EnsureHandle();
+            var choose=typeof(SelectedNotchComparisonWindow).GetMethod("ChoosePoint",PrivateInstance)!;
+            dialog.PointPickerOpenedForVerification=picker=> { picker.PointSelector.SelectedIndex=3;picker.UseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); };
+            choose.Invoke(dialog,[0]);
+            dialog.PointPickerOpenedForVerification=picker=> { picker.PointSelector.SelectedIndex=1;picker.UseButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); };
+            choose.Invoke(dialog,[4]);
+            Check(indices[0].Text=="3" && indices[4].Text=="1" && DocumentSession.ContentEquals(before,studio.Document),
+                "Notch comparison selects source and target contour points without changing the project",checks);
+            dialog.PointPickerOpenedForVerification=picker=>picker.Close();
+            choose.Invoke(dialog,[4]);
+            Check(indices[4].Text=="1","Cancelling notch point selection preserves the input",checks);
+            dialog.PointPickerOpenedForVerification=picker=> { target.SelectedIndex=0;picker.CheckCurrent();picker.Close(); };
+            choose.Invoke(dialog,[4]);
+            Check(indices[4].Text=="1","Changing the comparison target during point selection preserves the input",checks);
+            target.SelectedIndex=1;
+            dialog.PointPickerOpenedForVerification=null;
             string[] values=["3","4","5","0","1","2"];
             for(int i=0;i<6;i++)indices[i].Text=values[i];
             width.Text="0";depth.Text="0.001";compare.Invoke(dialog,null);
