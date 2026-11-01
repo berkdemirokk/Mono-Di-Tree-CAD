@@ -549,6 +549,7 @@ internal static class DesktopVerification
             VerifyBasicNestingAsync(studio,reportPath,checks);
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
+            VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
@@ -8139,6 +8140,52 @@ internal static class DesktopVerification
             Check(prompts==2,"Saving already upgraded file does not repeat compatibility prompt",checks);
         }
         finally { studio.ChooseCompatibilityForVerification=null;tools.Close(); }
+    }
+
+    private static void VerifyMarkedVertexCommandAvailability(MainWindow studio,List<string> checks)
+    {
+        var piece=new PatternPiece { Points=[new(0,0),new(20,0),new(20,20),new(0,20),new(0,0)],
+            Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var root=(FrameworkElement)tools.Content;
+            root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            Descendants<TabControl>(root).Single().SelectedIndex=1;
+            root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            var index=(TextBox)typeof(TextileToolsWindow).GetField("vertexIndexInput",PrivateInstance)!.GetValue(tools)!;
+            Button Find(string text)=>Descendants<Button>(root).Single(b=>Equals(b.Content,text));
+            var add=Find("Seçili noktaya işaret ekle");var remove=Find("Seçili noktanın işaretini kaldır");
+            var move=Find("Seçilen indeksteki noktayı taşı");var delete=Find("Seçilen indeksteki noktayı sil");
+            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled,
+                "Marked vertex disables conflicting operations and enables removal",checks);
+            index.Text="4";
+            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled,
+                "Repeated closing index uses the first vertex marker for command availability",checks);
+            index.Text="1";
+            Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled,
+                "Unmarked vertex permits mark addition and valid edits",checks);
+            add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!add.IsEnabled && remove.IsEnabled && !move.IsEnabled && !delete.IsEnabled && studio.Selected!.Notches!.Count==2,
+                "Adding a marker immediately updates the available operations",checks);
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(add.IsEnabled && !remove.IsEnabled && move.IsEnabled && delete.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),
+                "Removing the marker restores operations and leaves the other marker intact",checks);
+        }
+        finally { tools.Close(); }
+
+        var triangle=new PatternPiece { Points=[new(0,0),new(20,0),new(0,20),new(0,0)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[triangle] });studio.Select(triangle.Id);tools=new TextileToolsWindow(studio);
+        try
+        {
+            var root=(FrameworkElement)tools.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            Descendants<TabControl>(root).Single().SelectedIndex=1;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            Check(!Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçilen indeksteki noktayı sil")).IsEnabled &&
+                Descendants<TextBlock>(root).Any(t=>t.Text.Contains("daha az nokta bulunamaz")),
+                "Repeated closing triangle cannot offer deletion below three logical vertices",checks);
+        }
+        finally { tools.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
     private static void VerifyVertexNotches(MainWindow studio,string work,List<string> checks)

@@ -819,6 +819,14 @@ public sealed class TextileToolsWindow : Window
         },()=>HasPiece());
         vertexIndexInput=index;vertexXInput=px;vertexYInput=py;
         bool ValidIndex()=>source.SelectedItem is PatternPiece p&&int.TryParse(index.Text,out var value)&&value>=0&&value<p.Points.Count;
+        int LogicalCount(PatternPiece p)=>p.Points.Count-(p.Closed && p.Points.Count>1 && p.Points[0]==p.Points[^1] ? 1 : 0);
+        bool SelectedIsMarked()
+        {
+            if(!ValidIndex() || source.SelectedItem is not PatternPiece p)return false;
+            var selected=int.Parse(index.Text,CultureInfo.InvariantCulture);
+            if(p.Closed && selected==p.Points.Count-1 && LogicalCount(p)<p.Points.Count)selected=0;
+            return p.Notches?.Any(mark=>mark.VertexIndex==selected)==true;
+        }
         Note(panel,"Mevcut koordinatları yüklemek X/Y girişlerindeki değerleri değiştirir; parçayı değiştirmez.");
         Button(panel,"Seçili noktanın koordinatlarını yükle",()=>
         {
@@ -845,9 +853,11 @@ public sealed class TextileToolsWindow : Window
                 : piece.Points.Count==0 ? "Seçili parçada düzenlenecek nokta yok."
                 : !int.TryParse(index.Text,out var value) || value<0 || value>=piece.Points.Count
                     ? $"0 ile {piece.Points.Count-1} arasında mevcut bir nokta indeksi girin."
+                : SelectedIsMarked()
+                    ? "Bu köşe işaretli; taşımak veya silmek için önce bu köşenin işaretini kaldırın. Kenara nokta ekleme işareti korur."
                 : !IsNumber(px.Text,out _) || !IsNumber(py.Text,out _)
                     ? "Nokta eklemek veya taşımak için X ve Y koordinatlarına geçerli sayılar girin; silme bu alanları kullanmaz. Ondalık için virgül veya nokta kullanın."
-                : piece.Points.Count <= (piece.Closed?3:2)
+                : LogicalCount(piece) <= (piece.Closed?3:2)
                     ? "Bu parçada daha az nokta bulunamaz; nokta ekleyebilirsiniz, ancak silemezsiniz." : "";
             if(pointHint.Text==message)return;
             pointHint.Text=message;AutomationProperties.SetName(pointHint,message);
@@ -858,8 +868,8 @@ public sealed class TextileToolsWindow : Window
         index.TextChanged+=(_,_)=>UpdatePointHint();px.TextChanged+=(_,_)=>UpdatePointHint();py.TextChanged+=(_,_)=>UpdatePointHint();
         source.SelectionChanged+=(_,_)=>UpdatePointHint();UpdatePointHint();
         Note(panel,"İşaret yalnız seçili köşeyi belirtir; kesim derinliği, yönü veya makine çıktısı değildir. İşaretler proje sürümü 6 gerektirir. İşaretli parçada işaretsiz köşeler taşınabilir veya silinebilir, kenarlara nokta eklenebilir ve kontur yönü ters çevrilebilir; işaretler korunur. İşaretli köşeyi taşımak veya silmek için önce o köşenin işaretini kaldırın. İşaretli parçada V çentik açma henüz desteklenmez.");
-        Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex());
-        Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex());
+        Button(panel,"Seçili noktaya işaret ekle",()=>SetVertexNotch(index.Text,true),()=>ValidIndex()&&!SelectedIsMarked());
+        Button(panel,"Seçili noktanın işaretini kaldır",()=>SetVertexNotch(index.Text,false),()=>ValidIndex()&&SelectedIsMarked());
         Button(panel,"Nokta ekle",()=>VertexMoveTaskForVerification=InsertVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
         Note(panel,"Seçili noktadan sonraki kenarın tam ortasına nokta eklenebilir. Kapalı konturun son kenarı ilk noktaya uzanır; açık konturun son noktasından sonra kenar yoktur. Serileme kuralı varsa yeni nokta için yeniden gözden geçirin.");
         Button(panel,"Sonraki kenarın ortasına nokta ekle",()=>VertexMoveTaskForVerification=InsertEdgeMidpointAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&(p.Closed || int.Parse(index.Text,CultureInfo.InvariantCulture)<p.Points.Count-1));
@@ -882,8 +892,8 @@ public sealed class TextileToolsWindow : Window
         Note(panel,"Kapalı konturun yönünü ters çevirin; ilk nokta ve şekil korunur. Nokta indeksleri değişir. Eşleşen kayıtlı serileme artışları ilgili noktalarla birlikte taşınır; uygulanmamış taslaklar korunur.");
         Button(panel,"Kapalı kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseClosedContourAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
-        Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
-        Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&source.SelectedItem is PatternPiece p&&p.Points.Count>(p.Closed?3:2));return Scroll(panel);
+        Button(panel,"Seçilen indeksteki noktayı taşı",()=>VertexMoveTaskForVerification=MoveVertexAsync(index.Text,px.Text,py.Text),()=>ValidIndex()&&!SelectedIsMarked()&&IsNumber(px.Text,out _)&&IsNumber(py.Text,out _));
+        Button(panel,"Seçilen indeksteki noktayı sil",()=>VertexMoveTaskForVerification=DeleteVertexAsync(index.Text),()=>ValidIndex()&&!SelectedIsMarked()&&source.SelectedItem is PatternPiece p&&LogicalCount(p)>(p.Closed?3:2));return Scroll(panel);
     }
     private enum VertexEdit { Move, Insert, Delete, Midpoint, Reverse, ReverseClosed, Notch, Distance, Percentage }
     internal void SetVertexNotch(string indexText,bool add)
