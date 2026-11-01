@@ -77,6 +77,7 @@ final class ViewerUITests: XCTestCase {
         app.buttons["Modellerim"].tap()
         let raw = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Ham kayıt:")).firstMatch
         XCTAssertTrue(raw.waitForExistence(timeout: 10))
+        XCTAssertTrue((raw.value as? String ?? "").contains("Önizlenemiyor · Ham kopya kurtarma denenebilir"))
     }
 
     func testUnderflowingVersionSixNotchCoordinatesAreNotPreviewed() {

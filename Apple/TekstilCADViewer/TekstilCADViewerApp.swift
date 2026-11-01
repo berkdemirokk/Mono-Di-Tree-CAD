@@ -827,6 +827,10 @@ enum ModelStore {
         // The complete directory entry name distinguishes records in this
         // library; actions continue to use the full URL, never a display ID.
         var displayIdentity: String { url.lastPathComponent }
+        var selectionStatus: String? {
+            if canOpen { return nil }
+            return requiresRecovery ? "Önizlenemiyor · Ham kopya kurtarma denenebilir" : "Açılamıyor · Kayıt kontrol edilmeli"
+        }
         var readableIdentity: String {
             let stem = url.deletingPathExtension().lastPathComponent
             let candidate = stem.range(of: " - ", options: .backwards).map { String(stem[$0.upperBound...]) } ?? stem
@@ -1276,6 +1280,9 @@ private struct ModelLibrary: View {
                     } label: {
                         VStack(alignment: .leading) {
                             Text(model.name)
+                            if let status = model.selectionStatus {
+                                Text(status).font(.caption).foregroundStyle(.secondary)
+                            }
                             Text("Kayıt: \(model.readableIdentity)")
                                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                             if let date = model.date {
@@ -1287,7 +1294,7 @@ private struct ModelLibrary: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(model.name)
-                    .accessibilityValue("Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .accessibilityValue((model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(model.displayIdentity)" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
