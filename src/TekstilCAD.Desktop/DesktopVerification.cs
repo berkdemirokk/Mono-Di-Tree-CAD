@@ -33,18 +33,33 @@ internal static class DesktopVerification
     }
     private static bool PreviewEndDirection(FrameworkElement preview,Color color,bool downward)
     {
+        // A preview in an inactive/hidden TabControl can have a valid selected
+        // model but no WPF drawing commands: invisible visuals need not render.
+        // Recreate that exact selected model in a detached instance, then run
+        // the production OnRender into a DrawingVisual without showing a window.
+        if(preview is DxfPiecePreview dxf)
+        {
+            var points=(Point2[])typeof(DxfPiecePreview).GetField("points",PrivateInstance)!.GetValue(dxf)!;
+            var closed=(bool)typeof(DxfPiecePreview).GetField("closed",PrivateInstance)!.GetValue(dxf)!;
+            var detached=new DxfPiecePreview();
+            detached.ShowPiece(new PatternPiece { Points=[..points],Closed=closed });
+            preview=detached;
+        }
         preview.Measure(new Size(300,200));preview.Arrange(new Rect(0,0,300,200));preview.UpdateLayout();
-        // Tab selection and InvalidateVisual schedule WPF drawing work on the
-        // dispatcher; layout alone does not guarantee OnRender has run.
-        preview.Dispatcher.Invoke(()=> { },DispatcherPriority.ContextIdle);preview.UpdateLayout();
-        var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(preview);
+        if(preview.ActualWidth<24 || preview.ActualHeight<24)throw new InvalidOperationException("Preview was not arranged for direction verification.");
+        var visual=new DrawingVisual();
+        using(var context=visual.RenderOpen())
+            preview.GetType().GetMethod("OnRender",PrivateInstance)!.Invoke(preview,[context]);
+        var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(visual);
         static IEnumerable<GeometryDrawing> Drawings(Drawing? drawing)
         {
             if(drawing is GeometryDrawing geometry)yield return geometry;
             else if(drawing is DrawingGroup group)
                 foreach(var child in group.Children)foreach(var item in Drawings(child))yield return item;
         }
-        var stroke=Drawings(VisualTreeHelper.GetDrawing(preview)).Single(d=>d.Pen?.Brush is SolidColorBrush b && b.Color==color);
+        var strokes=Drawings(VisualTreeHelper.GetDrawing(visual)).Where(d=>d.Pen?.Brush is SolidColorBrush b && b.Color==color).ToArray();
+        if(strokes.Length!=1)throw new InvalidOperationException($"Expected one {color} contour from {preview.GetType().Name}, found {strokes.Length}.");
+        var stroke=strokes[0];
         var figure=stroke.Geometry.GetFlattenedPathGeometry().Figures.Single();var end=figure.StartPoint;
         foreach(var segment in figure.Segments)
         {
