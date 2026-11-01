@@ -13,8 +13,8 @@ namespace TekstilCAD.Desktop;
 internal sealed class BulkDuplicateCleanupWindow : Window
 {
     private readonly MainWindow workspace;
-    private readonly Func<Guid,bool> hasDraft;
-    private readonly Action<IReadOnlyCollection<Guid>>? resetCleanDrafts;
+    private readonly Func<PatternPiece,GradingRuleSet?,bool> hasDraft;
+    private readonly Action<IReadOnlyCollection<Guid>,ProjectDocument>? resetCleanDrafts;
     private readonly ListBox report=new() { MinHeight=180,MaxHeight=330,HorizontalContentAlignment=HorizontalAlignment.Stretch };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private readonly Button preview=new() { Content="Önizlemeyi hesapla",Margin=new Thickness(4),Padding=new Thickness(10,6,10,6) };
@@ -23,6 +23,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
     private CancellationTokenSource? cancellation;private bool closed;
     private ProjectDocument? original,snapshot;private Guid? selected;
     private Dictionary<Guid,bool>? draftStates;private Dictionary<Guid,PatternPiece>? ready;
+    private Dictionary<Guid,GradingRuleSet>? readyRules,sourceRules;
     internal Task? TaskForVerification { get; private set; }
     internal Action? BeforeCalculationForVerification { get; set; }
     internal Task PreviewForVerification()=>PrepareAsync();
@@ -32,7 +33,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
     internal int ReadyCountForVerification=>ready?.Count ?? 0;
     internal IReadOnlyList<string> ReportForVerification=>report.Items.Cast<string>().ToArray();
 
-    internal BulkDuplicateCleanupWindow(MainWindow workspace,Window owner,Func<Guid,bool> hasDraft,Action<IReadOnlyCollection<Guid>>? resetCleanDrafts=null)
+    internal BulkDuplicateCleanupWindow(MainWindow workspace,Window owner,Func<PatternPiece,GradingRuleSet?,bool> hasDraft,Action<IReadOnlyCollection<Guid>,ProjectDocument>? resetCleanDrafts=null)
     {
         this.workspace=workspace;this.hasDraft=hasDraft;this.resetCleanDrafts=resetCleanDrafts;Owner=owner;Title="Bitişik tekrarları topluca incele";Width=720;Height=620;MinWidth=500;MinHeight=400;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
@@ -41,7 +42,7 @@ internal sealed class BulkDuplicateCleanupWindow : Window
         var close=new Button { Content="Kapat",IsCancel=true,Margin=new Thickness(4),Padding=new Thickness(10,6,10,6) };
         actions.Children.Add(preview);actions.Children.Add(apply);actions.Children.Add(cancel);actions.Children.Add(close);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);var body=new StackPanel();scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="Tüm proje parçaları incelenir. Yalnız bitçe aynı bitişik nokta kopyaları kaldırılır. İşaretler yalnız indeksleri ve bitleri güvenle korunabiliyorsa eşlenir; işaretler fiziksel çentik değildir. Kayıtlı serileme kuralı veya uygulanmamış taslak içeren parçalar atlanır. Diğer geometri hataları kalabilir; sonuç üretim veya DXF uygunluğu onayı değildir. Kaynak dosyalar ve geçmiş değiştirilmez. Önce listeyi inceleyin, sonra açıkça uygulayın.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Tüm proje parçaları incelenir. Yalnız bitçe aynı bitişik nokta kopyaları kaldırılır. İşaretler yalnız indeksleri ve bitleri güvenle korunabiliyorsa eşlenir; işaretler fiziksel çentik değildir. Kayıtlı serileme kuralları yalnız kaynak ve birleşen artışlar bitçe tam eşleşirse korunur; uygulanmamış taslaklar atlanır. Diğer geometri hataları kalabilir; sonuç üretim veya DXF uygunluğu onayı değildir. Kaynak dosyalar ve geçmiş değiştirilmez. Önce listeyi inceleyin, sonra açıkça uygulayın.",TextWrapping=TextWrapping.Wrap });
         AutomationProperties.SetName(report,"Toplu nokta temizleme önizlemesi ve atlanan parçalar");
         report.ItemsPanel=new ItemsPanelTemplate(new FrameworkElementFactory(typeof(VirtualizingStackPanel)));VirtualizingPanel.SetIsVirtualizing(report,true);ScrollViewer.SetCanContentScroll(report,true);body.Children.Add(report);
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);AutomationProperties.SetName(status,"Toplu temizleme durumu");body.Children.Add(status);
@@ -58,71 +59,75 @@ internal sealed class BulkDuplicateCleanupWindow : Window
     private async Task PrepareAsync()
     {
         if(closed || cancellation is not null)return;
-        ready=null;apply.IsEnabled=false;report.ItemsSource=null;
+        ready=null;readyRules=null;sourceRules=null;apply.IsEnabled=false;report.ItemsSource=null;
         if(workspace.HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
         var document=workspace.Document;var copy=document.Clone();var selection=workspace.SelectedId;
-        // Pieces with saved rules are unconditionally skipped. Avoid
-        // looking up their drafts (which may scan a large grading-rule list).
-        // Document equality still invalidates the preview if either guard changes.
-        var protectedRuleIds=copy.GradingRules.Select(r=>r.SourcePieceId).ToHashSet();
-        var drafts=copy.Pieces.Where(p=>!protectedRuleIds.Contains(p.Id)).ToDictionary(p=>p.Id,p=>hasDraft(p.Id));
+        var rules=copy.GradingRules.ToDictionary(r=>r.SourcePieceId);
+        var drafts=copy.Pieces.ToDictionary(p=>p.Id,p=>hasDraft(p,rules.GetValueOrDefault(p.Id)));
         using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);SetStatus("Önizleme hazırlanıyor; proje değiştirilmedi.");
         try
         {
             var before=BeforeCalculationForVerification;
             var calculated=await Task.Run(()=>
             {
-                before?.Invoke();var token=cts.Token;token.ThrowIfCancellationRequested();ProjectStorage.Validate(copy);
-                var changes=new Dictionary<Guid,PatternPiece>();var details=new List<string>();var rules=protectedRuleIds;
+                before?.Invoke();var token=cts.Token;token.ThrowIfCancellationRequested();ProjectStorage.Validate(copy,token);
+                var changes=new Dictionary<Guid,PatternPiece>();var mappedRules=new Dictionary<Guid,GradingRuleSet>();var details=new List<string>();
                 foreach(var piece in copy.Pieces)
                 {
                     token.ThrowIfCancellationRequested();var label=$"{SafeName(piece.Name)} · {piece.Id:D}";
-                    if(rules.Contains(piece.Id) || drafts.GetValueOrDefault(piece.Id))
-                    {
-                        var reasons=new List<string>();
-                        if(rules.Contains(piece.Id))reasons.Add("serileme kuralı var");if(drafts.GetValueOrDefault(piece.Id))reasons.Add("uygulanmamış serileme taslağı var");
-                        if(rules.Contains(piece.Id))reasons.Add("taslak durumu ayrıca incelenmedi");
-                        details.Add(label+" · atlandı: "+string.Join(", ",reasons));continue;
-                    }
+                    if(drafts.GetValueOrDefault(piece.Id))
+                    { details.Add(label+" · atlandı: uygulanmamış serileme taslağı var");continue; }
                     var adjacent=false;for(int i=1;i<piece.Points.Count;i++) { if((i&1023)==0)token.ThrowIfCancellationRequested();if(piece.Points[i]==piece.Points[i-1]) { adjacent=true;break; } }
                     if(!adjacent) { details.Add(label+" · bitişik tekrar yok");continue; }
                     try
                     {
-                        var edited=PatternTools.RemoveConsecutiveDuplicateVertices(piece,token);changes.Add(piece.Id,edited);
+                        var edited=PatternTools.RemoveConsecutiveDuplicateVertices(piece,token);
+                        GradingRuleSet? mapped=null;
+                        if(rules.TryGetValue(piece.Id,out var rule))
+                        {
+                            mapped=rule.WithDuplicateRemovalFor(piece,edited,token);
+                            if(mapped is null) { details.Add(label+" · atlandı: serileme kuralı kaynak veya birleşen artışlarla bitçe eşleşmiyor");continue; }
+                        }
+                        changes.Add(piece.Id,edited);if(mapped is not null)mappedRules.Add(piece.Id,mapped);
                         var markCount=piece.Notches?.Count ?? 0;
                         var markerSummary=markCount==0 ? "" : $" · {markCount} görsel işaret eşlenecek: "+
                             string.Join(", ",piece.Notches!.Zip(edited.Notches!).Take(8).Select(pair=>$"{pair.First.VertexIndex}→{pair.Second.VertexIndex}"))+
                             (markCount>8 ? $" ve {markCount-8} diğer işaret" : "");
-                        details.Add(label+$" · {piece.Points.Count-edited.Points.Count} kopya temizlenecek"+markerSummary);
+                        details.Add(label+$" · {piece.Points.Count-edited.Points.Count} kopya temizlenecek"+markerSummary+(mapped is null ? "" : " · serileme kuralı bitçe eşlenecek"));
                     }
                     catch(ArgumentException ex) { details.Add(label+" · atlandı: "+ex.Message); }
                 }
                 var candidate=copy.Clone();for(int i=0;i<candidate.Pieces.Count;i++)if(changes.TryGetValue(candidate.Pieces[i].Id,out var item))candidate.Pieces[i]=item.Clone();
-                ProjectStorage.Validate(candidate);token.ThrowIfCancellationRequested();return (changes,details);
+                for(int i=0;i<candidate.GradingRules.Count;i++)if(mappedRules.TryGetValue(candidate.GradingRules[i].SourcePieceId,out var mapped))candidate.GradingRules[i]=mapped.Clone();
+                ProjectStorage.Validate(candidate,token);token.ThrowIfCancellationRequested();return (changes,mappedRules,details);
             },cts.Token);
             cts.Token.ThrowIfCancellationRequested();
-            if(!Current(document,copy,selection,drafts)) { SetStatus("Proje, seçim veya taslak değişti; önizleme geçersiz. Yeniden hesaplayın.");return; }
+            if(!Current(document,copy,selection,drafts,rules)) { SetStatus("Proje, seçim veya taslak değişti; önizleme geçersiz. Yeniden hesaplayın.");return; }
             report.ItemsSource=calculated.details;
-            original=document;snapshot=copy;selected=selection;draftStates=drafts;ready=calculated.changes;
+            original=document;snapshot=copy;selected=selection;draftStates=drafts;ready=calculated.changes;readyRules=calculated.mappedRules;sourceRules=rules;
             SetStatus($"{ready.Count} parça temizlenebilir; {copy.Pieces.Count-ready.Count} parça temizlenmeyecek. Listeyi inceleyip uygulamayı seçin. Diğer hatalar kalabilir.");
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested) { if(!closed)SetStatus("Önizleme iptal edildi; proje değiştirilmedi."); }
         catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException)) { if(!closed)SetStatus("Önizleme hazırlanamadı: "+ex.Message); }
         finally { if(ReferenceEquals(cancellation,cts))cancellation=null;if(!closed)Busy(false); }
     }
-    private bool Current(ProjectDocument document,ProjectDocument copy,Guid? selection,Dictionary<Guid,bool> drafts)=>
+    private bool Current(ProjectDocument document,ProjectDocument copy,Guid? selection,Dictionary<Guid,bool> drafts,Dictionary<Guid,GradingRuleSet> rules)=>
         !closed && !workspace.IsWindowClosed && !workspace.HasPendingCanvasOrPropertyWork && ReferenceEquals(workspace.Document,document) && workspace.SelectedId==selection &&
-        DocumentSession.ContentEquals(workspace.Document,copy) && drafts.All(p=>hasDraft(p.Key)==p.Value);
+        DocumentSession.ContentEquals(workspace.Document,copy) && copy.Pieces.All(piece=>drafts.TryGetValue(piece.Id,out var pending) && hasDraft(piece,rules.GetValueOrDefault(piece.Id))==pending);
     private void Apply()
     {
-        if(cancellation is not null || ready is not { Count:>0 } changes || original is null || snapshot is null || draftStates is null)return;
-        if(!Current(original,snapshot,selected,draftStates)) { ready=null;apply.IsEnabled=false;SetStatus("Proje, seçim veya taslak değişti; işlem uygulanmadı. Önizlemeyi yenileyin.");return; }
+        if(cancellation is not null || ready is not { Count:>0 } changes || original is null || snapshot is null || draftStates is null || readyRules is null || sourceRules is null)return;
+        if(!Current(original,snapshot,selected,draftStates,sourceRules)) { ready=null;apply.IsEnabled=false;SetStatus("Proje, seçim veya taslak değişti; işlem uygulanmadı. Önizlemeyi yenileyin.");return; }
         if(!workspace.CanRetainCurrentUndoSnapshot) { SetStatus("Proje geri alma sınırını aşıyor; işlem uygulanmadı.");return; }
+        var mappedRules=readyRules;var sourceSnapshot=snapshot;
         var committed=false;
         try
         {
             workspace.CommitObserved("Bitişik nokta tekrarları temizlendi",()=>
-            { for(var i=0;i<workspace.Document.Pieces.Count;i++)if(changes.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item; },()=> { committed=true;resetCleanDrafts?.Invoke(changes.Keys.ToArray()); });
+            {
+                for(var i=0;i<workspace.Document.Pieces.Count;i++)if(changes.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item;
+                for(var i=0;i<workspace.Document.GradingRules.Count;i++)if(mappedRules.TryGetValue(workspace.Document.GradingRules[i].SourcePieceId,out var mapped))workspace.Document.GradingRules[i]=mapped;
+            },()=> { committed=true;resetCleanDrafts?.Invoke(changes.Keys.ToArray(),sourceSnapshot); });
             ready=null;apply.IsEnabled=false;SetStatus($"{changes.Count} parça temizlendi; tek adımda geri alınabilir. Diğer hatalar kalabilir; kaynak ve pastal geçmişini kontrol edin.");
         }
         catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException))

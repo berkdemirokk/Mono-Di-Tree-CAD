@@ -9574,7 +9574,7 @@ internal static class DesktopVerification
         {
             studio.LoadDocument(project);studio.Select(marked.Id);var before=studio.Document.Clone();
             var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
-            var window=new BulkDuplicateCleanupWindow(studio,studio,_=>false);
+            var window=new BulkDuplicateCleanupWindow(studio,studio,(_,_)=>false);
             try
             {
                 var task=window.PreviewForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
@@ -9611,44 +9611,68 @@ internal static class DesktopVerification
             var draft=Piece("Taslaklı");var markedDraft=Piece("İşaretli taslak");markedDraft.Notches=[new NotchMark { VertexIndex=1,Position=markedDraft.Points[1] }];var invalidBits=Piece("Farklı sıfır");
             invalidBits.Points[2]=new Point2(10,BitConverter.Int64BitsToDouble(long.MinValue));
             var rule=new GradingRuleSet { SourcePieceId=graded.Id,SourceClosed=true,SourcePoints=graded.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),graded.Points.Count).ToList() };
+            var gradedConflict=Piece("Çelişkili kural");var conflictRule=new GradingRuleSet { SourcePieceId=gradedConflict.Id,SourceClosed=true,
+                SourcePoints=gradedConflict.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),gradedConflict.Points.Count).ToList() };conflictRule.Deltas[2]=new(1,0);
+            var gradedStale=Piece("Eski kural");var staleRule=new GradingRuleSet { SourcePieceId=gradedStale.Id,SourceClosed=true,
+                SourcePoints=gradedStale.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),gradedStale.Points.Count).ToList() };staleRule.SourcePoints[0]=new(-1,0);
+            var gradedSigned=Piece("İşaretli sıfır kuralı");var signedRule=new GradingRuleSet { SourcePieceId=gradedSigned.Id,SourceClosed=true,
+                SourcePoints=gradedSigned.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),gradedSigned.Points.Count).ToList() };
+            signedRule.SourcePoints[0]=new Point2(BitConverter.Int64BitsToDouble(long.MinValue),0);
+            var gradedDirty=Piece("Kurallı taslak");var dirtyRule=new GradingRuleSet { SourcePieceId=gradedDirty.Id,SourceClosed=true,
+                SourcePoints=gradedDirty.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),gradedDirty.Points.Count).ToList() };
             var closure=new PatternPiece { Name="Kapanış işareti",Points=[new(0,0),new(10,0),new(10,10),new(0,10),new(0,0),new(0,0)],
                 Notches=[new NotchMark { VertexIndex=4,Position=new(0,0) }],Grainline=new Grainline { Start=new(1,1),End=new(1,8) } };
             var collision=closure.Clone();collision.Id=Guid.NewGuid();collision.Name="Çakışan işaretler";
             collision.Notches!.Insert(0,new NotchMark { VertexIndex=0,Position=new(0,0) });
             var badMark=Piece("İşaret bit farkı");badMark.Notches=[new NotchMark { VertexIndex=1,Position=new(10,BitConverter.Int64BitsToDouble(long.MinValue)) }];
             var provenance=new DxfImportProvenance { SourceFileName="sample.dxf",SourceSha256=new string('A',64),SourceByteLength=10,MillimetersPerUnit=1,
-                PieceIds=[good.Id,good2.Id,marked.Id,graded.Id,draft.Id,invalidBits.Id,closure.Id,collision.Id,badMark.Id,markedDraft.Id],Warnings=["Kaynak uyarısı"] };
-            var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits,closure,collision,badMark,markedDraft],GradingRules=[rule],ImportProvenance=provenance };
+                PieceIds=[good.Id,good2.Id,marked.Id,graded.Id,draft.Id,invalidBits.Id,closure.Id,collision.Id,badMark.Id,markedDraft.Id,gradedConflict.Id,gradedStale.Id,gradedDirty.Id,gradedSigned.Id],Warnings=["Kaynak uyarısı"] };
+            var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits,closure,collision,badMark,markedDraft,gradedConflict,gradedStale,gradedDirty,gradedSigned],GradingRules=[rule,conflictRule,staleRule,dirtyRule,signedRule],ImportProvenance=provenance };
             studio.LoadDocument(document);studio.Select(good.Id);var before=studio.Document.Clone();
             var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
             var tools=new TextileToolsWindow(studio);var protectedLookups=0;
             var toolSource=(ComboBox)typeof(TextileToolsWindow).GetField("source",PrivateInstance)!.GetValue(tools)!;
             var toolGrades=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==graded.Id);
+            var snapshotDraftCheck=typeof(TextileToolsWindow).GetMethod("HasSnapshotGradeDraft",PrivateInstance)!;
+            Check(!(bool)snapshotDraftCheck.Invoke(tools,[graded,rule])!,"Unchanged saved-rule draft is clean for bulk remapping",checks);
+            toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==gradedDirty.Id);
+            toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="2";
+            Check((bool)snapshotDraftCheck.Invoke(tools,[gradedDirty,dirtyRule])!,"Edited saved-rule draft is protected from bulk remapping",checks);
             toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
             toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="2";
             toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==good.Id);
-            var window=new BulkDuplicateCleanupWindow(studio,studio,id=> { if(id==graded.Id)protectedLookups++;return id==draft.Id || id==markedDraft.Id; },tools.ResetCleanGradeDrafts);
+            var window=new BulkDuplicateCleanupWindow(studio,studio,(p,_)=> { if(p.Id==graded.Id)protectedLookups++;return p.Id==draft.Id || p.Id==markedDraft.Id || p.Id==gradedDirty.Id; },tools.ResetCleanGradeDrafts);
             try
             {
                 var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
-                Check(protectedLookups==0 && window.ReadyCountForVerification==4 && window.ReportForVerification.Any(s=>s.Contains("görsel işaret eşlenecek")) &&
+                Check(protectedLookups>0 && window.ReadyCountForVerification==5 && window.ReportForVerification.Any(s=>s.Contains("görsel işaret eşlenecek")) &&
                     window.ReportForVerification.Any(s=>s.Contains("4→0")) && window.ReportForVerification.Any(s=>s.Contains("tekil ve bitçe")) &&
-                    window.ReportForVerification.Any(s=>s.Contains("serileme kuralı var")) && window.ReportForVerification.Any(s=>s.Contains("serileme taslağı var")) &&
+                    window.ReportForVerification.Any(s=>s.Contains("serileme kuralı bitçe eşlenecek")) &&
+                    window.ReportForVerification.Count(s=>s.Contains("serileme kuralı kaynak veya birleşen artışlarla bitçe eşleşmiyor"))==3 && window.ReportForVerification.Any(s=>s.Contains("serileme taslağı var")) &&
                     window.ReportForVerification.Any(s=>s.Contains("koordinat bitleri farklı")) && DocumentSession.ContentEquals(before,studio.Document),
                     "Bulk duplicate preview reports eligible and each protected skip without editing the project",checks);
                 var detached=(Dictionary<Guid,PatternPiece>)typeof(BulkDuplicateCleanupWindow).GetField("ready",PrivateInstance)!.GetValue(window)!;
                 window.ApplyForVerification();var after=studio.Document.Clone();
                 detached[good.Id].Points[0]=new Point2(999,999);
-                Check(DocumentSession.ContentEquals(after,studio.Document) && protectedLookups==0,
+                Check(DocumentSession.ContentEquals(after,studio.Document) && protectedLookups>0,
                     "Committed project owns independent geometry and skips unnecessary protected draft lookups",checks);
                 typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[good.Id,true]);
                 Check(!(bool)typeof(TextileToolsWindow).GetField("rulesNeedReset",PrivateInstance)!.GetValue(tools)!,
                     "Successful cleanup refreshes a clean grading draft to the new contour",checks);
+                toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==graded.Id);
+                Check(!(bool)typeof(TextileToolsWindow).GetField("rulesNeedReset",PrivateInstance)!.GetValue(tools)! &&
+                    toolGrades.Items.Count==4,"Clean saved-rule draft reloads after bulk remapping",checks);
+                toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==gradedDirty.Id);
+                Check(toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="2",
+                    "Skipped ruled piece retains its dirty grading draft",checks);
                 toolSource.SelectedItem=toolSource.Items.Cast<PatternPiece>().Single(p=>p.Id==draft.Id);
                 Check(toolGrades.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="2",
                     "Bulk cleanup retains the skipped piece's unapplied grading draft",checks);
                 Check(after.Pieces.Single(p=>p.Id==good.Id).Points.Count==4 && after.Pieces.Single(p=>p.Id==good2.Id).Points.Count==4 &&
                     after.Pieces.Single(p=>p.Id==marked.Id).Points.Count==4 && after.Pieces.Single(p=>p.Id==marked.Id).Notches!.Single().VertexIndex==1 &&
+                    after.Pieces.Single(p=>p.Id==graded.Id).Points.Count==4 && after.GradingRules.Single(r=>r.SourcePieceId==graded.Id).Deltas.Count==4 &&
+                    after.Pieces.Single(p=>p.Id==gradedConflict.Id).Points.Count==5 && after.Pieces.Single(p=>p.Id==gradedStale.Id).Points.Count==5 && after.Pieces.Single(p=>p.Id==gradedSigned.Id).Points.Count==5 && after.Pieces.Single(p=>p.Id==gradedDirty.Id).Points.Count==5 &&
                     after.Pieces.Single(p=>p.Id==closure.Id).Notches!.Single().VertexIndex==0 && after.Pieces.Single(p=>p.Id==closure.Id).Grainline is { NeedsReview:true } &&
                     after.Pieces.Single(p=>p.Id==collision.Id).Points.Count==6 && after.Pieces.Single(p=>p.Id==collision.Id).Notches!.Count==2 &&
                     after.Pieces.Single(p=>p.Id==badMark.Id).Points.Count==5 && after.Pieces.Single(p=>p.Id==markedDraft.Id).Points.Count==5 && after.ImportProvenance!.SourceSha256==provenance.SourceSha256 &&
@@ -9660,7 +9684,7 @@ internal static class DesktopVerification
                     "Bulk duplicate cleanup undo and redo restore all protected pieces",checks);
             }
             finally { window.Close();tools.Close(); }
-            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,(p,_)=>p.Id==draft.Id);
             try
             {
                 var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
@@ -9671,7 +9695,7 @@ internal static class DesktopVerification
             }
             finally { window.Close(); }
             studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();var becameDraft=false;
-            window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id || (id==good.Id && becameDraft));
+            window=new BulkDuplicateCleanupWindow(studio,studio,(p,_)=>p.Id==draft.Id || (p.Id==good.Id && becameDraft));
             try
             {
                 var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();becameDraft=true;
@@ -9680,7 +9704,7 @@ internal static class DesktopVerification
                     "A grading draft created after preview blocks bulk cleanup",checks);
             }
             finally { window.Close(); }
-            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,(p,_)=>p.Id==draft.Id);
             using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
             {
                 Task? pending=null;

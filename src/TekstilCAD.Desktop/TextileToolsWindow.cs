@@ -835,23 +835,31 @@ public sealed class TextileToolsWindow : Window
     }
     private bool HasUnsavedGradeDraft(Guid pieceId,GradeDraft draft)
     {
-        static bool SameBits(double a,double b)=>BitConverter.DoubleToInt64Bits(a)==BitConverter.DoubleToInt64Bits(b);
         var saved=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==pieceId);
+        return HasUnsavedGradeDraft(draft,saved);
+    }
+    private static bool HasUnsavedGradeDraft(GradeDraft draft,GradingRuleSet? saved)
+    {
+        static bool SameBits(double a,double b)=>BitConverter.DoubleToInt64Bits(a)==BitConverter.DoubleToInt64Bits(b);
         if(saved is null)return draft.Rows.Any(row=>!IsNumber(row.Dx,out var dx)||!SameBits(dx,0)||!IsNumber(row.Dy,out var dy)||!SameBits(dy,0));
         if(saved.SourceClosed!=draft.Closed||(!saved.SourcePoints.SequenceEqual(draft.Points)&&!IsTranslation(saved.SourcePoints,draft.Points))||saved.Deltas.Count!=draft.Rows.Count)return true;
         return draft.Rows.Select((row,index)=>!IsNumber(row.Dx,out var dx)||!IsNumber(row.Dy,out var dy)||!SameBits(dx,saved.Deltas[index].X)||!SameBits(dy,saved.Deltas[index].Y)).Any(changed=>changed);
     }
-    private bool HasUnrecordedGradeDraft(Guid id)
+    private bool HasSnapshotGradeDraft(PatternPiece piece,GradingRuleSet? saved)
     {
-        if(!gradeDrafts.TryGetValue(id,out var draft))return false;
-        return draft.Rows.Any(row=>!IsNumber(row.Dx,out var x) || BitConverter.DoubleToInt64Bits(x)!=0 ||
-            !IsNumber(row.Dy,out var y) || BitConverter.DoubleToInt64Bits(y)!=0);
+        if(!gradeDrafts.TryGetValue(piece.Id,out var draft))return false;
+        if(draft.Closed!=piece.Closed || draft.Points.Count!=piece.Points.Count)return true;
+        for(var i=0;i<draft.Points.Count;i++)
+            if(BitConverter.DoubleToInt64Bits(draft.Points[i].X)!=BitConverter.DoubleToInt64Bits(piece.Points[i].X) ||
+               BitConverter.DoubleToInt64Bits(draft.Points[i].Y)!=BitConverter.DoubleToInt64Bits(piece.Points[i].Y))return true;
+        return HasUnsavedGradeDraft(draft,saved);
     }
-    internal void ResetCleanGradeDrafts(IReadOnlyCollection<Guid> ids)
+    internal void ResetCleanGradeDrafts(IReadOnlyCollection<Guid> ids,ProjectDocument sourceSnapshot)
     {
-        var saved=workspace.Document.GradingRules.Select(rule=>rule.SourcePieceId).ToHashSet();
+        var pieces=sourceSnapshot.Pieces.ToDictionary(piece=>piece.Id);
+        var rules=sourceSnapshot.GradingRules.ToDictionary(rule=>rule.SourcePieceId);
         foreach(var id in ids)
-            if(!saved.Contains(id) && !HasUnrecordedGradeDraft(id))gradeDrafts.Remove(id);
+            if(pieces.TryGetValue(id,out var piece) && !HasSnapshotGradeDraft(piece,rules.GetValueOrDefault(id)))gradeDrafts.Remove(id);
     }
     private bool HasUnsavedGradeRules() => gradeDrafts.Any(entry=>HasUnsavedGradeDraft(entry.Key,entry.Value));
     private bool ConfirmDiscardGradeRules()
@@ -1040,7 +1048,7 @@ public sealed class TextileToolsWindow : Window
         {
             if(!CommitGradeEdit()) { ShowGradeEditError();return; }
             var chosen=source.SelectedItem is PatternPiece selected ? selected.Id : (Guid?)null;
-            new BulkDuplicateCleanupWindow(workspace,this,HasUnrecordedGradeDraft,ResetCleanGradeDrafts).ShowDialog();
+            new BulkDuplicateCleanupWindow(workspace,this,HasSnapshotGradeDraft,ResetCleanGradeDrafts).ShowDialog();
             RefreshSources(chosen);
         },()=>HasPiece());
         Note(panel,"Kapalı konturun yönünü ters çevirin; ilk nokta ve şekil korunur. Nokta indeksleri değişir. Eşleşen kayıtlı serileme artışları ilgili noktalarla birlikte taşınır; uygulanmamış taslaklar korunur.");
