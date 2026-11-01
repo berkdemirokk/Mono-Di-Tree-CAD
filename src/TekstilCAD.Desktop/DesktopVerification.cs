@@ -6367,14 +6367,14 @@ internal static class DesktopVerification
             try
             {
                 studio.BeforeSelectedA4WriteForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
-                var path=Path.Combine(work,$"selected-a4-change-{edit}.pdf");
-                pending=studio.StartSelectedA4ForVerification(path,ProjectStorage.CaptureVersion(path),_=>true);
+                var selectedChangePath=Path.Combine(work,$"selected-a4-change-{edit}.pdf");
+                pending=studio.StartSelectedA4ForVerification(selectedChangePath,ProjectStorage.CaptureVersion(selectedChangePath),_=>true);
                 PumpUntil(()=>reached.IsSet);
                 if(edit=="selection")studio.Select(otherPiece.Id);
                 else studio.Commit("Başka parça değişti",()=>studio.Document.Pieces[1].Name="Değişmiş");
                 release.Set();PumpUntil(()=>pending!.IsCompleted);pending!.GetAwaiter().GetResult();
-                Check(studio.ExportError is null && File.Exists(path) && selectedNotice.Text.Contains("proje veya seçim değişti") &&
-                    File.ReadAllText(path).Contains(selectedBefore.Pieces[0].Id.ToString("D")),
+                Check(studio.ExportError is null && File.Exists(selectedChangePath) && selectedNotice.Text.Contains("proje veya seçim değişti") &&
+                    File.ReadAllText(selectedChangePath).Contains(selectedBefore.Pieces[0].Id.ToString("D")),
                     $"Selected A4 reports a real {edit} change while retaining the original exported snapshot",checks);
             }
             finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }studio.BeforeSelectedA4WriteForVerification=null; }
