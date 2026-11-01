@@ -35,4 +35,17 @@ public class PdfFormatTests
         Assert.Throws<InvalidDataException>(()=>PdfFormat.Export(source,path,ProjectStorage.CaptureVersion(path)));
         Assert.Equal("existing",File.ReadAllText(path));
     }
+
+    [Fact]
+    public void RoundedClosingEdgeIsRejectedWithoutOverwritingTarget()
+    {
+        var path=Path.Combine(Path.GetTempPath(),"tekstilcad-pdf-"+Guid.NewGuid().ToString("N")+".pdf");
+        File.WriteAllText(path,"keep");
+        var source=new ProjectDocument { Pieces=[new PatternPiece { Points=[new(0,0),new(10,0),new(0,10),new(0.00000001,0)] }] };
+        Assert.Throws<InvalidDataException>(()=>PdfFormat.Export(source,path,ProjectStorage.CaptureVersion(path)));
+        Assert.Equal("keep",File.ReadAllText(path));
+        source.Pieces[0].Points[^1]=source.Pieces[0].Points[0];
+        PdfFormat.Export(source,path,ProjectStorage.CaptureVersion(path));
+        Assert.StartsWith("%PDF-1.4",File.ReadAllText(path));
+    }
 }

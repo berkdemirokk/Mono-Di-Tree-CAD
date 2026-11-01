@@ -38,11 +38,13 @@ public static class PdfFormat
                 var p = piece.Points[i];
                 // PDF Y grows upward, while the CAD canvas Y grows downward.
                 var point = Number((p.X - minX) * PointsPerMillimeter) + " " + Number((maxY - p.Y) * PointsPerMillimeter);
-                if (previous == point && !(piece.Closed && i == piece.Points.Count - 1 && point == first))
+                if (previous == point)
                     throw new InvalidDataException("PDF koordinat hassasiyeti bir kenarı sıfıra indirdi; çıktı oluşturulmadı.");
                 content.Append(point).Append(i == 0 ? " m\n" : " l\n");
                 first ??= point; previous = point;
             }
+            if (piece.Closed && piece.Points[0] != piece.Points[^1] && first == previous)
+                throw new InvalidDataException("PDF koordinat hassasiyeti kapanış kenarını sıfıra indirdi; çıktı oluşturulmadı.");
             if (piece.Closed) content.Append("h\n");
             content.Append("S\n");
         }
