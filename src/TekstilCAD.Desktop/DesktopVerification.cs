@@ -6280,7 +6280,8 @@ internal static class DesktopVerification
         var first=new PatternPiece { Name="FRONT",Points=[new(0,0),new(10,0),new(0,10)] };
         var second=new PatternPiece { Name="BACK",Points=[new(30,0),new(40,0),new(30,10)] };
         var excluded=new PatternPiece { Name="MARKED",Points=[new(60,0),new(70,0),new(60,10)],Notches=[new NotchMark { VertexIndex=1,Position=new(70,0) }] };
-        var project=new ProjectDocument { Pieces=[first,second,excluded] };
+        var grainOnly=new PatternPiece { Name="GRAIN",Points=[new(90,0),new(100,0),new(90,10)],Grainline=new Grainline { Start=new(91,1),End=new(91,5) } };
+        var project=new ProjectDocument { Pieces=[first,second,excluded,grainOnly] };
         try
         {
             studio.LoadDocument(project);studio.Select(first.Id);var before=studio.Document.Clone();
@@ -6288,10 +6289,32 @@ internal static class DesktopVerification
             var picker=new SelectedDxfExportWindow(studio,before);
             try
             {
-                Check(!picker.ContinueButton.IsEnabled && picker.Choices.Items.Count==3,"Selected DXF requires explicit selection",checks);
-                picker.Choices.SelectedItems.Add(picker.Choices.Items[0]);picker.Choices.SelectedItems.Add(picker.Choices.Items[1]);
+                Check(!picker.ContinueButton.IsEnabled && picker.Choices.Items.Count==4,"Selected DXF requires explicit selection",checks);
+                Render(picker,Path.Combine(work,"selected-dxf-compact.png"),480,400);
+                var pickerRoot=(FrameworkElement)picker.Content;
+                Check(FullyVisible(picker.Search,pickerRoot) && FullyVisible(picker.SelectVisible,pickerRoot) &&
+                    FullyVisible(picker.ClearVisible,pickerRoot) && VisibleBoundsInRoot(picker.Choices,pickerRoot).Height>0,
+                    "Selected DXF search, bulk controls and list are reachable at minimum size",checks);
+                var firstRow=picker.Choices.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+                var firstCheck=firstRow is null ? null : Descendants<CheckBox>(firstRow).SingleOrDefault();
+                Check(firstCheck is not null && AutomationProperties.GetName(firstCheck).Contains(first.Id.ToString("D")),
+                    "Selected DXF realized checkbox exposes the source identity",checks);
+                firstCheck!.IsChecked=true;picker.AllChoices[1].IsSelected=true;
+                Check(picker.AllChoices[0].IsSelected,"Selected DXF checkbox updates the identity selection",checks);
                 Check(picker.ContinueButton.IsEnabled && picker.SelectedIds.SequenceEqual(new[] { first.Id,second.Id }) &&
                     VirtualizingPanel.GetIsVirtualizing(picker.Choices),"Selected DXF selection retains identities in a virtualized list",checks);
+                picker.Search.Text="FRONT";
+                Check(picker.Choices.Items.Count==1 && picker.SelectedIds.SequenceEqual(new[] { first.Id,second.Id }) && picker.Summary.Text.Contains("1 seçili parça aramada gizli"),
+                    "Selected DXF search preserves hidden selected pieces and reports them",checks);
+                picker.ClearVisible.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(picker.SelectedIds.SequenceEqual(new[] { second.Id }),"Clearing visible DXF choices preserves hidden selection",checks);
+                picker.SelectVisible.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(picker.SelectedIds.SequenceEqual(new[] { first.Id,second.Id }),"Selecting visible DXF choices restores only visible eligible rows",checks);
+                picker.Search.Text="MARKED";picker.AllChoices[2].IsSelected=true;picker.AllChoices[3].IsSelected=true;picker.SelectVisible.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!picker.AllChoices[2].Eligible && !picker.AllChoices[3].Eligible && picker.SelectedIds.SequenceEqual(new[] { first.Id,second.Id }) && picker.Summary.Text.Contains("1 parça normal DXF'te desteklenmez"),
+                    "Unsupported visible marked pieces cannot be selected in bulk",checks);
+                picker.Search.Text=second.Id.ToString("D");
+                Check(picker.Choices.Items.Count==1 && picker.SelectedIds.Count==2,"Selected DXF search also matches full identity",checks);
             }
             finally { picker.Close(); }
             var path=Path.Combine(work,"selected-subset.dxf");var task=studio.StartSelectedDxfForVerification([first.Id,second.Id],path,ProjectStorage.CaptureVersion(path));
