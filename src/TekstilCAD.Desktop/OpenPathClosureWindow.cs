@@ -10,7 +10,7 @@ namespace TekstilCAD.Desktop;
 internal sealed class OpenPathClosureWindow : Window
 {
     private readonly MainWindow workspace;
-    private readonly ComboBox source=new() { MinWidth=350,Margin=new Thickness(0,4,0,8) };
+    private readonly ComboBox source=new() { MinWidth=350,IsTextSearchEnabled=true,Margin=new Thickness(0,4,0,8) };
     private readonly TextBox tolerance=new() { Text="0",MinWidth=120,Margin=new Thickness(0,4,0,8) };
     private readonly CheckBox omitProductionData = new() { Content="Üretim bilgisi ve iplik yönü sonuca aktarılmadan devam et", IsChecked=false, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock message=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
@@ -22,7 +22,7 @@ internal sealed class OpenPathClosureWindow : Window
     private PatternPiece? before;
     private ProjectDocument? document;
     private bool closed;
-    private sealed record Choice(Guid Id,string Label) { public override string ToString()=>Label; }
+    private sealed record Choice(Guid Id,string Label,string SearchLabel) { public override string ToString()=>Label; }
     internal Task CalculateForVerification()=>CalculateAsync();
     internal void ApplyForVerification()=>Apply();
     internal TextBox ToleranceForVerification=>tolerance;
@@ -46,9 +46,10 @@ internal sealed class OpenPathClosureWindow : Window
         body.Children.Add(omitProductionData);
         body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview);body.Children.Add(message);
-        AutomationProperties.SetName(source,"Kapatılacak açık parça");AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre");
+        AutomationProperties.SetName(source,"Kapatılacak açık parça");TextSearch.SetTextPath(source,nameof(Choice.SearchLabel));AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre");
         AutomationProperties.SetName(preview,"Kapalı kontur ve kapanış kenarı önizlemesi");AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
-        foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))source.Items.Add(new Choice(p.Id,$"{p.Id:D} · {CadCanvas.CanvasPieceLabel(p.Name)}"));
+        foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))
+        { var safeName=CadCanvas.CanvasPieceLabel(p.Name);source.Items.Add(new Choice(p.Id,$"{p.Id:D} · {safeName}",safeName)); }
         if(source.Items.Count>0)source.SelectedIndex=0;
         source.SelectionChanged+=(_,_)=>InvalidateProposal();tolerance.TextChanged+=(_,_)=>InvalidateProposal();
         omitProductionData.Checked+=(_,_)=>InvalidateProposal();omitProductionData.Unchecked+=(_,_)=>InvalidateProposal();

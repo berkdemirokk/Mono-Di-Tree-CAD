@@ -294,10 +294,16 @@ internal static class DesktopVerification
                 var selector=(ComboBox)window.GetType().GetField(field,PrivateInstance)!.GetValue(window)!;
                 var item=selector.Items[0];var label=item.ToString()!;
                 var id=(Guid)item.GetType().GetProperty("Id")!.GetValue(item)!;
+                var search=(string)item.GetType().GetProperty("SearchLabel")!.GetValue(item)!;
+                var other=selector.Items[1];var otherSearch=(string)other.GetType().GetProperty("SearchLabel")!.GetValue(other)!;
                 Check(id==first.Id && label.StartsWith(first.Id.ToString("D"),StringComparison.Ordinal) &&
                     label.Contains("\\u202E") && label.Contains("\\u000A") && !label.Contains('\u202E') && !label.Contains('\n') &&
                     label.Length<=120 && label.EndsWith('…'),
                     "Open path source selectors show the full identity before a bounded escaped name",checks);
+                Check(selector.IsTextSearchEnabled && TextSearch.GetTextPath(selector)=="SearchLabel" &&
+                    search==CadCanvas.CanvasPieceLabel(first.Name) && search.StartsWith("Ön",StringComparison.Ordinal) &&
+                    search.Contains("\\u202E") && !search.Contains('\u202E') && otherSearch=="Arka",
+                    "Open path source selectors search safe names rather than the visible identity prefix",checks);
             }
             Check(DocumentSession.ContentEquals(before,studio.Document) && studio.Document.Pieces[0].Name==first.Name,
                 "Safe source labels leave original names and project data unchanged",checks);

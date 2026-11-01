@@ -11,8 +11,8 @@ namespace TekstilCAD.Desktop;
 internal sealed class OpenPathJoinWindow : Window
 {
     private readonly MainWindow workspace;
-    private readonly ComboBox first = new() { MinWidth=350, Margin=new Thickness(0,4,0,8) };
-    private readonly ComboBox second = new() { MinWidth=350, Margin=new Thickness(0,4,0,8) };
+    private readonly ComboBox first = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
+    private readonly ComboBox second = new() { MinWidth=350, IsTextSearchEnabled=true, Margin=new Thickness(0,4,0,8) };
     private readonly TextBox tolerance = new() { Text="0", MinWidth=120, Margin=new Thickness(0,4,0,8) };
     private readonly CheckBox omitProductionData = new() { Content="Üretim bilgisi ve iplik yönü sonuca aktarılmadan devam et", IsChecked=false, Margin=new Thickness(0,6,0,8) };
     private readonly TextBlock message = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,8,0,8) };
@@ -30,7 +30,7 @@ internal sealed class OpenPathJoinWindow : Window
     internal Button ApplyButtonForVerification => apply;
     internal string MessageForVerification => message.Text;
 
-    private sealed record Choice(Guid Id, string Label) { public override string ToString()=>Label; }
+    private sealed record Choice(Guid Id, string Label,string SearchLabel) { public override string ToString()=>Label; }
 
     internal OpenPathJoinWindow(MainWindow workspace, Window owner)
     {
@@ -52,12 +52,13 @@ internal sealed class OpenPathJoinWindow : Window
         body.Children.Add(new TextBlock { Text="Kaynaklar değişmez. Yeni parçada rol, beden, malzeme, adet ve iplik yönü bulunmaz; üretimden önce bunları ayrıca belirleyin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
         body.Children.Add(preview); body.Children.Add(message);
         AutomationProperties.SetName(first,"Birinci açık parça"); AutomationProperties.SetName(second,"İkinci açık parça");
+        TextSearch.SetTextPath(first,nameof(Choice.SearchLabel));TextSearch.SetTextPath(second,nameof(Choice.SearchLabel));
         AutomationProperties.SetName(tolerance,"En fazla uç uzaklığı, milimetre"); AutomationProperties.SetName(preview,"Birleştirilmiş kontur önizlemesi");
         AutomationProperties.SetLiveSetting(message,AutomationLiveSetting.Polite);
         foreach(var p in workspace.Document.Pieces.Where(p=>!p.Closed))
         {
-            var label=$"{p.Id:D} · {CadCanvas.CanvasPieceLabel(p.Name)}";
-            first.Items.Add(new Choice(p.Id,label)); second.Items.Add(new Choice(p.Id,label));
+            var safeName=CadCanvas.CanvasPieceLabel(p.Name);var label=$"{p.Id:D} · {safeName}";
+            first.Items.Add(new Choice(p.Id,label,safeName)); second.Items.Add(new Choice(p.Id,label,safeName));
         }
         if(first.Items.Count>0)first.SelectedIndex=0;
         if(second.Items.Count>1)second.SelectedIndex=1;
