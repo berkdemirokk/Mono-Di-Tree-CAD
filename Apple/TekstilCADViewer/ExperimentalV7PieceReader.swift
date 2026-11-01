@@ -1,5 +1,6 @@
 import Foundation
 import CoreFoundation
+import CryptoKit
 
 /// Experimental UTF-8 v7 visible-piece extractor. Not connected to the viewer.
 /// Successful extraction checks JSON syntax, unique keys and v7 root/history
@@ -38,6 +39,8 @@ struct ExperimentalV7PieceReader {
     private var pieces: [Data] = []
     private var totalPieceBytes = 0
     private var failure = false, finished = false
+    private var sourceHasher = SHA256()
+    private var sourceLength = 0
     private let maximumPieceBytes: Int
     private let maximumExtractedBytes: Int
     private let maximumPieces: Int
@@ -57,6 +60,8 @@ struct ExperimentalV7PieceReader {
                 if cancelled() { throw Failure.cancelled }
                 try extract(byte, cancelled: cancelled)
             }
+            sourceHasher.update(data: data)
+            sourceLength += data.count
         } catch { failure = true; pieces.removeAll(); piece = nil; throw error }
     }
 
@@ -96,6 +101,33 @@ struct ExperimentalV7PieceReader {
         guard preview.pieces.reduce(historicalPoints, { $0 + $1.points.count }) <= 200_000,
               preview.pieces.reduce(historicalMarks, { $0 + $1.notches.count }) <= 200_000 else { throw Failure.limit }
         return preview
+    }
+
+    /// Experimental in-memory source retention. Caller owns the original immutable
+    /// Data snapshot; the digest only checks it matches the fed bytes, not authenticity.
+    /// Full v7 history and geometry are still unverified; never use as a production load.
+    mutating func finishDocument(original: Data, cancelled: () -> Bool = { false }) throws -> ExperimentalV7Document {
+        guard !failure, !finished else { throw Failure.invalid }
+        guard original.count == sourceLength, original.count <= 64 * 1024 * 1024 else { failure = true; throw Failure.invalid }
+        var candidateHash = SHA256()
+        var offset = 0
+        while offset < original.count {
+            if cancelled() { failure = true; throw Failure.cancelled }
+            let end = min(offset + 64 * 1024, original.count)
+            candidateHash.update(data: original[offset..<end]); offset = end
+        }
+        var expectedHash = sourceHasher
+        guard candidateHash.finalize() == expectedHash.finalize() else { failure = true; throw Failure.invalid }
+        let preview = try finishPreview(cancelled: cancelled)
+        if cancelled() { throw Failure.cancelled }
+        let visible = Set(preview.pieces.compactMap(\.id))
+        let placed = Set(traceMappings.map(\.placed))
+        let drawing = Drawing(name: preview.name, pieces: preview.pieces, pieceRenameIdentitiesValid: true,
+            formatVersion: 7, hasNonUTF8BOM: false,
+            historyPieceIDsDiffer: visible != placed || preview.pieces.count != traceMappings.count,
+            insufficientContourCount: preview.pieces.filter { !$0.hasMinimumContourPoints }.count,
+            collapsedContourCount: preview.pieces.filter { $0.isCollapsed }.count)
+        return ExperimentalV7Document(drawing: drawing, originalBytes: original)
     }
 
     private mutating func extract(_ byte: UInt8, cancelled: () -> Bool) throws {

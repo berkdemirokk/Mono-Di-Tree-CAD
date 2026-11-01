@@ -40,9 +40,9 @@ Görünür parça kimlikleri ile geçmişteki yerleştirme kimlikleri farklıysa
 
 `ExperimentalV7PieceReader` aynı akış üzerinde v7 zarfı, kök alanlar ve pastal/döndürme geçmişi üst alanlarının ad ve temel türlerini kontrol edip görünür `Pieces` nesnelerinin özgün UTF-8 baytlarını sınırlı bellekte çıkaran ayrı bir prototiptir. Tam v7 şema ve geçmiş doğrulaması yapmaz, çizim üretmez ve çıktısı güvenilir proje olarak kullanılamaz; üretime bağlı değildir. Parça başına 512 KB, toplam çıkarılan parçalar için 16 MB ve 10.000 parça sınırı kullanır. Bu sınırlar gerçek veri ve cihazda henüz ölçülmemiştir.
 
-`ExperimentalV7Contours`, çıkarılan parça baytlarından sınırlı bir kontur dönüşümü denemesidir; üretim okuyucusuna bağlı değildir. Deneysel önizleme adayı, proje adı ve `Drawing.Piece` verilerini bir araya getirir. Parça düzeyinde kimlik, nokta, işaret ve desteklenen bilgi alanlarını kontrol eder; v7 geçmişini, masaüstü parmak izlerini veya kopyaların geometrik dönüşümünü doğrulamaz. Tam `Drawing` olarak kullanılmaz; modelin tamamını güvenilir kabul etmek veya 8 MB sınırını artırmak için yeterli değildir.
+`ExperimentalV7Contours`, çıkarılan parça baytlarından sınırlı bir kontur dönüşümü denemesidir; üretim okuyucusuna bağlı değildir. Deneysel belge, çağıranın bellekte tuttuğu en fazla 64 MB özgün `Data` ile `Drawing` adayını birlikte tutabilir; fedilen baytlarla eşleşme SHA-256 ile denetlenir. Bu ek bellek gerektirir; dosyayı doğrulamaz veya gerçek cihazda bellek güvenliği kanıtlamaz. Parça düzeyinde kimlik, nokta, işaret ve desteklenen bilgi alanlarını kontrol eder; v7 geçmişini, masaüstü parmak izlerini veya kopyaların geometrik dönüşümünü doğrulamaz. Bu aday üretimde kullanılmaz ve 8 MB sınırını artırmak için yeterli değildir.
 
-Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Parmak izlerini yeniden hesaplamaz, dönüştürülmüş geometriyi kaynakla karşılaştırmaz ve özgün dosya byte'larını saklamaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
+Deneysel akış kaynak ve yerleşim parçası yapısını, seçimi, adetleri, geçmiş eşlemelerini ve ortak geçmiş ayarlarını ayrıca sınar. Parmak izlerini yeniden hesaplamaz ve dönüştürülmüş geometriyi kaynakla karşılaştırmaz; bir önizleme adayı kaydetme veya kurtarma yetkisi vermez.
 
 ## Sınırlar
 

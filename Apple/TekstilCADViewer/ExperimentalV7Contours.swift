@@ -7,6 +7,12 @@ struct ExperimentalV7Preview {
     let pieces: [Drawing.Piece]
 }
 
+/// Research-only document. Its history and geometry have not been verified.
+struct ExperimentalV7Document {
+    let drawing: Drawing
+    let originalBytes: Data
+}
+
 /// Detached experimental conversion of extracted UTF-8 pieces into preview data.
 /// Does not establish v7 history validity or signed-zero byte fidelity and is never used by production UI.
 enum ExperimentalV7Contours {

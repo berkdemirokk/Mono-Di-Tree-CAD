@@ -141,6 +141,27 @@ final class ExperimentalV7PieceReaderTests: XCTestCase {
         }
         XCTAssertEqual(bytes, before)
     }
+    func testExperimentalDocumentKeepsExactlyTheFedBytesAndFlagsDifferentIDs() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-stale", withExtension: "tcad"))
+        let bytes = try Data(contentsOf: url)
+        var reader = ExperimentalV7PieceReader()
+        for offset in stride(from: 0, to: bytes.count, by: 257) {
+            try reader.feed(bytes.subdata(in: offset..<min(offset + 257, bytes.count)))
+        }
+        let document = try reader.finishDocument(original: bytes)
+        let expected = try Drawing.load(bytes)
+        XCTAssertEqual(document.originalBytes, bytes)
+        XCTAssertEqual(document.drawing.name, expected.name)
+        XCTAssertEqual(document.drawing.pieces.map(\.id), expected.pieces.map(\.id))
+        XCTAssertTrue(document.drawing.historyPieceIDsDiffer)
+
+        var changed = bytes; changed[changed.count - 1] ^= 1
+        var other = ExperimentalV7PieceReader(); try other.feed(bytes)
+        XCTAssertThrowsError(try other.finishDocument(original: changed))
+        XCTAssertThrowsError(try other.finishDocument(original: bytes))
+        var cancelled = ExperimentalV7PieceReader(); try cancelled.feed(bytes)
+        XCTAssertThrowsError(try cancelled.finishDocument(original: bytes, cancelled: { true }))
+    }
     func testSnapshotAndTraceHeaderRejectMissingUnknownOrWrongFields() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7-four-angle", withExtension: "tcad"))
         let bytes = try Data(contentsOf: url)
