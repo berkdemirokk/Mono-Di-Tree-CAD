@@ -92,4 +92,18 @@ public class IndependentNotchWidthTests
         var valid = PatternTools.InsertNotch(source,edge,.5,4,1);
         Assert.Equal(7,valid.Points.Count);
     }
+
+    [Fact]
+    public void AlreadyCancelledNotchInsertionOnMarkedPieceReportsCancellation()
+    {
+        var source = Rectangle();
+        source.Notches = [new NotchMark { VertexIndex = 1, Position = source.Points[1] }];
+        var before = source.Clone();
+        using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+        Assert.Throws<OperationCanceledException>(() => PatternTools.InsertNotch(source,0,.5,4,1,cancellation.Token));
+        // Without cancellation the existing protection against losing marks remains.
+        Assert.Throws<ArgumentException>(() => PatternTools.InsertNotch(source,0,.5,4,1));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces = [before] },
+            new ProjectDocument { Pieces = [source] }));
+    }
 }

@@ -551,8 +551,8 @@ public static class PatternTools
     private static List<Point2> SnapshotPointEdit(PatternPiece piece, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(piece);
-        NotchSafety.RequireNoNotches(piece);
         token.ThrowIfCancellationRequested();
+        NotchSafety.RequireNoNotches(piece);
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
         if (piece.Points.Count > LargeContourValidator.MaximumStoredPoints)
