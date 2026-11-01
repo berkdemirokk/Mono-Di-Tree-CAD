@@ -47,7 +47,7 @@ internal sealed class ProductionNestingWindow : Window
     private readonly TextBox width = new() { Text="1500", Width=110, Margin=new Thickness(4) };
     private readonly TextBox fabricLength = new() { Width=110, Margin=new Thickness(4), ToolTip="Boş bırakılırsa kumaş boyu sınırlandırılmaz." };
     private readonly ComboBox grainPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "İplik yönü denetlenmez", "Tek yön (+Y)", "Çift yön (±Y)" }, SelectedIndex=0 };
-    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa" }, SelectedIndex=0 };
+    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa", "Otomatik deneme: 0° / 90°" }, SelectedIndex=0 };
     private readonly TextBox gap = new() { Text="5", Width=90, Margin=new Thickness(4) };
     private readonly TextBox edgeMargin = new() { Text="0", Width=80, Margin=new Thickness(4) };
     private readonly TextBlock status = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,8,4,8) };
@@ -87,14 +87,14 @@ internal sealed class ProductionNestingWindow : Window
         {
             var lengthSummary=string.IsNullOrWhiteSpace(fabricLength.Text) ? "boy sınırsız" : "boy sınırı girildi";
             var grainSummary=grainPolicy.SelectedIndex switch { 1 => "tek yön", 2 => "çift yön", _ => "iplik denetlenmez" };
-            var rotationSummary=rotationPolicy.SelectedIndex==1 ? "tüm kopyalar 90°" : "dönüş yok";
+            var rotationSummary=rotationPolicy.SelectedIndex switch { 1=>"tüm kopyalar 90°",2=>"otomatik 0°/90°",_=>"dönüş yok" };
             advanced.Header=$"Kumaş boyu ve iplik · {lengthSummary}, {grainSummary}, {rotationSummary}";
         }
         UpdateAdvancedHeader();
         AutomationProperties.SetName(grainPolicy,"İplik yönü doğrulama politikası");
         AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. 90 derece dönüşte yön doğrulaması zorunludur.");
         AutomationProperties.SetName(rotationPolicy,"Kopyaların dönüşü");
-        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa, tuvalde saat yönünde her seçili parçanın tüm kopyalarına uygulanır. Optimizasyon değildir; iplik yönü doğrulanır. Ayrı kayıt sürüm 7 gerektirir.");
+        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa tüm kopyalara uygulanır. Otomatik deneme yalnız 0 ve 90 dereceyi kullanır; en iyi yerleşimi veya her uygun çözümü bulma garantisi yoktur. İplik yönü doğrulanır; ayrı kayıt sürüm 7 gerektirir.");
         AutomationProperties.SetName(width,"Kumaş eni, milimetre"); AutomationProperties.SetName(gap,"Parçalar arası boşluk, milimetre");
         AutomationProperties.SetName(fabricLength,"Kullanılabilir kumaş boyu, milimetre, isteğe bağlı");
         AutomationProperties.SetHelpText(fabricLength,"Boş bırakılırsa kumaş boyu sınırlandırılmaz. Bir değer girilirse pastal bu boyu aşamaz.");
@@ -441,8 +441,8 @@ internal sealed class ProductionNestingWindow : Window
         var ids=choiceItems.Where(c=>c.IsSelected).Select(c=>c.Id).ToArray();
         var grainMode=grainPolicy.SelectedIndex;
         var rotationMode=rotationPolicy.SelectedIndex;
-        if(rotationMode is <0 or >1 || (rotationMode==1 && grainMode is not (1 or 2)))
-        { InvalidatePreview();SetStatus("90° dönüş için tek veya çift yön iplik kontrolü seçin.");return; }
+        if(rotationMode is <0 or >2 || (rotationMode!=0 && grainMode is not (1 or 2)))
+        { InvalidatePreview();SetStatus("Dönüş için tek veya çift yön iplik kontrolü seçin.");return; }
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
@@ -454,18 +454,30 @@ internal sealed class ProductionNestingWindow : Window
                 beforeCalculation?.Invoke();token.ThrowIfCancellationRequested();
                 ProductionNestingResult result;
                 RotatedNestingTrace? trace=null;
-                if(rotationMode==1)
+                if(rotationMode!=0)
                 {
-                    var selected=ids.ToHashSet();var rotations=new Dictionary<(Guid,int),int>();
-                    foreach(var piece in snapshot.Pieces.Where(p=>selected.Contains(p.Id)))
-                    {
-                        token.ThrowIfCancellationRequested();
-                        if(piece.Metadata?.Quantity is not int n || n<1 || n>NestingEngine.MaximumPieces || rotations.Count+n>NestingEngine.MaximumPieces)
-                            throw new ArgumentException("Döndürme için geçerli ve sınırlı kopya adedi gereklidir.");
-                        for(var i=1;i<=n;i++)rotations.Add((piece.Id,i),90);
-                    }
                     var direction=grainMode==1 ? GrainDirectionPolicy.Direction.OneWay : GrainDirectionPolicy.Direction.TwoWay;
-                    var rotated=PerCopyOrthogonalNesting.Arrange(snapshot,ids,rotations,w,g,length,m,direction,0,token);
+                    PerCopyNestingResult rotated;Dictionary<(Guid,int),int> rotations;
+                    if(rotationMode==1)
+                    {
+                        var selected=ids.ToHashSet();rotations=new Dictionary<(Guid,int),int>();
+                        foreach(var piece in snapshot.Pieces.Where(p=>selected.Contains(p.Id)))
+                        {
+                            token.ThrowIfCancellationRequested();
+                            if(piece.Metadata?.Quantity is not int n || n<1 || n>NestingEngine.MaximumPieces || rotations.Count+n>NestingEngine.MaximumPieces)
+                                throw new ArgumentException("Döndürme için geçerli ve sınırlı kopya adedi gereklidir.");
+                            for(var i=1;i<=n;i++)rotations.Add((piece.Id,i),90);
+                        }
+                        rotated=PerCopyOrthogonalNesting.Arrange(snapshot,ids,rotations,w,g,length,m,direction,0,token);
+                    }
+                    else
+                    {
+                        var allowed=ids.ToDictionary(id=>id,_=>(IReadOnlyList<int>)[0,90]);
+                        rotated=AutomaticPerCopyNesting.Arrange(snapshot,ids,allowed,w,g,length,m,direction,0,token);
+                        if(!PerCopyTraceVerifier.IsValidForAllowedAngles(snapshot,ids,rotated,allowed,direction,0,w,g,m,length,token))
+                            throw new InvalidOperationException("Otomatik açılar veya kopya izi doğrulanamadı; önizleme hazırlanmadı.");
+                        rotations=rotated.Plan.Placements.ToDictionary(p=>(p.SourcePieceId,p.CopyNumber),p=>rotated.PlacedRotations[p.PlacedPieceId]);
+                    }
                     if(!PerCopyTraceVerifier.IsValidForConstraints(snapshot,ids,rotated,rotations,direction,0,w,g,m,length,token))
                         throw new InvalidOperationException("Döndürülen kopya, işaret veya iplik izi doğrulanamadı; önizleme hazırlanmadı.");
                     trace=RotatedNestingRecord.Capture(snapshot,ids,rotations,rotated,direction,0,w,g,m,length,token).ToTrace(token);
@@ -500,12 +512,14 @@ internal sealed class ProductionNestingWindow : Window
                 token.ThrowIfCancellationRequested();
                 var sources=snapshot.Pieces.ToDictionary(p=>p.Id);
                 var dimensions=result.Placements.Select(p=>p.SourcePieceId).Distinct().ToDictionary(id=>id,id=> { token.ThrowIfCancellationRequested();return TekstilCAD.Core.Geometry.Bounds(sources[id].Points); });
+                var anglesByPlaced=trace?.Copies.ToDictionary(c=>c.PlacedPieceId,c=>c.Degrees);
                 var placementChoices=result.Placements.Select((placement,index)=>
                 {
                     token.ThrowIfCancellationRequested();
                     var source=sources[placement.SourcePieceId];var bounds=dimensions[placement.SourcePieceId];
                     var safeName=SafeChoiceText(source.Name,60);
-                    var label=$"{index+1}. {safeName} · kopya {placement.CopyNumber}"+(rotationMode==1 ? " · 90°" : "")+$"\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
+                    int? degrees=anglesByPlaced is not null && anglesByPlaced.TryGetValue(placement.PlacedPieceId,out var angleValue) ? angleValue : null;
+                    var label=$"{index+1}. {safeName} · kopya {placement.CopyNumber}"+(degrees is int angle ? $" · {angle}°" : "")+$"\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
                     return new PlacementChoice(placement.PlacedPieceId,label,safeName);
                 }).ToArray();
                 token.ThrowIfCancellationRequested();
@@ -520,7 +534,7 @@ internal sealed class ProductionNestingWindow : Window
             if(!DocumentSession.ContentEquals(snapshot,workspace.Document)) { SetStatus("Proje değişti; sonuç uygulanmadı. Pencereyi kapatıp yeniden açın.");return; }
             previewLayoutSnapshot=prepared.LayoutSnapshot;
             preview.SetDrawing(planned.Nesting.Layout,w,planned.Nesting.UsedLength,planned.Nesting.EdgeMargin,prepared.Geometry);
-            previewRotation=rotationMode==1 ? 90 : 0;saveLayout.IsEnabled=true;
+            previewRotation=rotationMode;saveLayout.IsEnabled=true;
             documentWatch.Start();
             highlight.ItemsSource=prepared.Choices; if(prepared.Choices.Length>0)highlight.SelectedIndex=0;
             var edgeDescription=planned.Nesting.EdgeMargin>0
@@ -530,7 +544,7 @@ internal sealed class ProductionNestingWindow : Window
             var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
                 ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
                 : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
-            var rotationNotice=previewRotation==0 ? "" : " Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.";
+            var rotationNotice=previewRotation switch { 1=>" Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Ayrı kayıt sürüm 7 gerektirir; eski ve desteklemeyen mobil sürümler açamaz.",2=>" 0°/90° otomatik denemesi en iyi veya her uygun çözümü garanti etmez. Kopya açıları sürüm 7'de saklanır; deneme politikası saklanmaz. Eski ve desteklemeyen mobil sürümler açamaz.",_=>"" };
             SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}{rotationNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
@@ -584,7 +598,7 @@ internal sealed class ProductionNestingWindow : Window
     {
         var rotated=layout.NestingSnapshot?.RotationTrace is not null;
         var fileVersion=rotated ? 7 : layout.Pieces.Any(p=>p.Notches is not null) ? 6 : layout.ImportProvenance is not null ? 5 : layout.Pieces.Any(p => p.Grainline is not null) ? 4 : 3;
-        var extra=rotated ? " Kaynak parça geometrisi, kopya açıları ve iplik kısıtları tarihsel izde saklanır; kaynak serileme kuralları aktarılmaz. Desteklemeyen mobil sürümler açamaz." : "";
+        var extra=rotated ? " Kaynak parça geometrisi, kopya açıları ve iplik kısıtları tarihsel izde saklanır; kaynak serileme kuralları aktarılmaz. Varsa otomatik deneme politikası ve aday açı listesi saklanmaz. Desteklemeyen mobil sürümler açamaz." : "";
         return $"Ayrı proje yerleştirilmiş parçaları, kumaş ölçülerini, boşluğu, kenar payını ve kaynak-kopya eşleşmesini tarihsel pastal bilgisi olarak saklar. Parçalar sonradan değiştirilirse bu bilgi güncel değildir. Bu dosya sürüm {fileVersion} biçimindedir; eski TekstilCAD sürümleri açamaz.{extra} Bu bir makine işi değildir ve üretim onayı değildir. Devam edilsin mi?";
     }
     internal ProjectFileVersion CaptureLayoutDestination(string path,int version,ProjectDocument layout)
