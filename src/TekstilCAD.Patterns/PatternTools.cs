@@ -52,6 +52,8 @@ public static class PatternTools
             path.Add(new Point64(x, y)); quantized.Add(new Point2(x / scale, y / scale));
         }
         cancellationToken.ThrowIfCancellationRequested();
+        if (!OffsetSourceGridTurnGuard.PreservesTurns(points, path.Select(p => (p.X,p.Y)).ToArray(), cancellationToken))
+            throw new ArgumentException("Izgara yuvarlaması kaynak konturun bir köşesini değiştiriyor; işlem uygulanmadı.");
         Geometry.ValidateContour(quantized, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         var orientation = Math.Sign(Geometry.SignedArea(quantized));
@@ -518,4 +520,5 @@ public static class PatternTools
     }
     private static double Cross(Point2 a, Point2 b) => a.X * b.Y - a.Y * b.X;
 }
+
 
