@@ -590,6 +590,7 @@ internal static class DesktopVerification
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
+            VerifyMarkedGrading(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
@@ -8183,6 +8184,49 @@ internal static class DesktopVerification
                 "SVG UI export writes the captured piece identity, grainline coordinates and review state",checks);
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+
+    private static void VerifyMarkedGrading(MainWindow studio,List<string> checks)
+    {
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var source=new PatternPiece { Name="İşaretli",Points=[new(0,0),new(10,0),new(10,10),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(10,0) }] };
+        try
+        {
+            studio.LoadDocument(new ProjectDocument { Pieces=[source] });studio.Select(source.Id);
+            var before=studio.Document.Clone();var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var root=(FrameworkElement)tools.Content;root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
+                var create=Descendants<Button>(root).Single(b=>Equals(b.Content,"Yeni bedeni projeye ekle"));
+                ClickAndWaitForGrade(tools,create);
+                var graded=studio.Document.Pieces.Single(p=>p.Id!=source.Id);
+                var mark=graded.Notches!.Single();
+                var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                Check(mark.VertexIndex==1 && mark.Position==graded.Points[1] && !ReferenceEquals(mark,studio.Document.Pieces.Single(p=>p.Id==source.Id).Notches![0]) &&
+                    status.Text.Contains("köşe işareti",StringComparison.OrdinalIgnoreCase),
+                    "Single grading preserves independent marked vertices and reports them",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo removes marked single grade without changing source",checks);
+            }
+            finally { tools.Close(); }
+            var live=studio.Document.Pieces.Single();var added=false;
+            var batch=new BulkGradingWindow(studio,studio,live,[new(0,0),new(1,0),new(1,1),new(0,1)],()=>true,()=>added=true);
+            try
+            {
+                batch.Entries.Text="S; -1\nL; 1";var task=batch.CalculateAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(batch.Ready is { Count:2 } && batch.Ready.All(p=>p.Notches is { Count:1 } && p.Notches[0].VertexIndex==1 && p.Notches[0].Position==p.Points[1]) &&
+                    batch.Ready[0].Notches![0].Position==new Point2(9,0) && batch.Ready[1].Notches![0].Position==new Point2(11,0) &&
+                    batch.Status.Text.Contains("önizlemede gösterilmez") && DocumentSession.ContentEquals(before,studio.Document),
+                    "Marked batch preview maps each size and states markers are not drawn",checks);
+                batch.AddReady();
+                Check(added && studio.Document.Pieces.Count==3 && studio.Document.Pieces.Skip(1).All(p=>p.Notches![0].Position==p.Points[1]) &&
+                    session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Marked grade batch commits and undoes atomically",checks);
+            }
+            finally { batch.Close(); }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
 
     private static void VerifyGrainlineEditing(MainWindow studio,List<string> checks)

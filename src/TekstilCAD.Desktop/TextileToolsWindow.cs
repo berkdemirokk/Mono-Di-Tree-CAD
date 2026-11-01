@@ -512,7 +512,7 @@ public sealed class TextileToolsWindow : Window
         layout.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star),MinHeight=80 });
         layout.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
         var help=new Expander { Header="Artışları mm olarak girin · Projeye uygulayıp kaydedin",IsExpanded=false,Margin=new Thickness(0,0,0,2),MaxWidth=400,HorizontalAlignment=HorizontalAlignment.Left };
-        help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6) };
+        help.Content=new TextBlock { Text="ΔX / ΔY bir beden adımındaki mm değişimidir. Her beden aynı seçili temel parçadan hesaplanır. Artışları projeye uygulayın, ardından ana pencereden projeyi kaydedin. Uygulanmamış hücreler atölye kapanınca kaybolur. Köşe işaretleri yeni bedende aynı indeksli noktalara taşınır; görsel işaretler fiziksel çentik veya kesim komutu değildir. Her bedende konumlarını kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,6,0,6) };
         var gradeHeader=new StackPanel { Orientation=Orientation.Horizontal };gradeHeader.Children.Add(help);
         var pickGradePoint=Button(gradeHeader,"Konturdan nokta seç…",SelectGradePoint,()=>HasPiece()&&!rulesNeedReset);
         pickGradePoint.Margin=new Thickness(0,0,0,2);pickGradePoint.Padding=new Thickness(10,3,10,3);
@@ -666,12 +666,13 @@ public sealed class TextileToolsWindow : Window
                 // A request already received before this point must leave the project untouched.
                 token.ThrowIfCancellationRequested();
                 var grainNotice=generated.Grainline is null ? "" : " İplik yönü aktarıldı ve kontrol bekliyor; yeni konturla ilişkisini kontrol edin. Bu aktarım üretime uygunluk onayı değildir.";
-                AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}");
+                var markNotice=generated.Notches is { Count:>0 } ? $" {generated.Notches.Count} köşe işareti aynı indeksli yeni noktalara aktarıldı; konumlarını kontrol edin. İşaretler fiziksel çentik değildir." : "";
+                AddGenerated(generated,true,onCommitted:()=>gradeCommitted=true);Success($"{generated.Name} oluşturuldu. Temel parça “{snapshot.Name}” ve artışlar korundu. {metadataNotice}{grainNotice}{markNotice}");
                 if(generated.Grainline is not null)result.Foreground=StudioTheme.Warning;
                 if(generated.Points.SequenceEqual(snapshot.Points))
                 {
                     result.Foreground=StudioTheme.Warning;
-                    result.Text=$"{generated.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}";
+                    result.Text=$"{generated.Name} eklendi; geometri temel parçayla aynı. Adım sayısı veya tüm artışlar sıfır olabilir. Ölçü değişikliği bekliyorsanız kuralları kontrol edin. {metadataNotice}{grainNotice}{markNotice}";
                     workspace.SetStatus(result.Text);
                 }
             }

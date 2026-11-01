@@ -53,6 +53,8 @@ internal sealed class BulkGradingWindow : Window
         panel.Children.Add(new TextBlock { Text="Adet kaynaktan kopyalanmaz; her beden için üçüncü alana girilebilir. Sıfır adım veya sıfır artış, temel kalıpla aynı geometriyi oluşturabilir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted });
         if(this.source.Grainline is not null)
             panel.Children.Add(new TextBlock { Text="Tüm noktalar eşit ötelenirse iplik yönü de ötelenir; diğer durumlarda aynı koordinatlarda kalır. Her durumda kontrol bekler. Her bedenin konturuyla ilişkisini kontrol edin; aktarım üretime uygunluk onayı değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
+        if(this.source.Notches is { Count:>0 })
+            panel.Children.Add(new TextBlock { Text="Köşe işaretleri her bedende aynı indeksli noktalara aktarılır; bu karşılaştırma çiziminde gösterilmez. Her bedende işaret konumlarını kontrol edin. Görsel işaret fiziksel çentik veya kesim komutu değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         var actions=new WrapPanel();actions.Children.Add(PreviewButton);actions.Children.Add(AddButton);actions.Children.Add(CancelButton);panel.Children.Add(actions);
         AutomationProperties.SetName(PreviewList,"Hesaplanan bedenlerin önizleme listesi");panel.Children.Add(PreviewList);
         panel.Children.Add(new TextBlock { Text="Geometrileri karşılaştırmak için yukarıdan bir beden seçin. Konturlar: kesikli sarı temel kalıp, düz turkuaz seçili beden. İplik yönü çizgileri sarı ve kesikli turkuazdır; üst üste gelebilir. Her bedende konturla ilişkisini kontrol edin. Aynı koordinat ve ölçek kullanılır; ekran çizimi fiziksel ölçü değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0) });
@@ -161,7 +163,7 @@ internal sealed class BulkGradingWindow : Window
             ready=items.Generated;readyText=text;readySize=include;readyRole=copy;
             PreviewList.ItemsSource=items.Labels;
             PreviewList.SelectedIndex=0;
-            Status.Foreground=source.Grainline is null ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet yalnız girildiğinde eklenir."+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.");AddButton.IsEnabled=true;
+            Status.Foreground=source.Grainline is null && source.Notches is not { Count:>0 } ? StudioTheme.Text : StudioTheme.Warning;Status.Text=$"{items.Generated.Count} beden hazır. Ölçüleri inceleyin; ekleme tek geri alma işlemidir. Adet yalnız girildiğinde eklenir."+(source.Grainline is null ? "" : " İplik yönü her bedende kontrol bekliyor; konturla ilişkisini kontrol edin.")+(source.Notches is { Count:>0 } ? " Köşe işaretleri aynı indeksli noktalara aktarıldı; önizlemede gösterilmez. Her bedeni kontrol edin." : "");AddButton.IsEnabled=true;
         }
         catch(OperationCanceledException) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Hesap iptal edildi; proje değişmedi."; }
         catch(Exception ex) { InvalidatePreview();Status.Foreground=StudioTheme.Warning;Status.Text="Bedenler hazırlanamadı: "+ex.Message; }
