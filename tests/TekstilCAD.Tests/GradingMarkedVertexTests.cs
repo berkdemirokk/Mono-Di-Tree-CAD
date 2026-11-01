@@ -50,6 +50,27 @@ public sealed class GradingMarkedVertexTests
     }
 
     [Fact]
+    public void OpenMarkedPathGradesAndRoundTripsWithBothEndpointMarks()
+    {
+        var source = new PatternPiece { Closed = false, Points = [new(0,0),new(20,0),new(20,20)],
+            Notches = [new NotchMark { VertexIndex = 0, Position = new(0,0) },
+                new NotchMark { VertexIndex = 2, Position = new(20,20) }] };
+        var before = source.Clone();
+        var result = GradingEngine.Generate(source,[new(0,0),new(1,0),new(1,2)],1,"L");
+        Assert.False(result.Closed);
+        Assert.Equal(new[] { 0,2 },result.Notches!.Select(m=>m.VertexIndex));
+        Assert.Equal(new Point2(21,22),result.Notches[1].Position);
+        var document = new ProjectDocument { Pieces = [source,result] };
+        var text = ProjectStorage.SerializeProject(document);
+        Assert.Equal(6,(int)JsonNode.Parse(text)!.AsArray()[0]!);
+        var restored = ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(text));
+        Assert.False(restored.Pieces[1].Closed);
+        Assert.All(restored.Pieces[1].Notches!,mark=>Assert.Equal(restored.Pieces[1].Points[mark.VertexIndex],mark.Position));
+        Assert.True(DocumentSession.ContentEquals(new ProjectDocument { Pieces = [before] },
+            new ProjectDocument { Pieces = [source] }));
+    }
+
+    [Fact]
     public void InvalidAndAmbiguousMarksRemainRejected()
     {
         var source = Source();
