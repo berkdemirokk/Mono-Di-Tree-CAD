@@ -758,7 +758,10 @@ enum ModelStore {
                 data.append(chunk)
             }
             if data.count > limit { return .oversized }
-            guard let metadata = try? JSONDecoder().decode(CopyMetadata.self, from: data), metadata.version == 1 else { return .invalid }
+            try LosslessProjectName.validateAuxiliaryJSONKeys(data, limit: limit)
+            guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  Set(object.keys) == Set(["version", "name"]),
+                  let metadata = try? JSONDecoder().decode(CopyMetadata.self, from: data), metadata.version == 1 else { return .invalid }
             return .valid(metadata)
         } catch { return .invalid }
     }

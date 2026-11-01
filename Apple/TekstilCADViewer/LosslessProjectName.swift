@@ -22,6 +22,20 @@ enum LosslessProjectName {
         }
     }
 
+    // Validate a bounded auxiliary JSON document without requiring project
+    // fields; escaped spellings of the same key count as duplicates.
+    static func validateAuxiliaryJSONKeys(_ data: Data, limit: Int) throws {
+        guard data.count <= limit, String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
+        try data.withUnsafeBytes { raw in
+            let bytes = raw.bindMemory(to: UInt8.self)
+            let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0)
+            try scanner.value(depth: 0)
+            scanner.whitespace()
+            guard scanner.i == bytes.count else { throw Failure.invalid }
+        }
+    }
+
     static func replacing(in data: Data, with name: String) throws -> Data {
         // Renaming reparses the JSON while the preview is still resident.
         // Keep this lower than the viewer limit until streaming validation is available.

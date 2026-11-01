@@ -19,6 +19,9 @@ final class ModelFilePublisherTests: XCTestCase {
         let cases: [(String, Data?)] = [
             ("future", Data("{\"version\":2,\"name\":\"Future\"}".utf8)),
             ("corrupt", Data([255, 0, 1])),
+            ("duplicate-version", Data(#"{"version":1,"\u0076ersion":2,"name":"Ambiguous"}"#.utf8)),
+            ("duplicate-name", Data(#"{"version":1,"name":"First","name":"Second"}"#.utf8)),
+            ("unknown-field", Data(#"{"version":1,"name":"Extra","critical":true}"#.utf8)),
             ("missing", nil)
         ]
         for (name, metadata) in cases {
