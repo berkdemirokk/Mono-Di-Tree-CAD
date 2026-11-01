@@ -9167,6 +9167,52 @@ internal static class DesktopVerification
             var notesRoot=(FrameworkElement)notes!.Content;notesRoot.Measure(new Size(360,360));notesRoot.Arrange(new Rect(0,0,360,360));notesRoot.UpdateLayout();
             Check(new[] { notes.DescriptionForVerification,notes.MeasurementsForVerification,notes.ReferenceForVerification }.All(x=>x.Focusable && FullyVisible(x,notesRoot)),
                 "Drawing notes fields stay visible and keyboard reachable at minimum size",checks);
+            Check(notes.PhotoButtonForVerification.IsEnabled && notes.PhotoButtonForVerification.Focusable && FullyVisible(notes.PhotoButtonForVerification,notesRoot) &&
+                AutomationProperties.GetHelpText(notes.PhotoButtonForVerification).Contains("kalıp çıkarmaz"),
+                "Reference photo preview is reachable and its scope is clear",checks);
+            byte[] EncodePhoto(int width,int height,bool jpeg)
+            {
+                var pixels=new byte[checked(width*height*4)];for(int i=0;i<pixels.Length;i+=4) { pixels[i]=48;pixels[i+1]=96;pixels[i+2]=180;pixels[i+3]=255; }
+                var bitmap=BitmapSource.Create(width,height,96,96,PixelFormats.Bgra32,null,pixels,width*4);
+                BitmapEncoder encoder=jpeg ? new JpegBitmapEncoder() : new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                using var bytes=new MemoryStream();encoder.Save(bytes);return bytes.ToArray();
+            }
+            foreach(var jpeg in new[] { false,true })
+            {
+                var photoBytes=EncodePhoto(32,16,jpeg);var originalBytes=(byte[])photoBytes.Clone();
+                var preview=Task.Run(()=>ReferencePhotoDecoder.Decode(photoBytes)).GetAwaiter().GetResult();
+                Check(preview.IsFrozen && preview.PixelWidth==32 && preview.PixelHeight==16 && photoBytes.SequenceEqual(originalBytes),
+                    "Local "+(jpeg ? "JPEG" : "PNG")+" preview decodes independently without changing request bytes",checks);
+            }
+            var widePhoto=EncodePhoto(2000,10,false);var scaledPreview=Task.Run(()=>ReferencePhotoDecoder.Decode(widePhoto)).GetAwaiter().GetResult();
+            Check(scaledPreview.PixelWidth==1024 && scaledPreview.PixelHeight>0 && scaledPreview.PixelHeight<=1024,
+                "Large valid reference is reduced to the bounded preview size",checks);
+            var largePhoto=EncodePhoto(12001,1,false);var refused=false;
+            try { _=Task.Run(()=>ReferencePhotoDecoder.Decode(largePhoto)).GetAwaiter().GetResult(); } catch(InvalidDataException) { refused=true; }
+            Check(refused,"Oversized photo dimensions are rejected before preview",checks);
+            var badPhoto=new ReferencePhotoWindow(studio,input.Reference!.Data);var oldContext=SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+            try
+            {
+                var goodPhoto=new ReferencePhotoWindow(studio,EncodePhoto(32,16,false));
+                try
+                {
+                    var goodLoad=(Task)typeof(ReferencePhotoWindow).GetMethod("LoadPhotoAsync",PrivateInstance)!.Invoke(goodPhoto,null)!;
+                    PumpUntil(()=>goodLoad.IsCompleted);goodLoad.GetAwaiter().GetResult();
+                    Render(goodPhoto,Path.ChangeExtension(reportPath,".reference-photo-compact.png"),360,360);
+                    var photoRoot=(FrameworkElement)goodPhoto.Content;
+                    Check(goodPhoto.StatusForVerification.Text.Contains("gösteriliyor") && goodPhoto.PhotoForVerification.Source is BitmapSource &&
+                        FullyVisible(goodPhoto.PhotoForVerification,photoRoot) && FullyVisible(goodPhoto.StatusForVerification,photoRoot),
+                        "Local reference preview and its status render visibly at minimum size",checks);
+                }
+                finally { goodPhoto.Close(); }
+                var load=(Task)typeof(ReferencePhotoWindow).GetMethod("LoadPhotoAsync",PrivateInstance)!.Invoke(badPhoto,null)!;
+                PumpUntil(()=>load.IsCompleted);load.GetAwaiter().GetResult();
+                Check(badPhoto.StatusForVerification.Text.Contains("önizlenemedi") && input.Reference.Data.SequenceEqual(window.CaptureForVerification().Reference!.Data) &&
+                    DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
+                    "Invalid signed photo reports failure while request bytes and CAD remain unchanged",checks);
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(oldContext);badPhoto.Close(); }
             window.ChatInputForVerification.Text="gönderilmemiş";
             Check(window.CreateDrawingNotes() is null && window.ChatInputForVerification.Text=="gönderilmemiş" && window.StatusForVerification.Text.Contains("mesajı gönderin"),
                 "Unsent chat blocks drawing notes while preserving the message",checks);

@@ -1,0 +1,66 @@
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using TekstilCAD.FileFormats;
+
+namespace TekstilCAD.Desktop;
+
+/// <summary>
+/// Decodes a detached, reduced still-image preview; it does not interpret a garment,
+/// apply EXIF orientation, or establish measurements. WIC runs in this process, so
+/// these limits do not provide process isolation or a hard codec memory/time limit.
+/// </summary>
+internal static class ReferencePhotoDecoder
+{
+    internal const int MaximumDimension=12_000;
+    internal const long MaximumPixels=24_000_000;
+    internal const int MaximumPreviewDimension=1_024;
+
+    internal static BitmapSource Decode(byte[] data)
+    {
+        if(data is null || data.Length==0 || data.Length>DesignRequestStorage.MaximumReferenceBytes)
+            throw new InvalidDataException("Görsel boyutu önizleme sınırının dışında.");
+        // Decoding must not retain or change the request's image buffer.
+        var bytes=(byte[])data.Clone();
+        var png=bytes.Length>=8 && bytes.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10});
+        var jpeg=bytes.Length>=3 && bytes[0]==0xff && bytes[1]==0xd8 && bytes[2]==0xff;
+        if(!png && !jpeg)throw new InvalidDataException("Önizleme yalnız PNG veya JPEG dosyalarını destekler.");
+        try
+        {
+            int width,height;
+            using(var header=new MemoryStream(bytes,false))
+            {
+                var decoder=BitmapDecoder.Create(header,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.None);
+                if((png && decoder is not PngBitmapDecoder) || (jpeg && decoder is not JpegBitmapDecoder) || decoder.Frames.Count!=1)
+                    throw new InvalidDataException("Görsel biçimi veya kare sayısı önizleme için desteklenmiyor.");
+                width=decoder.Frames[0].PixelWidth;height=decoder.Frames[0].PixelHeight;
+            }
+            if(width<=0 || height<=0 || width>MaximumDimension || height>MaximumDimension || (long)width*height>MaximumPixels)
+                throw new InvalidDataException("Görselin piksel boyutu önizleme sınırını aşıyor.");
+
+            using var source=new MemoryStream(bytes,false);
+            var image=new BitmapImage();image.BeginInit();image.CacheOption=BitmapCacheOption.OnLoad;
+            image.CreateOptions=BitmapCreateOptions.PreservePixelFormat;image.StreamSource=source;
+            if(Math.Max(width,height)>MaximumPreviewDimension)
+            {
+                if(width>=height)image.DecodePixelWidth=MaximumPreviewDimension;
+                else image.DecodePixelHeight=MaximumPreviewDimension;
+            }
+            image.EndInit();
+            if(image.PixelWidth<=0 || image.PixelHeight<=0 || image.PixelWidth>MaximumPreviewDimension || image.PixelHeight>MaximumPreviewDimension)
+                throw new InvalidDataException("Görsel güvenli önizleme boyutuna indirgenemedi.");
+            // CopyPixels forces raster decoding and detaches the result from the
+            // stream and decoder; BGRA32 bounds the retained pixels to 4 MiB.
+            var converted=new FormatConvertedBitmap(image,PixelFormats.Bgra32,null,0);
+            var stride=checked(converted.PixelWidth*4);var pixels=new byte[checked(stride*converted.PixelHeight)];
+            converted.CopyPixels(pixels,stride,0);
+            var preview=BitmapSource.Create(converted.PixelWidth,converted.PixelHeight,96,96,PixelFormats.Bgra32,null,pixels,stride);
+            preview.Freeze();return preview;
+        }
+        catch(Exception ex) when(ex is IOException or FormatException or NotSupportedException or ArgumentException or InvalidOperationException or COMException or OverflowException)
+        {
+            throw new InvalidDataException("Görsel önizleme için çözümlenemedi; kayıtlı görsel değiştirilmedi.",ex);
+        }
+    }
+}

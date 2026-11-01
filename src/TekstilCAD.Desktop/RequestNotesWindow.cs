@@ -13,6 +13,8 @@ internal sealed class RequestNotesWindow : Window
     internal TextBox DescriptionForVerification { get; }
     internal TextBox MeasurementsForVerification { get; }
     internal TextBox ReferenceForVerification { get; }
+    internal Button PhotoButtonForVerification { get; }
+    private ReferencePhotoWindow? photoWindow;
 
     internal RequestNotesWindow(Window owner,DesignRequest request)
     {
@@ -22,8 +24,19 @@ internal sealed class RequestNotesWindow : Window
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });
         Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(14) };Content=root;
-        var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
-        close.Click+=(_,_)=>Close();DockPanel.SetDock(close,Dock.Bottom);root.Children.Add(close);
+        var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
+        PhotoButtonForVerification=new Button { Content="Referans görselini göster",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4),IsEnabled=request.Reference is not null };
+        AutomationProperties.SetHelpText(PhotoButtonForVerification,"Kaydedilmiş görselin yerel önizlemesini açar; fotoğraftan ölçü veya kalıp çıkarmaz.");
+        var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,4) };
+        close.Click+=(_,_)=>Close();actions.Children.Add(PhotoButtonForVerification);actions.Children.Add(close);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        var referenceBytes=request.Reference is null ? null : (byte[])request.Reference.Data.Clone();
+        PhotoButtonForVerification.Click+=(_,_)=>
+        {
+            if(referenceBytes is null)return;
+            if(photoWindow is not null) { photoWindow.Activate();return; }
+            var preview=new ReferencePhotoWindow(this,referenceBytes);photoWindow=preview;
+            preview.Closed+=(_,_)=>photoWindow=null;preview.Show();
+        };
         var notice=new TextBlock { Text="Açılış anındaki istek notlarıdır; otomatik güncellenmez. Çizim elle yapılır; kalıp oluşturulmadı ve ölçüler doğrulanmadı.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
         DockPanel.SetDock(notice,Dock.Top);root.Children.Add(notice);
         var grid=new Grid();root.Children.Add(grid);
@@ -41,7 +54,7 @@ internal sealed class RequestNotesWindow : Window
         DescriptionForVerification=ReadOnly("İstek açıklaması",request.Prompt);
         MeasurementsForVerification=ReadOnly("Ölçü notları",request.Measurements);
         var reference=request.Reference;
-        ReferenceForVerification=ReadOnly("Referans görsel bilgisi",reference is null ? "Görsel seçilmedi." : $"{SafeName(reference.Name)} · {reference.MediaType} · {reference.Data.Length} bayt\nGörsel gösterilmiyor veya yorumlanmıyor.");
+        ReferenceForVerification=ReadOnly("Referans görsel bilgisi",reference is null ? "Görsel seçilmedi." : $"{SafeName(reference.Name)} · {reference.MediaType} · {reference.Data.Length} bayt\nİsteğe bağlı görüntülenebilir; yorumlanmıyor.");
         ReferenceForVerification.MaxHeight=64;
         AddRow("Açıklama",DescriptionForVerification,0);AddRow("Ölçü notları",MeasurementsForVerification,2);AddRow("Referans görsel bilgisi",ReferenceForVerification,4);
     }
