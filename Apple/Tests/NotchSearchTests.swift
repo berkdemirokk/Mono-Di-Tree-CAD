@@ -2,6 +2,28 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testBoundedMatchesKeepsOrderAndSearchesPastVisibleLimit() {
+        let groups = [Array(0..<500), [500, 501]]
+        let first = NotchSearch.boundedMatches(groups: groups, limit: 500) { _, _ in true }
+        XCTAssertEqual(first.groups[0], Array(0..<500))
+        XCTAssertTrue(first.groups[1].isEmpty)
+        XCTAssertTrue(first.hasMore)
+        let exact = NotchSearch.boundedMatches(groups: [Array(0..<500)], limit: 500) { _, _ in true }
+        XCTAssertFalse(exact.hasMore)
+        let refined = NotchSearch.boundedMatches(groups: groups, limit: 500) { _, point in point == 501 }
+        XCTAssertEqual(refined.groups[1], [501])
+        XCTAssertFalse(refined.hasMore)
+    }
+
+    func testPreparedQueryChecksPointNumberAndHandlesOverflow() {
+        let query = NotchSearch.Query("kol 38 nokta 12")
+        XCTAssertTrue(query.allows(index: 12))
+        XCTAssertFalse(query.allows(index: 1))
+        XCTAssertTrue(query.matches(pieceName: "Ön Kol", details: "Beden: 38", index: 12, x: "1", y: "2"))
+        XCTAssertFalse(NotchSearch.Query("nokta 999999999999999999999999999999").allows(index: 12))
+        XCTAssertFalse(NotchSearch.Query("nokta 1 nokta 2").allows(index: 1))
+    }
+
     func testNotchSearchCombinesPieceDetailsAndPointLabel() {
         func matches(_ query: String, point: Int = 2) -> Bool {
             NotchSearch.matches(query: query, pieceName: "Ön Kol", details: "Beden: 38",

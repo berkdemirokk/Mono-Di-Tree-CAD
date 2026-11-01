@@ -1420,20 +1420,24 @@ private struct NotchPicker: View {
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
 
-    private func matching(_ piece: Drawing.Piece, index: Int) -> [Int] {
-        let query = search.trimmingCharacters(in: .whitespacesAndNewlines)
-        if query.isEmpty { return piece.notches }
-        return piece.notches.filter { point in
-            let p = piece.points[point]
-            return NotchSearch.matches(query: query, pieceName: piece.displayName(index: index),
-                details: piece.selectionDetails(index: index), index: point, x: p.x.formatted(), y: p.y.formatted())
-        }
-    }
-
     var body: some View {
         NavigationStack {
-            let matchingPoints = pieces.indices.map { matching(pieces[$0], index: $0) }
+            let query = NotchSearch.Query(search)
+            let names = pieces.indices.map { pieces[$0].displayName(index: $0) }
+            let details = pieces.indices.map { pieces[$0].selectionDetails(index: $0) }
+            let result = NotchSearch.boundedMatches(groups: pieces.map(\.notches), limit: 500) { pieceIndex, pointIndex in
+                if query.isEmpty { return true }
+                guard query.allows(index: pointIndex) else { return false }
+                let point = pieces[pieceIndex].points[pointIndex]
+                return query.matches(pieceName: names[pieceIndex], details: details[pieceIndex], index: pointIndex,
+                                     x: point.x.formatted(), y: point.y.formatted())
+            }
+            let matchingPoints = result.groups
             List {
+                if result.hasMore {
+                    Text("İlk 500 eşleşme gösteriliyor. Diğer işaretleri bulmak için aramayı daraltın.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 ForEach(pieces.indices, id: \.self) { pieceIndex in
                     let piece = pieces[pieceIndex]
                     let indices = matchingPoints[pieceIndex]

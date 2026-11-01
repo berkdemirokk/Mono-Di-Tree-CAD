@@ -623,6 +623,7 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Çok işaret"].waitForExistence(timeout: 15))
         XCTAssertTrue(app.staticTexts["Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin."].exists)
         app.buttons["Köşe işaretlerini ara ve seç…"].tap()
+        XCTAssertTrue(app.staticTexts["İlk 500 eşleşme gösteriliyor. Diğer işaretleri bulmak için aramayı daraltın."].waitForExistence(timeout: 5))
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("500")
         let mark = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Nokta 500")).firstMatch

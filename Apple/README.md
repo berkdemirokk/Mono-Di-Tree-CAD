@@ -22,6 +22,8 @@ Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme ar
 
 64 KiB üzerindeki kayıt bilgileri sınırlı okunur; sürümü doğrulanamayan kopya normal açılmaz. Kullanıcı ham proje baytlarını ayrı dışa aktarmayı seçebilir; kayıt bilgisi bu kopyaya dahil edilmez. Bu kurtarma akışı henüz Mac veya cihazda doğrulanmadı.
 
+Köşe işareti seçicisinde ilk 500 eşleşme listelenir; sonraki işaretler daha dar bir aramayla bulunabilir. Çok büyük modellerde genel aramanın cihaz performansı henüz ölçülmedi.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.
