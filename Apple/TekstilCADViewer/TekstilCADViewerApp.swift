@@ -259,7 +259,7 @@ private struct ContentView: View {
                             pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
                                 index: selectedPiece, projectName: project.name, revision: drawingRevision, loadRequest: modelLoad.request)
                         }
-                            .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+                            .disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: $pointEditSnapshot) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
                                     isCurrent: { sourceData == snapshot.data && self.selectedPiece == snapshot.index && drawingRevision == snapshot.revision && modelLoad.request == snapshot.loadRequest && !modelLoad.isLoading },
@@ -267,6 +267,10 @@ private struct ContentView: View {
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
+                        if project.hasNonUTF8BOM {
+                            Text("UTF-16 veya UTF-32 dosyalarında nokta düzenleme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
                         Button("Parça adını değiştir ve kopya kaydet") {
                             guard let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
                             // Keep a failed edit available for retry on the same snapshot.

@@ -25,7 +25,7 @@ final class ViewerUITests: XCTestCase {
     }
 
     func testBOMEncodedModelsExplainUnavailablePieceNameEditing() throws {
-        let input = #"[1,{"Name":"Ön","Pieces":[{"Name":"Parça","Points":[]}],"GradingRules":[]}]"#
+        let input = #"[1,{"Name":"Ön","Pieces":[{"Id":"C1F46B38-5857-4CA4-9F6C-D3AE73A4C9C9","Name":"Parça","Points":[{"X":0,"Y":0}]}],"GradingRules":[]}]"#
         let encodings: [(String.Encoding, [UInt8])] = [
             (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
             (.utf32LittleEndian, [0xff, 0xfe, 0, 0]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])
@@ -45,6 +45,8 @@ final class ViewerUITests: XCTestCase {
             XCTAssertTrue(rename.waitForExistence(timeout: 5))
             XCTAssertFalse(rename.isEnabled)
             XCTAssertTrue(app.staticTexts["UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz."].exists)
+            XCTAssertFalse(app.buttons["Deneysel nokta düzenle…"].isEnabled)
+            XCTAssertTrue(app.staticTexts["UTF-16 veya UTF-32 dosyalarında nokta düzenleme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz."].exists)
             app.terminate()
         }
     }
