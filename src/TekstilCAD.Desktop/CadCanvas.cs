@@ -7,6 +7,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
+using TekstilCAD.Patterns;
 using Geometry = TekstilCAD.Core.Geometry;
 
 namespace TekstilCAD.Desktop;
@@ -475,7 +476,10 @@ public sealed class CadCanvas : FrameworkElement
             }
             owner.Select(piece?.Id);
             if(vertex>=0 && piece?.Notches is not null)
-            { owner.SetStatus("İşaretli parçanın noktası taşınamaz; tüm parçayı seçerek taşıyın.");return; }
+            {
+                if(!CanDragMarkedVertex(piece,vertex)) { owner.SetStatus("İşaretli köşe taşınamaz; önce işareti gözden geçirin.");return; }
+                if(piece.Points.Count>Geometry.MaxValidatedContourVertices) { owner.SetStatus("Büyük işaretli konturda nokta taşımak için Tekstil araçlarını kullanın.");return; }
+            }
             if(piece is not null) { dragSourceSnapshot=piece.Clone();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
         }
@@ -647,6 +651,13 @@ public sealed class CadCanvas : FrameworkElement
             dragPreviewGrainline=GrainlineTransform.Translate(dragOriginalGrainline,dragOriginal[0],dragPreview[0],dragTranslation.X,dragTranslation.Y);
         }
     }
+    internal static bool CanDragMarkedVertex(PatternPiece piece,int vertex)
+    {
+        if(vertex<0 || vertex>=piece.Points.Count)return false;
+        if(piece.Notches is null)return true;
+        var logical=piece.Closed && piece.Points.Count>1 && piece.Points[0]==piece.Points[^1] && vertex==piece.Points.Count-1 ? 0 : vertex;
+        return !piece.Notches.Any(mark=>mark.VertexIndex==logical);
+    }
     private void Up(MouseButtonEventArgs e)
     {
         if(e.ChangedButton==MouseButton.Middle) { panStart=null;ReleaseMouseCapture();return; }
@@ -655,7 +666,7 @@ public sealed class CadCanvas : FrameworkElement
         var result=dragPreview;
         if(piece is not null && dragOriginal is not null && (!piece.Points.SequenceEqual(dragOriginal) || !GrainlineTransform.Same(piece.Grainline,dragOriginalGrainline)))
             throw new InvalidOperationException("Sürükleme sırasında parça değişti. İşlemi yeniden başlatın.");
-        if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null && (dragVertex>=0 || dragSourceSnapshot is null))
+        if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal) && piece.Notches is not null && (dragSourceSnapshot is null || (dragVertex>=0 && !CanDragMarkedVertex(piece,dragVertex))))
         { ClearDrag();ReleaseMouseCapture();InvalidateVisual();owner.ShowCanvasError("İşaretli parça değiştirilemez; işlem uygulanmadı.");return; }
         if(piece is not null && result is not null && dragOriginal is not null && !result.SequenceEqual(dragOriginal))
         {
@@ -663,10 +674,19 @@ public sealed class CadCanvas : FrameworkElement
             if(dragVertex>=0) ValidateClosingEdgePreserved(dragOriginal,result,piece.Closed);
             if(dragVertex>=0 && result.Count>Geometry.MaxValidatedContourVertices)
             {
+                if(piece.Notches is not null)throw new InvalidOperationException("Büyük işaretli konturda nokta taşımak için Tekstil araçlarını kullanın.");
                 StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result);
                 ClearDrag();ReleaseMouseCapture();InvalidateVisual();return;
             }
-            if(dragVertex>=0) ValidateDraggedVertex(result,piece.Closed);
+            if(dragVertex>=0)
+            {
+                if(piece.Notches is not null)
+                {
+                    var verified=PatternTools.MovePoint(piece,dragVertex,result[dragVertex]);
+                    if(!verified.Points.SequenceEqual(result))throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor.");
+                }
+                else ValidateDraggedVertex(result,piece.Closed);
+            }
             if(dragSourceSnapshot is not null && !OpenPathSourceSnapshot.Matches(piece,dragSourceSnapshot))
                 throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
             var snapshot=result.ToList();

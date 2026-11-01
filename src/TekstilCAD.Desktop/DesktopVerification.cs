@@ -1705,7 +1705,23 @@ internal static class DesktopVerification
             Check(staleRejected && DocumentSession.ContentEquals(newer,studio.Document) && session.UndoCount==priorUndo,
                 "Marked drag rejects a changed source and keeps newer marks",checks);canvas.CancelDrawing();
             studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.Select(marked.Id);PointAt(100,0,1);down.Invoke(canvas,[canvas,click]);
-            Check(!canvas.HasActiveDragPreview,"Individual vertex dragging stays disabled for marked pieces",checks);
+            Check(!canvas.HasActiveDragPreview,"Dragging an explicitly marked vertex is rejected",checks);
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);
+            before=studio.Document.Clone();undo=session.UndoCount;PointAt(0,0,1);down.Invoke(canvas,[canvas,click]);
+            Check(canvas.HasActiveDragPreview && (int)vertexField.GetValue(canvas)! == 0,"Unmarked vertex on a marked piece can start a drag",checks);
+            pointer=click.GetPosition(canvas);canvas.UpdateDragPreview(new Point(pointer.X-10,pointer.Y+10));up.Invoke(canvas,[click]);
+            var vertexEdited=studio.Document.Clone();
+            Check(vertexEdited.Pieces[0].Points[0]==new Point2(-10,10) && vertexEdited.Pieces[0].Notches!.Single().VertexIndex==1 &&
+                vertexEdited.Pieces[0].Notches![0].Position==marked.Notches![0].Position && vertexEdited.Pieces[0].Grainline!.NeedsReview &&
+                vertexEdited.GradingRules.Single().SourcePoints.SequenceEqual(before.GradingRules.Single().SourcePoints) &&
+                error.Text.Contains("serileme",StringComparison.OrdinalIgnoreCase) && session.UndoCount==undo+1,
+                "Unmarked vertex drag retains marks, warns about old grading and marks grainline for review",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(vertexEdited,studio.Document),
+                "Unmarked vertex drag on a marked piece is undoable and redoable",checks);
+            var repeatedMarked=marked.Clone();repeatedMarked.Points.Add(repeatedMarked.Points[0]);
+            repeatedMarked.Notches=[new NotchMark { VertexIndex=0,Position=repeatedMarked.Points[0] }];
+            Check(!CadCanvas.CanDragMarkedVertex(repeatedMarked,0) && !CadCanvas.CanDragMarkedVertex(repeatedMarked,repeatedMarked.Points.Count-1) &&
+                CadCanvas.CanDragMarkedVertex(repeatedMarked,1),"Both aliases of a marked closing vertex remain protected",checks);
             var far=new PatternPiece { Points=[new(50_000_000,0),new(50_000_100,0),new(50_000_100,100),new(50_000_000,100)],
                 Notches=[new NotchMark { VertexIndex=1,Position=new(50_000_100,0) }] };
             studio.LoadDocument(new ProjectDocument { Pieces=[far] });studio.Select(far.Id);before=studio.Document.Clone();undo=session.UndoCount;
