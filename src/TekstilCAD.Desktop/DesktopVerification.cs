@@ -9125,6 +9125,30 @@ internal static class DesktopVerification
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
                 "Dress request reports explicitly stated chest and asks for missing measurements",checks);
+            var root=(FrameworkElement)window.Content;root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
+            var straight=Descendants<Button>(root).Single(b=>Equals(b.Content,"Düz elbise"));
+            var aline=Descendants<Button>(root).Single(b=>Equals(b.Content,"A kesim elbise"));
+            Check(straight.Focusable && aline.Focusable && AutomationProperties.GetHelpText(straight).Contains("mevcut metin korunur") &&
+                AutomationProperties.GetHelpText(aline).Contains("kalıp oluşturulmaz"),"Dress model choices expose keyboard and honest help text",checks);
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var straightResult=window.CaptureForVerification();
+            Check(straightResult.Prompt.Replace("\r\n","\n")==input.Prompt+"\nDüz elbise; detaylar: " && straightResult.Measurements==input.Measurements &&
+                straightResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
+                "Straight model appends while preserving prompt, measurements and image and clears stale review",checks);
+            window.ReviewMeasurementsForVerification();
+            Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm"),"Review can be recalculated after model choice",checks);
+            aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var alineResult=window.CaptureForVerification();
+            Check(alineResult.Prompt.Replace("\r\n","\n")==straightResult.Prompt.Replace("\r\n","\n")+"\nA kesim elbise; detaylar: " && alineResult.Measurements==input.Measurements &&
+                alineResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
+                "A-line model appends without replacing existing data and clears stale review",checks);
+            window.PromptForVerification.Text="Göğüs çevresi 96 cm;"+new string('x',DesignRequestStorage.MaximumTextLength-"Göğüs çevresi 96 cm;".Length-1);
+            var longPrompt=window.PromptForVerification.Text;window.ReviewMeasurementsForVerification();var priorReview=window.ReviewForVerification.Text;
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text==longPrompt && window.ReviewForVerification.Text==priorReview &&
+                Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Örnek eklenemedi") && t.Text.Contains("Mevcut metin korundu")) &&
+                window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && window.MeasurementsForVerification.Text==input.Measurements,
+                "Both model choices refuse over-limit additions without changing text, image, measurements or review",checks);
             window.PromptForVerification.Text="Değişen elbise isteği";
             Check(window.DirtyForVerification && window.ReviewForVerification.Text.Length==0 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                 "Editing a design request leaves the open project and undo untouched",checks);
