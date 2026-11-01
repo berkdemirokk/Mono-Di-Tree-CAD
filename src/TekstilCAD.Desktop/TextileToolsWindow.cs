@@ -546,6 +546,32 @@ public sealed class TextileToolsWindow : Window
 
         resetRulesButton=Button(resetRow,"Yeni geometri için artışları sıfırla",ResetRulesForCurrentGeometry,()=>HasPiece()&&rulesNeedReset);
         resetRulesButton.Margin=new Thickness(0,0,0,6);resetRulesButton.Padding=new Thickness(10,5,10,5);resetRulesButton.Visibility=Visibility.Collapsed;
+        var batchEdit=new Expander { Header="Seçili satırlara aynı artışı yaz",IsExpanded=false,Margin=new Thickness(0,0,0,6) };
+        var batchPanel=new StackPanel();batchEdit.Content=batchPanel;lower.Children.Add(batchEdit);
+        batchPanel.Children.Add(new TextBlock { Text="Tabloda Ctrl veya Shift ile satırları seçin. İki değer seçili satırların mevcut artışlarının yerine yazılır; yalnız taslak değişir. Tekrarlı kapanış için ilk ve son satırı ayrı seçin.",TextWrapping=TextWrapping.Wrap });
+        var batchFields=new WrapPanel();batchPanel.Children.Add(batchFields);
+        var batchX=new TextBox { Width=100,Margin=new Thickness(0,4,8,4),Text="0" };
+        var batchY=new TextBox { Width=100,Margin=new Thickness(0,4,8,4),Text="0" };
+        AutomationProperties.SetName(batchX,"Seçili satırlar için ΔX mm");AutomationProperties.SetName(batchY,"Seçili satırlar için ΔY mm");
+        batchFields.Children.Add(new TextBlock { Text="ΔX (mm)",VerticalAlignment=VerticalAlignment.Center });batchFields.Children.Add(batchX);
+        batchFields.Children.Add(new TextBlock { Text="ΔY (mm)",VerticalAlignment=VerticalAlignment.Center });batchFields.Children.Add(batchY);
+        var writeBatch=Button(batchPanel,"Seçili satırlara yaz",()=>
+        {
+            if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+            if(rulesNeedReset || activeDraft is null || source.SelectedItem is not PatternPiece piece || activeSourceId!=piece.Id ||
+               !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
+               activeDraft.Closed!=piece.Closed || !activeDraft.Points.SequenceEqual(piece.Points))
+            { result.Text="Kaynak veya taslak güncel değil; artışlar değiştirilmedi.";return; }
+            var selected=grades.SelectedItems.Cast<GradeRow>().ToArray();
+            if(selected.Length==0) { result.Text="Önce tabloda en az bir nokta satırı seçin; artışlar değiştirilmedi.";return; }
+            if(!IsNumber(batchX.Text,out _) || !IsNumber(batchY.Text,out _))
+            { result.Text="İki artış için geçerli mm değerleri girin; hiçbir satır değiştirilmedi.";return; }
+            if(selected.Any(row=>row.Index<0 || row.Index>=rows.Count || !ReferenceEquals(rows[row.Index],row)))
+            { result.Text="Seçim değişti; artışlar değiştirilmedi.";return; }
+            foreach(var row in selected) { row.Dx=batchX.Text.Trim();row.Dy=batchY.Text.Trim(); }
+            result.Text=$"{selected.Length} satırın taslak artışları değişti; projeye henüz uygulanmadı. Tekrarlı kapanış varsa ilk ve son satırı kontrol edin.";
+        },()=>HasPiece()&&!rulesNeedReset);
+        writeBatch.Margin=new Thickness(0,4,0,4);writeBatch.Padding=new Thickness(10,5,10,5);
         var fields=new WrapPanel { VerticalAlignment=VerticalAlignment.Bottom };lower.Children.Add(fields);
         var sizeColumn=new StackPanel { Width=140,Margin=new Thickness(0,0,12,0) };
         var stepColumn=new StackPanel { Width=190,Margin=new Thickness(0,0,12,0) };
@@ -1297,9 +1323,12 @@ public sealed class TextileToolsWindow : Window
             }
         }
     }
-    public sealed class GradeRow
+    public sealed class GradeRow : INotifyPropertyChanged
     {
         public int Index { get; set; } public double X { get; set; } public double Y { get; set; }
-        public string Dx { get; set; }="0";public string Dy { get; set; }="0";
+        private string dx="0",dy="0";
+        public string Dx { get=>dx;set { if(dx==value)return;dx=value;PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(nameof(Dx))); } }
+        public string Dy { get=>dy;set { if(dy==value)return;dy=value;PropertyChanged?.Invoke(this,new PropertyChangedEventArgs(nameof(Dy))); } }
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 }

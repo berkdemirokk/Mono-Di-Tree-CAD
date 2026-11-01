@@ -580,6 +580,7 @@ internal static class DesktopVerification
             VerifyOffsetUnverifiedDetailGuidance(studio,checks);
             VerifySelectedNotchComparison(studio,checks);
             VerifyGradeInputFeedback(studio,checks);
+            VerifyGradeBatchDraft(studio,checks);
             VerifyGradeApplyConflicts(studio,checks);
             VerifyLayeredPointerSelection(studio,checks);
             VerifyPieceSearch(studio,checks);
@@ -11519,6 +11520,35 @@ internal static class DesktopVerification
         ClickAndWaitForGrade(conflictTools,create);
         Check(conflictStatus.Text.Contains("kural") && conflictTable.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7"
             && DocumentSession.ContentEquals(conflictBefore,studio.Document),"Changed saved rule cannot be used to generate a size from stale draft increments",checks);
+    }
+    private static void VerifyGradeBatchDraft(MainWindow studio,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Toplu artış",Points=[new(0,0),new(10,0),new(0,10)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
+        Descendants<TabControl>(root).Single().SelectedIndex=1;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        var expander=Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz"));expander.IsExpanded=true;root.UpdateLayout();
+        var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+        var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+        var x=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Seçili satırlar için ΔX mm");
+        var y=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Seçili satırlar için ΔY mm");
+        var write=Descendants<Button>(root).Single(b=>Equals(b.Content,"Seçili satırlara yaz"));
+        table.SelectedItems.Clear();x.Text="1";y.Text="2";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows.All(r=>r.Dx=="0" && r.Dy=="0") && DocumentSession.ContentEquals(before,studio.Document),"Empty bulk grading selection does not modify the draft",checks);
+        table.SelectedItems.Clear();table.SelectedItems.Add(rows[0]);table.SelectedItems.Add(rows[2]);
+        x.Text="1,5";y.Text="hatalı";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows.All(r=>r.Dx=="0" && r.Dy=="0") && DocumentSession.ContentEquals(before,studio.Document),
+            "Invalid bulk grading input leaves all draft rows and project unchanged",checks);
+        var changed=0;rows[0].PropertyChanged+=(_,_)=>changed++;
+        y.Text="-2";write.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="1,5" && rows[0].Dy=="-2" && rows[1].Dx=="0" && rows[1].Dy=="0" &&
+              rows[2].Dx=="1,5" && rows[2].Dy=="-2" && changed==2 && session.UndoCount==0 && DocumentSession.ContentEquals(before,studio.Document),
+            "Bulk grading changes only selected draft rows and notifies the table without committing",checks);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1.5,-2),new Point2(0,0),new Point2(1.5,-2) }) &&
+              session.UndoCount==1,"Applying batch-edited draft persists the selected increments in one transaction",checks);
+        Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores the project before batch grading application",checks);
     }
     private static void VerifyGradeInputFeedback(MainWindow studio,List<string> checks)
     {
