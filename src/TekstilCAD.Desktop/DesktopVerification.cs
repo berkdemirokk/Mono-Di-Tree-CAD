@@ -1460,7 +1460,10 @@ internal static class DesktopVerification
         foreach(var closed in new[] { false,true })
         {
             var piece=new PatternPiece { Name="Büyük parça",Closed=closed,Points=original.ToList() };
-            studio.LoadDocument(new ProjectDocument { Name="Büyük nokta düzenleme",Pieces=[piece] });
+            var document=new ProjectDocument { Name="Büyük nokta düzenleme",Pieces=[piece] };
+            if(closed)document.GradingRules.Add(new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,
+                SourcePoints=original.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),original.Length).ToList() });
+            studio.LoadDocument(document);
             studio.SetTool("Seç");studio.Select(piece.Id);
             var before=studio.Document.Clone();
             canvas.StartLargeVertexValidation(piece.Id,closed,original,valid);
@@ -1472,6 +1475,12 @@ internal static class DesktopVerification
             PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
             Check(!canvas.LargeVertexValidationRunning && studio.Selected!.Points.SequenceEqual(valid) && session.UndoCount==1,
                 $"Large {(closed?"closed":"open")} vertex change commits once",checks);
+            var warning=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+            Check(closed
+                ? warning.Text.Contains("taşındı") && warning.Text.Contains("serileme kuralı") && warning.Text.Contains("gözden geçirin") &&
+                  studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(original)
+                : string.IsNullOrEmpty(warning.Text),
+                $"Large vertex change {(closed?"warns about the preserved stale rule":"has no grading warning without a rule")}",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),
                 $"Large {(closed?"closed":"open")} vertex change is undoable",checks);
 

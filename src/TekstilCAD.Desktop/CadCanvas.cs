@@ -768,8 +768,13 @@ public sealed class CadCanvas : FrameworkElement
                 target.Points=candidate.ToList();
                 if(target.Grainline is not null)target.Grainline.NeedsReview=true;
             },()=>committed=true);
-            owner.ClearCanvasError();
-            owner.SetStatus("Büyük parçanın noktası taşındı · Geri al ile önceki duruma dönebilirsiniz.");
+            if(owner.Document.GradingRules.Any(rule=>rule.SourcePieceId==id))
+                owner.ShowCanvasError("Büyük parçanın noktası taşındı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
+            else
+            {
+                owner.ClearCanvasError();
+                owner.SetStatus("Büyük parçanın noktası taşındı · Geri al ile önceki duruma dönebilirsiniz.");
+            }
         }
         catch(OperationCanceledException) when(cancellation.IsCancellationRequested && !committed) { }
         catch(OperationCanceledException ex) when(committed)
