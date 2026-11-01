@@ -47,8 +47,11 @@ struct LoadedModelState<Model> {
     private(set) var revision = UUID()
     var load = ModelLoadState()
     var selectedPiece: Int? {
-        didSet { if selectedPiece != oldValue { selectionRevision = UUID() } }
+        didSet {
+            if selectedPiece != oldValue { selectionRevision = UUID(); selectedNotch = nil }
+        }
     }
+    var selectedNotch: (piece: Int, point: Int)?
     private var selectionRevision = UUID()
 
     #if DEBUG
@@ -82,6 +85,7 @@ struct LoadedModelState<Model> {
         self.model = model
         self.sourceData = data
         self.selectedPiece = selectedPiece
+        self.selectedNotch = nil
         revision = UUID()
     }
 }

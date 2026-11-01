@@ -55,7 +55,10 @@ private struct ContentView: View {
     @State private var showingFullScreenDrawing = false
     @State private var showingLargePiecePicker = false
     @State private var showingNotches = false
-    @State private var selectedNotch: (piece: Int, point: Int)?
+    private var selectedNotch: (piece: Int, point: Int)? {
+        get { loadedModel.selectedNotch }
+        nonmutating set { loadedModel.selectedNotch = newValue }
+    }
     @State private var showingLibrary = false
     @State private var librarySearch = ""
     @State private var librarySortOrder: ModelLibrarySortOrder = .name

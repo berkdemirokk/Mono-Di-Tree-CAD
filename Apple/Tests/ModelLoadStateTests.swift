@@ -63,6 +63,19 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertFalse(state.isCurrent(identity, data: Data([1])))
     }
     #endif
+    func testNotchSelectionIsClearedWhenPieceOrModelChanges() {
+        var state = LoadedModelState<Int>()
+        state.install(1, data: Data([1]), selectedPiece: 0)
+        state.selectedNotch = (piece: 0, point: 3)
+        state.selectedPiece = 0
+        XCTAssertEqual(state.selectedNotch?.point, 3)
+        state.selectedPiece = 1
+        XCTAssertNil(state.selectedNotch)
+        state.selectedNotch = (piece: 1, point: 2)
+        state.install(2, data: Data([2]), selectedPiece: 1)
+        XCTAssertNil(state.selectedNotch)
+        XCTAssertEqual(state.selectedPiece, 1)
+    }
     func testInstallingModelReplacesSelectionWithMatchedOrDefaultSelection() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]), selectedPiece: 2)
