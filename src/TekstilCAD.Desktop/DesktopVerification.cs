@@ -612,6 +612,7 @@ internal static class DesktopVerification
             VerifyBulkGrading(studio,reportPath,checks);
             VerifyBulkPreviewDirection(checks);
             VerifyBulkPreviewGrainline(checks);
+            VerifyBulkPreviewMarks(checks);
             VerifyBulkPreviewFit(checks);
             VerifyIndependentRecoveryWarnings(studio,reportPath,checks);
             VerifySingleGradePostCommit(studio,checks);
@@ -8218,8 +8219,8 @@ internal static class DesktopVerification
                 batch.Entries.Text="S; -1\nL; 1";var task=batch.CalculateAsync();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
                 Check(batch.Ready is { Count:2 } && batch.Ready.All(p=>p.Notches is { Count:1 } && p.Notches[0].VertexIndex==1 && p.Notches[0].Position==p.Points[1]) &&
                     batch.Ready[0].Notches![0].Position==new Point2(9,0) && batch.Ready[1].Notches![0].Position==new Point2(11,0) &&
-                    batch.Status.Text.Contains("önizlemede gösterilmez") && DocumentSession.ContentEquals(before,studio.Document),
-                    "Marked batch preview maps each size and states markers are not drawn",checks);
+                    batch.Status.Text.Contains("önizlemede gösterilir") && DocumentSession.ContentEquals(before,studio.Document),
+                    "Marked batch preview maps each size and reports visible markers",checks);
                 batch.AddReady();
                 Check(added && studio.Document.Pieces.Count==3 && studio.Document.Pieces.Skip(1).All(p=>p.Notches![0].Position==p.Points[1]) &&
                     session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Marked grade batch commits and undoes atomically",checks);
@@ -9846,6 +9847,41 @@ internal static class DesktopVerification
         Check(!preview.HasGeometry && preview.SelectedId is null && !AutomationProperties.GetHelpText(preview).Contains("Temel iplik yönü",StringComparison.Ordinal),
             "Clearing bulk preview removes grainline geometry and its accessible description",checks);
     }
+    private static void VerifyBulkPreviewMarks(List<string> checks)
+    {
+        var source=new PatternPiece { Points=[new(0,0),new(100,0),new(100,100),new(0,100)] };
+        var grade=source.Clone();grade.Id=Guid.NewGuid();
+        var preview=new BulkGradePreview { Width=300,Height=200,Margin=new Thickness(0) };
+        byte[] Pixels()
+        {
+            preview.Measure(new Size(300,200));preview.Arrange(new Rect(0,0,300,200));preview.UpdateLayout();
+            var bitmap=new RenderTargetBitmap(300,200,96,96,PixelFormats.Pbgra32);bitmap.Render(preview);
+            var pixels=new byte[300*4*200];bitmap.CopyPixels(pixels,300*4,0);return pixels;
+        }
+        static bool Changed(byte[] before,byte[] after,int centerX)
+        {
+            var count=0;
+            for(var y=8;y<=24;y++)for(var x=centerX-8;x<=centerX+8;x++)
+            { var i=(y*300+x)*4;if(Math.Abs(before[i]-after[i])+Math.Abs(before[i+1]-after[i+1])+Math.Abs(before[i+2]-after[i+2])>30)count++; }
+            return count>5;
+        }
+        preview.SetPieces(source,grade,"L");var empty=Pixels();
+        source.Notches=[new NotchMark { VertexIndex=0,Position=source.Points[0] }];
+        grade.Notches=[new NotchMark { VertexIndex=1,Position=grade.Points[1] }];
+        preview.SetPieces(source,grade,"L");var marked=Pixels();
+        Check(Changed(empty,marked,66) && Changed(empty,marked,234) && !preview.MarksSuppressed &&
+            AutomationProperties.GetHelpText(preview).Contains("sarı") && AutomationProperties.GetHelpText(preview).Contains("turkuaz"),
+            "Bulk preview renders both source and graded marks at their respective vertices",checks);
+        grade.Notches=null;preview.SetPieces(source,grade,"L");var sourceOnly=Pixels();
+        grade.Notches=[new NotchMark { VertexIndex=0,Position=grade.Points[0] }];preview.SetPieces(source,grade,"L");
+        Check(Changed(sourceOnly,Pixels(),66),"Overlapping graded and source markers remain separately drawn",checks);
+        source.Notches=Enumerable.Range(0,BulkGradePreview.MaximumVisibleMarks+1).Select(_=>new NotchMark { VertexIndex=0,Position=source.Points[0] }).ToList();
+        preview.SetPieces(source,grade,"L");var suppressed=Pixels();
+        Check(preview.MarksSuppressed && !Changed(empty,suppressed,66) && !Changed(empty,suppressed,234) &&
+            AutomationProperties.GetHelpText(preview).Contains("gösterilmiyor"),"Bulk preview suppresses both sets and explains its marker limit",checks);
+        preview.Clear();Check(!preview.MarksSuppressed && !preview.HasGeometry,"Clearing bulk preview removes marker state",checks);
+    }
+
     private static void VerifyBulkPreviewFit(List<string> checks)
     {
         // Render and measure visible colored pixels, so this verifies the actual

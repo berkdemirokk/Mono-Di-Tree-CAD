@@ -14,6 +14,9 @@ internal sealed class BulkGradePreview : FrameworkElement
     private static readonly Brush GradeBrush=FrozenBrush(0x39,0xd6,0xc6);
     private StreamGeometry? baseGeometry, gradeGeometry;
     private (Point Start,Point End)? baseGrain,gradeGrain;
+    private Point[] baseMarks=[],gradeMarks=[];
+    internal const int MaximumVisibleMarks=500;
+    internal bool MarksSuppressed { get; private set; }
     private double xExtent,yExtent;
     internal Guid? SelectedId { get; private set; }
     internal bool HasGeometry => baseGeometry is not null && gradeGeometry is not null;
@@ -27,7 +30,7 @@ internal sealed class BulkGradePreview : FrameworkElement
 
     internal void Clear()
     {
-        baseGeometry=null;gradeGeometry=null;baseGrain=null;gradeGrain=null;SelectedId=null;
+        baseGeometry=null;gradeGeometry=null;baseGrain=null;gradeGrain=null;baseMarks=[];gradeMarks=[];MarksSuppressed=false;SelectedId=null;
         AutomationProperties.SetHelpText(this,"Karşılaştırma yok. Önce bedenleri hesaplayın ve listeden bir beden seçin.");
         InvalidateVisual();
     }
@@ -67,9 +70,16 @@ internal sealed class BulkGradePreview : FrameworkElement
         baseGeometry=Build(source);gradeGeometry=Build(grade);SelectedId=grade.Id;
         if(sourceGrainValid)baseGrain=(Normalize(source.Grainline!.Start),Normalize(source.Grainline.End));
         if(gradeGrainValid)gradeGrain=(Normalize(grade.Grainline!.Start),Normalize(grade.Grainline.End));
+        MarksSuppressed=(source.Notches?.Count ?? 0)>MaximumVisibleMarks || (grade.Notches?.Count ?? 0)>MaximumVisibleMarks;
+        if(!MarksSuppressed)
+        {
+            baseMarks=source.Notches?.Select(mark=>Normalize(mark.Position)).ToArray() ?? [];
+            gradeMarks=grade.Notches?.Select(mark=>Normalize(mark.Position)).ToArray() ?? [];
+        }
         var sourceDescription=source.Grainline is null ? "Temel kalıpta iplik yönü yok." : sourceGrainValid ? "Temel iplik yönü kalın sarı çizgidir." : "Temel iplik yönü geçersiz olduğu için gösterilemedi.";
         var gradeDescription=grade.Grainline is null ? "Seçili bedende iplik yönü yok." : gradeGrainValid ? "Seçili bedenin iplik yönü kesikli turkuaz çizgidir; konturla ilişkisini kontrol edin." : "Seçili bedenin iplik yönü geçersiz olduğu için gösterilemedi.";
-        AutomationProperties.SetHelpText(this,$"Temel kalıp kesikli sarı, seçili beden düz turkuaz çizgidir. {sourceDescription} {gradeDescription} Çizgiler üst üste olabilir. Seçili beden: {accessibleName}. İkisi aynı koordinat sistemi ve ölçekle gösterilir. Ekran görüntüsü fiziksel ölçü değildir.");
+        var marksDescription=MarksSuppressed ? $"İşaretler {MaximumVisibleMarks} sınırı nedeniyle gösterilmiyor." : "Köşe işaretleri temel kalıpta büyük sarı, seçili bedende küçük turkuaz halkalardır; üst üste gelebilir.";
+        AutomationProperties.SetHelpText(this,$"Temel kalıp kesikli sarı, seçili beden düz turkuaz çizgidir. {sourceDescription} {gradeDescription} {marksDescription} İşaretler fiziksel çentik değildir. Çizgiler üst üste olabilir. Seçili beden: {accessibleName}. İkisi aynı koordinat sistemi ve ölçekle gösterilir. Ekran görüntüsü fiziksel ölçü değildir.");
         InvalidateVisual();
     }
 
@@ -115,6 +125,9 @@ internal sealed class BulkGradePreview : FrameworkElement
             dc.DrawEllipse(GradeBrush,null,g.Start,1.5/scale,1.5/scale);
             dc.DrawEllipse(GradeBrush,null,g.End,1.5/scale,1.5/scale);
         }
+        var baseMarkPen=new Pen(BaseBrush,2/scale);var gradeMarkPen=new Pen(GradeBrush,2/scale);
+        foreach(var p in baseMarks)dc.DrawEllipse(null,baseMarkPen,p,6/scale,6/scale);
+        foreach(var p in gradeMarks)dc.DrawEllipse(null,gradeMarkPen,p,3/scale,3/scale);
         dc.Pop();
     }
     protected override AutomationPeer OnCreateAutomationPeer()=>new PreviewPeer(this);
