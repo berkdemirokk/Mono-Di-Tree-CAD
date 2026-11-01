@@ -841,12 +841,14 @@ enum ModelStore {
                 let canOpen: Bool
                 let requiresRecovery: Bool
                 if url.pathExtension.lowercased() == "tcad" {
-                    name = displayName(url)
-                    canOpen = true
+                    let regular = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFREG) } ?? false
+                    name = regular ? displayName(url) : "Dosya değil (\(url.lastPathComponent))"
+                    canOpen = regular
                     requiresRecovery = false
                 } else if url.pathExtension.lowercased() == copyExtension {
-                    let hasPayload = FileManager.default.fileExists(atPath: payloadURL(url).path)
-                    switch (metadata(url), hasPayload) {
+                    let directory = initialIdentity.map { ($0.entry.mode & UInt32(S_IFMT)) == UInt32(S_IFDIR) } ?? false
+                    let hasPayload = directory && FileManager.default.fileExists(atPath: payloadURL(url).path)
+                    switch (directory ? metadata(url) : .invalid, hasPayload) {
                     case (.valid(let metadata), true):
                         name = metadata.name.isEmpty ? "Model" : metadata.name; canOpen = true; requiresRecovery = false
                     case (.oversized, true), (.invalid, true):
@@ -956,6 +958,14 @@ enum ModelStore {
               ["tcad", copyExtension].contains(url.pathExtension.lowercased()) else {
             throw ViewerError.message("Model silinemedi.")
         }
+        var rootInfo = stat()
+        guard url.path.withCString({ lstat($0, &rootInfo) }) == 0 else {
+            throw ViewerError.message("Kayıt bulunamadı; model listesini yenileyin.")
+        }
+        let expectedType = url.pathExtension.lowercased() == copyExtension ? S_IFDIR : S_IFREG
+        guard (rootInfo.st_mode & S_IFMT) == expectedType else {
+            throw ViewerError.message("Kayıt beklenen dosya türünde değil; içeriği korumak için silinmedi.")
+        }
         if url.pathExtension.lowercased() == copyExtension {
             let names = try FileManager.default.contentsOfDirectory(atPath: url.path)
             guard Set(names).isSubset(of: [payloadName, metadataName]) else {
@@ -1050,7 +1060,7 @@ private struct ModelLibrary: View {
                         if model.canOpen { open(model) }
                         else if model.requiresRecovery { modelToRecover = model }
                         else if model.identity == nil { error = "Kayıt listelenirken değişti. Listeyi kapatıp yeniden açın." }
-                        else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
+                        else { error = "Bu kayıt açılamıyor. Kayıtlı dosyayı kontrol edin." }
                     } label: {
                         VStack(alignment: .leading) {
                             Text(model.name)

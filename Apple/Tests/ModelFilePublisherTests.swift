@@ -12,6 +12,28 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testDirectoryNamedTcadCannotBeOpenedOrRecursivelyDeleted() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let folder = root.appendingPathComponent("not-a-file.tcad", isDirectory: true)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: false)
+        let child = folder.appendingPathComponent("important.txt")
+        let contents = Data("keep this".utf8)
+        try contents.write(to: child)
+        let file = root.appendingPathComponent("ordinary.tcad")
+        try Data("model".utf8).write(to: file)
+        let entries = try ModelStore.models(in: root)
+        let folderEntry = try XCTUnwrap(entries.first { $0.url == folder })
+        XCTAssertFalse(folderEntry.canOpen)
+        XCTAssertThrowsError(try ModelStore.delete(folderEntry, in: root))
+        XCTAssertEqual(try Data(contentsOf: child), contents)
+        let fileEntry = try XCTUnwrap(entries.first { $0.url == file })
+        XCTAssertTrue(fileEntry.canOpen)
+        try ModelStore.delete(fileEntry, in: root)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path))
+    }
+
     func testLibraryFilteringPreservesOrderAndCancelsWithoutPartialResults() throws {
         func entry(_ file: String, _ name: String, _ date: Date?) -> ModelStore.Entry {
             ModelStore.Entry(url: URL(fileURLWithPath: "/models/\(file).tcad"), name: name, date: date,
