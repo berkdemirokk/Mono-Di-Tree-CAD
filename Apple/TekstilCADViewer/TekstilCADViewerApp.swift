@@ -1389,6 +1389,12 @@ private struct ModelLibrary: View {
                         Text("Filtre: \(libraryFilter.rawValue)")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || libraryFilter != .all {
+                        Button("Aramayı ve filtreyi temizle") {
+                            search = ""
+                            libraryFilter = .all
+                        }
+                    }
                 }
                 if isLoading {
                     ProgressView("Modeller yükleniyor…")
