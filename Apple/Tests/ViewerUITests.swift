@@ -1350,6 +1350,23 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "3 nokta • Kapalı kontur")).firstMatch.waitForExistence(timeout: 5))
     }
 
+    func testPiecePickerShowsAndFindsEscapedDirectionalMetadata() {
+        let fixture = #"{"Name":"Proje","Pieces":[{"Name":"Kol","Metadata":{"Size":"A\u202EB","Material":"Pamuk"},"Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("202E")
+        let row = app.buttons["Kol"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains(#"Beden: A\u{202E}B"#))
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", #"Beden: A\u{202E}B"#)).firstMatch.waitForExistence(timeout: 5))
+    }
+
     func testPiecePickerShowsAndFindsEscapedDirectionalName() {
         let fixture = #"{"Name":"Proje","Pieces":[{"Name":"A\u202EB","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()

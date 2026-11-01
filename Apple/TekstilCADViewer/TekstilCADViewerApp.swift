@@ -107,7 +107,7 @@ private struct ContentView: View {
             }
             if let saveNotice { Text(saveNotice).font(.caption).foregroundStyle(.secondary) }
             if rawSaveNeedsRetry, let rawImport {
-                Text("Kaydedilemeyen ham kopya: \(rawImport.name)")
+                Text("Kaydedilemeyen ham kopya: \(ModelStore.safeLabel(rawImport.name))")
                     .font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 Text("Kopya geçici olarak bellekte tutuluyor; başka dosya seçerseniz veya uygulama kapanırsa yeniden seçmeniz gerekir.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -1614,7 +1614,7 @@ struct Drawing {
         func selectionDetails(index: Int) -> String {
             let fields = [("Beden", size), ("Tür", role), ("Malzeme", material)].compactMap { label, value -> String? in
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
-                return "\(label): \(value)"
+                return "\(label): \(ModelStore.safeLabel(value))"
             }
             let dimensions: [String]
             if let bounds = contourBounds,
@@ -1626,6 +1626,10 @@ struct Drawing {
             }
             let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
             return (["Parça \(index + 1)", closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + dimensions + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
+        }
+
+        var rawSearchText: String {
+            [name, size, role, material].compactMap { $0 }.joined(separator: " ")
         }
     }
     let name: String
@@ -2104,7 +2108,7 @@ private struct NotchPicker: View {
                         for index in snapshot.indices {
                             guard !Task.isCancelled else { return nil }
                             names.append(snapshot[index].displayName(index: index))
-                            details.append(snapshot[index].selectionDetails(index: index) + " " + (snapshot[index].name ?? ""))
+                            details.append(snapshot[index].selectionDetails(index: index) + " " + snapshot[index].rawSearchText)
                         }
                     }
                     guard let found = NotchSearch.boundedMatchesCancellable(groups: snapshot.map(\.notches), limit: 500, cancelled: { Task.isCancelled }, matches: { pieceIndex, pointIndex in
@@ -2176,7 +2180,7 @@ private struct PiecePicker: View {
                     }
                     #endif
                     guard let indices = ModelSearch.matchingIndices(count: snapshot.count, query: request, cancelled: { Task.isCancelled }, fields: { index in
-                        (snapshot[index].displayName(index: index), snapshot[index].selectionDetails(index: index) + " " + (snapshot[index].name ?? ""))
+                        (snapshot[index].displayName(index: index), snapshot[index].selectionDetails(index: index) + " " + snapshot[index].rawSearchText)
                     }) else { return nil }
                     return SearchResult(query: request, indices: indices)
                 }
@@ -2227,10 +2231,10 @@ private struct PieceDetails: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Kontur bilgisi").font(.subheadline.bold())
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
-                if let role = piece.role, !role.isEmpty { Text("Rol: \(role)") }
+                if let role = piece.role, !role.isEmpty { Text("Rol: \(ModelStore.safeLabel(role))") }
                 if piece.roleUnreadable { Text("Parça türü okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
-                if let size = piece.size, !size.isEmpty { Text("Beden: \(size)") }
-                if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
+                if let size = piece.size, !size.isEmpty { Text("Beden: \(ModelStore.safeLabel(size))") }
+                if let material = piece.material, !material.isEmpty { Text("Malzeme: \(ModelStore.safeLabel(material))") }
                 if piece.textMetadataUnreadable { Text("Beden veya malzeme okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 if piece.quantityUnreadable { Text("Adet okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
