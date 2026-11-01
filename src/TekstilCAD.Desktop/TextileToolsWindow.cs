@@ -1157,7 +1157,24 @@ public sealed class TextileToolsWindow : Window
             {
                 before?.Invoke();token.ThrowIfCancellationRequested();
                 var computed=NestingEngine.Arrange(original.Pieces,width,gap,double.PositiveInfinity,margin,token);
-                after?.Invoke();token.ThrowIfCancellationRequested();return computed;
+                var sourceById=original.Pieces.ToDictionary(p=>p.Id);
+                var placedById=computed.Layout.Pieces.ToDictionary(p=>p.Id);
+                var rules=new List<GradingRuleSet>(original.GradingRules.Count);var stale=new List<Guid>();var movedRules=new List<Guid>();
+                foreach(var existing in original.GradingRules)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var sourcePiece=sourceById[existing.SourcePieceId];var placed=placedById[existing.SourcePieceId];
+                    var copy=existing.Clone();
+                    if(!sourcePiece.Points.SequenceEqual(placed.Points))
+                    {
+                        if(existing.SourceClosed==sourcePiece.Closed && existing.Deltas.Count==sourcePiece.Points.Count &&
+                           existing.SourcePoints.SequenceEqual(sourcePiece.Points) && GradingRuleSet.IsExactPointTranslation(sourcePiece.Points,placed.Points))
+                        { copy.SourcePoints=[..placed.Points];movedRules.Add(sourcePiece.Id); }
+                        else stale.Add(sourcePiece.Id);
+                    }
+                    rules.Add(copy);
+                }
+                after?.Invoke();token.ThrowIfCancellationRequested();return (Result:computed,Rules:rules,Stale:stale,Moved:movedRules);
             });
             if(windowClosed)return;
             token.ThrowIfCancellationRequested();
@@ -1166,15 +1183,18 @@ public sealed class TextileToolsWindow : Window
                (source.SelectedItem as PatternPiece)?.Id!=sourceId || basicWidth.Text!=widthText || basicGap.Text!=gapText || basicMargin.Text!=marginText)
                 throw new InvalidOperationException("Proje, seçim veya pastal girdileri değişti. Sonuç uygulanmadı; güncel durumla yeniden hesaplayın.");
             token.ThrowIfCancellationRequested();
-            var candidate=original.Clone();candidate.Pieces=layout.Layout.Pieces;
+            var candidate=original.Clone();candidate.Pieces=layout.Result.Layout.Pieces;candidate.GradingRules=layout.Rules;
             if(DocumentSession.ContentEquals(original,candidate))
             {
-                Success($"Hesaplanan boy {MeasurementInput.Format(layout.UsedLength)} mm  ·  Kullanım %{layout.UtilizationPercent:0.##}  ·  Fire %{layout.WastePercent:0.##}. Yerleşim zaten aynı; proje ve geri alma geçmişi değişmedi. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı.");
+                Success($"Hesaplanan boy {MeasurementInput.Format(layout.Result.UsedLength)} mm  ·  Kullanım %{layout.Result.UtilizationPercent:0.##}  ·  Fire %{layout.Result.WastePercent:0.##}. Yerleşim zaten aynı; proje ve geri alma geçmişi değişmedi. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı.");
                 return;
             }
-            CommitToolChange("Raf pastal yerleşimi",()=>workspace.Document.Pieces=layout.Layout.Pieces,()=>
-            { workspace.Select(null);workspace.FitView();RefreshSources(null);
-              Success($"Hesaplanan boy {MeasurementInput.Format(layout.UsedLength)} mm  ·  Kullanım %{layout.UtilizationPercent:0.##}  ·  Fire %{layout.WastePercent:0.##}. Hesap: kumaş eni × kullanılan uzunluk. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı. Geri alma için atölyeyi kapatıp işlem geçmişini kontrol edin."); });
+            var cleanDrafts=layout.Moved.Where(id=>gradeDrafts.TryGetValue(id,out var draft) && !HasUnsavedGradeDraft(id,draft)).ToArray();
+            CommitToolChange("Raf pastal yerleşimi",()=> { workspace.Document.Pieces=layout.Result.Layout.Pieces;workspace.Document.GradingRules=layout.Rules; },()=>
+            { foreach(var id in cleanDrafts)gradeDrafts.Remove(id);workspace.Select(null);workspace.FitView();RefreshSources(null);
+              var staleNotice=layout.Stale.Count==0 ? "" : $" {layout.Stale.Count} parçada serileme kuralı eski konumda korundu; atölyede gözden geçirin. Kimlikler: "+string.Join(", ",layout.Stale.Take(3))+(layout.Stale.Count>3 ? " ve diğerleri." : ".");
+              Success($"Hesaplanan boy {MeasurementInput.Format(layout.Result.UsedLength)} mm  ·  Kullanım %{layout.Result.UtilizationPercent:0.##}  ·  Fire %{layout.Result.WastePercent:0.##}. Hesap: kumaş eni × kullanılan uzunluk. Her parça 1 adet; rol ve kayıtlı adet uygulanmadı. Geri alma için atölyeyi kapatıp işlem geçmişini kontrol edin."+staleNotice);
+              if(layout.Stale.Count>0)result.Foreground=StudioTheme.Warning; });
         }
         catch(OperationCanceledException) when(basicNestingCancellation?.IsCancellationRequested==true)
         { if(!windowClosed) { result.Foreground=StudioTheme.Warning;result.Text="Pastal hesabı iptal edildi; proje ve girdiler korundu."; } }

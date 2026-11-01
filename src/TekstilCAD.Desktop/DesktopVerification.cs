@@ -1040,6 +1040,7 @@ internal static class DesktopVerification
             VerifyDxfReviewRetry(studio,work,checks);
             VerifyBasicNestingLengthPrecision(studio,checks);
             VerifyNestingAndGrading(studio,checks);
+            VerifyBasicNestingGradingRules(studio,checks);
             VerifyConcaveAllowance(studio,checks);
             VerifyProductionPreview(studio,reportPath,work,checks);
             VerifyNestingHistory(studio,work,checks);
@@ -2869,7 +2870,8 @@ internal static class DesktopVerification
         Check(placedBounds.Min(b=>b.MinX)==10 && placedBounds.Min(b=>b.MinY)==10 && placedBounds.Max(b=>b.MaxY)==110 && result.Text.Contains("120"),
             "Basic nesting applies 10 mm fabric edge margin and includes end margin in length",checks);
         Check(!DocumentSession.ContentEquals(before,placed) && placed.GradingRules.Count==1
-            && placed.GradingRules[0].Deltas.SequenceEqual(rule.Deltas),"Nesting moves geometry while preserving grading increments",checks);
+            && placed.GradingRules[0].Deltas.SequenceEqual(rule.Deltas) && placed.GradingRules[0].SourcePoints.SequenceEqual(placed.Pieces.Single(p=>p.Id==first.Id).Points),
+            "Nesting moves the matching grading source while preserving increments",checks);
         var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
         Check(!grid.IsReadOnly && grid.Items.Cast<TextileToolsWindow.GradeRow>().All(r=>r.Dx=="1" && r.Dy=="2"),
             "Translated source keeps its grading table editable",checks);
@@ -2911,6 +2913,38 @@ internal static class DesktopVerification
             [new Point2(100_000_000,0),new Point2(1e-7,0)]),
             "A large stationary anchor cannot hide deformation near zero",checks);
     }
+    private static void VerifyBasicNestingGradingRules(MainWindow studio,List<string> checks)
+    {
+        var first=new PatternPiece { Name="Ön",Points=[new(300,400),new(400,400),new(400,500),new(300,500)] };
+        var second=new PatternPiece { Name="Arka",Points=[new(600,400),new(700,400),new(700,500),new(600,500)] };
+        var firstRule=new GradingRuleSet { SourcePieceId=first.Id,SourceClosed=true,SourcePoints=[..first.Points],Deltas=Enumerable.Repeat(new Point2(1,2),4).ToList() };
+        var staleRule=new GradingRuleSet { SourcePieceId=second.Id,SourceClosed=true,SourcePoints=[new(599,400),..second.Points.Skip(1)],Deltas=Enumerable.Repeat(new Point2(2,1),4).ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[first,second],GradingRules=[firstRule,staleRule] });studio.Select(first.Id);
+        var before=studio.Document.Clone();var tools=new TextileToolsWindow(studio);
+        try
+        {
+            var grid=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+            grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx="7";
+            var root=(FrameworkElement)tools.Content;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+            Descendants<TabControl>(root).Single().SelectedIndex=2;root.UpdateLayout();
+            var button=Descendants<Button>(root).Single(b=>Equals(b.Content,"Tüm proje parçalarını yerleştir"));
+            RunBasicNestingButton(studio,tools,button);
+            var moved=studio.Document.Clone();var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+            Check(moved.GradingRules.Single(r=>r.SourcePieceId==first.Id).SourcePoints.SequenceEqual(moved.Pieces.Single(p=>p.Id==first.Id).Points) &&
+                moved.GradingRules.Single(r=>r.SourcePieceId==first.Id).Deltas.SequenceEqual(firstRule.Deltas) &&
+                moved.GradingRules.Single(r=>r.SourcePieceId==second.Id).SourcePoints.SequenceEqual(staleRule.SourcePoints) &&
+                status.Text.Contains("serileme kuralı eski",StringComparison.Ordinal) && status.Text.Contains(second.Id.ToString("D"),StringComparison.Ordinal),
+                "Basic nesting moves matching grading and identifies an unchanged stale rule",checks);
+            typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[first.Id,true]);
+            Check(grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7","Basic nesting preserves unapplied grading input",checks);
+            typeof(TextileToolsWindow).GetMethod("RebaseMovedGradeDraft",PrivateInstance)!.Invoke(tools,null);
+            Check(grid.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7","An exact nesting translation permits explicit reassociation of the draft",checks);
+            Invoke(studio,"Undo");Check(DocumentSession.ContentEquals(before,studio.Document),"Basic nesting undo restores all contours and rules",checks);
+            Invoke(studio,"Redo");Check(DocumentSession.ContentEquals(moved,studio.Document),"Basic nesting redo restores all contours and rules",checks);
+        }
+        finally { tools.Close(); }
+    }
+
     private static void VerifyAsyncQuantityLayoutSave(MainWindow studio,ProductionNestingWindow window,ProjectDocument layout,int version,string sourcePath,byte[] sourceBytes,string work,List<string> checks)
     {
         var before=studio.Document.Clone();
