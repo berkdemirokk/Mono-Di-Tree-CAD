@@ -1,6 +1,19 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testCompareTwoPiecesShowsSignedSizeDifference() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let compare = app.buttons["İki parçayı karşılaştır…"]
+        XCTAssertTrue(compare.waitForExistence(timeout: 15)); compare.tap()
+        XCTAssertTrue(app.navigationBars["Parçaları karşılaştır"].waitForExistence(timeout: 5))
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["En: -50 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Boy: -100 mm"].exists)
+    }
     func testSelectedPieceShowsStraightLineMeasurement() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()

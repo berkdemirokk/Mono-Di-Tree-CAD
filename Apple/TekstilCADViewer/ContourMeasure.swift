@@ -23,6 +23,13 @@ enum ContourMeasure {
         return points.allSatisfy { $0.x == first.x && $0.y == first.y }
     }
 
+    // Signed comparison in the same units; unavailable inputs and overflow
+    // are not presented as measurements.
+    static func difference(first: Double?, second: Double?) -> Double? {
+        guard let first, let second, first.isFinite, second.isFinite else { return nil }
+        let result = second - first
+        return result.isFinite ? result : nil
+    }
     // Straight-line distance only; does not follow the contour between points.
     static func distance(_ points: [Point], from first: Int, to second: Int) -> Double? {
         guard points.indices.contains(first), points.indices.contains(second) else { return nil }

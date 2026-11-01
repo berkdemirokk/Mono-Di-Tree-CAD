@@ -31,6 +31,7 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingPieceComparison = false
     @State private var showingPointDistance = false
     @State private var showingFullScreenDrawing = false
     @State private var showingLargePiecePicker = false
@@ -249,6 +250,11 @@ private struct ContentView: View {
                             }
                         ))
                     }
+                    Button("İki parçayı karşılaştır…") { showingPieceComparison = true }
+                        .disabled(modelLoad.isLoading || project.pieces.count < 2)
+                        .sheet(isPresented: $showingPieceComparison) {
+                            PieceComparisonView(pieces: project.pieces, initialIndex: selectedPiece)
+                        }
                     HStack {
                         Button("Önceki parça") {
                             guard let current = selectedPiece, current > 0 else { return }
@@ -2661,6 +2667,59 @@ private struct PieceDetails: View {
             .padding(8)
             .background(Color.secondary.opacity(0.08))
             .accessibilityElement(children: .combine)
+        }
+    }
+}
+// A read-only comparison of the currently loaded snapshot, not a production check.
+private struct PieceComparisonView: View {
+    let pieces: [Drawing.Piece]
+    @Environment(\.dismiss) private var dismiss
+    @State private var first: Int?
+    @State private var second: Int?
+    @State private var choosingFirst = false
+    @State private var choosingSecond = false
+
+    init(pieces: [Drawing.Piece], initialIndex: Int?) {
+        self.pieces = pieces
+        let selected = initialIndex.flatMap { pieces.indices.contains($0) ? $0 : nil } ?? 0
+        _first = State(initialValue: pieces.indices.contains(selected) ? selected : nil)
+        _second = State(initialValue: pieces.count > 1 ? (selected == 0 ? 1 : 0) : nil)
+    }
+
+    private func difference(_ a: Double?, _ b: Double?) -> String {
+        guard let value = ContourMeasure.difference(first: a, second: b), let text = MeasurementDisplay.format(value) else { return "Hesaplanamadı" }
+        return "\(text) mm"
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Birinci parça") {
+                    Button(first.map { pieces[$0].displayName(index: $0) } ?? "Parça seç") { choosingFirst = true }
+                    if let first { PieceDetails(piece: pieces[first]) }
+                }
+                Section("İkinci parça") {
+                    Button(second.map { pieces[$0].displayName(index: $0) } ?? "Parça seç") { choosingSecond = true }
+                    if let second { PieceDetails(piece: pieces[second]) }
+                }
+                if let first, let second {
+                    let a = pieces[first], b = pieces[second]
+                    Section("Yaklaşık fark: ikinci − birinci") {
+                        Text("En: \(difference(a.contourBounds.map { $0.maxX - $0.minX }, b.contourBounds.map { $0.maxX - $0.minX }))")
+                        Text("Boy: \(difference(a.contourBounds.map { $0.maxY - $0.minY }, b.contourBounds.map { $0.maxY - $0.minY }))")
+                        Text("Toplam kontur uzunluğu: \(difference(a.contourLength, b.contourLength))")
+                    }
+                } else {
+                    Text("Karşılaştırmak için iki parça seçin.").foregroundStyle(.secondary)
+                }
+                Section {
+                    Text("Değerler dosyadaki doğrusal konturlardan hesaplanır ve 6 anlamlı basamağa yuvarlanır. Açık ve kapalı konturların toplamları farklı anlam taşır. Bu karşılaştırma dikiş uyumu veya üretime uygunluk doğrulaması değildir.")
+                }
+            }
+            .navigationTitle("Parçaları karşılaştır")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
+            .sheet(isPresented: $choosingFirst) { PiecePicker(pieces: pieces, selection: $first) }
+            .sheet(isPresented: $choosingSecond) { PiecePicker(pieces: pieces, selection: $second) }
         }
     }
 }

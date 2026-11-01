@@ -4,6 +4,13 @@ import XCTest
 final class ContourMeasureTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testComparisonDifferenceIsSignedAndRejectsUnavailableOrOverflow() {
+        XCTAssertEqual(ContourMeasure.difference(first: 100, second: 50), -50)
+        XCTAssertEqual(ContourMeasure.difference(first: 50, second: 100), 50)
+        XCTAssertNil(ContourMeasure.difference(first: nil, second: 100))
+        XCTAssertNil(ContourMeasure.difference(first: .infinity, second: 100))
+        XCTAssertNil(ContourMeasure.difference(first: -Double.greatestFiniteMagnitude, second: Double.greatestFiniteMagnitude))
+    }
     func testCollapsedRequiresMultipleIdenticalPoints() {
         XCTAssertFalse(ContourMeasure.isCollapsed([]))
         XCTAssertFalse(ContourMeasure.isCollapsed([p(1, 2)]))
