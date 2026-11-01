@@ -11,6 +11,46 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testListedModelReadRejectsReplacementBeforeOrDuringRead() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let path = root.appendingPathComponent("model.tcad")
+        let original = root.appendingPathComponent("original.saved")
+        let first = Data("first model".utf8)
+        let second = Data("second model".utf8)
+        try first.write(to: path)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == path })
+        XCTAssertEqual(try ModelStore.readListedPayload(entry), first)
+        XCTAssertThrowsError(try ModelStore.readListedPayload(entry) {
+            try FileManager.default.moveItem(at: path, to: original)
+            try second.write(to: path)
+        })
+        XCTAssertEqual(try Data(contentsOf: path), second)
+        XCTAssertEqual(try Data(contentsOf: original), first)
+        XCTAssertThrowsError(try ModelStore.readListedPayload(entry))
+        let newEntry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == path })
+        XCTAssertEqual(try ModelStore.readListedPayload(newEntry), second)
+    }
+
+    func testListedCopyReadRejectsChangedMetadata() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let copy = root.appendingPathComponent("model.tcadcopy", isDirectory: true)
+        try FileManager.default.createDirectory(at: copy, withIntermediateDirectories: false)
+        let payload = copy.appendingPathComponent("project.tcad")
+        let metadata = copy.appendingPathComponent("metadata.json")
+        try Data("model".utf8).write(to: payload)
+        try Data("{\"version\":1,\"name\":\"A\"}".utf8).write(to: metadata)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == copy })
+        let changed = Data("{\"version\":2,\"name\":\"Changed\"}".utf8)
+        try changed.write(to: metadata)
+        XCTAssertThrowsError(try ModelStore.readListedPayload(entry))
+        XCTAssertEqual(try Data(contentsOf: metadata), changed)
+        XCTAssertEqual(try Data(contentsOf: payload), Data("model".utf8))
+    }
+
     func testDeleteRejectsAReplacedLibraryEntry() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

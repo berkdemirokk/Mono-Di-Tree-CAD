@@ -401,9 +401,9 @@ private struct ContentView: View {
         } message: { Text("Yeni bir model kopyası kaydedilir; açık dosya değişmez. Kayıtlı pastal ve içe aktarma geçmişi eski parça adını veya önceki durumu gösterebilir. Parça adı en fazla 1024 UTF-16 birimi olabilir.") }
         #endif
         .sheet(isPresented: $showingLibrary) {
-            ModelLibrary { url in
+            ModelLibrary { entry in
                 showingLibrary = false
-                openModel(ModelStore.payloadURL(url), imported: false)
+                openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry)
             }
         }
         #if DEBUG && targetEnvironment(simulator)
@@ -455,7 +455,7 @@ private struct ContentView: View {
         return (stem.isEmpty ? "Model" : stem) + " - kopya.tcad"
     }
 
-    private func openModel(_ url: URL, imported: Bool) {
+    private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
         saveNotice = nil
         let request = modelLoad.begin()
         // Acquire the picker grant while still handling its result. Keep it
@@ -467,7 +467,9 @@ private struct ContentView: View {
             if ProcessInfo.processInfo.arguments.contains("--ui-test-open-delay") { Thread.sleep(forTimeInterval: 3) }
             #endif
             let loaded = Result { () -> (Drawing, Data) in
-                let data = try Drawing.readData(url)
+                let data: Data
+                if let listedEntry { data = try ModelStore.readListedPayload(listedEntry) }
+                else { data = try Drawing.readData(url) }
                 return (try Drawing.load(data), data)
             }
             DispatchQueue.main.async {
@@ -822,10 +824,24 @@ enum ModelStore {
                              metadata: isCopy ? fileIdentity(url.appendingPathComponent(metadataName)) : nil)
     }
 
-    static func delete(_ entry: Entry, in library: URL) throws {
+    static func requireCurrent(_ entry: Entry) throws {
         guard let expected = entry.identity, identity(entry.url) == expected else {
             throw ViewerError.message("Kayıt değişti veya kaldırıldı; model listesini yenileyip tekrar deneyin.")
         }
+    }
+
+    // Reject a row that was replaced or modified before or during the read.
+    // Filesystem identity checks are not atomic with another writer.
+    static func readListedPayload(_ entry: Entry, afterRead: (() throws -> Void)? = nil) throws -> Data {
+        try requireCurrent(entry)
+        let data = try Drawing.readData(payloadURL(entry.url))
+        try afterRead?()
+        try requireCurrent(entry)
+        return data
+    }
+
+    static func delete(_ entry: Entry, in library: URL) throws {
+        try requireCurrent(entry)
         try delete(entry.url, in: library)
     }
 
@@ -871,7 +887,7 @@ enum ModelStore {
 }
 
 private struct ModelLibrary: View {
-    let open: (URL) -> Void
+    let open: (ModelStore.Entry) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
     @State private var search = ""
@@ -940,7 +956,7 @@ private struct ModelLibrary: View {
                 ForEach(matchingModels) { model in
                     HStack {
                     Button {
-                        if model.canOpen { open(model.url) }
+                        if model.canOpen { open(model) }
                         else if model.requiresRecovery { modelToRecover = model }
                         else if model.identity == nil { error = "Kayıt listelenirken değişti. Listeyi kapatıp yeniden açın." }
                         else { error = "Bu kayıt açılamıyor. İsterseniz kayıtlı kopyayı silebilirsiniz." }
@@ -1036,7 +1052,7 @@ private struct ModelLibrary: View {
         recoveryID = request
         isRecovering = true
         DispatchQueue.global(qos: .userInitiated).async {
-            let result = Result { try Drawing.readData(ModelStore.payloadURL(model.url)) }
+            let result = Result { try ModelStore.readListedPayload(model) }
             DispatchQueue.main.async {
                 guard recoveryID == request else { return }
                 isRecovering = false

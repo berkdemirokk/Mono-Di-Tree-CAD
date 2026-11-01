@@ -22,6 +22,8 @@ Kopya klasöründeki tanınmayan dosyalar silmeyi engeller; kontrol ile silme ar
 
 Listelenen kayıt kimliği silme öncesinde yeniden kontrol edilir; ancak bu kontrol ve silme atomik değildir ve aynı dosyada her değişikliği yakalayacağı garanti edilmez.
 
+Listelenen model açılırken veya ham kopyası kurtarılırken kimlik okuma öncesi ve sonrasında kontrol edilir. Bu kontroller atomik değildir ve eşzamanlı her değişikliği yakalama garantisi vermez; Apple ortamında doğrulanmadı.
+
 64 KiB üzerindeki kayıt bilgileri sınırlı okunur; sürümü doğrulanamayan kopya normal açılmaz. Kullanıcı ham proje baytlarını ayrı dışa aktarmayı seçebilir; kayıt bilgisi bu kopyaya dahil edilmez. Bu kurtarma akışı henüz Mac veya cihazda doğrulanmadı.
 
 Köşe işareti seçicisinde ilk 500 eşleşme listelenir; sonraki işaretler daha dar bir aramayla bulunabilir. Arama yeni sorguda iptal edilen arka plan işi olarak hazırlanır. Bu değişiklik ve çok büyük modellerde cihaz performansı henüz Apple ortamında doğrulanmadı.
