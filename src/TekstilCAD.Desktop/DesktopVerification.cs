@@ -9186,6 +9186,21 @@ internal static class DesktopVerification
     }
     private static void VerifyPhotoTrace(string reportPath,List<string> checks)
     {
+        var edgePixels=new byte[20*20*4];
+        for(int y=0;y<20;y++)for(int x=0;x<20;x++) { var i=(y*20+x)*4;edgePixels[i]=edgePixels[i+1]=edgePixels[i+2]=(byte)(x<10 ? 0 : 255);edgePixels[i+3]=255; }
+        var edgeBitmap=BitmapSource.Create(20,20,96,96,PixelFormats.Bgra32,null,edgePixels,80);
+        Check(PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(7,10),out var edge) && edge==new Point(9,10) &&
+            !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(0,0),out _) && !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(double.NaN,0),out _),
+            "Photo edge suggestion finds nearby synthetic contrast and declines absent or invalid input",checks);
+        var edgeCanvas=new PhotoTraceCanvas { Image=edgeBitmap };edgeCanvas.TryAddPixelPoint(new Point(1,1));edgeCanvas.TryAddPixelPoint(new Point(2,1));
+        Check(!edgeCanvas.SuggestLastEdge(),"Photo edge suggestion never alters calibration endpoints",checks);
+        edgeCanvas.TryAddPixelPoint(new Point(7,10));var edgeBefore=edgeCanvas.Points.ToArray();
+        Check(edgeCanvas.SuggestLastEdge() && edgeCanvas.EdgeSuggestion==new Point(9,10) && edgeCanvas.Points.SequenceEqual(edgeBefore),
+            "Photo edge suggestion is a preview and does not alter selected points",checks);
+        Check(edgeCanvas.ApplyEdgeSuggestion() && edgeCanvas.Points[2]==new Point(9,10) && edgeCanvas.Points[0]==edgeBefore[0] && edgeCanvas.Points[1]==edgeBefore[1] && edgeCanvas.EdgeSuggestion is null,
+            "Explicitly applying the edge suggestion changes only the last trace point",checks);
+        edgeCanvas.SuggestLastEdge();edgeCanvas.TryAddPixelPoint(new Point(11,12));
+        Check(edgeCanvas.EdgeSuggestion is null && !edgeCanvas.ApplyEdgeSuggestion(),"Changing photo points invalidates an old edge suggestion",checks);
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();

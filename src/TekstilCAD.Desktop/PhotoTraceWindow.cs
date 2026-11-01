@@ -51,6 +51,14 @@ internal sealed class PhotoTraceWindow : Window
         ViewAction("Yakınlaştır","Son seçilen veya klavye imlecindeki noktaya yakınlaştırır.",()=>CanvasForVerification.ZoomAtCursor(2));
         ViewAction("Uzaklaştır","Son seçilen veya klavye imlecindeki noktadan uzaklaştırır.",()=>CanvasForVerification.ZoomAtCursor(0.5));
         ViewAction("Görüntüyü sığdır","Fotoğrafın tamamını pencereye sığdırır.",CanvasForVerification.ResetZoom);
+        var suggest=new Button { Content="Kenar öner",Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };viewActions.Children.Add(suggest);
+        AutomationProperties.SetHelpText(suggest,"Son çizgi noktasına yakın görüntü kontrastını arar; mavi halka bir öneridir ve nokta değişmez. Kumaş kenarı olduğu doğrulanmaz.");
+        suggest.Click+=(_,_)=> { StatusForVerification.Text=CanvasForVerification.SuggestLastEdge() && CanvasForVerification.EdgeSuggestion is Point p
+            ? $"Mavi halka önerisi: X {MeasurementInput.Format(p.X)}, Y {MeasurementInput.Format(p.Y)}. Görüntü kontrastı kumaş kenarı olmayabilir; uygula seçilene kadar nokta değişmez."
+            : "Son çizgi noktasının yakınında yeterli kontrast bulunamadı; nokta değişmedi."; };
+        var applySuggestion=new Button { Content="Öneriyi uygula",Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };viewActions.Children.Add(applySuggestion);
+        AutomationProperties.SetHelpText(applySuggestion,"Mavi halka önerisini son çizgi noktasına uygular; referans uçlarını değiştirmez.");
+        applySuggestion.Click+=(_,_)=> { if(!CanvasForVerification.ApplyEdgeSuggestion())StatusForVerification.Text="Uygulanabilir yeni kenar önerisi yok; nokta değişmedi."; };
         AutomationProperties.SetName(StatusForVerification,"Fotoğraf taslağı durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
         CanvasForVerification.Image=image;CanvasForVerification.SetSourceAspect(this.sourceWidth,this.sourceHeight);

@@ -19,6 +19,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private BitmapSource? image;
     private int sourceWidth,sourceHeight;
     private Point cursor;
+    private Point? edgeSuggestion;
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
 
@@ -47,7 +48,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
                 image=snapshot;
             }
             sourceWidth=image?.PixelWidth ?? 0;sourceHeight=image?.PixelHeight ?? 0;
-            points.Clear();cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
+            points.Clear();edgeSuggestion=null;cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
             zoom=1;zoomCenter=new Point(0.5,0.5);
             InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
         }
@@ -61,6 +62,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
 
     internal IReadOnlyList<Point> Points=>points.AsReadOnly();
     internal Point CursorForVerification=>cursor;
+    internal Point? EdgeSuggestion=>edgeSuggestion;
     internal double Zoom=>zoom;
     internal event EventHandler? PointsChanged;
 
@@ -74,24 +76,35 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         zoom=next;InvalidateVisual();
     }
     internal void ResetZoom() { zoom=1;zoomCenter=new Point(0.5,0.5);InvalidateVisual(); }
+    internal bool SuggestLastEdge()
+    {
+        edgeSuggestion=null;
+        if(image is not null && points.Count>2 && PhotoEdgeSuggestion.TryFind(image,points[^1],out var found))edgeSuggestion=found;
+        InvalidateVisual();return edgeSuggestion.HasValue;
+    }
+    internal bool ApplyEdgeSuggestion()
+    {
+        if(edgeSuggestion is not Point proposed || points.Count<=2 || proposed==points[^1] || (points.Count>3 && proposed==points[^2]))return false;
+        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+    }
 
     internal bool TryAddPixelPoint(Point point)
     {
         if(image is null || points.Count>=MaximumPoints || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
             point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 ||
             (points.Count>0 && points.Count!=2 && points[^1]==point))return false;
-        points.Add(point);cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.Add(point);edgeSuggestion=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool UndoPoint()
     {
         if(points.Count==0)return false;
-        points.RemoveAt(points.Count-1);InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.RemoveAt(points.Count-1);edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal void ClearPoints()
     {
         if(points.Count==0)return;
-        points.Clear();InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
+        points.Clear();edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
     }
 
     // Rectangle is the actual uniform-fit image, excluding letterbox regions.
@@ -166,6 +179,8 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             var label=new FormattedText((i+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),10,Brushes.White,dip);
             dc.DrawText(label,new Point(point.X-label.Width/2,point.Y-label.Height/2));previous=point;
         }
+        if(edgeSuggestion is Point suggested && TryMapPixelToView(suggested,RenderSize,out var suggestedView))
+            dc.DrawEllipse(null,new Pen(Brushes.DeepSkyBlue,3),suggestedView,11,11);
         if(IsKeyboardFocused && TryMapPixelToView(cursor,RenderSize,out var current))
         {
             var highlight=new Pen(Brushes.White,2);dc.DrawLine(highlight,new Point(current.X-8,current.Y),new Point(current.X+8,current.Y));
