@@ -2,6 +2,12 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class NotchSearchTests: XCTestCase {
+    func testDrawingLimitIgnoresUndrawnPiecesAndUsesStrictLimit() {
+        XCTAssertFalse(NotchSearch.exceedsDrawingLimit([(false, 900), (true, 500)], limit: 500))
+        XCTAssertTrue(NotchSearch.exceedsDrawingLimit([(false, 900), (true, 500), (true, 1)], limit: 500))
+        XCTAssertFalse(NotchSearch.exceedsDrawingLimit([(false, 900)], limit: 500))
+    }
+
     func testPieceSearchUsesNameAndSizeInOrderAndCanCancel() throws {
         let items = [("Ön Kol", "Parça 1 · Beden: S"), ("Arka Kol", "Parça 2 · Beden: XL"),
                      ("Ön Kol", "Parça 3 · Beden: XL")]

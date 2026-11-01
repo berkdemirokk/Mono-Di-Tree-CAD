@@ -25,7 +25,7 @@ final class ViewerUITests: XCTestCase {
     }
 
     func testBOMEncodedModelsExplainUnavailablePieceNameEditing() throws {
-        let input = #"[1,{"Name":"Ön","Pieces":[{"Id":"C1F46B38-5857-4CA4-9F6C-D3AE73A4C9C9","Name":"Parça","Points":[{"X":0,"Y":0}]}],"GradingRules":[]}]"#
+        let input = #"[1,{"Name":"Ön","Pieces":[{"Id":"C1F46B38-5857-4CA4-9F6C-D3AE73A4C9C9","Name":"Parça","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}],"GradingRules":[]}]"#
         let encodings: [(String.Encoding, [UInt8])] = [
             (.utf16LittleEndian, [0xff, 0xfe]), (.utf16BigEndian, [0xfe, 0xff]),
             (.utf32LittleEndian, [0xff, 0xfe, 0, 0]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])

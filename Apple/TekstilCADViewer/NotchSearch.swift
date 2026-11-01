@@ -33,6 +33,15 @@ enum ModelSearch {
 
 /// Shared by the notch list and its search so visible labels are searchable.
 enum NotchSearch {
+    static func exceedsDrawingLimit(_ counts: [(visible: Bool, count: Int)], limit: Int) -> Bool {
+        var remaining = max(0, limit)
+        for item in counts where item.visible {
+            if item.count > remaining { return true }
+            remaining -= item.count
+        }
+        return false
+    }
+
     private static let pointPattern = try! NSRegularExpression(pattern: #"\bnokta\s+(\d+)\b"#, options: .caseInsensitive)
 
     struct Query {

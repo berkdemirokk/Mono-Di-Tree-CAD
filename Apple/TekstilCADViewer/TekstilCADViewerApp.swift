@@ -177,7 +177,9 @@ private struct ContentView: View {
                              : "Seçili köşe işareti: \(coordinates). Konturda yeterli nokta olmadığı için önizleme gösterilemiyor.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if (selectedPiece.map { project.pieces[$0].notches.count } ?? project.pieces.reduce(0) { $0 + $1.notches.count }) > DrawingView.maximumVisibleNotches {
+                    if NotchSearch.exceedsDrawingLimit(project.pieces.enumerated().map { index, piece in
+                        (visible: piece.hasMinimumContourPoints && (selectedPiece == nil || selectedPiece == index), count: piece.notches.count)
+                    }, limit: DrawingView.maximumVisibleNotches) {
                         Text("Görünümde yalnız ilk 500 köşe işareti çiziliyor. Tüm işaretler kaynak dosyada korunur; parçaları ayrı seçerek inceleyin.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
