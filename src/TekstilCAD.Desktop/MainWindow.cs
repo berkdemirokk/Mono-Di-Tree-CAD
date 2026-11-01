@@ -1528,6 +1528,11 @@ public class MainWindow : Window
         if(HasPendingCanvasOrPropertyWork || recoveryRestoreIncomplete || BlockForDxfImport() || BlockForExport() || projectEpoch!=originalEpoch ||
            !ReferenceEquals(Document,originalDocument) || SelectedId!=sourceId || !DocumentSession.ContentEquals(Document,originalContent))
         { SetStatus("Proje, seçim veya bekleyen çalışma değişti · Parça çoğaltılmadı. Yeniden kontrol edin.");return; }
+        // A modal dialog can replace objects with content-equivalent clones.
+        // The pre-dialog references may then be detached and subsequently edited;
+        // only copy from the current document that passed the snapshot check.
+        sourcePiece=Document.Pieces.Single(p=>p.Id==sourceId);
+        sourceRule=Document.GradingRules.SingleOrDefault(r=>r.SourcePieceId==sourceId);
         if(choice.Value.CopyGrading && !DuplicatePieceWindow.RuleMatches(sourcePiece,sourceRule))
         { SetStatus("Kaynak serileme kuralı geometriyle eşleşmiyor veya yok · Parça çoğaltılmadı.");return; }
         const string suffix=" · kopya";

@@ -10488,6 +10488,32 @@ internal static class DesktopVerification
                 "Marked duplicate and copied rule undo and redo together",checks);
             studio.ChooseDuplicateForVerification=null;
 
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked.Clone()],GradingRules=[markedRule.Clone()] });studio.Select(marked.Id);
+            var detachedSource=studio.Selected!;var detachedRule=studio.Document.GradingRules.Single();
+            var equivalentBefore=studio.Document.Clone();
+            studio.ChooseDuplicateForVerification=_=>
+            {
+                // Simulate modal dispatcher work replacing the live objects with
+                // equivalent ones, then modifying only the detached originals.
+                studio.Document.Pieces[0]=detachedSource.Clone();
+                studio.Document.GradingRules[0]=detachedRule.Clone();
+                detachedSource.Name="Eski nesne";detachedSource.Points[1]=new Point2(30,0);
+                detachedSource.Notches![1].Position=new Point2(30,0);
+                detachedRule.SourcePoints[1]=new Point2(30,0);detachedRule.Deltas[1]=new Point2(9,9);
+                return new DuplicateOptions(false,false,true);
+            };
+            studio.DuplicateSelectedPiece();
+            var currentCopy=studio.Document.Pieces.Single(p=>p.Id!=marked.Id);
+            var currentRule=studio.Document.GradingRules.Single(r=>r.SourcePieceId==currentCopy.Id);
+            Check(currentCopy.Name=="İşaretli kalıp · kopya" && currentCopy.Points.SequenceEqual(equivalentBefore.Pieces[0].Points) &&
+                currentCopy.Notches![1].Position==equivalentBefore.Pieces[0].Notches![1].Position &&
+                currentRule.SourcePoints.SequenceEqual(equivalentBefore.GradingRules[0].SourcePoints) &&
+                currentRule.Deltas.SequenceEqual(equivalentBefore.GradingRules[0].Deltas),
+                "Duplicate resolves the current equivalent source and grading rule after modal replacement",checks);
+            Check(session.Undo() && DocumentSession.ContentEquals(equivalentBefore,studio.Document),
+                "Duplicate after equivalent object replacement undoes to the validated document",checks);
+            studio.ChooseDuplicateForVerification=null;
+
             studio.LoadDocument(initial);studio.Select(source.Id);studio.SetTool("Çoklu çizgi");
             canvas.RestorePendingDrawing(new RecoveryPendingDrawing("Çoklu çizgi",[new(1,1),new(2,1)]));
             before=studio.Document.Clone();undo=session.UndoCount;calls=0;
