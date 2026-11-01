@@ -591,6 +591,7 @@ internal static class DesktopVerification
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyMarkedGrading(studio,checks);
+            VerifyGradeRuleSignedZeroConflict(studio,checks);
             VerifyGrainlineEditorSafety(studio,work,checks);
             VerifyNumericVertexInsertDelete(studio,checks);
             VerifyEdgeMidpoint(studio,checks);
@@ -8185,6 +8186,43 @@ internal static class DesktopVerification
                 "SVG UI export writes the captured piece identity, grainline coordinates and review state",checks);
         }
         finally { canvas.CancelDrawing();studio.SetTool("Seç");SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+
+    private static void VerifyGradeRuleSignedZeroConflict(MainWindow studio,List<string> checks)
+    {
+        var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+        foreach(var sourceCoordinate in new[] { false,true })
+        {
+            var piece=new PatternPiece { Points=[new(0,0),new(10,0),new(0,10)],
+                Notches=[new NotchMark { VertexIndex=0,Position=new(0,0) }] };
+            var rule=new GradingRuleSet { SourcePieceId=piece.Id,SourceClosed=true,SourcePoints=[..piece.Points],
+                Deltas=[new(0,0),new(0,0),new(0,0)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[piece],GradingRules=[rule] });studio.Select(piece.Id);
+            var tools=new TextileToolsWindow(studio);
+            try
+            {
+                var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+                var row=table.Items.Cast<TextileToolsWindow.GradeRow>().First();row.Dx="-0";
+                Check((bool)typeof(TextileToolsWindow).GetMethod("HasUnsavedGradeRules",PrivateInstance)!.Invoke(tools,null)!,
+                    "Signed-zero grade entry is retained as an unapplied draft",checks);
+                row.Dx="7";
+                studio.Commit("Kural sıfır işareti değişti",()=>
+                {
+                    var current=studio.Document.GradingRules.Single();
+                    if(sourceCoordinate)current.SourcePoints[0]=new(negativeZero,0);else current.Deltas[0]=new(negativeZero,0);
+                });
+                var before=studio.Document.Clone();
+                typeof(TextileToolsWindow).GetMethod("RefreshSources",PrivateInstance)!.Invoke(tools,[piece.Id,false]);
+                var root=(FrameworkElement)tools.Content;root.Measure(new Size(680,540));root.Arrange(new Rect(0,0,680,540));root.UpdateLayout();
+                var apply=Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula"));
+                apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var message=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
+                Check(DocumentSession.ContentEquals(before,studio.Document) && row.Dx=="7" &&
+                    message.Text.Contains("kuralı değişti",StringComparison.OrdinalIgnoreCase),
+                    $"Grade draft preserves changed {(sourceCoordinate ? "source" : "delta")} signed-zero bits and entered values",checks);
+            }
+            finally { tools.Close(); }
+        }
     }
 
     private static void VerifyMarkedGrading(MainWindow studio,List<string> checks)

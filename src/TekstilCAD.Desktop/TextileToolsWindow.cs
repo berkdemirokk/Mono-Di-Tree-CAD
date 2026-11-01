@@ -401,8 +401,8 @@ public sealed class TextileToolsWindow : Window
     {
         var current=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==pieceId);
         var baseline=draft.BaselineRule;
-        return baseline is null ? current is null : current is not null && current.SourcePieceId==baseline.SourcePieceId &&
-            current.SourceClosed==baseline.SourceClosed && current.SourcePoints.SequenceEqual(baseline.SourcePoints) && current.Deltas.SequenceEqual(baseline.Deltas);
+        return baseline is null ? current is null : current is not null &&
+            DocumentSession.ContentEquals(new ProjectDocument { GradingRules=[baseline] },new ProjectDocument { GradingRules=[current] });
     }
     internal static bool IsTranslation(IReadOnlyList<Point2> before,IReadOnlyList<Point2> after)
     {
@@ -725,10 +725,11 @@ public sealed class TextileToolsWindow : Window
     }
     private bool HasUnsavedGradeDraft(Guid pieceId,GradeDraft draft)
     {
+        static bool SameBits(double a,double b)=>BitConverter.DoubleToInt64Bits(a)==BitConverter.DoubleToInt64Bits(b);
         var saved=workspace.Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==pieceId);
-        if(saved is null)return draft.Rows.Any(row=>!IsNumber(row.Dx,out var dx)||dx!=0||!IsNumber(row.Dy,out var dy)||dy!=0);
+        if(saved is null)return draft.Rows.Any(row=>!IsNumber(row.Dx,out var dx)||!SameBits(dx,0)||!IsNumber(row.Dy,out var dy)||!SameBits(dy,0));
         if(saved.SourceClosed!=draft.Closed||(!saved.SourcePoints.SequenceEqual(draft.Points)&&!IsTranslation(saved.SourcePoints,draft.Points))||saved.Deltas.Count!=draft.Rows.Count)return true;
-        return draft.Rows.Select((row,index)=>!IsNumber(row.Dx,out var dx)||!IsNumber(row.Dy,out var dy)||dx!=saved.Deltas[index].X||dy!=saved.Deltas[index].Y).Any(changed=>changed);
+        return draft.Rows.Select((row,index)=>!IsNumber(row.Dx,out var dx)||!IsNumber(row.Dy,out var dy)||!SameBits(dx,saved.Deltas[index].X)||!SameBits(dy,saved.Deltas[index].Y)).Any(changed=>changed);
     }
     private bool HasUnsavedGradeRules() => gradeDrafts.Any(entry=>HasUnsavedGradeDraft(entry.Key,entry.Value));
     private bool ConfirmDiscardGradeRules()
