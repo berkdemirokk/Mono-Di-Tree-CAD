@@ -143,6 +143,7 @@ public class MainWindow : Window
     private Button? dxfImportCommand;
     private DxfPreparationStamp? dxfPreparationStamp;
     private DxfImportResult? preparedDxf;
+    private bool preparedDxfReflectY;
     private readonly Button dxfReview = new() { Content="DXF önizlemesini aç", Visibility=Visibility.Collapsed, Margin=new Thickness(0,4,0,0) };
     private readonly Button dxfCancel = new() { Content="DXF okumayı iptal et", Visibility=Visibility.Collapsed, HorizontalAlignment=HorizontalAlignment.Left, Padding=new Thickness(4,2,4,2), Margin=new Thickness(0,2,0,0) };
     private readonly TextBlock dxfNotice = new() { Visibility=Visibility.Collapsed, FontSize=11, TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,4,0,0), Focusable=true };
@@ -1977,6 +1978,7 @@ public class MainWindow : Window
                 ? await StartInspectedDxfPreparationAsync(dlg.FileName,factor,optionsState.Encoding)
                 : await StartDxfPreparationWithBulgeAsync(dlg.FileName,factor,optionsState.Encoding,bulgeTolerance);
             if(imported is null || windowClosed)return;
+            preparedDxfReflectY=optionsState.ReflectY;
             preparedDxfFactor=factor;preparedDxfSource=Path.GetFileName(dlg.FileName);
             dxfNotice.Text="DXF hazır. Proje henüz değiştirilmedi; önizlemeyi açarak ölçüleri kontrol edin.";
             dxfReview.Visibility=Visibility.Visible;
@@ -1989,6 +1991,7 @@ public class MainWindow : Window
         internal double Factor { get; set; }=1;
         internal DxfTextEncoding Encoding { get; set; }=DxfTextEncoding.Utf8;
         internal bool UseBlockPlacements { get; set; }
+        internal bool ReflectY { get; set; }
     }
     internal sealed class DxfLayerSelectionState
     {
@@ -2082,8 +2085,8 @@ public class MainWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var cancel=AddButton(actions,"Vazgeç",()=>options.DialogResult=false);cancel.IsCancel=true;cancel.IsDefault=true;
-        ComboBox units=null!,encodings=null!,methods=null!;
-        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >2 || methods.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama ve okuma yöntemini seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex switch { 1 => DxfTextEncoding.Windows1254, 2 => DxfTextEncoding.Windows1252, _ => DxfTextEncoding.Utf8 };state.UseBlockPlacements=methods.SelectedIndex==1;options.DialogResult=true; });
+        ComboBox units=null!,encodings=null!,methods=null!,orientation=null!;
+        AddButton(actions,"DXF okumayı başlat",()=> { if(units.SelectedIndex is <0 or >2 || encodings.SelectedIndex is <0 or >2 || methods.SelectedIndex is <0 or >1 || orientation.SelectedIndex is <0 or >1)throw new InvalidOperationException("Birim, kodlama, okuma yöntemi ve yönü seçin.");state.Factor=new[] { 1.0,10.0,25.4 }[units.SelectedIndex];state.Encoding=encodings.SelectedIndex switch { 1 => DxfTextEncoding.Windows1254, 2 => DxfTextEncoding.Windows1252, _ => DxfTextEncoding.Utf8 };state.UseBlockPlacements=methods.SelectedIndex==1;state.ReflectY=orientation.SelectedIndex==1;options.DialogResult=true; });
         var content=new StackPanel();
         var scroll=new ScrollViewer { Content=content,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         KeyboardNavigation.SetIsTabStop(scroll,true);System.Windows.Automation.AutomationProperties.SetName(scroll,"DXF ölçü ve kodlama seçenekleri");root.Children.Add(scroll);
@@ -2096,6 +2099,11 @@ public class MainWindow : Window
         content.Children.Add(new TextBlock { Text="Okuma yöntemi",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,5,0,4) });
         methods=new ComboBox { ItemsSource=new[] { "Standart aktarım (blok yerleşimleri uygulanmaz)", "Kontrollü aktarım (sınırlı destek)" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
         System.Windows.Automation.AutomationProperties.SetName(methods,"DXF okuma yöntemi");content.Children.Add(methods);
+        content.Children.Add(new TextBlock { Text="Koordinat yönü",Margin=new Thickness(0,5,0,4) });
+        orientation=new ComboBox { ItemsSource=new[] { "Kaynak koordinatlarını koru", "Ekran yönü için Y işaretini ters çevir" },SelectedIndex=0,Padding=new Thickness(8),Margin=new Thickness(0,0,0,6) };
+        System.Windows.Automation.AutomationProperties.SetName(orientation,"DXF koordinat yönü");
+        System.Windows.Automation.AutomationProperties.SetHelpText(orientation,"Varsayılan kaynak koordinatlarını korur. Y işaretini ters çevirmek yansımadır; konumu ve kapalı kontur yönünü değiştirir.");content.Children.Add(orientation);
+        content.Children.Add(new TextBlock { Text="Ekranda Y aşağı artar. Y işaretini ters çevirmek tüm içe alınan geometrinin ve konumunun yansımasıdır; kapalı kontur yönü de tersine döner. Kaynak dosya değişmez; önizlemeyi kaynakla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge yaylarını yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kodlama otomatik tahmin edilmez. Yanlış seçim harfleri değiştirebilir; kaynak dosyanın kodlamasını kontrol edin. Okuma kaynak dosyayı değiştirmez; proje ancak önizlemede onaylanırsa değiştirilir.",TextWrapping=TextWrapping.Wrap });
         return options;
@@ -2127,10 +2135,12 @@ public class MainWindow : Window
         dxfReviewActive=true;
         dxfReview.Visibility=Visibility.Collapsed;
         var applied=false;
+        var reflectY=preparedDxfReflectY;
+        var reviewCopyIntact=true;
         ProjectDocument? importSnapshot = null;
         bool PreparedImportMatches()
         {
-            try { if (importSnapshot is not null && DocumentSession.ContentEquals(importSnapshot, imported.Project)) return true; }
+            try { if (reviewCopyIntact && preparedDxfReflectY==reflectY && importSnapshot is not null && DocumentSession.ContentEquals(importSnapshot, imported.Project)) return true; }
             catch (Exception ex) when (ex is InvalidOperationException or ArgumentException or NullReferenceException)
             { /* An unstable or malformed copy cannot be approved. */ }
             // Do not allow a later retry to re-baseline the mutated copy.
@@ -2146,8 +2156,12 @@ public class MainWindow : Window
             // Keep an independent baseline before any preview or modal callback.
             importSnapshot = imported.Project.Clone();
             if (!PreparedImportMatches()) return;
+            var displayedSnapshot=reflectY ? DxfCanvasImportOrientation.ReflectY(importSnapshot) : importSnapshot.Clone();
+            var displayedImport=imported with { Project=displayedSnapshot };
+            var displayWarnings=imported.Warnings.ToList();
+            if(reflectY)displayWarnings.Add("Kullanıcı seçimiyle tüm geometride Y işareti ters çevrildi; bu yansıma konumu ve kapalı kontur yönünü değiştirir. Kaynak dosya değişmedi; kaynakla karşılaştırın.");
             var retryPlacements=false;
-            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(importSnapshot.Clone(),imported.Warnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
+            var accepted=ConfirmDxfReviewForVerification is { } confirm ? confirm(imported) : BuildImportPreviewCapturedWithState(displayedSnapshot.Clone(),displayWarnings,preparedDxfFactor,preparedDxfSource,imported.Units,imported.SourceSha256,imported.SourceByteLength,()=>retryPlacements=true,imported.SkippedRelevantInsertEntities).ShowDialog()==true;
             if (!PreparedImportMatches()) return;
             if(retryPlacements) { await RetryPreparedDxfPlacementsAsync(imported);return; }
             if(!accepted) { OfferDxfReviewRetry(imported,"DXF önizlemesi kapatıldı; proje değiştirilmedi.");return; }
@@ -2174,7 +2188,7 @@ public class MainWindow : Window
                 if (imported.SkippedRelevantInsertEntities is false && imported.ImportedBlockDefinitions is false &&
                     imported.ImportParameters is not null && imported.SourceSha256 is { Length:64 } && imported.SourceByteLength is >= 0)
                 {
-                    try { grainFingerprint = DxfTextileGrainlineMapping.CaptureFingerprint(imported); }
+                    try { grainFingerprint = DxfTextileGrainlineMapping.CaptureFingerprint(displayedImport); }
                     catch (Exception ex) when (ex is InvalidDataException or ArgumentException) { grainReviewUnavailable = true; }
                 }
                 else grainReviewUnavailable = true;
@@ -2182,10 +2196,15 @@ public class MainWindow : Window
             if (grainFingerprint is not null)
             {
                 IReadOnlyList<DxfGrainlineSelection>? chosen;
-                if (ConfirmDxfGrainlineReviewForVerification is { } review) chosen = review(imported);
+                if (ConfirmDxfGrainlineReviewForVerification is { } review)
+                {
+                    var callbackInput=reflectY ? displayedImport with { Project=displayedSnapshot.Clone() } : imported;
+                    try { chosen=review(callbackInput); }
+                    finally { if(reflectY)reviewCopyIntact=DocumentSession.ContentEquals(callbackInput.Project,displayedSnapshot); }
+                }
                 else
                 {
-                    var window = new DxfGrainlineReviewWindow(this, imported with { Project = importSnapshot.Clone() });
+                    var window = new DxfGrainlineReviewWindow(this, displayedImport with { Project = displayedSnapshot.Clone() });
                     chosen = window.ShowDialog() == true ? window.Selections : null;
                 }
                 if (!PreparedImportMatches()) return;
@@ -2210,10 +2229,12 @@ public class MainWindow : Window
             // Persist only the verified import snapshot, never an absolute source
             // path. A missing/oversized history fails before replacing the document.
             var candidate = grainSelections.Count == 0
-                ? importSnapshot.Clone()
-                : DxfTextileGrainlineMapping.Apply(imported with { Project = importSnapshot.Clone() }, grainSelections,
+                ? displayedSnapshot.Clone()
+                : DxfTextileGrainlineMapping.Apply(displayedImport with { Project = displayedSnapshot.Clone() }, grainSelections,
                     grainFingerprint ?? throw new InvalidOperationException("İplik yönü inceleme kimliği eksik.")).Project;
             var historyWarnings = imported.Warnings.ToList();
+            if(reflectY)historyWarnings.Add("Kullanıcı seçimiyle içe aktarılan geometride Y işareti ters çevrildi; kaynak dosya değişmedi. Konum ve kapalı kontur yönü yansıtıldı; kaynakla karşılaştırın.");
+            else historyWarnings.Add("Koordinatların yönü korundu; seçilen birim ölçeği dışında Y işareti değiştirilmedi. Tuvalde Y aşağı artar; kaynak görünümünü kontrol edin.");
             if (grainReviewUnavailable)
                 historyWarnings.Add("İplik yönü eşlemesi için kaynak bilgileri doğrulanamadı; çizgiler ayrı parçalar olarak korundu. Çizgilerin anlamını kaynakta kontrol edin.");
             if (grainSelections.Count > 0)
@@ -2266,7 +2287,7 @@ public class MainWindow : Window
             return;
         }
         var oldStamp=dxfPreparationStamp;var oldPath=preparedDxfPath;var oldSaved=preparedDxfSavedState;
-        var oldFactor=preparedDxfFactor;var oldSource=preparedDxfSource;
+        var oldFactor=preparedDxfFactor;var oldSource=preparedDxfSource;var oldReflectY=preparedDxfReflectY;
         if(!await VerifyDxfSourceBeforeApplyAsync(imported,oldSaved))
         {
             if(dxfSourceCheckCancelled)OfferDxfReviewRetry(imported,"Kaynak kontrolü iptal edildi; mevcut çalışma korundu.");
@@ -2280,14 +2301,14 @@ public class MainWindow : Window
         if(windowClosed)return;
         if(result is not null)
         {
-            preparedDxfFactor=oldFactor;preparedDxfSource=oldSource;preparedDxfEncoding=encoding;
+            preparedDxfFactor=oldFactor;preparedDxfSource=oldSource;preparedDxfEncoding=encoding;preparedDxfReflectY=oldReflectY;
             dxfNotice.Text="Yerleşimler kontrollü okundu. Proje henüz değiştirilmedi; yeni önizlemeyi inceleyin.";
             dxfReview.Visibility=Visibility.Visible;SetStatus(dxfNotice.Text);return;
         }
         if(DxfStampMatches(oldStamp,allowSavedState:oldSaved))
         {
             preparedDxf=imported;dxfPreparationStamp=oldStamp;preparedDxfPath=oldPath;
-            preparedDxfSavedState=oldSaved;preparedDxfFactor=oldFactor;preparedDxfSource=oldSource;preparedDxfEncoding=encoding;
+            preparedDxfSavedState=oldSaved;preparedDxfFactor=oldFactor;preparedDxfSource=oldSource;preparedDxfEncoding=encoding;preparedDxfReflectY=oldReflectY;
             OfferDxfReviewRetry(imported,failure is null ? "Kontrollü okuma tamamlanmadı; mevcut çalışma korundu." : "Kontrollü okuma başarısız; mevcut çalışma korundu: "+failure);
         }
         else { dxfNotice.Text="Çalışma alanı değişti; DXF uygulanmadı. Dosyayı yeniden açın.";SetStatus(dxfNotice.Text); }
@@ -2380,7 +2401,7 @@ public class MainWindow : Window
         var sourcePath=Path.GetFullPath(path);var stamp=CaptureDxfPreparationStamp();
         var before=BeforeDxfPreparationForVerification;var after=AfterDxfPreparationForVerification;
         using var cancellation=new CancellationTokenSource();dxfImportCancellation=cancellation;
-        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
+        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;preparedDxfReflectY=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
         dxfReview.Visibility=Visibility.Collapsed;dxfNotice.Visibility=Visibility.Visible;
         dxfCancel.Content="DXF okumayı iptal et";System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
         dxfCancel.IsEnabled=true;dxfCancel.Visibility=Visibility.Visible;
@@ -2447,7 +2468,7 @@ public class MainWindow : Window
         var after=AfterDxfPreparationForVerification;
         using var cancellation=new CancellationTokenSource();
         dxfImportCancellation=cancellation;
-        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
+        preparedDxf=null;dxfPreparationStamp=null;preparedDxfPath=null;preparedDxfSavedState=false;preparedDxfReflectY=false;dxfSourceCheckCancelled=false;DxfImportRunning=true;
         dxfReview.Visibility=Visibility.Collapsed;
         dxfNotice.Visibility=Visibility.Visible;
         dxfCancel.Content="DXF okumayı iptal et";System.Windows.Automation.AutomationProperties.SetName(dxfCancel,"DXF okumayı iptal et");
@@ -2636,7 +2657,10 @@ public class MainWindow : Window
         {
             DockPanel.SetDock(riskNotices,Dock.Top);panel.Children.Add(riskNotices);
         }
-        var replacement=new TextBlock { Text="İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. Y aşağı artar; kaynak yönünü kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
+        var reflected=warnings.Any(w=>w.StartsWith("Kullanıcı seçimiyle tüm geometride Y",StringComparison.Ordinal));
+        var replacement=new TextBlock { Text=reflected
+            ? "İçe aktarma mevcut projeyi değiştirir. Y işareti ters çevrildi; konum ve kontur yönü yansıtıldı. Kaynakla karşılaştırın."
+            : "İçe aktarma mevcut projenin yerini alacak; Vazgeç korur. Y aşağı artar; kaynak yönünü kontrol edin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) };
         DockPanel.SetDock(replacement,Dock.Top);panel.Children.Add(replacement);
         var body=new StackPanel();
         var notesViewer=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
