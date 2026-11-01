@@ -28,7 +28,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
         var apply=new Button { Content="Çalışma kopyasını hazırla",Margin=new Thickness(4),Padding=new Thickness(10,7,10,7) };
         actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();var scroll=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Blok tanımı eşleme seçenekleri");root.Children.Add(scroll);
-        body.Children.Add(new TextBlock { Text="Bu işlem yerleştirilmemiş bir blok tanımından tek parça çalışma kopyası hazırlar. Aynı parçaya en fazla 32 POINT/köşe çifti ekleyin; listedeki her çifti seçerek önizleyin. Her çift kaynak dosyadan ayrı doğrulanır; büyük dosyalarda uzun sürebilir. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Bu işlem yerleştirilmemiş bir blok tanımından tek parça çalışma kopyası hazırlar. Aynı parçaya en fazla 32 POINT/köşe çifti ekleyin. Önizlemede yalnız hedef köşe gösterilir; POINT koordinatını listeden kontrol edin. Eşleşme işlem sırasında kaynak dosyadan doğrulanır; büyük dosyalarda uzun sürebilir. Yerleşim, fiziksel çentik veya üretim uygunluğu doğrulanmaz. Kaynak DXF ve açık proje değiştirilmez.",TextWrapping=TextWrapping.Wrap });
         body.Children.Add(new TextBlock { Text="Kaynak okuma uyarıları",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         foreach(var warning in import.CapturedWarnings)
             body.Children.Add(new TextBlock { Text="• "+SafeNotice(warning),TextWrapping=TextWrapping.Wrap });
@@ -101,7 +101,7 @@ internal sealed class DxfBlockDefinitionReviewWindow : Window
             pieces.SelectedItem=pieces.Items.Cast<PieceChoice>().FirstOrDefault(p=>p.Id==selected.Selection.PieceId);
             points.SelectedItem=points.Items.Cast<PointChoice>().FirstOrDefault(p=>p.Ordinal==selected.Selection.SourceOrdinal);
             vertices.SelectedItem=vertices.Items.Cast<VertexChoice>().FirstOrDefault(v=>v.Index==selected.Selection.VertexIndex);
-            SetStatus("Listeden seçilen çift gösteriliyor; eşleşme kaynaktan uygulama öncesi doğrulanacak.");
+            SetStatus("Yalnız hedef köşe gösteriliyor; POINT koordinatını listeden kontrol edin. Eşleşme işlem sırasında doğrulanacak.");
         };
         remove.Click+=(_,_)=> { if(mappingList.SelectedItem is Mapping selected)mappings.Remove(selected);SetStatus($"{mappings.Count} çift listede."); };
         var confirm=new CheckBox { Content="Bunun yerleştirilmemiş blok tanımı olduğunu anladım",Margin=new Thickness(0,12,0,8) };body.Children.Add(confirm);

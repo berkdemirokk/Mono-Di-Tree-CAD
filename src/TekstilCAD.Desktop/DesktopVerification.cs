@@ -2376,7 +2376,9 @@ internal static class DesktopVerification
             Check(indexText.Text=="" && vertex.SelectedIndex==1,"Manual vertex choice clears the old search index",checks);
             add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(queue.Items.Count==2,"Two explicitly selected pairs are queued for one source piece",checks);
-            queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair previews its exact point and vertex",checks);
+            queue.SelectedIndex=0;Check(vertex.SelectedIndex==0 && point.SelectedIndex==0,"Selecting a queued pair restores its source POINT and target vertex choices",checks);
+            Check(status.Text.Contains("Yalnız hedef köşe") && status.Text.Contains("POINT koordinatını listeden") && status.Text.Contains("işlem sırasında doğrulanacak"),
+                "Queued-pair preview explicitly distinguishes target vertex from source POINT",checks);
             remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(queue.Items.Count==1,"Selected queued pair can be removed",checks);
             point.SelectedIndex=0;vertex.SelectedIndex=0;add.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             try { apply.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); } catch(InvalidOperationException) { }
