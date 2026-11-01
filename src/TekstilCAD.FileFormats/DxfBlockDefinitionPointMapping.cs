@@ -58,7 +58,8 @@ public static class DxfBlockDefinitionPointMapping
         foreach(var other in lines.Values.Where(r=>!used.Contains(r.SourceOrdinal)))
         {
             token.ThrowIfCancellationRequested();var start=Endpoint(other,10,20);var end=Endpoint(other,11,21);
-            if(piece.Points.Any(p=>p==start.Scaled || p==end.Scaled))throw new InvalidDataException("LINE zinciri başka kaynak ucu ile belirsiz biçimde birleşiyor.");
+            static bool Near(Point2 a,Point2 b)=>Math.Abs(a.X-b.X)<=1e-6 && Math.Abs(a.Y-b.Y)<=1e-6;
+            if(piece.Points.Any(p=>Near(p,start.Scaled) || Near(p,end.Scaled)))throw new InvalidDataException("LINE zinciri başka kaynak ucu ile belirsiz biçimde birleşiyor.");
         }
     }
 

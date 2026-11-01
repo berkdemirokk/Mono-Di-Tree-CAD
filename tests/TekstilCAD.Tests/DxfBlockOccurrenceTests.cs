@@ -30,18 +30,30 @@ public sealed class DxfBlockOccurrenceTests
             [new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true));
     }
 
-    [Theory]
-    [InlineData("10",true)]
-    [InlineData("10.0000001",false)]
-    public void LineChainRequiresExactSourceJointEvenWhenImporterJoinsNearEndpoints(string joint,bool valid)
+    [Fact]
+    public void LineChainAcceptsExactSourceJointWithReversedSegment()
     {
         var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+
             "0\nLINE\n8\nA\n10\n0\n20\n0\n11\n10\n21\n0\n"+
-            "0\nLINE\n8\nA\n10\n20\n20\n0\n11\n"+joint+"\n21\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
+            "0\nLINE\n8\nA\n10\n20\n20\n0\n11\n10\n21\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
         var import=DxfFormat.Import(new MemoryStream(bytes),"test");var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="LINE"));
         DxfBlockProjectResult Create()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true);
-        if(valid)Assert.Equal(3,Assert.Single(Create().WorkingCopy.Pieces).Points.Count);
-        else Assert.Throws<InvalidDataException>(()=>Create());
+        Assert.Equal(3,Assert.Single(Create().WorkingCopy.Pieces).Points.Count);
+    }
+
+    [Fact]
+    public void NearButDifferentSourceEndpointsAreNotJoinedByImporter()
+    {
+        var bytes=Encoding.ASCII.GetBytes("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n"+
+            "0\nLINE\n8\nA\n10\n0\n20\n0\n11\n10\n21\n0\n"+
+            "0\nLINE\n8\nA\n10\n20\n20\n0\n11\n10.0000001\n21\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n");
+        var before=bytes.ToArray();var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var links=import.PieceSources!.Value.Where(p=>p.EntityType=="LINE").ToArray();
+        Assert.Equal(2,links.Length);Assert.All(links,p=>Assert.Single(p.SourceOrdinals));
+        Assert.All(import.Project.Pieces,p=>Assert.Equal(2,p.Points.Count));
+        foreach(var link in links)
+            Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.CreateProjectWithPieces(import,new MemoryStream(bytes),[],[new(link.BlockHeaderOrdinal!.Value,link.PieceId)],"source.dxf",true));
+        Assert.Equal(before,bytes);
     }
 
     [Fact]
