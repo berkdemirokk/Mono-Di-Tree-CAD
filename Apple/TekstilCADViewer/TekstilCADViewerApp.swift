@@ -2059,13 +2059,8 @@ private struct PieceDetails: View {
     let piece: Drawing.Piece
 
     private var dimensions: (width: Double, height: Double)? {
-        guard let first = piece.points.first else { return nil }
-        var minX = first.x, maxX = first.x, minY = first.y, maxY = first.y
-        for point in piece.points.dropFirst() {
-            minX = min(minX, point.x); maxX = max(maxX, point.x)
-            minY = min(minY, point.y); maxY = max(maxY, point.y)
-        }
-        return (maxX - minX, maxY - minY)
+        guard let bounds = piece.contourBounds else { return nil }
+        return (bounds.maxX - bounds.minX, bounds.maxY - bounds.minY)
     }
 
     var body: some View {

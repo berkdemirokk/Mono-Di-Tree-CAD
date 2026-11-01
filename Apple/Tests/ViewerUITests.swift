@@ -1121,6 +1121,7 @@ final class ViewerUITests: XCTestCase {
         selected.tap(); app.buttons["Kapalı"].tap()
         let closedLength = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık kontur uzunluğu: 12 mm")).firstMatch
         XCTAssertTrue(closedLength.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık en: 3 mm • boy: 4 mm")).firstMatch.exists)
     }
 
     func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
