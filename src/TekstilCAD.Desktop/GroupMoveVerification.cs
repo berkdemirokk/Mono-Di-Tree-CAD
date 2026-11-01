@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using TekstilCAD.Core;
@@ -20,6 +21,13 @@ internal static class GroupMoveVerification
         var rule=new GradingRuleSet { SourcePieceId=a.Id,SourceClosed=true,SourcePoints=[..a.Points],Deltas=[new(0,0),new(0,0),new(0,0)] };
         void Reset() { studio.LoadDocument(new ProjectDocument { Pieces=[a,b],GradingRules=[rule] });studio.Select(a.Id); }
         GroupMoveWindow Open() { var w=new GroupMoveWindow(studio);w.ChoicesForVerification.SelectedItems.Add(w.ChoicesForVerification.Items[0]);w.ChoicesForVerification.SelectedItems.Add(w.ChoicesForVerification.Items[1]);return w; }
+        void CheckAccessibleStatus(GroupMoveWindow w,string expected)
+        {
+            var text=(TextBlock)typeof(GroupMoveWindow).GetField("status",flags)!.GetValue(w)!;
+            if(!text.Text.Contains(expected,StringComparison.OrdinalIgnoreCase) || !AutomationProperties.GetName(text).Contains(text.Text) ||
+               AutomationProperties.GetLiveSetting(text)!=AutomationLiveSetting.Polite)
+                throw new InvalidOperationException("Group move accessible status does not match its current text.");
+        }
         try
         {
             Reset();var before=studio.Document.Clone();var window=new GroupMoveWindow(studio);
@@ -27,8 +35,11 @@ internal static class GroupMoveVerification
             {
                 if(window.ChoicesForVerification.SelectionMode!=SelectionMode.Multiple || window.SelectionCountForVerification!="0 / 2 parça seçildi")
                     throw new InvalidOperationException("Group move must support modifier-free selection and show the selection count.");
+                var countText=(TextBlock)typeof(GroupMoveWindow).GetField("selectionCount",flags)!.GetValue(window)!;
+                if(!AutomationProperties.GetName(countText).Contains(countText.Text) || AutomationProperties.GetLiveSetting(countText)!=AutomationLiveSetting.Polite)
+                    throw new InvalidOperationException("Group move selection count must expose its current live value.");
                 window.SelectAllForVerification.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-                if(window.ChoicesForVerification.SelectedItems.Count!=2 || window.SelectionCountForVerification!="2 / 2 parça seçildi")
+                if(window.ChoicesForVerification.SelectedItems.Count!=2 || window.SelectionCountForVerification!="2 / 2 parça seçildi" || !AutomationProperties.GetName(countText).Contains("2 / 2"))
                     throw new InvalidOperationException("Select all must select and count all pieces.");
                 window.ClearSelectionForVerification.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                 if(window.ChoicesForVerification.SelectedItems.Count!=0 || window.SelectionCountForVerification!="0 / 2 parça seçildi")
@@ -38,6 +49,7 @@ internal static class GroupMoveVerification
                 window.XForVerification.Text="1";Wait(window.ApplyForVerification());
                 if(!DocumentSession.ContentEquals(before,studio.Document) || session.UndoCount!=0 || !window.StatusForVerification.Contains("en az iki"))
                     throw new InvalidOperationException("A single selected piece must not start a group move.");
+                CheckAccessibleStatus(window,"en az iki");
                 checks.Add("Group move requires at least two selected pieces");
             }
             finally { window.Close(); }
@@ -50,6 +62,7 @@ internal static class GroupMoveVerification
                    first.Grainline!.Start!=new Point2(1.1,3) || !first.Grainline.NeedsReview ||
                    !studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(first.Points) || !studio.Document.GradingRules.Single().Deltas.SequenceEqual(rule.Deltas) || session.UndoCount!=1)
                     throw new InvalidOperationException("Group move lost geometry, marker, grain or source rule.");
+                CheckAccessibleStatus(window,"parça taşındı");
                 var after=studio.Document.Clone();
                 if(!session.Undo() || !DocumentSession.ContentEquals(before,studio.Document) || !session.Redo() || !DocumentSession.ContentEquals(after,studio.Document))
                     throw new InvalidOperationException("Group move did not undo and redo atomically.");

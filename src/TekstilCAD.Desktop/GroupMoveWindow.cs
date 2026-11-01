@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using TekstilCAD.Core;
@@ -60,10 +61,17 @@ internal sealed class GroupMoveWindow : Window
         body.Children.Add(new TextBlock { Text="Seçilen parçalar ve iplik yönleri aynı miktarla taşınır. Kaynakla eşleşen serileme kuralları da taşınır; eski kurallar korunur ve bildirilir. Küçük ayrıntıların ve üretim ölçülerinin korunumu garanti edilmez. Bir parça güvenle taşınamazsa hiçbiri uygulanmaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         AutomationProperties.SetName(status,"Toplu taşıma durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
         choices.SelectionChanged+=(_,_)=> { revision++;UpdateSelectionCount(); };UpdateSelectionCount();dx.TextChanged+=(_,_)=>revision++;dy.TextChanged+=(_,_)=>revision++;
-        apply.Click+=(_,_)=>TaskForVerification=MoveAsync();stop.Click+=(_,_)=> { cancellation?.Cancel();status.Text="İptal isteniyor; proje henüz değiştirilmedi."; };
+        apply.Click+=(_,_)=>TaskForVerification=MoveAsync();stop.Click+=(_,_)=> { cancellation?.Cancel();SetStatus("İptal isteniyor; proje henüz değiştirilmedi."); };
         close.Click+=(_,_)=>Close();Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
-    private void UpdateSelectionCount()=>selectionCount.Text=$"{choices.SelectedItems.Count} / {choices.Items.Count} parça seçildi";
+    private static void SetLiveText(TextBlock target,string prefix,string text)
+    {
+        if(target.Text==text && AutomationProperties.GetName(target)==prefix+text)return;
+        target.Text=text;AutomationProperties.SetName(target,prefix+text);
+        if(UIElementAutomationPeer.CreatePeerForElement(target) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    private void UpdateSelectionCount()=>SetLiveText(selectionCount,"Seçim sayısı: ",$"{choices.SelectedItems.Count} / {choices.Items.Count} parça seçildi");
+    private void SetStatus(string text)=>SetLiveText(status,"Toplu taşıma durumu: ",text);
     private static string SafeName(string? name)
     {
         if(string.IsNullOrEmpty(name))return "(boş)";
@@ -77,16 +85,16 @@ internal sealed class GroupMoveWindow : Window
     private async Task MoveAsync()
     {
         if(closed || cancellation is not null)return;
-        if(workspace.HasPendingCanvasOrPropertyWork) { status.Text="Önce bekleyen çizim veya alan taslaklarını tamamlayın.";return; }
+        if(workspace.HasPendingCanvasOrPropertyWork) { SetStatus("Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
         var ids=choices.SelectedItems.Cast<Choice>().Select(c=>c.Id).ToArray();
-        if(ids.Length<2 || ids.Distinct().Count()!=ids.Length) { status.Text="Farklı en az iki parça seçin.";return; }
+        if(ids.Length<2 || ids.Distinct().Count()!=ids.Length) { SetStatus("Farklı en az iki parça seçin.");return; }
         if(!MeasurementInput.TryParseMillimeters(dx.Text,200_000_000,out var mx) || !MeasurementInput.TryParseMillimeters(dy.Text,200_000_000,out var my))
-        { status.Text="Geçerli X ve Y taşıma miktarları girin (mm).";return; }
-        if(mx==0 && my==0) { status.Text="Taşıma miktarı sıfır; proje ve geçmiş değiştirilmedi.";return; }
+        { SetStatus("Geçerli X ve Y taşıma miktarları girin (mm).");return; }
+        if(mx==0 && my==0) { SetStatus("Taşıma miktarı sıfır; proje ve geçmiş değiştirilmedi.");return; }
         var document=workspace.Document;var snapshot=document.Clone();var selected=workspace.SelectedId;var selectionRevision=revision;
         var set=ids.ToHashSet();var sources=snapshot.Pieces.Where(p=>set.Contains(p.Id)).ToArray();
-        if(sources.Length!=ids.Length) { status.Text="Seçili parçalar artık mevcut değil; pencereyi yeniden açın.";return; }
-        using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);status.Text="Parçalar arka planda doğrulanıyor; proje henüz değiştirilmedi.";
+        if(sources.Length!=ids.Length) { SetStatus("Seçili parçalar artık mevcut değil; pencereyi yeniden açın.");return; }
+        using var cts=new CancellationTokenSource();cancellation=cts;Busy(true);SetStatus("Parçalar arka planda doğrulanıyor; proje henüz değiştirilmedi.");
         var committed=false;
         try
         {
@@ -121,9 +129,9 @@ internal sealed class GroupMoveWindow : Window
             if(closed || workspace.IsWindowClosed)return;
             if(revision!=selectionRevision || !ReferenceEquals(workspace.Document,document) || workspace.SelectedId!=selected ||
                workspace.HasPendingCanvasOrPropertyWork || !DocumentSession.ContentEquals(workspace.Document,snapshot))
-            { status.Text="Proje, seçim veya girişler değişti; işlem uygulanmadı. Pencereyi yeniden açın.";return; }
+            { SetStatus("Proje, seçim veya girişler değişti; işlem uygulanmadı. Pencereyi yeniden açın.");return; }
             if(!workspace.CanRetainCurrentUndoSnapshot)
-            { status.Text="Proje geri alma sınırını aşıyor; taşıma uygulanmadı ve geçmiş korunuyor.";return; }
+            { SetStatus("Proje geri alma sınırını aşıyor; taşıma uygulanmadı ve geçmiş korunuyor.");return; }
             cts.Token.ThrowIfCancellationRequested();
             workspace.CommitObserved("Parçalar birlikte taşındı",()=>
             {
@@ -132,15 +140,15 @@ internal sealed class GroupMoveWindow : Window
                 for(int i=0;i<workspace.Document.GradingRules.Count;i++)
                     if(moved.Rules.TryGetValue(workspace.Document.GradingRules[i].SourcePieceId,out var rule))workspace.Document.GradingRules[i]=rule;
             },()=>committed=true);
-            status.Text=$"{moved.Pieces.Count} parça taşındı; işlem ana çalışma alanında tek adımda geri alınabilir. Ölçüleri kontrol edin."+
-                (moved.Stale.Count==0 ? "" : $" {moved.Stale.Count} eski serileme kuralı korundu; serileme atölyesinde gözden geçirin. Parça kimlikleri: "+string.Join(", ",moved.Stale.Take(3))+(moved.Stale.Count>3 ? " ve diğerleri." : "."));
+            SetStatus($"{moved.Pieces.Count} parça taşındı; işlem ana çalışma alanında tek adımda geri alınabilir. Ölçüleri kontrol edin."+
+                (moved.Stale.Count==0 ? "" : $" {moved.Stale.Count} eski serileme kuralı korundu; serileme atölyesinde gözden geçirin. Parça kimlikleri: "+string.Join(", ",moved.Stale.Take(3))+(moved.Stale.Count>3 ? " ve diğerleri." : ".")));
             apply.IsEnabled=false;
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested && !committed)
-        { if(!closed)status.Text="Toplu taşıma iptal edildi; proje değiştirilmedi."; }
+        { if(!closed)SetStatus("Toplu taşıma iptal edildi; proje değiştirilmedi."); }
         catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException))
         {
-            if(!closed)status.Text=committed ? "Taşıma projeye uygulandı ancak görünüm yenilenemedi. Ana çalışma alanını ve geri alma geçmişini kontrol edin: "+ex.Message : "Toplu taşıma uygulanmadı: "+ex.Message;
+            if(!closed)SetStatus(committed ? "Taşıma projeye uygulandı ancak görünüm yenilenemedi. Ana çalışma alanını ve geri alma geçmişini kontrol edin: "+ex.Message : "Toplu taşıma uygulanmadı: "+ex.Message);
         }
         finally { if(ReferenceEquals(cancellation,cts))cancellation=null;if(!closed) { Busy(false);if(committed)apply.IsEnabled=false; } }
     }
