@@ -29,7 +29,7 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Bilinen sürekli olmayan DXF çizgi tipleri içe aktarılmaz ve atlandıkları bildirilir. Katman veya blok çizgi tipi çözümlenemediğinde geometri düz çizgi olarak gösterilebilir; uyarıya rağmen kesim/dikiş anlamı kaynak dosya ve üreticiyle ayrıca doğrulanmalıdır.
 - DXF renkleri parça bilgisinde saklanmaz. Çizgi birleştirmesinde renk ayrımı korunmaya çalışılır; renk mirası çözümlenemeyen veya standart dışı kaynaklarda anlamlar kaybolabilir ve kaynakla ayrıca kontrol gerektirir.
 - DXF koordinat metinleri en fazla 256 karakter ve üs mutlak değeri en fazla 1.000.000 olacak şekilde sınırlandırılır. Kaynak ondalık noktaları double veya ölçekleme sırasında aynı konuma düşerse ilgili içe aktarma reddedilir; bu kontrol bütün geometri aritmetiğinin kesin olduğunu kanıtlamaz.
-- HPGL yalnızca dışa aktarılır. PDF henüz yok.
+- HPGL yalnızca dışa aktarılır. PDF tek özel boyutlu vektör sayfada inceleme içindir; çok sayfaya bölme, iplik yönü ve üretim meta verisi desteği yoktur. Yazıcı ve okuyucular sayfayı ölçekleyebilir; gerçek yazıcı, baskı ölçeği, katman ve üretim doğruluğu henüz doğrulanmadı. Dosya üretim öncesi bağımsız kontrol gerektirir.
 - Simülatör fiziksel donanıma bağlanmaz. Geçerli iş manifestleri simülatör kuyruğu yeniden açıldığında yüklenir; geçersiz/eksik kayıtlar ve tarama sınırı uyarılır. Önceki doğrulama, sonraki dosya bütünlüğünü veya fiziksel işi kanıtlamaz.
 - Lisans doğrulama kitaplığı var; kullanıcı/firma/abonelik/ödeme sunucusu veya arayüzü yok. Güvenilir saat ve iptal sistemi gerekli.
 - AI özellikleri yok; çekirdek ücretli API gerektirmez.

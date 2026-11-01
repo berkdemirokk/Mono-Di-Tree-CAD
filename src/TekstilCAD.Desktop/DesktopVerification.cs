@@ -4128,8 +4128,18 @@ internal static class DesktopVerification
         PumpUntil(()=>approvedTask!.IsCompleted);approvedTask!.GetAwaiter().GetResult();
         Check(studio.ExportError is null && File.Exists(approvedPath) && DocumentSession.ContentEquals(mismatchDocument,studio.Document),
             "Accepted HPGL preflight exports without changing the source",checks);
+        var pdfPath=Path.Combine(work,"inspection.pdf");
+        var pdfVersion=ProjectStorage.CaptureVersion(pdfPath);string? pdfWarning=null;
+        var pdfDeclined=studio.StartExportAfterPreflight(studio.Document.Clone(),pdfPath,4,pdfVersion,message=> { pdfWarning=message;return false; });
+        Check(pdfDeclined is null && !studio.ExportRunning && pdfWarning is not null && pdfWarning.Contains("ölçekleyebilir",StringComparison.Ordinal),
+            "PDF preflight explains scaling and cancellation does not start export",checks);
+        var pdfTask=studio.StartExportAfterPreflight(studio.Document.Clone(),pdfPath,4,pdfVersion,_=>true);
+        Check(pdfTask is not null,"PDF inspection export starts after confirmation",checks);
+        PumpUntil(()=>pdfTask!.IsCompleted);pdfTask!.GetAwaiter().GetResult();
+        Check(studio.ExportError is null && File.ReadAllText(pdfPath).StartsWith("%PDF-1.4",StringComparison.Ordinal)
+            && DocumentSession.ContentEquals(mismatchDocument,studio.Document),"PDF export preserves source and creates a PDF document",checks);
         previousTask=studio.ExportTask;
-        foreach(var format in new[] { 1,2,3 })
+        foreach(var format in new[] { 1,2,3,4 })
         {
             try { studio.StartExportAsync(studio.Document.Clone(),mismatchPath,format,mismatchVersion);throw new InvalidOperationException("Mismatched export extension was accepted."); }
             catch(InvalidDataException) { }

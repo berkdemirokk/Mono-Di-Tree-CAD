@@ -249,7 +249,7 @@ public class MainWindow : Window
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
-        exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG veya HPGL dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
+        exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");
         var textile = CommandGroup(commandArea, "TEKSTİL");
         AddButton(textile, "Tekstil araçları…", OpenTextileTools, "Serileme, dikiş payı, nokta düzenleme ve temel pastal");
@@ -2904,7 +2904,7 @@ public class MainWindow : Window
         var warning=OutputLossNotice();
         if(warning is not null && MessageBox.Show(this,warning+"\n\nDevam edilsin mi?", "Dışa aktarım bilgisi", MessageBoxButton.YesNo, MessageBoxImage.Information)!=MessageBoxResult.Yes)return;
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje inceleme sırasında değişti; dışa aktarımı yeniden başlatın.");
-        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        var dlg = new SaveFileDialog { Title=$"Tüm proje dışa aktarılacak · {Document.Pieces.Count} parça", Filter="DXF (*.dxf)|*.dxf|SVG (*.svg)|*.svg|HPGL / PLT (*.plt;*.hpgl)|*.plt;*.hpgl|PDF inceleme (*.pdf)|*.pdf", FileName=SafeFileName(Document.Name), AddExtension=true, InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dlg.ShowDialog(this)!=true)return;
         ExportDestination.ValidateExtension(dlg.FileName,dlg.FilterIndex);
         if(!DocumentSession.ContentEquals(snapshot,Document)) throw new InvalidOperationException("Proje dosya seçimi sırasında değişti; dışa aktarımı yeniden başlatın.");
@@ -2927,7 +2927,7 @@ public class MainWindow : Window
         }
         EnsureExportDoesNotReplaceOpenProject(dlg.FileName);
         _ = StartExportAfterPreflight(snapshot,dlg.FileName,dlg.FilterIndex,targetVersion,
-            message=>MessageBox.Show(this,message,"HPGL dosya bilgisi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            message=>MessageBox.Show(this,message,"Dışa aktarım bilgisi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
     }
     internal const string HpglPreflightMessage = "Bu aktarım tüm proje parçalarını 40 birim/mm ile bir HPGL dosyasına yazar. "+
         "Dosya koordinat adımı 0,025 mm'dir; koordinatlar tam sayıya yuvarlanır. Bu değer fiziksel makine hassasiyeti değildir.\n\n"+
@@ -2937,6 +2937,7 @@ public class MainWindow : Window
     {
         ArgumentNullException.ThrowIfNull(confirm);
         if(format==3 && !confirm(HpglPreflightMessage)) { SetStatus("HPGL dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
+        if(format==4 && !confirm("PDF tek özel boyutlu sayfada inceleme içindir. Çok sayfalı yazdırma yoktur. Yazıcı ve PDF uygulaması sayfayı ölçekleyebilir; fiziksel ölçüyü bağımsız kontrol edin. İplik yönü içeren parçalar desteklenmez. Devam edilsin mi?")) { SetStatus("PDF dışa aktarımı başlatılmadı; dosya değiştirilmedi.");return null; }
         // Dialogs pump the dispatcher; a drawing, drag or property draft can
         // appear without changing the committed document snapshot.
         EnsurePropertyDraftsApplied();
@@ -3022,7 +3023,7 @@ public class MainWindow : Window
                 try { await Task.Run(()=>HpglFormat.WritePrepared(prepared,path,expected,token)); }
                 finally { if(!windowClosed)IsEnabled=previouslyEnabled; }
             }
-            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; } });
+            else await Task.Run(()=> { switch(format) { case 1: DxfFormat.Export(snapshot,path,expected); break; case 2: SvgFormat.Export(snapshot,path,expected); break; case 4: PdfFormat.Export(snapshot,path,expected); break; } });
             var stale=!DocumentSession.ContentEquals(snapshot,Document) || propertyDrafts.Count>0 || canvas.HasPendingDrawing || canvas.LargeVertexValidationRunning || canvas.HasActiveDragPreview;
             exportNotice.Foreground=stale?StudioTheme.Warning:StudioTheme.Accent;
             exportNotice.Text=stale?"Dosya hazırlandı; proje değiştiği için önceki kopya kullanıldı.":"Dosya dışa aktarıldı.";
