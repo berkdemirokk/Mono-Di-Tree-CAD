@@ -48,7 +48,10 @@ internal sealed class OffsetPreviewMeasurementWindow : Window
                 body.Children.Add(roles);
                 var status=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
                 var preview=new OffsetTriplePreview(group==0 ? this.source : this.candidate,group==0 ? "Kaynak kontur nokta seçicisi" : "Aday kontur nokta seçicisi");
-                preview.PointRequested+=index=> { if(index<0) { SetLiveText(status,index==-2 ? "Birden fazla yakın nokta var; kesin indeksi listeden seçin." : "Yakında nokta bulunamadı.");return; }
+                preview.PointRequested+=index=> { if(index<0) {
+                    var field=offset+activeRole[group];Selectors[field].SelectedIndex=-1;IndexInputs[field].Clear();
+                    SetLiveText(Result,"Nokta seçimi temizlendi; ölçümü yeniden yapın.");
+                    SetLiveText(status,index==-2 ? "Birden fazla yakın nokta var; önceki seçim temizlendi. Kesin indeksi listeden seçin." : "Yakında nokta bulunamadı; önceki seçim temizlendi.");return; }
                     Selectors[offset+activeRole[group]].SelectedIndex=index;SetLiveText(status,$"{roleNames[activeRole[group]]}: {index}. nokta seçildi."); };
                 Previews[group]=preview;body.Children.Add(preview);body.Children.Add(status);
             }

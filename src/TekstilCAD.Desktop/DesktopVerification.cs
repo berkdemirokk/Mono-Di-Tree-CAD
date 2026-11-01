@@ -11680,11 +11680,18 @@ internal static class DesktopVerification
                         "Offset selector exposes its accessible name, image role and selected-index help",checks);
                     var announcements=new List<(string Text,string Name)>();
                     measure.LiveAnnouncementForVerification=control=>announcements.Add((control.Text,AutomationProperties.GetName(control)));
+                    measure.Compare();
+                    Check(measure.Result.Text.Contains("Kaynak ağız: 10 mm"),"Preview measurement exists before ambiguous selection",checks);
                     measure.Previews[0].RequestPointForVerification(-2);
-                    Check(measure.Selectors[0].SelectedIndex==0 && announcements.Count>0 && announcements[^1].Text.Contains("Birden fazla yakın nokta") &&
-                        announcements[^1].Text==announcements[^1].Name,"Ambiguous visual selection preserves the choice and announces the list fallback",checks);
+                    Check(measure.Selectors[0].SelectedIndex==-1 && measure.Previews[0].Selected[0]==-1 && measure.Selectors[1].SelectedIndex==1 &&
+                        !measure.Result.Text.Contains("Kaynak ağız: 10 mm") && measure.Result.Text.Contains("temizlendi") && announcements.Count>0 &&
+                        announcements[^1].Text.Contains("Birden fazla yakın nokta") && announcements[^1].Text==announcements[^1].Name,
+                        "Ambiguous visual selection clears only the active choice and invalidates the measurement",checks);
                     measure.Previews[0].RequestPointForVerification(2);
                     Check(measure.Selectors[0].SelectedIndex==2 && measure.Previews[0].Selected[0]==2,"Unambiguous visual selection updates its matching list",checks);
+                    measure.Previews[0].RequestPointForVerification(-1);
+                    Check(measure.Selectors[0].SelectedIndex==-1 && measure.Result.Text.Contains("temizlendi") &&
+                        announcements[^1].Text.Contains("Yakında nokta bulunamadı"),"Empty visual selection clears its active choice",checks);
                     measure.Selectors[0].SelectedIndex=0;
                     measure.Compare();
                     Check(measure.Result.Text.Contains("Kaynak ağız: 10 mm") && measure.Result.Text.Contains("Kaynak derinlik: 3 mm") &&
