@@ -40,7 +40,14 @@ internal sealed class DuplicatePieceWindow : Window
         AutomationProperties.SetName(CopyGrading,"Serileme kuralını kopyala");panel.Children.Add(CopyGrading);
         panel.Children.Add(new TextBlock { Text=rule is null ? "Kaynakta serileme kuralı yok." : CopyGrading.IsEnabled ? "Kural bağımsız olarak yeni parçanın kimliğine bağlanır; beden artışlarını kontrol edin." : "Kaynak geometri kuralın kaydedildiği geometriyle tam eşleşmiyor; kural kopyalanamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning });
     }
-    internal static bool RuleMatches(PatternPiece source,GradingRuleSet? rule) => rule is not null && rule.SourcePieceId==source.Id &&
-        rule.SourceClosed==source.Closed && rule.SourcePoints is not null && rule.Deltas is not null && source.Points is not null &&
-        rule.SourcePoints.Count==rule.Deltas.Count && rule.SourcePoints.SequenceEqual(source.Points);
+    internal static bool RuleMatches(PatternPiece source,GradingRuleSet? rule)
+    {
+        if(rule is null || rule.SourcePieceId!=source.Id || rule.SourceClosed!=source.Closed ||
+           rule.SourcePoints is null || rule.Deltas is null || source.Points is null ||
+           rule.SourcePoints.Count!=rule.Deltas.Count || rule.SourcePoints.Count!=source.Points.Count)return false;
+        for(var i=0;i<source.Points.Count;i++)
+            if(BitConverter.DoubleToInt64Bits(rule.SourcePoints[i].X)!=BitConverter.DoubleToInt64Bits(source.Points[i].X) ||
+               BitConverter.DoubleToInt64Bits(rule.SourcePoints[i].Y)!=BitConverter.DoubleToInt64Bits(source.Points[i].Y))return false;
+        return true;
+    }
 }

@@ -13238,6 +13238,18 @@ internal static class DesktopVerification
             Check(!staleDialog.CopyGrading.IsEnabled,"A stale grading rule is unavailable in duplicate options",checks);staleDialog.Close();
             studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,true);studio.DuplicateSelectedPiece();
             Check(DocumentSession.ContentEquals(staleBefore,studio.Document) && session.UndoCount==0,"A stale grading rule cannot be copied even if requested",checks);
+            var bitStale=initial.Clone();bitStale.GradingRules[0].SourcePoints[0]=new Point2(-0.0,0);
+            studio.LoadDocument(bitStale);studio.Select(source.Id);var bitBefore=studio.Document.Clone();
+            var bitDialog=new DuplicatePieceWindow(studio,studio.Selected!,"Kaynak",studio.Document.GradingRules[0]);
+            Check(!bitDialog.CopyGrading.IsEnabled,"A bit-different signed-zero source rule cannot be selected for duplication",checks);bitDialog.Close();
+            studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,true);studio.DuplicateSelectedPiece();
+            Check(DocumentSession.ContentEquals(bitBefore,studio.Document) && session.UndoCount==0,
+                "Duplicate rejects a bit-different rule without changing geometry, rule or history",checks);
+            studio.ChooseDuplicateForVerification=_=>new DuplicateOptions(false,false,false);studio.DuplicateSelectedPiece();
+            Check(studio.Document.Pieces.Count==2 && studio.Document.GradingRules.Count==1 &&
+                BitConverter.DoubleToInt64Bits(studio.Document.GradingRules[0].SourcePoints[0].X)==BitConverter.DoubleToInt64Bits(-0.0) &&
+                session.Undo() && DocumentSession.ContentEquals(bitBefore,studio.Document),
+                "Duplicate without rule keeps bit-different source data and remains undoable",checks);
             studio.LoadDocument(initial);studio.Select(source.Id);
             studio.ChooseDuplicateForVerification=_=> { studio.Commit("Kural değişikliği",()=>studio.Document.GradingRules[0].Deltas[0]=new Point2(4,4));return new DuplicateOptions(false,false,true); };
             studio.DuplicateSelectedPiece();
