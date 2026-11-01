@@ -78,7 +78,7 @@ internal sealed class HalfTurnWindow : Window
                 if(mapped is not null && liveRule>=0)workspace.Document.GradingRules[liveRule]=mapped;
             },()=>committed=true);
             if(prepared.stale)workspace.ShowCanvasError("Dönüşüm uygulandı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
-            SetStatus("180° dönüşüm uygulandı; tek adımda geri alınabilir.");
+            SetStatus(committed ? "180° dönüşüm uygulandı; tek adımda geri alınabilir." : "Dönüşümde değişiklik yok; proje ve geri alma geçmişi korundu.");
             if(IsVisible)CloseAfterCompletion();
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested && !committed)

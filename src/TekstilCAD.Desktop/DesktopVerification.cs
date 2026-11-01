@@ -8648,6 +8648,16 @@ internal static class DesktopVerification
                     "Large half turn supports atomic undo and redo",checks);
             }
             finally { window.Close(); }
+            var unchangedPiece=new PatternPiece { Name="Aynı nokta",Closed=false,Points=Enumerable.Repeat(new Point2(1,1),4097).ToList() };
+            studio.LoadDocument(new ProjectDocument { Pieces=[unchangedPiece] });studio.Select(unchangedPiece.Id);var unchanged=studio.Document.Clone();
+            var noOp=new HalfTurnWindow(studio);
+            try
+            {
+                var task=noOp.RunForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(unchanged,studio.Document) && session.UndoCount==0 && noOp.StatusForVerification.Contains("değişiklik yok"),
+                    "An unchanged large half turn reports no change and creates no undo",checks);
+            }
+            finally { noOp.Close(); }
             studio.LoadDocument(document);studio.Select(piece.Id);before=studio.Document.Clone();window=new HalfTurnWindow(studio);
             using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
             {
