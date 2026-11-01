@@ -583,6 +583,41 @@ public sealed class TextileToolsWindow : Window
             result.Text=$"{selected.Length} satırın taslak artışları değişti; projeye henüz uygulanmadı. Tekrarlı kapanış varsa ilk ve son satırı kontrol edin.";
         },()=>HasPiece()&&!rulesNeedReset);
         writeBatch.Margin=new Thickness(0,4,0,4);writeBatch.Padding=new Thickness(10,5,10,5);
+        batchPanel.Children.Add(new TextBlock { Text="Alternatif: tam iki uç satır seçin. Aradaki satırlar, geometrik mesafeye değil nokta indeksine göre doğrusal doldurulur; uçlar değişmez. Tekrarlı kapanışın iki satırını ayrıca kontrol edin.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) });
+        var interpolate=Button(batchPanel,"İki seçili satır arasını doldur",()=>
+        {
+            if(rulesNeedReset || activeDraft is null || source.SelectedItem is not PatternPiece piece || activeSourceId!=piece.Id ||
+               !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
+               activeDraft.Closed!=piece.Closed || !activeDraft.Points.SequenceEqual(piece.Points))
+            { result.Text="Kaynak veya taslak güncel değil; ara artışlar değiştirilmedi.";return; }
+            var selected=grades.SelectedItems.Cast<GradeRow>().OrderBy(row=>row.Index).ToArray();
+            if(selected.Length!=2 || selected[1].Index-selected[0].Index<2 || selected.Any(row=>row.Index<0 || row.Index>=rows.Count || !ReferenceEquals(rows[row.Index],row)))
+            { result.Text="Aralarında en az bir satır bulunan iki uç satır seçin; ara artışlar değiştirilmedi.";return; }
+            var draft=activeDraft;var first=selected[0];var last=selected[1];
+            if(!IsNumber(first.Dx,out _) || !IsNumber(first.Dy,out _) || !IsNumber(last.Dx,out _) || !IsNumber(last.Dy,out _))
+            { result.Text="İki uç satırın ΔX ve ΔY değerleri geçerli olmalı; ara doldurma uygulanmadı.";return; }
+            if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+            if(rulesNeedReset || !ReferenceEquals(activeDraft,draft) || source.SelectedItem is not PatternPiece current ||
+               !ReferenceEquals(current,piece) || !ReferenceEquals(workspace.Document.Pieces.FirstOrDefault(p=>p.Id==piece.Id),piece) ||
+               activeSourceId!=piece.Id || draft.Closed!=piece.Closed || !draft.Points.SequenceEqual(piece.Points) ||
+               grades.SelectedItems.Count!=2 || !grades.SelectedItems.Contains(first) || !grades.SelectedItems.Contains(last) ||
+               first.Index<0 || last.Index>=rows.Count || !ReferenceEquals(rows[first.Index],first) || !ReferenceEquals(rows[last.Index],last))
+            { result.Text="Kaynak veya seçim değişti; ara artışlar değiştirilmedi. Açık hücre düzenlemesini kontrol edin.";return; }
+            if(!IsNumber(first.Dx,out var x0) || !IsNumber(first.Dy,out var y0) || !IsNumber(last.Dx,out var x1) || !IsNumber(last.Dy,out var y1))
+            { result.Text="İki uç satırın ΔX ve ΔY değerleri geçerli olmalı; ara artışlar değiştirilmedi.";return; }
+            var span=last.Index-first.Index;var updates=new List<(GradeRow Row,string X,string Y)>();
+            for(var index=first.Index+1;index<last.Index;index++)
+            {
+                var t=(double)(index-first.Index)/span;
+                var x=x0*(1-t)+x1*t;var y=y0*(1-t)+y1*t;
+                if(!double.IsFinite(x) || !double.IsFinite(y))
+                { result.Text="Ara artışlar sonlu hesaplanamadı; hiçbir ara satır değiştirilmedi.";return; }
+                updates.Add((rows[index],MeasurementInput.Format(x),MeasurementInput.Format(y)));
+            }
+            foreach(var update in updates) { update.Row.Dx=update.X;update.Row.Dy=update.Y; }
+            result.Text=$"{updates.Count} ara satır indeks aralığına göre dolduruldu; uçlar ve proje değişmedi. Sonuçları inceleyip projeye ayrıca uygulayın.";
+        },()=>HasPiece()&&!rulesNeedReset);
+        interpolate.Margin=new Thickness(0,4,0,4);interpolate.Padding=new Thickness(10,5,10,5);
         var fields=new WrapPanel { VerticalAlignment=VerticalAlignment.Bottom };lower.Children.Add(fields);
         var sizeColumn=new StackPanel { Width=140,Margin=new Thickness(0,0,12,0) };
         var stepColumn=new StackPanel { Width=190,Margin=new Thickness(0,0,12,0) };

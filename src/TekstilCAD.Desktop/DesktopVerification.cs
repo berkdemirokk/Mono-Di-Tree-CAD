@@ -581,6 +581,7 @@ internal static class DesktopVerification
             VerifySelectedNotchComparison(studio,checks);
             VerifyGradeInputFeedback(studio,checks);
             VerifyGradeBatchDraft(studio,checks);
+            VerifyGradeInterpolationDraft(studio,checks);
             VerifyGradeApplyConflicts(studio,checks);
             VerifyLayeredPointerSelection(studio,checks);
             VerifyPieceSearch(studio,checks);
@@ -5371,6 +5372,10 @@ internal static class DesktopVerification
         batchWrite.BringIntoView();root.UpdateLayout();
         Check(FullyVisible(batchWrite,root) && batchWrite.Focusable,
             "Bulk grading action remains fully reachable in the minimum-size scrolling area",checks);
+        var interpolate=Descendants<Button>(root).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur"));
+        interpolate.BringIntoView();root.UpdateLayout();
+        Check(FullyVisible(interpolate,root) && interpolate.Focusable,
+            "Grading interpolation action remains fully reachable in the minimum-size scrolling area",checks);
         batchOptions.IsExpanded=false;root.UpdateLayout();
         var size=Descendants<TextBox>(root).Single(t=>AutomationProperties.GetName(t)=="Yeni beden adı");
         var result=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
@@ -11527,6 +11532,36 @@ internal static class DesktopVerification
         ClickAndWaitForGrade(conflictTools,create);
         Check(conflictStatus.Text.Contains("kural") && conflictTable.Items.Cast<TextileToolsWindow.GradeRow>().First().Dx=="7"
             && DocumentSession.ContentEquals(conflictBefore,studio.Document),"Changed saved rule cannot be used to generate a size from stale draft increments",checks);
+    }
+    private static void VerifyGradeInterpolationDraft(MainWindow studio,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Ara artış",Points=[new(0,0),new(10,0),new(0,10)] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);
+        var before=studio.Document.Clone();var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var tools=new TextileToolsWindow(studio);var root=(FrameworkElement)tools.Content;
+        Descendants<TabControl>(root).Single().SelectedIndex=0;root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        Descendants<Expander>(root).Single(e=>Equals(e.Header,"İsteğe bağlı parça bilgileri ve toplu artışlar")).IsExpanded=true;root.UpdateLayout();
+        Descendants<Expander>(root).Single(e=>Equals(e.Header,"Seçili satırlara aynı artışı yaz")).IsExpanded=true;root.UpdateLayout();
+        var table=(DataGrid)typeof(TextileToolsWindow).GetField("grades",PrivateInstance)!.GetValue(tools)!;
+        var rows=table.Items.Cast<TextileToolsWindow.GradeRow>().ToArray();
+        var fill=Descendants<Button>(root).Single(b=>Equals(b.Content,"İki seçili satır arasını doldur"));
+        rows[0].Dx="1";rows[0].Dy="-2";rows[1].Dx="99";rows[1].Dy="99";rows[2].Dx="5";rows[2].Dy="4";
+        table.SelectedItems.Clear();table.SelectedItems.Add(rows[0]);
+        fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[1].Dx=="99" && rows[1].Dy=="99" && DocumentSession.ContentEquals(before,studio.Document),
+            "Interpolation requires two endpoints and preserves the draft otherwise",checks);
+        table.SelectedItems.Add(rows[2]);rows[2].Dy="hatalı";
+        fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[1].Dx=="99" && rows[1].Dy=="99" && DocumentSession.ContentEquals(before,studio.Document),
+            "Invalid interpolation endpoint leaves the intermediate draft unchanged",checks);
+        rows[2].Dy="4";fill.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(rows[0].Dx=="1" && rows[0].Dy=="-2" && rows[1].Dx=="3" && rows[1].Dy=="1" && rows[2].Dx=="5" && rows[2].Dy=="4" &&
+              DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+            "Interpolation writes only intermediate draft values using index spacing",checks);
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"Artışları projeye uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(studio.Document.GradingRules.Single().Deltas.SequenceEqual(new[] { new Point2(1,-2),new Point2(3,1),new Point2(5,4) }) && session.UndoCount==1,
+            "Interpolated draft is applied with the endpoints in one transaction",checks);
+        Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document),"Undo restores the project after applying interpolated grading",checks);
     }
     private static void VerifyGradeBatchDraft(MainWindow studio,List<string> checks)
     {
