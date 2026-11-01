@@ -32,6 +32,8 @@ Listelenen model açılırken veya ham kopyası kurtarılırken kimlik okuma ön
 
 Köşe işareti seçicisinde ilk 500 eşleşme listelenir; sonraki işaretler daha dar bir aramayla bulunabilir. Arama yeni sorguda iptal edilen arka plan işi olarak hazırlanır. Bu değişiklik ve çok büyük modellerde cihaz performansı henüz Apple ortamında doğrulanmadı.
 
+Sürüm 7 döndürmeli pastal dosyalarında görünür konturlar ve işaretler önizlenebilir. Döndürme izi, geçmiş-kopya eşleşmeleri ve üretim uygunluğu telefonda doğrulanmaz; kaynak dosya baytları kaydetme ve dışa aktarmada korunur. Dosya veya doğrulama için dönüştürülen metin 8 MB'ı aşarsa önizleme yapılmaz; seçilen en fazla 64 MB dosyanın ham kurtarma kopyası saklanabilir. Sürüm 7'de proje adı, parça adı ve nokta düzenleme desteklenmez. Masaüstünde üretilmiş sentetik fixture eklenmiştir; Apple derlemesi, cihaz davranışı ve gerçek fabrika verileri henüz doğrulanmamıştır.
+
 ## Sınırlar
 
 - Model kaydında geçici yolun oluşturulduktan sonra başka bir işlemce değiştirilmesi hâlinde yanlış içerik yayımlanabilir. Bu yarış durumu giderilmedi; iptal edilen veya başarısız kaydın geçici verileri cihazda kalabilir.

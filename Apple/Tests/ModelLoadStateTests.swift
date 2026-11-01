@@ -2,6 +2,19 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class ModelLoadStateTests: XCTestCase {
+    func testDesktopV7PreviewKeepsSourceBytesAndRejectsInvalidVisibleMarks() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let before = data
+        let drawing = try Drawing.load(data)
+        XCTAssertEqual(drawing.formatVersion, 7)
+        XCTAssertEqual(drawing.pieces.count, 2)
+        XCTAssertTrue(drawing.pieces.allSatisfy { !$0.notches.isEmpty && $0.grain != nil })
+        XCTAssertEqual(data, before)
+        let invalid = #"[7,{"Name":"Proje","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":9,"Position":{"X":0,"Y":0}}]}],"NestingSnapshot":{"RotationTrace":{}}}]"#
+        XCTAssertThrowsError(try Drawing.load(Data(invalid.utf8)))
+        XCTAssertTrue(LosslessProjectName.requiresVersionSixRawRecovery(Data(("[7," + String(repeating: " ", count: 8 * 1024 * 1024)).utf8), version: 7))
+    }
     func testPieceDisplayEscapesBidiWithoutChangingSourceName() throws {
         let bytes = Data(#"{"Name":"Proje","Pieces":[{"Name":"A\u202EB","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#.utf8)
         let drawing = try Drawing.load(bytes)

@@ -6,14 +6,14 @@ enum LosslessProjectName {
     static let maximumEditBytes = 8 * 1024 * 1024
     // Scan the existing, at-most-64-MB snapshot without creating a decoded
     // copy. The envelope hint permits raw recovery; it is not validation.
-    static func isOversizedVersionSix(_ data: Data) -> Bool {
+    static func isOversizedVersionSix(_ data: Data, version: Int = 6) -> Bool {
         guard data.count > maximumEditBytes, data.count <= 64 * 1024 * 1024 else { return false }
-        return hasVersionSixPrefix(data)
+        return hasVersionSixPrefix(data, version: version)
     }
 
-    static func requiresVersionSixRawRecovery(_ data: Data) -> Bool {
-        if isOversizedVersionSix(data) { return true }
-        guard data.count <= maximumEditBytes, let encoding = bomEncoding(data), hasVersionSixPrefix(data),
+    static func requiresVersionSixRawRecovery(_ data: Data, version: Int = 6) -> Bool {
+        if isOversizedVersionSix(data, version: version) { return true }
+        guard data.count <= maximumEditBytes, let encoding = bomEncoding(data), hasVersionSixPrefix(data, version: version),
               let text = String(data: data, encoding: encoding) else { return false }
         return text.utf8.count > maximumEditBytes
     }
@@ -30,7 +30,7 @@ enum LosslessProjectName {
     // here to decide whether the UTF-8-only name editor can be offered.
     static func hasNonUTF8BOM(_ data: Data) -> Bool { bomEncoding(data) != nil }
 
-    private static func hasVersionSixPrefix(_ data: Data) -> Bool {
+    private static func hasVersionSixPrefix(_ data: Data, version: Int) -> Bool {
         return data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let limit = bytes.count
@@ -54,7 +54,7 @@ enum LosslessProjectName {
                 }
                 return nil
             }
-            return next() == 91 && next() == 54 && next() == 44
+            return next() == 91 && next() == UInt32(version + 48) && next() == 44
         }
     }
 
@@ -78,14 +78,14 @@ enum LosslessProjectName {
 
     // The viewer already parsed JSON; scan the original UTF-8 bytes for
     // duplicate keys without rewriting or normalizing the project.
-    static func validateUniqueKeys(_ data: Data, strictV6: Bool = true, cancelled: @escaping () -> Bool = { false }) throws {
+    static func validateUniqueKeys(_ data: Data, strictV6: Bool = true, strictVersion: Int = 6, cancelled: @escaping () -> Bool = { false }) throws {
         if cancelled() { throw CancellationError() }
         // Bound the second scan until a streaming parser is available.
         guard data.count <= (strictV6 ? maximumEditBytes : 96 * 1024 * 1024), String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
         try data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
-            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: strictV6, cancelled: cancelled)
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: strictV6, strictVersion: strictVersion, cancelled: cancelled)
             _ = try scanner.projectName()
         }
     }
@@ -140,6 +140,7 @@ enum LosslessProjectName {
         var i = 0
         var nameRange: Range<Int>?
         var strictV6 = false
+        var strictVersion = 6
         var cancelled: () -> Bool = { false }
         var nextCancellationCheck = 0
         mutating func checkCancellation() throws {
@@ -156,7 +157,7 @@ enum LosslessProjectName {
             try whitespace()
             if i < bytes.count && bytes[i] == 91 {
                 try take(91); try whitespace(); let start = i; try value(depth: 0)
-                if strictV6 && String(bytes: bytes[start..<i], encoding: .utf8) != "6" { throw Failure.invalid }
+                if strictV6 && String(bytes: bytes[start..<i], encoding: .utf8) != String(strictVersion) { throw Failure.invalid }
                 try take(44); try object(depth: 0, project: true); try take(93)
             } else { try object(depth: 0, project: true) }
             try whitespace()

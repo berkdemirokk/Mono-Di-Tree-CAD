@@ -179,6 +179,20 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.alerts["Ham kopyayı kurtar?"].waitForExistence(timeout: 5))
     }
 
+    func testDesktopVersionSevenShowsUnverifiedTraceWarning() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = data.base64EncodedString()
+        app.launch()
+        let warning = app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz")).firstMatch
+        XCTAssertTrue(warning.waitForExistence(timeout: 15))
+        XCTAssertTrue(app.buttons["Köşe işaretlerini ara ve seç…"].exists)
+        XCTAssertFalse(app.buttons["Proje adını değiştir ve kopya kaydet"].isEnabled)
+        XCTAssertFalse(app.alerts["İşlem tamamlanamadı"].exists)
+    }
+
     func testVersionSixBOMEncodingsShowNotchPreview() throws {
         let text = #"[6,{"Name":"Kodlanmış","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":20}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
         let variants: [(String.Encoding, [UInt8])] = [
