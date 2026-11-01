@@ -1261,6 +1261,7 @@ internal static class DesktopVerification
             VerifyBasicNestingGradingRules(studio,checks);
             VerifyConcaveAllowance(studio,checks);
             VerifyProductionPreview(studio,reportPath,work,checks);
+            VerifyRotatedQuantityPreview(studio,work,checks);
             VerifyNestingHistory(studio,work,checks);
             Check(!studio.IsVisible && !textiles.IsVisible && !machine.IsVisible && !reopenedTextiles.IsVisible, "No window shown", checks);
             Check(AppPaths.PrepareProjectsDirectory().StartsWith(work, StringComparison.OrdinalIgnoreCase),
@@ -3664,6 +3665,59 @@ internal static class DesktopVerification
                 "Nesting history can inspect an offscreen historical mapping",checks);
         }
         finally { manyWindow.Close(); }
+    }
+
+    private static void VerifyRotatedQuantityPreview(MainWindow studio,string work,List<string> checks)
+    {
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        var piece=new PatternPiece { Name="Dönüşlü",Points=[new(0,0),new(20,0),new(20,10),new(0,10)],
+            Notches=[new NotchMark { VertexIndex=1,Position=new(20,0) }],
+            Grainline=new Grainline { Start=new(1,1),End=new(5,1),NeedsReview=false },
+            Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=2 } };
+        studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.Select(piece.Id);var before=studio.Document.Clone();
+        var window=new ProductionNestingWindow(studio,studio);
+        try
+        {
+            var rotation=(ComboBox)typeof(ProductionNestingWindow).GetField("rotationPolicy",PrivateInstance)!.GetValue(window)!;
+            var grain=(ComboBox)typeof(ProductionNestingWindow).GetField("grainPolicy",PrivateInstance)!.GetValue(window)!;
+            var save=(Button)typeof(ProductionNestingWindow).GetField("saveLayout",PrivateInstance)!.GetValue(window)!;
+            var preview=typeof(ProductionNestingWindow).GetField("preview",PrivateInstance)!.GetValue(window)!;
+            var status=(TextBlock)typeof(ProductionNestingWindow).GetField("status",PrivateInstance)!.GetValue(window)!;
+            var calculate=typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!;
+            void Calculate() { var task=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+            rotation.SelectedIndex=1;Calculate();
+            Check(status.Text.Contains("iplik kontrolü") && preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null,
+                "Rotation requires an explicit grain policy before calculation",checks);
+            grain.SelectedIndex=1;Calculate();
+            var layout=(ProjectDocument?)preview.GetType().GetProperty("Drawing")!.GetValue(preview);
+            Check(layout is { Pieces.Count:2 } && layout.Pieces.All(p=>p.Notches is { Count:1 } && p.Notches[0].Position==p.Points[1] &&
+                p.Grainline is { } line && line.Start.X==line.End.X && line.End.Y>line.Start.Y) && !save.IsEnabled &&
+                status.Text.Contains("90°") && status.Text.Contains("kaydedilemez") && DocumentSession.ContentEquals(before,studio.Document),
+                "Rotated marked copies are trace checked and preview only",checks);
+            var blocked=false;
+            try { window.CaptureLayoutDestination(Path.Combine(work,"rotated-must-not-save.tcad"),
+                (int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!,layout!); }
+            catch(InvalidOperationException) { blocked=true; }
+            Check(blocked && !File.Exists(Path.Combine(work,"rotated-must-not-save.tcad")),"Rotated preview cannot bypass the save guard",checks);
+            rotation.SelectedIndex=0;
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled,
+                "Changing rotation clears the old preview",checks);
+            rotation.SelectedIndex=1;
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                try
+                {
+                    window.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(20)))throw new TimeoutException(); };
+                    var task=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>reached.IsSet);
+                    typeof(ProductionNestingWindow).GetMethod("RequestCalculationCancellation",PrivateInstance)!.Invoke(window,null);
+                    release.Set();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+                    Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !save.IsEnabled &&
+                        DocumentSession.ContentEquals(before,studio.Document),"Cancelled rotated nesting retains the source and no preview",checks);
+                }
+                finally { release.Set();window.BeforeCalculationForVerification=null; }
+            }
+        }
+        finally { window.Close();SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
     private static void VerifyProductionPreview(MainWindow studio,string reportPath,string work,List<string> checks)

@@ -47,6 +47,7 @@ internal sealed class ProductionNestingWindow : Window
     private readonly TextBox width = new() { Text="1500", Width=110, Margin=new Thickness(4) };
     private readonly TextBox fabricLength = new() { Width=110, Margin=new Thickness(4), ToolTip="Boş bırakılırsa kumaş boyu sınırlandırılmaz." };
     private readonly ComboBox grainPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "İplik yönü denetlenmez", "Tek yön (+Y)", "Çift yön (±Y)" }, SelectedIndex=0 };
+    private readonly ComboBox rotationPolicy = new() { Width=190, Margin=new Thickness(4), ItemsSource=new[] { "Döndürme yok", "Tüm kopyalar 90° sağa" }, SelectedIndex=0 };
     private readonly TextBox gap = new() { Text="5", Width=90, Margin=new Thickness(4) };
     private readonly TextBox edgeMargin = new() { Text="0", Width=80, Margin=new Thickness(4) };
     private readonly TextBlock status = new() { TextWrapping=TextWrapping.Wrap, Margin=new Thickness(4,8,4,8) };
@@ -67,6 +68,7 @@ internal sealed class ProductionNestingWindow : Window
     // Instance-scoped barrier for hidden verification; normal windows leave it null.
     internal Action? BeforeLayoutSaveForVerification { get; set; }
     private int inputsVersion;
+    private int previewRotation;
     private readonly DispatcherTimer documentWatch = new() { Interval=TimeSpan.FromSeconds(1) };
     public ProductionNestingWindow(MainWindow workspace, Window owner)
     {
@@ -77,18 +79,21 @@ internal sealed class ProductionNestingWindow : Window
         var controls=new WrapPanel(); controls.Children.Add(new TextBlock { Text="Kumaş eni · mm",VerticalAlignment=VerticalAlignment.Center });controls.Children.Add(width);controls.Children.Add(new TextBlock { Text="Parça boşluğu · mm",VerticalAlignment=VerticalAlignment.Center });controls.Children.Add(gap);controls.Children.Add(new TextBlock { Text="Kenar payı · mm",VerticalAlignment=VerticalAlignment.Center });controls.Children.Add(edgeMargin);controls.Children.Add(calculate);controls.Children.Add(cancelCalculation);controls.Children.Add(saveLayout);DockPanel.SetDock(controls,Dock.Top);root.Children.Add(controls);
         var advancedControls=new WrapPanel();
         advancedControls.Children.Add(new TextBlock { Text="Kumaş boyu · mm (isteğe bağlı)",VerticalAlignment=VerticalAlignment.Center });
-        advancedControls.Children.Add(fabricLength);advancedControls.Children.Add(grainPolicy);
+        advancedControls.Children.Add(fabricLength);advancedControls.Children.Add(grainPolicy);advancedControls.Children.Add(rotationPolicy);
         var advanced=new Expander { Header="Kumaş boyu ve iplik yönü",Content=advancedControls,Margin=new Thickness(4,0,4,0),FontSize=11 };
         DockPanel.SetDock(advanced,Dock.Top);root.Children.Add(advanced);
         void UpdateAdvancedHeader()
         {
             var lengthSummary=string.IsNullOrWhiteSpace(fabricLength.Text) ? "boy sınırsız" : "boy sınırı girildi";
             var grainSummary=grainPolicy.SelectedIndex switch { 1 => "tek yön", 2 => "çift yön", _ => "iplik denetlenmez" };
-            advanced.Header=$"Kumaş boyu ve iplik · {lengthSummary}, {grainSummary}";
+            var rotationSummary=rotationPolicy.SelectedIndex==1 ? "tüm kopyalar 90°" : "dönüş yok";
+            advanced.Header=$"Kumaş boyu ve iplik · {lengthSummary}, {grainSummary}, {rotationSummary}";
         }
         UpdateAdvancedHeader();
         AutomationProperties.SetName(grainPolicy,"İplik yönü doğrulama politikası");
-        AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. Parçalar döndürülmez.");
+        AutomationProperties.SetHelpText(grainPolicy,"Tek veya çift yön seçilirse her parçanın gözden geçirilmiş iplik yönü kumaş boyuna tam paralel olmalıdır. 90 derece dönüşte yön doğrulaması zorunludur.");
+        AutomationProperties.SetName(rotationPolicy,"Kopyaların dönüşü");
+        AutomationProperties.SetHelpText(rotationPolicy,"90 derece sağa, tuvalde saat yönünde her seçili parçanın tüm kopyalarına uygulanır. Optimizasyon değildir; iplik yönü doğrulanır. Dönüş açısı kaydedilemediğinden sonuç yalnız önizlenebilir.");
         AutomationProperties.SetName(width,"Kumaş eni, milimetre"); AutomationProperties.SetName(gap,"Parçalar arası boşluk, milimetre");
         AutomationProperties.SetName(fabricLength,"Kullanılabilir kumaş boyu, milimetre, isteğe bağlı");
         AutomationProperties.SetHelpText(fabricLength,"Boş bırakılırsa kumaş boyu sınırlandırılmaz. Bir değer girilirse pastal bu boyu aşamaz.");
@@ -96,7 +101,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(gap,"Parça boşluğu 0 ile 100 milyon milimetre arasında olmalıdır. Ondalık için virgül veya nokta kullanın.");
         AutomationProperties.SetName(edgeMargin,"Dört kenarın her biri için kumaş kenar payı, milimetre");
         AutomationProperties.SetHelpText(edgeMargin,"Aynı pay sol, sağ, başlangıç ve bitiş kenarlarına uygulanır. Sıfır kenar payı eklemez.");
-        var warning=new TextBlock { Text="Kenar payı dört kenarın her birine uygulanır; sıfır seçilirse pay eklenmez. Boşluk parçalar arasındadır. İplik yalnız seçilirse denetlenir; dönüş, kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
+        var warning=new TextBlock { Text="Kenar payı dört kenara uygulanır; sıfır pay eklemez. Boşluk parçalar arasındadır. 90° tüm kopyalara uygulanır, optimizasyon değildir ve yalnız önizlenir. Kusur kontrolü ve makine çıktısı yok.",TextWrapping=TextWrapping.Wrap, Foreground=StudioTheme.Muted, Margin=new Thickness(4,4,4,8) }; DockPanel.SetDock(warning,Dock.Bottom);root.Children.Add(warning);
         var panel=new Grid();panel.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(300) });panel.ColumnDefinitions.Add(new ColumnDefinition());root.Children.Add(panel);
         VirtualizingPanel.SetIsVirtualizing(choices,true);
         VirtualizingPanel.SetVirtualizationMode(choices,VirtualizationMode.Recycling);
@@ -185,6 +190,7 @@ internal sealed class ProductionNestingWindow : Window
         AutomationProperties.SetHelpText(preview,"Dış çerçeve kumaş enini ve kullanılan boyu gösterir. Pozitif kenar payında kesik iç çerçeve kullanılabilir alanı gösterir; pay miktarı sonuç metnindedir. Fiziksel baskı ve makine uygunluğu doğrulanmaz.");
         width.TextChanged+=(_,_)=>InvalidatePreview(); fabricLength.TextChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); }; gap.TextChanged+=(_,_)=>InvalidatePreview(); edgeMargin.TextChanged+=(_,_)=>InvalidatePreview();
         grainPolicy.SelectionChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };
+        rotationPolicy.SelectionChanged+=(_,_)=> { UpdateAdvancedHeader();InvalidatePreview(); };
         calculate.Click+=async (_,_)=>await Calculate();
         cancelCalculation.Click+=(_,_)=>RequestCalculationCancellation();
         AutomationProperties.SetHelpText(cancelCalculation,"Pastal hesaplamasını durdurur; mevcut proje değiştirilmez.");
@@ -384,7 +390,7 @@ internal sealed class ProductionNestingWindow : Window
     {
         inputsVersion++; ClearErrorChoice();
         documentWatch.Stop();
-        preview.Drawing=null; highlight.ItemsSource=null; mapping.Text="";saveLayout.IsEnabled=false;
+        preview.Drawing=null;previewRotation=0; highlight.ItemsSource=null; mapping.Text="";saveLayout.IsEnabled=false;
         SetStatus("Seçim veya ölçüler değişti; güncel önizleme için yeniden hesaplayın.");
     }
     private void CheckVisibleResultCurrent()
@@ -431,16 +437,36 @@ internal sealed class ProductionNestingWindow : Window
         { SetStatus("Kumaş boyu 0'dan büyük, en fazla 100.000.000 mm ve iki kenar payının toplamından büyük olmalıdır; boş bırakılırsa sınırsızdır.");return; }
         var ids=choiceItems.Where(c=>c.IsSelected).Select(c=>c.Id).ToArray();
         var grainMode=grainPolicy.SelectedIndex;
+        var rotationMode=rotationPolicy.SelectedIndex;
+        if(rotationMode is <0 or >1 || (rotationMode==1 && grainMode is not (1 or 2)))
+        { InvalidatePreview();SetStatus("90° dönüş için tek veya çift yön iplik kontrolü seçin; dönüş yalnız önizlenir.");return; }
         var snapshot=workspace.Document.Clone(); var requestVersion=inputsVersion;
         var cancellation=new CancellationTokenSource();calculationCancellation=cancellation;var token=cancellation.Token;
         var beforeCalculation=BeforeCalculationForVerification;cancelCalculation.Visibility=Visibility.Visible;cancelCalculation.IsEnabled=true;
-        busy=true; calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;preview.Drawing=null;highlight.ItemsSource=null;mapping.Text="";SetStatus("Hesaplanıyor…");
+        busy=true; calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;preview.Drawing=null;highlight.ItemsSource=null;mapping.Text="";SetStatus("Hesaplanıyor…");
         try
         {
             var prepared=await Task.Run(()=>
             {
                 beforeCalculation?.Invoke();token.ThrowIfCancellationRequested();
-                var result=grainMode switch {
+                ProductionNestingResult result;
+                if(rotationMode==1)
+                {
+                    var selected=ids.ToHashSet();var rotations=new Dictionary<(Guid,int),int>();
+                    foreach(var piece in snapshot.Pieces.Where(p=>selected.Contains(p.Id)))
+                    {
+                        token.ThrowIfCancellationRequested();
+                        if(piece.Metadata?.Quantity is not int n || n<1 || n>NestingEngine.MaximumPieces || rotations.Count+n>NestingEngine.MaximumPieces)
+                            throw new ArgumentException("Döndürme için geçerli ve sınırlı kopya adedi gereklidir.");
+                        for(var i=1;i<=n;i++)rotations.Add((piece.Id,i),90);
+                    }
+                    var direction=grainMode==1 ? GrainDirectionPolicy.Direction.OneWay : GrainDirectionPolicy.Direction.TwoWay;
+                    var rotated=PerCopyOrthogonalNesting.Arrange(snapshot,ids,rotations,w,g,length,m,direction,0,token);
+                    if(!PerCopyTraceVerifier.IsValidForConstraints(snapshot,ids,rotated,rotations,direction,0,w,g,m,length,token))
+                        throw new InvalidOperationException("Döndürülen kopya, işaret veya iplik izi doğrulanamadı; önizleme hazırlanmadı.");
+                    result=rotated.Plan;
+                }
+                else result=grainMode switch {
                     1 => GrainConstrainedNesting.Arrange(snapshot,ids,w,g,length,m,GrainDirectionPolicy.Direction.OneWay,0,token),
                     2 => GrainConstrainedNesting.Arrange(snapshot,ids,w,g,length,m,GrainDirectionPolicy.Direction.TwoWay,0,token),
                     0 => ProductionNestingPlan.Arrange(snapshot,ids,w,g,length,m,token),
@@ -473,7 +499,7 @@ internal sealed class ProductionNestingWindow : Window
                     token.ThrowIfCancellationRequested();
                     var source=sources[placement.SourcePieceId];var bounds=dimensions[placement.SourcePieceId];
                     var safeName=SafeChoiceText(source.Name,60);
-                    var label=$"{index+1}. {safeName} · kopya {placement.CopyNumber}\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
+                    var label=$"{index+1}. {safeName} · kopya {placement.CopyNumber}"+(rotationMode==1 ? " · 90°" : "")+$"\nKaynak: {source.Id:D} · {MeasurementInput.Format(bounds.Width)} × {MeasurementInput.Format(bounds.Height)} mm";
                     return new PlacementChoice(placement.PlacedPieceId,label,safeName);
                 }).ToArray();
                 token.ThrowIfCancellationRequested();
@@ -487,7 +513,7 @@ internal sealed class ProductionNestingWindow : Window
             { InvalidatePreview();SetStatus("Hesap sırasında bekleyen çizim veya alan taslağı oluştu; sonuç uygulanmadı. Önce bunları tamamlayın veya iptal edin.");return; }
             if(!DocumentSession.ContentEquals(snapshot,workspace.Document)) { SetStatus("Proje değişti; sonuç uygulanmadı. Pencereyi kapatıp yeniden açın.");return; }
             preview.SetDrawing(planned.Nesting.Layout,w,planned.Nesting.UsedLength,planned.Nesting.EdgeMargin,prepared.Geometry);
-            saveLayout.IsEnabled=true;
+            previewRotation=rotationMode==1 ? 90 : 0;saveLayout.IsEnabled=previewRotation==0;
             documentWatch.Start();
             highlight.ItemsSource=prepared.Choices; if(prepared.Choices.Length>0)highlight.SelectedIndex=0;
             var edgeDescription=planned.Nesting.EdgeMargin>0
@@ -497,7 +523,8 @@ internal sealed class ProductionNestingWindow : Window
             var markNotice=preview.MarkerCount==0 ? "" : preview.MarkersSuppressed
                 ? $" {preview.MarkerCount} köşe işareti var; 500 işaret sınırı nedeniyle önizlemede gösterilmiyor. Kaydedilen parçaları kontrol edin. İşaretler fiziksel çentik değildir."
                 : $" {preview.MarkerCount} köşe işareti önizlemede sarı halkayla gösteriliyor; üst üste gelebilir. Konumlarını kontrol edin; fiziksel çentik değildir.";
-            SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}");
+            var rotationNotice=previewRotation==0 ? "" : " Tüm kopyalar 90° döndürüldü; bu optimizasyon değildir. Dönüş açıları proje biçiminde saklanamadığından bu önizleme kaydedilemez.";
+            SetStatus($"{planned.Placements.Count} parça · kullanılan boy {MeasurementInput.Format(planned.Nesting.UsedLength)} mm · kullanım %{planned.Nesting.UtilizationPercent:0.##}. {edgeDescription} {grainDescription} Kaynak proje değişmedi.{markNotice}{rotationNotice}");
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { if(!closed)SetStatus("Hesap iptal edildi; kaynak proje değiştirilmedi."); }
         catch(Exception ex)
@@ -514,9 +541,9 @@ internal sealed class ProductionNestingWindow : Window
                 }
             }
         }
-        finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
+        finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
     }
-    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
+    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && previewRotation==0 && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
         ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
     private async Task SaveLayout()
     {
@@ -577,7 +604,7 @@ internal sealed class ProductionNestingWindow : Window
         var snapshot=layout.Clone();
         var beforeSave=BeforeLayoutSaveForVerification;
         savingLayout=true;busy=true;
-        calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;
+        calculate.IsEnabled=false;saveLayout.IsEnabled=false;choices.IsEnabled=false;choiceSearch.IsEnabled=false;clearChoiceSearch.IsEnabled=false;selectShownChoices.IsEnabled=false;clearShownChoices.IsEnabled=false;width.IsEnabled=false;fabricLength.IsEnabled=false;grainPolicy.IsEnabled=false;rotationPolicy.IsEnabled=false;gap.IsEnabled=false;edgeMargin.IsEnabled=false;
         SetStatus("Pastal ayrı proje olarak kaydediliyor; pencereyi kapatmak için işlemin bitmesini bekleyin.");
         try
         {
@@ -593,7 +620,7 @@ internal sealed class ProductionNestingWindow : Window
             savingLayout=false;busy=false;
             if(!closed)
             {
-                calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;
+                calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;rotationPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;
                 saveLayout.IsEnabled=IsCurrentLayout(version,layout);
             }
         }
