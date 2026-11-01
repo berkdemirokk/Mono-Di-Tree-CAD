@@ -2698,12 +2698,21 @@ private struct PointDistanceView: View {
                            let value = MeasurementDisplay.format(distance) {
                             Text("Yaklaşık doğrusal mesafe: \(value) mm").font(.headline)
                         } else { Text("Mesafe hesaplanamadı.") }
+                        if let length = ContourMeasure.pathLength(piece.points, from: a, to: b, closed: piece.closed),
+                           let value = MeasurementDisplay.format(length) {
+                            Text(piece.closed ? "Kontur boyunca ileri: yaklaşık \(value) mm" : "Kontur boyunca: yaklaşık \(value) mm")
+                        } else { Text("Kontur boyunca uzunluk hesaplanamadı.") }
+                        if piece.closed,
+                           let length = ContourMeasure.pathLength(piece.points, from: a, to: b, closed: true, forward: false),
+                           let value = MeasurementDisplay.format(length) {
+                            Text("Kontur boyunca geri: yaklaşık \(value) mm")
+                        }
                     } else {
                         Text("Geçerli iki nokta indeksi girin.").foregroundStyle(.secondary)
                     }
                 }
                 Section {
-                    Text("Koordinatlar ve mesafe en fazla 6 anlamlı basamağa yuvarlanır. Bu, iki nokta arasındaki düz mesafedir; kontur boyunca uzunluk veya üretim ölçüsü değildir. Kapalı konturda dosyadaki tekrarlı son nokta ilk noktayla aynı olabilir.")
+                    Text("Koordinatlar ve mesafe en fazla 6 anlamlı basamağa yuvarlanır. Düz mesafe iki nokta arasındadır. Kontur uzunlukları dosyadaki düz çizgileri izler; kapalı konturda ileri dosya sırası, geri ters yöndür. Aynı nokta için uzunluk sıfırdır; tam tur değildir. Bunlar üretim ölçüsü değildir.")
                 }
             }
             .navigationTitle("İki nokta mesafesi")

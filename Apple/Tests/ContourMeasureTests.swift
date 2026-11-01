@@ -43,6 +43,18 @@ final class ContourMeasureTests: XCTestCase {
         XCTAssertNil(ContourMeasure.distance([p(.infinity, 0), p(0, 0)], from: 0, to: 1))
         XCTAssertNil(ContourMeasure.distance([p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)], from: 0, to: 1))
     }
+    func testPathBetweenVerticesHandlesOpenClosedAndClosingAlias() throws {
+        let triangle = [p(0, 0), p(3, 0), p(3, 4)]
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(triangle, from: 2, to: 0, closed: false)), 7, accuracy: 1e-12)
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(triangle, from: 0, to: 1, closed: true)), 3, accuracy: 1e-12)
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(triangle, from: 0, to: 1, closed: true, forward: false)), 9, accuracy: 1e-12)
+        let repeated = triangle + [p(0, 0)]
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(repeated, from: 3, to: 1, closed: true)), 3, accuracy: 1e-12)
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.pathLength(repeated, from: 3, to: 0, closed: true, forward: false)), 0, accuracy: 1e-12)
+        XCTAssertNil(ContourMeasure.pathLength(triangle, from: -1, to: 0, closed: true))
+        XCTAssertNil(ContourMeasure.pathLength([p(.infinity, 0), p(0, 0)], from: 0, to: 0, closed: false))
+        XCTAssertNil(ContourMeasure.pathLength([p(0, 0), p(0, 0)], from: 0, to: 1, closed: true))
+    }
     func testTenThousandPoints() throws {
         let points = (0..<10_000).map { p(Double($0), 0) }
         XCTAssertEqual(try XCTUnwrap(ContourMeasure.length(points, closed: false)), 9_999, accuracy: 1e-9)

@@ -13,6 +13,7 @@ final class ViewerUITests: XCTestCase {
         let measure = app.buttons["İki nokta arasını ölç…"]
         XCTAssertTrue(measure.waitForExistence(timeout: 5)); measure.tap()
         XCTAssertTrue(app.staticTexts["Yaklaşık doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Kontur boyunca ileri: yaklaşık 100 mm"].exists)
         XCTAssertTrue(app.staticTexts["İlk nokta: X 0, Y 0 mm"].exists)
         XCTAssertTrue(app.staticTexts["İkinci nokta: X 100, Y 0 mm"].exists)
         app.buttons["İlk noktayı listeden seç"].tap()

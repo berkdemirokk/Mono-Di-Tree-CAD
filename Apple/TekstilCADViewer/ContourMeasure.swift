@@ -31,6 +31,32 @@ enum ContourMeasure {
         let value = hypot(b.x - a.x, b.y - a.y)
         return value.isFinite ? value : nil
     }
+    // Polyline length between file vertices. On a closed contour forward follows
+    // file order and backward follows the other direction; selecting the same
+    // logical vertex yields zero in both directions, not a complete lap.
+    static func pathLength(_ points: [Point], from first: Int, to second: Int,
+                           closed: Bool, forward: Bool = true) -> Double? {
+        guard points.indices.contains(first), points.indices.contains(second),
+              hasMinimumContourPoints(points, closed: closed),
+              points[first].x.isFinite, points[first].y.isFinite,
+              points[second].x.isFinite, points[second].y.isFinite else { return nil }
+        let repeated = closed && points.count > 1 && points[0].x == points[points.count - 1].x && points[0].y == points[points.count - 1].y
+        let count = points.count - (repeated ? 1 : 0)
+        var start = repeated && first == points.count - 1 ? 0 : first
+        var end = repeated && second == points.count - 1 ? 0 : second
+        if !closed && start > end { swap(&start, &end) }
+        if closed && !forward { swap(&start, &end) }
+        var total = 0.0
+        var index = start
+        while index != end {
+            let next = closed ? (index + 1) % count : index + 1
+            guard let segment = distance(points, from: index, to: next) else { return nil }
+            total += segment
+            guard total.isFinite else { return nil }
+            index = next
+        }
+        return total
+    }
     // Measures only the polyline in the file. Invalid or overflowing values
     // are unavailable rather than presented as an authoritative measurement.
     static func length(_ points: [Point], closed: Bool) -> Double? {
