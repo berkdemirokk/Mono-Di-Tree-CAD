@@ -3481,15 +3481,30 @@ internal static class DesktopVerification
         Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Points.SequenceEqual(original.Points),
             "Undo removes concave seam allowance while preserving its source",checks);
 
+        // A successful offset intentionally requires closing and reopening the
+        // workshop before calculating another one, even after undo. Start the
+        // race fixture in a fresh workshop instead of testing that guard twice.
+        tools.Close();tools=new TextileToolsWindow(studio);root=(FrameworkElement)tools.Content;
+        root.Measure(new Size(1024,640));root.Arrange(new Rect(0,0,1024,640));root.UpdateLayout();
+        Descendants<TabControl>(root).Single().SelectedIndex=1;root.UpdateLayout();
         var run=typeof(TextileToolsWindow).GetMethod("CreateOffsetAsync",PrivateInstance)!;
-        var first=(Task)run.Invoke(tools,["10"])!;
-        var duplicate=(Task)run.Invoke(tools,["10"])!;
-        Check(duplicate.IsCompleted,"A second offset request is ignored while busy",checks);
-        var current=studio.Document.Pieces.Single(p=>p.Id==source.Id);
-        studio.Commit("Change during offset",()=>current.Name="Changed during offset");
-        PumpUntil(()=>first.IsCompleted);
-        Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Name=="Changed during offset",
-            "Stale asynchronous offset does not change the document",checks);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            tools.BeforeOffsetForVerification=()=> { reached.Set();release.Wait(); };
+            var first=(Task)run.Invoke(tools,["10"])!;
+            try
+            {
+                PumpUntil(()=>reached.IsSet);
+                var duplicate=(Task)run.Invoke(tools,["10"])!;
+                Check(!first.IsCompleted && duplicate.IsCompleted,"A second offset request is ignored while busy",checks);
+                var current=studio.Document.Pieces.Single(p=>p.Id==source.Id);
+                studio.Commit("Change during offset",()=>current.Name="Changed during offset");
+                release.Set();PumpUntil(()=>first.IsCompleted);first.GetAwaiter().GetResult();
+                Check(studio.Document.Pieces.Count==1 && studio.Document.Pieces[0].Name=="Changed during offset",
+                    "Stale asynchronous offset does not change the document",checks);
+            }
+            finally { release.Set();PumpUntil(()=>first.IsCompleted);tools.BeforeOffsetForVerification=null; }
+        }
 
         // The numeric input is valid, but exceeds the geometry operation's supported allowance.
         // This exercises a failure on the worker thread rather than an input parse failure.
@@ -3498,11 +3513,17 @@ internal static class DesktopVerification
         var allowanceInput=(TextBox)typeof(TextileToolsWindow).GetField("offsetAllowance",PrivateInstance)!.GetValue(tools)!;
         var status=(TextBlock)typeof(TextileToolsWindow).GetField("result",PrivateInstance)!.GetValue(tools)!;
         var offsetButton=Descendants<Button>(root).Single(b=>Equals(b.Content,"Dikiş payını ayrı parça oluştur"));
+        using var failureReached=new ManualResetEventSlim();using var failureRelease=new ManualResetEventSlim();
+        tools.BeforeOffsetForVerification=()=> { failureReached.Set();failureRelease.Wait(); };
         var failure=(Task)run.Invoke(tools,["100001"])!;
-        Check(!sourceSelector.IsEnabled && !allowanceInput.IsEnabled && !offsetButton.IsEnabled && status.Text.Contains("100001 mm") && status.Text.Contains("İptal isteyebilirsiniz")
-            && status.Text.Contains("işlemin bitmesini bekleyin") && !status.Text.Contains("Çalışma alanını kullanmaya devam"),
-            "Offset worker explains cancellation and waiting without implying an available modal owner",checks);
-        PumpUntil(()=>failure.IsCompleted);
+        try
+        {
+            PumpUntil(()=>failureReached.IsSet);
+            Check(!failure.IsCompleted && !sourceSelector.IsEnabled && !allowanceInput.IsEnabled && !offsetButton.IsEnabled && status.Text.Contains("100001 mm") && status.Text.Contains("İptal isteyebilirsiniz")
+                && status.Text.Contains("işlemin bitmesini bekleyin") && !status.Text.Contains("Çalışma alanını kullanmaya devam"),
+                "Offset worker explains cancellation and waiting without implying an available modal owner",checks);
+        }
+        finally { failureRelease.Set();PumpUntil(()=>failure.IsCompleted);failure.GetAwaiter().GetResult();tools.BeforeOffsetForVerification=null; }
         Check(DocumentSession.ContentEquals(studio.Document,failureBefore) && sourceSelector.IsEnabled && allowanceInput.IsEnabled && offsetButton.IsEnabled
             && status.Text.StartsWith("Dikiş payı uygulanmadı",StringComparison.Ordinal) && status.Text.Contains("100001 mm") && status.Text.Contains("üretim şartları izin veriyorsa")
             && !status.Text.Contains("daha küçük bir pay",StringComparison.OrdinalIgnoreCase),
