@@ -109,7 +109,11 @@ private struct ContentView: View {
                 }.disabled(isSaving || modelLoad.isLoading || sourceData == nil)
                 Button("Proje adını değiştir ve kopya kaydet") {
                     showingNameEditor = true
-                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                }.disabled(isSaving || modelLoad.isLoading || sourceData == nil || project.formatVersion == 6 || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes)
+                if project.formatVersion == 6 {
+                    Text("Sürüm 6 projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 if let sourceData, sourceData.count > LosslessProjectName.maximumEditBytes {
                     Text("Proje adını değiştirmek için dosya 8 MB veya daha küçük olmalı.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -553,7 +557,7 @@ private struct ContentView: View {
     }
 
     private func saveRenamedCopy() {
-        guard let data = sourceData else { return }
+        guard let data = sourceData, let currentProject = project, currentProject.formatVersion != 6 else { return }
         let name = editedName
         saveNotice = nil
         isSaving = true
@@ -1321,6 +1325,7 @@ private struct Drawing {
     let name: String
     let pieces: [Piece]
     let pieceRenameIdentitiesValid: Bool
+    let formatVersion: Int
 
     // JSONSerialization bridges both JSON booleans and numbers through NSNumber.
     // Check the underlying type before conversion so malformed files cannot turn
@@ -1507,7 +1512,7 @@ private struct Drawing {
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
-        return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid)
+        return Drawing(name: name, pieces: pieces, pieceRenameIdentitiesValid: pieceRenameIdentitiesValid, formatVersion: formatVersion)
     }
 }
 

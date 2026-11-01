@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testProjectRenameIsDisabledForVersionSixButAvailableForEarlierFormats() {
+        let app = XCUIApplication()
+        app.launchArguments.append("--ui-test-fixture")
+        let body = #"{"Name":"Kontrol","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}],"GradingRules":[]}"#
+        for input in [body, "[1,\(body)]", "[5,\(body)]"] {
+            app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(input.utf8).base64EncodedString()
+            app.launch()
+            let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+            XCTAssertTrue(rename.waitForExistence(timeout: 15))
+            XCTAssertTrue(rename.isEnabled)
+            app.terminate()
+        }
+        let versionSix = #"[6,{"Name":"Kontrol","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}],"Notches":[{"VertexIndex":0,"Position":{"X":0,"Y":0}}]}],"GradingRules":[]}]"#
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(versionSix.utf8).base64EncodedString()
+        app.launch()
+        let rename = app.buttons["Proje adını değiştir ve kopya kaydet"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 15))
+        XCTAssertFalse(rename.isEnabled)
+        XCTAssertTrue(app.staticTexts["Sürüm 6 projelerinde proje adını değiştirip kopya kaydetme henüz desteklenmiyor. Açık modeli dışa aktarabilirsiniz."].exists)
+        XCTAssertTrue(app.buttons["Açık modeli dışa aktar…"].isEnabled)
+    }
+
     func testCorruptSavedModelOffersExplicitRawRecovery() {
         let fixture = #"{"Name":"Kaynak","Pieces":[]}"#
         let app = XCUIApplication()
@@ -687,7 +709,7 @@ final class ViewerUITests: XCTestCase {
                         project.replacingOccurrences(of: "[6,", with: "[5,")] {
             app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(invalid.utf8).base64EncodedString()
             app.launch()
-            XCTAssertTrue(app.alerts["Dosya açılamadı"].waitForExistence(timeout: 15))
+            XCTAssertTrue(app.alerts["İşlem tamamlanamadı"].waitForExistence(timeout: 15))
             app.terminate()
         }
     }
