@@ -1617,7 +1617,7 @@ struct Drawing {
         try ModelStore.readFileSnapshot(url, expectedIdentity: expectedIdentity, cancelled: cancelled)
     }
 
-    static func load(_ data: Data, cancelled: () -> Bool = { false }) throws -> Drawing {
+    static func load(_ data: Data, cancelled: @escaping () -> Bool = { false }) throws -> Drawing {
         if cancelled() { throw CancellationError() }
         guard data.count <= 64 * 1024 * 1024 else { throw ViewerError.message("Dosya 64 MB sınırını aşıyor.") }
         if LosslessProjectName.isOversizedVersionSix(data) {
@@ -1636,8 +1636,9 @@ struct Drawing {
             guard data.count <= LosslessProjectName.maximumEditBytes else { throw ViewerError.message("Sürüm 6 önizlemesi için dosya en fazla 8 MB olmalı.") }
             do {
                 let validationData = try LosslessProjectName.versionSixValidationData(data)
-                try LosslessProjectName.validateUniqueKeys(validationData)
-            } catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları, kodlamayı ve 8 MB doğrulama sınırını kontrol edin.") }
+                try LosslessProjectName.validateUniqueKeys(validationData, cancelled: cancelled)
+            } catch is CancellationError { throw CancellationError() }
+            catch { throw ViewerError.message("Sürüm 6 dosyası güvenli biçimde okunamadı; alanları, kodlamayı ve 8 MB doğrulama sınırını kontrol edin.") }
             guard Set(object.keys).isSubset(of: ["Name", "Pieces", "GradingRules", "NestingSnapshot", "ImportProvenance"]) else {
                 throw ViewerError.message("Sürüm 6 projede tanınmayan alanlar var; dosya önizlenmedi.")
             }
@@ -1652,7 +1653,8 @@ struct Drawing {
             else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
             else { encoding = .utf8 }
             guard let decoded = String(data: data, encoding: encoding) else { throw ViewerError.message("Proje metni okunamadı.") }
-            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false) }
+            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false, cancelled: cancelled) }
+            catch is CancellationError { throw CancellationError() }
             catch { throw ViewerError.message("Proje alanları yinelenmiş veya güvenli biçimde okunamadı.") }
         }
         if cancelled() { throw CancellationError() }

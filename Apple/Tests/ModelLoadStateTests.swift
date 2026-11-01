@@ -9,9 +9,9 @@ final class ModelLoadStateTests: XCTestCase {
         var checks = 0
         XCTAssertThrowsError(try Drawing.load(bytes, cancelled: {
             checks += 1
-            return checks >= 8
+            return checks >= 25
         })) { error in XCTAssertTrue(error is CancellationError) }
-        XCTAssertEqual(checks, 8)
+        XCTAssertEqual(checks, 25)
         let normal = Data(#"{"Name":"Normal","Pieces":[{"Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#.utf8)
         XCTAssertEqual(try Drawing.load(normal).pieces.count, 1)
     }

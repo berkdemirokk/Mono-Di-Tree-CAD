@@ -3,6 +3,15 @@ import XCTest
 @testable import TekstilCADViewer_iOS
 
 final class LosslessProjectNameTests: XCTestCase {
+    func testUniqueKeyScanCanCancelWithinLongString() {
+        let text = "{\"Name\":\"" + String(repeating: "a", count: 40_000) + "\",\"Pieces\":[]}"
+        var calls = 0
+        XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(text.utf8), strictV6: false, cancelled: {
+            calls += 1
+            return calls >= 4
+        })) { error in XCTAssertTrue(error is CancellationError) }
+        XCTAssertEqual(calls, 4)
+    }
     func testNameEditorDetectsNonUTF8ByteOrderMarks() {
         XCTAssertFalse(LosslessProjectName.hasNonUTF8BOM(Data("[1,{}]".utf8)))
         XCTAssertFalse(LosslessProjectName.hasNonUTF8BOM(Data([0xef, 0xbb, 0xbf]) + Data("[1,{}]".utf8)))

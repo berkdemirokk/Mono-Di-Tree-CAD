@@ -78,13 +78,14 @@ enum LosslessProjectName {
 
     // The viewer already parsed JSON; scan the original UTF-8 bytes for
     // duplicate keys without rewriting or normalizing the project.
-    static func validateUniqueKeys(_ data: Data, strictV6: Bool = true) throws {
+    static func validateUniqueKeys(_ data: Data, strictV6: Bool = true, cancelled: @escaping () -> Bool = { false }) throws {
+        if cancelled() { throw CancellationError() }
         // Bound the second scan until a streaming parser is available.
         guard data.count <= (strictV6 ? maximumEditBytes : 96 * 1024 * 1024), String(data: data, encoding: .utf8) != nil else { throw Failure.invalid }
         try data.withUnsafeBytes { raw in
             let bytes = raw.bindMemory(to: UInt8.self)
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
-            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: strictV6)
+            var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0, strictV6: strictV6, cancelled: cancelled)
             _ = try scanner.projectName()
         }
     }
@@ -98,7 +99,7 @@ enum LosslessProjectName {
             let bom = bytes.count >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF
             var scanner = Scanner(bytes: bytes, i: bom ? 3 : 0)
             try scanner.value(depth: 0)
-            scanner.whitespace()
+            try scanner.whitespace()
             guard scanner.i == bytes.count else { throw Failure.invalid }
         }
     }
@@ -139,22 +140,33 @@ enum LosslessProjectName {
         var i = 0
         var nameRange: Range<Int>?
         var strictV6 = false
-        mutating func whitespace() { while i < bytes.count && [9, 10, 13, 32].contains(bytes[i]) { i += 1 } }
-        mutating func take(_ c: UInt8) throws { whitespace(); guard i < bytes.count, bytes[i] == c else { throw Failure.invalid }; i += 1 }
+        var cancelled: () -> Bool = { false }
+        var nextCancellationCheck = 0
+        mutating func checkCancellation() throws {
+            if i >= nextCancellationCheck {
+                if cancelled() { throw CancellationError() }
+                nextCancellationCheck = i + 4096
+            }
+        }
+        mutating func whitespace() throws {
+            while i < bytes.count && [9, 10, 13, 32].contains(bytes[i]) { try checkCancellation(); i += 1 }
+        }
+        mutating func take(_ c: UInt8) throws { try whitespace(); guard i < bytes.count, bytes[i] == c else { throw Failure.invalid }; i += 1 }
         mutating func projectName() throws -> Range<Int> {
-            whitespace()
+            try whitespace()
             if i < bytes.count && bytes[i] == 91 {
-                try take(91); whitespace(); let start = i; try value(depth: 0)
+                try take(91); try whitespace(); let start = i; try value(depth: 0)
                 if strictV6 && String(bytes: bytes[start..<i], encoding: .utf8) != "6" { throw Failure.invalid }
                 try take(44); try object(depth: 0, project: true); try take(93)
             } else { try object(depth: 0, project: true) }
-            whitespace()
+            try whitespace()
             guard i == bytes.count, let range = nameRange else { throw Failure.invalid }
             return range
         }
         mutating func string() throws -> Range<Int> {
-            whitespace(); let start = i; try take(34)
+            try whitespace(); let start = i; try take(34)
             while i < bytes.count {
+                try checkCancellation()
                 let c = bytes[i]; i += 1
                 if c == 34 { return start..<i }
                 if c < 32 { throw Failure.invalid }
@@ -172,7 +184,7 @@ enum LosslessProjectName {
         }
         mutating func object(depth: Int, project: Bool = false) throws {
             guard depth < 512 else { throw Failure.invalid }
-            try take(123); whitespace()
+            try take(123); try whitespace()
             if i < bytes.count && bytes[i] == 125 { i += 1; return }
             var keys = Set<String>()
             while true {
@@ -181,7 +193,7 @@ enum LosslessProjectName {
                 guard let key = (try? JSONSerialization.jsonObject(with: keyData) as? [String])?.first,
                       keys.insert(key).inserted else { throw Failure.invalid }
                 let isName = project && key == "Name"
-                try take(58); whitespace()
+                try take(58); try whitespace()
                 if strictV6 && key == "VertexIndex" {
                     let start = i; try value(depth: depth + 1)
                     guard let token = String(bytes: bytes[start..<i], encoding: .utf8),
@@ -191,29 +203,29 @@ enum LosslessProjectName {
                     guard nameRange == nil, i < bytes.count, bytes[i] == 34 else { throw Failure.invalid }
                     nameRange = try string()
                 } else { try value(depth: depth + 1) }
-                whitespace(); guard i < bytes.count else { throw Failure.invalid }
+                try whitespace(); guard i < bytes.count else { throw Failure.invalid }
                 if bytes[i] == 125 { i += 1; return }
                 try take(44)
             }
         }
         mutating func value(depth: Int) throws {
-            guard depth < 512 else { throw Failure.invalid }; whitespace()
+            guard depth < 512 else { throw Failure.invalid }; try checkCancellation(); try whitespace()
             guard i < bytes.count else { throw Failure.invalid }
             switch bytes[i] {
             case 34: _ = try string()
             case 123: try object(depth: depth + 1)
             case 91:
-                i += 1; whitespace()
+                i += 1; try whitespace()
                 if i < bytes.count && bytes[i] == 93 { i += 1; return }
                 while true {
-                    try value(depth: depth + 1); whitespace()
+                    try value(depth: depth + 1); try whitespace()
                     guard i < bytes.count else { throw Failure.invalid }
                     if bytes[i] == 93 { i += 1; return }
                     try take(44)
                 }
             default:
                 let start = i
-                while i < bytes.count && ![9, 10, 13, 32, 44, 93, 125].contains(bytes[i]) { i += 1 }
+                while i < bytes.count && ![9, 10, 13, 32, 44, 93, 125].contains(bytes[i]) { try checkCancellation(); i += 1 }
                 guard i > start else { throw Failure.invalid }
                 guard let token = String(bytes: bytes[start..<i], encoding: .utf8) else { throw Failure.invalid }
                 if token != "true" && token != "false" && token != "null" {
