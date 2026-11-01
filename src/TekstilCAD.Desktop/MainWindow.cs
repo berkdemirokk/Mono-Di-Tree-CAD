@@ -1471,22 +1471,27 @@ public class MainWindow : Window
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not { Points.Count: >0 } piece)return;
-        if(piece.Notches is { Count:>0 }) { SetStatus("Dönüşümden önce köşe işaretlerini kaldırın.");return; }
+        if(piece.Notches is not null && operation is null) { SetStatus("Bu dönüşüm köşe işaretleriyle desteklenmiyor.");return; }
         if(canvas.LargeVertexValidationRunning || canvas.LargeCompletionRunning)
         { SetStatus("Dönüşüm uygulanmadı · Doğrulamanın bitmesini bekleyin veya Esc ile iptal edin.");return; }
         if(canvas.HasActiveDragPreview)
         { SetStatus("Dönüşüm uygulanmadı · Sürüklemeyi tamamlayın veya Esc ile iptal edin.");return; }
         if(canvas.HasPendingDrawing)
         { SetStatus("Dönüşüm uygulanmadı · Önce çizimi tamamlayın veya Esc ile iptal edin.");return; }
-        var center=Geometry.Bounds(piece.Points).Center;
-        var result=transform(piece.Points,center);
+        if(piece.Notches is not null)_=MarkedPieceTranslation.Translate(piece,0,0);
+        var sourcePoints=piece.Points.ToList();
+        var center=Geometry.Bounds(sourcePoints).Center;
+        var result=transform(sourcePoints,center);
+        if(piece.Notches is not null && result.Count!=sourcePoints.Count)
+            throw new InvalidOperationException("Dönüşümde köşe sayısı değişti; işaretler korunamadı.");
+        var transformedNotches=piece.Notches?.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex,Position=result[mark.VertexIndex] }).ToList();
         var rule=Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
         var transformedRule=operation is { } kind ? rule?.OrthogonalFor(piece,result,kind) : null;
         var gradingNeedsReview=!result.SequenceEqual(piece.Points) && rule is not null && transformedRule is null;
         var transformedGrain=GrainlineTransform.Transform(piece.Grainline,piece.Points[0],result[0],points=>transform(points,center));
         var committed=false;
         try {
-            CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain;
+            CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain;piece.Notches=transformedNotches;
                 if(transformedRule is not null)Document.GradingRules[Document.GradingRules.IndexOf(rule!)]=transformedRule; },()=>committed=true);
             if(gradingNeedsReview)ShowCanvasError("Dönüşüm uygulandı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
             else if(transformedRule is not null)SetStatus("Geometri ve kayıtlı serileme artışları birlikte dönüştürüldü; bedenleri kontrol edin.");

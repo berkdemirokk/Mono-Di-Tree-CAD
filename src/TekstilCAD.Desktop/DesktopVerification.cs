@@ -7559,6 +7559,30 @@ internal static class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
                 $"{label} grading and geometry undo and redo together",checks);
         }
+        foreach(var label in new[] { "90° sola","90° sağa","Aynala","Yatay aynala" })
+        {
+            var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);
+            var marked=new PatternPiece { Points=[new(negativeZero,negativeZero),new(20,negativeZero),new(20,10),new(0,10),new(negativeZero,negativeZero)],
+                Notches=[new NotchMark { VertexIndex=0,Position=new(negativeZero,negativeZero) },new NotchMark { VertexIndex=1,Position=new(20,negativeZero) }],
+                Grainline=new Grainline { Start=new(5,2),End=new(5,8) } };
+            var markedRule=new GradingRuleSet { SourcePieceId=marked.Id,SourceClosed=true,SourcePoints=[..marked.Points],
+                Deltas=[new(0,0),new(1,0),new(0,1),new(-1,0),new(0,0)] };
+            studio.LoadDocument(new ProjectDocument { Pieces=[marked],GradingRules=[markedRule] });studio.Select(marked.Id);
+            var before=studio.Document.Clone();var live=studio.Selected!;var oldPoints=live.Points;var oldMarks=live.Notches!;
+            Descendants<Button>(root).Single(b=>Equals(b.Content,label)).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var current=studio.Document.Pieces.Single();var mapped=studio.Document.GradingRules.Single();
+            bool SameBits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
+            Check(current.Notches is { Count:2 } && current.Notches.Select(mark=>mark.VertexIndex).SequenceEqual(new[] { 0,1 }) &&
+                current.Notches.All(mark=>SameBits(mark.Position,current.Points[mark.VertexIndex])) &&
+                SameBits(current.Points[0],current.Points[^1]) && !ReferenceEquals(current.Notches,oldMarks) &&
+                !ReferenceEquals(current.Notches[0],oldMarks[0]) && oldPoints.SequenceEqual(before.Pieces[0].Points) &&
+                SameBits(oldMarks[0].Position,before.Pieces[0].Notches![0].Position) && mapped.SourcePoints.SequenceEqual(current.Points) &&
+                current.Grainline is not null && session.UndoCount==1,
+                $"{label} transforms markers at their exact vertex bits, keeps the closed endpoint and maps the grading rule",checks);
+            var after=studio.Document.Clone();
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                $"{label} restores marked geometry and grading together on undo and redo",checks);
+        }
         studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
         studio.Commit("Eski kural",()=>studio.Document.GradingRules[0].SourcePoints[0]=new Point2(-1,0));
         var stale=studio.Document.GradingRules[0].Clone();
