@@ -66,7 +66,9 @@ public static class DxfNotchReviewExport
         ulong next=0x10;string Handle()=>(next++).ToString("X",CultureInfo.InvariantCulture);
         var ltype=Handle();var continuous=Handle();var layerTable=Handle();var layerHandles=layers.Select(_=>Handle()).ToArray();
         var contourHandles=snapshot.Pieces.Select(_=>Handle()).ToArray();var markerHandles=items.Select(_=>Handle()).ToArray();
-        var b=new StringBuilder("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$HANDSEED\n5\n");
+        // PDMODE 34 requests a circle and cross; negative PDSIZE is a
+        // viewport-relative percentage, not a physical cutting dimension.
+        var b=new StringBuilder("0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1021\n9\n$INSUNITS\n70\n4\n9\n$PDMODE\n70\n34\n9\n$PDSIZE\n40\n-2\n9\n$HANDSEED\n5\n");
         b.Append(next.ToString("X",CultureInfo.InvariantCulture)).Append("\n0\nENDSEC\n0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLTYPE\n5\n").Append(ltype)
          .Append("\n330\n0\n100\nAcDbSymbolTable\n70\n1\n0\nLTYPE\n5\n").Append(continuous).Append("\n330\n").Append(ltype)
          .Append("\n100\nAcDbSymbolTableRecord\n100\nAcDbLinetypeTableRecord\n2\nCONTINUOUS\n70\n0\n3\nSolid line\n72\n65\n73\n0\n40\n0\n0\nENDTAB\n0\nTABLE\n2\nLAYER\n5\n").Append(layerTable)

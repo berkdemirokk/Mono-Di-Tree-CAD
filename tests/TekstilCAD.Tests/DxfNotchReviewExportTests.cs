@@ -28,6 +28,9 @@ public class DxfNotchReviewExportTests
         var path=PathForTest();try
         {
             var text=Write(plan,path);Assert.Equal(3,text.Split("\nPOINT\n").Length-1);
+            var header=text[..text.IndexOf("0\nENDSEC\n",StringComparison.Ordinal)];
+            Assert.Contains("9\n$PDMODE\n70\n34\n",header);
+            Assert.Contains("9\n$PDSIZE\n40\n-2\n",header);
             Assert.Contains($"10\n10\n20\n{expectedY}\n",text);
             Assert.Contains($"100\nAcDbPoint\n10\n10\n20\n{expectedY}\n",text);
             Assert.Contains("90\n3\n70\n1\n",text);Assert.True(DocumentSession.ContentEquals(original,project));
