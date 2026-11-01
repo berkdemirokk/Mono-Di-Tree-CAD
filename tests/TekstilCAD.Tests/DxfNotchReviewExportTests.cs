@@ -217,4 +217,30 @@ public class DxfNotchReviewExportTests
         Assert.Throws<OperationCanceledException>(()=>DxfNotchReviewExport.PrepareSelected(before,[id],false,cancellation.Token));
     }
 
+    [Theory]
+    [InlineData(false,"21")] [InlineData(true,"-21")]
+    public void MixedSelectionInventoriesAndExportsUnmarkedContourWithGrainline(bool flip,string grainY)
+    {
+        var source=Project();source.Pieces[1].Notches=null;
+        source.Pieces[1].Grainline=new Grainline { Start=new(12,21),End=new(15,24),NeedsReview=true };
+        var before=source.Clone();var selected=source.Pieces.Select(piece=>piece.Id).ToArray();
+        var plan=DxfNotchReviewExport.PrepareSelected(source,selected,flip);
+        Assert.Equal(2,plan.Contours.Length);Assert.Equal(selected,plan.Contours.Select(item=>item.PieceId));
+        var unmarked=plan.Contours.Single(item=>item.PieceId==source.Pieces[1].Id);
+        Assert.Equal(0,unmarked.MarkerCount);Assert.True(unmarked.HasGrainline);
+        Assert.All(plan.Items,item=>Assert.Equal(source.Pieces[0].Id,item.PieceId));
+        Assert.Single(plan.Grainlines);Assert.True(plan.Matches(before));
+        var path=PathForTest();try
+        {
+            var text=Write(plan,path);
+            Assert.Equal(2,text.Split("\nLWPOLYLINE\n").Length-1);
+            Assert.Equal(2,text.Split("\nPOINT\n").Length-1);
+            Assert.Equal(1,text.Split("\nLINE\n").Length-1);
+            Assert.Contains($"100\nAcDbLine\n10\n12\n20\n{grainY}\n",text);
+            Assert.True(DocumentSession.ContentEquals(before,source));
+            Assert.Throws<InvalidDataException>(()=>DxfFormat.Export(source,path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+
 }

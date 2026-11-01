@@ -6,6 +6,7 @@ using TekstilCAD.Core;
 
 namespace TekstilCAD.FileFormats;
 
+public sealed record DxfNotchContourReviewItem(Guid PieceId,string PieceName,string ContourLayer,int MarkerCount,bool HasGrainline);
 public sealed record DxfNotchReviewItem(Guid PieceId,string PieceName,string ContourLayer,string MarkerLayer,int VertexIndex,Point2 Position);
 public sealed record DxfNotchGrainReviewItem(Guid PieceId,string PieceName,string ContourLayer,string MarkerLayer,Point2 Start,Point2 End,bool NeedsReview);
 
@@ -14,13 +15,14 @@ public sealed class DxfNotchReviewPlan
 {
     private readonly ProjectDocument source;
     internal string Text { get; }
+    public ImmutableArray<DxfNotchContourReviewItem> Contours { get; }
     public ImmutableArray<DxfNotchReviewItem> Items { get; }
     public ImmutableArray<DxfNotchGrainReviewItem> Grainlines { get; }
     public ImmutableArray<DxfExportOmission> Omissions { get; }
     public bool FlipY { get; }
     public string Sha256 { get; }
-    internal DxfNotchReviewPlan(ProjectDocument source,string text,ImmutableArray<DxfNotchReviewItem> items,ImmutableArray<DxfNotchGrainReviewItem> grainlines,ImmutableArray<DxfExportOmission> omissions,bool flipY)
-    { this.source=source;Text=text;Items=items;Grainlines=grainlines;Omissions=omissions;FlipY=flipY;Sha256=Convert.ToHexString(SHA256.HashData(new UTF8Encoding(false,true).GetBytes(text))); }
+    internal DxfNotchReviewPlan(ProjectDocument source,string text,ImmutableArray<DxfNotchContourReviewItem> contours,ImmutableArray<DxfNotchReviewItem> items,ImmutableArray<DxfNotchGrainReviewItem> grainlines,ImmutableArray<DxfExportOmission> omissions,bool flipY)
+    { this.source=source;Text=text;Contours=contours;Items=items;Grainlines=grainlines;Omissions=omissions;FlipY=flipY;Sha256=Convert.ToHexString(SHA256.HashData(new UTF8Encoding(false,true).GetBytes(text))); }
     public bool Matches(ProjectDocument current)=>current is not null && DocumentSession.ContentEquals(source,current);
 }
 
@@ -29,7 +31,7 @@ public static class DxfNotchReviewExport
 {
     private const int MaxBytes=64*1024*1024, MaxMarkers=10_000;
     private static string Number(double n)=>n.ToString("G17",CultureInfo.InvariantCulture);
-    /// <summary>Review only explicitly selected marked pieces while binding approval to the full source snapshot.</summary>
+    /// <summary>Review explicitly selected pieces, at least one marked, while binding approval to the full source snapshot.</summary>
     public static DxfNotchReviewPlan PrepareSelected(ProjectDocument source,IReadOnlyCollection<Guid> selectedIds,bool flipY,CancellationToken cancellationToken=default)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(selectedIds);cancellationToken.ThrowIfCancellationRequested();
@@ -44,8 +46,8 @@ public static class DxfNotchReviewExport
         }
         if(visited!=selectedIds.Count)throw new ArgumentException("Parça seçimi geçersiz.");
         var pieces=snapshot.Pieces.Where(piece=>ids.Contains(piece.Id)).Select(piece=>piece.Clone()).ToList();
-        if(pieces.Count!=ids.Count || pieces.Any(piece=>piece.Notches is not { Count:>0 }))
-            throw new ArgumentException("Her seçili parça bulunmalı ve en az bir köşe işareti içermelidir.");
+        if(pieces.Count!=ids.Count)throw new ArgumentException("Seçilen parça bulunamadı.");
+        if(!pieces.Any(piece=>piece.Notches is { Count:>0 }))throw new ArgumentException("Seçimde en az bir işaretli parça bulunmalıdır.");
         var subset=new ProjectDocument { Name=snapshot.Name,Pieces=pieces,
             GradingRules=snapshot.GradingRules.Where(rule=>ids.Contains(rule.SourcePieceId)).Select(rule=>rule.Clone()).ToList(),
             ImportProvenance=snapshot.ImportProvenance?.Clone() };
@@ -57,7 +59,7 @@ public static class DxfNotchReviewExport
             omissions=omissions.Add(new(null,DxfExportOmissionKind.GradingRules));
         cancellationToken.ThrowIfCancellationRequested();
         if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
-        return new DxfNotchReviewPlan(snapshot,prepared.Text,prepared.Items,prepared.Grainlines,omissions,flipY);
+        return new DxfNotchReviewPlan(snapshot,prepared.Text,prepared.Contours,prepared.Items,prepared.Grainlines,omissions,flipY);
     }
 
     public static DxfNotchReviewPlan Prepare(ProjectDocument source,bool flipY,CancellationToken cancellationToken=default)
@@ -82,6 +84,7 @@ public static class DxfNotchReviewExport
             if(Rune.GetUnicodeCategory(rune) is UnicodeCategory.Control or UnicodeCategory.Format or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
                 throw new InvalidDataException("Kontur katman adında görünmez yönlendirme veya kontrol karakteri var. Parça adını düzeltip inceleme çıktısını yeniden hazırlayın.");
         }
+        var contours=snapshot.Pieces.Select((piece,i)=>new DxfNotchContourReviewItem(piece.Id,piece.Name,analysis.Layers[i].LayerName,piece.Notches?.Count ?? 0,piece.Grainline is not null)).ToImmutableArray();
         var used=analysis.Layers.Select(x=>x.LayerName).ToHashSet(StringComparer.OrdinalIgnoreCase);used.Add("0");
         var markerLayers=new string?[snapshot.Pieces.Count];var items=ImmutableArray.CreateBuilder<DxfNotchReviewItem>();
         for(int i=0;i<snapshot.Pieces.Count;i++)
@@ -146,7 +149,7 @@ public static class DxfNotchReviewExport
         var omissions=analysis.Omissions.Where(o=>o.Kind!=DxfExportOmissionKind.GrainlineUnsupported).ToImmutableArray()
             .AddRange(grainlines.Select(g=>new DxfExportOmission(g.PieceId,DxfExportOmissionKind.GrainlineReviewState)))
             .AddRange(snapshot.Pieces.Select(p=>new DxfExportOmission(p.Id,DxfExportOmissionKind.PieceIdentity)));
-        return new(snapshot,text,items.ToImmutable(),grainlines.ToImmutable(),omissions,flipY);
+        return new(snapshot,text,contours,items.ToImmutable(),grainlines.ToImmutable(),omissions,flipY);
     }
     public static void Write(DxfNotchReviewPlan plan,string path,ProjectFileVersion expected,CancellationToken cancellationToken=default)
     {

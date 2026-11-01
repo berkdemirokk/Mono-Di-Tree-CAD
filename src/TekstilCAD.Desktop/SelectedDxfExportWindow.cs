@@ -18,6 +18,7 @@ internal sealed class SelectedDxfExportWindow : Window
         public string SearchText { get; }
         public string Label { get; }
         public bool Eligible { get; }
+        public bool HasMarks { get; }
         private bool isSelected;
         public bool IsSelected
         {
@@ -29,8 +30,9 @@ internal sealed class SelectedDxfExportWindow : Window
         {
             Id=piece.Id;var safeName=CadCanvas.CanvasPieceLabel(piece.Name);
             SearchText=$"{piece.Name} {safeName} {piece.Id:D}";
-            Eligible=reviewMode ? piece.Notches is { Count:>0 } : piece.Notches is null && piece.Grainline is null;
-            Label=$"{safeName} · {piece.Id:D}"+(Eligible ? "" : reviewMode ? " · KÖŞE İŞARETİ YOK" : " · NORMAL DXF DESTEKLEMEZ: görsel işaret veya iplik yönü");
+            HasMarks=piece.Notches is { Count:>0 };
+            Eligible=reviewMode || (piece.Notches is null && piece.Grainline is null);
+            Label=$"{safeName} · {piece.Id:D}"+(reviewMode ? (HasMarks ? " · KÖŞE İŞARETLİ" : " · İŞARETSİZ")+(piece.Grainline is null ? "" : " · İPLİK YÖNÜ") : Eligible ? "" : " · NORMAL DXF DESTEKLEMEZ: görsel işaret veya iplik yönü");
         }
     }
     private readonly List<Choice> allChoices;
@@ -55,7 +57,7 @@ internal sealed class SelectedDxfExportWindow : Window
         cancel.Click+=(_,_)=>DialogResult=false;ContinueButton.Click+=(_,_)=>DialogResult=true;
         buttons.Children.Add(cancel);buttons.Children.Add(ContinueButton);DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);
         var top=new StackPanel();DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
-        top.Children.Add(new TextBlock { Text=reviewMode ? "Yalnız seçilen işaretli parçalar inceleme DXF'ine yazılır; diğerleri kaynakta kalır. Her seçilen parçada köşe işareti olmalıdır. İşaretler POINT, varsa iplik yönleri LINE olarak gösterilir; bunlar fiziksel çentik veya kesim komutu değildir. Kimlik, üretim bilgileri, serileme kuralları ve geçmiş DXF'te korunmaz." : "Yalnız seçilen parçalar ayrı DXF'e yazılır; diğerleri kaynakta kalır. Kimlik, üretim bilgileri, serileme kuralları ve kaynak geçmişi DXF'te korunmaz. İşaret veya iplik yönü içeren parçalar normal DXF'e uygun değildir; ayrı inceleme çıktısını kullanın.",TextWrapping=TextWrapping.Wrap });
+        top.Children.Add(new TextBlock { Text=reviewMode ? "Yalnız seçilen parçalar inceleme DXF'ine yazılır; diğerleri kaynakta kalır. Seçimde en az bir işaretli parça bulunmalıdır; işaretsiz parçalar da eklenebilir. İşaretler POINT, varsa iplik yönleri LINE olarak gösterilir; bunlar fiziksel çentik veya kesim komutu değildir. Kimlik, üretim bilgileri, serileme kuralları ve geçmiş DXF'te korunmaz." : "Yalnız seçilen parçalar ayrı DXF'e yazılır; diğerleri kaynakta kalır. Kimlik, üretim bilgileri, serileme kuralları ve kaynak geçmişi DXF'te korunmaz. İşaret veya iplik yönü içeren parçalar normal DXF'e uygun değildir; ayrı inceleme çıktısını kullanın.",TextWrapping=TextWrapping.Wrap });
         top.Children.Add(new TextBlock { Text="Ada veya kimliğe göre ara",Margin=new Thickness(0,6,0,0) });
         AutomationProperties.SetName(Search,"DXF parçasını ada veya kimliğe göre ara");
         AutomationProperties.SetHelpText(Search,"Arama yalnız listeyi süzer; gizlenen seçili parçalar seçili kalır.");top.Children.Add(Search);
@@ -90,15 +92,15 @@ internal sealed class SelectedDxfExportWindow : Window
     }
     private void RefreshSummary()
     {
-        var selected=0;var hidden=0;var unsupported=0;
+        var selected=0;var hidden=0;var unsupported=0;var marked=0;
         foreach(var choice in allChoices)
         {
             var visible=Matches(choice);
-            if(choice.IsSelected) { selected++;if(!visible)hidden++; }
+            if(choice.IsSelected) { selected++;if(!visible)hidden++;if(choice.HasMarks)marked++; }
             if(visible && !choice.Eligible)unsupported++;
         }
-        var message=$"{selected} parça seçili; {hidden} seçili parça aramada gizli. "+(reviewMode ? $"Görünen {unsupported} parçada köşe işareti yok." : $"Görünen {unsupported} parça normal DXF'te desteklenmez.");
-        Summary.Text=message;AutomationProperties.SetName(Summary,message);ContinueButton.IsEnabled=selected>0;
+        var message=$"{selected} parça seçili; {hidden} seçili parça aramada gizli. "+(reviewMode ? $"Seçimde {marked} işaretli parça var; en az bir işaretli parça gerekir." : $"Görünen {unsupported} parça normal DXF'te desteklenmez.");
+        Summary.Text=message;AutomationProperties.SetName(Summary,message);ContinueButton.IsEnabled=selected>0 && (!reviewMode || marked>0);
         if(UIElementAutomationPeer.CreatePeerForElement(Summary) is { } peer)peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
     }
 }

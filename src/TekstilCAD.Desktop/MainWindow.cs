@@ -263,7 +263,7 @@ public class MainWindow : Window
         var exchange = CommandGroup(commandArea, "DOSYA AKTARIMI");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
         AddButton(exchange,"DXF blok tanımından kopya…",CreateBlockDefinitionCopy,"Yerleştirilmemiş blok tanımını ayrı dosya olarak incelemeye hazırla.");
-        AddButton(exchange,"Seçilen işaretli parçaları inceleme DXF…",ExportSelectedNotchReview,"Yalnız seçtiğiniz işaretli parçaları ve varsa iplik yönlerini inceleme için dışa aktarır; üretim çıktısı değildir.");
+        AddButton(exchange,"Seçilen parçalar · işaretli inceleme DXF…",ExportSelectedNotchReview,"Seçimde en az bir işaretli parça gerekir; seçilen işaretsiz parçalar ve iplik yönleri de incelemeye dahil edilir. Üretim çıktısı değildir.");
         AddButton(exchange,"Seçilen parçaları DXF aktar…",ExportSelectedDxf,"Yalnız seçtiğiniz parçaları ayrı DXF dosyasına aktarır; kaynak proje değişmez.");
         exportCommand = AddButton(exchange, "Tümünü dışa aktar…", Export, "Projedeki tüm parçaları DXF, SVG, HPGL veya PDF inceleme dosyasına aktar. Kaynak geçmişi projede saklanmaz; üretimden önce ölçüleri ve yerleşimi kontrol edin. Üretim parçası seçmek için Makine simülatörünü kullanın.");
         grainReviewExportCommand=AddButton(exchange,"İplik işaretli DXF inceleme dosyası…",ExportGrainlineReview,"Yalnız inceleme için; işaret çizgileri alıcı yazılımda kesim yolu olarak algılanabilir.");

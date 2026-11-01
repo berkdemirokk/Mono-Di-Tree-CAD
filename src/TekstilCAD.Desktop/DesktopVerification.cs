@@ -6175,7 +6175,7 @@ internal static class DesktopVerification
         var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         var first=new PatternPiece { Name="FRONT",Points=[new(0,0),new(20,0),new(0,20)],Notches=[new NotchMark { VertexIndex=2,Position=new(0,20) }],Grainline=new Grainline { Start=new(1,2),End=new(3,4),NeedsReview=true } };
         var second=new PatternPiece { Name="BACK",Points=[new(40,0),new(60,0),new(40,20)],Notches=[new NotchMark { VertexIndex=1,Position=new(60,0) }] };
-        var plain=new PatternPiece { Name="PLAIN",Points=[new(80,0),new(100,0),new(80,20)] };
+        var plain=new PatternPiece { Name="PLAIN",Points=[new(80,0),new(100,0),new(80,20)],Grainline=new Grainline { Start=new(81,1),End=new(81,5),NeedsReview=true } };
         var source=new ProjectDocument { Pieces=[first,second,plain] };
         void Reset() { studio.LoadDocument(source.Clone());studio.Select(first.Id); }
         string Target()=>Path.Combine(work,$"selected-mark-review-{Guid.NewGuid():N}.dxf");
@@ -6185,17 +6185,29 @@ internal static class DesktopVerification
             Reset();var before=studio.Document.Clone();var picker=new SelectedDxfExportWindow(studio,before,reviewMode:true);
             try
             {
-                Check(picker.AllChoices[0].Eligible && picker.AllChoices[1].Eligible && !picker.AllChoices[2].Eligible,"Review selector permits only pieces with corner marks",checks);
+                picker.AllChoices[2].IsSelected=true;
+                Check(picker.AllChoices[0].Eligible && picker.AllChoices[1].Eligible && picker.AllChoices[2].Eligible && !picker.ContinueButton.IsEnabled,
+                    "Review selector accepts unmarked pieces but requires a marked selection",checks);
                 picker.AllChoices[0].IsSelected=true;picker.Search.Text="BACK";
-                Check(picker.SelectedIds.SequenceEqual(new[] { first.Id }) && picker.Summary.Text.Contains("1 seçili parça aramada gizli"),"Review selection survives search filtering",checks);
+                Check(picker.ContinueButton.IsEnabled && picker.SelectedIds.SequenceEqual(new[] { first.Id,plain.Id }) && picker.Summary.Text.Contains("2 seçili parça aramada gizli"),"Mixed review selection survives search filtering",checks);
             }
             finally { picker.Close(); }
             var path=Target();var approved=false;
-            studio.ConfirmDxfNotchReviewForVerification=plan=> { approved=plan.Matches(before) && plan.Items.All(item=>item.PieceId==first.Id) && plan.Items.Length==1 && plan.Grainlines.Length==1;return true; };
-            Run([first.Id],path);var text=File.ReadAllText(path);
-            Check(approved && studio.ExportError is null && text.Split("\nPOINT\n").Length-1==1 && text.Contains("100\nAcDbPoint\n10\n0\n20\n-20\n") &&
+            studio.ConfirmDxfNotchReviewForVerification=plan=> { approved=plan.Matches(before) && plan.Items.All(item=>item.PieceId==first.Id) && plan.Items.Length==1 && plan.Grainlines.Length==2 && plan.Contours.Length==2 && plan.Contours.Any(contour=>contour.PieceId==plain.Id && contour.MarkerCount==0);return true; };
+            Run([first.Id,plain.Id],path);var text=File.ReadAllText(path);
+            Check(approved && studio.ExportError is null && text.Split("\nPOINT\n").Length-1==1 && text.Split("\nLWPOLYLINE\n").Length-1==2 && text.Contains("100\nAcDbPoint\n10\n0\n20\n-20\n") &&
                 text.Contains("100\nAcDbLine\n10\n1\n20\n-2\n") && DocumentSession.ContentEquals(before,studio.Document),
-                "Selected marked DXF writes only approved reflected marker and grainline without changing source",checks);
+                "Selected review writes marked and unmarked contours with reflected markers without changing source",checks);
+            var mixedPlan=DxfNotchReviewExport.PrepareSelected(before,[first.Id,plain.Id],true);
+            var review=new DxfNotchReviewWindow(studio,mixedPlan,selectedScope:true);
+            try
+            {
+                var root=(FrameworkElement)review.Content;Render(review,Path.Combine(work,"selected-mixed-contours.png"),980,720);
+                var tabs=Descendants<TabControl>(root).Single();var contours=Descendants<DataGrid>(root).Single(grid=>AutomationProperties.GetName(grid)=="Aktarılacak tüm konturlar ve katmanları");
+                Check(tabs.SelectedIndex==2 && contours.Items.Count==2 && mixedPlan.Contours.Any(item=>item.PieceId==plain.Id && item.MarkerCount==0 && item.HasGrainline),
+                    "Mixed review opens the complete selected-contour inventory including the unmarked grainline piece",checks);
+            }
+            finally { review.Close(); }
             Reset();before=studio.Document.Clone();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=>false;Run([first.Id],path);
             Check(studio.ExportWasCancelled && !File.Exists(path) && DocumentSession.ContentEquals(before,studio.Document),"Declined selected marked DXF writes nothing",checks);
             Reset();path=Target();studio.ConfirmDxfNotchReviewForVerification=_=> { studio.Commit("Başka parça değişti",()=>studio.Document.Pieces[1].Name="Changed");return true; };Run([first.Id],path);

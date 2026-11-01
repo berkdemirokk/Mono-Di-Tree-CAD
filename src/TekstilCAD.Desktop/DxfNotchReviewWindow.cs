@@ -29,6 +29,7 @@ internal sealed class DxfNotchReviewWindow : Window
         DxfExportOmissionKind.NestingSnapshot=>"Pastal geçmişi",DxfExportOmissionKind.ImportProvenance=>"Kaynak geçmişi",
         DxfExportOmissionKind.PieceIdentity=>"TekstilCAD parça kimliği",DxfExportOmissionKind.GrainlineReviewState=>"İplik yönü kontrol durumu ve ilişkisi",_=>"Diğer proje bilgisi"
     };
+    private sealed record ContourRow(string Piece,string Id,string Layer,int MarkCount,string Grain);
     private sealed record Row(string Piece,string Id,string Contour,string Layer,string Index,string Source,string Output);
     private sealed record GrainRow(string Piece,string Id,string Contour,string Layer,string Source,string Output,string Review);
     internal DxfNotchReviewWindow(Window owner,DxfNotchReviewPlan plan,bool selectedScope=false)
@@ -40,7 +41,7 @@ internal sealed class DxfNotchReviewWindow : Window
         var accept=new Button { Content="İnceleme dosyasını yaz",Padding=new Thickness(12,8,12,8) };cancel.Click+=(_,_)=>DialogResult=false;accept.Click+=(_,_)=>DialogResult=true;actions.Children.Add(cancel);actions.Children.Add(accept);
         var top=new StackPanel();DockPanel.SetDock(top,Dock.Top);root.Children.Add(top);
         top.Children.Add(new TextBlock { Text="Köşe işaretli DXF · yalnız inceleme",FontSize=20,FontWeight=FontWeights.SemiBold });
-        if(selectedScope)top.Children.Add(new TextBlock { Text=$"Yalnız seçilen {plan.Items.Select(item=>item.PieceId).Distinct().Count()} işaretli parça aktarılacak; diğer parçalar kaynakta kalır. Tüm seçili parçalar aşağıdaki işaret listesinde kimlikleriyle gösterilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,0) });
+        if(selectedScope)top.Children.Add(new TextBlock { Text=$"Yalnız seçilen {plan.Contours.Length} parça aktarılacak; diğer parçalar kaynakta kalır. İşaretli ve işaretsiz tüm seçili konturlar, Konturlar sekmesinde kimlikleriyle gösterilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,0) });
         top.Children.Add(new TextBlock { Text="Üretim veya kesim dosyası değildir. Köşe işaretleri ayrı katmanlarda DXF POINT, iplik yönleri ayrı katmanlarda LINE nesneleridir; alıcı CAD bunları kesim yolu sayabilir. Köşe işareti fiziksel çentik derinliği içermez. Ölçeği, görünürlüğü ve tüm işaretleri hedefte kontrol edin. Parça ilişkisi ve iplik yönü kontrol durumu DXF'te korunmaz; .tcad kaynak dosyasını saklayın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,8,0,8) });
         top.Children.Add(new TextBlock { Text=$"Y yönü: {(plan.FlipY ? "ekran yönüne göre ters çevrildi" : "kaynak koordinatları korundu")} · Köşe işareti: {plan.Items.Length} · İplik yönü: {plan.Grainlines.Length} · SHA-256 {plan.Sha256}",TextWrapping=TextWrapping.Wrap });
         var omissions=new TextBox { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Height=80,Margin=new Thickness(0,8,0,0),Text="DXF'ye aktarılmayan bilgiler (kimlikler eşleme için burada gösterilir):\n"+string.Join("\n",plan.Omissions.Select(o=>$"{Omission(o.Kind)} · {o.PieceId?.ToString("D") ?? "proje"}")) };
@@ -59,6 +60,13 @@ internal sealed class DxfNotchReviewWindow : Window
         GrainColumn("İplik katmanı",nameof(GrainRow.Layer),150);GrainColumn("Kaynak uçlar · mm",nameof(GrainRow.Source),220);GrainColumn("DXF uçlar · mm",nameof(GrainRow.Output),220);GrainColumn("Kaynak kontrolü",nameof(GrainRow.Review),150);
         string Coordinates(Point2 a,Point2 b,bool flip)=>$"{MeasurementInput.Format(a.X)}, {MeasurementInput.Format(flip ? -a.Y : a.Y)} → {MeasurementInput.Format(b.X)}, {MeasurementInput.Format(flip ? -b.Y : b.Y)}";
         grainGrid.ItemsSource=plan.Grainlines.Select(i=>new GrainRow(Safe(i.PieceName),i.PieceId.ToString("D"),i.ContourLayer,i.MarkerLayer,Coordinates(i.Start,i.End,false),Coordinates(i.Start,i.End,plan.FlipY),i.NeedsReview ? "Kontrol bekliyor" : "Kontrol beklemiyor")).ToArray();
-        var tabs=new TabControl();tabs.Items.Add(new TabItem { Header="Köşe işaretleri",Content=grid });tabs.Items.Add(new TabItem { Header="İplik yönleri",Content=grainGrid });root.Children.Add(tabs);
+        var contourGrid=new DataGrid { IsReadOnly=true,AutoGenerateColumns=false,CanUserAddRows=false,EnableRowVirtualization=true,EnableColumnVirtualization=true };
+        VirtualizingPanel.SetIsVirtualizing(contourGrid,true);ScrollViewer.SetCanContentScroll(contourGrid,true);AutomationProperties.SetName(contourGrid,"Aktarılacak tüm konturlar ve katmanları");
+        void ContourColumn(string title,string field,double width)=>contourGrid.Columns.Add(new DataGridTextColumn { Header=title,Binding=new Binding(field),Width=width });
+        ContourColumn("Parça",nameof(ContourRow.Piece),180);ContourColumn("Kimlik",nameof(ContourRow.Id),245);ContourColumn("Kontur katmanı",nameof(ContourRow.Layer),190);
+        ContourColumn("Görsel işaret sayısı",nameof(ContourRow.MarkCount),140);ContourColumn("İplik yönü",nameof(ContourRow.Grain),110);
+        contourGrid.ItemsSource=plan.Contours.Select(c=>new ContourRow(Safe(c.PieceName),c.PieceId.ToString("D"),c.ContourLayer,c.MarkerCount,c.HasGrainline ? "Var" : "Yok")).ToArray();
+        var tabs=new TabControl();tabs.Items.Add(new TabItem { Header="Köşe işaretleri",Content=grid });tabs.Items.Add(new TabItem { Header="İplik yönleri",Content=grainGrid });
+        tabs.Items.Add(new TabItem { Header="Konturlar",Content=contourGrid });if(selectedScope)tabs.SelectedIndex=2;root.Children.Add(tabs);
     }
 }
