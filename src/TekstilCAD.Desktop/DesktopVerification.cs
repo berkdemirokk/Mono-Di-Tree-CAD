@@ -3074,6 +3074,37 @@ internal static class DesktopVerification
             Check(choiceItems.Count==1 && (bool)selectedProperty.GetValue(choiceItems[0])!,"Quantity preview initially selects source",checks);
             var original=studio.Document.Clone();
             var calculate=typeof(ProductionNestingWindow).GetMethod("Calculate",PrivateInstance)!;
+            var propertyX=(TextBox)typeof(MainWindow).GetField("x",PrivateInstance)!.GetValue(studio)!;
+            var initialX=propertyX.Text;propertyX.Text="2";
+            var blockedDraft=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>blockedDraft.IsCompleted);
+            var initialStatus=(TextBlock)typeof(ProductionNestingWindow).GetField("status",PrivateInstance)!.GetValue(window)!;
+            var initialPreview=typeof(ProductionNestingWindow).GetField("preview",PrivateInstance)!.GetValue(window)!;
+            Check(initialStatus.Text.Contains("taslak",StringComparison.OrdinalIgnoreCase) &&
+                initialPreview.GetType().GetProperty("Drawing")!.GetValue(initialPreview) is null && DocumentSession.ContentEquals(original,studio.Document),
+                "Quantity layout refuses an unapplied property draft before calculation",checks);
+            propertyX.Text=initialX;
+            var canvas=(CadCanvas)typeof(MainWindow).GetField("canvas",PrivateInstance)!.GetValue(studio)!;
+            var drawingPoints=(List<Point2>)typeof(CadCanvas).GetField("drawing",PrivateInstance)!.GetValue(canvas)!;
+            drawingPoints.Add(new Point2(1,1));
+            var blockedDrawing=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>blockedDrawing.IsCompleted);
+            Check(initialStatus.Text.Contains("çizim",StringComparison.OrdinalIgnoreCase) &&
+                initialPreview.GetType().GetProperty("Drawing")!.GetValue(initialPreview) is null && DocumentSession.ContentEquals(original,studio.Document),
+                "Quantity layout refuses an unfinished drawing before calculation",checks);
+            canvas.CancelDrawing();
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                window.BeforeCalculationForVerification=()=> { reached.Set();release.Wait(); };
+                Task? pendingDraft=null;
+                try
+                {
+                    pendingDraft=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>reached.IsSet);propertyX.Text="2";
+                    release.Set();PumpUntil(()=>pendingDraft.IsCompleted);pendingDraft.GetAwaiter().GetResult();
+                    Check(initialPreview.GetType().GetProperty("Drawing")!.GetValue(initialPreview) is null &&
+                        initialStatus.Text.Contains("taslağı",StringComparison.OrdinalIgnoreCase) && DocumentSession.ContentEquals(original,studio.Document),
+                        "Quantity layout discards calculation when a property draft appears during the worker",checks);
+                }
+                finally { release.Set();window.BeforeCalculationForVerification=null;propertyX.Text=initialX;if(pendingDraft is not null) { PumpUntil(()=>pendingDraft.IsCompleted);pendingDraft.GetAwaiter().GetResult(); } }
+            }
             var task=(Task)calculate.Invoke(window,null)!; PumpUntil(()=>task.IsCompleted);
             var status=(TextBlock)typeof(ProductionNestingWindow).GetField("status",PrivateInstance)!.GetValue(window)!;
             var mapping=(TextBlock)typeof(ProductionNestingWindow).GetField("mapping",PrivateInstance)!.GetValue(window)!;
@@ -3083,6 +3114,19 @@ internal static class DesktopVerification
             Check(drawing is not null && drawing.Pieces.Count==2 && highlight.Items.Count==2 && highlight.Items[0].ToString()!.Contains("kopya 1") && highlight.Items[1].ToString()!.Contains("kopya 2") && DocumentSession.ContentEquals(original,studio.Document),"Quantity preview maps two copies without mutating source",checks);
             Check(saveLayoutButton.IsEnabled && drawing is not null,"Quantity layout save is enabled only after a successful preview",checks);
             var layoutVersion=(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
+            var pendingPath=Path.Combine(work,"quantity-layout-pending.tcad");File.WriteAllText(pendingPath,"korundu");
+            var pendingTarget=window.CaptureLayoutDestination(pendingPath,layoutVersion,drawing!);propertyX.Text="2";
+            try { window.SaveLayoutTo(pendingPath,layoutVersion,drawing!,pendingTarget);throw new InvalidOperationException("Pending draft accepted."); }
+            catch(InvalidOperationException ex) when(!ex.Message.Contains("accepted")) { }
+            Check(File.ReadAllText(pendingPath)=="korundu" && DocumentSession.ContentEquals(original,studio.Document),
+                "Pending property draft blocks saving an already calculated layout",checks);
+            typeof(ProductionNestingWindow).GetMethod("CheckVisibleResultCurrent",PrivateInstance)!.Invoke(window,null);
+            Check(preview.GetType().GetProperty("Drawing")!.GetValue(preview) is null && !saveLayoutButton.IsEnabled && status.Text.Contains("taslağı"),
+                "Pending property draft clears a displayed layout and disables save",checks);
+            propertyX.Text=initialX;
+            task=(Task)calculate.Invoke(window,null)!;PumpUntil(()=>task.IsCompleted);
+            drawing=(ProjectDocument?)preview.GetType().GetProperty("Drawing")!.GetValue(preview);
+            layoutVersion=(int)typeof(ProductionNestingWindow).GetField("inputsVersion",PrivateInstance)!.GetValue(window)!;
             VerifyAsyncQuantityLayoutSave(studio,window,drawing!,layoutVersion,sourcePath,sourceBytes,work,checks);
             var layoutPath=Path.Combine(work,"quantity-layout-result.tcad");
             var expectedLayout=window.CaptureLayoutDestination(layoutPath,layoutVersion,drawing!);

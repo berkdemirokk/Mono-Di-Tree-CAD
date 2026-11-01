@@ -388,6 +388,12 @@ internal sealed class ProductionNestingWindow : Window
     private void CheckVisibleResultCurrent()
     {
         if (preview.Drawing is null && errorTargetId is null) { documentWatch.Stop(); return; }
+        if (workspace.HasPendingCanvasOrPropertyWork)
+        {
+            InvalidatePreview();
+            SetStatus("Bekleyen çizim veya parça alan taslağı var; önce tamamlayın veya iptal edin, sonra pastalı yeniden hesaplayın.");
+            return;
+        }
         if (!DocumentSession.ContentEquals(initialSnapshot, workspace.Document))
         {
             InvalidatePreview();
@@ -412,6 +418,8 @@ internal sealed class ProductionNestingWindow : Window
     private async Task Calculate()
     {
         if(busy)return; ClearErrorChoice();
+        if(workspace.HasPendingCanvasOrPropertyWork)
+        { InvalidatePreview();SetStatus("Önce bekleyen çizimi, sürüklemeyi veya parça alan taslaklarını tamamlayın ya da iptal edin.");return; }
         if(!DocumentSession.ContentEquals(initialSnapshot,workspace.Document)) { InvalidatePreview();SetStatus("Proje değişti; güncel parçalar için pencereyi kapatıp yeniden açın.");return; }
         var inputProblem=ValidateFabricInputs(width.Text,gap.Text,edgeMargin.Text,out var w,out var g,out var m);
         if(inputProblem is not null) { SetStatus(inputProblem);return; }
@@ -472,6 +480,8 @@ internal sealed class ProductionNestingWindow : Window
             token.ThrowIfCancellationRequested();
             var planned=prepared.Plan;
             if(requestVersion!=inputsVersion) { InvalidatePreview(); return; }
+            if(workspace.HasPendingCanvasOrPropertyWork)
+            { InvalidatePreview();SetStatus("Hesap sırasında bekleyen çizim veya alan taslağı oluştu; sonuç uygulanmadı. Önce bunları tamamlayın veya iptal edin.");return; }
             if(!DocumentSession.ContentEquals(snapshot,workspace.Document)) { SetStatus("Proje değişti; sonuç uygulanmadı. Pencereyi kapatıp yeniden açın.");return; }
             preview.SetDrawing(planned.Nesting.Layout,w,planned.Nesting.UsedLength,planned.Nesting.EdgeMargin,prepared.Geometry);
             saveLayout.IsEnabled=true;
@@ -500,10 +510,12 @@ internal sealed class ProductionNestingWindow : Window
         }
         finally { calculationCancellation=null;cancellation.Dispose();cancelCalculation.IsEnabled=false;cancelCalculation.Visibility=Visibility.Collapsed;busy=false;if(!closed){calculate.IsEnabled=true;choices.IsEnabled=true;choiceSearch.IsEnabled=true;clearChoiceSearch.IsEnabled=true;selectShownChoices.IsEnabled=true;clearShownChoices.IsEnabled=true;width.IsEnabled=true;fabricLength.IsEnabled=true;grainPolicy.IsEnabled=true;gap.IsEnabled=true;edgeMargin.IsEnabled=true;} }
     }
-    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && version==inputsVersion &&
+    private bool IsCurrentLayout(int version, ProjectDocument layout) => !closed && !busy && !workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion &&
         ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
     private async Task SaveLayout()
     {
+        if(workspace.HasPendingCanvasOrPropertyWork)
+        { InvalidatePreview();SetStatus("Bekleyen çizim veya parça alan taslağı var; önce tamamlayın veya iptal edin, sonra pastalı yeniden hesaplayın.");return; }
         if(preview.Drawing is not { } layout || !IsCurrentLayout(inputsVersion,layout)) { InvalidatePreview();return; }
         var version=inputsVersion;
         var message=FormatLayoutSaveConfirmation(layout);
@@ -565,10 +577,10 @@ internal sealed class ProductionNestingWindow : Window
         {
             await Task.Run(()=> { beforeSave?.Invoke(); ProjectStorage.SaveIfUnchanged(snapshot,path,expected); });
             if(closed)return;
-            var current=version==inputsVersion && ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
+            var current=!workspace.HasPendingCanvasOrPropertyWork && version==inputsVersion && ReferenceEquals(preview.Drawing,layout) && DocumentSession.ContentEquals(initialSnapshot,workspace.Document);
             SetStatus(current
                 ? "Pastal ayrı proje olarak kaydedildi. Kumaş ayarları ve kaynak-kopya eşleşmesi tarihsel bilgi olarak saklandı; makine işi oluşturulmadı. Eski TekstilCAD sürümleri bu dosyayı açamaz."
-                : "Pastalın önceki önizlemesi ayrı proje olarak kaydedildi; proje veya seçimler işlem sırasında değişti. Güncel sonuç için yeniden hesaplayın. Kaydedilen pastal bilgisi tarihsel görüntüye aittir.");
+                : "Pastalın önceki önizlemesi ayrı proje olarak kaydedildi; proje, seçimler veya bekleyen çizim/alan taslakları işlem sırasında değişti. Güncel sonuç için yeniden hesaplayın. Kaydedilen pastal bilgisi tarihsel görüntüye aittir.");
         }
         finally
         {
