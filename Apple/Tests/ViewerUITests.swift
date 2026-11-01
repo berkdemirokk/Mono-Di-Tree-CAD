@@ -3,7 +3,7 @@ import XCTest
 final class ViewerUITests: XCTestCase {
     func testFailedRawSaveCanBeRetriedWithoutSelectingSourceAgain() {
         let app = XCUIApplication()
-        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once"]
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-invalid-v6-import", "--ui-test-raw-save-fail-once", "--ui-test-raw-picker-lifecycle"]
         app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(#"{"Name":"Önceki","Pieces":[]}"#.utf8).base64EncodedString()
         app.launch()
         let warning = app.alerts["Dosya önizlenemedi"]
@@ -14,6 +14,11 @@ final class ViewerUITests: XCTestCase {
         let retry = app.buttons["Ham kopyayı yeniden kaydet…"]
         XCTAssertTrue(retry.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Önceki"].exists)
+        app.buttons["Test: seçim iptal"].tap()
+        XCTAssertTrue(retry.exists)
+        app.buttons["Test: geçersiz seçim"].tap()
+        XCTAssertTrue(failure.waitForExistence(timeout: 5)); failure.buttons["Tamam"].tap()
+        XCTAssertTrue(retry.exists)
         retry.tap()
         XCTAssertTrue(warning.waitForExistence(timeout: 5))
         warning.buttons["Ham kopyayı telefona kaydet"].tap()

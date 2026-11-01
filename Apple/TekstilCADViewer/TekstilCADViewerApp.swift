@@ -103,6 +103,12 @@ private struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button("Ham kopyayı yeniden kaydet…") { showingRawImport = true }
                     .disabled(isSaving || modelLoad.isLoading)
+                #if DEBUG && targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-raw-picker-lifecycle") {
+                    Button("Test: seçim iptal") { handlePickerFailure(CocoaError(.userCancelled)) }
+                    Button("Test: geçersiz seçim") { handlePickerFailure(ViewerError.message("Test: geçersiz seçim.")) }
+                }
+                #endif
             }
             if importedData != nil {
                 Button(isSaving ? "Kaydediliyor…" : "Bu modeli telefona kaydet") { saveImportedModel() }
@@ -425,12 +431,11 @@ private struct ContentView: View {
             do {
                 let url = try result.get()
                 guard url.pathExtension.lowercased() == "tcad" else {
-                    modelLoad.invalidate()
                     throw ViewerError.message("Lütfen bir .tcad dosyası seçin.")
                 }
                 openModel(url, imported: true)
             } catch {
-                if modelLoad.rejectPickerFailure(error) { self.error = error.localizedDescription }
+                handlePickerFailure(error)
             }
         }
         .fileExporter(isPresented: $showingExporter, document: exportDocument, contentType: .data, defaultFilename: exportName) { result in
@@ -580,6 +585,16 @@ private struct ContentView: View {
         return (stem.isEmpty ? "Model" : stem) + " - kopya.tcad"
     }
 
+    private func handlePickerFailure(_ failure: Error) {
+        guard modelLoad.rejectPickerFailure(failure) else { return }
+        // A rejected picker result did not open a replacement file. Retain a
+        // failed raw-save snapshot explicitly under the new request generation.
+        if rawSaveNeedsRetry, let retained = rawImport {
+            rawImport = RawImport(data: retained.data, name: retained.name, request: modelLoad.request, reason: retained.reason)
+        }
+        error = failure.localizedDescription
+    }
+
     private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
         saveNotice = nil
         rawImport = nil
@@ -632,8 +647,8 @@ private struct ContentView: View {
     }
 
     private func saveRawImport() {
-        guard let candidate = rawImport, !modelLoad.isLoading else {
-            error = "Önce dosya yüklemesinin tamamlanmasını bekleyin."
+        guard let candidate = rawImport, candidate.request == modelLoad.request, !modelLoad.isLoading else {
+            error = "Seçim değişti veya yükleme sürüyor; dosyayı yeniden seçin."
             return
         }
         saveNotice = nil
