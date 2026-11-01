@@ -1,6 +1,22 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testSelectedPieceShowsStraightLineMeasurement() throws {
+        let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
+        let app = XCUIApplication()
+        app.launchArguments += ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        app.buttons["Ön Beden"].tap()
+        let measure = app.buttons["İki nokta arasını ölç…"]
+        XCTAssertTrue(measure.waitForExistence(timeout: 5)); measure.tap()
+        XCTAssertTrue(app.staticTexts["Doğrusal mesafe: 100 mm"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["İlk nokta: X 0, Y 0 mm"].exists)
+        XCTAssertTrue(app.staticTexts["İkinci nokta: X 100, Y 0 mm"].exists)
+        app.buttons["Kapat"].tap()
+    }
     func testBOMEncodedLegacyModelsExplainUnavailableNameEditing() throws {
         let input = #"[1,{"Name":"Ön","Pieces":[],"GradingRules":[]}]"#
         let encodings: [(String.Encoding, [UInt8])] = [

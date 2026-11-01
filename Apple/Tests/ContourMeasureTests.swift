@@ -34,6 +34,15 @@ final class ContourMeasureTests: XCTestCase {
         XCTAssertNil(ContourMeasure.length([p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)], closed: false))
     }
 
+    func testStraightDistanceUsesSelectedFileIndicesAndRejectsInvalidValues() throws {
+        let points = [p(0, 0), p(3, 4), p(0, 0)]
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.distance(points, from: 0, to: 1)), 5, accuracy: 1e-12)
+        XCTAssertEqual(try XCTUnwrap(ContourMeasure.distance(points, from: 0, to: 2)), 0, accuracy: 1e-12)
+        XCTAssertNil(ContourMeasure.distance(points, from: -1, to: 0))
+        XCTAssertNil(ContourMeasure.distance(points, from: 0, to: 3))
+        XCTAssertNil(ContourMeasure.distance([p(.infinity, 0), p(0, 0)], from: 0, to: 1))
+        XCTAssertNil(ContourMeasure.distance([p(-Double.greatestFiniteMagnitude, 0), p(Double.greatestFiniteMagnitude, 0)], from: 0, to: 1))
+    }
     func testTenThousandPoints() throws {
         let points = (0..<10_000).map { p(Double($0), 0) }
         XCTAssertEqual(try XCTUnwrap(ContourMeasure.length(points, closed: false)), 9_999, accuracy: 1e-9)

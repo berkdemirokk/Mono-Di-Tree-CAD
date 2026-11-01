@@ -23,6 +23,14 @@ enum ContourMeasure {
         return points.allSatisfy { $0.x == first.x && $0.y == first.y }
     }
 
+    // Straight-line distance only; does not follow the contour between points.
+    static func distance(_ points: [Point], from first: Int, to second: Int) -> Double? {
+        guard points.indices.contains(first), points.indices.contains(second) else { return nil }
+        let a = points[first], b = points[second]
+        guard a.x.isFinite, a.y.isFinite, b.x.isFinite, b.y.isFinite else { return nil }
+        let value = hypot(b.x - a.x, b.y - a.y)
+        return value.isFinite ? value : nil
+    }
     // Measures only the polyline in the file. Invalid or overflowing values
     // are unavailable rather than presented as an authoritative measurement.
     static func length(_ points: [Point], closed: Bool) -> Double? {

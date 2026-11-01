@@ -31,6 +31,7 @@ struct TekstilCADViewerApp: App {
 private struct ContentView: View {
     @State private var showingImporter = false
     @State private var showingPieces = false
+    @State private var showingPointDistance = false
     @State private var showingFullScreenDrawing = false
     @State private var showingLargePiecePicker = false
     @State private var showingNotches = false
@@ -293,6 +294,11 @@ private struct ContentView: View {
                         .accessibilityHint("Seçili parçanın işaretleri arasında dosya sırasıyla gezinin")
                     }
                     if let selectedPiece {
+                        Button("İki nokta arasını ölç…") { showingPointDistance = true }
+                            .disabled(modelLoad.isLoading || project.pieces[selectedPiece].points.count < 2)
+                            .sheet(isPresented: $showingPointDistance) {
+                                PointDistanceView(piece: project.pieces[selectedPiece], name: project.pieces[selectedPiece].displayName(index: selectedPiece))
+                            }
                         #if DEBUG
                         Button("Deneysel nokta düzenle…") {
                             guard let data = sourceData, let id = project.pieces[selectedPiece].id else { return }
@@ -2655,6 +2661,51 @@ private struct PieceDetails: View {
             .padding(8)
             .background(Color.secondary.opacity(0.08))
             .accessibilityElement(children: .combine)
+        }
+    }
+}
+private struct PointDistanceView: View {
+    let piece: Drawing.Piece
+    let name: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var first = "0"
+    @State private var second = "1"
+
+    private var indices: (Int, Int)? {
+        guard let a = Int(first), let b = Int(second),
+              piece.points.indices.contains(a), piece.points.indices.contains(b) else { return nil }
+        return (a, b)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Parça") { Text(name) }
+                Section("Nokta indeksleri") {
+                    Text("Dosya sırası: 0–\(piece.points.count - 1)")
+                    TextField("İlk nokta indeksi", text: $first).keyboardType(.numberPad)
+                    TextField("İkinci nokta indeksi", text: $second).keyboardType(.numberPad)
+                    if let (a, b) = indices {
+                        let firstPoint = piece.points[a], secondPoint = piece.points[b]
+                        if let ax = MeasurementDisplay.format(firstPoint.x), let ay = MeasurementDisplay.format(firstPoint.y),
+                           let bx = MeasurementDisplay.format(secondPoint.x), let by = MeasurementDisplay.format(secondPoint.y) {
+                            Text("İlk nokta: X \(ax), Y \(ay) mm")
+                            Text("İkinci nokta: X \(bx), Y \(by) mm")
+                        }
+                        if let distance = ContourMeasure.distance(piece.points, from: a, to: b),
+                           let value = MeasurementDisplay.format(distance) {
+                            Text("Doğrusal mesafe: \(value) mm").font(.headline)
+                        } else { Text("Mesafe hesaplanamadı.") }
+                    } else {
+                        Text("Geçerli iki nokta indeksi girin.").foregroundStyle(.secondary)
+                    }
+                }
+                Section {
+                    Text("Bu, iki nokta arasındaki düz mesafedir; kontur boyunca uzunluk veya üretim ölçüsü değildir. Kapalı konturda dosyadaki tekrarlı son nokta ilk noktayla aynı olabilir.")
+                }
+            }
+            .navigationTitle("İki nokta mesafesi")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } } }
         }
     }
 }
