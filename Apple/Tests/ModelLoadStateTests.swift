@@ -15,6 +15,49 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertThrowsError(try Drawing.load(Data(invalid.utf8)))
         XCTAssertTrue(LosslessProjectName.requiresVersionSixRawRecovery(Data(("[7," + String(repeating: " ", count: 8 * 1024 * 1024)).utf8), version: 7))
     }
+    func testRotationTraceCannotUseOlderEnvelopeAndInvalidV7TraceIsRejected() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "desktop-synthetic-rotated-v7", withExtension: "tcad"))
+        let original = try Data(contentsOf: url)
+        let array = try XCTUnwrap(try JSONSerialization.jsonObject(with: original) as? [Any])
+        let body = try XCTUnwrap(array[1] as? [String: Any])
+        func bytes(_ version: Int, _ body: [String: Any], encoding: String.Encoding, bom: [UInt8]) throws -> Data {
+            let json = try JSONSerialization.data(withJSONObject: [version, body])
+            let text = try XCTUnwrap(String(data: json, encoding: .utf8))
+            var result = Data(bom); result.append(try XCTUnwrap(text.data(using: encoding))); return result
+        }
+        let encodings: [(String.Encoding, [UInt8])] = [(.utf8, []), (.utf16LittleEndian, [0xff, 0xfe]), (.utf32BigEndian, [0, 0, 0xfe, 0xff])]
+        for (encoding, bom) in encodings {
+            let valid = try bytes(7, body, encoding: encoding, bom: bom)
+            XCTAssertEqual(try Drawing.load(valid).formatVersion, 7)
+            for version in [1, 5, 6] {
+                let old = try bytes(version, body, encoding: encoding, bom: bom), before = old
+                XCTAssertThrowsError(try Drawing.load(old)); XCTAssertEqual(old, before)
+            }
+            var badBody = body
+            var snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+            snapshot["RotationTrace"] = [:]; badBody["NestingSnapshot"] = snapshot
+            let bad = try bytes(7, badBody, encoding: encoding, bom: bom), before = bad
+            XCTAssertThrowsError(try Drawing.load(bad)); XCTAssertEqual(bad, before)
+            var trace = try XCTUnwrap((body["NestingSnapshot"] as? [String: Any])?["RotationTrace"] as? [String: Any])
+            trace["Schema"] = "unknown"; snapshot["RotationTrace"] = trace; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            trace = try XCTUnwrap((body["NestingSnapshot"] as? [String: Any])?["RotationTrace"] as? [String: Any])
+            trace.removeValue(forKey: "Copies"); snapshot["RotationTrace"] = trace; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            trace["Copies"] = "invalid"; snapshot["RotationTrace"] = trace; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            trace = try XCTUnwrap((body["NestingSnapshot"] as? [String: Any])?["RotationTrace"] as? [String: Any])
+            trace["Extra"] = true; snapshot["RotationTrace"] = trace; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+        }
+        let text = try XCTUnwrap(String(data: original, encoding: .utf8))
+        let duplicate = text.replacingOccurrences(of: "\"RotationTrace\": {", with: "\"RotationTrace\": {}, \"RotationTrace\": {")
+        XCTAssertNotEqual(duplicate, text)
+        for (encoding, bom) in encodings {
+            var data = Data(bom); data.append(try XCTUnwrap(duplicate.data(using: encoding)))
+            let before = data; XCTAssertThrowsError(try Drawing.load(data)); XCTAssertEqual(data, before)
+        }
+    }
     func testPieceDisplayEscapesBidiWithoutChangingSourceName() throws {
         let bytes = Data(#"{"Name":"Proje","Pieces":[{"Name":"A\u202EB","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#.utf8)
         let drawing = try Drawing.load(bytes)

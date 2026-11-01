@@ -1663,6 +1663,75 @@ struct Drawing {
         return number.boolValue
     }
 
+    // Structural screening only. The desktop must verify geometry, fingerprints,
+    // copy mappings and the relationship between this history and the layout.
+    private static func hasKnownRotationTrace(_ value: Any?) -> Bool {
+        guard let trace = value as? [String: Any],
+              Set(trace.keys) == Set(["Schema", "Algorithm", "TransformConvention", "SourceFingerprint", "LayoutFingerprint", "SourcePieces", "LayoutPieces", "Selections", "Copies", "FabricWidth", "Gap", "EdgeMargin", "UsedLength", "MaxLength", "GrainDirection", "ToleranceDegrees"]),
+              trace["Schema"] as? String == "per-copy-orthogonal-trace-v1",
+              trace["Algorithm"] as? String == "explicit-per-copy-shelf-v1",
+              trace["TransformConvention"] as? String == "origin-quarter-turn-then-translate-v1",
+              let source = trace["SourcePieces"] as? [[String: Any]], !source.isEmpty, source.count <= 10_000,
+              let layout = trace["LayoutPieces"] as? [[String: Any]], !layout.isEmpty, layout.count <= 10_000,
+              let selections = trace["Selections"] as? [String], !selections.isEmpty, selections.count <= 10_000,
+              selections.allSatisfy({ UUID(uuidString: $0) != nil }),
+              let copies = trace["Copies"] as? [[String: Any]], !copies.isEmpty, copies.count <= 10_000,
+              let direction = trace["GrainDirection"] as? String, ["OneWay", "TwoWay"].contains(direction) else { return false }
+        for key in ["SourceFingerprint", "LayoutFingerprint"] {
+            guard let hash = trace[key] as? String, hash.utf8.count == 64,
+                  hash.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }) else { return false }
+        }
+        for key in ["FabricWidth", "Gap", "EdgeMargin", "UsedLength", "ToleranceDegrees"] {
+            guard let n = jsonNumber(trace[key]), n.isFinite else { return false }
+        }
+        if !(trace["MaxLength"] is NSNull) {
+            guard let n = jsonNumber(trace["MaxLength"]), n.isFinite else { return false }
+        }
+        func pointValid(_ point: [String: Any]) -> Bool {
+            guard Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                  let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]), x.isFinite, y.isFinite,
+                  point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true else { return false }
+            return true
+        }
+        for piece in source + layout {
+            guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]),
+                  let id = piece["Id"] as? String, UUID(uuidString: id) != nil,
+                  piece["Name"] is String, jsonBoolean(piece["Closed"]) != nil,
+                  let points = piece["Points"] as? [[String: Any]], !points.isEmpty, points.count <= 10_000,
+                  let metadata = piece["Metadata"] as? [String: Any],
+                  Set(metadata.keys) == Set(["Role", "Size", "Material", "Quantity"]),
+                  let grain = piece["Grainline"] as? [String: Any],
+                  Set(grain.keys) == Set(["Start", "End", "NeedsReview"]),
+                  let start = grain["Start"] as? [String: Any], pointValid(start),
+                  let end = grain["End"] as? [String: Any], pointValid(end),
+                  jsonBoolean(grain["NeedsReview"]) != nil else { return false }
+            for key in ["Role", "Size", "Material"] {
+                if !(metadata[key] is NSNull) && !(metadata[key] is String) { return false }
+            }
+            if !(metadata["Quantity"] is NSNull) {
+                guard let quantity = jsonNumber(metadata["Quantity"]), quantity.rounded() == quantity,
+                      quantity >= 1, quantity <= 100_000 else { return false }
+            }
+            for point in points where !pointValid(point) { return false }
+            if let value = piece["Notches"] {
+                guard let marks = value as? [[String: Any]], !marks.isEmpty, marks.count <= points.count else { return false }
+                for mark in marks {
+                    guard Set(mark.keys) == Set(["VertexIndex", "Position"]),
+                          let index = jsonNumber(mark["VertexIndex"]), index.rounded() == index, index >= 0, index < Double(points.count),
+                          let position = mark["Position"] as? [String: Any], pointValid(position) else { return false }
+                }
+            }
+        }
+        for copy in copies {
+            guard Set(copy.keys) == Set(["SourcePieceId", "CopyNumber", "PlacedPieceId", "Degrees"]),
+                  let sourceID = copy["SourcePieceId"] as? String, UUID(uuidString: sourceID) != nil,
+                  let placedID = copy["PlacedPieceId"] as? String, UUID(uuidString: placedID) != nil,
+                  let number = jsonNumber(copy["CopyNumber"]), number.rounded() == number, number >= 1, number <= 100_000,
+                  let degrees = jsonNumber(copy["Degrees"]), [0.0, 90.0, 180.0, 270.0].contains(degrees) else { return false }
+        }
+        return true
+    }
+
     // JSONSerialization does not promise to preserve a number's spelling.
     // Examine the first array element in the UTF-8 source before interpreting it.
     private static func envelopeVersion(_ data: Data) -> Int? {
@@ -1734,8 +1803,8 @@ struct Drawing {
             }
             if formatVersion == 7 {
                 guard let snapshot = object["NestingSnapshot"] as? [String: Any],
-                      snapshot["RotationTrace"] is [String: Any] else {
-                    throw ViewerError.message("Sürüm 7 döndürme geçmişi eksik; dosya önizlenmedi.")
+                      hasKnownRotationTrace(snapshot["RotationTrace"]) else {
+                    throw ViewerError.message("Sürüm 7 döndürme geçmişi eksik veya desteklenmiyor; dosya önizlenmedi.")
                 }
             }
         } else {
@@ -1749,7 +1818,7 @@ struct Drawing {
             else if data.starts(with: [0xfe, 0xff]) { encoding = .utf16BigEndian }
             else { encoding = .utf8 }
             guard let decoded = String(data: data, encoding: encoding) else { throw ViewerError.message("Proje metni okunamadı.") }
-            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false, cancelled: cancelled) }
+            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false, strictVersion: formatVersion, cancelled: cancelled) }
             catch is CancellationError { throw CancellationError() }
             catch { throw ViewerError.message("Proje alanları yinelenmiş veya güvenli biçimde okunamadı.") }
         }

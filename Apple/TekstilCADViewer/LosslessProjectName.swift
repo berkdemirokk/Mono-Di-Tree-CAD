@@ -183,7 +183,7 @@ enum LosslessProjectName {
             }
             throw Failure.invalid
         }
-        mutating func object(depth: Int, project: Bool = false) throws {
+        mutating func object(depth: Int, project: Bool = false, nestingSnapshot: Bool = false) throws {
             guard depth < 512 else { throw Failure.invalid }
             try take(123); try whitespace()
             if i < bytes.count && bytes[i] == 125 { i += 1; return }
@@ -195,11 +195,14 @@ enum LosslessProjectName {
                       keys.insert(key).inserted else { throw Failure.invalid }
                 let isName = project && key == "Name"
                 try take(58); try whitespace()
+                if nestingSnapshot && key == "RotationTrace" && strictVersion != 7 { throw Failure.invalid }
                 if strictV6 && key == "VertexIndex" {
                     let start = i; try value(depth: depth + 1)
                     guard let token = String(bytes: bytes[start..<i], encoding: .utf8),
                           !token.isEmpty, token.allSatisfy({ $0 >= "0" && $0 <= "9" }),
                           (token == "0" || token.first != "0"), Int32(token) != nil else { throw Failure.invalid }
+                } else if project && key == "NestingSnapshot" && i < bytes.count && bytes[i] == 123 {
+                    try object(depth: depth + 1, nestingSnapshot: true)
                 } else if isName {
                     guard nameRange == nil, i < bytes.count, bytes[i] == 34 else { throw Failure.invalid }
                     nameRange = try string()
