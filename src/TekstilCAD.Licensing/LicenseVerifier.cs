@@ -25,30 +25,8 @@ public static class LicenseVerifier
     {
         static LicenseVerification Fail(LicenseFailure reason, string text) => new(false, reason, text);
         if (utcNow.Offset != TimeSpan.Zero) return Fail(LicenseFailure.InvalidClaims, "Verification time must use UTC.");
-        if (string.IsNullOrEmpty(token) || token.Length > 16_384) return Fail(LicenseFailure.Malformed, "Invalid token length.");
-        var parts = token.Split('.');
-        if (parts.Length != 3 || parts[0] != "v1") return Fail(LicenseFailure.Malformed, "Unsupported token envelope.");
-        byte[] payloadBytes, signature;
-        try { payloadBytes = Decode(parts[1]); signature = Decode(parts[2]); }
-        catch (FormatException) { return Fail(LicenseFailure.Malformed, "Invalid base64url encoding."); }
-        if (payloadBytes.Length > 8192 || signature.Length is < 256 or > 1024)
-            return Fail(LicenseFailure.Malformed, "Payload or signature length is invalid.");
-        if (string.IsNullOrWhiteSpace(publicKeyPem) || publicKeyPem.Length > 16_384 || publicKeyPem.Contains("PRIVATE KEY", StringComparison.Ordinal))
-            return Fail(LicenseFailure.InvalidKey, "A trusted RSA public key is required.");
-        using var rsa = RSA.Create();
-        try
-        {
-            rsa.ImportFromPem(publicKeyPem);
-            if (rsa.KeySize is < 2048 or > 8192) return Fail(LicenseFailure.InvalidKey, "RSA key size must be between 2048 and 8192 bits.");
-        }
-        catch (Exception ex) when (ex is ArgumentException or CryptographicException)
-        { return Fail(LicenseFailure.InvalidKey, "Public key could not be read."); }
-        try
-        {
-            if (!rsa.VerifyData(Encoding.ASCII.GetBytes("v1." + parts[1]), signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
-                return Fail(LicenseFailure.InvalidSignature, "License signature is invalid.");
-        }
-        catch (CryptographicException) { return Fail(LicenseFailure.InvalidSignature, "License signature is invalid."); }
+        var envelopeFailure=VerifyEnvelope(token,publicKeyPem,"v1",out var payloadBytes);
+        if(envelopeFailure is not null)return envelopeFailure;
         LicensePayload? payload;
         try
         {
@@ -75,6 +53,37 @@ public static class LicenseVerifier
         if (payload.DeviceId is not null && !string.Equals(payload.DeviceId, deviceId, StringComparison.Ordinal))
             return Fail(LicenseFailure.WrongDevice, "License is assigned to another device.");
         return new(true, LicenseFailure.None, "Offline signature and claims are valid.", payload);
+    }
+    // Null means the bounded envelope and signature are valid; no claims are trusted yet.
+    internal static LicenseVerification? VerifyEnvelope(string token,string publicKeyPem,string version,out byte[] payloadBytes)
+    {
+        static LicenseVerification Fail(LicenseFailure reason,string text)=>new(false,reason,text);
+        payloadBytes=[];
+        if (string.IsNullOrEmpty(token) || token.Length > 16_384) return Fail(LicenseFailure.Malformed, "Invalid token length.");
+        var parts = token.Split('.');
+        if (parts.Length != 3 || parts[0] != version) return Fail(LicenseFailure.Malformed, "Unsupported token envelope.");
+        byte[] signature;
+        try { payloadBytes = Decode(parts[1]); signature = Decode(parts[2]); }
+        catch (FormatException) { return Fail(LicenseFailure.Malformed, "Invalid base64url encoding."); }
+        if (payloadBytes.Length > 8192 || signature.Length is < 256 or > 1024)
+            return Fail(LicenseFailure.Malformed, "Payload or signature length is invalid.");
+        if (string.IsNullOrWhiteSpace(publicKeyPem) || publicKeyPem.Length > 16_384 || publicKeyPem.Contains("PRIVATE KEY", StringComparison.Ordinal))
+            return Fail(LicenseFailure.InvalidKey, "A trusted RSA public key is required.");
+        using var rsa = RSA.Create();
+        try
+        {
+            rsa.ImportFromPem(publicKeyPem);
+            if (rsa.KeySize is < 2048 or > 8192) return Fail(LicenseFailure.InvalidKey, "RSA key size must be between 2048 and 8192 bits.");
+        }
+        catch (Exception ex) when (ex is ArgumentException or CryptographicException)
+        { return Fail(LicenseFailure.InvalidKey, "Public key could not be read."); }
+        try
+        {
+            if (!rsa.VerifyData(Encoding.ASCII.GetBytes(version + "." + parts[1]), signature, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1))
+                return Fail(LicenseFailure.InvalidSignature, "License signature is invalid.");
+        }
+        catch (CryptographicException) { return Fail(LicenseFailure.InvalidSignature, "License signature is invalid."); }
+        return null;
     }
     private static byte[] Decode(string value)
     {
