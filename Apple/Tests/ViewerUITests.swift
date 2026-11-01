@@ -1129,6 +1129,22 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Yaklaşık en: 3 mm • boy: 4 mm")).firstMatch.exists)
     }
 
+    func testInvalidProductionQuantityIsNotShownAsValid() {
+        let fixture = #"{"Name":"Adet","Pieces":[{"Name":"Geçersiz","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}],"Metadata":{"Quantity":0}},{"Name":"Geçerli","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}],"Metadata":{"Quantity":2}}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let row = app.buttons["Geçersiz"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("Adet okunamadı veya geçersiz"))
+        row.tap()
+        XCTAssertTrue(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Adet okunamadı veya geçersiz")).firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Adet: 0")).firstMatch.exists)
+    }
+
     func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()
