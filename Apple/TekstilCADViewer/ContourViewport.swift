@@ -31,6 +31,13 @@ struct ContourBounds {
 enum ContourOverlay {
     // Strictly below 0.001 mm even though that decimal is not exactly binary64.
     static let maximumError = 0.001.nextDown
+    struct ShiftInputSnapshot {
+        let first: String
+        let second: String
+        func matches(_ currentFirst: String, _ currentSecond: String) -> Bool {
+            first.utf8.elementsEqual(currentFirst.utf8) && second.utf8.elementsEqual(currentSecond.utf8)
+        }
+    }
     // Half-millimetre increments are exactly representable in binary64.
     // Accept dot or comma, but reject exponents and ambiguous grouping.
     static func halfMillimeterShift(_ text: String) -> Double? {

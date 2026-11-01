@@ -48,7 +48,7 @@ final class ViewerUITests: XCTestCase {
     func testComparisonOffersSameScaleVisualOverlay() throws {
         let fixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "selection", withExtension: "tcad"))
         let app = XCUIApplication()
-        app.launchArguments += ["--ui-test-fixture"]
+        app.launchArguments += ["--ui-test-fixture", "--ui-test-delay-overlay-check"]
         app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = try Data(contentsOf: fixture).base64EncodedString()
         app.launch()
         let compare = app.buttons["İki parçayı karşılaştır…"]
@@ -66,12 +66,15 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(x.waitForExistence(timeout: 5)); x.tap(); x.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "25")
         y.tap(); y.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 3) + "-10.5")
         app.buttons["Görsel kaydırmayı uygula"].tap()
+        XCTAssertFalse(x.isEnabled); XCTAssertFalse(y.isEnabled)
         XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "İkinci parçanın görsel kaydırması: X 25, Y -10")).firstMatch.waitForExistence(timeout: 5))
         app.buttons["Seçilen köşeleri hizala…"].tap()
         let a = app.textFields["Birinci parça köşe indeksi"], b = app.textFields["İkinci parça köşe indeksi"]
         XCTAssertTrue(a.waitForExistence(timeout: 5)); a.tap(); a.typeText("0")
         b.tap(); b.typeText("1")
         app.buttons["Köşeleri görsel olarak hizala"].tap()
+        XCTAssertFalse(a.isEnabled); XCTAssertFalse(b.isEnabled)
+        XCTAssertFalse(app.buttons["Birinci köşeyi seç"].isEnabled)
         XCTAssertTrue(app.staticTexts["İkinci parçanın görsel kaydırması: X -50, Y -100 mm"].waitForExistence(timeout: 5))
         app.swipeUp()
         app.buttons["Görünümü yakınlaştır"].tap()

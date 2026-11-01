@@ -2893,10 +2893,19 @@ private struct PieceOverlayView: View {
             shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
             return
         }
+        let inputSnapshot: ContourOverlay.ShiftInputSnapshot?
+        switch destination {
+        case .overlay: inputSnapshot = nil
+        case .numeric: inputSnapshot = .init(first: shiftXText, second: shiftYText)
+        case .anchor: inputSnapshot = .init(first: firstAnchor, second: secondAnchor)
+        }
         let request = UUID(), firstPoints = first.points, secondPoints = second.points
         shiftRequest = request; isCheckingShift = true; shiftError = nil
         shiftCheck = Task {
             let worker = Task.detached(priority: .userInitiated) {
+                #if DEBUG && targetEnvironment(simulator)
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-delay-overlay-check") { Thread.sleep(forTimeInterval: 1.5) }
+                #endif
                 guard ContourOverlay.bounds(firstBounds, secondBounds, dx: x, dy: y) != nil else { return false }
                 return ContourOverlay.errorBound(first: firstPoints, firstBounds: firstBounds,
                                                  second: secondPoints, secondBounds: secondBounds,
@@ -2905,6 +2914,16 @@ private struct PieceOverlayView: View {
             let valid = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
             guard !Task.isCancelled, shiftRequest == request else { return }
             isCheckingShift = false; shiftCheck = nil
+            let inputCurrent: Bool
+            switch destination {
+            case .overlay: inputCurrent = true
+            case .numeric: inputCurrent = inputSnapshot?.matches(shiftXText, shiftYText) == true
+            case .anchor: inputCurrent = inputSnapshot?.matches(firstAnchor, secondAnchor) == true
+            }
+            guard inputCurrent else {
+                shiftError = "Girdi değişti; hizalama uygulanmadı. Güncel değerlerle yeniden deneyin."
+                return
+            }
             guard valid else {
                 shiftError = "Bu görsel kaydırma sayı hassasiyeti veya 10.000 mm sınırı nedeniyle uygulanamadı."
                 return
@@ -2993,11 +3012,11 @@ private struct PieceOverlayView: View {
                     Form {
                         Text("İki parçadan birer köşe seçin. Yalnız görsel hizalama değişir; kaynak dosyalar ve karşılaştırma özeti değişmez. Bu işlem dikiş uyumunu doğrulamaz.")
                         Text("Birinci parça: \(firstIndex + 1). \(first.displayName(index: firstIndex))")
-                        TextField("Birinci parça köşe indeksi", text: $firstAnchor).keyboardType(.numberPad)
-                        NavigationLink("Birinci köşeyi seç") { PointIndexPicker(points: first.points, selected: $firstAnchor) }
+                        TextField("Birinci parça köşe indeksi", text: $firstAnchor).keyboardType(.numberPad).disabled(isCheckingShift)
+                        NavigationLink("Birinci köşeyi seç") { PointIndexPicker(points: first.points, selected: $firstAnchor) }.disabled(isCheckingShift)
                         Text("İkinci parça: \(secondIndex + 1). \(second.displayName(index: secondIndex))")
-                        TextField("İkinci parça köşe indeksi", text: $secondAnchor).keyboardType(.numberPad)
-                        NavigationLink("İkinci köşeyi seç") { PointIndexPicker(points: second.points, selected: $secondAnchor) }
+                        TextField("İkinci parça köşe indeksi", text: $secondAnchor).keyboardType(.numberPad).disabled(isCheckingShift)
+                        NavigationLink("İkinci köşeyi seç") { PointIndexPicker(points: second.points, selected: $secondAnchor) }.disabled(isCheckingShift)
                         if isCheckingShift { ProgressView("Hizalama doğrulanıyor…") }
                         if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
                         Button("Köşeleri görsel olarak hizala") {
@@ -3020,8 +3039,8 @@ private struct PieceOverlayView: View {
                 NavigationStack {
                     Form {
                         Text("İkinci parçanın yalnızca görsel kaydırmasını tam veya yarım milimetre olarak girin (−10.000 ile 10.000). Ondalık için nokta veya virgül kullanın. Kaynak dosya değişmez.")
-                        TextField("X kaydırması (mm)", text: $shiftXText).keyboardType(.numbersAndPunctuation)
-                        TextField("Y kaydırması (mm)", text: $shiftYText).keyboardType(.numbersAndPunctuation)
+                        TextField("X kaydırması (mm)", text: $shiftXText).keyboardType(.numbersAndPunctuation).disabled(isCheckingShift)
+                        TextField("Y kaydırması (mm)", text: $shiftYText).keyboardType(.numbersAndPunctuation).disabled(isCheckingShift)
                         if isCheckingShift { ProgressView("Hizalama doğrulanıyor…") }
                         if let shiftError { Text(shiftError).foregroundStyle(.secondary) }
                         Button("Görsel kaydırmayı uygula") {

@@ -4,6 +4,14 @@ import XCTest
 final class ContourViewportTests: XCTestCase {
     private func p(_ x: Double, _ y: Double) -> ContourMeasure.Point { .init(x: x, y: y) }
 
+    func testShiftInputSnapshotRejectsChangesDuringValidation() {
+        let numeric = ContourOverlay.ShiftInputSnapshot(first: "1", second: "-2.5")
+        XCTAssertTrue(numeric.matches("1", "-2.5"))
+        XCTAssertFalse(numeric.matches("2", "-2.5"))
+        XCTAssertFalse(numeric.matches("1", "-2,5"))
+        let anchors = ContourOverlay.ShiftInputSnapshot(first: "0", second: "1")
+        XCTAssertFalse(anchors.matches("0", "2"))
+    }
     func testAnchorAlignmentRequiresExactBoundedHalfMillimeterOffset() throws {
         let a = try XCTUnwrap(ContourBounds(points: [p(0, 0), p(10, 10)]))
         let b = try XCTUnwrap(ContourBounds(points: [p(-10, 0), p(0, 10)]))
