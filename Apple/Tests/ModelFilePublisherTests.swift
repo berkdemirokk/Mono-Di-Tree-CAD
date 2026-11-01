@@ -12,6 +12,19 @@ final class FilePickerCancellationTests: XCTestCase {
 }
 
 final class ModelFilePublisherTests: XCTestCase {
+    func testCorruptSavedModelCanBeReadAsRawBytesWithoutChangingIt() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let file = root.appendingPathComponent("broken.tcad")
+        let invalid = Data([0xff, 0x00, 0x91])
+        try invalid.write(to: file)
+        let entry = try XCTUnwrap(ModelStore.models(in: root).first { $0.url == file })
+        XCTAssertTrue(entry.canOpen)
+        XCTAssertEqual(try ModelStore.readListedPayload(entry), invalid)
+        XCTAssertEqual(try Data(contentsOf: file), invalid)
+    }
+
     func testCopyDeleteRejectsNewFileAfterValidationWithoutDeletingModel() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)

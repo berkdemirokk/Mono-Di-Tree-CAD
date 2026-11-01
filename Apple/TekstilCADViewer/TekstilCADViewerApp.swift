@@ -476,6 +476,10 @@ private struct ContentView: View {
                     try data.write(to: copy.appendingPathComponent("project.tcad"))
                     try Data(repeating: 65, count: 65_537).write(to: copy.appendingPathComponent("metadata.json"))
                 }
+                if ProcessInfo.processInfo.arguments.contains("--ui-test-corrupt-library-model") {
+                    let corrupt = try ModelStore.directory().appendingPathComponent("Bozuk.tcad")
+                    try Data([0xff, 0x00, 0x91]).write(to: corrupt)
+                }
                 selectedPiece = nil
                 selectedNotch = nil
                 drawingRevision = UUID()
@@ -1127,6 +1131,9 @@ private struct ModelLibrary: View {
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
+                        if model.canOpen || model.requiresRecovery {
+                            Button("Ham kopyayı dışa aktar…") { modelToRecover = model }
+                        }
                         Button("Kayıtlı modeli sil", role: .destructive) { modelToDelete = model }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -1168,7 +1175,11 @@ private struct ModelLibrary: View {
                     prepareRecovery(model)
                 }
             } message: {
-                Text("Kayıt bilgisi eksik, bozuk, çok büyük veya desteklenmeyen sürümde; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
+                if modelToRecover?.requiresRecovery == true {
+                    Text("Kayıt bilgisi eksik, bozuk, çok büyük veya desteklenmeyen sürümde; biçimi ve sürümü doğrulanamadı. Proje dosyası açılmadan veya değiştirilmeden dışa aktarılır; ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
+                } else {
+                    Text("Dosya içeriği açılmadan veya değiştirilmeden dışa aktarılır. Ham veri bozuk olabilir ve geçerli bir proje olduğu doğrulanmaz. Kayıt bilgisi varsa kopyaya dahil edilmez. En fazla 64 MB desteklenir.")
+                }
             }
             .fileExporter(isPresented: $showingRecoveryExporter, document: recoveryDocument, contentType: .data, defaultFilename: "Kurtarılan-model.tcad") { result in
                 recoveryDocument = nil

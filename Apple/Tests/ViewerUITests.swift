@@ -1,6 +1,25 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testCorruptSavedModelOffersExplicitRawRecovery() {
+        let fixture = #"{"Name":"Kaynak","Pieces":[]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-library-fixture", "--ui-test-library-reset", "--ui-test-corrupt-library-model"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let library = app.buttons["Modellerim"]
+        XCTAssertTrue(library.waitForExistence(timeout: 15)); library.tap()
+        let actions = app.buttons["Bozuk model işlemleri"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 10)); actions.tap()
+        let raw = app.buttons["Ham kopyayı dışa aktar…"]
+        XCTAssertTrue(raw.waitForExistence(timeout: 5)); raw.tap()
+        let warning = app.alerts["Ham kopyayı kurtar?"]
+        XCTAssertTrue(warning.waitForExistence(timeout: 5))
+        XCTAssertTrue(warning.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "geçerli bir proje olduğu doğrulanmaz")).firstMatch.exists)
+        warning.buttons["İptal"].tap()
+        XCTAssertTrue(actions.exists)
+    }
+
     func testSlowOldPieceSearchCannotReplaceNewResults() {
         let fixture = #"{"Name":"Arama","Pieces":[{"Name":"old","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]},{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":5,"Y":5}]}]}"#
         let app = XCUIApplication()
