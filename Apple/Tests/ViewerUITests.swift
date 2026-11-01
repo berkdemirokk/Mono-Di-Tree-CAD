@@ -1176,6 +1176,24 @@ final class ViewerUITests: XCTestCase {
         XCTAssertFalse(app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Rol: Bilinmeyen")).firstMatch.exists)
     }
 
+    func testInvalidSizeIsReportedWhileValidMaterialRemainsVisible() {
+        let fixture = #"{"Name":"Üretim","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":3,"Y":4}],"Metadata":{"Size":42,"Material":"Pamuk"}}]}"#
+        let app = XCUIApplication()
+        app.launchArguments += ["--ui-test-fixture"]
+        app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(fixture.utf8).base64EncodedString()
+        app.launch()
+        let picker = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Tüm parçalar")).firstMatch
+        XCTAssertTrue(picker.waitForExistence(timeout: 15)); picker.tap()
+        let row = app.buttons["Kol"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        XCTAssertTrue((row.value as? String ?? "").contains("Beden veya malzeme okunamadı veya geçersiz"))
+        XCTAssertTrue((row.value as? String ?? "").contains("Malzeme: Pamuk"))
+        row.tap()
+        let details = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "Beden veya malzeme okunamadı veya geçersiz")).firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 5))
+        XCTAssertTrue(details.label.contains("Malzeme: Pamuk"))
+    }
+
     func testCancellingExportKeepsOpenModelAndDoesNotReportSuccess() {
         let fixture = #"{"Name":"Deneme","Pieces":[{"Name":"Kol","Closed":false,"Points":[{"X":0,"Y":0},{"X":1,"Y":1}]}]}"#
         let app = XCUIApplication()

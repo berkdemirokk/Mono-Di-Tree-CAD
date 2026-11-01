@@ -1474,6 +1474,7 @@ private struct Drawing {
         let roleUnreadable: Bool
         let size: String?
         let material: String?
+        let textMetadataUnreadable: Bool
         let quantity: Int?
         let quantityUnreadable: Bool
         let metadataUnreadable: Bool
@@ -1494,7 +1495,7 @@ private struct Drawing {
                 guard let value = value?.trimmingCharacters(in: .whitespacesAndNewlines), !value.isEmpty else { return nil }
                 return "\(label): \(value)"
             }
-            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : [])
+            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
             return (["Parça \(index + 1)"] + fields + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
     }
@@ -1688,6 +1689,16 @@ private struct Drawing {
             let roleText = rawRole as? String
             let role = roleText == "Kesim" || roleText == "Yardımcı" ? roleText : nil
             let roleUnreadable = rawRole != nil && !(rawRole is NSNull) && role == nil
+            func productionText(_ value: Any?) -> String? {
+                guard let text = value as? String, !text.isEmpty, text.utf16.count <= 128,
+                      text == text.trimmingCharacters(in: .whitespacesAndNewlines),
+                      text.rangeOfCharacter(from: .controlCharacters) == nil else { return nil }
+                return text
+            }
+            let rawSize = metadata?["Size"], rawMaterial = metadata?["Material"]
+            let size = productionText(rawSize), material = productionText(rawMaterial)
+            let textMetadataUnreadable = (rawSize != nil && !(rawSize is NSNull) && size == nil) ||
+                (rawMaterial != nil && !(rawMaterial is NSNull) && material == nil)
             let grainStatus: String
             var parsedGrain: Grain?
             if formatVersion == 6, let grain = raw["Grainline"] as? [String: Any] {
@@ -1727,8 +1738,8 @@ private struct Drawing {
                                 contourLength: points.count >= (closed ? 3 : 2) ? ContourMeasure.length(points, closed: closed) : nil,
                                 isCollapsed: ContourMeasure.isCollapsed(points),
                                 contourBounds: points.count > 1 ? ContourBounds(points: points) : nil,
-                                role: role, roleUnreadable: roleUnreadable, size: metadata?["Size"] as? String,
-                                material: metadata?["Material"] as? String, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable,
+                                role: role, roleUnreadable: roleUnreadable, size: size,
+                                material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable,
                                 grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
         }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
@@ -2097,6 +2108,7 @@ private struct PieceDetails: View {
                 if piece.roleUnreadable { Text("Parça türü okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if let size = piece.size, !size.isEmpty { Text("Beden: \(size)") }
                 if let material = piece.material, !material.isEmpty { Text("Malzeme: \(material)") }
+                if piece.textMetadataUnreadable { Text("Beden veya malzeme okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if let quantity = piece.quantity { Text("Adet: \(quantity)") }
                 if piece.quantityUnreadable { Text("Adet okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }
                 if piece.metadataUnreadable { Text("Üretim bilgileri okunamadı; kaynak dosyayı kontrol edin.") }
