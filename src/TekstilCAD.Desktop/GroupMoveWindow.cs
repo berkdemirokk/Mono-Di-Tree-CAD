@@ -57,7 +57,7 @@ internal sealed class GroupMoveWindow : Window
         selectAll.Click+=(_,_)=>choices.SelectAll();clearSelection.Click+=(_,_)=>choices.UnselectAll();
         body.Children.Add(new TextBlock { Text="X yönünde taşıma (mm)" });AutomationProperties.SetName(dx,"X yönünde taşıma milimetre");body.Children.Add(dx);
         body.Children.Add(new TextBlock { Text="Y yönünde taşıma (mm)" });AutomationProperties.SetName(dy,"Y yönünde taşıma milimetre");body.Children.Add(dy);
-        body.Children.Add(new TextBlock { Text="Seçilen parçalar ve iplik yönleri aynı miktarla taşınır; kaynak serileme kuralları ve geçmiş korunur, ilişkileri kontrol edin. Küçük ayrıntıların ve üretim ölçülerinin korunumu garanti edilmez. Bir parça güvenle taşınamazsa hiçbiri uygulanmaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
+        body.Children.Add(new TextBlock { Text="Seçilen parçalar ve iplik yönleri aynı miktarla taşınır. Kaynakla eşleşen serileme kuralları da taşınır; eski kurallar korunur ve bildirilir. Küçük ayrıntıların ve üretim ölçülerinin korunumu garanti edilmez. Bir parça güvenle taşınamazsa hiçbiri uygulanmaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,6,0,0) });
         AutomationProperties.SetName(status,"Toplu taşıma durumu");AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);body.Children.Add(status);
         choices.SelectionChanged+=(_,_)=> { revision++;UpdateSelectionCount(); };UpdateSelectionCount();dx.TextChanged+=(_,_)=>revision++;dy.TextChanged+=(_,_)=>revision++;
         apply.Click+=(_,_)=>TaskForVerification=MoveAsync();stop.Click+=(_,_)=> { cancellation?.Cancel();status.Text="İptal isteniyor; proje henüz değiştirilmedi."; };
@@ -98,6 +98,8 @@ internal sealed class GroupMoveWindow : Window
                 // positions across pieces, preserving group layout to the same budget.
                 var anchors=sources.Select(p=>p.Points[0]).ToArray();var movedAnchors=Geometry.Translate(anchors,mx,my);
                 var results=new Dictionary<Guid,PatternPiece>();
+                var rules=snapshot.GradingRules.ToDictionary(r=>r.SourcePieceId);
+                var movedRules=new Dictionary<Guid,GradingRuleSet>();var staleRules=new List<Guid>();
                 for(var i=0;i<sources.Length;i++)
                 {
                     token.ThrowIfCancellationRequested();var result=sources[i].Clone();
@@ -106,9 +108,14 @@ internal sealed class GroupMoveWindow : Window
                     if((mx!=0 && result.Points[0].X==sources[i].Points[0].X) || (my!=0 && result.Points[0].Y==sources[i].Points[0].Y))
                         throw new ArgumentException("Taşıma miktarı bir parçada sayısal hassasiyetle temsil edilemiyor.");
                     if(result.Points[0]!=movedAnchors[i])throw new InvalidOperationException("Parçalar aynı taşıma ile güvenle hesaplanamadı.");
+                    if(rules.TryGetValue(result.Id,out var rule))
+                    {
+                        var movedRule=rule.TranslatedFor(sources[i],result.Points,mx,my);
+                        if(movedRule is null)staleRules.Add(result.Id);else movedRules.Add(result.Id,movedRule);
+                    }
                     results.Add(result.Id,result);
                 }
-                token.ThrowIfCancellationRequested();return results;
+                token.ThrowIfCancellationRequested();return (Pieces:results,Rules:movedRules,Stale:staleRules);
             },cts.Token);
             cts.Token.ThrowIfCancellationRequested();
             if(closed || workspace.IsWindowClosed)return;
@@ -121,9 +128,12 @@ internal sealed class GroupMoveWindow : Window
             workspace.CommitObserved("Parçalar birlikte taşındı",()=>
             {
                 for(int i=0;i<workspace.Document.Pieces.Count;i++)
-                    if(moved.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item;
+                    if(moved.Pieces.TryGetValue(workspace.Document.Pieces[i].Id,out var item))workspace.Document.Pieces[i]=item;
+                for(int i=0;i<workspace.Document.GradingRules.Count;i++)
+                    if(moved.Rules.TryGetValue(workspace.Document.GradingRules[i].SourcePieceId,out var rule))workspace.Document.GradingRules[i]=rule;
             },()=>committed=true);
-            status.Text=$"{moved.Count} parça taşındı; işlem ana çalışma alanında tek adımda geri alınabilir. Ölçüleri ve serileme ilişkilerini kontrol edin.";
+            status.Text=$"{moved.Pieces.Count} parça taşındı; işlem ana çalışma alanında tek adımda geri alınabilir. Ölçüleri kontrol edin."+
+                (moved.Stale.Count==0 ? "" : $" {moved.Stale.Count} eski serileme kuralı korundu; serileme atölyesinde gözden geçirin. Parça kimlikleri: "+string.Join(", ",moved.Stale.Take(3))+(moved.Stale.Count>3 ? " ve diğerleri." : "."));
             apply.IsEnabled=false;
         }
         catch(OperationCanceledException) when(cts.IsCancellationRequested && !committed)

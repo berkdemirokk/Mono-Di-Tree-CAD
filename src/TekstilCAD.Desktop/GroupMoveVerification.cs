@@ -47,12 +47,26 @@ internal static class GroupMoveVerification
                 window.XForVerification.Text="0,1";window.YForVerification.Text="2";Wait(window.ApplyForVerification());
                 var first=studio.Document.Pieces[0];var second=studio.Document.Pieces[1];
                 if(first.Points[0]!=new Point2(.1,2) || second.Points[0]!=new Point2(20.1,2) || first.Metadata?.Quantity!=2 || first.Metadata.Role!="Kesim" ||
-                   first.Grainline!.Start!=new Point2(1.1,3) || !first.Grainline.NeedsReview || studio.Document.GradingRules.Single().SourcePoints[0]!=new Point2(0,0) || session.UndoCount!=1)
+                   first.Grainline!.Start!=new Point2(1.1,3) || !first.Grainline.NeedsReview ||
+                   !studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(first.Points) || !studio.Document.GradingRules.Single().Deltas.SequenceEqual(rule.Deltas) || session.UndoCount!=1)
                     throw new InvalidOperationException("Group move lost geometry, marker, grain or source rule.");
                 var after=studio.Document.Clone();
                 if(!session.Undo() || !DocumentSession.ContentEquals(before,studio.Document) || !session.Redo() || !DocumentSession.ContentEquals(after,studio.Document))
                     throw new InvalidOperationException("Group move did not undo and redo atomically.");
-                checks.Add("Multiple same-named pieces move with metadata and grain as one undoable transaction");
+                checks.Add("Multiple same-named pieces move with metadata, grain and matching grading rule as one undoable transaction");
+            }
+            finally { window.Close(); }
+            Reset();studio.Commit("Eski kural",()=>studio.Document.GradingRules.Single().SourcePoints[0]=new Point2(-1,0));
+            before=studio.Document.Clone();window=Open();
+            try
+            {
+                window.XForVerification.Text="1";Wait(window.ApplyForVerification());
+                if(!studio.Document.GradingRules.Single().SourcePoints.SequenceEqual(before.GradingRules.Single().SourcePoints) ||
+                   !window.StatusForVerification.Contains("eski serileme kuralı") || !window.StatusForVerification.Contains(a.Id.ToString("D")))
+                    throw new InvalidOperationException("Stale grading rule must remain unchanged and be identified after the move.");
+                if(!session.Undo() || !DocumentSession.ContentEquals(before,studio.Document))
+                    throw new InvalidOperationException("Undo must restore the group move with its stale rule.");
+                checks.Add("Group move preserves and identifies stale grading rules and undoes atomically");
             }
             finally { window.Close(); }
             Reset();window=Open();
