@@ -1553,14 +1553,27 @@ private struct ModelLibrary: View {
             let current = filterResult?.key == filterKey ? filterResult : nil
             let matchingModels = current?.entries ?? []
             List {
+                if !isLoading && !isRecovering && !loadFailed {
+                    Section("Arama kapsamı ve filtre") {
+                        Text(searchContents ? "Model adı, kimliği ve parça bilgileri aranıyor" : "Model adı ve kayıt kimliği aranıyor")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Toggle("Parça adı, beden ve malzemede ara", isOn: $searchContents)
+                        if searchContents {
+                            Text("İçerik araması gruplar hâlinde çalışır; okunamayan veya 8 MB üzerindeki kayıtlar atlanabilir.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Picker("Kayıt durumu", selection: $libraryFilter) {
+                            ForEach(ModelStore.LibraryFilter.allCases) { filter in
+                                Text(filter.rawValue).tag(filter)
+                            }
+                        }.pickerStyle(.menu)
+                    }
+                }
                 if !isLoading && !isRecovering && !loadFailed && !models.isEmpty, let current {
                     Text("\(current.entries.count) / \(models.count) kayıt gösteriliyor")
                         .font(.caption).foregroundStyle(.secondary)
                         .accessibilityLabel("\(models.count) kayıttan \(current.entries.count) tanesi gösteriliyor")
-                    if searchContents {
-                        Text("İçerik araması açık: parça adı, beden, malzeme")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+
                     if current.next != nil || current.stalled || current.key.contentOffset > 0 {
                         Text("İçerik sonuçları yalnızca bu kayıt grubunu kapsar; diğer gruplarda eşleşmeler olabilir. Ad araması seçili kayıtların tamamında yapıldı.")
                             .font(.caption).foregroundStyle(.secondary)
@@ -1673,7 +1686,7 @@ private struct ModelLibrary: View {
                     }
                 }
             }
-            .searchable(text: $search, prompt: "Model ara")
+            .searchable(text: $search, prompt: Text(searchContents ? "Model veya parça bilgisi ara" : "Model adı veya kimliği ara"))
             .navigationTitle("Modellerim")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Kapat") { dismiss() } }
@@ -1681,12 +1694,7 @@ private struct ModelLibrary: View {
                     Menu {
                         Button { loadModels() } label: { Label("Listeyi yenile", systemImage: "arrow.clockwise") }
                             .disabled(isLoading || isRecovering)
-                        Toggle("Parça adı, beden ve malzemede ara", isOn: $searchContents)
-                        Picker("Kayıt durumu", selection: $libraryFilter) {
-                            ForEach(ModelStore.LibraryFilter.allCases) { filter in
-                                Text(filter.rawValue).tag(filter)
-                            }
-                        }
+
                         Picker("Sıralama", selection: $sortOrder) {
                             ForEach(ModelLibrarySortOrder.allCases) { order in
                                 Text(order.rawValue).tag(order)

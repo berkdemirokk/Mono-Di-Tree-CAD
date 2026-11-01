@@ -1099,8 +1099,10 @@ final class ViewerUITests: XCTestCase {
         sort.tap()
         app.buttons["Ada göre"].tap()
         XCTAssertLessThan(akasya.frame.minY, zebra.frame.minY)
-        sort.tap()
+        let filter = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Kayıt durumu")).firstMatch
+        XCTAssertTrue(filter.waitForExistence(timeout: 5)); filter.tap()
         app.buttons["Kontrol gerekenler"].tap()
+
         let showAll = app.buttons["Tüm kayıtları göster"]
         XCTAssertTrue(showAll.waitForExistence(timeout: 5))
         showAll.tap()
@@ -1924,9 +1926,11 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 15)); save.tap()
         XCTAssertTrue(app.staticTexts["Model telefona kaydedildi."].waitForExistence(timeout: 10))
         app.buttons["Modellerim"].tap()
-        let options = app.buttons["Model listesi seçenekleri"]
-        XCTAssertTrue(options.waitForExistence(timeout: 10)); options.tap()
-        app.buttons["Parça adı, beden ve malzemede ara"].tap()
+        XCTAssertTrue(app.staticTexts["Model adı ve kayıt kimliği aranıyor"].waitForExistence(timeout: 10))
+        let scope = app.switches["Parça adı, beden ve malzemede ara"]
+        XCTAssertTrue(scope.waitForExistence(timeout: 5)); scope.tap()
+        XCTAssertTrue(app.staticTexts["Model adı, kimliği ve parça bilgileri aranıyor"].waitForExistence(timeout: 5))
+
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Pamuk")
         XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch.waitForExistence(timeout: 10))
