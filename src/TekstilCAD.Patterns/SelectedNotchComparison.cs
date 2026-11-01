@@ -36,10 +36,19 @@ public static class SelectedNotchComparison
         {
             double dx=p[2].X-p[0].X,dy=p[2].Y-p[0].Y;
             double x=p[1].X-p[0].X,y=p[1].Y-p[0].Y;
-            double width=Math.Sqrt(dx*dx+dy*dy);
-            return (width,Math.Abs(dx*y-dy*x)/width);
+            // Scale before squaring so valid subnormal edges do not become zero.
+            double scale=Math.Max(Math.Abs(dx),Math.Abs(dy));
+            if(scale==0 || !double.IsFinite(scale))throw new ArgumentException("Seçili ağız ölçüsü gösterilemiyor.");
+            double ux=dx/scale,uy=dy/scale,norm=Math.Sqrt(ux*ux+uy*uy);
+            double width=scale*norm,depth=Math.Abs(ux*y-uy*x)/norm;
+            // The exact predicate proves nonzero dimensions; if rounded display
+            // arithmetic loses either, fail rather than display zero or NaN.
+            if(width<=0 || depth<=0 || !double.IsFinite(width) || !double.IsFinite(depth))
+                throw new ArgumentException("Seçili ölçü gösterim hassasiyetinde güvenilir biçimde temsil edilemiyor.");
+            return (width,depth);
         }
         var am=Measure(a);var bm=Measure(b);
         return new(ok,am.Width,bm.Width,am.Depth,bm.Depth);
     }
 }
+

@@ -9120,11 +9120,15 @@ internal static class DesktopVerification
             depth.Text="1";
             Check(result.Text.Contains("yeniden karşılaştırın",StringComparison.Ordinal),
                 "Editing a tolerance invalidates the displayed notch comparison",checks);
+            compare.Invoke(dialog,null);
+            var timer=(DispatcherTimer)typeof(SelectedNotchComparisonWindow).GetField("staleTimer",PrivateInstance)!.GetValue(dialog)!;
+            Check(timer.IsEnabled && result.Text.Contains("toleransı aşıyor",StringComparison.Ordinal),
+                "A valid comparison remains visible while its document is current",checks);
             studio.Commit("Karşılaştırma kaynağını değiştir",()=>studio.Document.Pieces[0].Points[0]=new Point2(-1,0));
             var changed=studio.Document.Clone();var changedUndo=session.UndoCount;
-            compare.Invoke(dialog,null);
-            Check(result.Text.Contains("değişti",StringComparison.Ordinal) && DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==changedUndo,
-                "Notch comparison rejects a stale document without changing it",checks);
+            PumpUntil(()=>!timer.IsEnabled);
+            Check(result.Text.Contains("eski sonuç geçersiz",StringComparison.Ordinal) && DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==changedUndo,
+                "A displayed notch result automatically expires when the document changes",checks);
         }
         finally { dialog.Close();tools.Close(); }
     }
@@ -9775,4 +9779,5 @@ internal static class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
+
 

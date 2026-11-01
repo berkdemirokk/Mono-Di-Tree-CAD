@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Threading;
 using TekstilCAD.Core;
 using TekstilCAD.Patterns;
 
@@ -13,6 +14,7 @@ internal sealed class SelectedNotchComparisonWindow : Window
     private readonly MainWindow workspace;
     private readonly ProjectDocument originalDocument,originalContent;
     private readonly PatternPiece source;
+    private readonly DispatcherTimer staleTimer=new() { Interval=TimeSpan.FromMilliseconds(500) };
     private readonly ComboBox target=new() { MinWidth=260,HorizontalAlignment=HorizontalAlignment.Left,DisplayMemberPath="Label" };
     private readonly TextBox[] indices=new TextBox[6];
     private readonly TextBox widthTolerance=new() { Text="0",MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
@@ -23,6 +25,8 @@ internal sealed class SelectedNotchComparisonWindow : Window
     internal SelectedNotchComparisonWindow(MainWindow workspace,Window owner,PatternPiece source)
     {
         this.workspace=workspace;this.source=source.Clone();originalDocument=workspace.Document;originalContent=workspace.Document.Clone();
+        staleTimer.Tick+=(_,_)=>InvalidateIfStale();
+        Closed+=(_,_)=>staleTimer.Stop();
         Owner=owner;Title="Seçili çentik ölçülerini karşılaştır";Width=700;Height=740;MinWidth=430;MinHeight=400;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;
         var panel=new StackPanel { Margin=new Thickness(18) };
@@ -56,16 +60,30 @@ internal sealed class SelectedNotchComparisonWindow : Window
     }
     private void InvalidateResult()
     {
+        staleTimer.Stop();
         if(result.Text.Length==0)return;
         result.Text="Giriş değişti; yeniden karşılaştırın.";
         AutomationProperties.SetName(result,result.Text);
+        if(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(result) is { } peer)
+            peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
+    }
+    private bool IsCurrent() => !workspace.HasPendingCanvasOrPropertyWork &&
+        ReferenceEquals(workspace.Document,originalDocument) && DocumentSession.ContentEquals(workspace.Document,originalContent);
+    private void InvalidateIfStale()
+    {
+        if(IsCurrent())return;
+        staleTimer.Stop();
+        result.Text="Proje veya bekleyen çalışma değişti; eski sonuç geçersiz. Pencereyi kapatıp yeniden açın.";
+        AutomationProperties.SetName(result,result.Text);
+        if(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(result) is { } peer)
+            peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
     }
     private void Compare()
     {
         try
         {
-            if(workspace.HasPendingCanvasOrPropertyWork || !ReferenceEquals(workspace.Document,originalDocument) ||
-               !DocumentSession.ContentEquals(workspace.Document,originalContent))
+            staleTimer.Stop();
+            if(!IsCurrent())
                 throw new InvalidOperationException("Proje veya bekleyen çalışma değişti; pencereyi kapatıp güncel parçalarla yeniden açın.");
             if(target.SelectedItem is not Choice choice)throw new ArgumentException("Karşılaştırılacak parçayı seçin.");
             var values=new int[6];
@@ -81,6 +99,7 @@ internal sealed class SelectedNotchComparisonWindow : Window
                 $"Kaynak derinlik: {MeasurementInput.Format(measurement.SourceDepth)} mm, karşılaştırma derinlik: {MeasurementInput.Format(measurement.CandidateDepth)} mm. "+
                 $"Kaynak: {source.Id:D}; karşılaştırma: {choice.Piece.Id:D}. Genişlik toleransı: {MeasurementInput.Format(w)} mm; derinlik toleransı: {MeasurementInput.Format(d)} mm. "+
                 "Gösterilen ölçüler yaklaşıktır. Yalnız bu üç nokta karşılaştırıldı; dikiş payı, diğer çentikler ve üretim uygunluğu doğrulanmadı.";
+            staleTimer.Start();
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException)
         { result.Text="Karşılaştırma yapılamadı: "+ex.Message; }
@@ -90,5 +109,7 @@ internal sealed class SelectedNotchComparisonWindow : Window
     }
     private static string SafeName(string name)=>new(name.Take(80).Select(c=>char.IsControl(c)||char.GetUnicodeCategory(c)==UnicodeCategory.Format?'�':c).ToArray());
 }
+
+
 
 

@@ -29,4 +29,20 @@ public class SelectedNotchComparisonTests
         Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,output,3,4,5,0,0,2,0,1));
         Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(Source,output,3,4,5,0,1,2,-1,1));
     }
-}
+    [Fact]
+    public void TinyRepresentableDimensionsDoNotUnderflowToNan()
+    {
+        Point2[] tiny=[new(0,0),new(1e-200,1e-200),new(2e-200,0)];
+        var result=SelectedNotchComparison.Compare(tiny,tiny,0,1,2,0,1,2,0,0);
+        Assert.True(result.WithinTolerance);Assert.True(double.IsFinite(result.SourceWidth));
+        Assert.True(double.IsFinite(result.SourceDepth));Assert.True(result.SourceWidth>0 && result.SourceDepth>0);
+    }
+    [Fact]
+    public void NonrepresentableDepthIsExplicitlyRejected()
+    {
+        double e=double.Epsilon;
+        Point2[] tiny=[new(0,0),new(e,e),new(3*e,4*e)];
+        var ex=Assert.Throws<ArgumentException>(()=>SelectedNotchComparison.Compare(tiny,tiny,0,1,2,0,1,2,0,0));
+        Assert.Contains("temsil",ex.Message);
+    }}
+
