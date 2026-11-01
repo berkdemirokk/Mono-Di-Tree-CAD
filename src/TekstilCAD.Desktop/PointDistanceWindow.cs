@@ -37,7 +37,7 @@ internal sealed class PointDistanceWindow : Window
         originalDocument=workspace.Document; originalSelection=workspace.SelectedId; sourceId=source.Id;
         if (!ReferenceEquals(originalDocument.Pieces.FirstOrDefault(p=>p.Id==source.Id),source) || selectedSource()!=source.Id)
             throw new InvalidOperationException("Kaynak parça değişti; güncel parçayı seçip yeniden deneyin.");
-        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece);
+        snapshot=originalDocument.Clone(); piece=source.Clone(); Preview=new PointMeasurePreview(piece,collapseClosingAlias:true);
         Owner=owner; Title="İki nokta arası mesafe · Mono Di Tree CAD";
         Width=670; Height=480; MinWidth=510; MinHeight=390;
         WindowStartupLocation=WindowStartupLocation.CenterOwner; StudioTheme.Apply(this);
@@ -69,7 +69,7 @@ internal sealed class PointDistanceWindow : Window
         AutomationProperties.SetName(Result,"Geometrik mesafe sonucu"); AutomationProperties.SetLiveSetting(Result,AutomationLiveSetting.Polite); panel.Children.Add(Result);
         AutomationProperties.SetName(ContourResult,"Kontur boyunca ölçüm sonucu"); AutomationProperties.SetLiveSetting(ContourResult,AutomationLiveSetting.Polite); panel.Children.Add(ContourResult);
         panel.Children.Add(new TextBlock { Text="Kalıp önizlemesi · A halka, B baklava · kesik çizgi düz mesafe", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(0,12,0,0), FontWeight=FontWeights.SemiBold });
-        panel.Children.Add(new TextBlock { Text="Değiştireceğiniz noktayı seçin, ardından kalıp üzerindeki bir noktaya tıklayın. Birbirine yakın noktalar için yukarıdaki listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,6) });
+        panel.Children.Add(new TextBlock { Text="Değiştireceğiniz noktayı seçin, ardından kalıp üzerindeki bir noktaya tıklayın. Tekrarlı kapanış görselden ilk nokta olarak seçilir; listede her iki indeks bulunur. Birbirine yakın farklı noktalar için yukarıdaki listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,6) });
         if(!Preview.IndividualVerticesVisible)panel.Children.Add(new TextBlock { Text="Çok sayıda nokta olduğu için küçük nokta işaretleri gizlendi; kesin seçim için listeyi kullanın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6),Foreground=StudioTheme.Muted });
         var pickModes=new WrapPanel();pickModes.Children.Add(PickStart);pickModes.Children.Add(PickEnd);panel.Children.Add(pickModes);
         panel.Children.Add(Preview);

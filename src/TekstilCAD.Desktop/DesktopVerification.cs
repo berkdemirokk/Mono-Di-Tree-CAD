@@ -10124,6 +10124,17 @@ internal static class DesktopVerification
         Check(explicitWindow.ContourResult.Text.Contains("ileri 0 mm") && explicitWindow.ContourResult.Text.Contains("ters 0 mm"),"Explicit closing vertex measures zero in reverse selection order",checks);
         explicitWindow.EndSelector.SelectedIndex=2;
         Check(explicitWindow.ContourResult.Text.Contains("ileri 7 mm") && explicitWindow.ContourResult.Text.Contains("ters 5 mm"),"Closing vertex retains correct paths to other vertices",checks);
+        explicitWindow.Preview.Height=200;explicitWindow.Preview.Margin=new Thickness(0);
+        explicitWindow.Preview.Measure(new Size(300,200));explicitWindow.Preview.Arrange(new Rect(0,0,300,200));explicitWindow.Preview.UpdateLayout();
+        var hit=explicitWindow.Preview.HitTestPoint(new Point(90,20));
+        Check(hit==0,"Distance preview resolves the repeated closing point to the first index",checks);
+        var beforeClosingPick=studio.Document.Clone();
+        explicitWindow.PickEnd.IsChecked=true;
+        var requestClosing=(Action<int>)typeof(PointMeasurePreview).GetField("PointRequested",PrivateInstance)!.GetValue(explicitWindow.Preview)!;
+        requestClosing(hit);
+        Check(explicitWindow.EndSelector.SelectedIndex==0 && explicitWindow.Result.Text.Contains("Düz mesafe: 0 mm") &&
+            explicitWindow.PickStatus.Text.Contains("B noktası 0") && DocumentSession.ContentEquals(beforeClosingPick,studio.Document),
+            "Clicking the closing vertex selects its canonical index without changing the project",checks);
         explicitWindow.Close();
         var clickable=new PointMeasurePreview(new PatternPiece { Closed=false,Points=[new(0,0),new(3,0),new(3,4)] });
         clickable.Measure(new Size(400,180));clickable.Arrange(new Rect(0,0,400,180));clickable.UpdateLayout();
