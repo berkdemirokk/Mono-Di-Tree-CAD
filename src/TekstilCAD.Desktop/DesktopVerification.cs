@@ -1552,9 +1552,9 @@ internal static class DesktopVerification
                 pending=canvas.LargeVertexValidationTask!;PumpUntil(()=>reached.IsSet);
                 name.Text="Korunan büyük taslak";
                 release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
-                var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+                var draftStatus=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
                 Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo &&
-                    studio.HasPropertyDraftFor(draftPiece.Id) && name.Text=="Korunan büyük taslak" && status.Text.Contains("taslak",StringComparison.OrdinalIgnoreCase) && status.Text.Contains("uygulanmadı"),
+                    studio.HasPropertyDraftFor(draftPiece.Id) && name.Text=="Korunan büyük taslak" && draftStatus.Text.Contains("taslak",StringComparison.OrdinalIgnoreCase) && draftStatus.Text.Contains("uygulanmadı"),
                     "A property draft created during large vertex validation preserves both draft and source",checks);
                 var refused=false;
                 try { canvas.StartLargeVertexValidation(draftPiece.Id,false,original,valid); }
