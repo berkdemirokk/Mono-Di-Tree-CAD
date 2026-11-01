@@ -591,6 +591,7 @@ internal static class DesktopVerification
             VerifyNumericVertexMove(studio,checks);
             VerifyVertexNotches(studio,work,checks);
             VerifyExtraClosureCleanup(studio,checks);
+            VerifyBulkDuplicateCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
@@ -9390,6 +9391,70 @@ internal static class DesktopVerification
         finally { tools.Close();studio.LoadDocument(new ProjectDocument()); }
     }
 
+    private static void VerifyBulkDuplicateCleanup(MainWindow studio,List<string> checks)
+    {
+        var old=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            PatternPiece Piece(string name)=>new() { Name=name,Points=[new(0,0),new(10,0),new(10,0),new(10,10),new(0,10)] };
+            var good=Piece("Temizlenecek");var good2=Piece("İkinci");var marked=Piece("İşaretli");marked.Notches=[new NotchMark { VertexIndex=1,Position=marked.Points[1] }];
+            var graded=Piece("Kurallı");var draft=Piece("Taslaklı");var invalidBits=Piece("Farklı sıfır");
+            invalidBits.Points[2]=new Point2(10,BitConverter.Int64BitsToDouble(long.MinValue));
+            var rule=new GradingRuleSet { SourcePieceId=graded.Id,SourceClosed=true,SourcePoints=graded.Points.ToList(),Deltas=Enumerable.Repeat(new Point2(0,0),graded.Points.Count).ToList() };
+            var document=new ProjectDocument { Pieces=[good,good2,marked,graded,draft,invalidBits],GradingRules=[rule] };
+            studio.LoadDocument(document);studio.Select(good.Id);var before=studio.Document.Clone();
+            var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+            var window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            try
+            {
+                var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
+                Check(window.ReadyCountForVerification==2 && window.ReportForVerification.Any(s=>s.Contains("işaret var")) &&
+                    window.ReportForVerification.Any(s=>s.Contains("serileme kuralı var")) && window.ReportForVerification.Any(s=>s.Contains("serileme taslağı var")) &&
+                    window.ReportForVerification.Any(s=>s.Contains("koordinat bitleri farklı")) && DocumentSession.ContentEquals(before,studio.Document),
+                    "Bulk duplicate preview reports eligible and each protected skip without editing the project",checks);
+                window.ApplyForVerification();var after=studio.Document.Clone();
+                Check(after.Pieces[0].Points.Count==4 && after.Pieces[1].Points.Count==4 && after.Pieces.Skip(2).Select(p=>p.Points.Count).SequenceEqual(new[] {5,5,5,5}) && session.UndoCount==1,
+                    "Bulk duplicate cleanup changes only eligible pieces in one transaction",checks);
+                Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                    "Bulk duplicate cleanup undo and redo restore all protected pieces",checks);
+            }
+            finally { window.Close(); }
+            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            try
+            {
+                var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();
+                studio.Commit("Önizleme sonrası değişiklik",()=>studio.Document.Pieces[0].Name="Güncel ad");var changed=studio.Document.Clone();var undo=session.UndoCount;
+                window.ApplyForVerification();
+                Check(DocumentSession.ContentEquals(changed,studio.Document) && session.UndoCount==undo && window.StatusForVerification.Contains("değişti"),
+                    "Bulk duplicate cleanup rejects a stale preview without losing the newer edit",checks);
+            }
+            finally { window.Close(); }
+            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();var becameDraft=false;
+            window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id || (id==good.Id && becameDraft));
+            try
+            {
+                var preview=window.PreviewForVerification();PumpUntil(()=>preview.IsCompleted);preview.GetAwaiter().GetResult();becameDraft=true;
+                window.ApplyForVerification();
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && window.StatusForVerification.Contains("taslak değişti"),
+                    "A grading draft created after preview blocks bulk cleanup",checks);
+            }
+            finally { window.Close(); }
+            studio.LoadDocument(document.Clone());studio.Select(good.Id);before=studio.Document.Clone();window=new BulkDuplicateCleanupWindow(studio,studio,id=>id==draft.Id);
+            using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+            {
+                Task? pending=null;
+                try
+                {
+                    window.BeforeCalculationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                    pending=window.PreviewForVerification();PumpUntil(()=>reached.IsSet);window.CancelForVerification();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                    Check(window.ReadyCountForVerification==0 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0,
+                        "Cancelling bulk duplicate preview preserves project and undo history",checks);
+                }
+                finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }window.Close(); }
+            }
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(old); }
+    }
     private static void VerifyExtraClosureCleanup(MainWindow studio,List<string> checks)
     {
         var oldContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));

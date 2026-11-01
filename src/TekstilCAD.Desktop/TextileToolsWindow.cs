@@ -1024,6 +1024,13 @@ public sealed class TextileToolsWindow : Window
         Button(panel,"Fazla kapanış noktalarını temizle",()=>VertexMoveTaskForVerification=CleanExtraClosureAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
         Note(panel,"Bitişik eş nokta kopyaları ayrı bir işlemle temizlenebilir; başka geometri hataları kalabilir ve üretim uygunluğu doğrulanmaz. İşaret veya serileme kuralı/taslağı bulunan parçalar korunur.");
         Button(panel,"Bitişik eş noktaları temizle",()=>VertexMoveTaskForVerification=CleanConsecutiveAsync(),()=>HasPiece());
+        Button(panel,"Projedeki tekrarları topluca incele…",()=>
+        {
+            if(!CommitGradeEdit()) { ShowGradeEditError();return; }
+            var chosen=source.SelectedItem is PatternPiece selected ? selected.Id : (Guid?)null;
+            new BulkDuplicateCleanupWindow(workspace,this,id=>gradeDrafts.TryGetValue(id,out var draft) && HasUnsavedGradeDraft(id,draft)).ShowDialog();
+            RefreshSources(chosen);
+        },()=>HasPiece());
         Note(panel,"Kapalı konturun yönünü ters çevirin; ilk nokta ve şekil korunur. Nokta indeksleri değişir. Eşleşen kayıtlı serileme artışları ilgili noktalarla birlikte taşınır; uygulanmamış taslaklar korunur.");
         Button(panel,"Kapalı kontur yönünü ters çevir",()=>VertexMoveTaskForVerification=ReverseClosedContourAsync(),()=>source.SelectedItem is PatternPiece { Closed:true });
         Note(panel,"Noktayı taşı, girilen indeksteki mevcut noktanın koordinatlarını değiştirir. Kapalı konturda yinelenen ilk ve son nokta birlikte taşınır. Doğrulama arka planda yapılır; sonucun uygulanmasından önce proje yeniden kontrol edilir.");
