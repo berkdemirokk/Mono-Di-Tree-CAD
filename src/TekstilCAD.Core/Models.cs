@@ -57,6 +57,8 @@ public sealed class PatternPiece
     public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone() };
 }
 
+public enum OrthogonalGradingTransform { RotateLeft, RotateRight, MirrorVertical, MirrorHorizontal }
+
 public sealed class GradingRuleSet
 {
     public Guid SourcePieceId { get; set; }
@@ -64,6 +66,26 @@ public sealed class GradingRuleSet
     public List<Point2> SourcePoints { get; set; } = [];
     public List<Point2> Deltas { get; set; } = [];
     public GradingRuleSet Clone() => new() { SourcePieceId = SourcePieceId, SourceClosed = SourceClosed, SourcePoints = [.. SourcePoints], Deltas = [.. Deltas] };
+
+    /// <summary>Transform a matching rule only when its source geometry is exactly the same rigid transformation.</summary>
+    public GradingRuleSet? OrthogonalFor(PatternPiece source,IReadOnlyList<Point2> transformed,OrthogonalGradingTransform operation)
+    {
+        if(source.Id!=SourcePieceId || source.Closed!=SourceClosed || Deltas.Count!=source.Points.Count ||
+           !SourcePoints.SequenceEqual(source.Points) || transformed.Count!=source.Points.Count) return null;
+        static Point2 Map(Point2 p,OrthogonalGradingTransform op)=>op switch {
+            OrthogonalGradingTransform.RotateLeft=>new(-p.Y,p.X),
+            OrthogonalGradingTransform.RotateRight=>new(p.Y,-p.X),
+            OrthogonalGradingTransform.MirrorVertical=>new(-p.X,p.Y),
+            OrthogonalGradingTransform.MirrorHorizontal=>new(p.X,-p.Y),
+            _=>throw new ArgumentOutOfRangeException(nameof(op))
+        };
+        var rotated=source.Points.Select(p=>Map(p,operation)).ToArray();
+        // A pivot only adds a constant translation. This exact dyadic check
+        // refuses to attach deltas if the represented contour was distorted.
+        if(!IsExactPointTranslation(rotated,transformed))return null;
+        var result=Clone();result.SourcePoints=transformed.ToList();result.Deltas=Deltas.Select(p=>Map(p,operation)).ToList();
+        return result;
+    }
 
     /// <summary>Verify that a rule and its source changed only by an exactly represented translation.</summary>
     public bool IsExactTranslationTo(GradingRuleSet current, PatternPiece piece)

@@ -363,12 +363,12 @@ public class MainWindow : Window
         AutomationProperties.SetLiveSetting(grainlineStatus,AutomationLiveSetting.Polite);
         inspector.Children.Add(grainlineStatus);
         var transforms = new UniformGrid { Columns = 2 }; inspector.Children.Add(transforms);
-        selectionCommands.Add(AddButton(transforms, "90° döndür", () => Transform((points,center) => Geometry.Rotate(points,90,center)), "Parçayı merkezinden saat yönünün tersine döndür"));
-        var rotateClockwise=AddButton(transforms, "90° sağa", () => Transform((points,center) => Geometry.Rotate(points,-90,center)), "Parçayı merkezinden saat yönünde 90 derece döndür");
+        selectionCommands.Add(AddButton(transforms, "90° döndür", () => TransformWithGrading((points,center) => Geometry.Rotate(points,90,center),OrthogonalGradingTransform.RotateLeft), "Parçayı merkezinden saat yönünün tersine döndür"));
+        var rotateClockwise=AddButton(transforms, "90° sağa", () => TransformWithGrading((points,center) => Geometry.Rotate(points,-90,center),OrthogonalGradingTransform.RotateRight), "Parçayı merkezinden saat yönünde 90 derece döndür");
         AutomationProperties.SetName(rotateClockwise,"Parçayı saat yönünde 90 derece döndür");
         selectionCommands.Add(rotateClockwise);
-        selectionCommands.Add(AddButton(transforms, "Aynala", () => Transform((points,center) => Geometry.Mirror(points,true,center.X)), "Parçayı merkezinden geçen dikey eksene göre aynala"));
-        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => Transform((points,center) => Geometry.Mirror(points,false,center.Y)), "Parçayı merkezinden geçen yatay eksene göre aynala");
+        selectionCommands.Add(AddButton(transforms, "Aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,true,center.X),OrthogonalGradingTransform.MirrorVertical), "Parçayı merkezinden geçen dikey eksene göre aynala"));
+        var mirrorHorizontal=AddButton(transforms, "Yatay aynala", () => TransformWithGrading((points,center) => Geometry.Mirror(points,false,center.Y),OrthogonalGradingTransform.MirrorHorizontal), "Parçayı merkezinden geçen yatay eksene göre aynala");
         AutomationProperties.SetName(mirrorHorizontal,"Parçayı yatay eksene göre aynala");
         selectionCommands.Add(mirrorHorizontal);
         metrics.Foreground = Ink; metrics.FontSize = 12; metrics.LineHeight = 22; metrics.TextWrapping = TextWrapping.Wrap;
@@ -1437,6 +1437,10 @@ public class MainWindow : Window
         return dialog;
     }
     private void Transform(Func<IReadOnlyList<Point2>,Point2,List<Point2>> transform)
+        => TransformCore(transform,null);
+    private void TransformWithGrading(Func<IReadOnlyList<Point2>,Point2,List<Point2>> transform,OrthogonalGradingTransform operation)
+        => TransformCore(transform,operation);
+    private void TransformCore(Func<IReadOnlyList<Point2>,Point2,List<Point2>> transform,OrthogonalGradingTransform? operation)
     {
         if(!EnsureMainMutationReady())return;
         if(Selected is not { Points.Count: >0 } piece)return;
@@ -1448,12 +1452,16 @@ public class MainWindow : Window
         { SetStatus("Dönüşüm uygulanmadı · Önce çizimi tamamlayın veya Esc ile iptal edin.");return; }
         var center=Geometry.Bounds(piece.Points).Center;
         var result=transform(piece.Points,center);
-        var gradingNeedsReview=!result.SequenceEqual(piece.Points) && Document.GradingRules.Any(r=>r.SourcePieceId==piece.Id);
+        var rule=Document.GradingRules.FirstOrDefault(r=>r.SourcePieceId==piece.Id);
+        var transformedRule=operation is { } kind ? rule?.OrthogonalFor(piece,result,kind) : null;
+        var gradingNeedsReview=!result.SequenceEqual(piece.Points) && rule is not null && transformedRule is null;
         var transformedGrain=GrainlineTransform.Transform(piece.Grainline,piece.Points[0],result[0],points=>transform(points,center));
         var committed=false;
         try {
-            CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain; },()=>committed=true);
+            CommitObserved("Geometri dönüşümü uygulandı",()=> { piece.Points=result;piece.Grainline=transformedGrain;
+                if(transformedRule is not null)Document.GradingRules[Document.GradingRules.IndexOf(rule!)]=transformedRule; },()=>committed=true);
             if(gradingNeedsReview)ShowCanvasError("Dönüşüm uygulandı; kayıtlı serileme kuralı önceki kontura ait. Serilemeden önce kuralı gözden geçirin.");
+            else if(transformedRule is not null)SetStatus("Geometri ve kayıtlı serileme artışları birlikte dönüştürüldü; bedenleri kontrol edin.");
         }
         catch(Exception ex) when(committed && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {

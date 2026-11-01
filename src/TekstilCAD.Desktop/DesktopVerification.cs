@@ -413,6 +413,7 @@ internal static class DesktopVerification
             VerifyRecoveryRestoreDuringWrite(studio,work,checks);
             VerifyDraftErrorIdentity(studio,checks);
             VerifyBatchTransforms(studio,checks);
+            VerifyOrthogonalGrading(studio,checks);
             VerifyMetadataDialogStaleProject(studio,checks);
             VerifyMetadataDialogPieceIdentity(studio,checks);
             VerifyActiveDragGuards(studio,work,checks);
@@ -6901,6 +6902,36 @@ internal static class DesktopVerification
         }
         finally { studio.MetadataDialogSuccessForVerification=null; }
     }
+    private static void VerifyOrthogonalGrading(MainWindow studio,List<string> checks)
+    {
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        var root=(FrameworkElement)studio.Content;
+        var source=new PatternPiece { Points=[new(0,0),new(20,0),new(0,10)] };
+        var rule=new GradingRuleSet { SourcePieceId=source.Id,SourceClosed=true,SourcePoints=[..source.Points],Deltas=[new(0,0),new(2,0),new(0,2)] };
+        foreach(var (label,expected) in new[] {
+            ("90° döndür",new Point2(0,2)),("90° sağa",new Point2(0,-2)),
+            ("Aynala",new Point2(-2,0)),("Yatay aynala",new Point2(2,0)) })
+        {
+            studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
+            var before=studio.Document.Clone();var button=Descendants<Button>(root).Single(b=>Equals(b.Content,label));
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var current=studio.Document.Pieces.Single();var mapped=studio.Document.GradingRules.Single();
+            Check(mapped.SourcePoints.SequenceEqual(current.Points) && mapped.Deltas[1]==expected && session.UndoCount==1,
+                $"{label} transforms the matching grading rule together with the contour",checks);
+            var after=studio.Document.Clone();
+            Check(session.Undo() && DocumentSession.ContentEquals(before,studio.Document) && session.Redo() && DocumentSession.ContentEquals(after,studio.Document),
+                $"{label} grading and geometry undo and redo together",checks);
+        }
+        studio.LoadDocument(new ProjectDocument { Pieces=[source],GradingRules=[rule] });studio.Select(source.Id);
+        studio.Commit("Eski kural",()=>studio.Document.GradingRules[0].SourcePoints[0]=new Point2(-1,0));
+        var stale=studio.Document.GradingRules[0].Clone();
+        Descendants<Button>(root).Single(b=>Equals(b.Content,"Aynala")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var warning=(TextBlock)typeof(MainWindow).GetField("canvasError",PrivateInstance)!.GetValue(studio)!;
+        Check(studio.Document.GradingRules[0].SourcePoints.SequenceEqual(stale.SourcePoints) && warning.Text.Contains("serileme kuralı"),
+            "Mirror retains and warns about a stale grading rule",checks);
+        studio.ClearCanvasError();
+    }
+
     private static void VerifyBatchTransforms(MainWindow studio,List<string> checks)
     {
         var safeLabel=CadCanvas.CanvasPieceLabel("Ön\u202E\n😀");
