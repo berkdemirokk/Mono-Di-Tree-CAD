@@ -29,8 +29,11 @@ public static class DxfBlockDefinitionPointMapping
         var fresh=DxfFormat.Import(source,import.Project.Name,parameters.MillimetersPerUnit,parameters.Encoding,token);
         if(fresh.SourceByteLength!=import.SourceByteLength || !string.Equals(fresh.SourceSha256,import.SourceSha256,StringComparison.OrdinalIgnoreCase) ||
            fresh.SkippedInsertEntities!=false || fresh.ImportedBlockDefinitions!=true || fresh.SourceGeometry is not { Truncated:false } geometry ||
-           fresh.SupplementalGeometry is not { Truncated:false } supplemental || fresh.PieceSources is not { } freshLinks || freshLinks.IsDefault)
+           fresh.SupplementalGeometry is not { Truncated:false } supplemental || fresh.PieceSources is not { } freshLinks || freshLinks.IsDefault ||
+           fresh.BlockEntityInventory is not { Truncated:false } inventory || inventory.Records.IsDefault)
             throw new InvalidDataException("Kaynak baytları, blok envanteri veya INSERT durumu doğrulanamadı.");
+        if(inventory.Records.Any(r=>r.BlockHeaderOrdinal==blockHeaderOrdinal && r.EntityType is not ("POINT" or "POLYLINE" or "VERTEX" or "SEQEND" or "LINE" or "TEXT" or "MTEXT")))
+            throw new InvalidDataException("Blokta bilinmeyen veya desteklenmeyen kaynak varlığı var.");
         var link=freshLinks.SingleOrDefault(p=>p.BlockHeaderOrdinal==blockHeaderOrdinal && p.EntityType=="POLYLINE" &&
             p.SourceOrdinals.Length==1 && p.SourceOrdinals[0]==oldLink.SourceOrdinals[0]);
         if(link is null || link.ChildSourceOrdinals.Length<2 || selection.VertexIndex<0 || selection.VertexIndex>=link.ChildSourceOrdinals.Length-1)

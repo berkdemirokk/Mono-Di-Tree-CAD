@@ -75,6 +75,8 @@ public sealed record DxfSkippedSourceReport(ImmutableArray<DxfSkippedSourceRecor
 public sealed record DxfSkippedSourceDetail(DxfSkippedSourceRecord Source, ImmutableArray<DxfAnnotationGroup> Groups);
 /// <summary>Bounded prefix of whole skipped records; this is not a complete loss report or textile interpretation.</summary>
 public sealed record DxfSkippedSourceDetailReport(ImmutableArray<DxfSkippedSourceDetail> Records, bool Truncated);
+internal sealed record DxfBlockEntityInventoryEntry(int BlockHeaderOrdinal,int SourceOrdinal,string EntityType);
+internal sealed record DxfBlockEntityInventory(ImmutableArray<DxfBlockEntityInventoryEntry> Records,bool Truncated);
 /// <summary>Original decoded non-private groups for one source record; this does not establish textile meaning or placement.</summary>
 public sealed record DxfSourceGeometryRecord(int SourceOrdinal, string Section, string? Block, string EntityType, ImmutableArray<DxfAnnotationGroup> Groups)
 {
@@ -97,6 +99,7 @@ public sealed record DxfPieceSource(Guid PieceId, string Section, string? Block,
 }
 public sealed record DxfImportResult(ProjectDocument Project, List<string> Warnings)
 {
+    internal DxfBlockEntityInventory? BlockEntityInventory { get; init; }
     public DxfUnitInfo Units { get; init; } = new(null, "Birim başlığı yok", null, false);
     /// <summary>Whether the legacy import encountered an INSERT it did not apply. Null means this result did not come from a completed import.</summary>
     public bool? SkippedInsertEntities { get; init; }
@@ -669,6 +672,20 @@ public static class DxfFormat
                 throw new InvalidDataException("DXF BLOCKS içinde sahipsiz kaynak kaydı var.");
         }
         if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF bölüm veya blok kapatılmadı.");
+        const int maxBlockInventory=4096;
+        var blockInventory=ImmutableArray.CreateBuilder<DxfBlockEntityInventoryEntry>();bool blockInventoryTruncated=false;
+        string inventorySection="";int? inventoryHeader=null;
+        for(int ordinal=0;ordinal<entities.Count;ordinal++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();var item=entities[ordinal];
+            if(item.Type=="SECTION") { inventorySection=item.Text(2);inventoryHeader=null;continue; }
+            if(item.Type=="ENDSEC") { inventorySection="";inventoryHeader=null;continue; }
+            if(inventorySection=="BLOCKS" && item.Type=="BLOCK") { inventoryHeader=ordinal;continue; }
+            if(item.Type=="ENDBLK") { inventoryHeader=null;continue; }
+            if(inventoryHeader is not int header)continue;
+            if(blockInventory.Count>=maxBlockInventory) { blockInventoryTruncated=true;break; }
+            blockInventory.Add(new(header,ordinal,item.Type));
+        }
         // Preserve undecoded annotation groups for explicit review. They are
         // not mapped to garment fields or treated as block placements.
         const int maxAnnotations=4096,maxAnnotationGroups=32768,maxAnnotationCharacters=1_000_000;
@@ -1349,7 +1366,7 @@ public static class DxfFormat
                 : $"Bulge seçeneği etkin; dönüştürülen yay yok. Seçilen nominal sapma {DisplayFactor(sampledTolerance)} mm; kaynağı kontrol edin.");
         var importParameters=new DxfImportParameters(encoding,millimetersPerUnit,strictImport ? DxfImportMode.Controlled : DxfImportMode.General,
             strict?.ComponentToleranceMm,approvedLayers) { BulgeToleranceMm = bulgeToleranceMm };
-        return new DxfImportResult(doc, warnings) { Units = units, SourceSha256=sourceSha256, SourceByteLength=sourceByteLength, ImportParameters=importParameters,
+        return new DxfImportResult(doc, warnings) { Units = units, SourceSha256=sourceSha256, SourceByteLength=sourceByteLength, ImportParameters=importParameters, BlockEntityInventory=new(blockInventory.ToImmutable(),blockInventoryTruncated),
             SkippedInsertEntities=skippedInsertEntities, SkippedRelevantInsertEntities=skippedRelevantInsertEntities, ImportedBlockDefinitions=blockGeometry, MetadataLoss=metadataLoss, MetadataSources=metadataSources, OpaqueMetadata=opaqueMetadata, Annotations=annotations, SupplementalGeometry=supplementalGeometry,
             AnnotationSnapshotSha256=sourceSha256, AnnotationSnapshotByteLength=sourceByteLength,
             CapturedSkippedRelevantInsertEntities=skippedRelevantInsertEntities, CapturedImportedBlockDefinitions=blockGeometry, CapturedWarnings=warnings.ToImmutableArray(),

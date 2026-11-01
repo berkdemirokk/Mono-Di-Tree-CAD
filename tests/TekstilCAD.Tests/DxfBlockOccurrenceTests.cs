@@ -5,6 +5,37 @@ namespace TekstilCAD.Tests;
 
 public sealed class DxfBlockOccurrenceTests
 {
+    [Fact]
+    public void TruncatedBlockInventoryCannotAuthorizeMapping()
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\nPOINT\n8\nA\n10\n0\n20\n0\n"+string.Concat(Enumerable.Repeat("0\nTEXT\n8\nA\n",4097))+"0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        Assert.True(import.BlockEntityInventory!.Truncated);
+        Assert.Throws<InvalidDataException>(()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true));
+    }
+
+    [Theory]
+    [InlineData("SOLID",false)]
+    [InlineData("VENDOR_UNKNOWN",false)]
+    [InlineData("TEXT",true)]
+    public void BlockInventoryRejectsUnknownGeometryButAllowsKnownText(string extraType,bool allowed)
+    {
+        var text="0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nPOLYLINE\n8\nA\n70\n1\n"+
+            "0\nVERTEX\n10\n0\n20\n0\n0\nVERTEX\n10\n10\n20\n0\n0\nVERTEX\n10\n0\n20\n10\n0\nSEQEND\n"+
+            "0\n"+extraType+"\n8\nA\n10\n0\n20\n0\n0\nPOINT\n8\nA\n10\n0\n20\n0\n0\nENDBLK\n0\nENDSEC\n0\nEOF\n";
+        var bytes=Encoding.ASCII.GetBytes(text);var import=DxfFormat.Import(new MemoryStream(bytes),"test");
+        var link=Assert.Single(import.PieceSources!.Value.Where(p=>p.EntityType=="POLYLINE"));
+        var point=Assert.Single(import.SupplementalGeometry!.Records.Where(p=>p.EntityType=="POINT"));
+        DxfBlockDefinitionPointResult Create()=>DxfBlockDefinitionPointMapping.Create(import,new MemoryStream(bytes),new(point.SourceOrdinal,link.PieceId,0),link.BlockHeaderOrdinal!.Value,true);
+        if(allowed)Assert.Single(Assert.Single(Create().WorkingCopy.Pieces).Notches!);
+        else Assert.Throws<InvalidDataException>(()=>Create());
+        Assert.All(import.Project.Pieces,p=>Assert.Null(p.Notches));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
