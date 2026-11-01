@@ -404,6 +404,15 @@ final class ModelFilePublisherTests: XCTestCase {
         XCTAssertTrue(first.hasPrefix("Kurtarılan-ham-"))
         XCTAssertTrue(first.hasSuffix(".tcad"))
     }
+    func testContentMatchRequiresSameBytesAndValidPieceIndex() {
+        let original = Data("original".utf8)
+        let match = ModelContentMatch(index: 1, detail: "Arka", data: original)
+        XCTAssertTrue(match.matches(data: original, pieceCount: 2))
+        XCTAssertFalse(match.matches(data: Data("different".utf8), pieceCount: 2))
+        XCTAssertFalse(match.matches(data: original, pieceCount: 1))
+        let invalid = ModelContentMatch(index: -1, detail: "", data: original)
+        XCTAssertFalse(invalid.matches(data: original, pieceCount: 2))
+    }
     func testContentSearchMatchesWordsAcrossModelAndPieceFields() {
         let fields = ["Fabrika 42", "Ön kol", "XL", "Pamuk"]
         XCTAssertTrue(ModelStore.contentSearchMatches(query: "42 kol pamuk", fields: fields))

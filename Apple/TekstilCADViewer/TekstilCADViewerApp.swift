@@ -1,4 +1,5 @@
 import CoreFoundation
+import CryptoKit
 import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
@@ -28,6 +29,18 @@ struct TekstilCADViewerApp: App {
     }
 }
 
+// Binds a result to a SHA-256 digest of the bytes that were searched.
+struct ModelContentMatch {
+    let index: Int
+    let detail: String
+    private let digest: Data
+    init(index: Int, detail: String, data: Data) {
+        self.index = index; self.detail = detail; self.digest = Data(SHA256.hash(data: data))
+    }
+    func matches(data: Data, pieceCount: Int) -> Bool {
+        index >= 0 && index < pieceCount && digest == Data(SHA256.hash(data: data))
+    }
+}
 private enum ModelLibrarySortOrder: String, CaseIterable, Identifiable {
     case name = "Ada göre"
     case newest = "En yeni önce"
@@ -56,7 +69,7 @@ private struct ContentView: View {
     @State private var sourceData: Data?
     private enum RawImportReason { case sizeLimit, invalidPreview(String) }
     private struct RawImport { let data: Data; let name: String; let request: UUID; let reason: RawImportReason }
-    private enum OpenedModel { case preview(Drawing, Data); case raw(Data, RawImportReason) }
+    private enum OpenedModel { case preview(Drawing, Data, Int?); case raw(Data, RawImportReason) }
     @State private var rawImport: RawImport?
     @State private var showingRawImport = false
     @State private var rawSaveNeedsRetry = false
@@ -604,9 +617,9 @@ private struct ContentView: View {
         .sheet(isPresented: $showingLibrary) {
             ModelLibrary(search: $librarySearch, sortOrder: $librarySortOrder,
                          libraryFilter: $libraryFilter, searchContents: $librarySearchContents,
-                         pendingRawRecovery: rawSaveNeedsRetry) { entry in
+                         pendingRawRecovery: rawSaveNeedsRetry) { entry, match in
                 showingLibrary = false
-                openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry)
+                openModel(ModelStore.payloadURL(entry.url), imported: false, listedEntry: entry, matchedPiece: match)
             }
         }
         #if DEBUG && targetEnvironment(simulator)
@@ -709,7 +722,7 @@ private struct ContentView: View {
         error = failure.localizedDescription
     }
 
-    private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil) {
+    private func openModel(_ url: URL, imported: Bool, listedEntry: ModelStore.Entry? = nil, matchedPiece: ModelContentMatch? = nil) {
         guard !rawSaveNeedsRetry else {
             error = "Önce kaydedilemeyen ham kopyayı yeniden kaydedin veya ham kopyadan açıkça vazgeçin. Önceki kopya bellekte korunuyor."
             return
@@ -735,7 +748,13 @@ private struct ContentView: View {
                 if cancellation.isCancelled { throw CancellationError() }
                 if imported && (LosslessProjectName.requiresVersionSixRawRecovery(data) || LosslessProjectName.requiresVersionSixRawRecovery(data, version: 7)) { return .raw(data, .sizeLimit) }
                 if cancellation.isCancelled { throw CancellationError() }
-                do { return .preview(try Drawing.load(data, cancelled: { cancellation.isCancelled }), data) }
+                do {
+                    let drawing = try Drawing.load(data, cancelled: { cancellation.isCancelled })
+                    if let matchedPiece, !matchedPiece.matches(data: data, pieceCount: drawing.pieces.count) {
+                        throw ViewerError.message("Kayıt aramadan sonra değişti; model listesini yenileyip tekrar arayın.")
+                    }
+                    return .preview(drawing, data, matchedPiece?.index)
+                }
                 catch {
                     if error is CancellationError || cancellation.isCancelled { throw CancellationError() }
                     if imported { return .raw(data, .invalidPreview(error.localizedDescription)) }
@@ -745,7 +764,7 @@ private struct ContentView: View {
             DispatchQueue.main.async {
                 guard modelLoad.finish(request) else { return }
                 switch loaded {
-                case .success(.preview(let drawing, let data)):
+                case .success(.preview(let drawing, let data, let matchedIndex)):
                     rawImport = nil
                     rawSaveNeedsRetry = false
                     #if DEBUG
@@ -753,7 +772,7 @@ private struct ContentView: View {
                     #endif
                     showingPieces = false
                     showingNotches = false
-                    selectedPiece = nil
+                    selectedPiece = matchedIndex
                     selectedNotch = nil
                     drawingRevision = UUID()
                     project = drawing
@@ -1512,7 +1531,7 @@ private struct ModelLibrary: View {
     @Binding var libraryFilter: ModelStore.LibraryFilter
     @Binding var searchContents: Bool
     let pendingRawRecovery: Bool
-    let open: (ModelStore.Entry) -> Void
+    let open: (ModelStore.Entry, ModelContentMatch?) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var models: [ModelStore.Entry] = []
     @State private var modelsRevision = UUID()
@@ -1544,7 +1563,7 @@ private struct ModelLibrary: View {
         let contentOffset: Int
         let retry: UUID
     }
-    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let stalled: Bool; let evidence: [URL: String] }
+    private struct FilterResult { let key: FilterKey; let entries: [ModelStore.Entry]; let skipped: Int; let next: Int?; let stalled: Bool; let evidence: [URL: ModelContentMatch] }
     @State private var filterResult: FilterResult?
     private var filterKey: FilterKey { FilterKey(query: search, newest: sortOrder == .newest, filter: libraryFilter, revision: modelsRevision, searchContents: searchContents, contentOffset: contentPage.offset, retry: contentRetry) }
 
@@ -1635,7 +1654,7 @@ private struct ModelLibrary: View {
                     Button {
                         if model.canOpen {
                             if pendingRawRecovery { error = "Önce bekleyen ham kopyayı ana ekranda yeniden kaydedin veya açıkça vazgeçin. Dışa aktarmadan sonra da bellekteki kopyadan ayrıca vazgeçmeniz gerekir. Arama sonuçları korunuyor." }
-                            else { open(model) }
+                            else { open(model, current?.evidence[model.id]) }
                         }
                         else if model.requiresRecovery { modelToRecover = model }
                         else if model.identity == nil { error = "Kayıt listelenirken değişti. Model listesini yenileyip tekrar deneyin." }
@@ -1644,7 +1663,7 @@ private struct ModelLibrary: View {
                         VStack(alignment: .leading) {
                             Text(model.safeName)
                             if let match = current?.evidence[model.id] {
-                                Text("Eşleşen parça: \(match)")
+                                Text("Eşleşen parça: \(match.detail)")
                                     .font(.caption).foregroundStyle(.secondary).lineLimit(3)
                             }
                             if let status = model.selectionStatus {
@@ -1661,7 +1680,7 @@ private struct ModelLibrary: View {
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel(model.safeName)
-                    .accessibilityValue((current?.evidence[model.id].map { "Eşleşen parça: \($0), " } ?? "") + (model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
+                    .accessibilityValue((current?.evidence[model.id].map { "Eşleşen parça: \($0.detail), " } ?? "") + (model.selectionStatus.map { "\($0), " } ?? "") + "Kayıt kimliği: \(ModelStore.safeLabel(model.displayIdentity))" + (model.date.map { ", Kaydedildi: \($0.formatted(date: .abbreviated, time: .standard))" } ?? ""))
                     .buttonStyle(.plain)
                     .disabled(isRecovering)
                     Menu {
@@ -1762,14 +1781,14 @@ private struct ModelLibrary: View {
                     do { try await Task.sleep(nanoseconds: 150_000_000) } catch { return }
                 }
                 guard !Task.isCancelled else { return }
-                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Int?, Bool, [URL: String])? in
+                let worker = Task.detached(priority: .userInitiated) { () -> ([ModelStore.Entry], Int, Int?, Bool, [URL: ModelContentMatch])? in
                     let cancelled = { Task.isCancelled }
                     guard let names = ModelStore.filteredModels(snapshot, query: request.query, newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
                     guard request.searchContents, !request.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return (names, 0, nil, false, [:]) }
                     guard let candidates = ModelStore.filteredModels(snapshot, query: "", newest: request.newest, filter: request.filter, cancelled: cancelled) else { return nil }
                     let named = Set(names.map(\.id))
                     var selected: [ModelStore.Entry] = []
-                    var evidence: [URL: String] = [:]
+                    var evidence: [URL: ModelContentMatch] = [:]
                     var skipped = 0
                     var page = ModelStore.ContentPageGate(start: request.contentOffset)
                     var budget = ModelStore.ContentSearchBudget(start: ProcessInfo.processInfo.systemUptime)
@@ -1795,7 +1814,7 @@ private struct ModelLibrary: View {
                                     }
                                     let name = piece.name.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : excerpt($0) } ?? "Parça \(index + 1)"
                                     let details = [name, piece.size.map { "Beden: \(excerpt($0))" }, piece.material.map { "Malzeme: \(excerpt($0))" }].compactMap { $0 }
-                                    evidence[entry.id] = details.joined(separator: " · ")
+                                    evidence[entry.id] = ModelContentMatch(index: index, detail: details.joined(separator: " · "), data: bytes)
                                     selected.append(entry)
                                     break
                                 }

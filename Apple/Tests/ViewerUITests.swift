@@ -1933,7 +1933,9 @@ final class ViewerUITests: XCTestCase {
 
         let search = app.searchFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5)); search.tap(); search.typeText("Pamuk")
-        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch.waitForExistence(timeout: 10))
+        let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10)); result.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["Arka Beden kontur önizlemesi"].waitForExistence(timeout: 10))
         let result = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Deneme Modeli")).firstMatch
         XCTAssertTrue((result.value as? String ?? "").contains("Eşleşen parça: Arka Beden"))
     }
