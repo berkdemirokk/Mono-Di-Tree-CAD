@@ -639,7 +639,13 @@ public sealed class CadCanvas : FrameworkElement
         else if(dragVertex>=0)
         {
             var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==dragId);
-            dragPreview=PreviewVertexDrag(dragOriginal,dragVertex,dragPosition,piece?.Closed == true);
+            // A handle can be picked up to eight DIPs from its centre. Preserve
+            // that grab offset instead of jumping the vertex to the pointer.
+            var vertexPosition=dragScreenOrigin is { } origin
+                ? new Point2(dragOriginal[dragVertex].X+(pos.X-origin.X)/scale,dragOriginal[dragVertex].Y+(pos.Y-origin.Y)/scale)
+                : dragPosition;
+            if(owner.Snap)vertexPosition=new Point2(Math.Round(vertexPosition.X),Math.Round(vertexPosition.Y));
+            dragPreview=PreviewVertexDrag(dragOriginal,dragVertex,vertexPosition,piece?.Closed == true);
             dragPreviewGrainline=dragOriginalGrainline?.Clone();
             if(dragPreviewGrainline is not null && !dragPreview.SequenceEqual(dragOriginal))dragPreviewGrainline.NeedsReview=true;
         }

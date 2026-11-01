@@ -1591,6 +1591,25 @@ internal static class DesktopVerification
                 Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                     $"Fractional piece click without movement preserves geometry and undo with snap {snapping}",checks);
             }
+            foreach(var snapping in new[] { true,false })
+            {
+                var piece=new PatternPiece { Name="Merkez dışı tutma",Points=[new(20,20),new(100,20),new(100,100),new(20,100)] };
+                studio.LoadDocument(new ProjectDocument { Pieces=[piece] });studio.SetTool("Seç");studio.Select(piece.Id);snap.IsChecked=snapping;
+                scaleField.SetValue(canvas,1d);
+                var pos=click.GetPosition(canvas);
+                // Pointer is six DIPs right and three down from vertex zero.
+                offsetField.SetValue(canvas,new Vector(pos.X-26,pos.Y-23));
+                var before=studio.Document.Clone();
+                down.Invoke(canvas,[canvas,click]);
+                Check((int)vertexField.GetValue(canvas)! == 0,$"Off-centre handle is selected with snap {snapping}",checks);
+                canvas.UpdateDragPreview(new Point(pos.X+15,pos.Y+10));
+                var preview=(List<Point2>)typeof(CadCanvas).GetField("dragPreview",PrivateInstance)!.GetValue(canvas)!;
+                Check(preview[0]==new Point2(35,30),$"Vertex follows pointer displacement without a grab-offset jump with snap {snapping}",checks);
+                up.Invoke(canvas,[click]);
+                Check(studio.Document.Pieces[0].Points[0]==new Point2(35,30),$"Off-centre vertex drag commits the preview with snap {snapping}",checks);
+                Invoke(studio,"Undo");
+                Check(DocumentSession.ContentEquals(before,studio.Document),$"Undo restores off-centre vertex drag with snap {snapping}",checks);
+            }
         }
         finally { snap.IsChecked=previousSnap;scaleField.SetValue(canvas,previousScale);offsetField.SetValue(canvas,previousOffset); }
     }
