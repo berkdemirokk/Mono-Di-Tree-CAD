@@ -49,6 +49,22 @@ final class ModelLoadStateTests: XCTestCase {
             trace = try XCTUnwrap((body["NestingSnapshot"] as? [String: Any])?["RotationTrace"] as? [String: Any])
             trace["Extra"] = true; snapshot["RotationTrace"] = trace; badBody["NestingSnapshot"] = snapshot
             XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            badBody = body; badBody.removeValue(forKey: "GradingRules")
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            badBody = body; badBody["Extra"] = 1
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+            snapshot.removeValue(forKey: "Gap"); badBody = body; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+            snapshot["Unexpected"] = 1; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            snapshot = try XCTUnwrap(body["NestingSnapshot"] as? [String: Any])
+            snapshot["Placements"] = "invalid"; badBody["NestingSnapshot"] = snapshot
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
+            var pieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+            pieces[0].removeValue(forKey: "Id"); badBody = body; badBody["Pieces"] = pieces
+            XCTAssertThrowsError(try Drawing.load(bytes(7, badBody, encoding: encoding, bom: bom)))
         }
         let text = try XCTUnwrap(String(data: original, encoding: .utf8))
         let duplicate = text.replacingOccurrences(of: "\"RotationTrace\": {", with: "\"RotationTrace\": {}, \"RotationTrace\": {")

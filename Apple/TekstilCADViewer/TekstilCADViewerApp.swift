@@ -1665,7 +1665,8 @@ struct Drawing {
 
     // Structural screening only. The desktop must verify geometry, fingerprints,
     // copy mappings and the relationship between this history and the layout.
-    private static func hasKnownRotationTrace(_ value: Any?) -> Bool {
+    private static func hasKnownRotationTrace(_ value: Any?, cancelled: () -> Bool) throws -> Bool {
+        if cancelled() { throw CancellationError() }
         guard let trace = value as? [String: Any],
               Set(trace.keys) == Set(["Schema", "Algorithm", "TransformConvention", "SourceFingerprint", "LayoutFingerprint", "SourcePieces", "LayoutPieces", "Selections", "Copies", "FabricWidth", "Gap", "EdgeMargin", "UsedLength", "MaxLength", "GrainDirection", "ToleranceDegrees"]),
               trace["Schema"] as? String == "per-copy-orthogonal-trace-v1",
@@ -1694,6 +1695,7 @@ struct Drawing {
             return true
         }
         for piece in source + layout {
+            if cancelled() { throw CancellationError() }
             guard Set(piece.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]),
                   let id = piece["Id"] as? String, UUID(uuidString: id) != nil,
                   piece["Name"] is String, jsonBoolean(piece["Closed"]) != nil,
@@ -1712,10 +1714,14 @@ struct Drawing {
                 guard let quantity = jsonNumber(metadata["Quantity"]), quantity.rounded() == quantity,
                       quantity >= 1, quantity <= 100_000 else { return false }
             }
-            for point in points where !pointValid(point) { return false }
+            for (offset, point) in points.enumerated() {
+                if offset % 256 == 0 && cancelled() { throw CancellationError() }
+                if !pointValid(point) { return false }
+            }
             if let value = piece["Notches"] {
                 guard let marks = value as? [[String: Any]], !marks.isEmpty, marks.count <= points.count else { return false }
-                for mark in marks {
+                for (offset, mark) in marks.enumerated() {
+                    if offset % 256 == 0 && cancelled() { throw CancellationError() }
                     guard Set(mark.keys) == Set(["VertexIndex", "Position"]),
                           let index = jsonNumber(mark["VertexIndex"]), index.rounded() == index, index >= 0, index < Double(points.count),
                           let position = mark["Position"] as? [String: Any], pointValid(position) else { return false }
@@ -1723,11 +1729,58 @@ struct Drawing {
             }
         }
         for copy in copies {
+            if cancelled() { throw CancellationError() }
             guard Set(copy.keys) == Set(["SourcePieceId", "CopyNumber", "PlacedPieceId", "Degrees"]),
                   let sourceID = copy["SourcePieceId"] as? String, UUID(uuidString: sourceID) != nil,
                   let placedID = copy["PlacedPieceId"] as? String, UUID(uuidString: placedID) != nil,
                   let number = jsonNumber(copy["CopyNumber"]), number.rounded() == number, number >= 1, number <= 100_000,
                   let degrees = jsonNumber(copy["Degrees"]), [0.0, 90.0, 180.0, 270.0].contains(degrees) else { return false }
+        }
+        return true
+    }
+
+    private static func hasV7ProjectFields(_ object: [String: Any], cancelled: () -> Bool) throws -> Bool {
+        if cancelled() { throw CancellationError() }
+        guard let rules = object["GradingRules"] as? [[String: Any]], rules.count <= 10_000,
+              let snapshot = object["NestingSnapshot"] as? [String: Any],
+              Set(snapshot.keys) == Set(["FabricWidth", "UsedLength", "Gap", "EdgeMargin", "Algorithm", "LayoutFingerprint", "Placements", "RotationTrace"]),
+              snapshot["Algorithm"] as? String == "deterministic-shelf-v1",
+              let fingerprint = snapshot["LayoutFingerprint"] as? String, fingerprint.utf8.count == 64,
+              fingerprint.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }),
+              let placements = snapshot["Placements"] as? [[String: Any]], !placements.isEmpty, placements.count <= 10_000 else { return false }
+        for key in ["FabricWidth", "UsedLength", "Gap", "EdgeMargin"] {
+            guard let value = jsonNumber(snapshot[key]), value.isFinite else { return false }
+        }
+        for placement in placements {
+            if cancelled() { throw CancellationError() }
+            guard Set(placement.keys) == Set(["SourcePieceId", "CopyNumber", "PlacedPieceId"]),
+                  let source = placement["SourcePieceId"] as? String, UUID(uuidString: source) != nil,
+                  let placed = placement["PlacedPieceId"] as? String, UUID(uuidString: placed) != nil,
+                  let number = jsonNumber(placement["CopyNumber"]), number.rounded() == number,
+                  number >= 1, number <= 100_000 else { return false }
+        }
+        for rule in rules {
+            if cancelled() { throw CancellationError() }
+            guard Set(rule.keys) == Set(["SourcePieceId", "SourceClosed", "SourcePoints", "Deltas"]),
+                  let id = rule["SourcePieceId"] as? String, UUID(uuidString: id) != nil,
+                  jsonBoolean(rule["SourceClosed"]) != nil,
+                  let points = rule["SourcePoints"] as? [[String: Any]], points.count <= 10_000,
+                  let deltas = rule["Deltas"] as? [[String: Any]], deltas.count == points.count else { return false }
+            for (offset, point) in (points + deltas).enumerated() {
+                if offset % 256 == 0 && cancelled() { throw CancellationError() }
+                guard Set(point.keys).isSubset(of: ["X", "Y", "IsFinite"]),
+                      let x = jsonNumber(point["X"]), let y = jsonNumber(point["Y"]), x.isFinite, y.isFinite,
+                      point["IsFinite"] == nil || jsonBoolean(point["IsFinite"]) == true else { return false }
+            }
+        }
+        if let value = object["ImportProvenance"] {
+            guard let provenance = value as? [String: Any],
+                  Set(provenance.keys) == Set(["SourceFileName", "SourceSha256", "SourceByteLength", "MillimetersPerUnit", "Warnings", "PieceIds"]),
+                  provenance["SourceFileName"] is String, provenance["SourceSha256"] is String,
+                  let length = jsonNumber(provenance["SourceByteLength"]), length.isFinite, length.rounded() == length,
+                  let scale = jsonNumber(provenance["MillimetersPerUnit"]), scale.isFinite,
+                  provenance["Warnings"] is [String],
+                  let ids = provenance["PieceIds"] as? [String], ids.allSatisfy({ UUID(uuidString: $0) != nil }) else { return false }
         }
         return true
     }
@@ -1802,8 +1855,8 @@ struct Drawing {
                 throw ViewerError.message("Sürüm \(formatVersion) projede tanınmayan alanlar var; dosya önizlenmedi.")
             }
             if formatVersion == 7 {
-                guard let snapshot = object["NestingSnapshot"] as? [String: Any],
-                      hasKnownRotationTrace(snapshot["RotationTrace"]) else {
+                guard try hasV7ProjectFields(object, cancelled: cancelled), let snapshot = object["NestingSnapshot"] as? [String: Any],
+                      try hasKnownRotationTrace(snapshot["RotationTrace"], cancelled: cancelled) else {
                     throw ViewerError.message("Sürüm 7 döndürme geçmişi eksik veya desteklenmiyor; dosya önizlenmedi.")
                 }
             }
@@ -1833,6 +1886,11 @@ struct Drawing {
         var pieceIDs = Set<UUID>()
         for raw in rawPieces {
             if cancelled() { throw CancellationError() }
+            if formatVersion == 7 {
+                guard let id = raw["Id"] as? String, UUID(uuidString: id) != nil, raw["Name"] is String else {
+                    throw ViewerError.message("Sürüm 7 parça kimliği veya adı eksik; dosya önizlenmedi.")
+                }
+            }
             if formatVersion >= 6 && !Set(raw.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]) {
                 throw ViewerError.message("Sürüm \(formatVersion) parçada tanınmayan alanlar var; kontur önizlenmedi.")
             }
@@ -1935,11 +1993,17 @@ struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
+            if formatVersion == 7 && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı" || raw["Grainline"] is NSNull || raw["Metadata"] is NSNull) {
+                throw ViewerError.message("Sürüm 7 parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
+            }
             let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
             if !(raw["Name"] is String) { pieceRenameIdentitiesValid = false }
             if raw["Id"] != nil {
                 if let id, id.uuidString != "00000000-0000-0000-0000-000000000000", pieceIDs.insert(id).inserted { }
                 else { pieceRenameIdentitiesValid = false }
+            }
+            if formatVersion == 7 && !pieceRenameIdentitiesValid {
+                throw ViewerError.message("Sürüm 7 parça kimliği yinelenmiş veya geçersiz; dosya önizlenmedi.")
             }
             let hasMinimum = ContourMeasure.hasMinimumContourPoints(points, closed: closed)
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
