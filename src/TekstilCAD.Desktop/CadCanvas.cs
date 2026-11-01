@@ -35,6 +35,7 @@ public sealed class CadCanvas : FrameworkElement
     private CancellationTokenSource? largeCompletionCancellation;
     private CancellationTokenSource? largeVertexCancellation;
     internal Task? LargeVertexValidationTask { get; private set; }
+    internal Action? BeforeLargeVertexValidationForVerification { get; set; }
     internal bool LargeVertexValidationRunning => largeVertexCancellation is not null;
     internal Task? LargeCompletionTask { get; private set; }
     internal bool LargeCompletionRunning => largeCompletionCancellation is not null;
@@ -743,6 +744,8 @@ public sealed class CadCanvas : FrameworkElement
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
         if(piece is null || piece.Closed!=closed || !piece.Points.SequenceEqual(original) || owner.SelectedId!=id || owner.ActiveTool!="Seç")
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
+        if(owner.HasPropertyDraftFor(id))
+            throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
         NotchSafety.RequireNoNotches(piece);
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
@@ -758,10 +761,13 @@ public sealed class CadCanvas : FrameworkElement
         var committed=false;
         try
         {
-            await Task.Run(()=> { if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token); },cancellation.Token);
+            var before=BeforeLargeVertexValidationForVerification;
+            await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token); },cancellation.Token);
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed)return;
             if(owner.ActiveTool!="Seç" || owner.SelectedId!=id || !ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Proje veya seçim değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
+            if(owner.HasPropertyDraftFor(id))
+            { owner.SetStatus("Nokta değişikliği uygulanmadı · Bu parçaya ait ad veya konum taslağı doğrulama sırasında oluşturuldu. Taslak ve önceki geometri korundu.");return; }
             var current=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
             if(current is null || current.Notches is not null || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
             { owner.SetStatus("Parça değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }

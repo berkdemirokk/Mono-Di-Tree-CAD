@@ -1538,6 +1538,34 @@ internal static class DesktopVerification
             Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && studio.SelectedId==piece.Id,
                 $"Invalid large {(closed?"closed":"open")} vertex change preserves document and history",checks);
         }
+        var draftPiece=new PatternPiece { Name="Büyük taslak",Closed=false,Points=original.ToList() };
+        studio.LoadDocument(new ProjectDocument { Pieces=[draftPiece] });studio.SetTool("Seç");studio.Select(draftPiece.Id);
+        using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())
+        {
+            Task? pending=null;
+            try
+            {
+                var before=studio.Document.Clone();var undo=session.UndoCount;
+                var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reached.Set();if(!release.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.StartLargeVertexValidation(draftPiece.Id,false,original,valid);
+                pending=canvas.LargeVertexValidationTask!;PumpUntil(()=>reached.IsSet);
+                name.Text="Korunan büyük taslak";
+                release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+                Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo &&
+                    studio.HasPropertyDraftFor(draftPiece.Id) && name.Text=="Korunan büyük taslak" && status.Text.Contains("taslak",StringComparison.OrdinalIgnoreCase) && status.Text.Contains("uygulanmadı"),
+                    "A property draft created during large vertex validation preserves both draft and source",checks);
+                var refused=false;
+                try { canvas.StartLargeVertexValidation(draftPiece.Id,false,original,valid); }
+                catch(InvalidOperationException) { refused=true; }
+                Check(refused && !canvas.LargeVertexValidationRunning,"Large vertex validation cannot start with a draft on its source",checks);
+                Invoke(studio,"ApplyProperties");
+                Check(studio.Selected!.Name=="Korunan büyük taslak" && !studio.HasPropertyDraftFor(draftPiece.Id),
+                    "The draft remains applicable after the worker result is refused",checks);
+            }
+            finally { release.Set();if(pending is not null) { PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
         var a=new PatternPiece { Name="A",Closed=false,Points=original.ToList() };
         var b=new PatternPiece { Name="B",Closed=false,Points=[new(0,0),new(10,0)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[a,b] });studio.Select(a.Id);
