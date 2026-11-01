@@ -1585,6 +1585,68 @@ internal static class DesktopVerification
             Check(DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==0 && studio.SelectedId==piece.Id,
                 $"Invalid large {(closed?"closed":"open")} vertex change preserves document and history",checks);
         }
+        var marked=new PatternPiece { Name="Büyük işaretli",Closed=true,Points=original.ToList(),
+            Notches=[new NotchMark { VertexIndex=2,Position=original[2] }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[marked] });studio.SetTool("Seç");studio.Select(marked.Id);
+        var markedBefore=studio.Document.Clone();
+        var rejectedMarked=false;
+        try { canvas.StartLargeVertexValidation(marked.Id,true,original,valid,2); }
+        catch(InvalidOperationException) { rejectedMarked=true; }
+        Check(rejectedMarked && !canvas.LargeVertexValidationRunning && DocumentSession.ContentEquals(markedBefore,studio.Document),
+            "Large marked vertex itself cannot move",checks);
+        canvas.StartLargeVertexValidation(marked.Id,true,original,valid,0);
+        var markedTask=canvas.LargeVertexValidationTask!;PumpUntil(()=>markedTask.IsCompleted);markedTask.GetAwaiter().GetResult();
+        Check(studio.Selected!.Points.SequenceEqual(valid) && studio.Selected.Notches!.Single().VertexIndex==2 &&
+            studio.Selected.Notches.Single().Position==original[2] && session.UndoCount==1,
+            "Large unmarked vertex moves while marker stays on its exact source vertex",checks);
+        Check(session.Undo() && DocumentSession.ContentEquals(markedBefore,studio.Document),
+            "Undo restores the large marked contour and marker",checks);
+        var multiple=valid.ToArray();multiple[1]=new Point2(original[1].X+0.01,original[1].Y);
+        canvas.StartLargeVertexValidation(marked.Id,true,original,multiple,0);
+        var multiTask=canvas.LargeVertexValidationTask!;PumpUntil(()=>multiTask.IsCompleted);multiTask.GetAwaiter().GetResult();
+        Check(DocumentSession.ContentEquals(markedBefore,studio.Document) && session.UndoCount==0,
+            "Large marked preview with extra vertex changes is rejected",checks);
+        var repeated=original.Append(original[0]).ToArray();
+        var closureMarked=new PatternPiece { Name="Tekrarlı kapanış",Closed=true,Points=repeated.ToList(),
+            Notches=[new NotchMark { VertexIndex=0,Position=repeated[0] }] };
+        studio.LoadDocument(new ProjectDocument { Pieces=[closureMarked] });studio.SetTool("Seç");studio.Select(closureMarked.Id);
+        var closureCandidate=repeated.ToArray();closureCandidate[0]=valid[0];closureCandidate[^1]=valid[0];
+        var closureRejected=false;
+        try { canvas.StartLargeVertexValidation(closureMarked.Id,true,repeated,closureCandidate,repeated.Length-1); }
+        catch(InvalidOperationException) { closureRejected=true; }
+        Check(closureRejected && !canvas.LargeVertexValidationRunning && studio.Selected!.Points.SequenceEqual(repeated),
+            "Large marked repeated closure rejects moving its alias",checks);
+        studio.LoadDocument(markedBefore.Clone());studio.SetTool("Seç");studio.Select(marked.Id);
+        using(var reachedCancel=new ManualResetEventSlim())using(var releaseCancel=new ManualResetEventSlim())
+        {
+            Task? waiting=null;
+            try
+            {
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reachedCancel.Set();if(!releaseCancel.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.StartLargeVertexValidation(marked.Id,true,original,valid,0);
+                waiting=canvas.LargeVertexValidationTask!;PumpUntil(()=>reachedCancel.IsSet);
+                canvas.CancelLargeVertexValidation();releaseCancel.Set();PumpUntil(()=>waiting.IsCompleted);waiting.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(markedBefore,studio.Document) && session.UndoCount==0,
+                    "Cancelling large marked vertex validation preserves the source",checks);
+            }
+            finally { releaseCancel.Set();if(waiting is not null) { PumpUntil(()=>waiting.IsCompleted);waiting.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
+        using(var reachedMarked=new ManualResetEventSlim())using(var releaseMarked=new ManualResetEventSlim())
+        {
+            Task? waiting=null;
+            try
+            {
+                canvas.BeforeLargeVertexValidationForVerification=()=> { reachedMarked.Set();if(!releaseMarked.Wait(TimeSpan.FromSeconds(30)))throw new TimeoutException(); };
+                canvas.StartLargeVertexValidation(marked.Id,true,original,valid,0);
+                waiting=canvas.LargeVertexValidationTask!;PumpUntil(()=>reachedMarked.IsSet);
+                studio.Document.Pieces[0].Notches![0].VertexIndex=3;
+                studio.Document.Pieces[0].Notches![0].Position=original[3];
+                var changedMarks=studio.Document.Clone();releaseMarked.Set();PumpUntil(()=>waiting.IsCompleted);waiting.GetAwaiter().GetResult();
+                Check(DocumentSession.ContentEquals(changedMarks,studio.Document) && session.UndoCount==0,
+                    "Concurrent marker changes reject the large vertex proposal",checks);
+            }
+            finally { releaseMarked.Set();if(waiting is not null) { PumpUntil(()=>waiting.IsCompleted);waiting.GetAwaiter().GetResult(); }canvas.BeforeLargeVertexValidationForVerification=null; }
+        }
         var draftPiece=new PatternPiece { Name="Büyük taslak",Closed=false,Points=original.ToList() };
         studio.LoadDocument(new ProjectDocument { Pieces=[draftPiece] });studio.SetTool("Seç");studio.Select(draftPiece.Id);
         using(var reached=new ManualResetEventSlim())using(var release=new ManualResetEventSlim())

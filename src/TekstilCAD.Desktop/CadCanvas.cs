@@ -492,7 +492,6 @@ public sealed class CadCanvas : FrameworkElement
             if(vertex>=0 && piece?.Notches is not null)
             {
                 if(!CanDragMarkedVertex(piece,vertex)) { owner.SetStatus("İşaretli köşe taşınamaz; önce işareti gözden geçirin.");return; }
-                if(piece.Points.Count>Geometry.MaxValidatedContourVertices) { owner.SetStatus("Büyük işaretli konturda nokta taşımak için Tekstil araçlarını kullanın.");return; }
             }
             if(piece is not null) { dragSourceSnapshot=piece.Clone();dragId=piece.Id;dragVertex=vertex;dragOrigin=World(screenPosition);dragScreenOrigin=screenPosition;dragOriginal=[..piece.Points];dragPreview=[..piece.Points];dragOriginalGrainline=piece.Grainline?.Clone();dragPreviewGrainline=dragOriginalGrainline?.Clone();dragTranslation=default;CaptureMouse(); }
             return;
@@ -705,8 +704,9 @@ public sealed class CadCanvas : FrameworkElement
             if(dragVertex>=0) ValidateClosingEdgePreserved(dragOriginal,result,piece.Closed);
             if(dragVertex>=0 && result.Count>Geometry.MaxValidatedContourVertices)
             {
-                if(piece.Notches is not null)throw new InvalidOperationException("Büyük işaretli konturda nokta taşımak için Tekstil araçlarını kullanın.");
-                StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result);
+                if(dragSourceSnapshot is not null && !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[piece] },new ProjectDocument { Pieces=[dragSourceSnapshot] }))
+                    throw new InvalidOperationException("Sürükleme sırasında kaynak veya işaretler değişti; işlem uygulanmadı.");
+                StartLargeVertexValidation(piece.Id,piece.Closed,dragOriginal,result,dragVertex);
                 ClearDrag();ReleaseMouseCapture();InvalidateVisual();return;
             }
             if(dragVertex>=0)
@@ -744,7 +744,7 @@ public sealed class CadCanvas : FrameworkElement
     }
 
     /// <summary>Validates a detached large vertex proposal; no live geometry changes until the worker succeeds.</summary>
-    internal void StartLargeVertexValidation(Guid id, bool closed, IReadOnlyList<Point2> original, IReadOnlyList<Point2> proposed)
+    internal void StartLargeVertexValidation(Guid id, bool closed, IReadOnlyList<Point2> original, IReadOnlyList<Point2> proposed,int vertexIndex=-1)
     {
         if(LargeVertexValidationRunning) { owner.SetStatus("Nokta değişikliği zaten doğrulanıyor; lütfen bekleyin.");return; }
         var piece=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
@@ -752,30 +752,31 @@ public sealed class CadCanvas : FrameworkElement
             throw new InvalidOperationException("Parça veya seçim değişti; nokta taşımasını yeniden başlatın.");
         if(owner.HasPropertyDraftFor(id))
             throw new InvalidOperationException("Önce bu parçanın ad ve konum taslağını uygulayın veya temizleyin.");
-        NotchSafety.RequireNoNotches(piece);
+        if(piece.Notches is not null && (vertexIndex<0 || vertexIndex>=piece.Points.Count || !CanDragMarkedVertex(piece,vertexIndex)))
+            throw new InvalidOperationException("İşaretli köşe taşınamaz; işlem uygulanmadı.");
         if(proposed.Count!=original.Count || proposed.Count<=Geometry.MaxValidatedContourVertices || proposed.Count>LargeOpenPathValidator.MaximumStoredPoints)
             throw new ArgumentException("Büyük nokta değişikliği için nokta sayısı geçersiz.");
         ValidateClosingEdgePreserved(original,proposed,closed);
-        var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();
+        var source=original.ToArray();var candidate=proposed.ToArray();var document=owner.Document;var originalGrain=piece.Grainline?.Clone();var markedSource=piece.Notches is null ? null : piece.Clone();
         var cancellation=new CancellationTokenSource();largeVertexCancellation=cancellation;
-        LargeVertexValidationTask=ValidateLargeVertexAsync(id,closed,source,candidate,document,originalGrain,cancellation);
+        LargeVertexValidationTask=ValidateLargeVertexAsync(id,closed,source,candidate,document,originalGrain,markedSource,vertexIndex,cancellation);
     }
 
-    private async Task ValidateLargeVertexAsync(Guid id,bool closed,Point2[] source,Point2[] candidate,ProjectDocument document,Grainline? originalGrain,CancellationTokenSource cancellation)
+    private async Task ValidateLargeVertexAsync(Guid id,bool closed,Point2[] source,Point2[] candidate,ProjectDocument document,Grainline? originalGrain,PatternPiece? markedSource,int vertexIndex,CancellationTokenSource cancellation)
     {
         owner.SetStatus("Büyük parçanın nokta değişikliği doğrulanıyor; ekranda kayıtlı geometri var. Bekleyin veya Esc ile iptal edin.");
         var committed=false;
         try
         {
             var before=BeforeLargeVertexValidationForVerification;
-            await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token); },cancellation.Token);
+            await Task.Run(()=> { before?.Invoke();cancellation.Token.ThrowIfCancellationRequested();if(markedSource is not null) { var verified=PatternTools.MovePoint(markedSource,vertexIndex,candidate[vertexIndex],cancellation.Token);if(!verified.Points.Zip(candidate).All(pair=>BitConverter.DoubleToInt64Bits(pair.First.X)==BitConverter.DoubleToInt64Bits(pair.Second.X) && BitConverter.DoubleToInt64Bits(pair.First.Y)==BitConverter.DoubleToInt64Bits(pair.Second.Y)) || verified.Points.Count!=candidate.Length)throw new InvalidOperationException("Nokta önizlemesi doğrulanan konturla eşleşmiyor."); } else if(closed)LargeContourValidator.Validate(candidate,cancellation.Token);else LargeOpenPathValidator.Validate(candidate,cancellation.Token); },cancellation.Token);
             if(cancellation.IsCancellationRequested || owner.IsWindowClosed)return;
             if(owner.ActiveTool!="Seç" || owner.SelectedId!=id || !ReferenceEquals(owner.Document,document))
             { owner.SetStatus("Proje veya seçim değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
             if(owner.HasPropertyDraftFor(id))
             { owner.SetStatus("Nokta değişikliği uygulanmadı · Bu parçaya ait ad veya konum taslağı doğrulama sırasında oluşturuldu. Taslak ve önceki geometri korundu.");return; }
             var current=owner.Document.Pieces.FirstOrDefault(p=>p.Id==id);
-            if(current is null || current.Notches is not null || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
+            if(current is null || (markedSource is null ? current.Notches is not null : !DocumentSession.ContentEquals(new ProjectDocument { Pieces=[current] },new ProjectDocument { Pieces=[markedSource] })) || current.Closed!=closed || !current.Points.SequenceEqual(source) || !GrainlineTransform.Same(current.Grainline,originalGrain))
             { owner.SetStatus("Parça değişti; doğrulanan nokta önerisi uygulanmadı. Önceki geometri korundu.");return; }
             // Check and commit without yielding to avoid applying a stale worker result.
             owner.CommitObserved("Büyük parçanın noktası taşındı",()=>
