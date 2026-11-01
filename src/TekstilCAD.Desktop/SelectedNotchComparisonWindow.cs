@@ -15,13 +15,13 @@ internal sealed class SelectedNotchComparisonWindow : Window
     private readonly ProjectDocument originalDocument,originalContent;
     private readonly PatternPiece source;
     private readonly DispatcherTimer staleTimer=new() { Interval=TimeSpan.FromMilliseconds(500) };
-    private readonly ComboBox target=new() { MinWidth=260,HorizontalAlignment=HorizontalAlignment.Left,DisplayMemberPath="Label" };
+    private readonly ComboBox target=new() { MinWidth=260,HorizontalAlignment=HorizontalAlignment.Left,DisplayMemberPath="Label",IsTextSearchEnabled=true };
     private readonly TextBox[] indices=new TextBox[6];
     private readonly TextBox widthTolerance=new() { Text="0",MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
     private readonly TextBox depthTolerance=new() { Text="0",MinWidth=100,HorizontalAlignment=HorizontalAlignment.Left };
     private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,12,0,0),Focusable=true };
     internal Action<PointPickerWindow>? PointPickerOpenedForVerification { get; set; }
-    private sealed record Choice(string Label,PatternPiece Piece);
+    private sealed record Choice(string Label,PatternPiece Piece,string SearchLabel);
 
     internal SelectedNotchComparisonWindow(MainWindow workspace,Window owner,PatternPiece source)
     {
@@ -37,7 +37,11 @@ internal sealed class SelectedNotchComparisonWindow : Window
         panel.Children.Add(new TextBlock { Text=$"Kaynak parça kimliği: {source.Id:D}",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         panel.Children.Add(new TextBlock { Text="Karşılaştırılacak parça",Margin=new Thickness(0,4,0,4) });
         AutomationProperties.SetName(target,"Karşılaştırılacak parça ve kimliği");
-        target.ItemsSource=workspace.Document.Pieces.Select(p=>new Choice($"{p.Id:D} · {SafeName(p.Name)}",p.Clone())).ToArray();
+        TextSearch.SetTextPath(target,nameof(Choice.SearchLabel));
+        target.ItemsSource=workspace.Document.Pieces.Select(p=> {
+            var safeName=CadCanvas.CanvasPieceLabel(p.Name);
+            return new Choice($"{p.Id:D} · {safeName}",p.Clone(),safeName);
+        }).ToArray();
         target.SelectedIndex=target.Items.Count>0?0:-1;target.SelectionChanged+=(_,_)=>InvalidateResult();panel.Children.Add(target);
         string[] labels=["Kaynak ağız başlangıcı indeksi (0 tabanlı)","Kaynak dip noktası indeksi (0 tabanlı)","Kaynak ağız bitişi indeksi (0 tabanlı)",
             "Karşılaştırma ağız başlangıcı indeksi (0 tabanlı)","Karşılaştırma dip noktası indeksi (0 tabanlı)","Karşılaştırma ağız bitişi indeksi (0 tabanlı)"];
@@ -141,5 +145,4 @@ internal sealed class SelectedNotchComparisonWindow : Window
         if(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(result) is { } peer)
             peer.RaiseAutomationEvent(System.Windows.Automation.Peers.AutomationEvents.LiveRegionChanged);
     }
-    private static string SafeName(string name)=>new(name.Take(80).Select(c=>char.IsControl(c)||char.GetUnicodeCategory(c)==UnicodeCategory.Format?'�':c).ToArray());
 }

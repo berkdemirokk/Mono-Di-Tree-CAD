@@ -10713,7 +10713,7 @@ internal static class DesktopVerification
     private static void VerifySelectedNotchComparison(MainWindow studio,List<string> checks)
     {
         var sourcePiece=new PatternPiece { Name="Kaynak",Points=[new(0,0),new(100,0),new(100,100),new(60,100),new(50,90),new(40,100),new(0,100)] };
-        var output=new PatternPiece { Name="Aday",Points=[new(60,100),new(50,99.999999),new(40,100)] };
+        var output=new PatternPiece { Name="Aday\u202E😀",Points=[new(60,100),new(50,99.999999),new(40,100)] };
         studio.LoadDocument(new ProjectDocument { Pieces=[sourcePiece,output] });studio.Select(sourcePiece.Id);
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var before=studio.Document.Clone();var undo=session.UndoCount;var redo=session.RedoCount;
@@ -10725,6 +10725,12 @@ internal static class DesktopVerification
             var sourceControl=(ScrollViewer)dialog.Content;var panel=(StackPanel)sourceControl.Content;
             var warning=panel.Children.OfType<TextBlock>().First();
             var target=(ComboBox)typeof(SelectedNotchComparisonWindow).GetField("target",PrivateInstance)!.GetValue(dialog)!;
+            var targetChoice=target.Items[1];
+            var targetLabel=(string)targetChoice.GetType().GetProperty("Label")!.GetValue(targetChoice)!;
+            var targetSearch=(string)targetChoice.GetType().GetProperty("SearchLabel")!.GetValue(targetChoice)!;
+            Check(target.IsTextSearchEnabled && TextSearch.GetTextPath(target)=="SearchLabel" && targetSearch=="Aday\\u202E😀" &&
+                targetLabel.StartsWith(output.Id.ToString("D"),StringComparison.Ordinal) && targetLabel.Contains(targetSearch) && !targetLabel.Contains('\u202E'),
+                "Notch comparison searches safe target names and preserves a full identity in the visible label",checks);
             var indices=(TextBox[])typeof(SelectedNotchComparisonWindow).GetField("indices",PrivateInstance)!.GetValue(dialog)!;
             var width=(TextBox)typeof(SelectedNotchComparisonWindow).GetField("widthTolerance",PrivateInstance)!.GetValue(dialog)!;
             var depth=(TextBox)typeof(SelectedNotchComparisonWindow).GetField("depthTolerance",PrivateInstance)!.GetValue(dialog)!;
