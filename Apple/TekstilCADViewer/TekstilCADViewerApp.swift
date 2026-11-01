@@ -2781,6 +2781,10 @@ private struct PointDistancePreview: View {
                 Button(panEnabled ? "Çizim taşımayı bitir" : "Ölçüm çizimini taşı") { panEnabled.toggle() }
                 Button("Ölçüm çizimini sıfırla") { zoom = 1; offset = .zero }
             }.font(.caption)
+            HStack {
+                Button("İlk noktayı görünür yap") { reveal(first) }
+                Button("İkinci noktayı görünür yap") { reveal(second) }
+            }.font(.caption)
             if panEnabled {
                 HStack {
                     Button("Sola taşı") { move(x: -40, y: 0) }
@@ -2793,6 +2797,12 @@ private struct PointDistancePreview: View {
         .onChange(of: zoom) { offset = boundedOffset(offset, size: canvasSize, zoom: $0) }
     }
 
+    private func reveal(_ index: Int) {
+        guard piece.points.indices.contains(index), let bounds = piece.contourBounds,
+              let viewport = ContourViewport(bounds: bounds, width: Double(canvasSize.width), height: Double(canvasSize.height)),
+              let next = ContourViewport.visibleOffset(point: viewport.position(piece.points[index]), size: canvasSize, zoom: zoom, offset: offset) else { return }
+        offset = boundedOffset(next, size: canvasSize, zoom: zoom)
+    }
     private func move(x: CGFloat, y: CGFloat) {
         offset = boundedOffset(CGSize(width: offset.width + x, height: offset.height + y), size: canvasSize, zoom: zoom)
     }
