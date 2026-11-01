@@ -10,6 +10,11 @@ public sealed class DxfBlockOccurrenceTests
     [InlineData("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nSECTION\n2\nENTITIES\n0\nENDSEC\n0\nEOF\n")]
     [InlineData("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n2\nA\n0\nENDSEC\n0\nEOF\n")]
     [InlineData("0\nSECTION\n2\nBLOCKS\n0\nPOINT\n10\n0\n20\n0\n0\nENDSEC\n0\nEOF\n")]
+    [InlineData("0\nPOINT\n10\n0\n20\n0\n0\nEOF\n")]
+    [InlineData("0\nSECTION\n0\nENDSEC\n0\nEOF\n")]
+    [InlineData("0\nSECTION\n2\nENTITIES\n2\nBLOCKS\n0\nENDSEC\n0\nEOF\n")]
+    [InlineData("0\nSECTION\n2\nENTITIES\n0\nEOF\n")]
+    [InlineData("0\nEOF\n0\nPOINT\n10\n0\n20\n0\n")]
     public void MalformedBlockBoundariesCannotProduceSourceEvidence(string source)
     {
         var bytes=Encoding.ASCII.GetBytes(source);var original=bytes.ToArray();

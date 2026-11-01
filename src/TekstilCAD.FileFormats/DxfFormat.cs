@@ -629,20 +629,29 @@ public static class DxfFormat
         // All source reports and the geometry pass must agree on the owning
         // BLOCK occurrence. Reject malformed boundaries before producing any
         // occurrence evidence, including in the legacy importer.
-        string? occurrenceSection=null;bool occurrenceBlock=false;
+        string? occurrenceSection=null;bool occurrenceBlock=false,occurrenceEof=false;
         foreach(var item in entities)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if(occurrenceEof)throw new InvalidDataException("DXF EOF sonrasında kaynak kaydı bulunamaz.");
             if(item.Type=="SECTION")
             {
                 if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF bölüm sınırları iç içe geçemez.");
-                occurrenceSection=item.Text(2);continue;
+                var names=item.Data.Where(p=>p.Code==2).ToArray();
+                if(names.Length!=1 || string.IsNullOrWhiteSpace(names[0].Value))throw new InvalidDataException("DXF SECTION adı eksik veya yinelenmiş.");
+                occurrenceSection=names[0].Value;continue;
             }
             if(item.Type=="ENDSEC")
             {
                 if(occurrenceSection is null || occurrenceBlock)throw new InvalidDataException("DXF blok veya bölüm sonu eksik.");
                 occurrenceSection=null;continue;
             }
+            if(item.Type=="EOF")
+            {
+                if(occurrenceSection is not null || occurrenceBlock)throw new InvalidDataException("DXF EOF öncesinde bölüm kapatılmadı.");
+                occurrenceEof=true;continue;
+            }
+            if(occurrenceSection is null)throw new InvalidDataException("DXF bölüm dışında sahipsiz kayıt içeriyor.");
             if(item.Type=="BLOCK")
             {
                 if(occurrenceSection!="BLOCKS" || occurrenceBlock)throw new InvalidDataException("DXF BLOCK yalnız BLOCKS bölümünde ve ayrı tanım olarak bulunabilir.");
