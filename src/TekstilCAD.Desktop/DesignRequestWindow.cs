@@ -53,8 +53,9 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetName(statusViewport,"İşlem durumu");
         statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);
         var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
-        body.Children.Add(new TextBlock { Text="Modelini ve isteğini anlat",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
-        body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan yazın. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
+        body.Children.Add(new TextBlock { Text="MONO Dİ TREE CAD  ·  KALIP STÜDYOSU",Foreground=Muted,FontSize=11,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,8) });
+        body.Children.Add(new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
+        body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
         var drawingNotes=new Button { Content="Kaydedilmiş notlarla çizime geç",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetHelpText(drawingNotes,"Kaydedilmiş isteğin salt okunur notlarını ana çizim penceresiyle birlikte açar. Kalıp oluşturmaz.");
         drawingNotes.Click+=(_,_)=>OpenDrawingNotes();body.Children.Add(drawingNotes);
@@ -67,9 +68,9 @@ internal sealed class DesignRequestWindow : Window
             var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=Brushes.Transparent,Stroke=Accent,StrokeThickness=1.2 };
             art.Children.Add(dress);
             if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=Accent,StrokeThickness=1.2,StrokeLineJoin=PenLineJoin.Round });
-            var image=new Viewbox { Width=92,Height=92,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,1,0,3) };
-            var content=new StackPanel { Width=126,IsHitTestVisible=false };
-            content.Children.Add(image);
+            var image=new Viewbox { Width=112,Height=112,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };
+            var content=new StackPanel { Width=146,IsHitTestVisible=false };
+            content.Children.Add(new Border { Background=Raised,CornerRadius=new CornerRadius(6),Child=image,Margin=new Thickness(0,0,0,5) });
             content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontFamily=new FontFamily("Georgia"),FontSize=14,Foreground=Accent,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
             var caption=new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted };content.Children.Add(caption);
             var button=new Button { Content=content,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
@@ -79,7 +80,7 @@ internal sealed class DesignRequestWindow : Window
             {
                 var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
                 if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; }
-                prompt.AppendText(addition);SetLastModel(button);chatInput.Focus();SetStatus("Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.");
+                prompt.AppendText(addition);SetLastModel(button);prompt.Focus();SetStatus("Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.");
             };
             modelCards.Add((button,caption));models.Children.Add(button);
         }
@@ -87,7 +88,10 @@ internal sealed class DesignRequestWindow : Window
         ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,38 14,73 66,73 50,38 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Anvelop elbise", "Anvelop elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,40 17,73 63,73 50,40 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z","M 34,5 L 49,39 M 46,5 L 31,39 M 30,40 L 50,40 M 49,40 L 58,73");
         ModelChoice("Gömlek elbise", "Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
-        body.Children.Add(new TextBlock { Text="02  ·  TARİF VE ÖLÇÜLER",FontWeight=FontWeights.SemiBold,Foreground=Ink,Margin=new Thickness(0,10,0,4) });
+        body.Children.Add(new TextBlock { Text="Nasıl bir elbise istiyorsun?",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
+        body.Children.Add(new TextBlock { Text="Kumaşı, yakayı, boyu ve diğer model ayrıntılarını tarif edin.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        var editBody=new StackPanel();body.Children.Add(editBody);
+        body.Children.Add(new TextBlock { Text="Ölçüler için yazışma",FontFamily=new FontFamily("Georgia"),FontSize=19,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
         body.Children.Add(new Label { Foreground=Ink,Content="Konuşma ve sıradaki soru",Target=conversation,Padding=new Thickness(0,4,0,4) });
         AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(new Border { Child=conversation,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(3),Margin=new Thickness(0,0,0,6) });
         AutomationProperties.SetHelpText(measurementShortcut,"Sorulan ölçünün etiketini mesajın sonuna ekler; sayı veya birim seçmez. Mevcut metin korunur.");
@@ -98,8 +102,8 @@ internal sealed class DesignRequestWindow : Window
         send.Background=Accent;send.Foreground=Surface;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
-        var editBody=new StackPanel();body.Children.Add(new Expander { Header="İstek ve ölçüleri düzenle",Content=editBody,Margin=new Thickness(0,8,0,8) });
-        editBody.Children.Add(new Label { Foreground=Ink,Content="Kadın elbise modeli ve özellikleri",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
+        editBody.Children.Add(new Label { Foreground=Ink,Content="Tasarımcı notları",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
+        editBody.Children.Add(new TextBlock { Text="Ölçülerini ekle",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
         editBody.Children.Add(new Label { Foreground=Ink,Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");editBody.Children.Add(measurements);
         editBody.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
         var checkMeasurements=new Button { Content="Açık ölçüleri denetle",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };

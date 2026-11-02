@@ -9946,10 +9946,13 @@ internal static class DesktopVerification
             {
                 themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
                 var requestBody=(StackPanel)window.BodyScrollerForVerification.Content;
-                var advanced=(StackPanel)requestBody.Children.OfType<Expander>().Single().Content;
+                var advanced=requestBody.Children.OfType<StackPanel>().Single(p=>p.Children.Contains(window.PromptForVerification));
                 var labels=requestBody.Children.OfType<Label>().Concat(advanced.Children.OfType<Label>()).ToArray();
                 Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,DesignRequestWindow.Ink)),
                     "All design request labels use the readable theme text brush at "+size,checks);
+                Check(advanced.Children.Contains(window.MeasurementsForVerification) && !requestBody.Children.OfType<Expander>().Any() &&
+                    requestBody.Children.IndexOf(advanced)<requestBody.Children.IndexOf(requestBody.Children.OfType<Label>().First()),
+                    "Design request presents editable description and measurements before optional conversation at "+size,checks);
             }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
