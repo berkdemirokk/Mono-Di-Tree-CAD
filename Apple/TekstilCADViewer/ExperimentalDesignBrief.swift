@@ -343,7 +343,20 @@ enum ExperimentalDesignBrief {
             if let model { try box.encode(model, forKey: .model) } else { try box.encodeNil(forKey: .model) }
         }
     }
+    static func v2ImageGeometryAllowed(width: Int, height: Int, frames: Int) -> Bool {
+        frames == 1 && width > 0 && height > 0 && width <= 12_000 && height <= 12_000 && width <= 24_000_000 / height
+    }
+    private static func validateV2Image(_ data: Data) throws {
+        guard !data.isEmpty, data.count <= maxImageBytes,
+              let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int,
+              v2ImageGeometryAllowed(width: width, height: height, frames: CGImageSourceGetCount(source)),
+              CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw Error.invalidImage }
+    }
     static func makeV2(_ draft: Draft) throws -> Data {
+        if let image = draft.image { try validateV2Image(image) }
         let id = portableStyleIDs.first(where: { $0.value == draft.style })?.key
         guard draft.style == .describe || id != nil else { throw Error.invalidText }
         let validated = try JSONDecoder().decode(Document.self, from: make(prompt: draft.description, measurements: draft.measurements, image: draft.image, imageName: draft.imageName))
@@ -383,6 +396,7 @@ enum ExperimentalDesignBrief {
             guard let decoded = Data(base64Encoded: normalized) else { throw Error.invalidImage }
             image = decoded
         } else { image = nil }
+        if doc.version == 2, let image { try validateV2Image(image) }
         // Reject unsupported or inconsistent images before replacing any current draft.
         let verified = try JSONDecoder().decode(Document.self, from: make(prompt: doc.prompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name))
         guard doc.prompt.utf16.count <= maxTextUnits else { throw Error.invalidText }

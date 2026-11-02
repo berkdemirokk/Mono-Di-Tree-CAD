@@ -493,12 +493,22 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(recovered.style, .aline)
         XCTAssertEqual(recovered.description, "Düz elbise istiyorum")
     }
+    func testV2PhotoGeometryBoundaries() {
+        XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 4000, frames: 1))
+        XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 12000, height: 2000, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 5000, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 12001, height: 1, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 1, height: 12001, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 4000, frames: 2))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 1, height: 0, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: Int.max, height: 1, frames: 1))
+    }
     func testSharedV2Fixtures() throws {
         let bundle = Bundle(for: Self.self)
         func fixture(_ name: String) throws -> Data {
             try Data(contentsOf: XCTUnwrap(bundle.url(forResource: name, withExtension: "json")))
         }
-        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg"] {
+        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng"] {
             XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(fixture(name)), name)
         }
         for name in ["v2-model-matching", "v2-model-conflicting"] {
