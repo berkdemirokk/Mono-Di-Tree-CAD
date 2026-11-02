@@ -9314,6 +9314,26 @@ internal static class DesktopVerification
                 canvas.TryAddPixelPoint(new Point(25,25));Check(checkWindow.FirstForVerification.Items.Count==beforeZoom.Length,"Photo comparison uses a detached point snapshot",checks);canvas.UndoPoint();
             }
             finally { checkWindow.Close(); }
+            var editor=trace.CreatePointEditor() ?? throw new InvalidOperationException("Photo point editor missing.");
+            var staleEditor=trace.CreatePointEditor() ?? throw new InvalidOperationException("Second photo point editor missing.");
+            try
+            {
+                editor.PointSelector.SelectedIndex=1;editor.XInput.Text="21";editor.YInput.Text="11";
+                Render(editor,Path.ChangeExtension(reportPath,".photo-point-edit.png"),440,340);
+                Check(editor.PointSelector.Items.Count==3 && FullyVisible(editor.PointSelector,(FrameworkElement)editor.Content) &&
+                    !canvas.TryMoveTracePoint(0,new Point(11,11)) && !canvas.TryMoveTracePoint(3,new Point(20,20)),
+                    "Photo point editor exposes only trace points and rejects reference or adjacent-point moves",checks);
+                Check(canvas.SetPathSuggestion(new Point(20,10),new Point(20,20),[new Point(20,10),new Point(21,15),new Point(20,20)]),
+                    "Photo point edit starts with a pending path preview",checks);
+                var revision=trace.DraftRevision;
+                Check(editor.TryApplyEdit() && canvas.Points[3]==new Point(21,11) && canvas.Points[0]==beforeZoom[0] && canvas.Points[1]==beforeZoom[1] &&
+                    canvas.PathSuggestion is null && trace.DraftRevision==revision+1,
+                    "Photo point edit preserves references and invalidates pending proposals",checks);
+                Check(!staleEditor.TryApplyEdit() && staleEditor.Status.Text.Contains("Taslak değişti") && canvas.Points[3]==new Point(21,11),
+                    "Stale photo point editor cannot overwrite a newer draft",checks);
+                Check(canvas.TryMoveTracePoint(3,beforeZoom[3]) && canvas.Points.SequenceEqual(beforeZoom),"Photo edit can be corrected without changing other points",checks);
+            }
+            finally { editor.Close();staleEditor.Close(); }
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
@@ -9423,15 +9443,17 @@ internal static class DesktopVerification
             Check(pendingWarning && closureNotice && closureRequested is null && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Draft confirmation discloses an unaccepted photo path and leaves the project unchanged on cancellation",checks);
             Check(canvas.ApplyPathSuggestion(),"Reviewed photo path is explicitly accepted",checks);
+            Check(canvas.TryMoveTracePoint(4,new Point(22,11)) && !canvas.UndoPath(),
+                "Correcting an accepted path point invalidates the previous path undo",checks);
             trace.ConfirmForVerification=_=>true;trace.TryApply();
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
             Check(closureRequested==draft.Id,"Photo draft requests closure review for the exact newly added source",checks);
-            Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(110,10),new Point2(110,90),new Point2(100,100) }) && session.UndoCount==1,
-                "Confirmed photo trace with accepted path adds one scaled open draft",checks);
+            Check(!draft.Closed && draft.Name.Contains("taslak") && draft.Points.SequenceEqual(new[] { new Point2(0,0),new Point2(100,0),new Point2(120,10),new Point2(110,90),new Point2(100,100) }) && session.UndoCount==1,
+                "Confirmed photo trace with corrected path adds one scaled open draft",checks);
             var provenance=AssertSingle(added.PhotoTraceHistory!);
             Check(provenance.PieceId==draft.Id && provenance.SourceSha256==photoHash && provenance.SourceByteLength==encodedPhoto.Length &&
-                provenance.GeneratedPoints.SequenceEqual(draft.Points) && provenance.TracePixels.Count==5,
-                "Photo draft retains accepted path, source identity and historical calibration",checks);
+                provenance.GeneratedPoints.SequenceEqual(draft.Points) && provenance.TracePixels.Count==5 && provenance.TracePixels[2]==new Point2(22,11),
+                "Photo draft retains corrected path, source identity and historical calibration",checks);
             var historyWindow=new PhotoTraceHistoryWindow(workspace,added);
             try
             {

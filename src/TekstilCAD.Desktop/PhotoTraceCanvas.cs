@@ -159,6 +159,15 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         points.Add(point);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
+    internal bool TryMoveTracePoint(int index,Point point)
+    {
+        if(image is null || index<ReferencePointCount || index>=points.Count || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
+            point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 || point==points[index] ||
+            (index>ReferencePointCount && point==points[index-1]) || (index+1<points.Count && point==points[index+1]))return false;
+        points[index]=point;cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;
+        InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+    }
+
     internal bool UndoPoint()
     {
         if(points.Count==0)return false;

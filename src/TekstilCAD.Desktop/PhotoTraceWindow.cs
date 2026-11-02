@@ -52,6 +52,9 @@ internal sealed class PhotoTraceWindow : Window
         input.Children.Add(new Label { Content="Y",Target=yInput,Foreground=DesignRequestWindow.Ink });AutomationProperties.SetName(yInput,"Seçilecek piksel Y");input.Children.Add(yInput);
         var addPoint=new Button { Content="Nokta ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(addPoint);
         addPoint.Click+=(_,_)=> { if(!MeasurementInput.TryParseMillimeters(xInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(yInput.Text,out var y) || !CanvasForVerification.TryAddPixelPoint(new Point(x,y)))StatusForVerification.Text="Piksel koordinatı geçersiz veya nokta eklenemedi."; };
+        var editPoint=new Button { Content="Düzelt…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(editPoint);
+        AutomationProperties.SetName(editPoint,"Çizgi noktasını düzelt");AutomationProperties.SetHelpText(editPoint,"Seçilen çizgi noktasını piksel koordinatlarıyla veya önceden seçilmiş inceleme imleciyle taşır; referansları değiştirmez.");
+        editPoint.Click+=(_,_)=> { var dialog=CreatePointEditor();if(dialog is not null)dialog.ShowDialog(); };
         var checkMeasure=new Button { Content="Ölçü karşılaştır…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(checkMeasure);
         AutomationProperties.SetHelpText(checkMeasure,"Taslak noktaları arasındaki fotoğraf mesafesini ayrı bilinen bir ölçüyle karşılaştırır; proje değişmez ve sonuç kaydedilmez.");
         checkMeasure.Click+=(_,_)=>CreateMeasurementCheck()?.ShowDialog();
@@ -91,6 +94,11 @@ internal sealed class PhotoTraceWindow : Window
         UpdateStatus();root.Children.Add(CanvasForVerification);
         Closing+=OnClosing;
         workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
+    }
+    internal PhotoTracePointEditWindow? CreatePointEditor()
+    {
+        if(CanvasForVerification.Points.Count<=CanvasForVerification.ReferencePointCount) { StatusForVerification.Text="Düzeltmek için önce bir çizgi noktası seçin.";return null; }
+        return new PhotoTracePointEditWindow(this);
     }
     private void OpenPlaneSetup()
     {

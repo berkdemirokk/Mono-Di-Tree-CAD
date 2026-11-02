@@ -1,0 +1,58 @@
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using TekstilCAD.Core;
+
+namespace TekstilCAD.Desktop;
+
+/// <summary>Edits one trace point in a captured draft; reference points cannot be moved here.</summary>
+internal sealed class PhotoTracePointEditWindow : Window
+{
+    private readonly PhotoTraceWindow owner;
+    private readonly long revision;
+    private readonly Point[] snapshot;
+    internal ComboBox PointSelector { get; } = new() { MinWidth=240,Margin=new Thickness(0,2,0,6) };
+    internal TextBox XInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,12,0) };
+    internal TextBox YInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,0,0) };
+    internal TextBlock Status { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,6) };
+    private sealed record Choice(int Index,Point Pixel)
+    {
+        public override string ToString()=>$"Nokta {Index+1} · X {MeasurementInput.Format(Pixel.X)}, Y {MeasurementInput.Format(Pixel.Y)}";
+    }
+    internal PhotoTracePointEditWindow(PhotoTraceWindow owner)
+    {
+        this.owner=owner;Owner=owner;revision=owner.DraftRevision;snapshot=owner.CanvasForVerification.Points.ToArray();
+        Title="Çizgi noktasını düzelt";Width=480;Height=360;MinWidth=440;MinHeight=340;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
+        var root=new DockPanel { Margin=new Thickness(16) };Content=root;
+        var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
+        var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
+        var apply=new Button { Content="Noktayı değiştir",Padding=new Thickness(12,6,12,6) };
+        apply.Click+=(_,_)=> { if(TryApplyEdit())DialogResult=true; };
+        actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        var body=new StackPanel();root.Children.Add(body);
+        body.Children.Add(new TextBlock { Text="Çizgi noktasını seçin; yeni önizleme piksel koordinatlarını girin. Referans noktaları değişmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        body.Children.Add(new Label { Content="Çizgi noktası",Target=PointSelector,Padding=new Thickness(0),Foreground=StudioTheme.Text });body.Children.Add(PointSelector);
+        AutomationProperties.SetName(PointSelector,"Düzeltilecek çizgi noktası");
+        var coords=new WrapPanel();coords.Children.Add(new Label { Content="X",Target=XInput,Foreground=StudioTheme.Text });coords.Children.Add(XInput);coords.Children.Add(new Label { Content="Y",Target=YInput,Foreground=StudioTheme.Text });coords.Children.Add(YInput);
+        AutomationProperties.SetName(XInput,"Yeni önizleme piksel X");AutomationProperties.SetName(YInput,"Yeni önizleme piksel Y");body.Children.Add(coords);
+        var cursorButton=new Button { Content="İnceleme imlecini kullan",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,8,0,0) };
+        AutomationProperties.SetHelpText(cursorButton,"Pencere açılmadan önce fotoğrafta sağ tıklanan veya klavyeyle taşınan imleç konumunu yeni koordinatlara yazar.");
+        var cursor=owner.CanvasForVerification.CursorForVerification;
+        cursorButton.Click+=(_,_)=> { XInput.Text=MeasurementInput.Format(cursor.X);YInput.Text=MeasurementInput.Format(cursor.Y); };
+        body.Children.Add(cursorButton);Status.Text="Değişiklik bekleyen öneriyi ve yol geri almasını kaldırır.";AutomationProperties.SetName(Status,"Nokta düzenleme durumu");AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);body.Children.Add(Status);
+        PointSelector.SelectionChanged+=(_,_)=> { if(PointSelector.SelectedItem is Choice c) { XInput.Text=MeasurementInput.Format(c.Pixel.X);YInput.Text=MeasurementInput.Format(c.Pixel.Y); } };
+        for(int i=owner.CanvasForVerification.ReferencePointCount;i<snapshot.Length;i++)PointSelector.Items.Add(new Choice(i,snapshot[i]));
+        if(PointSelector.Items.Count>0)
+        {
+            var nearest=PointSelector.Items.Cast<Choice>().OrderBy(c=>(c.Pixel-cursor).LengthSquared).First();PointSelector.SelectedItem=nearest;
+        }
+    }
+    internal bool TryApplyEdit()
+    {
+        if(owner.DraftRevision!=revision || !owner.CanvasForVerification.Points.SequenceEqual(snapshot)) { Status.Text="Taslak değişti; pencereyi kapatıp yeniden açın.";return false; }
+        if(PointSelector.SelectedItem is not Choice choice || !MeasurementInput.TryParseMillimeters(XInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(YInput.Text,out var y) ||
+            !owner.CanvasForVerification.TryMoveTracePoint(choice.Index,new Point(x,y)))
+        { Status.Text="Nokta değişmedi. Görüntü içindeki yeni koordinatları seçin; komşu noktayla aynı konum kullanılamaz.";return false; }
+        return true;
+    }
+}
