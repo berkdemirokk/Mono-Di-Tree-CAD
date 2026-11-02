@@ -1,0 +1,7 @@
+# Read-only synthetic front preview
+
+`synthetic-front-preview.html` is a self-contained illustration generated for one fixed synthetic Breanna example. The generator accepts no measurements or other command-line input. It uses the isolated SVG transform probe and retains the original cubic commands in millimetre-based coordinates. The left panel is a padded crop of the front seam and its conservative control-point box; the right panel shows the same transformed geometry in the original SVG viewport. The source viewport is a layout frame, not the exact boundary of the piece. Screen display is responsive and is not physically calibrated; printing is disabled by the page stylesheet. This is not a cutting or plotting file.
+
+The source is rounded by FreeSewing's SVG renderer. Tests compare each rendered point and cubic control against the separately produced intermediate geometry with the known source translation and 0.0051 mm rounding tolerance. They also verify the viewport, control-point rectangle, fixed content, lack of interactive controls, and rejection of external input. The local page was checked in a headless browser. This does not validate topology, sizing, fit, seam allowances, physical printing, cutting, or licensing. The only generated geometry is the synthetic example; do not introduce real measurements.
+
+Recreate after building `svg-transform-probe` with the local .NET SDK, by running `node synthetic-front-preview.mjs` and redirecting its stdout to the HTML file. No network service is needed.
