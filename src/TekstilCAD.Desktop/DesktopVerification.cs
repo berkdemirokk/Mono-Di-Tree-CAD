@@ -9805,6 +9805,40 @@ internal static class DesktopVerification
             window.LoadForVerification(input);
             Check(tiles["göğüs çevresi"].Text=="96 cm" && tiles["bel çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
                 "Opening a request updates measurement cards without inferring an ambiguous length",checks);
+            _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window);
+            try
+            {
+                Render(entry,Path.ChangeExtension(reportPath,".atelier-measurement-entry.png"),440,390);
+                var entryRoot=(FrameworkElement)entry.Content;
+                Check(entry.InputsForVerification.Count==4 && entry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable && FullyVisible(t,entryRoot)) &&
+                    !entry.TryApply() && entry.StatusForVerification.Text.Contains("en az bir"),
+                    "Measurement entry starts blank and preserves the request when no value is entered",checks);
+                var chest=entry.InputsForVerification["göğüs çevresi"];var waist=entry.InputsForVerification["bel çevresi"];
+                chest.Text="90 cm; göğüs çevresi 90";
+                Check(!entry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,"Measurement entry refuses injected labels and units",checks);
+                chest.Text="97";waist.Text="0";
+                Check(!entry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,"A bad measurement rejects the whole entry without partial changes",checks);
+                waist.Text="72,5";
+                Check(entry.TryApply() && window.MeasurementsForVerification.Text.StartsWith(input.Measurements,StringComparison.Ordinal) &&
+                    window.MeasurementsForVerification.Text.Contains("göğüs çevresi 97 cm") && window.MeasurementsForVerification.Text.Contains("bel çevresi 72,5 cm") &&
+                    tiles["göğüs çevresi"].Text=="Kontrol edin" && tiles["bel çevresi"].Text=="72.5 cm" &&
+                    window.PromptForVerification.Text==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Measurement entry appends values, retains originals and surfaces conflicting measurements",checks);
+            }
+            finally { entry.Close(); }
+            var staleEntry=new AtelierMeasurementEntryWindow(window);
+            try { staleEntry.InputsForVerification["kalça çevresi"].Text="100";window.PromptForVerification.Text+=" değişti";
+                var expected=window.MeasurementsForVerification.Text;
+                Check(!staleEntry.TryApply() && staleEntry.StatusForVerification.Text.Contains("İstek değişti") && window.MeasurementsForVerification.Text==expected,
+                    "A stale measurement entry cannot overwrite a changed request",checks); }
+            finally { staleEntry.Close(); }
+            window.LoadForVerification(input);window.MeasurementsForVerification.Text=new string('x',DesignRequestStorage.MaximumTextLength-2);
+            var fullEntry=new AtelierMeasurementEntryWindow(window);
+            try { fullEntry.InputsForVerification["elbise boyu"].Text="110";var expected=window.MeasurementsForVerification.Text;
+                Check(!fullEntry.TryApply() && fullEntry.StatusForVerification.Text.Contains("sınırına") && window.MeasurementsForVerification.Text==expected && fullEntry.InputsForVerification["elbise boyu"].Text=="110",
+                    "Measurement entry refuses overflow without losing existing or entered text",checks); }
+            finally { fullEntry.Close(); }
+            window.LoadForVerification(input);
             var overviewScroll=window.BodyScrollerForVerification;var tileY=tiles["göğüs çevresi"].TransformToAncestor(overviewScroll).Transform(new Point(0,0)).Y+overviewScroll.VerticalOffset;
             overviewScroll.ScrollToVerticalOffset(Math.Max(0,tileY-80));Render(window,Path.ChangeExtension(reportPath,".atelier-measurements.png"),900,700);overviewScroll.ScrollToVerticalOffset(0);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),

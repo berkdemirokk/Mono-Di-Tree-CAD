@@ -111,7 +111,11 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         editBody.Children.Add(new Label { Foreground=Ink,Content="Tasarımcı notları",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
-        editBody.Children.Add(new TextBlock { Text="Ölçülerini ekle",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
+        var measurementHeading=new DockPanel { Margin=new Thickness(0,14,0,4) };
+        var enterMeasurements=new Button { Content="Ölçüleri gir…",Padding=new Thickness(10,4,10,4),Margin=new Thickness(8,0,0,0) };
+        AutomationProperties.SetHelpText(enterMeasurements,"Bilinen ölçüleri santimetre cinsinden ayrı alanlara girip mevcut notlara ekler; farklı değerler çelişki olarak gösterilir.");
+        enterMeasurements.Click+=(_,_)=>new AtelierMeasurementEntryWindow(this).ShowDialog();DockPanel.SetDock(enterMeasurements,Dock.Right);measurementHeading.Children.Add(enterMeasurements);
+        measurementHeading.Children.Add(new TextBlock { Text="Ölçülerini ekle",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,VerticalAlignment=VerticalAlignment.Center });editBody.Children.Add(measurementHeading);
         editBody.Children.Add(new TextBlock { Text="Yalnız açıkça yazılan değerler gösterilir; beden veya eksik ölçü varsayılmaz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var measurementCards=new WrapPanel();editBody.Children.Add(measurementCards);
         void MeasurementCard(string key,string title)
@@ -142,6 +146,16 @@ internal sealed class DesignRequestWindow : Window
         statusViewport.ScrollToTop();
         if(UIElementAutomationPeer.FromElement(status) is { } peer)
             peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    internal bool TryAppendMeasurementLines(string expectedPrompt,string expectedMeasurements,IReadOnlyList<string> lines,out string error)
+    {
+        error="";
+        if(prompt.Text!=expectedPrompt || measurements.Text!=expectedMeasurements) { error="İstek değişti; pencereyi kapatıp yeniden açın.";return false; }
+        if(lines.Count==0) { error="Eklemek için en az bir ölçü girin.";return false; }
+        var addition=(measurements.Text.Length==0 ? "" : "\n")+string.Join("\n",lines);
+        if((long)measurements.Text.Length+addition.Length+addition.Count(c=>c=='\n')>measurements.MaxLength)
+        { error="Ölçü notları sınırına ulaşıldı; mevcut notlar ve girilen değerler korundu.";return false; }
+        measurements.AppendText(addition);SetStatus("Ölçüler notlara eklendi. Çelişkileri ve ölçülerin doğruluğunu kontrol edin.");return true;
     }
     internal RequestNotesWindow? CreateDrawingNotes()
     {
