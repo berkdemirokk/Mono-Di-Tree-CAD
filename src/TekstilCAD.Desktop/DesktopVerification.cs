@@ -9405,6 +9405,8 @@ internal static class DesktopVerification
                 Render(trace,Path.ChangeExtension(reportPath,".photo-batch-preview.png"),560,480);
                 Check(calls==2 && canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && FullyVisible(canvas,root) && trace.StatusForVerification.Text.Contains("ilk ve son birleşmez"),
                     "Batch search previews each trace interval without changing points and discloses the open end",checks);
+                Check(trace.StatusForVerification.Text.Contains("Piksel geometrisi kontrolünde sorun bulunmadı") && trace.StatusForVerification.Text.Contains("üretim onayı değildir"),
+                    "Noncrossing photo path preview receives a limited pixel geometry check",checks);
                 var preview=canvas.PathSuggestion!.ToArray();var inspectionRevision=trace.DraftRevision;
                 Check(canvas.TryMapPixelToView(new Point(15,11),canvas.RenderSize,out var inspectView) && canvas.TryInspectAtView(inspectView,canvas.RenderSize),
                     "Photo inspection selects a displayed position without adding a point",checks);
@@ -9479,6 +9481,18 @@ internal static class DesktopVerification
                 var cancelledPath=trace.StartPathSuggestionAsync();PumpUntil(()=>cancelReached.IsSet);trace.CancelPathSuggestion();PumpUntil(()=>cancelledPath.IsCompleted);cancelledPath.GetAwaiter().GetResult();
                 Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("iptal"),
                     "Cancelling photo path computation preserves selected points",checks);
+                trace.ComputePathForVerification=(_,start,end,_)=>new[] { start,new Point(15,5),end };
+                var crossingPath=trace.StartPathSuggestionAsync();PumpUntil(()=>crossingPath.IsCompleted);crossingPath.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("Piksel geometrisi uyarısı"),
+                    "Crossing photo path preview receives a warning before it is applied",checks);
+                canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(10,20),new Point(20,20) })canvas.TryAddPixelPoint(p);
+                trace.ReviewClosureForVerification.IsChecked=true;
+                trace.ComputePathForVerification=(_,start,end,_)=>start==new Point(10,10) && end==new Point(20,10)
+                    ? new[] { start,new Point(15,9),end } : new[] { start,end };
+                var crossingClosure=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>crossingClosure.IsCompleted);crossingClosure.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is not null && trace.StatusForVerification.Text.Contains("Piksel geometrisi uyarısı"),
+                    "Photo preview warns when the closing edge crosses an otherwise open contour",checks);
+                trace.ReviewClosureForVerification.IsChecked=false;canvas.ClearPoints();foreach(var p in beforeZoom)canvas.TryAddPixelPoint(p);
                 trace.ComputePathForVerification=null;
             }
             finally { SynchronizationContext.SetSynchronizationContext(savedContext); }
