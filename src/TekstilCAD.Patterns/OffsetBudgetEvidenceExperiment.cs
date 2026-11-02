@@ -8,7 +8,10 @@ namespace TekstilCAD.Patterns;
 /// Experimental caller-budgeted comparison of a single candidate against the
 /// indexed miter. Passing is evidence for the stated checks only. It does not
 /// discover or certify garment features, source-to-grid precision, independent
-/// marked notches, manufacturing tolerances, or production suitability.
+/// marked notches, manufacturing tolerances, or production suitability. The
+/// caller-selected minimum is checked in integer grid units only for pairs of
+/// non-adjacent candidate edges; it neither measures a V-notch's adjacent
+/// arms/depth nor proves that binary64 millimeter distances meet the same bound.
 /// Caller must keep all inputs stable while copied.
 /// </summary>
 internal static class OffsetBudgetEvidenceExperiment
@@ -62,7 +65,7 @@ internal static class OffsetBudgetEvidenceExperiment
                !AtLeast(x,a,b,separationSquared) || !AtLeast(y,a,b,separationSquared))
             {reason=$"Candidate edges {i} and {j} violate the caller's minimum separation.";return false;}
         }
-        reason="Caller-budgeted indexed vertex, edge, turn, topology, binary64 and minimum-separation checks passed; feature discovery, dimensional preservation and production suitability are not certified.";
+        reason="Caller-budgeted indexed vertex, edge, turn, topology and binary64 topology checks passed; non-adjacent candidate edges meet the caller-selected minimum in grid units only. Adjacent V-notch arms, physical millimeter separation, feature discovery, dimensional preservation and production suitability are not certified.";
         return true;
     }
     private static bool AtLeast(GridPoint p,GridPoint a,GridPoint b,BigInteger minimumSquared)

@@ -10,12 +10,12 @@ namespace TekstilCAD.Tests;
 public sealed class OffsetSameCountAdversarialTests(ITestOutputHelper log)
 {
     private const long U=1_000_000;
-    private static (bool Ok,string Reason) Verify(GridPoint[] source,GridPoint[] candidate,long delta=U)
+    private static (bool Ok,string Reason) Verify(GridPoint[] source,GridPoint[] candidate,long delta=U,long minimum=500)
     {
         var m=typeof(PatternTools).Assembly.GetType("TekstilCAD.Patterns.OffsetBudgetEvidenceExperiment",true)!
             .GetMethod("TryVerify",BindingFlags.Static|BindingFlags.NonPublic)!;
         IReadOnlyList<GridPoint>[] paths=[candidate];
-        object?[] args=[source,paths,delta,125L,126L,1_000_000L,1_000L,500L,null,CancellationToken.None];
+        object?[] args=[source,paths,delta,125L,126L,1_000_000L,1_000L,minimum,null,CancellationToken.None];
         bool ok=(bool)m.Invoke(null,args)!;return (ok,(string)args[8]!);
     }
     private static GridPoint[] Ideal(GridPoint[] source,long delta=U)
@@ -75,6 +75,7 @@ public sealed class OffsetSameCountAdversarialTests(ITestOutputHelper log)
         log.WriteLine($"narrowed reverse={reverse}; widthBefore={before} widthAfter={after} evidence={r.Ok} reason={r.Reason}; production={production}");
         Assert.Equal("accepted",production);Assert.False(r.Ok);Assert.Contains("minimum separation",r.Reason);
         Assert.True(edge.Ok,edge.Reason);
+        var permissive=Verify(s,c,delta,1);Assert.True(permissive.Ok,permissive.Reason);
     }
     [Theory]
     [InlineData(false)]
@@ -104,5 +105,37 @@ public sealed class OffsetSameCountAdversarialTests(ITestOutputHelper log)
         var result=Verify(s,c,delta);var production=Production(s,(double)delta/U);
         log.WriteLine($"limit reverse={reverse}; max={c.Max(p=>p.X)} evidence={result.Ok} reason={result.Reason}; production={production}");
         Assert.False(result.Ok);Assert.Contains("coordinate range",result.Reason);Assert.Equal(max+125,c.Max(p=>p.X));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GridMinimumDoesNotImplyIdenticalBinary64MillimeterMinimum(bool reverse)
+    {
+        const long origin=50_000_000_000_000,delta=200;
+        GridPoint[] s=[new(origin,0),new(origin+120*U,0),new(origin+120*U,120*U),new(origin+60*U+500,120*U),
+            new(origin+60*U+500,60*U),new(origin+60*U-500,60*U),new(origin+60*U-500,120*U),new(origin,120*U)];
+        var c=Ideal(s,delta);
+        c[3]=c[3] with {X=c[3].X-50};c[4]=c[4] with {X=c[4].X-50};
+        c[5]=c[5] with {X=c[5].X+50};c[6]=c[6] with {X=c[6].X+50};
+        if(reverse){Array.Reverse(s);Array.Reverse(c);}
+        long left=c[reverse?1:6].X,right=c[reverse?4:3].X;
+        Assert.Equal(500,right-left);
+        double millimeters=right/(double)U-left/(double)U;
+        Assert.True(millimeters<.0005);Assert.InRange(millimeters,.00049999,.0005);
+        var result=Verify(s,c,delta,500);Assert.True(result.Ok,result.Reason);
+        Assert.Contains("grid units only",result.Reason);
+        log.WriteLine($"reverse={reverse}; separation=500 grid; binary64 millimeters={millimeters:G17}");
+    }
+    [Fact]
+    public void AdjacentVArmsHaveNoMinimumSeparationTest()
+    {
+        // The two edges A->tip and tip->C are adjacent: they meet at the tip
+        // and the non-adjacent-edge loop deliberately excludes this pair.
+        GridPoint a=new(-250,0),tip=new(0,-1000),c=new(250,0);
+        GridPoint left=new((a.X+tip.X)/2,(a.Y+tip.Y)/2);
+        GridPoint right=new((c.X+tip.X)/2,(c.Y+tip.Y)/2);
+        Assert.Equal(250,right.X-left.X);
+        int edgeA=2,edgeB=3;Assert.Equal(edgeA+1,edgeB);
+        Assert.True(right.X-left.X<500);
     }
 }
