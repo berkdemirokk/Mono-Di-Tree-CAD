@@ -11,7 +11,9 @@ namespace TekstilCAD.Desktop;
 /// <summary>Read-only comparison of a detached photo trace snapshot.</summary>
 internal sealed class PhotoTraceCheckWindow : Window
 {
-    private readonly Point2[] points;
+    private readonly List<Point2> points;
+    private readonly int originalPointCount;
+    private const int MaximumControlPoints=100;
     private readonly int previewWidth,previewHeight,sourceWidth,sourceHeight;
     private readonly double referenceLength;
     private readonly PhotoPlaneCalibration? plane;
@@ -24,13 +26,16 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal ListBox ComparisonListForVerification { get; } = new() { MinHeight=75,MaxHeight=160,Margin=new Thickness(0,4,0,4) };
     internal PhotoMeasurementPreview PreviewForVerification { get; }
     internal TextBlock PickStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4),Text="Fotoğrafta sol tık: 1; sağ tık: 2. Yakın noktalar için listeyi kullanın." };
+    internal TextBox ControlXForVerification { get; } = new() { Width=90,MaxLength=24,Margin=new Thickness(0,2,8,2) };
+    internal TextBox ControlYForVerification { get; } = new() { Width=90,MaxLength=24,Margin=new Thickness(0,2,8,2) };
+    internal CheckBox AddControlModeForVerification { get; } = new() { Content="Fotoğrafa tıklayarak kontrol noktası ekle",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
 
     internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(snapshot);ArgumentNullException.ThrowIfNull(image);
         if(snapshot.Count<3 || snapshot.Count>PhotoTraceCanvas.MaximumPoints)throw new ArgumentOutOfRangeException(nameof(snapshot));
         previewWidth=image.PixelWidth;previewHeight=image.PixelHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();
-        points=snapshot.Select(p=>new Point2(p.X,p.Y)).ToArray();
+        points=snapshot.Select(p=>new Point2(p.X,p.Y)).ToList();originalPointCount=points.Count;
         PreviewForVerification=new PhotoMeasurementPreview(image,points,sourceWidth,sourceHeight);
         Owner=owner;Title="Fotoğrafta ölçü karşılaştır";Width=610;Height=580;MinWidth=460;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
@@ -51,6 +56,14 @@ internal sealed class PhotoTraceCheckWindow : Window
         ZoomButton("Sığdır","Fotoğrafın tamamını göster",PreviewForVerification.ResetZoom);
         previewColumn.Children.Add(zoomActions);Grid.SetColumn(previewColumn,1);selection.Children.Add(previewColumn);body.Children.Add(selection);
         AutomationProperties.SetLiveSetting(PickStatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(PickStatusForVerification);
+        AutomationProperties.SetHelpText(AddControlModeForVerification,"Açıkken sol tık fotoğrafa yalnız bu pencere için kontrol noktası ekler. Çizim değişmez. Kapatınca sol tık tekrar birinci ucu seçer.");
+        AddControlModeForVerification.Checked+=(_,_)=>PreviewForVerification.AddControlPointMode=true;AddControlModeForVerification.Unchecked+=(_,_)=>PreviewForVerification.AddControlPointMode=false;body.Children.Add(AddControlModeForVerification);
+        var controlCoordinates=new WrapPanel();controlCoordinates.Children.Add(new Label { Content="Kontrol X (piksel)",Target=ControlXForVerification,Foreground=StudioTheme.Text });controlCoordinates.Children.Add(ControlXForVerification);
+        controlCoordinates.Children.Add(new Label { Content="Y",Target=ControlYForVerification,Foreground=StudioTheme.Text });controlCoordinates.Children.Add(ControlYForVerification);
+        AutomationProperties.SetName(ControlXForVerification,"Yeni kontrol noktası piksel X");AutomationProperties.SetName(ControlYForVerification,"Yeni kontrol noktası piksel Y");
+        var addControl=new Button { Content="Kontrol noktası ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,2,0,2) };
+        addControl.Click+=(_,_)=> { if(!MeasurementInput.TryParseMillimeters(ControlXForVerification.Text,out var x) || !MeasurementInput.TryParseMillimeters(ControlYForVerification.Text,out var y)) { PickStatusForVerification.Text="Piksel koordinatlarını girin.";return; } AddControlPoint(new Point2(x,y)); };controlCoordinates.Children.Add(addControl);body.Children.Add(controlCoordinates);
+        body.Children.Add(new TextBlock { Text="Ek noktalar yalnız bu ölçüm penceresinde kalır; çizgiye ve projeye eklenmez. En fazla 100 nokta eklenebilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,5) });
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
         body.Children.Add(ResultForVerification);
@@ -75,8 +88,22 @@ internal sealed class PhotoTraceCheckWindow : Window
         void SelectionChanged() { ClearResult();PreviewForVerification.Select((FirstForVerification.SelectedItem as Choice)?.Index,(SecondForVerification.SelectedItem as Choice)?.Index); }
         FirstForVerification.SelectionChanged+=(_,_)=>SelectionChanged();SecondForVerification.SelectionChanged+=(_,_)=>SelectionChanged();KnownForVerification.TextChanged+=(_,_)=>ClearResult();
         PreviewForVerification.PointChosen+=(index,second)=> { if(second)SecondForVerification.SelectedIndex=index;else FirstForVerification.SelectedIndex=index; };
+        PreviewForVerification.ControlPointChosen+=point=>AddControlPoint(point);
         PreviewForVerification.PickMessage+=message=>PickStatusForVerification.Text=message;
         calculate.Click+=(_,_)=> { Calculate();ResultForVerification.BringIntoView(); };close.Click+=(_,_)=>Close();
+    }
+    internal bool AddControlPoint(Point2 point)
+    {
+        if(points.Count-originalPointCount>=MaximumControlPoints) { PickStatusForVerification.Text="En fazla 100 geçici kontrol noktası eklenebilir.";return false; }
+        if(!point.IsFinite || point.X<0 || point.Y<0 || point.X>previewWidth-1 || point.Y>previewHeight-1)
+        { PickStatusForVerification.Text="Kontrol noktası fotoğrafın piksel sınırları içinde olmalıdır.";return false; }
+        if(points.Contains(point)) { PickStatusForVerification.Text="Bu pikselde zaten bir nokta var; ilgili ucu listeden seçin.";return false; }
+        var first=FirstForVerification.SelectedIndex;var second=SecondForVerification.SelectedIndex;
+        var options=((Choice[])FirstForVerification.ItemsSource).ToList();var index=points.Count;
+        options.Add(new Choice(index,$"{index+1} · kontrol · X {MeasurementInput.Format(point.X)}, Y {MeasurementInput.Format(point.Y)}"));
+        points.Add(point);PreviewForVerification.AddControlPoint(point);var updated=options.ToArray();FirstForVerification.ItemsSource=updated;SecondForVerification.ItemsSource=updated;
+        FirstForVerification.SelectedIndex=first;SecondForVerification.SelectedIndex=second;
+        PickStatusForVerification.Text=$"{index+1}. geçici kontrol noktası eklendi; çizim ve proje değişmedi. Ölçüm için uç listesinden seçin.";return true;
     }
     private void ClearResult() { LastResultForVerification=null;ResultForVerification.Text=""; }
     internal bool AddComparison()

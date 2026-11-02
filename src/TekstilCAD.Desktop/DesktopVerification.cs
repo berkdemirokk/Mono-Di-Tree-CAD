@@ -9475,6 +9475,32 @@ internal static class DesktopVerification
                 Check(!checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==1,
                     "An invalid reference-only comparison cannot enter the temporary list",checks);
                 canvas.TryAddPixelPoint(new Point(25,25));Check(checkWindow.FirstForVerification.Items.Count==beforeZoom.Length,"Photo comparison uses a detached point snapshot",checks);canvas.UndoPoint();
+                Check(!checkWindow.AddControlPoint(new Point2(-1,1)) && !checkWindow.AddControlPoint(new Point2(10,10)) &&
+                    checkWindow.FirstForVerification.Items.Count==beforeZoom.Length,
+                    "Temporary measurement points reject outside and duplicate coordinates",checks);
+                checkWindow.AddControlModeForVerification.IsChecked=true;
+                var viewport=checkWindow.PreviewForVerification.RenderSize;var controlView=checkWindow.PreviewForVerification.MapPixel(new Point2(30,30),viewport);
+                var pickedControl=checkWindow.PreviewForVerification.PickControlPoint(controlView,viewport);
+                checkWindow.ControlXForVerification.Text="40";checkWindow.ControlYForVerification.Text="30";
+                Descendants<Button>(checkRoot).Single(b=>Equals(b.Content,"Kontrol noktası ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(checkWindow.PreviewForVerification.AddControlPointMode && pickedControl && checkWindow.FirstForVerification.Items.Count==beforeZoom.Length+2 &&
+                    canvas.Points.SequenceEqual(beforeZoom) && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Photo review adds mapped and typed temporary control points without changing the draft or project",checks);
+                var controlY=checkWindow.AddControlModeForVerification.TransformToAncestor(comparisonScroll).Transform(new Point(0,0)).Y+comparisonScroll.VerticalOffset;
+                comparisonScroll.ScrollToVerticalOffset(Math.Max(0,controlY-50));Render(checkWindow,Path.ChangeExtension(reportPath,".photo-independent-control.png"),460,420);
+                Check(FullyVisible(checkWindow.AddControlModeForVerification,checkRoot) && checkWindow.AddControlModeForVerification.Focusable &&
+                    FullyVisible(checkWindow.ControlXForVerification,checkRoot) && FullyVisible(checkWindow.ControlYForVerification,checkRoot),
+                    "Independent photo control point entry remains visible and keyboard accessible in the compact scrolled view",checks);
+                checkWindow.AddControlModeForVerification.IsChecked=false;checkWindow.FirstForVerification.SelectedIndex=beforeZoom.Length;
+                checkWindow.SecondForVerification.SelectedIndex=beforeZoom.Length+1;checkWindow.KnownForVerification.Text="100";checkWindow.Calculate();
+                Check(!checkWindow.PreviewForVerification.AddControlPointMode && checkWindow.LastResultForVerification is { } extraResult &&
+                    Math.Abs(extraResult.EstimatedMm-100)<1e-7 && checkWindow.AddComparison() &&
+                    checkWindow.ComparisonsForVerification.Last().Contains("kontrol") && canvas.Points.SequenceEqual(beforeZoom),
+                    "Two independent temporary photo points can be measured and retained for review",checks);
+                var addedLimit=true;for(int n=0;n<98;n++)addedLimit &= checkWindow.AddControlPoint(new Point2(n,45));
+                Check(addedLimit && !checkWindow.AddControlPoint(new Point2(99,49)) && checkWindow.FirstForVerification.Items.Count==beforeZoom.Length+100 &&
+                    checkWindow.PickStatusForVerification.Text.Contains("100") && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Temporary photo control points enforce their bound without changing the project",checks);
             }
             finally { checkWindow.Close(); }
             var editor=trace.CreatePointEditor() ?? throw new InvalidOperationException("Photo point editor missing.");
@@ -9896,6 +9922,10 @@ internal static class DesktopVerification
                     "Plane photo comparison reports a positive relative difference against the entered measurement",checks);
                 Check(measurement.AddComparison() && measurement.ComparisonsForVerification.Single().Contains("ölçülen 125 mm") && DocumentSession.ContentEquals(original,workspace.Document),
                     "Plane photo comparison can be retained without editing the project",checks);
+                Check(measurement.AddControlPoint(new Point2(30,30)) && measurement.AddControlPoint(new Point2(70,30)),"Planar measurement accepts two detached control points",checks);
+                measurement.FirstForVerification.SelectedIndex=7;measurement.SecondForVerification.SelectedIndex=8;measurement.KnownForVerification.Text="100";measurement.Calculate();
+                Check(measurement.LastResultForVerification is { } extraPlane && Math.Abs(extraPlane.EstimatedMm-100)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
+                    "Independent temporary control points use the configured plane transform",checks);
                 measurement.FirstForVerification.SelectedIndex=0;measurement.SecondForVerification.SelectedIndex=2;measurement.Calculate();
                 Check(measurement.LastResultForVerification is null && measurement.ResultForVerification.Text.Contains("referans köşesini"),"Plane measurement rejects two reference corners as a tautological check",checks);
             }

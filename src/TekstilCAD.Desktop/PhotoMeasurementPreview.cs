@@ -12,14 +12,16 @@ namespace TekstilCAD.Desktop;
 internal sealed class PhotoMeasurementPreview : FrameworkElement
 {
     private readonly BitmapSource image;
-    private readonly Point2[] points;
+    private readonly List<Point2> points;
     private readonly int sourceWidth,sourceHeight;
     private double zoom=1,centerX=.5,centerY=.5;
     internal double Zoom=>zoom;
     internal int? FirstIndex { get; private set; }
     internal int? SecondIndex { get; private set; }
     internal event Action<int,bool>? PointChosen;
+    internal event Action<Point2>? ControlPointChosen;
     internal event Action<string>? PickMessage;
+    internal bool AddControlPointMode { get; set; }
 
     internal PhotoMeasurementPreview(BitmapSource image,IReadOnlyList<Point2> points,int sourceWidth,int sourceHeight)
     {
@@ -28,7 +30,7 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
         var snapshot=image.IsFrozen ? image : image.CloneCurrentValue();
         if(!snapshot.CanFreeze)throw new ArgumentException("Fotoğraf önizlemesi sabitlenemedi.",nameof(image));
         if(!snapshot.IsFrozen)snapshot.Freeze();
-        this.image=snapshot;this.points=points.ToArray();this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;
+        this.image=snapshot;this.points=points.ToList();this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;
         Height=120;MinWidth=100;ClipToBounds=true;
         AutomationProperties.SetName(this,"Seçilen ölçü noktalarının fotoğraf üzerindeki görünümü");
         AutomationProperties.SetHelpText(this,"Sol tık birinci, sağ tık ikinci ucu seçer; fare tekerleği yakınlaştırır. Yakın noktalar ayırt edilemiyorsa listeleri kullanın. Görünüm noktaları değiştirmez.");
@@ -37,7 +39,8 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
     {
         FirstIndex=Valid(first) ? first : null;SecondIndex=Valid(second) ? second : null;InvalidateVisual();
     }
-    private bool Valid(int? index)=>index is >=0 && index<points.Length;
+    private bool Valid(int? index)=>index is >=0 && index<points.Count;
+    internal void AddControlPoint(Point2 point) { points.Add(point);InvalidateVisual(); }
     private Rect ImageBounds(Size viewport)
     {
         var margin=Math.Min(11,Math.Min(viewport.Width,viewport.Height)/4);
@@ -58,7 +61,7 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
             position.X<0 || position.Y<0 || position.X>=viewport.Width || position.Y>=viewport.Height)
             return false;
         var nearest=double.PositiveInfinity;var next=double.PositiveInfinity;var index=-1;
-        for(int i=0;i<points.Length;i++)
+        for(int i=0;i<points.Count;i++)
         {
             var point=MapPixel(points[i],viewport);
             if(point.X<0 || point.Y<0 || point.X>=viewport.Width || point.Y>=viewport.Height)continue;
@@ -70,6 +73,17 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
         if(index<0 || nearest>9) { PickMessage?.Invoke("Yakında nokta yok; bir işarete tıklayın veya listeden seçin.");return false; }
         if(next-nearest<3) { PickMessage?.Invoke("Yakın noktalar ayırt edilemiyor; ilgili ucu listeden seçin.");return false; }
         PointChosen?.Invoke(index,second);PickMessage?.Invoke($"{(second ? "2" : "1")}. uç seçildi; çizim değişmedi.");return true;
+    }
+    internal bool PickControlPoint(Point position,Size viewport)
+    {
+        if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || !double.IsFinite(viewport.Width) || !double.IsFinite(viewport.Height) ||
+            viewport.Width<=0 || viewport.Height<=0 || position.X<0 || position.Y<0 || position.X>=viewport.Width || position.Y>=viewport.Height)return false;
+        var bounds=ImageBounds(viewport);
+        if(bounds.Width<=0 || bounds.Height<=0)return false;
+        var point=new Point2((position.X-bounds.Left)/bounds.Width*image.PixelWidth-.5,(position.Y-bounds.Top)/bounds.Height*image.PixelHeight-.5);
+        if(!point.IsFinite || point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1)
+        { PickMessage?.Invoke("Kontrol noktası için fotoğrafın içinde bir piksel seçin.");return false; }
+        ControlPointChosen?.Invoke(point);return true;
     }
     internal bool ZoomAt(Point position,Size viewport,double factor)
     {
@@ -94,7 +108,7 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
     }
     internal void ResetZoom() { zoom=1;centerX=.5;centerY=.5;InvalidateVisual();PickMessage?.Invoke("Fotoğrafın tamamı gösteriliyor; ölçü ve çizim değişmedi."); }
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
-    { base.OnMouseLeftButtonDown(e);PickAt(e.GetPosition(this),RenderSize,false);e.Handled=true; }
+    { base.OnMouseLeftButtonDown(e);if(AddControlPointMode)PickControlPoint(e.GetPosition(this),RenderSize);else PickAt(e.GetPosition(this),RenderSize,false);e.Handled=true; }
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     { base.OnMouseRightButtonDown(e);PickAt(e.GetPosition(this),RenderSize,true);e.Handled=true; }
     protected override void OnMouseWheel(MouseWheelEventArgs e)
