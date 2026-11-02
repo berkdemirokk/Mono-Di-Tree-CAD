@@ -66,4 +66,52 @@ public sealed class ExperimentalPhysicalNotchContractTests
         p.Notches=[new NotchMark{VertexIndex=0,Position=p.Points[0]}];
         Assert.Null(ExperimentalPhysicalNotchValidation.FromLegacy(p));
     }
+    [Fact]
+    public void OutwardTipFailsEvenWithLargePositionTolerance()
+    {
+        var (p,s,_)=Fixture();Point2[] outward=[new(48,0),new(50,-2),new(52,0)];
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s with {PositionTolerance=4},outward,out _));
+    }
+    [Fact]
+    public void SlantedTipMustMatchPerpendicularDepth()
+    {
+        var (p,s,_)=Fixture();Point2[] slanted=[new(48,0),new(51.5,2),new(52,0)];
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s with {Depth=2.5,PositionTolerance=1.6},slanted,out _));
+    }
+    [Theory]
+    [InlineData(false,false)]
+    [InlineData(false,true)]
+    [InlineData(true,false)]
+    [InlineData(true,true)]
+    public void ActualDirectionAndPerpendicularToleranceHoldAfterReversalAndReflection(bool reverse,bool reflect)
+    {
+        var (p,s,v)=Fixture(reverse);
+        if(reflect)
+        {
+            static Point2 Mirror(Point2 x)=>new(-x.X,x.Y);
+            p.Points=p.Points.Select(Mirror).ToList();v=v.Select(Mirror).ToArray();
+            s=s with {SnapshotHash=ExperimentalPhysicalNotchValidation.Fingerprint(p),EdgeStart=p.Points[0],
+                EdgeEnd=p.Points[1],Direction=s.Direction=="left"?"right":"left"};
+        }
+        var center=(v[0]+v[2])*.5;
+        var outward=v.ToArray();outward[1]=center-(v[1]-center);
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s with {PositionTolerance=4},outward,out _));
+        var flat=v.ToArray();flat[1]=center;
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s with {PositionTolerance=2,DepthTolerance=2},flat,out _));
+        var along=(p.Points[1]-p.Points[0])*.015;
+        var slanted=v.ToArray();slanted[1]=slanted[1]+along;
+        var supplied=s with {Depth=2.5,PositionTolerance=1.6};
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,supplied,slanted,out _));
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,supplied with {DepthTolerance=Math.BitDecrement(.5)},slanted,out _));
+        Assert.True(ExperimentalPhysicalNotchValidation.Verify(p,supplied with {DepthTolerance=.5},slanted,out var reason),reason);
+    }
+    [Fact]
+    public void DetachedThreePointCheckDoesNotBindAnOutputContour()
+    {
+        var (p,s,v)=Fixture();var unrelated=p.Clone();
+        Assert.DoesNotContain(v[1],unrelated.Points);
+        Assert.True(ExperimentalPhysicalNotchValidation.Verify(p,s,v,out _));
+        // Verify has no candidate contour parameter: passing the three-point
+        // measurement says nothing about membership in this unrelated output.
+    }
 }

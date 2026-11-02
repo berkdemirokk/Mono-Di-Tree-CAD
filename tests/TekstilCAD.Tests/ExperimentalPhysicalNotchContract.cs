@@ -4,7 +4,8 @@ using TekstilCAD.Core;
 namespace TekstilCAD.Tests;
 
 // Test-only schema proposal, not part of project persistence or production.
-// Its source edge belongs to the UNNOTCHED closed source snapshot.
+// Its source edge belongs to the UNNOTCHED closed source snapshot. Inputs must
+// remain stable while copied; snapshots of independent inputs are not atomic.
 internal sealed record ExperimentalPhysicalNotchV1(
     int Version, Guid SourcePieceId, string SnapshotHash, int SourceEdgeIndex,
     Point2 EdgeStart, Point2 EdgeEnd, string EdgeKind, double Fraction,
@@ -28,6 +29,9 @@ internal static class ExperimentalPhysicalNotchValidation
     internal static bool Verify(PatternPiece source,ExperimentalPhysicalNotchV1? spec,Point2[] geometry,out string reason)
     {
         reason="Missing or invalid contract.";
+        if(source is null || source.Points is null || geometry is null)return false;
+        source=new PatternPiece{Id=source.Id,Closed=source.Closed,Points=source.Points.ToList()};
+        geometry=geometry.ToArray();
         if(spec is null || spec.Version!=1 || source.Id==Guid.Empty || spec.SourcePieceId!=source.Id || !source.Closed ||
            source.Points is null || source.Points.Count<3 || source.Points.Count>4096 || source.Points[0]==source.Points[^1] ||
            spec.SourceEdgeIndex<0 || spec.SourceEdgeIndex>=source.Points.Count || spec.EdgeKind!="straight" || spec.Unit!="mm" ||
@@ -47,10 +51,18 @@ internal static class ExperimentalPhysicalNotchValidation
             var unit=(b-a)*(1/length);var center=a+(b-a)*spec.Fraction;
             var expectedA=center-unit*(spec.Width/2);var expectedC=center+unit*(spec.Width/2);
             var expectedTip=center+new Point2(-unit.Y,unit.X)*(side*spec.Depth);
+            var mouth=geometry[2]-geometry[0];double mouthLength=Geometry.Distance(geometry[0],geometry[2]);
+            if(mouthLength==0 || mouth.X*unit.X+mouth.Y*unit.Y<=0)
+            {reason="Actual mouth direction is degenerate or reversed.";return false;}
+            var fromMouth=geometry[1]-geometry[0];var fromSource=geometry[1]-a;
+            double signedDepth=side*(mouth.X*fromMouth.Y-mouth.Y*fromMouth.X)/mouthLength;
+            double sourceSide=side*(unit.X*fromSource.Y-unit.Y*fromSource.X);
+            if(!double.IsFinite(signedDepth) || !double.IsFinite(sourceSide) || signedDepth<=0 || sourceSide<=0)
+            {reason="Actual tip is flat or lies on the wrong side.";return false;}
             if(Geometry.Distance(geometry[0],expectedA)>spec.PositionTolerance || Geometry.Distance(geometry[1],expectedTip)>spec.PositionTolerance ||
                Geometry.Distance(geometry[2],expectedC)>spec.PositionTolerance ||
-               Math.Abs(Geometry.Distance(geometry[0],geometry[2])-spec.Width)>spec.WidthTolerance ||
-               Math.Abs(Geometry.Distance((geometry[0]+geometry[2])*.5,geometry[1])-spec.Depth)>spec.DepthTolerance)
+               Math.Abs(mouthLength-spec.Width)>spec.WidthTolerance ||
+               Math.Abs(signedDepth-spec.Depth)>spec.DepthTolerance)
             {reason="Supplied V geometry is outside explicit tolerances.";return false;}
             reason="Experimental straight-edge V measurement only; representation, transformed topology, persistence and manufacturing are not certified.";return true;
         }
