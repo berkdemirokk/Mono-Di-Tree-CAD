@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Automation;
@@ -14,7 +15,13 @@ internal sealed class RequestNotesWindow : Window
     internal TextBox MeasurementsForVerification { get; }
     internal TextBox ReferenceForVerification { get; }
     internal Button PhotoButtonForVerification { get; }
+    internal Button TraceButtonForVerification { get; }
+    internal TextBlock TraceStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,6) };
+    internal Func<byte[],ReferencePhotoPreview>? DecodeForVerification { get; set; }
     private ReferencePhotoWindow? photoWindow;
+    private PhotoTraceWindow? traceWindow;
+    private readonly byte[]? referenceBytes;
+    private bool closed,decoding;
 
     internal RequestNotesWindow(Window owner,DesignRequest request)
     {
@@ -25,11 +32,13 @@ internal sealed class RequestNotesWindow : Window
         Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(14) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
-        PhotoButtonForVerification=new Button { Content="Referans görselini göster",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4),IsEnabled=request.Reference is not null };
+        PhotoButtonForVerification=new Button { Content="Görseli göster",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4),IsEnabled=request.Reference is not null };
         AutomationProperties.SetHelpText(PhotoButtonForVerification,"Kaydedilmiş görselin yerel önizlemesini açar; fotoğraftan ölçü veya kalıp çıkarmaz.");
+        TraceButtonForVerification=new Button { Content="Fotoğraftan çiz…",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4),IsEnabled=request.Reference is not null && owner is MainWindow };
+        AutomationProperties.SetHelpText(TraceButtonForVerification,"Kaydedilmiş referansı kullanarak elle açık taslak çizim penceresi açar; otomatik kalıp oluşturmaz.");
         var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,4) };
-        close.Click+=(_,_)=>Close();actions.Children.Add(PhotoButtonForVerification);actions.Children.Add(close);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
-        var referenceBytes=request.Reference is null ? null : (byte[])request.Reference.Data.Clone();
+        close.Click+=(_,_)=>Close();actions.Children.Add(PhotoButtonForVerification);actions.Children.Add(TraceButtonForVerification);actions.Children.Add(close);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        referenceBytes=request.Reference is null ? null : (byte[])request.Reference.Data.Clone();
         PhotoButtonForVerification.Click+=(_,_)=>
         {
             if(referenceBytes is null)return;
@@ -37,6 +46,10 @@ internal sealed class RequestNotesWindow : Window
             var preview=new ReferencePhotoWindow(this,referenceBytes);photoWindow=preview;
             preview.Closed+=(_,_)=>photoWindow=null;preview.Show();
         };
+        TraceButtonForVerification.Click+=async (_,_)=> { var window=await PreparePhotoTraceAsync();if(window is null)return;if(window.IsVisible)window.Activate();else window.Show(); };
+        Closed+=(_,_)=>closed=true;
+        AutomationProperties.SetName(TraceStatusForVerification,"Fotoğraf taslağı açma durumu");AutomationProperties.SetLiveSetting(TraceStatusForVerification,AutomationLiveSetting.Polite);
+        DockPanel.SetDock(TraceStatusForVerification,Dock.Top);root.Children.Add(TraceStatusForVerification);
         var notice=new TextBlock { Text="Açılış anındaki istek notlarıdır; otomatik güncellenmez. Çizim elle yapılır; kalıp oluşturulmadı ve ölçüler doğrulanmadı.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
         DockPanel.SetDock(notice,Dock.Top);root.Children.Add(notice);
         var grid=new Grid();root.Children.Add(grid);
@@ -58,6 +71,27 @@ internal sealed class RequestNotesWindow : Window
         ReferenceForVerification.MaxHeight=64;
         AddRow("Açıklama",DescriptionForVerification,0);AddRow("Ölçü notları",MeasurementsForVerification,2);AddRow("Referans görsel bilgisi",ReferenceForVerification,4);
     }
+    internal async Task<PhotoTraceWindow?> PreparePhotoTraceAsync()
+    {
+        if(closed || decoding || referenceBytes is null || Owner is not MainWindow studio)return null;
+        if(traceWindow is not null)return traceWindow;
+        decoding=true;TraceButtonForVerification.IsEnabled=false;SetTraceStatus("Görsel çizim için hazırlanıyor…");
+        try
+        {
+            var decode=DecodeForVerification;
+            var captured=await Task.Run(()=>decode is null ? ReferencePhotoDecoder.DecodeWithGeometry(referenceBytes) : decode(referenceBytes));
+            if(closed)return null;
+            var stamp=studio.CapturePhotoTrace();
+            if(stamp is null) { SetTraceStatus("Çizim açılamadı; ana penceredeki bekleyen işlemi kontrol edin.");return null; }
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation);
+            traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;
+            SetTraceStatus("Fotoğraf taslağı hazır; çizgi ve referans noktalarını siz seçin.");return window;
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        { if(!closed)SetTraceStatus("Görsel çizim için açılamadı; istek ve proje değişmedi.");return null; }
+        finally { decoding=false;if(!closed)TraceButtonForVerification.IsEnabled=true; }
+    }
+    private void SetTraceStatus(string text) { TraceStatusForVerification.Text=text;TraceStatusForVerification.Visibility=Visibility.Visible; }
     private static string SafeName(string name)
     {
         var result=new StringBuilder(name.Length);

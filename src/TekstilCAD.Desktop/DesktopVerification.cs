@@ -9928,11 +9928,14 @@ internal static class DesktopVerification
                 notes.ReferenceForVerification.Text.Contains("örnek.png") && notes.ReferenceForVerification.Text.Contains("yorumlanmıyor") &&
                 DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo,
                 "Saved request creates independent read-only drawing notes without editing the CAD project",checks);
+            Render(notes!,Path.ChangeExtension(reportPath,".request-notes-direct-photo.png"),360,360);
             var notesRoot=(FrameworkElement)notes!.Content;notesRoot.Measure(new Size(360,360));notesRoot.Arrange(new Rect(0,0,360,360));notesRoot.UpdateLayout();
             Check(new[] { notes.DescriptionForVerification,notes.MeasurementsForVerification,notes.ReferenceForVerification }.All(x=>x.Focusable && FullyVisible(x,notesRoot)),
                 "Drawing notes fields stay visible and keyboard reachable at minimum size",checks);
             Check(notes.PhotoButtonForVerification.IsEnabled && notes.PhotoButtonForVerification.Focusable && FullyVisible(notes.PhotoButtonForVerification,notesRoot) &&
-                AutomationProperties.GetHelpText(notes.PhotoButtonForVerification).Contains("kalıp çıkarmaz"),
+                notes.TraceButtonForVerification.IsEnabled && notes.TraceButtonForVerification.Focusable && FullyVisible(notes.TraceButtonForVerification,notesRoot) &&
+                AutomationProperties.GetHelpText(notes.PhotoButtonForVerification).Contains("kalıp çıkarmaz") &&
+                AutomationProperties.GetHelpText(notes.TraceButtonForVerification).Contains("otomatik kalıp oluşturmaz"),
                 "Reference photo preview is reachable and its scope is clear",checks);
             byte[] EncodePhoto(int width,int height,bool jpeg)
             {
@@ -9941,6 +9944,48 @@ internal static class DesktopVerification
                 BitmapEncoder encoder=jpeg ? new JpegBitmapEncoder() : new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
                 using var bytes=new MemoryStream();encoder.Save(bytes);return bytes.ToArray();
             }
+            var previousPhotoContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+            try
+            {
+                var invalidTask=notes.PreparePhotoTraceAsync();PumpUntil(()=>invalidTask.IsCompleted);
+                Check(invalidTask.GetAwaiter().GetResult() is null && notes.TraceStatusForVerification.Text.Contains("açılamadı") && DocumentSession.ContentEquals(before,studio.Document),
+                    "Direct photo tracing reports invalid stored image without changing the project",checks);
+                var bytes=EncodePhoto(32,16,false);var expectedHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+                var directNotes=new RequestNotesWindow(studio,new DesignRequest("Deneme","",new DesignReference("foto.png","image/png",bytes)));
+                using var entered=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+                directNotes.DecodeForVerification=data=> { entered.Set();release.Wait();return ReferencePhotoDecoder.DecodeWithGeometry(data); };
+                try
+                {
+                    bytes[^1]^=1;
+                    var opening=directNotes.PreparePhotoTraceAsync();PumpUntil(()=>entered.IsSet);
+                    var duplicate=directNotes.PreparePhotoTraceAsync();
+                    Check(duplicate.IsCompleted && duplicate.GetAwaiter().GetResult() is null && !directNotes.TraceButtonForVerification.IsEnabled,
+                        "Direct photo tracing prevents duplicate requests while decoding",checks);
+                    release.Set();PumpUntil(()=>opening.IsCompleted);var photoTrace=opening.GetAwaiter().GetResult();
+                    Check(photoTrace is not null && !photoTrace.IsVisible && ReferenceEquals(photoTrace.Owner,studio) &&
+                        (string?)typeof(PhotoTraceWindow).GetField("sourceSha256",PrivateInstance)!.GetValue(photoTrace)==expectedHash &&
+                        directNotes.TraceButtonForVerification.IsEnabled && DocumentSession.ContentEquals(before,studio.Document),
+                        "Saved request opens a detached photo-trace snapshot with the original image identity",checks);
+                    photoTrace!.Close();
+                }
+                finally { release.Set();directNotes.Close(); }
+                var noPhoto=new RequestNotesWindow(studio,new DesignRequest("Fotoğrafsız","",null));
+                try { Check(!noPhoto.TraceButtonForVerification.IsEnabled && noPhoto.PreparePhotoTraceAsync().GetAwaiter().GetResult() is null,
+                    "Direct photo tracing stays unavailable when the request has no reference image",checks); }
+                finally { noPhoto.Close(); }
+                var closingNotes=new RequestNotesWindow(studio,new DesignRequest("Kapanış","",new DesignReference("foto.png","image/png",EncodePhoto(8,8,false))));
+                var closingNotesClosed=false;closingNotes.Closed+=(_,_)=>closingNotesClosed=true;
+                using var closingEntered=new ManualResetEventSlim();using var closingRelease=new ManualResetEventSlim();
+                closingNotes.DecodeForVerification=data=> { closingEntered.Set();closingRelease.Wait();return ReferencePhotoDecoder.DecodeWithGeometry(data); };
+                try
+                {
+                    var pending=closingNotes.PreparePhotoTraceAsync();PumpUntil(()=>closingEntered.IsSet);closingNotes.Close();closingRelease.Set();PumpUntil(()=>pending.IsCompleted);
+                    Check(pending.GetAwaiter().GetResult() is null && DocumentSession.ContentEquals(before,studio.Document),
+                        "Closing request notes during image decoding does not open a stale photo trace",checks);
+                }
+                finally { closingRelease.Set();if(!closingNotesClosed)closingNotes.Close(); }
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(previousPhotoContext); }
             foreach(var jpeg in new[] { false,true })
             {
                 var photoBytes=EncodePhoto(32,16,jpeg);var originalBytes=(byte[])photoBytes.Clone();
