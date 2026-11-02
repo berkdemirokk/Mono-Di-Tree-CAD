@@ -20,6 +20,15 @@ public partial class App : Application
             Shutdown(code);
             return;
         }
-        new MainWindow().Show();
+        var main=new MainWindow();
+        LaunchAtelierAfterFirstRender(main,()=>new DesignRequestWindow(main).ShowDialog());
+        main.Show();
+    }
+    internal static void LaunchAtelierAfterFirstRender(Window owner,Action launch)
+    {
+        ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(launch);
+        EventHandler? handler=null;
+        handler=(_,_)=> { owner.ContentRendered-=handler;launch(); };
+        owner.ContentRendered+=handler;
     }
 }

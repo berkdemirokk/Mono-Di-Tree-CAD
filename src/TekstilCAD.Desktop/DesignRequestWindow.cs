@@ -48,7 +48,7 @@ internal sealed class DesignRequestWindow : Window
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string text,Action action) { var b=new Button { Content=text,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };b.Click+=(_,_)=>action();actions.Children.Add(b);return b; }
-        Action("İstek aç…",Open);var save=Action("Yeni istek dosyası kaydet…",Save);save.Background=Accent;save.Foreground=Surface;save.BorderBrush=Accent;save.FontWeight=FontWeights.SemiBold;Action("Kapat",Close);
+        Action("İstek aç…",Open);var save=Action("Yeni istek dosyası kaydet…",Save);save.Background=Accent;save.Foreground=Surface;save.BorderBrush=Accent;save.FontWeight=FontWeights.SemiBold;Action("Çizim araçlarına geç",Close);
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(statusViewport,"İşlem durumu");
         statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);

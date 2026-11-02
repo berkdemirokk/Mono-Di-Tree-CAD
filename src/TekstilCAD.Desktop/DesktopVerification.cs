@@ -9762,16 +9762,30 @@ internal static class DesktopVerification
 
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
+        var startupProbe=new Window();var startupLaunches=0;
+        try
+        {
+            App.LaunchAtelierAfterFirstRender(startupProbe,()=>startupLaunches++);
+            var rendered=typeof(Window).GetMethod("OnContentRendered",PrivateInstance) ?? throw new InvalidOperationException("Window render callback missing.");
+            Check(startupLaunches==0 && !startupProbe.IsVisible,"Atelier waits for the main window's first render",checks);
+            rendered.Invoke(startupProbe,[EventArgs.Empty]);rendered.Invoke(startupProbe,[EventArgs.Empty]);
+            Check(startupLaunches==1 && !startupProbe.IsVisible,"Atelier startup is invoked exactly once without showing a test window",checks);
+        }
+        finally { startupProbe.Close(); }
         var before=studio.Document.Clone();
         var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
         var undo=session.UndoCount;
         var window=new DesignRequestWindow(studio);
         try
         {
+            Render(window,Path.ChangeExtension(reportPath,".atelier-start.png"),900,700);
             Check(window.CreateDrawingNotes() is null && window.StatusForVerification.Text.Contains("kaydedin") && DocumentSession.ContentEquals(before,studio.Document),
                 "An unsaved new design request cannot become drawing notes",checks);
             typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
             var blankRoot=(FrameworkElement)window.Content;blankRoot.Measure(new Size(480,420));blankRoot.Arrange(new Rect(0,0,480,420));blankRoot.UpdateLayout();
+            var drawingButton=Descendants<Button>(blankRoot).Single(b=>Equals(b.Content,"Çizim araçlarına geç"));
+            Check(FullyVisible(drawingButton,blankRoot) && drawingButton.Focusable && ReferenceEquals(window.Owner,studio),
+                "Atelier exposes a visible, keyboard-reachable return to the existing CAD owner",checks);
             Check(window.StatusForVerification.Text.Contains("Açıklama veya referans görseli gereklidir") &&
                 FullyVisible(window.StatusViewportForVerification,blankRoot),
                 "Empty request save reports its validation error at minimum size",checks);

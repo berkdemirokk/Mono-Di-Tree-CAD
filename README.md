@@ -27,11 +27,12 @@ Kütüphane işlevinin bulunması tüm ekran akışlarının doğrulandığı an
 
 ## Çalışma akışı
 
-1. Yeni proje açın veya örnek parçalarla başlayın.
-2. Çizim aracını seçip kanvasa tıklayın. Çoklu çizgiyi Enter ile kapatın; Esc ile çizimi iptal edin.
-3. Parçayı seçerek özelliklerden X/Y konumunu düzenleyin. Ölçüler mm'dir.
-4. Tekstil araçları penceresinde seçili parçaya serileme veya desteklenen dikiş payını uygulayın.
-5. Projeyi ayrı bir `.tcad` dosyasına kaydedin. DXF içe aktarırken birim ölçeğini açıkça seçin ve bilinen ölçüyü kontrol edin.
+1. Açılıştaki model ve ölçü ekranında isterseniz bir model fikri, tarif ve bilinen ölçüleri girin. Bu ekran tek başına kalıp oluşturmaz; istek ayrı bir dosyaya kaydedilebilir.
+2. `Çizim araçlarına geç` ile CAD alanına geçin; yeni proje açın veya örnek parçalarla başlayın. Kaydedilmemiş istek değişiklikleri varsa geçiş öncesinde uyarı gösterilir.
+3. Çizim aracını seçip kanvasa tıklayın. Çoklu çizgiyi Enter ile kapatın; Esc ile çizimi iptal edin.
+4. Parçayı seçerek özelliklerden X/Y konumunu düzenleyin. Ölçüler mm'dir.
+5. Tekstil araçları penceresinde seçili parçaya serileme veya desteklenen dikiş payını uygulayın.
+6. Projeyi ayrı bir `.tcad` dosyasına kaydedin. DXF içe aktarırken birim ölçeğini açıkça seçin ve bilinen ölçüyü kontrol edin.
 
 ## Kritik sınırlar
 
