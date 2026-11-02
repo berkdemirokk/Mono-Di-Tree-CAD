@@ -1,0 +1,16 @@
+# Sentetik geometri ve bağımlılık incelemesi — 63b0b1d temeli
+
+Bu çalışma yalnız deney dalında; kullanıcı verisi, gerçek üretim, fiziksel makine ve ücretli API kullanılmadı. Herhangi bir yeni paket indirilmedi. Yeni üç geometri testi, iki sentetik ölçü setinde mm dikiş yolu sözdizimi, öteleme/dönme/yansıma/ölçek için kübik eğri noktalarının bağımsız Bernstein hesabıyla eşleşmesi, ölçü değişimine verilen geometrik yanıt ve tekil/belirsiz matris reddini kontrol eder. Bu kontrol genel SVG yerleşim matrisi çözümlemesi, topolojik basitlik, fiziksel ölçek veya dikiş uyumu ispatı değildir.
+
+Yalnız söz dizimindeki close komutu denetlenir; kendini kesmeyen gerçek Bézier konturu kanıtlanmış değildir. Eğri ekranlaması poligon örneklemesidir ve transferable=false/topologyProven=false tutar; preview-adapter genel durumda bu taramayı uygulamaz. Çentik/snippet değerleri, konum/yön ve eşleşme korunmaz, sadece adları kayıp manifestindedir. Dikiş payı/kesim sınırı ve yerleştirme dönüşümü korunmaz. Etek ve üretim ölçütü yoktur. Açık güvenlik kapısı requireTransferable her koşulda reddeder.
+
+## Paket kanıtı
+pnpm kilidinde 20 paket için SHA-512 integrity alanı var. Yerel önbellekteki Breanna 4.10.2 tgz hash'i kilit değeriyle uyuştu; pnpm store status yerel store nesnelerinde değişim bildirmedi. Bunlar yayıncı kimliği, bağımsız güven kökü veya kurulu node_modules dosyalarının o anda değişmediği garantisi değildir. Dosya hash doğrulaması/başlatma arasındaki TOCTOU ve bağımlılık çözümleme saldırıları açık. Paket metadata: 19 MIT, hooks@0.3.2 legacy metadata ve upstream README MIT bildirir; yerelde paketlerde yeterli lisans metni ve telif/NOTICE envanteri doğrulanmadı. https://github.com/bnoguchi/hooks-js . Dağıtımdan önce her tam lisans/telif bildirimi ve güvenilir sabit paket incelenmelidir.
+
+## Tehdit modeli — gerçek veriye kapalı
+Node exe ve worker için mutlak yol güven değildir; bunlar veya bağımlılıklar değiştirilirse kullanıcı ölçüleri çalınabilir. Job Object ağ/dosya yetkilerini kısıtlamaz; minimum ortam değişkenleri ağ veya dosya izolasyonu sağlamaz. Güvenilir imza/manifest, tüm geçişli içerik ve güvenli değişmez yükleme + TOCTOU koruması ve saldırgan değişimi testi yoktur. NodeProbe başarı koduyla gelen stdout'u bağımsız şema/protokol doğrulaması yapmadan iletir; çıktı kısmi/yanlış olabilir. Çağırıcı tam, boyutu sınırlı, sürümlü, şeması ve sonuç kodu doğrulanmış yanıt dışındakini reddetmeli, stdout'u günlük olarak saklamamalıdır. Çıktı ölçüler içerebilir.
+
+Job belleği/CPU/aktif çocuk sayısı sınırı yoktur. stderr taşması, eşzamanlı akış baskısı, dosya değiştirme ve kaynak tüketimi testleri tamamlanmadı. Timeout tek başına bellek/CPU güvencesi değildir. Bunlar, paket lisansı, veri gizliliği ve uzman/geometri kabulü kapanmadan gerçek veriye veya ürün/plotter akışına bağlanmaz.
+
+## Test raporu
+Yeni geometry-independent.test.mjs: 3 geçti. `node --test --test-concurrency=1 experiments/breanna-4.10.2/*.test.mjs`: 40 geçti, 0 başarısız. Varsayılan paralel Node test çalıştırmasında bazı C# köprü testleri başarısız oldu; seri çalıştırma geçti. Paralel başarısızlığın nedeni bu oturumda kesin olarak ayrıştırılmadı; testler eşzamanlı dotnet süreç/derleme kaynakları paylaşır, yeniden üretilip izole edilmelidir. Testlerin geçtiği Windows/Node ortamı dışında genelleme yapılmaz.
