@@ -44,7 +44,7 @@ internal sealed class PhotoTraceWindow : Window
         var apply=Action("CAD'e taslak ekle",TryApply);apply.Background=DesignRequestWindow.Accent;apply.Foreground=DesignRequestWindow.Surface;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         Action("Kapat",Close);
-        var intro=new TextBlock { Text="Tek mesafede iki referans ucu, düzlem ayarında dört köşe seçin; ardından çizgi noktalarını işaretleyin. Perspektif, kumaş dökümü ve ölçüler ayrıca kontrol edilmelidir; sonuç açık taslaktır.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,4) };
+        var intro=new TextBlock { Text="İki referans ucu veya dört düzlem köşesi seçin; sol tıkla çizgi noktası ekleyin. Sağ tık inceleme konumunu seçer. Perspektif, kumaş dökümü ve ölçüleri kontrol edin; sonuç açık taslaktır.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,4) };
         DockPanel.SetDock(intro,Dock.Top);root.Children.Add(intro);
         var input=new WrapPanel();DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
         referenceLabel.Content="İki uç arası bilinen mesafe (mm)";referenceLabel.Target=LengthForVerification;input.Children.Add(referenceLabel);AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
@@ -63,7 +63,7 @@ internal sealed class PhotoTraceWindow : Window
         allPaths.Click+=(_,_)=>_ = StartPathSuggestionAsync(allSegments:true);
         var viewActions=new WrapPanel { Margin=new Thickness(0,2,0,2) };DockPanel.SetDock(viewActions,Dock.Top);root.Children.Add(viewActions);
         Button ViewAction(string text,string help,Action action) { var button=new Button { Content=text,Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };AutomationProperties.SetHelpText(button,help);button.Click+=(_,_)=> { action();UpdateStatus(); };viewActions.Children.Add(button);return button; }
-        ViewAction("Yakınlaştır","Son seçilen veya klavye imlecindeki noktaya yakınlaştırır.",()=>CanvasForVerification.ZoomAtCursor(2));
+        ViewAction("Yakınlaştır","Son seçilen, sağ tıklanan veya klavye imlecindeki noktaya yakınlaştırır.",()=>CanvasForVerification.ZoomAtCursor(2));
         ViewAction("Uzaklaştır","Son seçilen veya klavye imlecindeki noktadan uzaklaştırır.",()=>CanvasForVerification.ZoomAtCursor(0.5));
         ViewAction("Görüntüyü sığdır","Fotoğrafın tamamını pencereye sığdırır.",CanvasForVerification.ResetZoom);
         var suggest=new Button { Content="Kenar öner",Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };viewActions.Children.Add(suggest);

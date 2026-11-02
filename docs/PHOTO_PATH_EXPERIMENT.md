@@ -18,6 +18,8 @@ Arama, uçların çevresindeki sınırlı bir dikdörtgende kontrast ve yol uzun
 
 Kullanıcı en fazla 17 çizgi noktası seçerek ardışık aralıkların tamamı için tek seferde öneri isteyebilir. `Kapatmayı incele` seçildiğinde `Çizgi + kapanış öner` düğmesi, son noktadan ilk noktaya giden yol için de öneri hesaplar. Öneri uygulandığında ilk nokta yinelenmez; taslak açık kalır. CAD'e ekleme sonrası kapanış aracı kalan son kenarı düz olarak ayrıca önizler ve onayla ayrı kapalı parça oluşturur; fotoğraf geçmişi açık kaynakta kalır. Bir aralık başarısızsa bütün öneri reddedilir; noktalar ve referanslar değişmez. Kullanıcı öneriyi inceleyip uygularsa tüm işlem tek adımda geri alınabilir. Bu sayfadaki fotoğraf deneyi tek aralıkları ölçmüştür. Daha sonra aynı görüntülerde yapılan [kapanış dahil kontur deneyi](PHOTO_CONTOUR_EXPERIMENT.md), ortalama iyileşmeye rağmen önemli yerel sapmalar gösterdi. Otomatik giysi bölgesi için incelenen iki klasik yöntem [ayrı deneyde](PHOTO_REGION_EXPLORATION.md) yetersiz kalmıştır.
 
+Öneri incelenirken fotoğrafa sağ tıklamak inceleme imlecini taşır; yakınlaştırılmış görünüm o konuma ortalanır. Yakınlaştırma düğmesi imleç konumunu kullanır. Bu görünüm işlemleri seçilmiş noktaları veya bekleyen öneriyi değiştirmez. Klavyeyle imleç ok tuşlarıyla, daha hızlı olarak Shift ve ok tuşlarıyla taşınabilir. Görünüm kontrolü sapmayı otomatik saptamaz; gerçek fare ve erişilebilirlik kullanıcı kabulü yapılmadı.
+
 ## Tekrarlama
 
 ZIP'i bağımsız olarak indirin; Windows, .NET 10 SDK ve Python 3.12.14 ile boş bir çalışma klasörü kullanın:

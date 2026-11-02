@@ -32,7 +32,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     {
         Focusable=true;MinHeight=160;ClipToBounds=true;
         AutomationProperties.SetName(this,"Referans fotoğrafta elle nokta seçimi");
-        AutomationProperties.SetHelpText(this,"Fotoğraf üzerinde tıklayın. Klavyeyle ok tuşları imleci taşır, Shift ile on piksel ilerler, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Yakınlaştırmada imleç kenara ulaşınca görünüm onu izler. Çizim otomatik kalıp değildir.");
+        AutomationProperties.SetHelpText(this,"Sol tık nokta ekler; sağ tık yalnız inceleme konumunu seçer ve yakınlaştırılmış görünümü oraya taşır. Klavyeyle ok tuşları imleci taşır, Shift ile on piksel ilerler, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Yakınlaştırmada imleç kenara ulaşınca görünüm onu izler. Çizim otomatik kalıp değildir.");
     }
 
     internal BitmapSource? Image
@@ -87,6 +87,13 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         zoom=next;InvalidateVisual();
     }
     internal void ResetZoom() { zoom=1;zoomCenter=new Point(0.5,0.5);InvalidateVisual(); }
+    internal bool TryInspectAtView(Point viewPoint,Size viewport)
+    {
+        if(image is null || !TryMapViewToPixel(viewPoint,viewport,out var pixel))return false;
+        cursor=pixel;
+        if(zoom>1)zoomCenter=new Point((pixel.X+0.5)/image.PixelWidth,(pixel.Y+0.5)/image.PixelHeight);
+        InvalidateVisual();return true;
+    }
     internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;InvalidateVisual(); }
     internal bool SuggestLastEdge()
     {
@@ -197,6 +204,11 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         base.OnMouseLeftButtonDown(e);Focus();
         if(TryMapViewToPixel(e.GetPosition(this),RenderSize,out var pixel))
         { cursor=pixel;TryAddPixelPoint(pixel);InvalidateVisual();e.Handled=true; }
+    }
+    protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnMouseRightButtonDown(e);
+        if(TryInspectAtView(e.GetPosition(this),RenderSize)) { Focus();e.Handled=true; }
     }
     protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e) { base.OnGotKeyboardFocus(e);InvalidateVisual(); }
     protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e) { base.OnLostKeyboardFocus(e);InvalidateVisual(); }

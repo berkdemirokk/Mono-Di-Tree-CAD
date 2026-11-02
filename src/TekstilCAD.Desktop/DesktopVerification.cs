@@ -9307,6 +9307,18 @@ internal static class DesktopVerification
                 Render(trace,Path.ChangeExtension(reportPath,".photo-batch-preview.png"),560,480);
                 Check(calls==2 && canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && FullyVisible(canvas,root) && trace.StatusForVerification.Text.Contains("ilk ve son birleşmez"),
                     "Batch search previews each trace interval without changing points and discloses the open end",checks);
+                var preview=canvas.PathSuggestion!.ToArray();var inspectionRevision=trace.DraftRevision;
+                Check(canvas.TryMapPixelToView(new Point(15,11),canvas.RenderSize,out var inspectView) && canvas.TryInspectAtView(inspectView,canvas.RenderSize),
+                    "Photo inspection selects a displayed position without adding a point",checks);
+                canvas.ZoomAtCursor(2);
+                Check(canvas.TryMapPixelToView(new Point(15,11),canvas.RenderSize,out var inspectionCenter) && Math.Abs(inspectionCenter.X-canvas.RenderSize.Width/2)<1e-7 && Math.Abs(inspectionCenter.Y-canvas.RenderSize.Height/2)<1e-7 &&
+                    canvas.Points.SequenceEqual(beforeZoom) && canvas.PathSuggestion!.SequenceEqual(preview) && trace.DraftRevision==inspectionRevision,
+                    "Inspection zoom preserves photo points, path preview and draft revision",checks);
+                Check(canvas.TryMapPixelToView(new Point(18,12),canvas.RenderSize,out var nextView) && canvas.TryInspectAtView(nextView,canvas.RenderSize) &&
+                    canvas.TryMapPixelToView(new Point(18,12),canvas.RenderSize,out var recentered) && Math.Abs(recentered.X-canvas.RenderSize.Width/2)<1e-7 && Math.Abs(recentered.Y-canvas.RenderSize.Height/2)<1e-7 &&
+                    !canvas.TryInspectAtView(new Point(-1,0),canvas.RenderSize) && canvas.PathSuggestion!.SequenceEqual(preview) && trace.DraftRevision==inspectionRevision,
+                    "Inspection recenters an enlarged photo and ignores positions outside the viewport",checks);
+                canvas.ResetZoom();
                 Check(canvas.ApplyPathSuggestion() && canvas.Points.Count>beforeZoom.Length && canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),
                     "Batch proposal applies and undoes as one operation",checks);
                 trace.ReviewClosureForVerification.IsChecked=true;calls=0;
