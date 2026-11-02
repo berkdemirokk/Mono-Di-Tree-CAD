@@ -483,6 +483,13 @@ final class DesignDraftStoreTests: XCTestCase {
         let damagedDraft = ExperimentalDesignBrief.Draft(style: .aline, description: "örnek", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: damaged, imageName: "broken.png")
         XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(damagedDraft))
     }
+    func testV2RetainsFreeTextPotentialModelConflictWithoutClaimingDetection() throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "Düz elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertFalse(ExperimentalDesignBrief.hasConflictingModelLabels(style: draft.style, description: draft.description))
+        let recovered = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
+        XCTAssertEqual(recovered.style, .aline)
+        XCTAssertEqual(recovered.description, "Düz elbise istiyorum")
+    }
     func testV2ToV1RejectsOverLimitWithoutTruncatingEmoji() throws {
         let text = String(repeating: "👗", count: 8192)
         let original = ExperimentalDesignBrief.Draft(style: .aline, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
