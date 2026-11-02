@@ -19,11 +19,12 @@ function validateOptions(options) {
 const allowedParts=['breanna.front','breanna.back','breanna.sleeve'];
 function copyPoint(p) { if(!p || !Number.isFinite(p.x)||!Number.isFinite(p.y)) throw new Error('Sonlu olmayan nokta.'); return {x:p.x,y:p.y}; }
 export function toIntermediate(parts) {
- const output=[];
+ const output=[]; const losses=[];
  const knownParts=new Set([...allowedParts,'breanna.base','breanna.frontBase','breanna.sleevecap']);
  for(const name of Object.keys(parts||{})) if(!knownParts.has(name)) throw new Error(`Bilinmeyen parça: ${name}`);
  for(const name of allowedParts) {
   const part=parts?.[name]; if(!part) throw new Error(`Eksik parça: ${name}`);
+  losses.push({part:name, omittedSnippets:Object.keys(part.snippets||{}), omittedPointNames:Object.keys(part.points||{}), omittedPartAttributes:Object.keys(part.attributes?.list||{}), omittedPathAttributes:Object.fromEntries(Object.entries(part.paths||{}).map(([k,v])=>[k,Object.keys(v.attributes?.list||{})])), layoutTransform:"not inspected or applied", topology:"unverified"});
   const paths=[];
   for(const [key,path] of Object.entries(part.paths||{})) {
    let kind;
@@ -48,7 +49,7 @@ export function toIntermediate(parts) {
   if(paths.filter(p=>p.kind==='sewing-boundary').length!==1) throw new Error(`Dikiş sınırı belirsiz: ${name}`);
   output.push({name,paths});
  }
- return {unit:'mm',curve:'cubic-bezier',cutBoundaryAvailable:false,parts:output};
+ return {purpose:'diagnostic-only',transferable:false,unit:'mm',curve:'cubic-bezier',cutBoundaryAvailable:false,lossManifest:losses,parts:output};
 }
 export function draftExperimental(measurements, options) {
  if (!measurements || typeof measurements !== 'object' || Array.isArray(measurements)) throw new TypeError('Ölçü nesnesi gerekli.');
