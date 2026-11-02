@@ -6,7 +6,7 @@ using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 if(!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException();
-if(args.Length!=3 || (args[2]!="keep" && args[2]!="exit" && args[2]!="cancel"))throw new ArgumentException("Synthetic test: node path and script path required");
+if(args.Length!=3 || (args[2]!="keep" && args[2]!="exit" && args[2]!="cancel" && args[2]!="ownerexit" && args[2]!="ownerterminate"))throw new ArgumentException("Synthetic test: node path and script path required");
 var node=Path.GetFullPath(args[0]);var script=Path.GetFullPath(args[1]);
 if(node.Contains('"')||script.Contains('"'))throw new ArgumentException("Invalid path");
 using var job=Native.CreateJobObject(IntPtr.Zero,null);if(job.IsInvalid)throw new Win32Exception();
@@ -16,11 +16,12 @@ try{Marshal.StructureToPtr(limits,data,false);if(!Native.SetInformationJobObject
 using var stdout=new AnonymousPipeServerStream(PipeDirection.In,HandleInheritability.Inheritable);
 using var stdin=new AnonymousPipeServerStream(PipeDirection.Out,HandleInheritability.Inheritable);
 var si=new Native.STARTUPINFO { cb=(uint)Marshal.SizeOf<Native.STARTUPINFO>(),dwFlags=0x100,hStdInput=stdin.ClientSafePipeHandle.DangerousGetHandle(),hStdOutput=stdout.ClientSafePipeHandle.DangerousGetHandle(),hStdError=stdout.ClientSafePipeHandle.DangerousGetHandle() };
-var command=new StringBuilder($"\"{node}\" \"{script}\" {args[2]}");
+var mode=(args[2]=="ownerexit"||args[2]=="ownerterminate") ? "keep" : args[2];
+var command=new StringBuilder($"\"{node}\" \"{script}\" {mode}");
 if(!Native.CreateProcess(node,command,IntPtr.Zero,IntPtr.Zero,true,0x00000004|0x08000000,IntPtr.Zero,null,ref si,out var pi))throw new Win32Exception();
 using var proc=new SafeFileHandle(pi.hProcess,true);using var thread=new SafeFileHandle(pi.hThread,true);
 stdout.DisposeLocalCopyOfClientHandle();stdin.DisposeLocalCopyOfClientHandle();
-if(!Native.AssignProcessToJobObject(job,proc)) {var error=Marshal.GetLastWin32Error();Native.TerminateProcess(proc,1);Native.WaitForSingleObject(proc,3000);throw new Win32Exception(error,"Job assignment rejected; process was not resumed.");}
+if(!Native.AssignProcessToJobObject(job,proc)) {var error=Marshal.GetLastWin32Error();if(!Native.TerminateProcess(proc,1)||Native.WaitForSingleObject(proc,3000)!=0)throw new InvalidOperationException("Job assignment failed and suspended process cleanup was not confirmed.");throw new Win32Exception(error,"Job assignment rejected; process was not resumed.");}
 if(Native.ResumeThread(thread)==uint.MaxValue){Native.TerminateJobObject(job,1);throw new Win32Exception("Could not resume.");}
 using var reader=new StreamReader(stdout,new UTF8Encoding(false,true));
 string? line;using(var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(10)))line=await reader.ReadLineAsync(timeout.Token);
@@ -29,6 +30,8 @@ using var child=Process.GetProcessById(childId);
 using(var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(5))) { var ready=await reader.ReadLineAsync(timeout.Token);if(ready!="CHILD_READY")throw new InvalidOperationException("Child did not become ready: "+ready); }
 if(args[2]=="exit" && Native.WaitForSingleObject(proc,5000)!=0)throw new TimeoutException("Root did not exit.");
 if(child.HasExited)throw new InvalidOperationException("Child already exited; test inconclusive.");
+if(!Native.IsProcessInJob(child.SafeHandle,job,out var member) || !member)throw new InvalidOperationException("Sentinel child is not in the expected job.");
+if(args[2]=="ownerexit"||args[2]=="ownerterminate") { Console.WriteLine($"OWNERCHILD={childId}");Console.Out.Flush();if(Console.ReadLine()!="EXIT")throw new InvalidOperationException("Synchronization missing.");if(args[2]=="ownerterminate") Native.TerminateSelf(Native.GetCurrentProcess(),88);else Environment.Exit(88);throw new InvalidOperationException("Owner exit failed."); }
 if(args[2]=="cancel") { using var cancel=new CancellationTokenSource(200);try{await Task.Delay(Timeout.Infinite,cancel.Token);}catch(OperationCanceledException){} }
 job.Dispose();
 await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));
@@ -46,8 +49,11 @@ internal static class Native
  [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool SetInformationJobObject(SafeFileHandle job,int info,IntPtr data,uint size);
  [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool CreateProcess(string app,StringBuilder cmd,IntPtr processAttrs,IntPtr threadAttrs,[MarshalAs(UnmanagedType.Bool)]bool inherit,uint flags,IntPtr env,string? cwd,ref STARTUPINFO startup,out PROCESS_INFORMATION info);
  [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool AssignProcessToJobObject(SafeFileHandle job,SafeFileHandle process);
+ [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool IsProcessInJob(SafeProcessHandle process,SafeFileHandle job,[MarshalAs(UnmanagedType.Bool)]out bool result);
  [DllImport("kernel32.dll",SetLastError=true)]internal static extern uint ResumeThread(SafeFileHandle thread);
  [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool TerminateProcess(SafeFileHandle process,uint code);
  [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool TerminateJobObject(SafeFileHandle job,uint code);
+ [DllImport("kernel32.dll")]internal static extern IntPtr GetCurrentProcess();
+ [DllImport("kernel32.dll",EntryPoint="TerminateProcess",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool TerminateSelf(IntPtr process,uint code);
  [DllImport("kernel32.dll",SetLastError=true)]internal static extern uint WaitForSingleObject(SafeFileHandle handle,uint milliseconds);
 }
