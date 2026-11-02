@@ -22,6 +22,16 @@ public sealed class ExperimentalOffsetFallbackPrototypeTests(ITestOutputHelper l
         }
         return max;
     }
+    private static int TurnSignTransitions(IReadOnlyList<Point2> points)
+    {
+        int[] signs=new int[points.Count];
+        for(int i=0;i<points.Count;i++)
+        {
+            var u=points[i]-points[(i+points.Count-1)%points.Count];var v=points[(i+1)%points.Count]-points[i];
+            signs[i]=Math.Sign(u.X*v.Y-u.Y*v.X);
+        }
+        return Enumerable.Range(0,points.Count).Count(i=>signs[i]!=signs[(i+points.Count-1)%points.Count]);
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -63,6 +73,26 @@ public sealed class ExperimentalOffsetFallbackPrototypeTests(ITestOutputHelper l
         Assert.ThrowsAny<ArgumentException>(()=>ExperimentalOffsetFallbackPrototype.TryOffset(notch,1));
         var closed=ExperimentalOffsetFallbackPrototype.TryOffset(channel,5);
         Assert.Null(closed.Piece);Assert.NotNull(closed.OriginalFailure);Assert.False(closed.NumericalChecksPassed);
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void SameVertexCountSmallTurnsAndInflectionCountDoNotProveNoLocalIndentation(bool reverse)
+    {
+        var baseline=Lobed();var changed=baseline.Clone();const int index=74;
+        var a=changed.Points[index-1];var b=changed.Points[index];var c=changed.Points[index+1];
+        var chord=c-a;double length=Geometry.Distance(a,c);
+        changed.Points[index]=b+new Point2(-chord.Y/length,chord.X/length)*.05;
+        double SignedDepth(Point2 x)=>(chord.X*(x.Y-a.Y)-chord.Y*(x.X-a.X))/length;
+        Assert.True(SignedDepth(b)>0);
+        Assert.InRange(SignedDepth(changed.Points[index])-SignedDepth(b),.049999,.050001);
+        if(reverse){baseline.Points.Reverse();changed.Points.Reverse();}
+        Assert.Equal(512,baseline.Points.Count);Assert.Equal(512,changed.Points.Count);Assert.Null(changed.Notches);
+        Assert.InRange(MaximumTurnDegrees(baseline.Points),0,2);Assert.InRange(MaximumTurnDegrees(changed.Points),0,2);
+        Assert.Equal(6,TurnSignTransitions(baseline.Points));Assert.Equal(6,TurnSignTransitions(changed.Points));
+        var result=ExperimentalOffsetFallbackPrototype.TryOffset(changed,1);
+        log.WriteLine($"reverse={reverse}; source and modified both 512 points, six turn transitions and max turn <2°; numerical={result.NumericalChecksPassed}; {result.Reason}");
+        Assert.Null(result.Piece);Assert.NotNull(result.OriginalFailure);
     }
     [Fact]
     public void ExistingSuccessAndOtherErrorsRemainOriginal()
