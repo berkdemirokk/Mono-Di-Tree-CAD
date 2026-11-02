@@ -1024,6 +1024,7 @@ internal static class DesktopVerification
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
+            VerifyPhotoFileTrace(reportPath,checks);
             VerifyPhotoTrace(reportPath,checks);
             VerifyPhotoPlaneWorkflow(reportPath,checks);
             VerifyArcStartPoint(studio,checks);
@@ -9216,6 +9217,49 @@ internal static class DesktopVerification
         }
         foreach(var group in groups) { group.IsExpanded=true;root.UpdateLayout();Check(group.IsExpanded && Descendants<Button>(group).Any(),"Expanded command group exposes its actions: "+AutomationProperties.GetName(group),checks);group.IsExpanded=false; }
 
+    }
+    private static void VerifyPhotoFileTrace(string reportPath,List<string> checks)
+    {
+        var directory=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-file-fixture-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(directory);
+        var bitmap=BitmapSource.Create(48,24,96,96,PixelFormats.Bgra32,null,new byte[48*24*4],48*4);
+        byte[] bytes;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);bytes=stream.ToArray(); }
+        var path=Path.Combine(directory,"source.png");File.WriteAllBytes(path,bytes);
+        var invalid=Path.Combine(directory,"invalid.png");File.WriteAllBytes(invalid,[0,1,2]);
+        var tooLarge=Path.Combine(directory,"large.png");using(var file=new FileStream(tooLarge,FileMode.CreateNew,FileAccess.Write))file.SetLength(DesignRequestStorage.MaximumReferenceBytes+1L);
+        var initial=new ProjectDocument { Name="Fotoğraf dosyası testi" };var workspace=new MainWindow(new DocumentSession(initial));StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+        var previous=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
+        try
+        {
+            var ready=workspace.PreparePhotoFileTraceAsync(path);PumpUntil(()=>ready.IsCompleted);var trace=ready.GetAwaiter().GetResult();
+            var expectedHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+            Check(trace is not null && !trace.IsVisible && ReferenceEquals(trace.Owner,workspace) &&
+                (string?)typeof(PhotoTraceWindow).GetField("sourceSha256",PrivateInstance)!.GetValue(trace)==expectedHash &&
+                File.ReadAllBytes(path).SequenceEqual(bytes) && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Direct photo-file opening captures the exact image without editing source or project",checks);
+            trace!.Close();
+            foreach(var badPath in new[] { invalid,tooLarge,Path.Combine(directory,"missing.png") })
+            {
+                var bad=workspace.PreparePhotoFileTraceAsync(badPath);PumpUntil(()=>bad.IsCompleted);
+                Check(bad.GetAwaiter().GetResult() is null && DocumentSession.ContentEquals(initial,workspace.Document) && File.ReadAllBytes(path).SequenceEqual(bytes),
+                    "Invalid, oversized or missing photo file is rejected without changing the source or project",checks);
+            }
+            using var entered=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+            workspace.PhotoFileLoaderForVerification=p=> { entered.Set();release.Wait();return ReferencePhotoFileLoader.Load(p); };
+            try
+            {
+                var pending=workspace.PreparePhotoFileTraceAsync(path);PumpUntil(()=>entered.IsSet);
+                var duplicate=workspace.PreparePhotoFileTraceAsync(path);
+                Check(duplicate.IsCompleted && duplicate.GetAwaiter().GetResult() is null,"Only one direct photo-file read can run at a time",checks);
+                workspace.Commit("test",()=>workspace.Document.Name="Değişen proje");release.Set();PumpUntil(()=>pending.IsCompleted);
+                Check(pending.GetAwaiter().GetResult() is null && workspace.Document.Name=="Değişen proje" && File.ReadAllBytes(path).SequenceEqual(bytes),
+                    "A project edit during photo-file reading discards the stale trace and preserves the edit",checks);
+            }
+            finally { release.Set();workspace.PhotoFileLoaderForVerification=null; }
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
+        }
     }
     private static void VerifyPhotoTrace(string reportPath,List<string> checks)
     {

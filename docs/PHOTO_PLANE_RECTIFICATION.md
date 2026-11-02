@@ -10,6 +10,8 @@ Fotoğraf çiziminde kullanıcı noktalar temizken düzlem modunu seçip en ve b
 
 Kaydedilmiş istekle açılan çizim notlarında, gömülü referans varsa `Fotoğraftan çiz…` düğmesi bu görseli ayrı önizleme penceresine uğramadan fotoğraf taslağında açar. Görsel arka planda çözülür, ana projenin mevcut durumu daha sonra yakalanır; bozuk görsel, pencerenin kapanması veya bekleyen proje işlemi durumunda taslak açılmaz. Bu geçiş otomatik kalıp oluşturmaz ve projeyi değiştirmez.
 
+Ana çizim penceresindeki `Fotoğraftan taslak…` komutu da bir PNG/JPEG dosyasını istek dosyası oluşturmadan açar. Kaynak dosya yalnız okunur; en fazla 8 MiB görüntü verisi arka planda çözülür. Seçim sonrasında proje veya seçim değişirse eski sonuç kullanılmaz. Fotoğrafın kendisi projeye kaydedilmez; kullanıcı referans ve çizgi noktalarını seçip işlemi ayrıca onaylar. Bu yolun gerçek kullanıcı kabulü yapılmadı.
+
 Bağımsız iki noktalı ölçü karşılaştırması, milimetre farkının yanında `(tahmin − girilen) / girilen × 100` göreli farkını gösterir. Bu sayı yalnız seçilen mesafe ve kullanıcının girdiği değer için geçerlidir; tolerans, hata sınırı veya kabul kararı değildir. Çok küçük girilen değerlerde yüzde sayısal olarak gösterilemeyebilir; milimetre sonucu ayrı kalır.
 
 Karşılaştırma penceresi seçilen iki ucu fotoğraf üzerinde numaralı işaretlerle gösterir; liste ve görüntü pencerenin açıldığı andaki taslak kopyasına aittir. Fotoğrafta sol tık birinci, sağ tık ikinci ucu seçer; yakın noktalar ayırt edilemiyorsa seçim yapılmaz ve liste kullanılır. Listeler klavyeyle de kullanılabilir. Seçim eski karşılaştırma sonucunu kaldırır, çizim noktalarını değiştirmez veya fotoğraf kenarıyla uyumu ölçmez. Gerçek fare, klavye ve ekran okuyucu kullanıcı kabulü yapılmadı.

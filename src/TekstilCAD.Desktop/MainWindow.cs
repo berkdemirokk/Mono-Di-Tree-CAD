@@ -25,6 +25,8 @@ public class MainWindow : Window
     private Guid projectEpoch = Guid.NewGuid();
     private long projectOpenGeneration;
     private bool projectOpenRunning;
+    private bool photoFileLoading;
+    internal Func<string,ReferencePhotoPreview>? PhotoFileLoaderForVerification { get; set; }
     private CancellationTokenSource? projectOpenCancellation;
     internal Action<CancellationToken>? ProjectOpenTokenForVerification { get; set; }
     private Button? projectOpenCancel;
@@ -265,6 +267,7 @@ public class MainWindow : Window
         AddButton(files, "Yeni dosya olarak güvenli kopya…", SaveNewCopy, "Açık dosyayı değiştirmeden yeni bir kopya oluştur", projectSaveAction:true);
         recoveryRescan = AddButton(files, "Kurtarma tara", async () => await BeginRecoveryScan(), "Kurtarma kayıtlarını yeniden tara; açık proje değiştirilmez.");
         AddButton(files, "Parça ara", FocusPieceSearch, "Parça adı veya kimliğiyle arama alanına git");
+        AddButton(files,"Fotoğraftan taslak…",ChoosePhotoForTrace,"PNG veya JPEG dosyasından elle açık taslak çizimi başlatır; otomatik kalıp oluşturmaz.");
         AddButton(files, "Fotoğraf taslağı geçmişi…",()=>new PhotoTraceHistoryWindow(this,Document).ShowDialog(),"Kaydedilmiş kaynak özeti ve ilk çizim verilerini gösterir; üretim onayı değildir.");
         var exchange = CollapsibleCommands(commandArea, "Dosya aktarımı");
         dxfImportCommand=AddButton(exchange, "DXF al…", ImportDxf, "DXF dosyasından geometri aktar");
@@ -1368,6 +1371,32 @@ public class MainWindow : Window
     internal sealed record GrainlineEditStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid PieceId);
 
     internal sealed record PhotoTraceStamp(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,Guid? Selection);
+    private async void ChoosePhotoForTrace()
+    {
+        if(photoFileLoading) { SetStatus("Fotoğraf açma işlemi sürüyor.");return; }
+        var dialog=new OpenFileDialog { Title="Fotoğraf seç",Filter="PNG veya JPEG (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",CheckFileExists=true,Multiselect=false };
+        if(dialog.ShowDialog(this)!=true)return;
+        var trace=await PreparePhotoFileTraceAsync(dialog.FileName);
+        if(trace is not null)trace.Show();
+    }
+    internal async Task<PhotoTraceWindow?> PreparePhotoFileTraceAsync(string path)
+    {
+        if(windowClosed || photoFileLoading) { if(!windowClosed)SetStatus("Fotoğraf açma işlemi sürüyor.");return null; }
+        var stamp=CapturePhotoTrace();if(stamp is null)return null;
+        photoFileLoading=true;SetStatus("Fotoğraf okunuyor; proje değiştirilmiyor.");
+        try
+        {
+            var loader=PhotoFileLoaderForVerification;
+            var image=await Task.Run(()=>loader is null ? ReferencePhotoFileLoader.Load(path) : loader(path));
+            if(windowClosed)return null;
+            if(PhotoTraceProblem(stamp) is { } stale) { SetStatus(stale);return null; }
+            var trace=new PhotoTraceWindow(this,image.Bitmap,stamp,image.OrientedSourceWidth,image.OrientedSourceHeight,image.SourceSha256,image.SourceByteLength,image.SourceOrientation);
+            SetStatus("Fotoğraf hazır; referans ve çizgi noktalarını seçin. Proje henüz değiştirilmedi.");return trace;
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        { if(!windowClosed)SetStatus("Fotoğraf açılamadı; kaynak dosya ve proje değiştirilmedi.");return null; }
+        finally { photoFileLoading=false; }
+    }
     private readonly HashSet<PhotoTraceWindow> photoTraceWindows=[];
     private bool photoCloseCheckActive;
     internal Func<bool>? ConfirmPhotoTraceCloseForVerification { get; set; }
