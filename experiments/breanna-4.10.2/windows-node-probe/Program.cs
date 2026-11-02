@@ -26,6 +26,7 @@ try
     byte[] request = await ReadBounded(Console.OpenStandardInput(), 32768, combined.Token);
     if (request.Length == 0) throw new InvalidOperationException();
     byte[] response = await Run(args[0], args[1], invalidJob, request, combined.Token);
+    PreviewResponseValidator.Validate(request,response);
     await Console.OpenStandardOutput().WriteAsync(response, combined.Token);
 }
 catch { Console.Error.WriteLine("Synthetic worker failed."); Environment.ExitCode = 1; }
