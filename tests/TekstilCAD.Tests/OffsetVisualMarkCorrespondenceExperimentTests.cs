@@ -68,4 +68,27 @@ public sealed class OffsetVisualMarkCorrespondenceExperimentTests
         var (s,c)=Square(false,false);s.Points[0]=new(.0000004,0);Assert.False(Verify(s,c).Ok);
         (s,c)=Square(false,false);s.Points.Add(s.Points[0]);c.Points.Add(c.Points[0]);Assert.False(Verify(s,c).Ok);
     }
+    [Fact]
+    public void InteriorEdgePointIsNotAValidVertexAnchoredMark()
+    {
+        var (source,_)=Square(false,false);
+        source.Notches=[new NotchMark{VertexIndex=0,Position=new Point2(50,0)}];
+        Assert.Throws<ArgumentException>(()=>MarkedPieceTranslation.Translate(source,0,0));
+        Assert.Throws<ArgumentException>(()=>PatternTools.Offset(source,.0002));
+    }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PhysicalVNotchIsContourGeometryAndIsNotANotchMark(bool reverse)
+    {
+        var (source,_)=Square(reverse,false);
+        var physical=PatternTools.InsertNotch(source,0,.5,4,2);
+        Assert.Null(physical.Notches);Assert.Equal(source.Points.Count+3,physical.Points.Count);
+        Assert.Equal(4,Geometry.Distance(physical.Points[1],physical.Points[3]),10);
+        var middle=physical.Points[1]+(physical.Points[3]-physical.Points[1])*.5;
+        Assert.Equal(2,Geometry.Distance(middle,physical.Points[2]),10);
+        var visual=source.Clone();visual.Notches=[new NotchMark{VertexIndex=0,Position=source.Points[0]}];
+        Assert.Equal(source.Points,visual.Points);Assert.Single(visual.Notches);
+        Assert.NotEqual(visual.Points.Count,physical.Points.Count);
+    }
 }
