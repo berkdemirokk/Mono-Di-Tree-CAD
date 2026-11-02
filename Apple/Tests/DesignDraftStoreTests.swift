@@ -469,6 +469,11 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun; bel çevresi 73 cm olsun", existing: [:]))
         XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun; kol uzun olsun", existing: [:]))
         XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun", existing: ["bel çevresi": "70 cm"]))
+        for ambiguous in ["bel çevresi yaklaşık 72 cm olsun", "bel çevresi 72 cm olmasın", "bel çevresi 72 cm olsun değil"] {
+            XCTAssertThrowsError(try MeasurementMessageParser.parse(ambiguous, existing: [:]))
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: ambiguous, image: nil, imageName: nil)
+            XCTAssertEqual(draft.measurements, ambiguous)
+        }
         let raw = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-message-olsun.tcad-request", withExtension: "json"))
         let data = try Data(contentsOf: raw)
         let draft = try ExperimentalDesignBrief.portableDraft(data)
