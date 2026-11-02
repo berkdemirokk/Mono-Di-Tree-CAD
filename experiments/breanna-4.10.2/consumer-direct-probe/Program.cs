@@ -31,16 +31,16 @@ async Task Direct(string mode)
 }
 async Task ChildTree()
 {
-    var id=Convert.ToHexString(SHA256.HashData(request)).ToLowerInvariant()[..32];var baseDir="work/breanna-probe/";var childPath=baseDir+"atomic-child-"+id+".pid";var rootPath=baseDir+"atomic-root-"+id+".pid";
-    if(File.Exists(childPath)||File.Exists(rootPath))throw new IOException("Sentinel collision");
-    using var p=Start(Path.Combine(args[4],"orphan.mjs"),10000);Process? child=null;
+    var id=Convert.ToHexString(SHA256.HashData(request)).ToLowerInvariant()[..32];var baseDir="work/breanna-probe/atomic-case-"+id;var childPath=Path.Combine(baseDir,"child.pid");var rootPath=Path.Combine(baseDir,"root.pid");var release=Path.Combine(baseDir,"release");
+    if(Directory.Exists(baseDir))throw new IOException("Sentinel directory collision");Directory.CreateDirectory(baseDir);
+    using var p=Start(Path.Combine(args[4],"orphan-synced.mjs"),10000);Process? child=null;
     try {
         var stderr=p.StandardError.ReadToEndAsync();await Send(p);using var cancel=new CancellationTokenSource();var read=FinalPreviewConsumer.ReadAsync(p.StandardOutput.BaseStream,Exit(p),request,TimeSpan.FromSeconds(10),cancel.Token);
         var limit=Stopwatch.StartNew();while((!File.Exists(childPath)||!File.Exists(rootPath))&&limit.Elapsed<TimeSpan.FromSeconds(6))await Task.Delay(20);
         if(!File.Exists(childPath)||!File.Exists(rootPath))throw new Exception("Child sentinel missing");
-        child=Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(childPath)));if(child.HasExited)throw new Exception("Child not alive before cancel");
+        child=Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(childPath)));using var root=Process.GetProcessById(int.Parse(await File.ReadAllTextAsync(rootPath)));if(root.HasExited||child.HasExited)throw new Exception("Sentinel exited before release");await File.WriteAllTextAsync(release,"release");await root.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));if(child.HasExited)throw new Exception("Child exited before cancel");
         cancel.Cancel();await Expect<OperationCanceledException>(async()=>await read);await Cleanup(p);await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(5));if(!p.HasExited)throw new Exception("Launcher survived");_ = await stderr;
-    } finally {await Cleanup(p);child?.Dispose();if(File.Exists(childPath))File.Delete(childPath);if(File.Exists(rootPath))File.Delete(rootPath);}
+    } finally {await Cleanup(p);child?.Dispose();if(File.Exists(childPath))File.Delete(childPath);if(File.Exists(rootPath))File.Delete(rootPath);if(File.Exists(release))File.Delete(release);Directory.Delete(baseDir);}
 }
 foreach(var mode in new[]{"slow","partial","fail","cancel","timeout","truncated-write"})await Direct(mode);await ChildTree();Console.Write("PASS: direct NodeProbe pipe, partial write, timeout, cancellation, errors and job cleanup");
 sealed class GatedPipe(Stream source):Stream
