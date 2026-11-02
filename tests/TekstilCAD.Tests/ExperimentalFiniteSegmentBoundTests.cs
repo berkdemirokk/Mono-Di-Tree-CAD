@@ -44,6 +44,15 @@ public sealed class ExperimentalFiniteSegmentBoundTests
         GridPoint[] zero=[new(0,0),new(0,0),new(1,0)];
         Assert.False(ExperimentalFiniteSegmentBound.Verify(zero,square,true,5,1,out _));
     }
+    [Fact]
+    public void ZeroSetDistanceDoesNotProveSingleTraversalOrTopology()
+    {
+        GridPoint[] square=[new(0,0),new(100,0),new(100,100),new(0,100)];
+        var twice=square.Concat(square).ToArray();
+        Assert.True(ExperimentalFiniteSegmentBound.Verify(square,twice,true,0,1,out var reason),reason);
+        Assert.Contains("topology",reason);
+        Assert.Throws<ArgumentException>(()=>Geometry.ValidateContour(twice.Select(p=>new Point2(p.X,p.Y)).ToArray()));
+    }
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

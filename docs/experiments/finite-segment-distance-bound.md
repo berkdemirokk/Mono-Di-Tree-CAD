@@ -8,6 +8,8 @@ Her sonlu kaynak segmenti belirtilen sayıda eşit rasyonel alt segmente bölün
 
 Koşul yeterlidir, zorunlu değildir. Bir alt segmentin iki ucu farklı karşı segmentlere yakınsa, aradaki kapsama gerçekten var olsa bile kanıt bulunamayabilir. Alt bölme bazı kavşakları ayırabilir; sınırlı bölme sayısı ve iki milyon karşılaştırma bütçesi nedeniyle belirsiz durumlar reddedilir. Yöntem kontur basitliğini, yönünü veya fiziksel çentiklerin anlamını tek başına incelemez.
 
+Somut karşı örnek: aynı kareyi iki kez dolaşan adayın nokta kümesi tek dolaşımlı kareyle aynıdır ve iki yönlü uzaklığı sıfırdır; buna rağmen aday tekrarlı ve geçersiz bir konturdur. Bu nedenle ayrı basitlik, tekrar, yön ve topoloji denetimleri zorunludur.
+
 ## Grid kaynağın ideal miteri
 
 Ek test, grid kaynak üzerindeki indeksli ideal miterin her köşesini mevcut interval hesabıyla grid vekiline eksen başına 1 grid içinde sınırlar. İndeksli kenarların doğrusal aradeğerleri de bu sınıra uyar; her noktada Öklid uzaklığı için **2 grid** güvenli, ama sıkı olmayan bir üst sınırdır. Önce vekil ve aday sonlu sınırları için iki yönlü mesafe `T−2` grid içinde kanıtlanırsa, üçgen eşitsizliğiyle ideal miter ile aday için toplam `T` grid sınırı elde edilir. Bu sonuç mevcut interval hesabının doğruluğuna bağlıdır ve grid kaynağın ideal miterini ifade eder.
