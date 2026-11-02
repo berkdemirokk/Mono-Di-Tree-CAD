@@ -1,0 +1,65 @@
+using TekstilCAD.MachineGateway;
+
+namespace TekstilCAD.Tests;
+
+public sealed class PlotterCalibrationSquareTests
+{
+    [Theory]
+    [InlineData(1, 100)] [InlineData(40, 4000)] [InlineData(101.25, 10125)]
+    public void SquareHasExactHundredMillimeterBounds(double units, int side)
+    {
+        var prepared = PlotterCalibrationSquare.Prepare(units, 1);
+        var geometry = prepared.Output.GetPieceGeometry(prepared.PieceId);
+        Assert.True(geometry.Closed);
+        Assert.Equal(4, geometry.Points.Count);
+        Assert.Equal(0, geometry.Points.Min(p => p.PlotX));
+        Assert.Equal(side, geometry.Points.Max(p => p.PlotX));
+        Assert.Equal(0, geometry.Points.Min(p => p.PlotY));
+        Assert.Equal(side, geometry.Points.Max(p => p.PlotY));
+        Assert.Equal(100, geometry.Points.Max(p => p.SourceX));
+        Assert.Equal(100, geometry.Points.Max(p => p.SourceY));
+        Assert.StartsWith("IN;SP1;PA;", prepared.Output.Text);
+        Assert.Contains("SP0;", prepared.Output.Text);
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(-1)] [InlineData(10001)] [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)] [InlineData(0.015)]
+    public void InvalidOrNonIntegralReferenceUnitsAreRejected(double units)
+    { Assert.ThrowsAny<ArgumentException>(() => PlotterCalibrationSquare.Prepare(units, 1)); }
+
+    [Theory]
+    [InlineData(0)] [InlineData(0.5)] [InlineData(2)] [InlineData(double.NaN)]
+    public void ReferenceCannotBeScaledAwayFromHundredMillimeters(double scale)
+    { Assert.ThrowsAny<ArgumentException>(() => PlotterCalibrationSquare.Prepare(40, scale)); }
+
+    [Theory]
+    [InlineData(@"C:\WearCadfe\reference-100mm.plt")]
+    [InlineData(@"C:\Hpgl\reference-100mm.plt")]
+    [InlineData(@"C:\Nester\reference-100mm.plt")]
+    [InlineData(@"C:\Nester1\reference-100mm.plt")]
+    [InlineData(@"C:\NST\reference-100mm.plt")]
+    public void ProtectedTargetsAreRejected(string path)
+    { Assert.Throws<InvalidOperationException>(() => PlotterCalibrationSquare.WriteNew(PlotterCalibrationSquare.Prepare(40, 1), path)); }
+
+    [Fact]
+    public void NewOutputIsWrittenAndExistingOutputIsNeverReplaced()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        var directory = Path.Combine(root!.FullName, "work", "calibration-square-tests");
+        Directory.CreateDirectory(directory);
+        var path = Path.Combine(directory, Guid.NewGuid().ToString("N") + ".plt");
+        var prepared = PlotterCalibrationSquare.Prepare(40, 1);
+        try
+        {
+            PlotterCalibrationSquare.WriteNew(prepared, path);
+            var bytes = File.ReadAllBytes(path);
+            Assert.Equal(System.Text.Encoding.UTF8.GetBytes(prepared.Output.Text), bytes);
+            Assert.Throws<IOException>(() => PlotterCalibrationSquare.WriteNew(prepared, path));
+            Assert.Equal(bytes, File.ReadAllBytes(path));
+        }
+        finally { if (File.Exists(path)) File.Delete(path); }
+    }
+}

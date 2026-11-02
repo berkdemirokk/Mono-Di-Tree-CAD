@@ -58,6 +58,7 @@ public sealed class MachineCenterWindow : Window
     private string? selectedFileReadError;
     private readonly Button prepare=new() { Content="Projeden dosya hazırla" },simulate=new() { Content="Seçili dosyayı doğrula",IsEnabled=false };
     private readonly Button cancelPrepare=new() { Content="Hazırlamayı iptal et",Visibility=Visibility.Collapsed };
+    private readonly Button calibrationSquare=new() { Content="100 mm referans PLT dosyası oluştur" };
     private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Text="Bir profil belirleyip geçerli projeden yerel dosya oluşturun." };
     private readonly TextBlock inputHint=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private readonly ScrollViewer messagesViewer=new();
@@ -124,7 +125,9 @@ public sealed class MachineCenterWindow : Window
         units.ToolTip="40 yalnızca örnek değerdir; fiziksel cihaz kalibrasyonu doğrulanmadı. Nokta veya virgül ondalıktır.";
         var scaleCheck=new StackPanel { Margin=new Thickness(0,4,0,12) };
         scaleCheck.Children.Add(new TextBlock { Text="Ölçek kontrolü · isteğe bağlı",FontWeight=FontWeights.SemiBold });
-        scaleCheck.Children.Add(new TextBlock { Text="Ayrı hazırlanmış 100 × 100 mm referansın çıktısını ölçtüyseniz X ve Y uzunluklarını girin. Bu ekran referans çizmez veya makineye göndermez.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,8) });
+        scaleCheck.Children.Add(new TextBlock { Text="HPGL biçimini seçerek işaretsiz 100 × 100 mm referans dosyası oluşturabilirsiniz; ölçek 1 olmalı ve birim/mm değeri cihaz belgelerine göre seçilmelidir. Dosya makineye gönderilmez. Basılmış referansın X ve Y kenarlarını elle ölçüp aşağıya girin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,8) });
+        StyleButton(calibrationSquare);AutomationProperties.SetName(calibrationSquare,"100 mm referans HPGL dosyası oluştur");
+        calibrationSquare.Click+=(_,_)=>Execute(CreateCalibrationSquare);scaleCheck.Children.Add(calibrationSquare);
         var measuredX=new TextBox();var measuredY=new TextBox();var measuredFields=new WrapPanel();
         Field(measuredFields,"Ölçülen X · mm",measuredX,150);Field(measuredFields,"Ölçülen Y · mm",measuredY,150);scaleCheck.Children.Add(measuredFields);
         var scaleCheckResult=new TextBlock { Text="İki ölçüyü de girin. Bu hesap cihaz doğrulaması değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
@@ -300,6 +303,7 @@ public sealed class MachineCenterWindow : Window
     private void UpdateAvailability()
     {
         units.IsEnabled=!preparing && format.SelectedIndex==1;
+        calibrationSquare.IsEnabled=!preparing && format.SelectedIndex==1;
         var selected=SelectedPieceIds.ToHashSet();var existing=studio.Document.Pieces.Where(p=>selected.Contains(p.Id)).ToArray();
         selectionSummary.Text=$"Seçili üretim kümesi: {existing.Length} parça · {existing.Sum(p=>p.Points.Count)} nokta · Her parça 1 adet";
         UpdateChoiceSearchStatus();
@@ -312,6 +316,18 @@ public sealed class MachineCenterWindow : Window
     }
     private void Execute(Action action)
     { try { action(); } catch(Exception ex) { result.Foreground=StudioTheme.Danger;result.Text="İşlem başarısız: "+ex.Message; } }
+    private void CreateCalibrationSquare()
+    {
+        if(preparing || format.SelectedIndex!=1)throw new InvalidOperationException("Önce HPGL / PLT biçimini seçin.");
+        var unitValue=Number(units);var scaleValue=Number(scale);
+        var reference=PlotterCalibrationSquare.Prepare(unitValue,scaleValue);
+        var confirmation=MessageBox.Show(this,$"100 × 100 mm işaretsiz referans dosyası hazırlanacak.\nBirim/mm: {unitValue:G17}\nÖlçek: {scaleValue:G17}\n\nBu değerlerin cihazınıza uygunluğu ve çıktı ölçüsü doğrulanmış değildir. Makineye veri gönderilmez.","Referans dosyasını kontrol edin",MessageBoxButton.OKCancel,MessageBoxImage.Information);
+        if(confirmation!=MessageBoxResult.OK)return;
+        var dialog=new Microsoft.Win32.SaveFileDialog { Title="Yeni 100 mm referans HPGL dosyası",Filter="HPGL / PLT (*.plt)|*.plt|HPGL (*.hpgl)|*.hpgl",FileName="referans-100mm.plt",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        PlotterCalibrationSquare.WriteNew(reference,dialog.FileName);
+        result.Foreground=StudioTheme.Accent;result.Text="100 mm referans dosyası oluşturuldu: "+dialog.FileName+". Makineye gönderilmedi; cihaz ve fiziksel ölçü doğrulanmadı.";
+    }
     private async Task Prepare()
     {
         if(preparing)return;
