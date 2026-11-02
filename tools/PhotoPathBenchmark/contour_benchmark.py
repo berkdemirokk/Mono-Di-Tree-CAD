@@ -1,6 +1,6 @@
 """Measure full closed contours using annotation-derived anchors; no dataset is redistributed.
 
-Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS]]
+Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS [development|holdout]]]
 """
 import collections
 import hashlib
@@ -12,11 +12,14 @@ import subprocess
 import sys
 import zipfile
 
-if len(sys.argv) not in (4, 5, 6):
-    raise SystemExit("Expected DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS]].")
+if len(sys.argv) not in (4, 5, 6, 7):
+    raise SystemExit("Expected DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS [development|holdout]]].")
 archive, dotnet, work = Path(sys.argv[1]).resolve(), sys.argv[2], Path(sys.argv[3]).resolve()
 anchor_count = int(sys.argv[4]) if len(sys.argv) >= 5 else 12
-jitter = float(sys.argv[5]) if len(sys.argv) == 6 else 0.0
+jitter = float(sys.argv[5]) if len(sys.argv) >= 6 else 0.0
+selection = sys.argv[6] if len(sys.argv) == 7 else "development"
+if selection not in ("development", "holdout"):
+    raise SystemExit("Selection must be development or holdout.")
 if not 3 <= anchor_count <= 17:
     raise SystemExit("Anchor count must be between 3 and 17.")
 if not math.isfinite(jitter) or not 0 <= jitter <= 10:
@@ -36,8 +39,39 @@ with zipfile.ZipFile(archive) as z:
         if names[ann["category_id"]] in ("shorts", "tshirt") and ann.get("segmentation"):
             choices[names[ann["category_id"]]].append(ann)
     rng = random.Random(73114)
-    chosen = [(category, a) for category in sorted(choices)
-              for a in rng.sample(sorted(choices[category], key=lambda a: a["id"]), 40)]
+    development = [(category, a) for category in sorted(choices)
+                   for a in rng.sample(sorted(choices[category], key=lambda a: a["id"]), 40)]
+    chosen = development
+    if selection == "holdout":
+        # Exclude both previously selected image IDs and byte-identical images
+        # under other IDs. This does not rule out visually similar photographs.
+        old_ids = {a["image_id"] for _, a in development}
+        def image_hash(image_id):
+            return hashlib.sha256(z.read(prefix + images[image_id]["file_name"])).digest()
+        used_hashes = {image_hash(image_id) for image_id in old_ids}
+        used_ids = set(old_ids)
+        rng = random.Random(451827)
+        chosen = []
+        for category in sorted(choices):
+            by_image = {}
+            for ann in sorted(choices[category], key=lambda a: a["id"]):
+                if ann["image_id"] not in old_ids and any(len(p) >= 6 for p in ann["segmentation"]):
+                    by_image.setdefault(ann["image_id"], ann)
+            image_ids = sorted(by_image)
+            rng.shuffle(image_ids)
+            count = 0
+            for image_id in image_ids:
+                if image_id in used_ids:
+                    continue
+                digest = image_hash(image_id)
+                if digest in used_hashes:
+                    continue
+                chosen.append((category, by_image[image_id]))
+                used_ids.add(image_id); used_hashes.add(digest); count += 1
+                if count == 40:
+                    break
+            if count != 40:
+                raise SystemExit(f"Not enough distinct holdout images for {category}: {count}.")
     for category, ann in chosen:
         polygon = max((p for p in ann["segmentation"] if len(p) >= 6), key=len)
         points = list(zip(polygon[::2], polygon[1::2]))
@@ -170,6 +204,11 @@ for category in ("shorts", "tshirt", "all"):
 with archive.open("rb") as f:
     digest = hashlib.file_digest(f, "sha256").hexdigest()
 report = {"archive_sha256": digest, "method": f"Same 80 selected test annotations as earlier experiments; {anchor_count} equally spaced perimeter anchors from ground truth; {anchor_count} independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation", "categories": summary}
+if selection == "holdout":
+    report["method"] = report["method"].replace("Same 80 selected test annotations as earlier experiments", "80 holdout annotations from distinct images, excluding development image IDs and byte-identical files")
+    report["selection"] = {"name": "holdout", "seed": 451827,
+                           "development_image_ids": sorted(old_ids),
+                           "holdout_image_ids": [a["image_id"] for _, a in chosen]}
 if jitter:
     report["method"] += f"; anchors independently shifted {jitter:g} pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks"
     report["jitter_pixels"] = jitter
