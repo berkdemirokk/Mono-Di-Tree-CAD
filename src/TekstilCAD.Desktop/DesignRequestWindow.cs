@@ -30,6 +30,7 @@ internal sealed class DesignRequestWindow : Window
     private DesignReference? reference;
     private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
+    private readonly Dictionary<string,TextBlock> measurementTiles=new(StringComparer.Ordinal);
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
     internal DesignRequest CaptureForVerification()=>Capture();
@@ -42,6 +43,7 @@ internal sealed class DesignRequestWindow : Window
     internal ScrollViewer StatusViewportForVerification=>statusViewport;
     internal ScrollViewer BodyScrollerForVerification=>bodyScroller;
     internal ScrollViewer ModelScrollerForVerification=>modelScroller;
+    internal IReadOnlyDictionary<string,TextBlock> MeasurementTilesForVerification=>measurementTiles;
     internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
@@ -110,6 +112,16 @@ internal sealed class DesignRequestWindow : Window
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         editBody.Children.Add(new Label { Foreground=Ink,Content="Tasarımcı notları",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
         editBody.Children.Add(new TextBlock { Text="Ölçülerini ekle",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
+        editBody.Children.Add(new TextBlock { Text="Yalnız açıkça yazılan değerler gösterilir; beden veya eksik ölçü varsayılmaz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        var measurementCards=new WrapPanel();editBody.Children.Add(measurementCards);
+        void MeasurementCard(string key,string title)
+        {
+            var content=new StackPanel();content.Children.Add(new TextBlock { Text=title,FontSize=11,Foreground=Muted,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap });
+            var value=new TextBlock { Text="Belirtilmedi",FontSize=15,Foreground=Ink,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,5,0,0),TextWrapping=TextWrapping.Wrap };
+            AutomationProperties.SetName(value,title+": belirtilmedi");content.Children.Add(value);measurementTiles.Add(key,value);
+            measurementCards.Children.Add(new Border { Width=136,MinHeight=70,Background=Raised,CornerRadius=new CornerRadius(8),Padding=new Thickness(10,8,10,8),Margin=new Thickness(0,0,8,8),Child=content });
+        }
+        MeasurementCard("göğüs çevresi","GÖĞÜS ÇEVRESİ");MeasurementCard("bel çevresi","BEL ÇEVRESİ");MeasurementCard("kalça çevresi","KALÇA ÇEVRESİ");MeasurementCard("elbise boyu","ELBİSE BOYU");
         editBody.Children.Add(new Label { Foreground=Ink,Content="Ölçüler ve birimler",Target=measurements });AutomationProperties.SetName(measurements,"Ölçüler ve birimler");editBody.Children.Add(measurements);
         editBody.Children.Add(new TextBlock { Text="Açık ölçüleri satır veya noktalı virgülle ayırın: göğüs çevresi 96 cm; bel çevresi 72 cm; kalça çevresi 100 cm; elbise boyu 110 cm. Yalnız açık çevre veya boy etiketi ve mm/cm birimi kullanılır; göğüs, bel veya kalça tek başına çevre varsayılmaz. Virgül/nokta ondalık ayracıdır. Kol boyu yalnız açıkça belirtilirse alınır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4) });
         var checkMeasurements=new Button { Content="Açık ölçüleri denetle",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };
@@ -205,7 +217,14 @@ internal sealed class DesignRequestWindow : Window
     {
         DressMeasurementReview review;
         try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
-        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;foreach(var (key,tile) in measurementTiles) { tile.Text="Denetlenemedi";AutomationProperties.SetName(tile,key+": denetlenemedi"); } conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        foreach(var (key,tile) in measurementTiles)
+        {
+            var found=review.Measurements.FirstOrDefault(m=>m.Label==key);
+            var ambiguous=review.Questions.Any(q=>q.StartsWith(key+": ifade belirsiz",StringComparison.Ordinal));
+            tile.Text=found is not null ? (found.Millimeters/10m).ToString("0.#########",System.Globalization.CultureInfo.InvariantCulture)+" cm" : ambiguous ? "Kontrol edin" : "Belirtilmedi";
+            AutomationProperties.SetName(tile,key+": "+tile.Text);
+        }
         UpdateMeasurementShortcut(review);
         var lines=new List<string> { "Siz:",string.IsNullOrEmpty(prompt.Text) ? "Henüz istek yazılmadı." : prompt.Text };
         if(!string.IsNullOrEmpty(measurements.Text)) { lines.Add("Ölçü notlarınız:");lines.Add(measurements.Text); }
@@ -219,7 +238,7 @@ internal sealed class DesignRequestWindow : Window
                 question.StartsWith("kalça çevresi",StringComparison.Ordinal) ? "kalça çevresi 100 cm" :
                 question.StartsWith("elbise boyu",StringComparison.Ordinal) ? "elbise boyu 110 cm" : "kol boyu 62 cm";
             lines.Add(question+" Örnek: "+example+".");
-            if(question.Contains("çelişiyor",StringComparison.Ordinal))lines.Add("Çelişen önceki ifadeyi İstek ve ölçüleri düzenle bölümünde düzeltin.");
+            if(question.Contains("çelişiyor",StringComparison.Ordinal))lines.Add("Çelişen önceki ifadeyi yukarıdaki tarif veya ölçü alanında düzeltin.");
         }
         else lines.Add("Temel ölçüler açıkça yazıldı. Ölçülerin niteliğini ve model ayrıntılarını kontrol edin.");
         if(review.Unrecognized.Count>0)lines.Add("Diğer ifadeler ölçü olarak yorumlanmadı; açıklamanız aynen korundu.");

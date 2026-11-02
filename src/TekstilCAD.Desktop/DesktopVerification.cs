@@ -9779,6 +9779,8 @@ internal static class DesktopVerification
         try
         {
             Render(window,Path.ChangeExtension(reportPath,".atelier-start.png"),900,700);
+            Check(window.MeasurementTilesForVerification.Count==4 && window.MeasurementTilesForVerification.Values.All(t=>t.Text=="Belirtilmedi"),
+                "Measurement overview starts without invented values",checks);
             Check(window.CreateDrawingNotes() is null && window.StatusForVerification.Text.Contains("kaydedin") && DocumentSession.ContentEquals(before,studio.Document),
                 "An unsaved new design request cannot become drawing notes",checks);
             typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(window,null);
@@ -9791,7 +9793,20 @@ internal static class DesktopVerification
                 "Empty request save reports its validation error at minimum size",checks);
             typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
             var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
+            window.LoadForVerification(new DesignRequest("göğüs çevresi 96,5 cm; bel çevresi 70 cm", "bel çevresi 720 mm; kalça çevresi 100 cm; elbise boyu 110 cm",null));
+            var tiles=window.MeasurementTilesForVerification;
+            Check(tiles["göğüs çevresi"].Text=="96.5 cm" && tiles["bel çevresi"].Text=="Kontrol edin" &&
+                tiles["kalça çevresi"].Text=="100 cm" && tiles["elbise boyu"].Text=="110 cm" &&
+                AutomationProperties.GetName(tiles["bel çevresi"]).Contains("Kontrol edin"),
+                "Measurement overview converts explicit units and refuses conflicting values",checks);
+            window.MeasurementsForVerification.Text="göğüs çevresi yaklaşık 90 cm";
+            Check(tiles["göğüs çevresi"].Text=="Kontrol edin" && tiles["kalça çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
+                "Edited or ambiguous request immediately clears outdated measurement values",checks);
             window.LoadForVerification(input);
+            Check(tiles["göğüs çevresi"].Text=="96 cm" && tiles["bel çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
+                "Opening a request updates measurement cards without inferring an ambiguous length",checks);
+            var overviewScroll=window.BodyScrollerForVerification;var tileY=tiles["göğüs çevresi"].TransformToAncestor(overviewScroll).Transform(new Point(0,0)).Y+overviewScroll.VerticalOffset;
+            overviewScroll.ScrollToVerticalOffset(Math.Max(0,tileY-80));Render(window,Path.ChangeExtension(reportPath,".atelier-measurements.png"),900,700);overviewScroll.ScrollToVerticalOffset(0);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "Design request loads text and exact image bytes independently",checks);
             var notes=window.CreateDrawingNotes();
