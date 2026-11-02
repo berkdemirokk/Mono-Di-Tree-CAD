@@ -1,0 +1,19 @@
+using System.Text;
+using System.Text.Json;
+Console.InputEncoding=new UTF8Encoding(false,true);using var pair=JsonDocument.Parse(await Console.In.ReadToEndAsync());var request=Encoding.UTF8.GetBytes(pair.RootElement.GetProperty("request").GetString()!);var response=Encoding.UTF8.GetBytes(pair.RootElement.GetProperty("response").GetString()!);PreviewResponseValidator.Validate(request,response);
+using var doc=JsonDocument.Parse(response);var parts=doc.RootElement.GetProperty("preview").GetProperty("preview").GetProperty("parts");
+P Point(JsonElement e)=>new(e.GetProperty("x").GetDouble(),e.GetProperty("y").GetDouble());
+var inputs=new List<PathInput>();foreach(var part in parts.EnumerateArray()){var path=part.GetProperty("paths").EnumerateArray().Single(p=>p.GetProperty("kind").GetString()=="sewing-boundary");var segs=new List<Seg>();foreach(var s in path.GetProperty("segments").EnumerateArray()){var k=s.GetProperty("type").GetString();segs.Add(k switch{"move" or "line"=>new Seg(k,Point(s.GetProperty("to"))),"cubic"=>new Seg(k,Point(s.GetProperty("to")),Point(s.GetProperty("cp1")),Point(s.GetProperty("cp2"))),"close"=>new Seg(k),_=>throw new InvalidDataException()});}inputs.Add(new(part.GetProperty("name").GetString()!,segs));}
+var matrix=new double[]{0,2,-2,0,10,-3};var output=CadPreviewInspection.Inspect(inputs,"mm",matrix);if(output.TopologyVerified||output.Transferable||output.ProductionApproved)throw new Exception("Unsafe promotion flag.");
+for(int k=0;k<inputs.Count;k++){if(output.Paths[k].PieceId!=inputs[k].PieceId)throw new Exception("Identity lost.");var p0=default(P);var q0=default(P);for(int i=0;i<inputs[k].Segments.Count;i++){var source=inputs[k].Segments[i];var target=output.Paths[k].Segments[i];if(source.Kind!=target.Kind)throw new Exception("Order lost.");if(source.Kind=="cubic"){foreach(double t in new[]{0.0,0.25,0.5,0.75,1.0}){var a=Curve(p0,source.C1!.Value,source.C2!.Value,source.To!.Value,t);var b=Curve(q0,target.C1!.Value,target.C2!.Value,target.To!.Value,t);Near(b.X,10-2*a.Y);Near(b.Y,2*a.X-3);var bounds=output.Paths[k].ControlBounds;if(b.X<bounds.MinX-1e-8||b.X>bounds.MaxX+1e-8||b.Y<bounds.MinY-1e-8||b.Y>bounds.MaxY+1e-8)throw new Exception("Outside bounds.");}}if(source.To is P pt){p0=pt;q0=target.To!.Value;}}}
+// Independent exact oracle: midpoint of (0,0),(0,4),(4,4),(4,0) is (2,3); after matrix it is (4,1).
+var known=Curve(new(0,0),new(0,4),new(4,4),new(4,0),0.5);Near(known.X,2);Near(known.Y,3);Near(10-2*known.Y,4);Near(2*known.X-3,1);
+void Reject(Action action){try{action();throw new Exception("Expected rejection missing.");}catch(InvalidDataException){}}
+Reject(()=>CadPreviewInspection.Inspect(inputs,"inch",matrix));Reject(()=>CadPreviewInspection.Inspect(inputs,"mm",new double[]{1,0,0,0,0,0}));Reject(()=>CadPreviewInspection.Inspect(inputs,"mm",new double[]{1,0,0,1,double.PositiveInfinity,0}));
+var duplicate=inputs.ToArray();duplicate[1]=duplicate[1] with{PieceId=duplicate[0].PieceId};Reject(()=>CadPreviewInspection.Inspect(duplicate,"mm",matrix));
+var bad=inputs.ToArray();bad[0]=bad[0] with{Segments=bad[0].Segments.SkipLast(1).ToArray()};Reject(()=>CadPreviewInspection.Inspect(bad,"mm",matrix));
+bad=inputs.ToArray();var altered=bad[0].Segments.ToArray();altered[1]=new Seg("unknown",new P(1,1));bad[0]=bad[0] with{Segments=altered};Reject(()=>CadPreviewInspection.Inspect(bad,"mm",matrix));
+try{CadPreviewInspection.RequireCadPreview(output);throw new Exception("Unverified topology accepted.");}catch(InvalidOperationException){}
+Console.Write("PASS: synthetic affine, cubic, bounding hull and topology-gated inspection");
+static P Curve(P p0,P p1,P p2,P p3,double t){var u=1-t;return new(u*u*u*p0.X+3*u*u*t*p1.X+3*u*t*t*p2.X+t*t*t*p3.X,u*u*u*p0.Y+3*u*u*t*p1.Y+3*u*t*t*p2.Y+t*t*t*p3.Y);}
+static void Near(double a,double b){if(!double.IsFinite(a)||Math.Abs(a-b)>1e-7)throw new Exception("Numeric oracle mismatch.");}
