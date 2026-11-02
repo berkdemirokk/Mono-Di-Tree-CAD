@@ -10167,6 +10167,10 @@ internal static class DesktopVerification
             Check(window.MeasurementTilesForVerification["göğüs çevresi"].Text=="Kontrol edin" && window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin" &&
                 window.MeasurementsForVerification.Text=="göğüs çevresi 92 cm ve\r\n\t\r\nbel çevresi 72",
                 "Invalid joined lines preserve source and never partially populate measurement tiles",checks);
+            window.MeasurementsForVerification.Text="göğüs çevresi 92 cm ve\u00a0\r\n\u00a0\r\nbel çevresi 72";
+            Check(window.MeasurementTilesForVerification["göğüs çevresi"].Text=="Kontrol edin" && window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin" &&
+                window.MeasurementsForVerification.Text=="göğüs çevresi 92 cm ve\u00a0\r\n\u00a0\r\nbel çevresi 72",
+                "Unicode whitespace in joined lines preserves input and cannot partially populate measurement tiles",checks);
             window.LoadForVerification(input);
             _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try

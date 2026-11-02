@@ -12,7 +12,7 @@ public static partial class DressMeasurementParser
     private static readonly string[] Required=["göğüs çevresi","bel çevresi","kalça çevresi","elbise boyu"];
     private const string Labels=@"(?:göğüs(?:\s+çevresi)?|bel(?:\s+çevresi)?|kalça(?:\s+çevresi)?|elbise\s+boyu|kol\s+boyu)";
     private const string ExactLabels=@"(?:göğüs\s+çevresi|bel\s+çevresi|kalça\s+çevresi|elbise\s+boyu|kol\s+boyu)";
-    private static readonly Regex SegmentSplit=new(@";|(?:\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))*|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex SegmentSplit=new(@";|(?:\r\n|[\r\n\v\f\u0085\u2028\u2029])(?:[^\S\r\n\v\f\u0085\u2028\u2029]*(?:\r\n|[\r\n\v\f\u0085\u2028\u2029]))*|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Conjunction=new(@"\s+ve\s+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!?]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
@@ -26,16 +26,18 @@ public static partial class DressMeasurementParser
     private static string FoldCase(string text)=>text.Replace('İ','i').ToLowerInvariant();
     // A newline next to a standalone conjunction is part of the same clause,
     // not an independent measurement. Semicolons always remain boundaries.
+    private static bool IsLineBreak(char c)=>c is '\r' or '\n' or '\v' or '\f' or '\u0085' or '\u2028' or '\u2029';
+    private static bool HorizontalWhitespace(char c)=>char.IsWhiteSpace(c) && !IsLineBreak(c);
     private static bool JoinedLineBreak(string folded,Match separator)
     {
         for(int i=separator.Index;i<separator.Index+separator.Length;i++)
-            if(folded[i]!='\r' && folded[i]!='\n' && folded[i]!=' ' && folded[i]!='\t')return false;
+            if(!char.IsWhiteSpace(folded[i]))return false;
         var left=separator.Index-1;
-        while(left>=0 && (folded[left]==' ' || folded[left]=='\t'))left--;
+        while(left>=0 && HorizontalWhitespace(folded[left]))left--;
         bool endsWithVe=left>=1 && folded[left]=='e' && folded[left-1]=='v' &&
             (left==1 || char.IsWhiteSpace(folded[left-2]));
         var right=separator.Index+separator.Length;
-        while(right<folded.Length && (folded[right]==' ' || folded[right]=='\t'))right++;
+        while(right<folded.Length && HorizontalWhitespace(folded[right]))right++;
         bool startsWithVe=right+1<folded.Length && folded[right]=='v' && folded[right+1]=='e' &&
             (right+2==folded.Length || char.IsWhiteSpace(folded[right+2]));
         return endsWithVe || startsWithVe;
