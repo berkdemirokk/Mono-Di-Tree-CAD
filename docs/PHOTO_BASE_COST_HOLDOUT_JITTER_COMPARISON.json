@@ -1,0 +1,51 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "first_method": "80 holdout annotations from distinct images, excluding development image IDs and byte-identical files; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation; anchors independently shifted 2 pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks",
+  "second_method": "80 holdout annotations from distinct images, excluding development image IDs and byte-identical files; 12 equally spaced perimeter anchors from ground truth; 12 independent base-cost 0.03 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation; anchors independently shifted 2 pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks",
+  "total_first": 80,
+  "total_second": 80,
+  "categories": {
+    "shorts": {
+      "paired": 40,
+      "mean_error_change": -0.03589904986589442,
+      "mean_improved_gt_half": 1,
+      "mean_worsened_gt_half": 0,
+      "worst_mean_increase": 0.2887467784319109,
+      "local_max_improved_gt_one": 4,
+      "local_max_worsened_gt_one": 0,
+      "both_local_over_5": 27,
+      "only_first_local_over_5": 3,
+      "only_second_local_over_5": 0,
+      "strict_crossing_first": 2,
+      "strict_crossing_second": 3
+    },
+    "tshirt": {
+      "paired": 40,
+      "mean_error_change": -0.05208522870459525,
+      "mean_improved_gt_half": 0,
+      "mean_worsened_gt_half": 0,
+      "worst_mean_increase": 0.20222565840024131,
+      "local_max_improved_gt_one": 2,
+      "local_max_worsened_gt_one": 0,
+      "both_local_over_5": 29,
+      "only_first_local_over_5": 2,
+      "only_second_local_over_5": 0,
+      "strict_crossing_first": 1,
+      "strict_crossing_second": 1
+    },
+    "all": {
+      "paired": 80,
+      "mean_error_change": -0.043992139285244834,
+      "mean_improved_gt_half": 1,
+      "mean_worsened_gt_half": 0,
+      "worst_mean_increase": 0.2887467784319109,
+      "local_max_improved_gt_one": 6,
+      "local_max_worsened_gt_one": 0,
+      "both_local_over_5": 56,
+      "only_first_local_over_5": 5,
+      "only_second_local_over_5": 0,
+      "strict_crossing_first": 3,
+      "strict_crossing_second": 4
+    }
+  }
+}

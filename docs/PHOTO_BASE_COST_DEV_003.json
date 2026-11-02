@@ -1,0 +1,45 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent base-cost 0.03 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+  "categories": {
+    "shorts": {
+      "contours": 40,
+      "all_segments_found": 40,
+      "proposal_accepted_by_simulated_point_checks": 40,
+      "mean_straight_complete": 2.087626589784688,
+      "mean_proposed_complete": 1.3347659946122727,
+      "improved_gt_half_pixel": 25,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 3.2067533854236503,
+      "max_sampled_local_error": 19.1049731745428,
+      "local_error_over_5_pixels": 33,
+      "strict_self_crossing": 0
+    },
+    "tshirt": {
+      "contours": 40,
+      "all_segments_found": 40,
+      "proposal_accepted_by_simulated_point_checks": 40,
+      "mean_straight_complete": 2.7009166617164793,
+      "mean_proposed_complete": 1.4249700078708887,
+      "improved_gt_half_pixel": 34,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 2.728720286000925,
+      "max_sampled_local_error": 24.340264647648844,
+      "local_error_over_5_pixels": 32,
+      "strict_self_crossing": 0
+    },
+    "all": {
+      "contours": 80,
+      "all_segments_found": 80,
+      "proposal_accepted_by_simulated_point_checks": 80,
+      "mean_straight_complete": 2.394271625750583,
+      "mean_proposed_complete": 1.3798680012415807,
+      "improved_gt_half_pixel": 59,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 3.2067533854236503,
+      "max_sampled_local_error": 24.340264647648844,
+      "local_error_over_5_pixels": 65,
+      "strict_self_crossing": 0
+    }
+  }
+}
