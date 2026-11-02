@@ -148,16 +148,18 @@ internal sealed class PhotoTraceWindow : Window
         var snapshot=CanvasForVerification.ProposedTraceSnapshot();if(snapshot is null)return;
         var closure=ReviewClosureForVerification.IsChecked==true;
         var pixelPoints=snapshot.Select(p=>new Point2(p.X,p.Y)).ToArray();
-        var valid=await Task.Run(()=>
+        var result=await Task.Run(()=>
         {
-            try { LargeOpenPathValidator.Validate(pixelPoints,token);if(closure)LargeContourValidator.Validate(pixelPoints,token);return true; }
-            catch(ArgumentException) { return false; }
+            try { LargeOpenPathValidator.Validate(pixelPoints,token);if(closure)LargeContourValidator.Validate(pixelPoints,token);return (Valid:true,Edges:(Point[]?)null); }
+            catch(ArgumentException) { return (Valid:false,Edges:PhotoPathCrossingDiagnostic.Find(snapshot,closure,token)); }
         },token);
         token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
         var current=CanvasForVerification.ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(snapshot))return;
-        StatusForVerification.Text+=valid
+        CanvasForVerification.SetTopologyWarning(snapshot,result.Edges);
+        StatusForVerification.Text+=result.Valid
             ? " Piksel geometrisi kontrolünde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
-            : " Piksel geometrisi uyarısı: kesişme, çakışma, sıfır kenar veya kapanış sorunu olabilir; öneriyi düzeltin.";
+            : result.Edges is not null ? " Piksel geometrisi uyarısı: turuncu kenarlar kesişiyor veya temas ediyor; inceleyin."
+            : " Piksel geometrisi uyarısı: çakışma, sıfır kenar veya kapanış sorunu olabilir; öneriyi düzeltin.";
     }
     internal async Task StartReplacementPathAsync(int first,int last,long expectedRevision)
     {

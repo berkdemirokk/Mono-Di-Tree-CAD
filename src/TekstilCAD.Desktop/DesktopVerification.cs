@@ -9485,14 +9485,20 @@ internal static class DesktopVerification
                 var crossingPath=trace.StartPathSuggestionAsync();PumpUntil(()=>crossingPath.IsCompleted);crossingPath.GetAwaiter().GetResult();
                 Check(canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("Piksel geometrisi uyarısı"),
                     "Crossing photo path preview receives a warning before it is applied",checks);
+                var warningEdges=canvas.TopologyWarningEdgesForVerification;
+                Check(warningEdges is { Length:4 } && TekstilCAD.Core.Geometry.SegmentsIntersect(new Point2(warningEdges[0].X,warningEdges[0].Y),new Point2(warningEdges[1].X,warningEdges[1].Y),
+                    new Point2(warningEdges[2].X,warningEdges[2].Y),new Point2(warningEdges[3].X,warningEdges[3].Y)) && trace.StatusForVerification.Text.Contains("turuncu"),
+                    "Crossing photo preview highlights two intersecting edges",checks);
+                Render(trace,Path.ChangeExtension(reportPath,".photo-crossing-warning.png"),560,480);
                 canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(10,20),new Point(20,20) })canvas.TryAddPixelPoint(p);
                 trace.ReviewClosureForVerification.IsChecked=true;
                 trace.ComputePathForVerification=(_,start,end,_)=>start==new Point(10,10) && end==new Point(20,10)
                     ? new[] { start,new Point(15,9),end } : new[] { start,end };
                 var crossingClosure=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>crossingClosure.IsCompleted);crossingClosure.GetAwaiter().GetResult();
-                Check(canvas.PathSuggestion is not null && trace.StatusForVerification.Text.Contains("Piksel geometrisi uyarısı"),
+                Check(canvas.PathSuggestion is not null && canvas.TopologyWarningEdgesForVerification is { Length:4 } && trace.StatusForVerification.Text.Contains("Piksel geometrisi uyarısı"),
                     "Photo preview warns when the closing edge crosses an otherwise open contour",checks);
                 trace.ReviewClosureForVerification.IsChecked=false;canvas.ClearPoints();foreach(var p in beforeZoom)canvas.TryAddPixelPoint(p);
+                Check(canvas.TopologyWarningEdgesForVerification is null,"Changing photo points removes outdated crossing highlights",checks);
                 trace.ComputePathForVerification=null;
             }
             finally { SynchronizationContext.SetSynchronizationContext(savedContext); }

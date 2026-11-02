@@ -26,6 +26,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private int pathStartIndex;
     private int pathOriginalTotalCount;
     private Point? pathClosingTarget;
+    private Point[]? topologyWarningEdges;
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
 
@@ -95,7 +96,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(zoom>1)zoomCenter=new Point((pixel.X+0.5)/image.PixelWidth,(pixel.Y+0.5)/image.PixelHeight);
         InvalidateVisual();return true;
     }
-    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;InvalidateVisual(); }
+    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;InvalidateVisual(); }
     internal bool SuggestLastEdge()
     {
         edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
@@ -116,7 +117,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
 
     private bool SetPathSegments(int startIndex,IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
     {
-        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;edgeSuggestion=null;InvalidateVisual();
         if(image is null || startIndex<ReferencePointCount || anchors.Count<(includeClosing ? 3 : 2) || anchors.Count>17 || candidates.Count!=anchors.Count-1+(includeClosing ? 1 : 0) ||
            points.Count!=startIndex+anchors.Count || !points.Skip(startIndex).SequenceEqual(anchors))return false;
         Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
@@ -140,7 +141,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     }
     internal bool SetReplacementPath(int first,int last,IReadOnlyList<Point> candidate)
     {
-        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;edgeSuggestion=null;InvalidateVisual();
         if(image is null || candidate is null || first<ReferencePointCount || first>=points.Count || last<=first || last>=points.Count ||
             candidate.Count<2 || candidate.Count>4096 || points[first]==points[last])return false;
         Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
@@ -171,6 +172,12 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             points.Count!=pathOriginalTotalCount || pathStartIndex+pathOriginal.Length>points.Count || !points.Skip(pathStartIndex).Take(pathOriginal.Length).SequenceEqual(pathOriginal))return null;
         var snapshot=points.ToList();snapshot.RemoveRange(pathStartIndex,pathOriginal.Length);snapshot.InsertRange(pathStartIndex,path);
         return snapshot.Skip(ReferencePointCount).ToArray();
+    }
+    internal Point[]? TopologyWarningEdgesForVerification=>pathSuggestion is null ? null : topologyWarningEdges?.ToArray();
+    internal bool SetTopologyWarning(Point[] expected,Point[]? edges)
+    {
+        var current=ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(expected) || (edges is not null && edges.Length!=4))return false;
+        topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
     }
     internal bool UndoPath()
     {
@@ -317,6 +324,12 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             dc.DrawLine(new Pen(Brushes.DarkOrange,2) { DashStyle=DashStyles.Dash },lastCorner,firstCorner);
         if(edgeSuggestion is Point suggested && TryMapPixelToView(suggested,RenderSize,out var suggestedView))
             dc.DrawEllipse(null,new Pen(Brushes.DeepSkyBlue,3),suggestedView,11,11);
+        if(pathSuggestion is not null && topologyWarningEdges is { Length:4 } warning)
+        {
+            var warningPen=new Pen(Brushes.DarkOrange,5);
+            for(int i=0;i<4;i+=2)
+                if(TryMapPixelToView(warning[i],RenderSize,out var a) && TryMapPixelToView(warning[i+1],RenderSize,out var b))dc.DrawLine(warningPen,a,b);
+        }
         if(IsKeyboardFocused && TryMapPixelToView(cursor,RenderSize,out var current))
         {
             var highlight=new Pen(Brushes.White,2);dc.DrawLine(highlight,new Point(current.X-8,current.Y),new Point(current.X+8,current.Y));
