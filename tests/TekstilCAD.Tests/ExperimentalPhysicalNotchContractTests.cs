@@ -114,4 +114,12 @@ public sealed class ExperimentalPhysicalNotchContractTests
         // Verify has no candidate contour parameter: passing the three-point
         // measurement says nothing about membership in this unrelated output.
     }
+    [Fact]
+    public void OversizedInputsAreRejectedBeforeSnapshotAllocation()
+    {
+        var (p,s,v)=Fixture();p.Points=Enumerable.Repeat(new Point2(0,0),4097).ToList();
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s,v,out _));
+        (p,s,v)=Fixture();var excessive=new Point2[100_000];
+        Assert.False(ExperimentalPhysicalNotchValidation.Verify(p,s,excessive,out _));
+    }
 }

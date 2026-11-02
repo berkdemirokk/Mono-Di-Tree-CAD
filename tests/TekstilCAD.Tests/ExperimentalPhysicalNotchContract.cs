@@ -29,7 +29,8 @@ internal static class ExperimentalPhysicalNotchValidation
     internal static bool Verify(PatternPiece source,ExperimentalPhysicalNotchV1? spec,Point2[] geometry,out string reason)
     {
         reason="Missing or invalid contract.";
-        if(source is null || source.Points is null || geometry is null)return false;
+        if(source is null || source.Points is null || source.Points.Count<3 || source.Points.Count>4096 ||
+           geometry is null || geometry.Length!=3)return false;
         source=new PatternPiece{Id=source.Id,Closed=source.Closed,Points=source.Points.ToList()};
         geometry=geometry.ToArray();
         if(spec is null || spec.Version!=1 || source.Id==Guid.Empty || spec.SourcePieceId!=source.Id || !source.Closed ||
