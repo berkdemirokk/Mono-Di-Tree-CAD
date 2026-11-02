@@ -1,0 +1,302 @@
+{
+  "source": "@freesewing/breanna 4.10.2 patternConfig.options; references only, not approvals",
+  "constants": {
+    "collarFactor": 4.8,
+    "armholeDepthBase": 0.6,
+    "shoulderSeamLength": 0.95,
+    "sleeveWidthGuarantee": 0.9,
+    "breannaFitSleeve": true,
+    "breannaFitCollar": true
+  },
+  "options": {
+    "shoulderDart": {
+      "bool": false,
+      "menu": "fit"
+    },
+    "waistDart": {
+      "bool": true,
+      "menu": "fit"
+    },
+    "primaryBustDart": {
+      "list": [
+        "06:00",
+        "07:00",
+        "08:00",
+        "09:00",
+        "10:00",
+        "11:00",
+        "11:30",
+        "12:00",
+        "12:30",
+        "13:00",
+        "13:30",
+        "14:00",
+        "15:00",
+        "16:00",
+        "17:00"
+      ],
+      "dflt": "06:00",
+      "doNotTranslate": true,
+      "menu": "style"
+    },
+    "secondaryBustDart": {
+      "list": [
+        "none",
+        "06:00",
+        "07:00",
+        "08:00",
+        "09:00",
+        "10:00",
+        "11:00",
+        "11:30",
+        "12:00",
+        "12:30",
+        "13:00",
+        "13:30",
+        "14:00",
+        "15:00",
+        "16:00",
+        "17:00"
+      ],
+      "dflt": "13:30",
+      "doNotTranslate": true,
+      "menu": "style"
+    },
+    "acrossBackFactor": {
+      "pct": 96,
+      "min": 93,
+      "max": 100,
+      "menu": "advanced"
+    },
+    "armholeDepthFactor": {
+      "pct": 100,
+      "min": 80,
+      "max": 120,
+      "menu": "advanced"
+    },
+    "backNeckCutout": {
+      "pct": 5,
+      "min": 2,
+      "max": 8,
+      "menu": "advanced"
+    },
+    "bicepsEase": {
+      "pct": 15,
+      "min": 0,
+      "max": 50,
+      "menu": "fit"
+    },
+    "shoulderDartSize": {
+      "pct": 7,
+      "min": 4,
+      "max": 10
+    },
+    "shoulderDartLength": {
+      "pct": 85,
+      "min": 60,
+      "max": 100
+    },
+    "waistDartSize": {
+      "pct": 10,
+      "min": 4,
+      "max": 15
+    },
+    "waistDartLength": {
+      "pct": 85,
+      "min": 60,
+      "max": 100
+    },
+    "verticalEase": {
+      "pct": 2,
+      "min": 0,
+      "max": 8,
+      "menu": "fit"
+    },
+    "frontArmholeDeeper": {
+      "pct": 1,
+      "min": 0,
+      "max": 5,
+      "menu": "advanced"
+    },
+    "shoulderEase": {
+      "pct": 0,
+      "min": 0,
+      "max": 4,
+      "menu": "fit"
+    },
+    "collarEase": {
+      "pct": 3.5,
+      "min": 0,
+      "max": 10,
+      "menu": "fit"
+    },
+    "chestEase": {
+      "pct": 10,
+      "min": 5,
+      "max": 20,
+      "menu": "fit"
+    },
+    "waistEase": {
+      "pct": 10,
+      "min": 5,
+      "max": 20,
+      "menu": "fit"
+    },
+    "primaryBustDartShaping": {
+      "pct": 50,
+      "min": 25,
+      "max": 75,
+      "menu": "style"
+    },
+    "primaryBustDartLength": {
+      "pct": 85,
+      "min": 65,
+      "max": 95,
+      "menu": "style"
+    },
+    "secondaryBustDartLength": {
+      "pct": 85,
+      "min": 65,
+      "max": 95,
+      "menu": "style"
+    },
+    "shoulderSlopeReduction": {
+      "pct": 0,
+      "min": 0,
+      "max": 100,
+      "menu": "advanced"
+    },
+    "frontScyeDart": {
+      "pct": 25,
+      "min": 0,
+      "max": 45,
+      "menu": "fit"
+    },
+    "sleevecapEase": {
+      "pct": 0.5,
+      "min": 0,
+      "max": 2.5,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapTopFactorX": {
+      "pct": 50,
+      "min": 25,
+      "max": 75,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapTopFactorY": {
+      "pct": 110,
+      "min": 35,
+      "max": 165,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapBackFactorX": {
+      "pct": 45,
+      "min": 35,
+      "max": 55,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapBackFactorY": {
+      "pct": 33,
+      "min": 30,
+      "max": 65,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapFrontFactorX": {
+      "pct": 55,
+      "min": 35,
+      "max": 65,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapFrontFactorY": {
+      "pct": 33,
+      "min": 30,
+      "max": 65,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ1Offset": {
+      "pct": 3,
+      "min": 0,
+      "max": 7,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ2Offset": {
+      "pct": 5.5,
+      "min": 0,
+      "max": 7,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ3Offset": {
+      "pct": 4.5,
+      "min": 0,
+      "max": 7,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ4Offset": {
+      "pct": 1,
+      "min": 0,
+      "max": 7,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ1Spread1": {
+      "pct": 10,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ1Spread2": {
+      "pct": 12.5,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ2Spread1": {
+      "pct": 12.5,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ2Spread2": {
+      "pct": 12.5,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ3Spread1": {
+      "pct": 12.5,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ3Spread2": {
+      "pct": 8,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ4Spread1": {
+      "pct": 7,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "sleevecapQ4Spread2": {
+      "pct": 7,
+      "min": 4,
+      "max": 20,
+      "menu": "advanced.sleevecap"
+    },
+    "cuffEase": {
+      "pct": 20,
+      "min": 0,
+      "max": 50,
+      "menu": "fit"
+    },
+    "sleeveLengthBonus": {
+      "pct": 0,
+      "min": -40,
+      "max": 10,
+      "menu": "style"
+    }
+  }
+}
