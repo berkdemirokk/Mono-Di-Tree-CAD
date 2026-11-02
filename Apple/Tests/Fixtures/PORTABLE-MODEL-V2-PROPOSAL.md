@@ -27,3 +27,5 @@ V2 iPhone kodu artık tek kare, eksen başına 12.000 ve toplam 24.000.000 pikse
 V2 ImageIO tarafından sağlanan yön etiketi varsa yalnız 1–8 kabul edilir; eksik yön etiketi kabul edilir. Sentetik JPEG EXIF yönü 9 test girdisidir. ImageIO'nun geçersiz etiketi nasıl sunduğu Mac/iPhone üzerinde doğrulanmadı; çözücüler arasında eksiksiz eşitlik iddia edilmez.
 
 ImageIO geçersiz EXIF yön etiketini hiç sunmazsa kod bunu etiket yok olarak görür; bu durum Mac/iPhone üzerinde doğrulanana kadar geçersiz bütün etiketlerin reddedildiği iddia edilmez. Boolean ve kayan noktalı yön değerleri sunulursa reddedilir.
+
+V2 PNG politikası kare sayısından bağımsız olarak acTL animasyon parçasını reddeder; tek kareli APNG dahil. V1 yolu değiştirilmedi. Kontrol sıkıştırılmış piksel verisini veya kaynak baytlarını değiştirmez. Tek kareli APNG örneği ImageIO/Windows üzerinde henüz çalıştırılmadı.

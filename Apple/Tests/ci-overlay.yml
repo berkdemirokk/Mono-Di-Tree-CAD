@@ -12,6 +12,8 @@
         buildPhase: resources
       - path: Tests/Fixtures/v2-large-6000x5000.json
         buildPhase: resources
+      - path: Tests/Fixtures/v2-one-frame-apng.json
+        buildPhase: resources
       - path: Tests/Fixtures/v2-two-frame-apng.json
         buildPhase: resources
       - path: Tests/Fixtures/v2-empty-model.json

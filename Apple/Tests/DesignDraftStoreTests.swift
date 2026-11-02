@@ -503,6 +503,16 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.5)))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed("9"))
     }
+    func testV2PNGAnimationChunkBoundaries() throws {
+        let bundle = Bundle(for: Self.self)
+        let url = try XCTUnwrap(bundle.url(forResource: "v2-one-frame-apng", withExtension: "json"))
+        let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
+        let animated = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(doc.reference).dataBase64))
+        XCTAssertTrue(try ExperimentalDesignBrief.v2PNGHasAnimationControl(animated))
+        let plain = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
+        XCTAssertFalse(try ExperimentalDesignBrief.v2PNGHasAnimationControl(plain))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.v2PNGHasAnimationControl(Data(plain.prefix(15))))
+    }
     func testV2PhotoGeometryBoundaries() {
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 4000, frames: 1))
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 12000, height: 2000, frames: 1))
@@ -518,7 +528,7 @@ final class DesignDraftStoreTests: XCTestCase {
         func fixture(_ name: String) throws -> Data {
             try Data(contentsOf: XCTUnwrap(bundle.url(forResource: name, withExtension: "json")))
         }
-        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng", "v2-jpeg-orientation-9"] {
+        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng", "v2-one-frame-apng", "v2-jpeg-orientation-9"] {
             XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(fixture(name)), name)
         }
         for name in ["v2-model-matching", "v2-model-conflicting"] {

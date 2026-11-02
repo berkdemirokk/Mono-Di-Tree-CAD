@@ -354,6 +354,22 @@ enum ExperimentalDesignBrief {
         let orientation = number.int64Value
         return orientation >= 1 && orientation <= 8
     }
+    // Windows v2 rejects PNG animation metadata even when it declares one frame.
+    // Inspect chunk boundaries only; never rewrite the image or scan compressed pixels.
+    static func v2PNGHasAnimationControl(_ data: Data) throws -> Bool {
+        let bytes = [UInt8](data)
+        guard bytes.count >= 8, Array(bytes.prefix(8)) == [137, 80, 78, 71, 13, 10, 26, 10] else { throw Error.invalidImage }
+        var offset = 8
+        while offset <= bytes.count - 12 {
+            let length = (Int(bytes[offset]) << 24) | (Int(bytes[offset + 1]) << 16) | (Int(bytes[offset + 2]) << 8) | Int(bytes[offset + 3])
+            guard length <= bytes.count - offset - 12 else { throw Error.invalidImage }
+            let type = Array(bytes[(offset + 4)..<(offset + 8)])
+            if type == [97, 99, 84, 76] { return true } // acTL
+            if type == [73, 69, 78, 68] { return false } // IEND
+            offset += length + 12
+        }
+        throw Error.invalidImage
+    }
     private static func validateV2Image(_ data: Data) throws {
         guard !data.isEmpty, data.count <= maxImageBytes,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -363,6 +379,7 @@ enum ExperimentalDesignBrief {
               v2ImageGeometryAllowed(width: width, height: height, frames: CGImageSourceGetCount(source)),
               ((CGImageSourceGetType(source) as String?) != "public.jpeg" || v2ImageOrientationAllowed(properties[kCGImagePropertyOrientation])),
               CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw Error.invalidImage }
+        if (CGImageSourceGetType(source) as String?) == "public.png", try v2PNGHasAnimationControl(data) { throw Error.invalidImage }
     }
     static func makeV2(_ draft: Draft) throws -> Data {
         if let image = draft.image { try validateV2Image(image) }
