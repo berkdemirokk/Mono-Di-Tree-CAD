@@ -4069,6 +4069,11 @@ internal static class DesktopVerification
             var refreshed=review.PieceReviewTaskForVerification!;PumpUntil(()=>refreshed.IsCompleted);refreshed.GetAwaiter().GetResult();
             Check(review.SelectedDetails.Text.Contains("Kaynak nokta 5") && review.PageStatus.Text.Contains("Örnekler: 1–") && review.PageStatus.Text.Contains("Son sayfa"),
                 "Selected HPGL piece can be reviewed again from the captured output snapshot",checks);
+            Descendants<TabControl>(root).Single().SelectedIndex=2;
+            Render(review,Path.ChangeExtension(reportPath,".hpgl-length-review.png"),580,420);
+            Check(review.GeometryText.Text.Contains("Kenar uzunlukları (yaklaşık)") && review.GeometryText.Text.Contains("En büyük mutlak kenar farkı") &&
+                review.GeometryText.Text.Contains("fiziksel çıktı veya ayrıntı korunumu doğrulanmaz") && FullyVisible(review.GeometryText,root) && review.GeometryText.Focusable,
+                "HPGL review exposes captured length differences without claiming physical accuracy",checks);
             var displayedGeometry=(HpglPieceGeometryPreview?)typeof(HpglGeometryComparison).GetField("geometry",PrivateInstance)!.GetValue(review.GeometryComparison);
             var highlighted=(int[])typeof(HpglGeometryComparison).GetField("examples",PrivateInstance)!.GetValue(review.GeometryComparison)!;
             Check(displayedGeometry is not null && displayedGeometry.PieceId==document.Pieces[0].Id && displayedGeometry.UnitsPerMillimeter==40

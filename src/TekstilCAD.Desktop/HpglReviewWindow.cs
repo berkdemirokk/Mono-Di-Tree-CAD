@@ -24,6 +24,7 @@ internal sealed class HpglReviewWindow : Window
     internal Button ResetZoomButton { get; } = new() { Content="1×",Width=38,Padding=new Thickness(0),Margin=new Thickness(4,0,0,0),IsEnabled=false };
     private readonly TextBlock comparisonMode = new() { Text="Tüm parça · ekrana sığdırıldı",Margin=new Thickness(8,0,0,0),VerticalAlignment=VerticalAlignment.Center };
     private HpglPieceGeometryPreview? currentGeometry;
+    private HpglLengthReview.Result? currentLengths;
     private bool updatingSamples;
     private sealed record SampleChoice(HpglTurnReview.Sample Sample)
     {
@@ -140,7 +141,7 @@ internal sealed class HpglReviewWindow : Window
         var legend=new TextBlock { Text="Kaynak: kesik/üçgen; HPGL: düz/daire. Ölçüm değildir; görünüm kırpılabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,3) };
         DockPanel.SetDock(legend,Dock.Top);comparisonPanel.Children.Add(legend);
         AutomationProperties.SetName(GeometryText,"Kaynak ve HPGL örnek koordinatları");
-        AutomationProperties.SetHelpText(GeometryText,"Sayfadaki dönüşler için kaynak ve yuvarlanmış HPGL koordinatlarını milimetre cinsinden okuyun ve kopyalayın.");
+        AutomationProperties.SetHelpText(GeometryText,"Yaklaşık kaynak ve HPGL kenar uzunluklarını, en büyük kenar farkını ve örnek dönüş koordinatlarını okuyun ve kopyalayın.");
         GeometryText.Text="Karşılaştırma için bir parça seçip ayrıntılı incelemeyi başlatın.";
         GeometryComparison.MinHeight=70;comparisonPanel.Children.Add(GeometryComparison);
         ReportsGrid.IsReadOnly=true;ReportsGrid.AutoGenerateColumns=false;ReportsGrid.CanUserAddRows=false;
@@ -194,7 +195,7 @@ internal sealed class HpglReviewWindow : Window
         gridArea.Children.Add(empty);sourcePanel.Children.Add(gridArea);
         detailsTabs.Items.Add(new TabItem { Header="Parçalar ve noktalar",Content=sourcePanel });
         detailsTabs.Items.Add(new TabItem { Header="Kaynak / HPGL karşılaştırması",Content=comparisonPanel });
-        detailsTabs.Items.Add(new TabItem { Header="Örnek koordinatları",Content=GeometryText });
+        detailsTabs.Items.Add(new TabItem { Header="Uzunluk ve koordinatlar",Content=GeometryText });
         if(interaction is { Status:HpglPieceInteraction.State.Found,FirstPiece:Guid firstId,SecondPiece:Guid secondId })
         {
             var first=rows.Single(r=>r.Report.PieceId==firstId);var second=rows.Single(r=>r.Report.PieceId==secondId);
@@ -227,14 +228,14 @@ internal sealed class HpglReviewWindow : Window
         }
         SampleSelector.SelectionChanged+=(_,_)=>
         {
-            if(updatingSamples || currentGeometry is null || currentPage is null)return;
+            if(updatingSamples || currentGeometry is null || currentPage is null || currentLengths is null)return;
             if(SampleSelector.SelectedItem is SampleChoice choice)
             {
                 GeometryComparison.ShowLocal(choice.Sample.SourceVertexIndex);
                 UpdateZoomControls();
-                GeometryText.Text=GeometryDescription(currentGeometry,[choice.Sample]);
+                GeometryText.Text=GeometryDescription(currentGeometry,currentLengths,[choice.Sample]);
             }
-            else { GeometryComparison.ShowWhole();UpdateZoomControls();GeometryText.Text=GeometryDescription(currentGeometry,currentPage.Report.Samples); }
+            else { GeometryComparison.ShowWhole();UpdateZoomControls();GeometryText.Text=GeometryDescription(currentGeometry,currentLengths,currentPage.Report.Samples); }
         };
         ShowWholeButton.Click+=(_,_)=> { SampleSelector.SelectedIndex=-1; };
         ZoomInButton.Click+=(_,_)=> { GeometryComparison.SetZoom(GeometryComparison.ZoomFactorForVerification*2);UpdateZoomControls(); };
@@ -277,9 +278,15 @@ internal sealed class HpglReviewWindow : Window
         return (count==0 ? $"Bu sayfada örnek yok. Toplam değişen dönüş: {total}." : $"Örnekler: {page.Offset+1}–{page.Offset+count} / {total}.")+
             (page.NextOffset is null ? " Son sayfa." : " Devamı için Sonraki düğmesini kullanın.");
     }
-    private static string GeometryDescription(HpglPieceGeometryPreview geometry,IReadOnlyList<HpglTurnReview.Sample> samples)
+    private static string GeometryDescription(HpglPieceGeometryPreview geometry,HpglLengthReview.Result lengths,IReadOnlyList<HpglTurnReview.Sample> samples)
     {
         var text=new StringBuilder("Koordinatlar ve farklar mm cinsindedir. Kaynak, simülasyonda seçilen ölçeğin uygulanmış halidir; HPGL dosya ızgarasındaki değerdir. Çizimdeki işaretler semboliktir; boyutları fiziksel ölçü değildir. Önizleme makine uygunluğu onayı değildir.");
+        text.Append("\nKenar uzunlukları (yaklaşık): ").Append(lengths.EdgeCount).Append(" kenar; kaynak toplam ").Append(MeasurementInput.Format(lengths.SourceLengthMm))
+            .Append(" mm; HPGL toplam ").Append(MeasurementInput.Format(lengths.EncodedLengthMm)).Append(" mm; toplam fark ")
+            .Append(MeasurementInput.Format(lengths.EncodedLengthMm-lengths.SourceLengthMm)).Append(" mm.")
+            .Append(" En büyük mutlak kenar farkı: nokta ").Append(lengths.WorstStartIndex+1).Append(" → ").Append(lengths.WorstEndIndex+1)
+            .Append("; HPGL − kaynak ").Append(MeasurementInput.Format(lengths.WorstSignedDifferenceMm)).Append(" mm.")
+            .Append(" Toplam fark kenar değişikliklerini gizleyebilir; fiziksel çıktı veya ayrıntı korunumu doğrulanmaz.");
         if(samples.Count==0)return text.Append("\nBu sayfada işaretli örnek yok.").ToString();
         var points=geometry.Points;var indices=new List<int>(points.Count);
         bool SameSource(int a,int b)=>points[a].SourceX==points[b].SourceX && points[a].SourceY==points[b].SourceY;
@@ -313,14 +320,14 @@ internal sealed class HpglReviewWindow : Window
         PageStatus.Text="Seçili parça inceleniyor; isterseniz iptal isteyebilirsiniz.";
         try
         {
-            var result=await Task.Run(()=> { before?.Invoke();token.ThrowIfCancellationRequested();var page=preparedForReview.ReviewPiecePage(row.Report.PieceId,offset,PieceReviewPageSize,token);var geometry=preparedForReview.GetPieceGeometry(row.Report.PieceId,token);after?.Invoke();token.ThrowIfCancellationRequested();return (Page:page,Geometry:geometry); });
+            var result=await Task.Run(()=> { before?.Invoke();token.ThrowIfCancellationRequested();var page=preparedForReview.ReviewPiecePage(row.Report.PieceId,offset,PieceReviewPageSize,token);var geometry=preparedForReview.GetPieceGeometry(row.Report.PieceId,token);var lengths=HpglLengthReview.Analyze(geometry,token);after?.Invoke();token.ThrowIfCancellationRequested();return (Page:page,Geometry:geometry,Lengths:lengths); });
             token.ThrowIfCancellationRequested();
             if(!closed && generation==selectionGeneration && ReferenceEquals(ReportsGrid.SelectedItem,row))
             { currentPage=result.Page;pageRow=row;SelectedDetails.Text=Details(row with { Report=result.Page.Report },true);PageStatus.Text=PageSummary(result.Page);
-                currentGeometry=result.Geometry;GeometryComparison.SetData(result.Geometry,result.Page.Report.Samples.Select(s=>s.SourceVertexIndex));
+                currentGeometry=result.Geometry;currentLengths=result.Lengths;GeometryComparison.SetData(result.Geometry,result.Page.Report.Samples.Select(s=>s.SourceVertexIndex));
                 updatingSamples=true;SampleSelector.ItemsSource=result.Page.Report.Samples.Select(s=>new SampleChoice(s)).ToArray();SampleSelector.SelectedIndex=-1;updatingSamples=false;
                 SampleSelector.IsEnabled=result.Page.Report.Samples.Count>0;ShowWholeButton.IsEnabled=true;UpdateZoomControls();
-                GeometryText.Text=GeometryDescription(result.Geometry,result.Page.Report.Samples); }
+                GeometryText.Text=GeometryDescription(result.Geometry,result.Lengths,result.Page.Report.Samples); }
         }
         catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
         { if(!closed && generation==selectionGeneration && ReferenceEquals(ReportsGrid.SelectedItem,row)) { SelectedDetails.Text=currentPage is not null && ReferenceEquals(pageRow,row) ? Details(row with { Report=currentPage.Report },true) : Details(row);PageStatus.Text=(currentPage is not null && ReferenceEquals(pageRow,row) ? PageSummary(currentPage)+" " : "")+"Ayrıntılı inceleme iptal edildi.";GeometryText.Text="Karşılaştırma iptal edildi; yeniden inceleyebilirsiniz."; } }
@@ -342,7 +349,7 @@ internal sealed class HpglReviewWindow : Window
     }
     private void ClearComparison()
     {
-        currentGeometry=null;GeometryComparison.Clear();updatingSamples=true;SampleSelector.ItemsSource=null;SampleSelector.SelectedIndex=-1;updatingSamples=false;
+        currentGeometry=null;currentLengths=null;GeometryComparison.Clear();updatingSamples=true;SampleSelector.ItemsSource=null;SampleSelector.SelectedIndex=-1;updatingSamples=false;
         SampleSelector.IsEnabled=false;ShowWholeButton.IsEnabled=false;UpdateZoomControls();
         GeometryText.Text="Karşılaştırma için bir parça seçip ayrıntılı incelemeyi başlatın.";
     }
