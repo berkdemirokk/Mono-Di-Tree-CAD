@@ -929,6 +929,118 @@ internal static class DesktopVerification
         Check(VirtualizingPanel.GetIsVirtualizing(list) && VirtualizingPanel.GetVirtualizationMode(list)==VirtualizationMode.Recycling && ScrollViewer.GetCanContentScroll(list),
             "Piece list requests recycling virtualization with logical scrolling",checks);
     }
+    public static int RunLegacyMigration(string reportPath)
+    {
+        MainWindow? studio=null;var checks=new List<string>();string? failure=null;
+        try
+        {
+            reportPath=AllowedReportPath(reportPath);
+            var work=Path.Combine(RepositoryRoot(reportPath),"work","migration-verification",Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(work);AppPaths.UseVerificationDirectory(Path.Combine(work,"application-data"));
+            studio=new MainWindow();StopTimer(studio);_=new WindowInteropHelper(studio).EnsureHandle();
+            Render(studio,Path.Combine(work,"migration-ui.png"),1440,900);
+            VerifyLegacyMigration(studio,work,checks);
+        }
+        catch(Exception ex) { failure=ex.ToString(); }
+        finally
+        {
+            if(studio is not null)
+            {
+                StopTimer(studio);typeof(MainWindow).GetField("dirty",PrivateInstance)?.SetValue(studio,false);
+                try { WaitRecovery(studio.SetRecoveryForVerificationAsync(null,null)); }
+                catch(Exception ex) { failure ??=ex.ToString(); }
+            }
+        }
+        try
+        {
+            reportPath=AllowedReportPath(reportPath);Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+            File.WriteAllText(reportPath,JsonSerializer.Serialize(new { status=failure is null ? "PASS" : "FAIL",checks,failure,
+                scope="Synthetic WPF migration verification; the version-10 writer was enabled only in a scoped verification override." },new JsonSerializerOptions { WriteIndented=true }));
+        }
+        catch { return 2; }
+        return failure is null ? 0 : 1;
+    }
+
+    private static void VerifyLegacyMigration(MainWindow studio,string work,List<string> checks)
+    {
+        static ProjectDocument Fixture(string kind)
+        {
+            if(kind=="physical8")
+            {
+                var p=new PatternPiece { Points=[new(0,0),new(4,0),new(5,1),new(6,0),new(10,0),new(10,10),new(0,10)] };
+                p.PhysicalFeatures=PhysicalContourFeatures.Create(p,[2]);return new ProjectDocument { Name="Synthetic physical",Pieces=[p] };
+            }
+            var piece=new PatternPiece { Closed=false,Points=[new(0,0),new(10,0)] };
+            var photo=new PhotoTraceProvenance { AlgorithmVersion=kind=="plane9" ? 2 : 1,PieceId=piece.Id,SourceSha256=new string('A',64),SourceByteLength=100,
+                SourceOrientation=1,SourceWidth=20,SourceHeight=20,PreviewWidth=20,PreviewHeight=20,ReferenceStart=new(0,0),ReferenceEnd=new(10,0),ReferenceLengthMm=10,
+                TracePixels=[new(0,0),new(10,0)],GeneratedPoints=[new(0,0),new(10,0)] };
+            if(kind=="plane9")photo.PlaneCalibration=new PhotoPlaneCalibration { Corners=[new(0,0),new(10,0),new(10,10),new(0,10)],WidthMm=10,HeightMm=10 };
+            return new ProjectDocument { Name="Synthetic photo",Pieces=[piece],PhotoTraceHistory=[photo] };
+        }
+        var root=(FrameworkElement)studio.Content;
+        var save=Descendants<Button>(root).Single(b=>Equals(b.Content,"Kaydet"));
+        var sourceField=typeof(MainWindow).GetField("filePath",PrivateInstance)!;
+        foreach(var kind in new[]{"physical8","photo8","plane9"})
+        {
+            var source=Path.Combine(work,kind+"-source.tcad");var target=Path.Combine(work,kind+"-new.tcad");var existing=Path.Combine(work,kind+"-existing.tcad");
+            var fixture=Fixture(kind);string json;
+            using(ProjectStorage.EnableVersion10ForVerification())json=ProjectStorage.SerializeProject(fixture);
+            var node=System.Text.Json.Nodes.JsonNode.Parse(json)!;node[0]=kind=="plane9" ? 9 : 8;
+            File.WriteAllText(source,node.ToJsonString());var original=File.ReadAllBytes(source);File.WriteAllText(existing,"existing");
+            studio.OpenProjectFile(source);var status=(TextBlock)typeof(MainWindow).GetField("status",PrivateInstance)!.GetValue(studio)!;
+            Check(DocumentSession.ContentEquals(fixture,studio.Document) && status.Text.Contains("kayıt kapalı"),kind+" opens without losing fields and explains the blocked writer",checks);
+            var prompted=false;studio.ConfirmLegacyMigrationForVerification=()=> { prompted=true;return true; };
+            studio.ChooseLegacyMigrationTargetForVerification=()=>target;studio.ConfirmLegacyDestinationForVerification=_=>true;
+            save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!prompted && status.Text.Contains("tahsis edilmedi") && !File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" is blocked while version allocation is unconfirmed",checks);
+            using(ProjectStorage.EnableVersion10ForVerification())
+            {
+                studio.ConfirmLegacyMigrationForVerification=()=>false;save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(!File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" initial cancellation preserves source",checks);
+                studio.ConfirmLegacyMigrationForVerification=()=>true;studio.ChooseLegacyMigrationTargetForVerification=()=>null;
+                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(!File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" destination cancellation preserves source",checks);
+                studio.ChooseLegacyMigrationTargetForVerification=()=>existing;
+                var rejected=false;try { Invoke(studio,"Save"); } catch(IOException) { rejected=true; }
+                Check(rejected && File.ReadAllText(existing)=="existing" && original.SequenceEqual(File.ReadAllBytes(source)),kind+" existing target is never replaced",checks);
+                studio.ChooseLegacyMigrationTargetForVerification=()=>source;
+                rejected=false;try { Invoke(studio,"Save"); } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected && original.SequenceEqual(File.ReadAllBytes(source)),kind+" source path cannot be selected",checks);
+                studio.ChooseLegacyMigrationTargetForVerification=()=>target;studio.ConfirmLegacyDestinationForVerification=_=>false;
+                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Check(!File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" final cancellation preserves source",checks);
+                studio.ChooseLegacyMigrationTargetForVerification=()=> { File.AppendAllText(source," ");return target; };
+                rejected=false;try { Invoke(studio,"Save"); } catch(IOException) { rejected=true; }
+                Check(rejected && !File.Exists(target) && File.ReadAllBytes(source).Length==original.Length+1,kind+" changed source is not overwritten or migrated",checks);
+                File.WriteAllBytes(source,original);studio.ChooseLegacyMigrationTargetForVerification=()=>target;
+                studio.ConfirmLegacyDestinationForVerification=_=> { studio.Commit("Synthetic change",()=>studio.Document.Name+=" changed");return true; };
+                rejected=false;try { Invoke(studio,"Save"); } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected && !File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" changed document invalidates final approval",checks);
+                studio.OpenProjectFile(source);
+                studio.ConfirmLegacyDestinationForVerification=_=>true;studio.BeforeLegacyMigrationWriteForVerification=()=>throw new IOException("synthetic write failure");
+                rejected=false;try { Invoke(studio,"Save"); } catch(IOException) { rejected=true; }
+                Check(rejected && !File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" write failure preserves source and absent target",checks);
+                studio.BeforeLegacyMigrationWriteForVerification=()=>File.AppendAllText(source," ");
+                rejected=false;try { Invoke(studio,"Save"); } catch(IOException) { rejected=true; }
+                Check(rejected && !File.Exists(target) && File.ReadAllBytes(source).Length==original.Length+1,kind+" source change after final approval aborts migration",checks);
+                File.WriteAllBytes(source,original);
+                studio.ConfirmLegacyDestinationForVerification=_=>true;studio.BeforeLegacyMigrationWriteForVerification=()=>File.WriteAllText(target,"raced");
+                rejected=false;try { Invoke(studio,"Save"); } catch(ProjectConflictException) { rejected=true; }
+                Check(rejected && File.ReadAllText(target)=="raced" && original.SequenceEqual(File.ReadAllBytes(source)),kind+" target appearing after approval is preserved",checks);
+                File.Delete(target);studio.BeforeLegacyMigrationWriteForVerification=null;
+                var expected=studio.CaptureSaveAsDestination(target,true);
+                rejected=false;try { studio.SaveAsTo(target,expected,true); } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected && !File.Exists(target),kind+" direct Save As cannot bypass migration consent",checks);
+                rejected=false;try { studio.SaveNewCopyTo(target); } catch(InvalidOperationException) { rejected=true; }
+                Check(rejected && !File.Exists(target),kind+" direct safe-copy path cannot bypass migration consent",checks);
+                string? confirmedPath=null;studio.ConfirmLegacyDestinationForVerification=path=> { confirmedPath=path;return true; };
+                save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var migrated=ProjectStorage.LoadWithVersion(target);
+                Check(migrated.FormatVersion==10 && DocumentSession.ContentEquals(fixture,migrated.Project) && original.SequenceEqual(File.ReadAllBytes(source)) &&
+                      string.Equals(confirmedPath,Path.GetFullPath(target),StringComparison.OrdinalIgnoreCase) &&
+                      string.Equals((string?)sourceField.GetValue(studio),Path.GetFullPath(target),StringComparison.OrdinalIgnoreCase),kind+" migrates losslessly to a new file after both confirmations",checks);
+            }
+        }
+    }
+
     public static int Run(string reportPath)
     {
         MainWindow? studio = null;

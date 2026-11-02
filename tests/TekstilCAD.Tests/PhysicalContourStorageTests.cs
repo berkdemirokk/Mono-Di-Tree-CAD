@@ -7,8 +7,10 @@ using TekstilCAD.Nesting;
 
 namespace TekstilCAD.Tests;
 
-public class PhysicalContourStorageTests
+public class PhysicalContourStorageTests : IDisposable
 {
+    private readonly IDisposable versionScope=ProjectStorage.EnableVersion10ForVerification();
+    public void Dispose()=>versionScope.Dispose();
     [Fact] public void PublishedLegacyFixtureHasUnknownPhysicalFeatures()
     {
         var root=new DirectoryInfo(AppContext.BaseDirectory);

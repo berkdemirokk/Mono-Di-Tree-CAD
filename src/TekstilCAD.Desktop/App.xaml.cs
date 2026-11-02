@@ -20,6 +20,12 @@ public partial class App : Application
             Shutdown(code);
             return;
         }
+        if (e.Args.Length == 2 && e.Args[0] == "--verify-legacy-migration")
+        {
+            ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            Shutdown(DesktopVerification.RunLegacyMigration(e.Args[1]));
+            return;
+        }
         new MainWindow().Show();
     }
 }

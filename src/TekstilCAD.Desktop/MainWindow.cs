@@ -93,6 +93,8 @@ public class MainWindow : Window
     private readonly Dictionary<string, Button> toolButtons = [];
     private string? filePath;
     private ProjectFileVersion? fileVersion;
+    private int? fileFormatVersion;
+    private bool legacyMigrationWriteAuthorized;
     private bool savedFileHasGradingRules;
     private bool savedFileHasMetadata;
     private bool savedFileHasNestingSnapshot;
@@ -802,7 +804,7 @@ public class MainWindow : Window
         projectEpoch=Guid.NewGuid();
         if(markUnsaved)session.MarkUnsaved();
         dirty=markUnsaved;
-        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
+        propertyDrafts.Clear();filePath=null;fileVersion=null;fileFormatVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;
         SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
         onLoaded?.Invoke();
         ClearRecovery();canvas.CancelDrawing();canvas.IsEnabled=true;
@@ -1820,7 +1822,7 @@ public class MainWindow : Window
         {
             LoadDocumentCore(loaded.Project,false,()=>
             {
-                filePath=loaded.Version.FullPath;fileVersion=loaded.Version;
+                filePath=loaded.Version.FullPath;fileVersion=loaded.Version;fileFormatVersion=loaded.FormatVersion;
                 savedFileHasGradingRules=loaded.Project.GradingRules.Count>0;
                 savedFileHasMetadata=loaded.Project.Pieces.Any(p=>p.Metadata is not null);
                 savedFileHasNestingSnapshot=loaded.Project.NestingSnapshot is not null;
@@ -1829,18 +1831,87 @@ public class MainWindow : Window
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
                 applied=true;
             },openingProject:true);
-            SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
+            var migrationNotice=RequiresVersion10(Document) && !ProjectStorage.Version10WriteAvailable
+                ? " · Yeni biçim sürümü henüz tahsis edilmedi; kayıt kapalı, otomatik kurtarma yapılamaz; kaynak korunuyor."
+                : LegacyMigrationRequired ? " · Yeni biçim için açık onay ve yeni dosya gereklidir." : "";
+            SetStatus("Proje açıldı: "+filePath+migrationNotice+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
         }
         catch(Exception ex) when(applied && ex is not OutOfMemoryException and not StackOverflowException and not AccessViolationException)
         {
             throw new InvalidOperationException("Proje açıldı, ancak görünüm yenilenemedi. Açılan proje ve dosya ilişkisi korundu; önceki çalışma geri getirilmedi. Ana çalışma alanını kontrol edin.",ex);
         }
     }
+    private static bool RequiresVersion10(ProjectDocument document) => document.PhotoTraceHistory is not null || document.Pieces.Any(p=>p.PhysicalFeatures is not null);
+    private bool LegacyMigrationRequired => filePath is not null && fileFormatVersion!=10 && RequiresVersion10(Document);
+    private bool BlockUnconfirmedVersion10()
+    {
+        if(!RequiresVersion10(Document) || ProjectStorage.Version10WriteAvailable)return false;
+        SetStatus("Yeni proje sürümü henüz tahsis edilmedi · Kayıt ve otomatik kurtarma kapalı; dosya yazılmadı.");
+        return true;
+    }
+    internal Func<bool>? ConfirmLegacyMigrationForVerification { get; set; }
+    internal Func<string?>? ChooseLegacyMigrationTargetForVerification { get; set; }
+    internal Func<string,bool>? ConfirmLegacyDestinationForVerification { get; set; }
+    internal Action? BeforeLegacyMigrationWriteForVerification { get; set; }
+    private void StartLegacyMigration()
+    {
+        if(!LegacyMigrationRequired || filePath is null || fileVersion is null)throw new InvalidOperationException("Geçiş için açık bir kaynak proje gereklidir.");
+        if(HasPendingCanvasOrPropertyWork) { SetStatus("Geçiş yapılmadı · Önce bekleyen çizim veya alan taslaklarını tamamlayın.");return; }
+        if(!ProjectStorage.Version10WriteAvailable)
+        {
+            SetStatus("Yeni proje sürümü henüz tahsis edilmedi · Kayıt ve otomatik kurtarma kapalı; kaynak dosya korunuyor.");
+            return;
+        }
+        var source=filePath;var sourceVersion=fileVersion;var sourceFormat=fileFormatVersion;var snapshot=Document.Clone();
+        var confirmed=ConfirmLegacyMigrationForVerification?.Invoke() ??
+            (MessageBox.Show(this,"Bu proje yeni bir proje biçiminde kaydedilecek. Kaynak dosya korunacak ve yalnız yeni bir dosya adı kabul edilecek. Eski uygulamalar yeni dosyayı açamayabilir. Devam edilsin mi?",
+                "Yeni biçime güvenli geçiş",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+        if(!confirmed) { SetStatus("Geçiş iptal edildi · Kaynak dosya korundu.");return; }
+        string? target;
+        if(ChooseLegacyMigrationTargetForVerification is { } choose)target=choose();
+        else
+        {
+            var dialog=new SaveFileDialog { Title="Yeni proje dosyası seç",Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad",DefaultExt=".tcad",
+                FileName=SafeFileName(Document.Name)+" - yeni biçim.tcad",InitialDirectory=AppPaths.PrepareProjectsDirectory(),OverwritePrompt=false };
+            target=dialog.ShowDialog(this)==true ? dialog.FileName : null;
+        }
+        if(target is null) { SetStatus("Geçiş iptal edildi · Kaynak dosya korundu.");return; }
+        if(filePath!=source || !Equals(fileVersion,sourceVersion) || fileFormatVersion!=sourceFormat ||
+           HasPendingCanvasOrPropertyWork || !DocumentSession.ContentEquals(snapshot,Document))
+            throw new InvalidOperationException("Proje veya kaynak geçiş onayı sırasında değişti; işlem uygulanmadı.");
+        if(!Equals(ProjectStorage.CaptureVersion(source),sourceVersion))
+            throw new IOException("Kaynak proje dışarıda değişti; yeniden açın ve geçişi tekrar başlatın.");
+        var destination=CaptureSaveAsDestination(target,true);
+        if(destination.Sha256 is not null)throw new IOException("Hedef dosya zaten var; korunuyor. Yeni bir dosya adı seçin.");
+        // Validate and round-trip the exact candidate before the final review.
+        ProjectStorage.Validate(snapshot);_=ProjectStorage.SerializeProject(snapshot);
+        var finalConfirmed=ConfirmLegacyDestinationForVerification?.Invoke(Path.GetFullPath(target)) ??
+            (MessageBox.Show(this,$"Kaynak korunacak:\n{SafePieceName(source)}\n\nYeni dosya oluşturulacak:\n{SafePieceName(Path.GetFullPath(target))}\n\nDevam edilsin mi?",
+                "Yeni dosyayı onayla",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+        if(!finalConfirmed) { SetStatus("Geçiş iptal edildi · Kaynak dosya korundu.");return; }
+        if(filePath!=source || !Equals(fileVersion,sourceVersion) || fileFormatVersion!=sourceFormat || HasPendingCanvasOrPropertyWork ||
+           !DocumentSession.ContentEquals(snapshot,Document) || !Equals(ProjectStorage.CaptureVersion(source),sourceVersion))
+            throw new InvalidOperationException("Proje veya kaynak son onay sırasında değişti; işlem uygulanmadı.");
+        legacyMigrationWriteAuthorized=true;
+        try
+        {
+            BeforeLegacyMigrationWriteForVerification?.Invoke();
+            // Keep the reviewed source open without write/delete sharing during
+            // the destination commit. A changed source is never silently used.
+            using var sourceGuard=new FileStream(source,FileMode.Open,FileAccess.Read,FileShare.Read);
+            if(!Equals(ProjectStorage.CaptureVersion(source),sourceVersion))
+                throw new IOException("Kaynak proje son kontrolden sonra değişti; geçiş yapılmadı.");
+            SaveToCore(target,destination);
+        }
+        finally { legacyMigrationWriteAuthorized=false; }
+    }
     private void Save()
     {
         EnsureNoActiveDrag();
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
+        if(LegacyMigrationRequired) { StartLegacyMigration();return; }
+        if(BlockUnconfirmedVersion10())return;
         if (filePath is null) { SaveAs(); return; }
         if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches))
         {
@@ -1855,6 +1926,8 @@ public class MainWindow : Window
     {
         EnsureNoActiveDrag();
         EnsureNoExport();
+        if(LegacyMigrationRequired && !legacyMigrationWriteAuthorized)
+            throw new InvalidOperationException("Bu proje yeni biçime yalnız açık onayla, yeni bir dosyaya kaydedilebilir.");
         var recoveryDirectory = Path.TrimEndingDirectorySeparator(AppPaths.RecoveryDirectory) + Path.DirectorySeparatorChar;
         if(Path.GetFullPath(path).StartsWith(recoveryDirectory,StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("Kalıcı projeyi yönetilen kurtarma klasörünün dışında kaydedin.");
@@ -1869,7 +1942,7 @@ public class MainWindow : Window
             ? fileVersion : ProjectStorage.CaptureVersion(path));
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
-        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
+        filePath=path; fileVersion=savedVersion; fileFormatVersion=RequiresVersion10(candidate) ? 10 : null; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });
         try
         {
             if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
@@ -1899,6 +1972,8 @@ public class MainWindow : Window
     private void SaveNewCopy()
     {
         EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
+        if(LegacyMigrationRequired) { StartLegacyMigration();return; }
+        if(BlockUnconfirmedVersion10())return;
         if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 })) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         var dlg=new SaveFileDialog { Title="Yeni proje dosyası oluştur", Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+" - kopya.tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory(), OverwritePrompt=false };
         if(dlg.ShowDialog(this)!=true)return;
@@ -1907,6 +1982,7 @@ public class MainWindow : Window
     internal void SaveNewCopyTo(string path)
     {
         EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
+        if(LegacyMigrationRequired)throw new InvalidOperationException("Önce yeni biçim için açık geçiş onayı gereklidir.");
         var expected=CaptureSaveAsDestination(path,true);
         if(expected.Sha256 is not null)
             throw new IOException("Bu adla bir dosya zaten var; üzerine yazılmadı. Yeni bir ad seçin.");
@@ -1926,6 +2002,8 @@ public class MainWindow : Window
         EnsureNoActiveDrag();
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
+        if(LegacyMigrationRequired) { StartLegacyMigration();return; }
+        if(BlockUnconfirmedVersion10())return;
         if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 })) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         var dlg = new SaveFileDialog { Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+".tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if (dlg.ShowDialog(this) != true) return;

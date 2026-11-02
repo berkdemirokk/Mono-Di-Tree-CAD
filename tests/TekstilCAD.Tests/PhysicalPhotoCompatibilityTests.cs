@@ -19,10 +19,12 @@ public sealed class HistoricalReaderFactAttribute : FactAttribute
     }
 }
 
-public sealed class PhysicalPhotoCompatibilityTests
+public sealed class PhysicalPhotoCompatibilityTests : IDisposable
 {
     private readonly ITestOutputHelper output;
+    private readonly IDisposable versionScope=ProjectStorage.EnableVersion10ForVerification();
     public PhysicalPhotoCompatibilityTests(ITestOutputHelper output) => this.output=output;
+    public void Dispose()=>versionScope.Dispose();
     private const string Piece="11111111-1111-4111-8111-111111111111";
     private const string Edge1="22222222-2222-4222-8222-222222222221";
     private const string Edge2="22222222-2222-4222-8222-222222222222";
@@ -40,7 +42,7 @@ public sealed class PhysicalPhotoCompatibilityTests
           "EdgeIds":["{{{{Edge1}}}}","{{{{Edge2}}}}","{{{{Edge3}}}}","{{{{Edge4}}}}","{{{{Edge5}}}}","{{{{Edge6}}}}","{{{{Edge7}}}}"],
           "Notches":[{"Id":"{{{{Notch}}}}","FirstEdgeId":"{{{{Edge2}}}}","SecondEdgeId":"{{{{Edge3}}}}"}]}}],"GradingRules":[]}]
       """)!;
-    private static JsonNode Photo8()=>JsonNode.Parse($$$$"""
+    internal static JsonNode Photo8()=>JsonNode.Parse($$$$"""
       [8,{"Name":"synthetic", "Pieces":[{"Id":"{{{{Piece}}}}","Name":"piece","Closed":false,"Points":[{"X":0,"Y":0},{"X":10,"Y":0}]}],
         "GradingRules":[],"PhotoTraceHistory":[{"AlgorithmVersion":1,"PieceId":"{{{{Piece}}}}",
         "SourceSha256":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","SourceByteLength":100,"SourceOrientation":1,
@@ -48,7 +50,7 @@ public sealed class PhysicalPhotoCompatibilityTests
         "ReferenceEnd":{"X":10,"Y":0},"ReferenceLengthMm":10,"TracePixels":[{"X":0,"Y":0},{"X":10,"Y":0}],
         "GeneratedPoints":[{"X":0,"Y":0},{"X":10,"Y":0}]}]}]
       """)!;
-    private static JsonNode Plane9()
+    internal static JsonNode Plane9()
     {
         var result=Photo8();result[0]=9;var history=result[1]!["PhotoTraceHistory"]![0]!;history["AlgorithmVersion"]=2;
         history["PlaneCalibration"]=JsonNode.Parse("{\"Corners\":[{\"X\":0,\"Y\":0},{\"X\":10,\"Y\":0},{\"X\":10,\"Y\":10},{\"X\":0,\"Y\":10}],\"WidthMm\":10,\"HeightMm\":10}");

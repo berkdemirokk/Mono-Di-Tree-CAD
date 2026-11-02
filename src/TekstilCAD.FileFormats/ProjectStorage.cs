@@ -9,7 +9,11 @@ namespace TekstilCAD.FileFormats;
 
 /// <summary>A content version tied to one normalized path. Null SHA256 means the file did not exist.</summary>
 public sealed record ProjectFileVersion(string FullPath, string? Sha256);
-public sealed record ProjectLoadResult(ProjectDocument Project, ProjectFileVersion Version);
+public sealed record ProjectLoadResult(ProjectDocument Project, ProjectFileVersion Version)
+{
+    /// <summary>Format from the exact byte snapshot used to load the project; null denotes the unversioned legacy form.</summary>
+    public int? FormatVersion { get; init; }
+}
 public sealed class ProjectConflictException : IOException
 {
     public ProjectConflictException() : base("Bu proje başka bir oturumda değiştirildi veya silindi. Değişiklikleriniz korunuyor; dosyayı yeniden açın ya da farklı kaydedin.") { }
@@ -17,6 +21,20 @@ public sealed class ProjectConflictException : IOException
 
 public static class ProjectStorage
 {
+    // A repository-wide allocation decision is still outstanding. The scoped
+    // override is solely for isolated synthetic verification, never UI consent.
+    private static readonly AsyncLocal<bool> Version10VerificationOverride=new();
+    internal static bool Version10WriteAvailable => Version10VerificationOverride.Value;
+    internal static IDisposable EnableVersion10ForVerification()
+    {
+        var previous=Version10VerificationOverride.Value;Version10VerificationOverride.Value=true;
+        return new VerificationScope(()=>Version10VerificationOverride.Value=previous);
+    }
+    private sealed class VerificationScope(Action cleanup) : IDisposable
+    {
+        private Action? cleanup=cleanup;
+        public void Dispose()=>Interlocked.Exchange(ref cleanup,null)?.Invoke();
+    }
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true, UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow };
     public const int MaximumPieces = 10_000;
     public const int MaximumPointsPerPiece = 10_000;
@@ -39,7 +57,9 @@ public static class ProjectStorage
         var full = Path.GetFullPath(path);
         var bytes = ReadSnapshot(full, cancellationToken) ?? throw new FileNotFoundException("Proje dosyası bulunamadı.", full);
         var project = DeserializeProject(bytes, cancellationToken);
-        return new(project, new(full, Convert.ToHexString(SHA256.HashData(bytes))));
+        using var shape=JsonDocument.Parse(DecodeProjectText(bytes));
+        var format=shape.RootElement.ValueKind==JsonValueKind.Array ? shape.RootElement[0].GetInt32() : (int?)null;
+        return new(project, new(full, Convert.ToHexString(SHA256.HashData(bytes)))) { FormatVersion=format };
     }
     internal static ProjectDocument DeserializeProject(byte[] bytes, CancellationToken cancellationToken = default)
     {
@@ -457,7 +477,10 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.Pieces.Any(p=>p.PhysicalFeatures is not null) || project.PhotoTraceHistory is not null
+        var requires10=project.Pieces.Any(p=>p.PhysicalFeatures is not null) || project.PhotoTraceHistory is not null;
+        if(requires10 && !Version10WriteAvailable)
+            throw new InvalidOperationException("Proje biçimi sürüm 10 için sürüm tahsisi doğrulanmadı; dosya yazılmadı.");
+        var text = requires10
             ? JsonSerializer.Serialize<object[]>([10, project], Options)
             : project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
