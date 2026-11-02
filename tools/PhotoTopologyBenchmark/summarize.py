@@ -24,6 +24,9 @@ result = {}
 for category in ("shorts", "tshirt", "all"):
     pairs = [(t, m) for t, m in zip(topology, measurements) if category == "all" or m["category"] == category]
     complete = [(t, m) for t, m in pairs if t["ProposalAccepted"]]
+    valid = [(t, m) for t, m in complete if t["PixelGeometryValid"] is True]
+    if any(m["proposal_max"] is None for _, m in valid):
+        raise SystemExit("A geometrically valid proposal has no corresponding distance measurement.")
     result[category] = {
         "contours": len(pairs),
         "points_accepted": sum(t["PointsAccepted"] for t, _ in pairs),
@@ -33,6 +36,9 @@ for category in ("shorts", "tshirt", "all"):
         "strict_crossing_counter": sum(m["strict_crossing"] is True for _, m in complete),
         "strict_crossing_not_flagged": sum(m["strict_crossing"] is True and t["PixelGeometryValid"] is not False for t, m in complete),
         "strict_crossing_without_pair": sum(m["strict_crossing"] is True and t["CrossingPairFound"] is not True for t, m in complete),
+        "pixel_geometry_valid": len(valid),
+        "geometry_valid_local_over_5_pixels": sum(m["proposal_max"] > 5 for _, m in valid),
+        "geometry_valid_max_sampled_local_pixels": max((m["proposal_max"] for _, m in valid), default=None),
     }
 report = {"archive_sha256": source["archive_sha256"], "contour_method": source["method"],
           "jitter_pixels": source.get("jitter_pixels", 0), "categories": result}

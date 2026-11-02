@@ -11,7 +11,10 @@
       "crossing_pair_found": 6,
       "strict_crossing_counter": 2,
       "strict_crossing_not_flagged": 0,
-      "strict_crossing_without_pair": 0
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 34,
+      "geometry_valid_local_over_5_pixels": 26,
+      "geometry_valid_max_sampled_local_pixels": 20.506096654409877
     },
     "tshirt": {
       "contours": 40,
@@ -21,7 +24,10 @@
       "crossing_pair_found": 5,
       "strict_crossing_counter": 1,
       "strict_crossing_not_flagged": 0,
-      "strict_crossing_without_pair": 0
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 35,
+      "geometry_valid_local_over_5_pixels": 29,
+      "geometry_valid_max_sampled_local_pixels": 25.612496949731394
     },
     "all": {
       "contours": 80,
@@ -31,7 +37,10 @@
       "crossing_pair_found": 11,
       "strict_crossing_counter": 3,
       "strict_crossing_not_flagged": 0,
-      "strict_crossing_without_pair": 0
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 69,
+      "geometry_valid_local_over_5_pixels": 55,
+      "geometry_valid_max_sampled_local_pixels": 25.612496949731394
     }
   }
 }

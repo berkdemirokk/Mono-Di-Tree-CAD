@@ -164,7 +164,7 @@ internal sealed class PhotoTraceWindow : Window
         var current=CanvasForVerification.ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(snapshot))return;
         CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);
         StatusForVerification.Text+=result.Valid
-            ? " Piksel geometrisi kontrolünde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
+            ? " Piksel geometrisi: sorun bulunmadı. Fotoğraf kenarı ve üretim doğrulanmadı."
             : result.Edges is not null ? " Piksel geometrisi uyarısı: turuncu kenarlar kesişiyor veya temas ediyor; inceleyin."
             : " Piksel geometrisi uyarısı: çakışma, sıfır kenar veya kapanış sorunu olabilir; öneriyi düzeltin.";
     }
@@ -185,7 +185,7 @@ internal sealed class PhotoTraceWindow : Window
             if((currentProposal is not null)!=usesProposal || !(currentProposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray()).SequenceEqual(snapshot))return;
             if(usesProposal)CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);else CanvasForVerification.SetCurrentTopologyWarning(snapshot,result.Edges,!result.Valid);
             var prefix=usesProposal ? "Yol önerisi" : "Çizgi";
-            StatusForVerification.Text=result.Valid ? $"{prefix}: piksel geometrisinde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
+            StatusForVerification.Text=result.Valid ? $"{prefix}: piksel geometrisinde sorun bulunmadı. Fotoğraf kenarı ve üretim doğrulanmadı."
                 : result.Edges is not null ? $"{prefix}: piksel geometrisi uyarısı; turuncu kenarlar kesişiyor veya temas ediyor."
                 : $"{prefix}: piksel geometrisi uyarısı; çakışma, sıfır kenar veya kapanış sorunu olabilir.";
             if(closure)StatusForVerification.Text+=" Kapanış kenarı önizlemedir; taslak açık kalır.";

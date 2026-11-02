@@ -7,10 +7,14 @@
 | Tuvalin kabul ettiği toplu öneri | 80 / 80 | 80 / 80 |
 | Piksel geometri denetiminde uyarı | 8 / 80 | 11 / 80 |
 | Uyarıda bulunabilen ilk kenar çifti | 8 / 8 | 11 / 11 |
+| Piksel geometri denetiminden geçen | 72 / 80 | 69 / 80 |
+| Denetimden geçenlerde 5 pikseli aşan örneklenmiş yerel uzaklık | 51 / 72 | 55 / 69 |
 | Önceki dar sayacın bulduğu sıkı kesişim | 1 | 3 |
 | Sıkı kesişim olup geometri uyarısı veya kenar çifti bulunmayan | 0 | 0 |
 
 Ek uyarıların nedeni tek tek sınıflandırılmadı; dar sayaç yalnız içten çapraz geçişleri sayarken gerçek denetim temas, çakışma ve diğer geçersizlikleri de inceleyebilir. Geometri kontrolünü geçmek gerçek kumaş sınırının, piksel hatasının veya üretim uygunluğunun doğrulandığı anlamına gelmez. Araç, ürünün piksel inceleme mantığını çağırır; ana pencerenin asenkron durum yönetimi, fareyle kullanım ve milimetreye dönüştürülmüş sonuç bu veriyle sınanmadı. Noktalar anotasyondan veya yapay kaydırmadan gelir; kullanıcı seçimi ve farklı veri kaynağı test edilmedi.
+
+İki koşulda da geometri denetiminden geçenler arasında en büyük örneklenmiş yerel uzaklık 25,61 pikseldi. Bu eşleştirme, geçerli görünen konturun anotasyona yakın olduğunu varsaymamak için somut bir örnektir; anotasyonlar fiziksel kalıp referansı değildir ve örnekleme sürekli en büyük hatayı garanti etmez.
 
 [Referans özeti](PHOTO_HOLDOUT_TOPOLOGY_REFERENCE.json), [kaydırma özeti](PHOTO_HOLDOUT_TOPOLOGY_JITTER.json), [referans satırları](PHOTO_HOLDOUT_TOPOLOGY_REFERENCE_ROWS.json) ve [kaydırma satırları](PHOTO_HOLDOUT_TOPOLOGY_JITTER_ROWS.json) sonuçları içerir. Referans koşulu iki kez çalıştırıldığında satır dosyaları bayt düzeyinde aynıydı. Görüntüler depoya eklenmedi.
 

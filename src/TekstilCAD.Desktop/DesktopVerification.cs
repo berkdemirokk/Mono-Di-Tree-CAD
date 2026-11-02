@@ -9421,7 +9421,7 @@ internal static class DesktopVerification
                 Render(trace,Path.ChangeExtension(reportPath,".photo-batch-preview.png"),560,480);
                 Check(calls==2 && canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && FullyVisible(canvas,root) && trace.StatusForVerification.Text.Contains("ilk ve son birleşmez"),
                     "Batch search previews each trace interval without changing points and discloses the open end",checks);
-                Check(trace.StatusForVerification.Text.Contains("Piksel geometrisi kontrolünde sorun bulunmadı") && trace.StatusForVerification.Text.Contains("üretim onayı değildir"),
+                Check(trace.StatusForVerification.Text.Contains("Piksel geometrisi: sorun bulunmadı") && trace.StatusForVerification.Text.Contains("Fotoğraf kenarı ve üretim doğrulanmadı"),
                     "Noncrossing photo path preview receives a limited pixel geometry check",checks);
                 var previewCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>previewCheck.IsCompleted);previewCheck.GetAwaiter().GetResult();
                 Check(canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("Yol önerisi") && trace.StatusForVerification.Text.Contains("sorun bulunmadı"),
@@ -9524,7 +9524,7 @@ internal static class DesktopVerification
                 Check(canvas.TryMoveTracePoint(5,new Point(30,20)) && canvas.TopologyWarningEdgesForVerification is null,
                     "Editing the manual trace clears its previous diagnostic",checks);
                 currentCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>currentCheck.IsCompleted);currentCheck.GetAwaiter().GetResult();
-                Check(canvas.TopologyWarningEdgesForVerification is null && trace.StatusForVerification.Text.Contains("sorun bulunmadı") && trace.StatusForVerification.Text.Contains("üretim onayı değildir"),
+                Check(canvas.TopologyWarningEdgesForVerification is null && trace.StatusForVerification.Text.Contains("sorun bulunmadı") && trace.StatusForVerification.Text.Contains("Fotoğraf kenarı ve üretim doğrulanmadı"),
                     "Explicit pixel review checks the corrected current trace without claiming production approval",checks);
                 using(var checkReached=new ManualResetEventSlim())using(var checkRelease=new ManualResetEventSlim())
                 {
