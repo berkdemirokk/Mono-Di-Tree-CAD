@@ -9316,6 +9316,14 @@ internal static class DesktopVerification
                 Check(checkWindow.ResultForVerification.Text.Contains("141.421356") && checkWindow.ResultForVerification.Text.Contains("150 mm") &&
                     DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom),
                     "Photo measurement compares an independent segment without changing the draft or project",checks);
+                var expectedPercent=((Math.Sqrt(2)*100-150)/150*100).ToString("G6",CultureInfo.CurrentCulture);
+                Check(checkWindow.ResultForVerification.Text.Contains("Göreli fark (fark / girilen)") && checkWindow.ResultForVerification.Text.Contains(expectedPercent+" %") &&
+                    checkWindow.ResultForVerification.Text.Contains("üretim onayı verilmedi"),
+                    "Photo comparison reports the signed relative difference without an acceptance claim",checks);
+                checkWindow.KnownForVerification.Text="1e-320";checkWindow.Calculate();
+                Check(checkWindow.LastResultForVerification is not null && checkWindow.ResultForVerification.Text.Contains("sayısal aralıkta gösterilemiyor") &&
+                    !checkWindow.ResultForVerification.Text.Contains("Infinity"),
+                    "Photo comparison handles an unrepresentable relative percentage without losing the millimeter result",checks);
                 checkWindow.KnownForVerification.Text="151";Check(checkWindow.ResultForVerification.Text=="","Changing a comparison input clears the old measurement",checks);
                 checkWindow.SecondForVerification.SelectedIndex=1;checkWindow.Calculate();
                 Check(checkWindow.ResultForVerification.Text.Contains("aynı iki ucu"),"Photo measurement refuses to reuse the calibration segment",checks);
@@ -9717,6 +9725,9 @@ internal static class DesktopVerification
                 measurement.FirstForVerification.SelectedIndex=4;measurement.SecondForVerification.SelectedIndex=5;measurement.KnownForVerification.Text="150";measurement.Calculate();
                 Check(measurement.LastResultForVerification is { } result && Math.Abs(result.EstimatedMm-150)<1e-8 && Math.Abs(result.DifferenceMm)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
                     "Independent photo measurement uses the selected plane transform without changing the project",checks);
+                measurement.KnownForVerification.Text="125";measurement.Calculate();
+                Check(measurement.ResultForVerification.Text.Contains("20 %") && measurement.LastResultForVerification is { KnownMm:125 },
+                    "Plane photo comparison reports a positive relative difference against the entered measurement",checks);
                 measurement.FirstForVerification.SelectedIndex=0;measurement.SecondForVerification.SelectedIndex=2;measurement.Calculate();
                 Check(measurement.LastResultForVerification is null && measurement.ResultForVerification.Text.Contains("referans köşesini"),"Plane measurement rejects two reference corners as a tautological check",checks);
             }

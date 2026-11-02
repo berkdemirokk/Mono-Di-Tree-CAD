@@ -66,7 +66,11 @@ internal sealed class PhotoTraceCheckWindow : Window
                 var estimated=Geometry.Distance(corrected[0],corrected[1]);result=new PhotoTraceMeasurementResult(estimated,known,estimated-known);
             }
             LastResultForVerification=result;
-            ResultForVerification.Text=$"Fotoğraftan tahmin: {MeasurementInput.Format(result.EstimatedMm)} mm\nGirilen gerçek mesafe: {MeasurementInput.Format(result.KnownMm)} mm\nFark (tahmin − girilen): {MeasurementInput.Format(result.DifferenceMm)} mm\n\nYalnız seçilen iki nokta karşılaştırıldı; ölçü veya üretim onayı verilmedi.";
+            var percent=result.DifferenceMm/result.KnownMm*100;
+            var relative=double.IsFinite(percent)
+                ? $"Göreli fark (fark / girilen): {percent.ToString("G6",System.Globalization.CultureInfo.CurrentCulture)} %"
+                : "Göreli fark bu sayısal aralıkta gösterilemiyor.";
+            ResultForVerification.Text=$"Fotoğraftan tahmin: {MeasurementInput.Format(result.EstimatedMm)} mm\nGirilen mesafe: {MeasurementInput.Format(result.KnownMm)} mm\nFark (tahmin − girilen): {MeasurementInput.Format(result.DifferenceMm)} mm\n{relative}\n\nYalnız seçilen iki nokta karşılaştırıldı; ölçü veya üretim onayı verilmedi.";
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { ResultForVerification.Text="Karşılaştırma yapılamadı: "+ex.Message; }
