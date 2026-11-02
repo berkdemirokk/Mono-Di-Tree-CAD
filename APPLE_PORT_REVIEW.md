@@ -31,3 +31,7 @@ Both sources use the separate `tekstilcad.design-request` v1 document contract w
 Swift, Xcode and XcodeGen were not available in this Windows session. No Mac/iOS compile, Swift tests, simulator test, signing, actual phone test, file-provider test, performance test or native rendering verification was performed. Desktop builds/tests were not run by this agent under the repository build-coordination rule. The presence of test files is not a passed test result.
 
 Before integration approval, run the Apple test scheme on an authorized Mac with the pinned candidate, run desktop synthetic request interoperability checks, and resolve the project-version boundary. Do not infer production readiness from a successful source-tree port.
+
+## Follow-up: future-version rejection test source
+
+After the initial port commit `61e998245752846f6e8be070b3475dc79c500457`, the two Apple test-file changes from `1875f8f22b113d0acb6ff7cbfeb5f314addefe7b` (direct child of `db996ea`) were applied. The complete Apple tree now matches `1875f8f` rather than `db996ea`. The change adds v8/v9/v10 inputs to the existing UI reader-rejection test and a synthetic load-state test that checks the previous model/source snapshot and temporary input files remain unchanged. The latter exercises error-completion state directly; it does not itself invoke the real parser. No application or schema code changed. Both source tests remain unexecuted here because no Apple toolchain is available. The two files passed a targeted credential-pattern scan and `git diff --check` before committing.

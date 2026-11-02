@@ -1258,7 +1258,7 @@ final class ViewerUITests: XCTestCase {
     func testVersionMustBeAnIntegerJSONNumber() {
         let app = XCUIApplication()
         app.launchArguments.append("--ui-test-fixture")
-        for version in ["true", "false", "1.0", "1e0", "1E+0", "18446744073709551617", "9223372036854775809", "7", "0"] {
+        for version in ["true", "false", "1.0", "1e0", "1E+0", "18446744073709551617", "9223372036854775809", "7", "8", "9", "10", "0"] {
             let project = "[\(version),{\"Name\":\"Sürüm testi\",\"Pieces\":[]}]"
             app.launchEnvironment["TCAD_UI_TEST_FIXTURE"] = Data(project.utf8).base64EncodedString()
             app.launch()

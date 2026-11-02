@@ -85,6 +85,29 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertTrue(raw["reference"] is NSNull)
     }
     #endif
+    func testRejectedFutureProjectLoadsKeepPreviouslyOpenModelAndSourceFile() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let original = Data(#"[1,{"Name":"Önceki","Pieces":[]}]"#.utf8)
+        var state = LoadedModelState<String>()
+        state.install("Önceki", data: original, selectedPiece: 0)
+        let revision = state.revision
+        for version in [8, 9, 10] {
+            let candidate = Data("[\(version),{\"Name\":\"Gelecek\",\"Pieces\":[]}]".utf8)
+            let url = directory.appendingPathComponent("future-\(version).tcad")
+            try candidate.write(to: url)
+            let request = state.load.begin()
+            // The real reader rejects these versions in ViewerUITests; the error
+            // completion must leave the previously installed snapshot untouched.
+            XCTAssertTrue(state.load.finish(request))
+            XCTAssertEqual(state.model, "Önceki")
+            XCTAssertEqual(state.sourceData, original)
+            XCTAssertEqual(state.selectedPiece, 0)
+            XCTAssertEqual(state.revision, revision)
+            XCTAssertEqual(try Data(contentsOf: url), candidate)
+        }
+    }
     func testInstalledModelKeepsLoadRequestAndRejectsStaleCompletion() {
         var state = LoadedModelState<Int>()
         state.install(1, data: Data([1]))
