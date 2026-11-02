@@ -37,14 +37,14 @@ internal sealed class AtelierMeasurementEntryWindow : Window
         }
         Field("göğüs çevresi","Göğüs çevresi");Field("bel çevresi","Bel çevresi");Field("kalça çevresi","Kalça çevresi");Field("elbise boyu","Elbise boyu");
         AutomationProperties.SetName(StatusForVerification,"Ölçü girişi durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(StatusForVerification);
-        Closing+=OnClosing;
+        Closing+=OnFormClosing;
     }
     internal bool CanCloseWithoutLosingInput()
     {
         if(accepted || InputsForVerification.Values.All(input=>input.Text.Length==0))return true;
         return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencereyi kapatıp bu girişleri silmek istiyor musunuz?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     }
-    private void OnClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
+    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
     internal bool TryApply()
     {
         if(request.PromptForVerification.Text!=originalPrompt || request.MeasurementsForVerification.Text!=originalMeasurements)

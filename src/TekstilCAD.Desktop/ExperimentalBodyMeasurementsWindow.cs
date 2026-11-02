@@ -54,14 +54,14 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
             input.ToolTip=instructions;AutomationProperties.SetName(input,label+" "+unit);AutomationProperties.SetHelpText(input,instructions+" "+(angle ? "Bilinmiyorsa boş bırakın." : "Santimetre cinsinden; bilinmiyorsa boş bırakın."));
             body.Children.Add(input);InputsForVerification.Add(label,input);
         }
-        Closing+=OnClosing;
+        Closing+=OnFormClosing;
     }
     internal bool CanCloseWithoutLosingInput()
     {
         if(accepted || InputsForVerification.Values.All(input=>input.Text.Length==0))return true;
         return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencereyi kapatıp bu girişleri silmek istiyor musunuz?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     }
-    private void OnClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
+    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
     internal bool TryApply()
     {
         if(!TryRead(out var lines,out _))return false;

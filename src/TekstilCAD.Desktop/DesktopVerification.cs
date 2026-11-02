@@ -10078,7 +10078,7 @@ internal static class DesktopVerification
                 Check(entry.CanCloseWithoutLosingInput(),"An empty basic measurement form can close without a discard prompt",checks);
                 var chest=entry.InputsForVerification["göğüs çevresi"];var waist=entry.InputsForVerification["bel çevresi"];
                 var discardAsked=false;entry.ConfirmDiscardForVerification=()=> { discardAsked=true;return false; };chest.Text=" ";
-                var cancelClosing=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnClosing",PrivateInstance)!.Invoke(entry,[entry,cancelClosing]);
+                var cancelClosing=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(entry,[entry,cancelClosing]);
                 Check(discardAsked && cancelClosing.Cancel && chest.Text==" " && window.MeasurementsForVerification.Text==input.Measurements,
                     "Closing the basic measurement form requires confirmation even for whitespace and preserves rejected input",checks);
                 entry.ConfirmDiscardForVerification=()=>true;Check(entry.CanCloseWithoutLosingInput(),"A user-approved discard can close the measurement form",checks);chest.Clear();
@@ -10116,7 +10116,7 @@ internal static class DesktopVerification
                     "Experimental body intake starts empty and does not modify the request",checks);
                 var experimentalDiscardAsked=false;experimentalEntry.ConfirmDiscardForVerification=()=> { experimentalDiscardAsked=true;return false; };
                 experimentalEntry.InputsForVerification["bel çevresi"].Text="72";
-                var cancelExperimental=new System.ComponentModel.CancelEventArgs();typeof(ExperimentalBodyMeasurementsWindow).GetMethod("OnClosing",PrivateInstance)!.Invoke(experimentalEntry,[experimentalEntry,cancelExperimental]);
+                var cancelExperimental=new System.ComponentModel.CancelEventArgs();typeof(ExperimentalBodyMeasurementsWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(experimentalEntry,[experimentalEntry,cancelExperimental]);
                 Check(experimentalDiscardAsked && cancelExperimental.Cancel && experimentalEntry.InputsForVerification["bel çevresi"].Text=="72" &&
                     window.MeasurementsForVerification.Text==input.Measurements && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                     "Closing experimental form cannot silently discard an unapproved measurement",checks);
