@@ -492,6 +492,25 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: reopened.prompt, measurements: reopened.measurements, image: nil, imageName: nil))
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(v2).description, text)
     }
+    func testPortableV1AndV2AttemptsKeepSnapshotWhenCancelledOrSuperseded() throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "İpek 👗", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let v1 = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+        let v2 = try ExperimentalDesignBrief.makeV2(draft)
+        let first = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: v1)
+        let second = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: v2)
+        var presentation = ExperimentalDesignBrief.ExportPresentation()
+        presentation.begin(first.id)
+        presentation.setPresented(false, for: first.id) // cancellation changes presentation only
+        XCTAssertFalse(presentation.isPresented(for: first.id))
+        XCTAssertEqual(first.bytes, v1)
+        XCTAssertEqual(first.draft, draft)
+        presentation.begin(second.id)
+        presentation.setPresented(false, for: first.id) // late callback cannot dismiss v2
+        XCTAssertTrue(presentation.isPresented(for: second.id))
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(second.bytes).style, .aline)
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(first.bytes).style, .describe)
+        XCTAssertEqual(first.draft, second.draft)
+    }
     func testMeasurementMessagePreservedAsUserAuthoredText() throws {
         let message = "Göğüs çevresi 92 cm, bel çevresi 72 cm.\nKol ölçüsünü bilmiyorum 👗"
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
