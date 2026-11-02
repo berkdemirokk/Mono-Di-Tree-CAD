@@ -10,6 +10,7 @@ public static class ContourPathExtraction
     public static ContourPathExtractionResult Extract(PatternPiece source,int start,int end,bool reverse,CancellationToken token=default)
     {
         ArgumentNullException.ThrowIfNull(source);token.ThrowIfCancellationRequested();
+        if(source.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur kimlikleri kenar çıkarmada korunamıyor.",nameof(source));
         if(source.Id==Guid.Empty || !source.Closed || source.Points is null || source.Points.Count<3 || source.Points.Count>LargeContourValidator.MaximumStoredPoints)
             throw new ArgumentException("En fazla 10000 saklı noktalı kapalı bir kontur seçin.");
         var points=source.Points.ToArray();

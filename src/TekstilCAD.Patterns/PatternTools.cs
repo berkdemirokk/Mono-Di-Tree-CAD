@@ -633,6 +633,7 @@ public static class PatternTools
         ArgumentNullException.ThrowIfNull(piece);
         token.ThrowIfCancellationRequested();
         NotchSafety.RequireNoNotches(piece);
+        if(piece.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur bilgisi olan parçada bu nokta düzenlemesi desteklenmiyor.",nameof(piece));
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
         if (piece.Points.Count > LargeContourValidator.MaximumStoredPoints)
@@ -755,6 +756,7 @@ public static class PatternTools
     {
         ArgumentNullException.ThrowIfNull(piece);
         NotchSafety.RequireNoNotches(piece);
+        if(piece.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur bilgisi bu işlemle aktarılamıyor.",nameof(piece));
         if (piece.Points is null) throw new ArgumentException("Kaynak kontur noktaları gerekli.", nameof(piece));
         if (piece.Name is null || piece.Name.Length > 1024) throw new ArgumentException("Geçersiz kaynak parça adı.", nameof(piece));
         // Editing must not copy or quadratically inspect unbounded input.
@@ -770,6 +772,7 @@ public static class PatternTools
     }
     private static PatternPiece NewPiece(PatternPiece source, List<Point2> points, string suffix, bool preserveGrainline=false, bool markGrainlineForReview=false)
     {
+        if(source.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur bilgisi bu işlemle aktarılamıyor.",nameof(source));
         var name = source.Name + suffix;
         if (name.Length > 1024) throw new ArgumentException("Üretilen parça adı 1024 karakteri aşıyor; kaynak adını kısaltın.");
         var line=preserveGrainline ? source.Grainline?.Clone() : null;

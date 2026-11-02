@@ -51,6 +51,65 @@ public sealed class NotchMark
     public NotchMark Clone() => new() { VertexIndex=VertexIndex,Position=Position };
 }
 
+/// <summary>Explicit V cuts on a particular unchanged closed contour; null means unknown.</summary>
+public sealed class PhysicalContourFeatures
+{
+    [JsonRequired] public Guid OwnerPieceId { get; set; }
+    [JsonRequired] public List<Point2> SourcePoints { get; set; } = [];
+    [JsonRequired] public List<Guid> EdgeIds { get; set; } = [];
+    [JsonRequired] public List<PhysicalVNotch> Notches { get; set; } = [];
+    /// <summary>Assign identities to the current contour and explicitly selected V tip indices.</summary>
+    public static PhysicalContourFeatures Create(PatternPiece piece, IReadOnlyList<int> tipIndices)
+    {
+        ArgumentNullException.ThrowIfNull(piece); ArgumentNullException.ThrowIfNull(tipIndices);
+        if(piece.PhysicalFeatures is not null || piece.Points is null || piece.Points.Count<3 || piece.Points.Count>Geometry.MaxValidatedContourVertices || tipIndices.Count>piece.Points.Count)
+            throw new ArgumentException("Fiziksel kontur kimlikleri oluşturulamıyor.",nameof(piece));
+        var edges=piece.Points.Select(_=>Guid.NewGuid()).ToList();
+        var features=new PhysicalContourFeatures { OwnerPieceId=piece.Id, SourcePoints=[..piece.Points], EdgeIds=edges };
+        foreach(var tip in tipIndices)
+        {
+            if(tip<0 || tip>=edges.Count)throw new ArgumentOutOfRangeException(nameof(tipIndices));
+            features.Notches.Add(new() { Id=Guid.NewGuid(), FirstEdgeId=edges[(tip+edges.Count-1)%edges.Count], SecondEdgeId=edges[tip] });
+        }
+        features.Validate(piece);
+        return features;
+    }
+    public PhysicalContourFeatures Clone() => new() { OwnerPieceId=OwnerPieceId, SourcePoints=[..SourcePoints], EdgeIds=[..EdgeIds], Notches=Notches.Select(n=>n.Clone()).ToList() };
+    public void Validate(PatternPiece piece)
+    {
+        if (piece.Id==Guid.Empty || OwnerPieceId!=piece.Id || !piece.Closed || piece.Points is null ||
+            SourcePoints is null || EdgeIds is null || Notches is null || piece.Points.Count<3 ||
+            piece.Points[0]==piece.Points[^1] || SourcePoints.Count!=piece.Points.Count || EdgeIds.Count!=piece.Points.Count ||
+            !SourcePoints.SequenceEqual(piece.Points) || EdgeIds.Any(id=>id==Guid.Empty) || EdgeIds.Distinct().Count()!=EdgeIds.Count ||
+            Notches.Count>EdgeIds.Count)
+            throw new InvalidDataException("Fiziksel kontur kimliği veya kaynak geometrisi geçersiz.");
+        double area;
+        try { Geometry.ValidateContour(piece.Points); area=Geometry.SignedArea(piece.Points); }
+        catch(ArgumentException ex) { throw new InvalidDataException("Fiziksel kontur basit ve geçerli olmalıdır.",ex); }
+        if(!double.IsFinite(area) || area==0)throw new InvalidDataException("Fiziksel kontur yönü belirsiz.");
+        var used=new HashSet<Guid>(); var usedEdges=new HashSet<Guid>();
+        foreach (var notch in Notches)
+        {
+            if (notch is null || notch.Id==Guid.Empty || !used.Add(notch.Id)) throw new InvalidDataException("Fiziksel çentik kimliği geçersiz.");
+            var i=EdgeIds.IndexOf(notch.FirstEdgeId);
+            if (i<0 || EdgeIds[(i+1)%EdgeIds.Count]!=notch.SecondEdgeId || !usedEdges.Add(notch.FirstEdgeId) || !usedEdges.Add(notch.SecondEdgeId)) throw new InvalidDataException("Fiziksel çentik kenarları bitişik değil veya başka bir çentikte kullanılıyor.");
+            var a=piece.Points[i]; var b=piece.Points[(i+1)%piece.Points.Count]; var c=piece.Points[(i+2)%piece.Points.Count];
+            var cross=(b.X-a.X)*(c.Y-a.Y)-(b.Y-a.Y)*(c.X-a.X);
+            var turn=Geometry.Orientation(a,b,c);
+            if (!a.IsFinite || !b.IsFinite || !c.IsFinite || !double.IsFinite(cross) || turn==0 || a==c || turn==Math.Sign(area))
+                throw new InvalidDataException("Fiziksel V çentiği geçersiz.");
+        }
+    }
+}
+
+public sealed class PhysicalVNotch
+{
+    [JsonRequired] public Guid Id { get; set; }
+    [JsonRequired] public Guid FirstEdgeId { get; set; }
+    [JsonRequired] public Guid SecondEdgeId { get; set; }
+    public PhysicalVNotch Clone() => new() { Id=Id, FirstEdgeId=FirstEdgeId, SecondEdgeId=SecondEdgeId };
+}
+
 public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -64,7 +123,9 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PhysicalContourFeatures? PhysicalFeatures { get; set; }
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList(), PhysicalFeatures=PhysicalFeatures?.Clone() };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down

@@ -150,6 +150,7 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
+        if(basePiece.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur kimlikleri serilemede korunamıyor.",nameof(basePiece));
         var grainline = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         if (string.IsNullOrWhiteSpace(sizeName) || sizeName.Trim().Length > 128) throw new ArgumentException("Beden adı gerekli ve en fazla 128 karakter olmalıdır.", nameof(sizeName));
@@ -268,6 +269,7 @@ public static class GradingEngine
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(basePiece);
+        if(basePiece.PhysicalFeatures is not null)throw new ArgumentException("Fiziksel kontur kimlikleri serilemede korunamıyor.",nameof(basePiece));
         _ = CopyGrainlineForReview(basePiece);
         ArgumentNullException.ThrowIfNull(increments);
         ArgumentNullException.ThrowIfNull(sizes);

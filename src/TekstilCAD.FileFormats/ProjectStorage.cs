@@ -54,7 +54,7 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
@@ -62,11 +62,12 @@ public static class ProjectStorage
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 ValidateSerializedGrainlines(root[1], version);
                 ValidateSerializedNotches(root[1],version);
+                ValidateSerializedPhysicalFeatures(root[1],version);
                 if (version < 3 && root[1].TryGetProperty("NestingSnapshot", out _))
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
                 var hasTrace=root[1].TryGetProperty("NestingSnapshot",out var nesting) && nesting.ValueKind==JsonValueKind.Object && nesting.TryGetProperty("RotationTrace",out _);
-                if((version==7)!=hasTrace)throw new InvalidDataException("Döndürme izi yalnız tam sürüm 7 projesinde bulunmalıdır.");
+                if((version==7 && !hasTrace) || (version<7 && hasTrace))throw new InvalidDataException("Döndürme izi için sürüm 7 gereklidir.");
                 if(hasTrace)
                 {
                     var raw=nesting.GetProperty("RotationTrace");
@@ -90,6 +91,7 @@ public static class ProjectStorage
                 ValidateSerializedIdentityAndPoints(root);
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
+                ValidateSerializedPhysicalFeatures(root,0);
                 ValidateSerializedImportProvenance(root, 0);
                 if (HasSerializedMetadata(root)) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 if (root.TryGetProperty("NestingSnapshot", out _)) throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
@@ -149,6 +151,23 @@ public static class ProjectStorage
             if (warning.ValueKind != JsonValueKind.String) throw new InvalidDataException("DXF kaynak uyarısı geçersiz.");
         foreach (var id in ids.EnumerateArray())
             if (id.ValueKind != JsonValueKind.String || !id.TryGetGuid(out _)) throw new InvalidDataException("DXF kaynak parça kimliği geçersiz.");
+    }
+    private static void ValidateSerializedPhysicalFeatures(JsonElement project,int version)
+    {
+        if(!project.TryGetProperty("Pieces",out var pieces) || pieces.ValueKind!=JsonValueKind.Array)return;
+        var found=false;
+        foreach(var piece in pieces.EnumerateArray())
+        {
+            if(piece.ValueKind!=JsonValueKind.Object || !piece.TryGetProperty("PhysicalFeatures",out var features))continue;
+            if(version<8 || features.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Fiziksel kontur bilgisi için sürüm 8 gereklidir.");
+            found=true;
+            if(!features.TryGetProperty("SourcePoints",out var points) || points.ValueKind!=JsonValueKind.Array || points.GetArrayLength()>MaximumPointsPerPiece)
+                throw new InvalidDataException("Fiziksel kontur noktaları eksik.");
+            foreach(var point in points.EnumerateArray())
+                if(point.ValueKind!=JsonValueKind.Object || !point.TryGetProperty("X",out var x) || x.ValueKind!=JsonValueKind.Number || !point.TryGetProperty("Y",out var y) || y.ValueKind!=JsonValueKind.Number || (point.TryGetProperty("IsFinite",out var finite) && finite.ValueKind!=JsonValueKind.True))
+                    throw new InvalidDataException("Fiziksel kontur koordinatları eksik.");
+        }
+        if(version==8 && !found)throw new InvalidDataException("Sürüm 8 fiziksel kontur bilgisi içermiyor.");
     }
     private static void ValidateSerializedNotches(JsonElement project,int version)
     {
@@ -372,7 +391,9 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.NestingSnapshot?.RotationTrace is not null
+        var text = project.Pieces.Any(p=>p.PhysicalFeatures is not null)
+            ? JsonSerializer.Serialize<object[]>([8, project], Options)
+            : project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
             : project.Pieces.Any(p=>p.Notches is not null)
             ? JsonSerializer.Serialize<object[]>([6, project], Options)
@@ -433,8 +454,13 @@ public static class ProjectStorage
 
     // DXF layer planning explicitly reports and replaces unsupported name characters;
     // the permanent project format must continue rejecting lossy UTF-16 strings.
-    internal static void ValidateForDxfExport(ProjectDocument project) => ValidateCore(project, allowInvalidPieceNameUtf16: true);
-    internal static void ValidateForDxfExport(ProjectDocument project,CancellationToken token) => ValidateCore(project,allowInvalidPieceNameUtf16:true,token);
+    internal static void ValidateForDxfExport(ProjectDocument project) => ValidateForDxfExport(project,CancellationToken.None);
+    internal static void ValidateForDxfExport(ProjectDocument project,CancellationToken token)
+    {
+        ValidateCore(project,allowInvalidPieceNameUtf16:true,token);
+        if(project.Pieces.Any(p=>p.PhysicalFeatures is not null))
+            throw new InvalidDataException("Fiziksel kontur ve çentik kimlikleri DXF dışa aktarımında korunamıyor; aktarım yapılmadı.");
+    }
 
     private static void ValidateCore(ProjectDocument project, bool allowInvalidPieceNameUtf16,CancellationToken token=default)
     {
@@ -443,7 +469,7 @@ public static class ProjectStorage
         project.ImportProvenance?.Validate();
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
         if (project.Pieces is null || project.Pieces.Count > MaximumPieces) throw new InvalidDataException("Geçersiz parça listesi.");
-        var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
+        var ids = new HashSet<Guid>(); var physicalIds=new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
         {
             token.ThrowIfCancellationRequested();
@@ -477,6 +503,10 @@ public static class ProjectStorage
                     catch(ArgumentOutOfRangeException ex) { throw new InvalidDataException("Çentik koordinatı geçersiz.",ex); }
                 }
             }
+            piece.PhysicalFeatures?.Validate(piece);
+            if(piece.PhysicalFeatures is { } physical)
+                foreach(var id in physical.EdgeIds.Concat(physical.Notches.Select(n=>n.Id)))
+                    if(!physicalIds.Add(id))throw new InvalidDataException("Fiziksel kenar ve çentik kimlikleri projede benzersiz olmalıdır.");
             if (piece.Id == Guid.Empty || !ids.Add(piece.Id)) throw new InvalidDataException("Parça kimlikleri benzersiz ve dolu olmalıdır.");
             total += piece.Points.Count;
             if (total > MaximumTotalPoints) throw new InvalidDataException("Proje toplam nokta sınırını aşıyor.");

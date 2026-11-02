@@ -69,6 +69,7 @@ public sealed class DocumentSession
         {
             action(Document);
             validate?.Invoke(Document);
+            ProtectPhysicalFeatures(before, Document);
             var changed = !ContentEquals(before, Document);
             // Clone even on no-op to detach lists/references supplied by the action or validator.
             var committed = changed ? Document.Clone() : before;
@@ -146,6 +147,31 @@ public sealed class DocumentSession
         (a is not null && b is not null && PointBitsEqual(a.Start,b.Start) && PointBitsEqual(a.End,b.End) && a.NeedsReview == b.NeedsReview);
     private static bool NotchesEqual(List<NotchMark>? a,List<NotchMark>? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(pair=>pair.First.VertexIndex==pair.Second.VertexIndex && PointBitsEqual(pair.First.Position,pair.Second.Position)));
+    private static bool PhysicalEqual(PhysicalContourFeatures? a,PhysicalContourFeatures? b) => ReferenceEquals(a,b) ||
+        (a is not null && b is not null && a.OwnerPieceId==b.OwnerPieceId && PointListsEqual(a.SourcePoints,b.SourcePoints) &&
+         a.EdgeIds.SequenceEqual(b.EdgeIds) && a.Notches.Count==b.Notches.Count && a.Notches.Zip(b.Notches).All(p=>p.First.Id==p.Second.Id && p.First.FirstEdgeId==p.Second.FirstEdgeId && p.First.SecondEdgeId==p.Second.SecondEdgeId));
+    private static void ProtectPhysicalFeatures(ProjectDocument before,ProjectDocument after)
+    {
+        var protectedPieces=before.Pieces.Where(p=>p.PhysicalFeatures is not null).ToArray();
+        var beforeIds=protectedPieces.Length>0 ? before.Pieces.Select(p=>p.Id).ToHashSet() : null;
+        if(beforeIds is not null && after.Pieces.Any(p=>!beforeIds.Contains(p.Id)))
+            throw new InvalidOperationException("Fiziksel kontur bilgisi bulunan projede yeni parça ekleme veya çoğaltma henüz desteklenmiyor.");
+        var afterById=protectedPieces.Length>0 ? after.Pieces.ToLookup(p=>p.Id) : null;
+        foreach(var old in protectedPieces)
+        {
+            var matches=afterById![old.Id].ToArray();
+            if(matches.Length!=1 || matches[0].Closed!=old.Closed || !PointListsEqual(old.Points,matches[0].Points) || !PhysicalEqual(old.PhysicalFeatures,matches[0].PhysicalFeatures))
+                throw new InvalidOperationException("Fiziksel kontur bilgisi bulunan parça bu işlemle değiştirilemez veya silinemez.");
+        }
+        var ids=new HashSet<Guid>();
+        foreach(var piece in after.Pieces)
+        {
+            if(piece.PhysicalFeatures is not { } features)continue;
+            features.Validate(piece);
+            foreach(var id in features.EdgeIds.Concat(features.Notches.Select(n=>n.Id)))
+                if(!ids.Add(id))throw new InvalidDataException("Fiziksel kenar ve çentik kimlikleri projede benzersiz olmalıdır.");
+        }
+    }
     private static bool NestingEquals(NestingSnapshot? a, NestingSnapshot? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.FabricWidth == b.FabricWidth && a.UsedLength == b.UsedLength &&
          BitConverter.DoubleToInt64Bits(a.Gap)==BitConverter.DoubleToInt64Bits(b.Gap) &&
@@ -164,7 +190,7 @@ public sealed class DocumentSession
         for (var i = 0; i < left.Pieces.Count; i++)
         {
             var a = left.Pieces[i]; var b = right.Pieces[i];
-            if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
+            if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches) || !PhysicalEqual(a.PhysicalFeatures,b.PhysicalFeatures)) return false;
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
