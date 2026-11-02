@@ -1,0 +1,504 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "opencv_version": "4.10.0",
+  "sample_count": 80,
+  "evaluated": 80,
+  "failures": [],
+  "method": "Post-hoc exploratory settings; annotation-derived ideal foreground seed and box; 40 shorts and 40 tshirts, seed 73114; polygon-rasterized IoU; no real user or automatic box detection",
+  "flood_lab_blur5_fixed50": {
+    "count": 80,
+    "mean": 0.6540123471288017,
+    "median": 0.7114141094069675,
+    "at_least_0_8": 31,
+    "below_0_5": 23
+  },
+  "watershed_blur5_radius5": {
+    "count": 80,
+    "mean": 0.5195068197565771,
+    "median": 0.5180746348839134,
+    "at_least_0_8": 0,
+    "below_0_5": 32
+  },
+  "images": [
+    {
+      "id": 98,
+      "category": "shorts",
+      "flood_iou": 0.9537494387067804,
+      "watershed_iou": 0.49853903693314633
+    },
+    {
+      "id": 69,
+      "category": "shorts",
+      "flood_iou": 0.723116066751478,
+      "watershed_iou": 0.5381699399120862
+    },
+    {
+      "id": 140,
+      "category": "shorts",
+      "flood_iou": 0.5421182159664955,
+      "watershed_iou": 0.5803904923599321
+    },
+    {
+      "id": 137,
+      "category": "shorts",
+      "flood_iou": 0.2084671595783665,
+      "watershed_iou": 0.5327481160814495
+    },
+    {
+      "id": 26,
+      "category": "shorts",
+      "flood_iou": 0.4177684870655866,
+      "watershed_iou": 0.4525285251443865
+    },
+    {
+      "id": 96,
+      "category": "shorts",
+      "flood_iou": 0.9347419390337846,
+      "watershed_iou": 0.43566176470588236
+    },
+    {
+      "id": 130,
+      "category": "shorts",
+      "flood_iou": 0.6602095275746195,
+      "watershed_iou": 0.6482959447799828
+    },
+    {
+      "id": 36,
+      "category": "shorts",
+      "flood_iou": 0.48590530554795325,
+      "watershed_iou": 0.4980210132412205
+    },
+    {
+      "id": 100,
+      "category": "shorts",
+      "flood_iou": 0.8436136336832174,
+      "watershed_iou": 0.556071376759031
+    },
+    {
+      "id": 179,
+      "category": "shorts",
+      "flood_iou": 0.9490521327014217,
+      "watershed_iou": 0.4592711309316424
+    },
+    {
+      "id": 81,
+      "category": "shorts",
+      "flood_iou": 0.9916684469130528,
+      "watershed_iou": 0.6371984649122807
+    },
+    {
+      "id": 70,
+      "category": "shorts",
+      "flood_iou": 0.7569528415961306,
+      "watershed_iou": 0.5958257713248639
+    },
+    {
+      "id": 104,
+      "category": "shorts",
+      "flood_iou": 0.38739220933690155,
+      "watershed_iou": 0.47282638621221296
+    },
+    {
+      "id": 156,
+      "category": "shorts",
+      "flood_iou": 0.4160367428954167,
+      "watershed_iou": 0.5312270051508462
+    },
+    {
+      "id": 170,
+      "category": "shorts",
+      "flood_iou": 0.7062690613351407,
+      "watershed_iou": 0.45898334794040313
+    },
+    {
+      "id": 4,
+      "category": "shorts",
+      "flood_iou": 0.9572866251824537,
+      "watershed_iou": 0.4213225371120108
+    },
+    {
+      "id": 31,
+      "category": "shorts",
+      "flood_iou": 0.9706190975865687,
+      "watershed_iou": 0.4334527418021494
+    },
+    {
+      "id": 52,
+      "category": "shorts",
+      "flood_iou": 0.9119146413752223,
+      "watershed_iou": 0.5543543543543543
+    },
+    {
+      "id": 142,
+      "category": "shorts",
+      "flood_iou": 0.6316841864716636,
+      "watershed_iou": 0.6212289984219809
+    },
+    {
+      "id": 131,
+      "category": "shorts",
+      "flood_iou": 0.7192867576688662,
+      "watershed_iou": 0.5400159051474841
+    },
+    {
+      "id": 15,
+      "category": "shorts",
+      "flood_iou": 0.49360060229625446,
+      "watershed_iou": 0.49274013402829486
+    },
+    {
+      "id": 2,
+      "category": "shorts",
+      "flood_iou": 0.38664899296734045,
+      "watershed_iou": 0.4297819919366881
+    },
+    {
+      "id": 135,
+      "category": "shorts",
+      "flood_iou": 0.5338884495511002,
+      "watershed_iou": 0.6144754286227895
+    },
+    {
+      "id": 146,
+      "category": "shorts",
+      "flood_iou": 0.9419727891156463,
+      "watershed_iou": 0.529490106544901
+    },
+    {
+      "id": 157,
+      "category": "shorts",
+      "flood_iou": 0.5419057756386524,
+      "watershed_iou": 0.5501429464844099
+    },
+    {
+      "id": 145,
+      "category": "shorts",
+      "flood_iou": 0.92077282564376,
+      "watershed_iou": 0.5538939636500612
+    },
+    {
+      "id": 155,
+      "category": "shorts",
+      "flood_iou": 0.5290817494847722,
+      "watershed_iou": 0.5412322274881517
+    },
+    {
+      "id": 12,
+      "category": "shorts",
+      "flood_iou": 0.9660084978755311,
+      "watershed_iou": 0.5401804302567661
+    },
+    {
+      "id": 143,
+      "category": "shorts",
+      "flood_iou": 0.9570274528207019,
+      "watershed_iou": 0.557174909764901
+    },
+    {
+      "id": 1,
+      "category": "shorts",
+      "flood_iou": 0.5703086235982932,
+      "watershed_iou": 0.4541176470588235
+    },
+    {
+      "id": 8,
+      "category": "shorts",
+      "flood_iou": 0.44396856418146285,
+      "watershed_iou": 0.4929973181218339
+    },
+    {
+      "id": 71,
+      "category": "shorts",
+      "flood_iou": 0.7072149880414563,
+      "watershed_iou": 0.4356364161432388
+    },
+    {
+      "id": 108,
+      "category": "shorts",
+      "flood_iou": 0.9661859168585626,
+      "watershed_iou": 0.4496565588875859
+    },
+    {
+      "id": 126,
+      "category": "shorts",
+      "flood_iou": 0.7056145675265554,
+      "watershed_iou": 0.45563112938943373
+    },
+    {
+      "id": 163,
+      "category": "shorts",
+      "flood_iou": 0.8223712127641517,
+      "watershed_iou": 0.5229723899913719
+    },
+    {
+      "id": 58,
+      "category": "shorts",
+      "flood_iou": 0.3450489115725167,
+      "watershed_iou": 0.45229822862675856
+    },
+    {
+      "id": 48,
+      "category": "shorts",
+      "flood_iou": 0.46736210445522103,
+      "watershed_iou": 0.4843620832185175
+    },
+    {
+      "id": 177,
+      "category": "shorts",
+      "flood_iou": 0.8797225086716041,
+      "watershed_iou": 0.48925654232350035
+    },
+    {
+      "id": 99,
+      "category": "shorts",
+      "flood_iou": 0.7994582941794263,
+      "watershed_iou": 0.5105219919110212
+    },
+    {
+      "id": 67,
+      "category": "shorts",
+      "flood_iou": 0.7081548854254051,
+      "watershed_iou": 0.5900951499933924
+    },
+    {
+      "id": 259,
+      "category": "tshirt",
+      "flood_iou": 0.09739278658040522,
+      "watershed_iou": 0.43255969836615
+    },
+    {
+      "id": 521,
+      "category": "tshirt",
+      "flood_iou": 0.0742397732054661,
+      "watershed_iou": 0.5940921052631579
+    },
+    {
+      "id": 305,
+      "category": "tshirt",
+      "flood_iou": 0.6153732373533182,
+      "watershed_iou": 0.6831666526598874
+    },
+    {
+      "id": 276,
+      "category": "tshirt",
+      "flood_iou": 0.9330404649512947,
+      "watershed_iou": 0.46794451725644387
+    },
+    {
+      "id": 232,
+      "category": "tshirt",
+      "flood_iou": 0.7505884056921461,
+      "watershed_iou": 0.5162590091368254
+    },
+    {
+      "id": 482,
+      "category": "tshirt",
+      "flood_iou": 0.7356348257791671,
+      "watershed_iou": 0.5759754577701083
+    },
+    {
+      "id": 510,
+      "category": "tshirt",
+      "flood_iou": 0.9346626058817931,
+      "watershed_iou": 0.538348623853211
+    },
+    {
+      "id": 492,
+      "category": "tshirt",
+      "flood_iou": 0.819390532280373,
+      "watershed_iou": 0.5371610751996256
+    },
+    {
+      "id": 205,
+      "category": "tshirt",
+      "flood_iou": 0.4806489775223931,
+      "watershed_iou": 0.4833446251129178
+    },
+    {
+      "id": 568,
+      "category": "tshirt",
+      "flood_iou": 0.5418659433221501,
+      "watershed_iou": 0.5121095594683938
+    },
+    {
+      "id": 254,
+      "category": "tshirt",
+      "flood_iou": 0.9566186026363017,
+      "watershed_iou": 0.531142044299939
+    },
+    {
+      "id": 517,
+      "category": "tshirt",
+      "flood_iou": 0.14621727683671948,
+      "watershed_iou": 0.5914619814314256
+    },
+    {
+      "id": 336,
+      "category": "tshirt",
+      "flood_iou": 0.035260433009099465,
+      "watershed_iou": 0.5311666666666667
+    },
+    {
+      "id": 319,
+      "category": "tshirt",
+      "flood_iou": 0.7526139182025969,
+      "watershed_iou": 0.620336822329576
+    },
+    {
+      "id": 436,
+      "category": "tshirt",
+      "flood_iou": 0.5235788937037981,
+      "watershed_iou": 0.5560661764705882
+    },
+    {
+      "id": 378,
+      "category": "tshirt",
+      "flood_iou": 0.970734675813233,
+      "watershed_iou": 0.5135000731314904
+    },
+    {
+      "id": 209,
+      "category": "tshirt",
+      "flood_iou": 0.15796019900497513,
+      "watershed_iou": 0.4680677650346393
+    },
+    {
+      "id": 579,
+      "category": "tshirt",
+      "flood_iou": 0.8725542041248017,
+      "watershed_iou": 0.41813788659793816
+    },
+    {
+      "id": 413,
+      "category": "tshirt",
+      "flood_iou": 0.9782958678671516,
+      "watershed_iou": 0.6377738995540043
+    },
+    {
+      "id": 296,
+      "category": "tshirt",
+      "flood_iou": 0.050452781371280724,
+      "watershed_iou": 0.47746893629246573
+    },
+    {
+      "id": 443,
+      "category": "tshirt",
+      "flood_iou": 0.9271711976487876,
+      "watershed_iou": 0.5073185637891521
+    },
+    {
+      "id": 460,
+      "category": "tshirt",
+      "flood_iou": 0.4689600106460842,
+      "watershed_iou": 0.44244639376218325
+    },
+    {
+      "id": 542,
+      "category": "tshirt",
+      "flood_iou": 0.10454445341751707,
+      "watershed_iou": 0.4935144927536232
+    },
+    {
+      "id": 331,
+      "category": "tshirt",
+      "flood_iou": 0.5875795459674144,
+      "watershed_iou": 0.5796961447264425
+    },
+    {
+      "id": 266,
+      "category": "tshirt",
+      "flood_iou": 0.33607950830391004,
+      "watershed_iou": 0.47983849824340624
+    },
+    {
+      "id": 404,
+      "category": "tshirt",
+      "flood_iou": 0.7508966416693837,
+      "watershed_iou": 0.46799116997792495
+    },
+    {
+      "id": 253,
+      "category": "tshirt",
+      "flood_iou": 0.9385992507221094,
+      "watershed_iou": 0.5103541012998656
+    },
+    {
+      "id": 481,
+      "category": "tshirt",
+      "flood_iou": 0.7091584469040986,
+      "watershed_iou": 0.5836281328696487
+    },
+    {
+      "id": 358,
+      "category": "tshirt",
+      "flood_iou": 0.9676294375391219,
+      "watershed_iou": 0.5139343873142478
+    },
+    {
+      "id": 316,
+      "category": "tshirt",
+      "flood_iou": 0.6910583489614663,
+      "watershed_iou": 0.5034347148803595
+    },
+    {
+      "id": 556,
+      "category": "tshirt",
+      "flood_iou": 0.9906905566537014,
+      "watershed_iou": 0.5648001154567759
+    },
+    {
+      "id": 461,
+      "category": "tshirt",
+      "flood_iou": 0.7136697719098363,
+      "watershed_iou": 0.5680481445549357
+    },
+    {
+      "id": 392,
+      "category": "tshirt",
+      "flood_iou": 0.9510225348443402,
+      "watershed_iou": 0.48618564897634664
+    },
+    {
+      "id": 274,
+      "category": "tshirt",
+      "flood_iou": 0.9152237996814963,
+      "watershed_iou": 0.492626404494382
+    },
+    {
+      "id": 277,
+      "category": "tshirt",
+      "flood_iou": 0.8838658568787959,
+      "watershed_iou": 0.4073856147618151
+    },
+    {
+      "id": 370,
+      "category": "tshirt",
+      "flood_iou": 0.14934036939313985,
+      "watershed_iou": 0.5198902606310014
+    },
+    {
+      "id": 539,
+      "category": "tshirt",
+      "flood_iou": 0.009900377451890353,
+      "watershed_iou": 0.5432999394876622
+    },
+    {
+      "id": 526,
+      "category": "tshirt",
+      "flood_iou": 0.9017112391435205,
+      "watershed_iou": 0.5332442786571227
+    },
+    {
+      "id": 220,
+      "category": "tshirt",
+      "flood_iou": 0.0697522816166884,
+      "watershed_iou": 0.5309183202584218
+    },
+    {
+      "id": 412,
+      "category": "tshirt",
+      "flood_iou": 0.9728395061728395,
+      "watershed_iou": 0.5331162300656099
+    }
+  ]
+}
