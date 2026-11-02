@@ -115,11 +115,13 @@ public sealed class HpglPreparedOutput
     private readonly Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes;
     private readonly Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews;
     internal HpglPreparedOutput(string text,double units,IReadOnlyList<HpglTurnReview.Report> reviews,
-        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews,HpglOutputBounds bounds)
-    { Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews;Bounds=bounds; }
+        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews,HpglOutputBounds bounds,HpglPieceInteraction.Result? interactions)
+    { Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews;Bounds=bounds;Interactions=interactions; }
     public string Text { get; }
     public double UnitsPerMillimeter { get; }
     public HpglOutputBounds Bounds { get; }
+    /// <summary>Informational bounded check of distinct quantized paths; null when reviews were not requested.</summary>
+    public HpglPieceInteraction.Result? Interactions { get; }
     /// <summary>Informational only; not a guarantee of geometry or machine compatibility.</summary>
     public IReadOnlyList<HpglTurnReview.Report> TurnReviews { get; }
 
@@ -314,7 +316,8 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         var text=b.ToString();cancellationToken.ThrowIfCancellationRequested();
         cancellationToken.ThrowIfCancellationRequested();
-        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews,new HpglOutputBounds(minX,minY,maxX,maxY));
+        var interactions=includeReviews ? HpglPieceInteraction.Analyze(geometryPreviews!.Values.ToArray(),cancellationToken:cancellationToken) : null;
+        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews,new HpglOutputBounds(minX,minY,maxX,maxY),interactions);
     }
 
     private static void ValidateQuantizedContour(PatternPiece piece, PlotPoint[] points, CancellationToken cancellationToken)

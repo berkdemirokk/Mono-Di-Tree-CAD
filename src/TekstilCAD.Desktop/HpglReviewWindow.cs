@@ -31,6 +31,7 @@ internal sealed class HpglReviewWindow : Window
     }
     internal TextBlock PageStatus { get; } = new() { Text="Parça seçin.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
     internal TextBlock BoundsSummary { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
+    internal string InteractionTextForVerification { get; private set; } = "";
     internal CheckBox ChangedOnlyFilter { get; } = new() { Content="Yalnız değişen parçaları göster",Margin=new Thickness(0,5,0,4) };
     internal Button MoreSamplesButton { get; } = new() { Content="Seçili parçayı ayrıntılı incele",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),IsEnabled=false };
     internal Button CancelReviewButton { get; } = new() { Content="İncelemeyi iptal et",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),Visibility=Visibility.Collapsed };
@@ -73,12 +74,21 @@ internal sealed class HpglReviewWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height=new GridLength(1,GridUnitType.Star) });
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });Content=root;
+        var interaction=prepared.Interactions;
+        var interactionHeadline=interaction?.Status switch {
+            HpglPieceInteraction.State.Found=>"Parçalar arası temas veya iç içe yerleşim bulundu; ayrıntı için kaydırın.",
+            HpglPieceInteraction.State.Clear=>"Parçalar arası temas veya iç içe yerleşim bulunmadı; sınırlar için kaydırın.",
+            _=>"Parçalar arası kontrol tamamlanmadı; ayrıntı için kaydırın." };
+        var interactionDetails=interaction?.Status==HpglPieceInteraction.State.Found
+            ? $"İlk bulunan çiftin parça kimlikleri: {interaction.FirstPiece:D} ve {interaction.SecondPiece:D}. " : "";
+        InteractionTextForVerification=interactionHeadline+" "+interactionDetails;
         var description=new TextBlock { TextWrapping=TextWrapping.Wrap,Text=
-            "Kapsamı okumak için kaydırın. Yalnız yerel dönüşler; makine doğrulanmadı.\n"+
+            interactionHeadline+"\n"+interactionDetails+
+            "Bu kontrol yalnız yuvarlanmış HPGL yollarını inceler; kaynak geometrisi, mesafe, üretim veya cihaz uygunluğu onayı değildir. İlk bulguda durur; tamamlanmamış kontrol bulgu yok anlamına gelmez.\n"+
             $"{rows.Length} {(simulation ? "seçili " : "")}parça · {rows.Sum(r=>(long)r.Examined)} dönüş incelendi · {rows.Sum(r=>(long)r.Changed)} dönüşün yön sınıfı değişti. "+
             (simulation ? $"Seçili parçalar {MeasurementInput.Format(simulationScale!.Value)} ölçek çarpanı uygulanarak incelendi. " : "")+
             $"{MeasurementInput.Format(prepared.UnitsPerMillimeter)} birim/mm; dosya koordinat adımı {MeasurementInput.Format(1/prepared.UnitsPerMillimeter)} mm.\n"+
-            "Bu inceleme yalnız kaynak noktalarındaki yerel dönüşleri karşılaştırır; tüm detayları veya yollar arası etkileşimleri değerlendirmez. "+
+            "Dönüş incelemesi yalnız kaynak noktalarındaki yerel dönüşleri karşılaştırır; tüm detayları değerlendirmez. "+
             "Sayımlar incelenen dönüşlerin tamamını kapsar; ilk raporda örnekler iş genelinde sınırlıdır. Seçili parçanın örneklerini sayfalar halinde inceleyebilirsiniz. "+
             "Değişiklikler yoğun eğrilerde zararsız olabilir; sıfır bulgu güvenlik veya ölçü doğruluğu onayı değildir. Bu rapor HPGL dosyasına eklenmez. Fiziksel makine uyumluluğu ve kalibrasyon doğrulanmadı."+
             (simulation ? " Fiziksel cihaza bağlantı kurulmaz veya iş gönderilmez." : ""),Margin=new Thickness(0,0,0,8) };

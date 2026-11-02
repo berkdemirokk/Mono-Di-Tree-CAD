@@ -3966,6 +3966,13 @@ internal static class DesktopVerification
         var prepared=HpglFormat.Prepare(document,40);var review=new HpglReviewWindow(studio,prepared,document.Pieces);
         Render(review,Path.ChangeExtension(reportPath,".hpgl-review-compact.png"),580,420);
         var root=(FrameworkElement)review.Content;var rows=review.ReportsGrid.Items.Cast<object>().ToArray();
+        Check(review.InteractionTextForVerification.Contains("bulunmadı"),"HPGL review reports completed distinct-path check for separate pieces",checks);
+        var overlapDocument=new ProjectDocument { Pieces=[Piece(0,false),Piece(5,false)] };
+        var overlapReview=new HpglReviewWindow(studio,HpglFormat.Prepare(overlapDocument,40),overlapDocument.Pieces);
+        Render(overlapReview,Path.ChangeExtension(reportPath,".hpgl-interaction-compact.png"),580,420);
+        Check(overlapReview.InteractionTextForVerification.Contains("bulundu") && overlapDocument.Pieces.All(p=>overlapReview.InteractionTextForVerification.Contains(p.Id.ToString("D"))),
+            "HPGL review identifies a distinct-path interaction by captured piece IDs",checks);
+        overlapReview.Close();
         Check(review.BoundsSummary.Text.Contains("X 0…1200") && review.BoundsSummary.Text.Contains("Y 0…400") &&
             review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),
             "Compact HPGL review exposes full encoded bounds without claiming machine compatibility",checks);
@@ -4117,8 +4124,8 @@ internal static class DesktopVerification
             finally { lateRelease.Set();PumpUntil(()=>cancelling.IsCompleted);review.AfterPieceReviewForVerification=null; }
         }
         finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
-        var description=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("Bu inceleme yalnız kaynak noktalarındaki"));
-        Check(description.Text.Contains("yollar arası") && description.Text.Contains("sıfır bulgu") && description.Text.Contains("Bu rapor HPGL dosyasına eklenmez") && description.Text.Contains("Fiziksel makine")
+        var description=Descendants<TextBlock>(root).Single(t=>t.Text.Contains("Dönüş incelemesi yalnız kaynak noktalarındaki"));
+        Check(description.Text.Contains("yuvarlanmış HPGL yollarını") && description.Text.Contains("tamamlanmamış kontrol") && description.Text.Contains("sıfır bulgu") && description.Text.Contains("Bu rapor HPGL dosyasına eklenmez") && description.Text.Contains("Fiziksel makine")
             && JsonSerializer.Serialize(document)==before && !review.IsVisible,
             "HPGL review states limited scope and remains hidden without modifying source",checks);
         review.Close();
@@ -4187,7 +4194,7 @@ internal static class DesktopVerification
         var simulationReview=new HpglReviewWindow(machine,simulated,document.Pieces,2);
         Render(simulationReview,Path.ChangeExtension(reportPath,".hpgl-simulator-review.png"),580,420);
         var simulationRoot=(FrameworkElement)simulationReview.Content;
-        var simulationDescription=Descendants<TextBlock>(simulationRoot).Single(t=>t.Text.Contains("Bu inceleme yalnız kaynak noktalarındaki"));
+        var simulationDescription=Descendants<TextBlock>(simulationRoot).Single(t=>t.Text.Contains("Dönüş incelemesi yalnız kaynak noktalarındaki"));
         Check(ReferenceEquals(simulationReview.Owner,machine) && Equals(simulationReview.ExportButton.Content,"Simülasyon dosyasını oluştur")
             && simulationDescription.Text.Contains("2 seçili parça") && simulationDescription.Text.Contains("2 ölçek çarpanı")
             && simulationDescription.Text.Contains("Fiziksel cihaza bağlantı kurulmaz") && simulationReview.ReportsGrid.Items.Count==2
