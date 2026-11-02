@@ -43,6 +43,7 @@ public sealed class OffsetLobedEmbeddedFeatureInvestigationTests(ITestOutputHelp
         if(!accepted){Assert.Empty(Value<IReadOnlyList<Point2>>(evaluation,"DiagnosticCandidate"));return;}
         var candidate=Value<IReadOnlyList<Point2>>(evaluation,"DiagnosticCandidate").ToArray();
         var precise=Measure(before,candidate,a,w,b,.000001,.000001);
+        var depthOnly=Measure(before,candidate,a,w,b,2,.001);
         var relaxed=Measure(before,candidate,a,w,b,2,2);
         static double Depth(Point2 p,Point2 q,Point2 r)
         {
@@ -52,7 +53,8 @@ public sealed class OffsetLobedEmbeddedFeatureInvestigationTests(ITestOutputHelp
         var inputDepth=Depth(before[a],before[w],before[b]);var outputDepth=Depth(candidate[a],candidate[w],candidate[b]);
         log.WriteLine($"selected feature tolerance .000001mm={precise.Ok}, reason={precise.Reason}; 2mm={relaxed.Ok}, reason={relaxed.Reason}");
         log.WriteLine($"mouth width source={inputWidth:G17}mm candidate={outputWidth:G17}mm change={outputWidth-inputWidth:G17}mm; depth source={inputDepth:G17}mm candidate={outputDepth:G17}mm change={outputDepth-inputDepth:G17}mm");
-        Assert.False(precise.Ok);Assert.True(relaxed.Ok,relaxed.Reason);
+        Assert.False(precise.Ok);Assert.False(depthOnly.Ok);Assert.Contains("depth",depthOnly.Reason);
+        Assert.True(relaxed.Ok,relaxed.Reason);
         Assert.InRange(outputWidth-inputWidth,-.166,-.165);
         Assert.InRange(outputDepth-inputDepth,-.014,-.013);
     }
