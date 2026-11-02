@@ -3990,8 +3990,11 @@ internal static class DesktopVerification
             "Interaction navigation selects the first captured piece even when names match",checks);
         overlapReview.Close();
         Check(review.BoundsSummary.Text.Contains("X 0…1200") && review.BoundsSummary.Text.Contains("Y 0…400") &&
-            review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),
+            review.BoundsSummary.Text.Contains("30 × 10 mm") && review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),
             "Compact HPGL review exposes full encoded bounds without claiming machine compatibility",checks);
+        var wideBounds=HpglReviewWindow.FormatOutputDimensions(new HpglOutputBounds(int.MinValue,0,int.MaxValue,40),40);
+        Check(wideBounds.Contains((4294967295d/40).ToString("G6",CultureInfo.CurrentCulture)) && wideBounds.Contains("× 1 mm"),
+            "HPGL output extent uses wide subtraction before conversion to millimeters",checks);
         var negativeDocument=new ProjectDocument { Pieces=[new PatternPiece { Name="negatif",Closed=false,Points=[new(-1,0),new(1,1)] }] };
         var negativeReview=new HpglReviewWindow(studio,HpglFormat.Prepare(negativeDocument,40),negativeDocument.Pieces);
         var negativeRoot=(FrameworkElement)negativeReview.Content;negativeRoot.Measure(new Size(580,420));negativeRoot.Arrange(new Rect(0,0,580,420));negativeRoot.UpdateLayout();

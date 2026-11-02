@@ -56,6 +56,16 @@ internal sealed class HpglReviewWindow : Window
     internal Button ExportButton { get; } = new() { Content="HPGL dosyasını oluştur",Padding=new Thickness(14,8,14,8) };
     private sealed record Row(string Name,string FullName,string Identity,int Examined,int Changed,int Flattened,int Introduced,int Reversed,HpglTurnReview.Report Report);
 
+    internal static string FormatOutputDimensions(HpglOutputBounds bounds,double unitsPerMillimeter)
+    {
+        // Widen before subtracting: the two valid integer coordinates can span
+        // more than Int32.MaxValue. These are encoded bounds, not physical output.
+        var width=((long)bounds.MaxX-bounds.MinX)/unitsPerMillimeter;
+        var height=((long)bounds.MaxY-bounds.MinY)/unitsPerMillimeter;
+        if(!double.IsFinite(width) || !double.IsFinite(height))return "Yaklaşık çıktı boyutu hesaplanamadı.";
+        return $"≈{width.ToString("G6",CultureInfo.CurrentCulture)} × {height.ToString("G6",CultureInfo.CurrentCulture)} mm";
+    }
+
     internal HpglReviewWindow(Window owner,HpglPreparedOutput prepared,IReadOnlyList<PatternPiece> sourcePieces,double? simulationScale=null)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(prepared);ArgumentNullException.ThrowIfNull(sourcePieces);
@@ -100,10 +110,12 @@ internal sealed class HpglReviewWindow : Window
         AutomationProperties.SetHelpText(descriptionViewer,"Tam kapsam ve uyarılar için bu alanı yön tuşlarıyla kaydırın.");
         Grid.SetRow(descriptionViewer,0);root.Children.Add(descriptionViewer);
         var bounds=prepared.Bounds;
-        BoundsSummary.Text=$"HPGL sınırı: X {bounds.MinX}…{bounds.MaxX}, Y {bounds.MinY}…{bounds.MaxY} birim. "+
+        BoundsSummary.Text=$"HPGL: X {bounds.MinX}…{bounds.MaxX}, Y {bounds.MinY}…{bounds.MaxY}; "+
+            FormatOutputDimensions(bounds,prepared.UnitsPerMillimeter)+". "+
             (bounds.HasNegativeCoordinates ? "Negatif koordinat; cihaz alanını kontrol edin." : "Cihaz doğrulanmadı.");
         BoundsSummary.Foreground=bounds.HasNegativeCoordinates ? StudioTheme.Warning : StudioTheme.Text;
         AutomationProperties.SetName(BoundsSummary,"Hazırlanan HPGL çıktı koordinat sınırları");
+        AutomationProperties.SetHelpText(BoundsSummary,"Yaklaşık en ve boy, dosyadaki tamsayı sınırlarının seçilen birim/mm değerine bölünmesiyle bulunur; fiziksel çıktı ölçüsü değildir.");
         Grid.SetRow(BoundsSummary,1);root.Children.Add(BoundsSummary);
         var actions=new StackPanel { Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         CancelButton.Click+=(_,_)=>DialogResult=false;ExportButton.Click+=(_,_)=>DialogResult=true;
