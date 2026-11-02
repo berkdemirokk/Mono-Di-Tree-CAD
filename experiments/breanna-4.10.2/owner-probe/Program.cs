@@ -29,6 +29,14 @@ foreach(var failedStage in new[]{"kill","wait","streams","dispose"}) {
     await Expect<SyntheticPreviewOwner.CleanupException>(async()=>await running);
     if(!visited.SequenceEqual(new[]{"cancel","stdin","kill","wait","streams","dispose"}))throw new Exception("Gerçek temizlik adımları eksik.");
 }
+// Cancellation is observed first; the delayed Send finally then reports a separate cleanup failure.
+var closeEntered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);var releaseClose=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);var waitStage=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+var delayedOwner=new SyntheticPreviewOwner { AfterSendCloseForTest=async()=>{closeEntered.TrySetResult();await releaseClose.Task;throw new System.ComponentModel.Win32Exception(5,"SYNTHETIC_LATE_CLOSE_SECRET");},AfterCleanupStageForTest=stage=>{if(stage=="wait")waitStage.TrySetResult();} };
+var delayedRun=delayedOwner.RunAsync(dotnet,runner,node,Script("process-test-fixtures/hang.mjs"),request,TimeSpan.FromSeconds(10));
+await closeEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));delayedOwner.Cancel();var delayedDispose=delayedOwner.DisposeAsync().AsTask();await waitStage.Task.WaitAsync(TimeSpan.FromSeconds(5));if(delayedDispose.IsCompleted)throw new Exception("Gecikmiş temizlik beklenmedi.");releaseClose.TrySetResult();
+try{await delayedDispose;throw new Exception("Gecikmiş stdin hatası kayboldu.");}catch(SyntheticPreviewOwner.CleanupException ex){if(ex.ToString().Contains("SYNTHETIC_LATE_CLOSE_SECRET",StringComparison.Ordinal))throw new Exception("Temizlik verisi sızdı.");}
+await Expect<SyntheticPreviewOwner.CleanupException>(async()=>await delayedRun);
+await Expect<SyntheticPreviewOwner.CleanupException>(async()=>await delayedOwner.DisposeAsync().AsTask());
 var id=Convert.ToHexString(SHA256.HashData(request)).ToLowerInvariant()[..32];var dir="work/breanna-probe/atomic-case-"+id;var cp=Path.Combine(dir,"child.pid");var rp=Path.Combine(dir,"root.pid");var release=Path.Combine(dir,"release");
 if(Directory.Exists(dir))throw new IOException("Sentinel çakışması");Directory.CreateDirectory(dir);
 var treeOwner=new SyntheticPreviewOwner();Process? child=null;try {
