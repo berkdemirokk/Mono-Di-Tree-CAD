@@ -4168,6 +4168,7 @@ internal static class DesktopVerification
             Descendants<TabControl>(root).Single().SelectedIndex=2;
             Render(review,Path.ChangeExtension(reportPath,".hpgl-length-review.png"),580,420);
             Check(review.GeometryText.Text.Contains("Kenar uzunlukları (yaklaşık, gösterim yuvarlanır)") && review.GeometryText.Text.Contains("En büyük mutlak kenar farkı") &&
+                review.GeometryText.Text.Contains("En büyük nokta kayması") && review.GeometryText.Text.Contains("cihaz doğruluğu değildir") &&
                 review.GeometryText.Text.Contains("fiziksel çıktı veya ayrıntı korunumu doğrulanmaz") && FullyVisible(review.GeometryText,root) && review.GeometryText.Focusable,
                 "HPGL review exposes captured length differences without claiming physical accuracy",checks);
             var displayedGeometry=(HpglPieceGeometryPreview?)typeof(HpglGeometryComparison).GetField("geometry",PrivateInstance)!.GetValue(review.GeometryComparison);

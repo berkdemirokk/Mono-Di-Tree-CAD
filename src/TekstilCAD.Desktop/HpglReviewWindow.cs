@@ -284,6 +284,13 @@ internal sealed class HpglReviewWindow : Window
     {
         var text=new StringBuilder("Koordinatlar ve farklar mm cinsindedir. Kaynak, simülasyonda seçilen ölçeğin uygulanmış halidir; HPGL dosya ızgarasındaki değerdir. Çizimdeki işaretler semboliktir; boyutları fiziksel ölçü değildir. Önizleme makine uygunluğu onayı değildir.");
         static string LengthValue(double value)=>value.ToString("G8",CultureInfo.CurrentCulture);
+        var displaced=geometry.Points[lengths.WorstDisplacementIndex];
+        text.Append("\nEn büyük nokta kayması (yaklaşık): nokta ").Append(lengths.WorstDisplacementIndex+1)
+            .Append("; uzaklık ").Append(LengthValue(lengths.WorstDisplacementMm)).Append(" mm; HPGL − kaynak X ")
+            .Append(LengthValue(lengths.WorstDisplacementXmm)).Append(" mm, Y ").Append(LengthValue(lengths.WorstDisplacementYmm))
+            .Append(" mm. Kaynak (").Append(LengthValue(displaced.SourceX)).Append(", ").Append(LengthValue(displaced.SourceY))
+            .Append(") mm; HPGL (").Append(LengthValue(displaced.PlotX/geometry.UnitsPerMillimeter)).Append(", ")
+            .Append(LengthValue(displaced.PlotY/geometry.UnitsPerMillimeter)).Append(") mm. Bu yalnız dosya ızgarası farkıdır, cihaz doğruluğu değildir.");
         text.Append("\nKenar uzunlukları (yaklaşık, gösterim yuvarlanır): ").Append(lengths.EdgeCount).Append(" kenar; kaynak toplam ").Append(LengthValue(lengths.SourceLengthMm))
             .Append(" mm; HPGL toplam ").Append(LengthValue(lengths.EncodedLengthMm)).Append(" mm; toplam fark ")
             .Append(LengthValue(lengths.EncodedLengthMm-lengths.SourceLengthMm)).Append(" mm.")

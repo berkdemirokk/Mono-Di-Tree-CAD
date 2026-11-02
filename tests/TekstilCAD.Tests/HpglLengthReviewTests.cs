@@ -6,6 +6,22 @@ namespace TekstilCAD.Tests;
 public class HpglLengthReviewTests
 {
     [Fact]
+    public void PointShiftIsReportedEvenWhenPathLengthIsUnchanged()
+    {
+        var piece=new PatternPiece { Closed=false,Points=[new(.25,.25),new(10.25,.25)] };
+        var result=HpglLengthReview.Analyze(HpglFormat.Prepare(new ProjectDocument { Pieces=[piece] },1).GetPieceGeometry(piece.Id));
+        Assert.Equal(result.SourceLengthMm,result.EncodedLengthMm,12);
+        Assert.Equal(0,result.WorstDisplacementIndex);Assert.Equal(-.25,result.WorstDisplacementXmm,12);Assert.Equal(-.25,result.WorstDisplacementYmm,12);
+        Assert.Equal(Math.Sqrt(.125),result.WorstDisplacementMm,12);
+    }
+    [Fact]
+    public void NegativeCoordinateAndUnshiftedEndpointAreComparedInOutputMillimeters()
+    {
+        var piece=new PatternPiece { Closed=false,Points=[new(0,0),new(-10.125,.125)] };
+        var result=HpglLengthReview.Analyze(HpglFormat.Prepare(new ProjectDocument { Pieces=[piece] },2).GetPieceGeometry(piece.Id));
+        Assert.Equal(1,result.WorstDisplacementIndex);Assert.Equal(.125,result.WorstDisplacementXmm,12);Assert.Equal(-.125,result.WorstDisplacementYmm,12);
+    }
+    [Fact]
     public void CollinearEdgesCanChangeLengthWithoutChangingTurnClass()
     {
         var piece=new PatternPiece { Closed=false,Points=[new(.49,0),new(10.49,0),new(20.51,0)] };
