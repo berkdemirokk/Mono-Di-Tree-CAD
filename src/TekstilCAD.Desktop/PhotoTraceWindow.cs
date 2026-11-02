@@ -19,7 +19,7 @@ internal sealed class PhotoTraceWindow : Window
     private readonly int sourceOrientation;
     private readonly TextBox xInput=new() { Width=60,MaxLength=24 },yInput=new() { Width=60,MaxLength=24 };
     internal long DraftRevision { get; private set; }
-    internal bool HasDraft => CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
+    internal bool HasDraft => PlaneSettings is not null || CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
     internal PhotoTraceCanvas CanvasForVerification { get; } = new();
     internal TextBox LengthForVerification { get; } = new() { Width=85,MaxLength=32 };
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };
@@ -27,6 +27,8 @@ internal sealed class PhotoTraceWindow : Window
     internal Func<string,bool>? ConfirmForVerification { get; set; }
     internal Action<Guid>? OpenClosureForVerification { get; set; }
     internal Func<BitmapSource,Point,Point,CancellationToken,IReadOnlyList<Point>?>? ComputePathForVerification { get; set; }
+    internal (double Width,double Height)? PlaneSettings { get; private set; }
+    private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
     private bool allowClose,closed;
     private CancellationTokenSource? pathCancellation;
 
@@ -42,10 +44,10 @@ internal sealed class PhotoTraceWindow : Window
         var apply=Action("CAD'e taslak ekle",TryApply);apply.Background=DesignRequestWindow.Accent;apply.Foreground=DesignRequestWindow.Surface;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         Action("Kapat",Close);
-        var intro=new TextBlock { Text="Önce fotoğrafta bilinen mesafenin iki ucunu, sonra çizginin en az iki noktasını seçin. Görüntü perspektifi ve dökümü ölçüleri değiştirebilir; sonuç açık bir taslaktır, doğrulanmış kalıp değildir.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,4) };
+        var intro=new TextBlock { Text="Tek mesafede iki referans ucu, düzlem ayarında dört köşe seçin; ardından çizgi noktalarını işaretleyin. Perspektif, kumaş dökümü ve ölçüler ayrıca kontrol edilmelidir; sonuç açık taslaktır.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,4) };
         DockPanel.SetDock(intro,Dock.Top);root.Children.Add(intro);
         var input=new WrapPanel();DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
-        input.Children.Add(new Label { Content="İki uç arası bilinen mesafe (mm)",Target=LengthForVerification,Foreground=DesignRequestWindow.Ink });AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
+        referenceLabel.Content="İki uç arası bilinen mesafe (mm)";referenceLabel.Target=LengthForVerification;input.Children.Add(referenceLabel);AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
         input.Children.Add(new Label { Content="Piksel X",Target=xInput,Foreground=DesignRequestWindow.Ink });AutomationProperties.SetName(xInput,"Seçilecek piksel X");input.Children.Add(xInput);
         input.Children.Add(new Label { Content="Y",Target=yInput,Foreground=DesignRequestWindow.Ink });AutomationProperties.SetName(yInput,"Seçilecek piksel Y");input.Children.Add(yInput);
         var addPoint=new Button { Content="Nokta ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(addPoint);
@@ -53,6 +55,9 @@ internal sealed class PhotoTraceWindow : Window
         var checkMeasure=new Button { Content="Ölçü karşılaştır…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(checkMeasure);
         AutomationProperties.SetHelpText(checkMeasure,"Taslak noktaları arasındaki fotoğraf mesafesini ayrı bilinen bir ölçüyle karşılaştırır; proje değişmez ve sonuç kaydedilmez.");
         checkMeasure.Click+=(_,_)=>CreateMeasurementCheck()?.ShowDialog();
+        var planeSetup=new Button { Content="Düzlem ayarı…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(planeSetup);
+        AutomationProperties.SetHelpText(planeSetup,"Noktalar temizken dört köşeli düzlem referansını veya tek mesafe modunu seçer.");
+        planeSetup.Click+=(_,_)=>OpenPlaneSetup();
         var viewActions=new WrapPanel { Margin=new Thickness(0,2,0,2) };DockPanel.SetDock(viewActions,Dock.Top);root.Children.Add(viewActions);
         Button ViewAction(string text,string help,Action action) { var button=new Button { Content=text,Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };AutomationProperties.SetHelpText(button,help);button.Click+=(_,_)=> { action();UpdateStatus(); };viewActions.Children.Add(button);return button; }
         ViewAction("Yakınlaştır","Son seçilen veya klavye imlecindeki noktaya yakınlaştırır.",()=>CanvasForVerification.ZoomAtCursor(2));
@@ -83,16 +88,44 @@ internal sealed class PhotoTraceWindow : Window
         Closing+=OnClosing;
         workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
     }
+    private void OpenPlaneSetup()
+    {
+        if(CanvasForVerification.Points.Count!=0) { StatusForVerification.Text="Önce noktaları temizleyin; referans türü mevcut noktalara yeniden yorumlanmaz.";return; }
+        var revision=DraftRevision;var dialog=new PhotoPlaneSetupWindow(this,PlaneSettings?.Width,PlaneSettings?.Height);
+        if(dialog.ShowDialog()!=true)return;
+        if(DraftRevision!=revision || CanvasForVerification.Points.Count!=0) { StatusForVerification.Text="Taslak değişti; referans ayarı uygulanmadı.";return; }
+        SetPlaneSettings(dialog.UsePlane ? (dialog.WidthMm,dialog.HeightMm) : null);
+    }
+    internal void SetPlaneSettings((double Width,double Height)? value)
+    {
+        if(CanvasForVerification.Points.Count!=0)throw new InvalidOperationException("Referans türü için önce noktaları temizleyin.");
+        if(value is null && PlaneSettings is null) { UpdateStatus();return; }
+        if(value is { } p && (!double.IsFinite(p.Width) || !double.IsFinite(p.Height) || p.Width<=0 || p.Height<=0 || p.Width>Geometry.MaxCoordinate || p.Height>Geometry.MaxCoordinate))
+            throw new ArgumentOutOfRangeException(nameof(value));
+        CanvasForVerification.SetReferencePointCount(value is null ? 2 : 4);PlaneSettings=value;
+        LengthForVerification.IsReadOnly=value is not null;LengthForVerification.Text=value is { } dimensions ? MeasurementInput.Format(dimensions.Width) : "";
+        referenceLabel.Content=value is null ? "İki uç arası bilinen mesafe (mm)" : "Düzlem referans eni (mm)";
+        AutomationProperties.SetName(LengthForVerification,value is null ? "Bilinen referans mesafesi milimetre" : "Düzlem referans eni milimetre, ayarlarda değiştirilir");
+        DraftRevision++;UpdateStatus();
+    }
     internal PhotoTraceCheckWindow? CreateMeasurementCheck()
     {
         try
         {
             var points=CanvasForVerification.Points.ToArray();
-            if(points.Length<3) { StatusForVerification.Text="Ölçü karşılaştırmak için referans uçlarını ve en az bir başka nokta seçin.";return null; }
+            var referenceCount=CanvasForVerification.ReferencePointCount;
+            if(points.Length<referenceCount+1) { StatusForVerification.Text="Ölçü karşılaştırmak için referans noktalarını ve en az bir başka nokta seçin.";return null; }
             if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm)) { StatusForVerification.Text="Önce bilinen referans mesafesini girin.";return null; }
             var a=new Point2(points[0].X,points[0].Y);var b=new Point2(points[1].X,points[1].Y);
-            _=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,a,b,mm,[a,b]);
-            return new PhotoTraceCheckWindow(this,image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,mm,points);
+            PhotoPlaneCalibration? plane=null;
+            if(PlaneSettings is { } settings)
+            {
+                if(referenceCount!=4 || BitConverter.DoubleToInt64Bits(mm)!=BitConverter.DoubleToInt64Bits(settings.Width))throw new InvalidOperationException("Düzlem eni ayarla uyuşmuyor.");
+                plane=new PhotoPlaneCalibration { Corners=points.Take(4).Select(q=>new Point2(q.X,q.Y)).ToList(),WidthMm=settings.Width,HeightMm=settings.Height };
+                _=PhotoPlaneRectification.Convert(image.PixelWidth,image.PixelHeight,plane.Corners,plane.WidthMm,plane.HeightMm,[a,b]);
+            }
+            else _=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,a,b,mm,[a,b]);
+            return new PhotoTraceCheckWindow(this,image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,mm,points,plane);
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { StatusForVerification.Text="Ölçü karşılaştırması açılamadı: "+ex.Message;return null; }
@@ -102,7 +135,7 @@ internal sealed class PhotoTraceWindow : Window
     {
         if(pathCancellation is not null) { StatusForVerification.Text="Yol araması zaten sürüyor.";return; }
         var points=CanvasForVerification.Points;
-        if(points.Count<4 || CanvasForVerification.Image is not BitmapSource source) { StatusForVerification.Text="Önce referans uçlarını ve en az iki çizgi noktası seçin.";return; }
+        if(points.Count<CanvasForVerification.ReferencePointCount+2 || CanvasForVerification.Image is not BitmapSource source) { StatusForVerification.Text="Önce referans noktalarını ve en az iki çizgi noktası seçin.";return; }
         var start=points[^2];var end=points[^1];var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
         StatusForVerification.Text="Son iki nokta arasında yol aranıyor; iptal edebilirsiniz.";
         try
@@ -123,29 +156,45 @@ internal sealed class PhotoTraceWindow : Window
     private void UpdateStatus()
     {
         var n=CanvasForVerification.Points.Count;
-        StatusForVerification.Text=$"Önizleme: {image.PixelWidth} × {image.PixelHeight} piksel; yakınlaştırma {MeasurementInput.Format(CanvasForVerification.Zoom)}×. "+(n<2 ? $"Referans ucu seçin: {n}/2." : $"Referans uçları hazır; çizgi noktası: {n-2}. İlk referans CAD'de 0,0 olur; Y aşağı artar.");
+        var references=CanvasForVerification.ReferencePointCount;
+        StatusForVerification.Text=$"Önizleme: {image.PixelWidth} × {image.PixelHeight} piksel; yakınlaştırma {MeasurementInput.Format(CanvasForVerification.Zoom)}×. "+(n<references ? $"{(references==4 ? "Düzlem köşesi" : "Referans ucu")} seçin: {n}/{references}." : $"Referans hazır; çizgi noktası: {n-references}. İlk referans CAD'de 0,0 olur; Y aşağı artar.");
     }
     internal void TryApply()
     {
         try
         {
             var p=CanvasForVerification.Points;
-            if(p.Count<4) { StatusForVerification.Text="İki referans ucu ve en az iki çizgi noktası seçin.";return; }
+            var referenceCount=CanvasForVerification.ReferencePointCount;
+            if(p.Count<referenceCount+2) { StatusForVerification.Text="Referans noktalarını ve en az iki çizgi noktası seçin.";return; }
             var reviewClosure=ReviewClosureForVerification.IsChecked==true;
-            if(reviewClosure && p.Count<5) { StatusForVerification.Text="Kapanışı incelemek için en az üç çizgi noktası seçin.";return; }
+            if(reviewClosure && p.Count<referenceCount+3) { StatusForVerification.Text="Kapanışı incelemek için en az üç çizgi noktası seçin.";return; }
             if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0) { StatusForVerification.Text="Fotoğraf kaynak kimliği bulunamadı; taslak eklenmedi.";return; }
             if(!MeasurementInput.TryParseMillimeters(LengthForVerification.Text,out var mm) || mm<=0) { StatusForVerification.Text="Bilinen mesafeyi pozitif milimetre olarak girin.";return; }
             var referenceStart=new Point2(p[0].X,p[0].Y);var referenceEnd=new Point2(p[1].X,p[1].Y);
-            var pixels=p.Skip(2).Select(q=>new Point2(q.X,q.Y)).ToList();
-            var trace=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,referenceStart,referenceEnd,mm,pixels);
-            var history=new PhotoTraceProvenance { AlgorithmVersion=1,SourceSha256=sourceSha256,SourceByteLength=sourceByteLength,SourceOrientation=sourceOrientation,SourceWidth=sourceWidth,SourceHeight=sourceHeight,PreviewWidth=image.PixelWidth,PreviewHeight=image.PixelHeight,ReferenceStart=referenceStart,ReferenceEnd=referenceEnd,ReferenceLengthMm=mm,TracePixels=pixels,GeneratedPoints=trace.ToList() };
+            var pixels=p.Skip(referenceCount).Select(q=>new Point2(q.X,q.Y)).ToList();
+            PhotoPlaneCalibration? plane=null;IReadOnlyList<Point2> trace;
+            if(PlaneSettings is { } settings)
+            {
+                if(referenceCount!=4 || BitConverter.DoubleToInt64Bits(mm)!=BitConverter.DoubleToInt64Bits(settings.Width))throw new InvalidOperationException("Düzlem eni ayarla uyuşmuyor; yeniden seçin.");
+                plane=new PhotoPlaneCalibration { Corners=p.Take(4).Select(q=>new Point2(q.X,q.Y)).ToList(),WidthMm=settings.Width,HeightMm=settings.Height };
+                trace=PhotoPlaneRectification.Convert(image.PixelWidth,image.PixelHeight,plane.Corners,plane.WidthMm,plane.HeightMm,pixels);
+            }
+            else
+            {
+                if(referenceCount!=2)throw new InvalidOperationException("Referans türü uyuşmuyor; yeniden seçin.");
+                trace=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,referenceStart,referenceEnd,mm,pixels);
+            }
+            var history=new PhotoTraceProvenance { AlgorithmVersion=plane is null ? 1 : 2,SourceSha256=sourceSha256,SourceByteLength=sourceByteLength,SourceOrientation=sourceOrientation,SourceWidth=sourceWidth,SourceHeight=sourceHeight,PreviewWidth=image.PixelWidth,PreviewHeight=image.PixelHeight,ReferenceStart=referenceStart,ReferenceEnd=referenceEnd,ReferenceLengthMm=mm,PlaneCalibration=plane,TracePixels=pixels,GeneratedPoints=trace.ToList() };
             LargeOpenPathValidator.Validate(trace);
             if(workspace.PhotoTraceProblem(stamp) is { } stale) { StatusForVerification.Text=stale;return; }
             var distance=Math.Sqrt(Math.Pow(p[1].X-p[0].X,2)+Math.Pow(p[1].Y-p[0].Y,2));
             var pendingSuggestion=CanvasForVerification.PathSuggestion is not null || CanvasForVerification.EdgeSuggestion is not null
                 ? "\n\nUygulanmamış mavi öneri çizgiye dahil edilmeyecek." : "";
             var closureNotice=reviewClosure ? "\n\nArdından kapanış incelemesi açılacak. Kapalı parça ayrıca onaylanır; fotoğraf geçmişi açık kaynakta kalır." : "";
-            var question=$"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin.\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Perspektif, gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Fotoğraf özeti, boyutlar, işaretler ve mesafe proje biçimi 8 ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice} Devam edilsin mi?";
+            var calibrationNotice=plane is null ? $"Referans uçları önizlemede {MeasurementInput.Format(distance)} piksel aralığında. Kısa bir referans, nokta seçme hatasını büyütebilir; mümkünse daha uzun bir referans seçin." :
+                $"Düzlem referansı {MeasurementInput.Format(plane.WidthMm)} × {MeasurementInput.Format(plane.HeightMm)} mm. Dört köşe ve çizgi aynı düzlemde olmalı; seçilen köşeler doğru sırada ve ölçüler gerçek olmalıdır. Lens bozulması ve kumaş dökümü düzeltilmez.";
+            var version=plane is null ? 8 : 9;
+            var question=$"{calibrationNotice}\n\nSeçilen ve kabul edilen noktalardan oluşan açık çizgi CAD'e taslak olarak eklenecek. Gerçek beden, görünmeyen parçalar ve üretim uygunluğu doğrulanmadı. Fotoğraf özeti, boyutlar, işaretler ve referans proje biçimi {version} ile kaydedilir; fotoğrafın kendisi eklenmez. Önceki sürümler dosyayı açamaz.{pendingSuggestion}{closureNotice} Devam edilsin mi?";
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }

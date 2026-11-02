@@ -1020,6 +1020,7 @@ internal static class DesktopVerification
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
             VerifyPhotoTrace(reportPath,checks);
+            VerifyPhotoPlaneWorkflow(reportPath,checks);
             VerifyArcStartPoint(studio,checks);
             VerifyCoordinatePreviewCursor(studio,checks);
             VerifyOpenPolylineDrawing(studio,work,checks);
@@ -9404,6 +9405,69 @@ internal static class DesktopVerification
             typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
         }
         VerifyPhotoTraceOwnerClose(reportPath,checks);
+    }
+
+    private static void VerifyPhotoPlaneWorkflow(string reportPath,List<string> checks)
+    {
+        var session=new DocumentSession(new ProjectDocument { Name="Düzlem fotoğraf testi" });var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+        var bitmap=BitmapSource.Create(100,100,96,96,PixelFormats.Bgra32,null,new byte[100*100*4],400);bitmap.Freeze();
+        byte[] photo;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);photo=stream.ToArray(); }
+        var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length);_ = new WindowInteropHelper(trace).EnsureHandle();
+        var wasClosed=false;trace.Closed+=(_,_)=>wasClosed=true;
+        try
+        {
+            var setup=new PhotoPlaneSetupWindow(trace);try
+            {
+                Render(setup,Path.ChangeExtension(reportPath,".photo-plane-setup.png"),460,360);
+                Check(!setup.TryRead(out _,out _) && setup.Error.Text.Length>0,"Plane setup rejects missing dimensions",checks);
+                setup.WidthInput.Text="200,5";setup.HeightInput.Text="100";
+                Check(setup.TryRead(out var width,out var height) && width==200.5 && height==100,"Plane setup accepts localized positive dimensions",checks);
+            }
+            finally { setup.Close(); }
+            trace.LengthForVerification.Text="17";trace.SetPlaneSettings(null);
+            Check(trace.LengthForVerification.Text=="17","Selecting the existing single-distance mode preserves its entered value",checks);
+            trace.SetPlaneSettings((200,100));var canvas=trace.CanvasForVerification;
+            Check(canvas.ReferencePointCount==4 && trace.HasDraft && trace.LengthForVerification.IsReadOnly,"Plane mode uses four reference corners and retains its settings",checks);
+            foreach(var p in new[] { new Point(10,10),new Point(90,10),new Point(90,90),new Point(10,90) })canvas.TryAddPixelPoint(p);
+            Check(!canvas.SuggestLastEdge(),"Plane reference corners cannot be changed by the trace edge suggestion",checks);
+            try { trace.SetPlaneSettings(null);throw new InvalidOperationException("Changed calibration with points present."); }
+            catch(InvalidOperationException) { Check(canvas.ReferencePointCount==4 && canvas.Points.Count==4,"Changing calibration with existing points is blocked",checks); }
+            canvas.TryAddPixelPoint(new Point(5,5));canvas.TryAddPixelPoint(new Point(20,20));trace.ConfirmForVerification=_=>throw new InvalidOperationException("Invalid plane reached confirmation.");
+            var original=workspace.Document.Clone();trace.TryApply();
+            Check(DocumentSession.ContentEquals(original,workspace.Document) && trace.StatusForVerification.Text.Contains("dışında"),"Plane rejects trace points outside the reference without modifying the project",checks);
+            canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(90,10),new Point(90,90),new Point(10,90),new Point(20,20),new Point(80,20),new Point(80,80) })canvas.TryAddPixelPoint(p);
+            var measurement=trace.CreateMeasurementCheck() ?? throw new InvalidOperationException("Plane measurement window missing: "+trace.StatusForVerification.Text);
+            try
+            {
+                measurement.FirstForVerification.SelectedIndex=4;measurement.SecondForVerification.SelectedIndex=5;measurement.KnownForVerification.Text="150";measurement.Calculate();
+                Check(measurement.LastResultForVerification is { } result && Math.Abs(result.EstimatedMm-150)<1e-8 && Math.Abs(result.DifferenceMm)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
+                    "Independent photo measurement uses the selected plane transform without changing the project",checks);
+                measurement.FirstForVerification.SelectedIndex=0;measurement.SecondForVerification.SelectedIndex=2;measurement.Calculate();
+                Check(measurement.LastResultForVerification is null && measurement.ResultForVerification.Text.Contains("referans köşesini"),"Plane measurement rejects two reference corners as a tautological check",checks);
+            }
+            finally { measurement.Close(); }
+            Render(trace,Path.ChangeExtension(reportPath,".photo-plane-trace.png"),560,480);
+            var expected=canvas.Points.ToArray();var versionWarning=false;
+            trace.ConfirmForVerification=message=> { versionWarning=message.Contains("sürüm 9") || message.Contains("biçimi 9");return false; };trace.TryApply();
+            Check(versionWarning && !wasClosed && canvas.Points.SequenceEqual(expected) && DocumentSession.ContentEquals(original,workspace.Document),"Declining plane trace preserves all points and discloses version nine",checks);
+            trace.ConfirmForVerification=_=> { canvas.TryAddPixelPoint(new Point(60,60));return true; };trace.TryApply();
+            Check(!wasClosed && DocumentSession.ContentEquals(original,workspace.Document) && trace.StatusForVerification.Text.Contains("değişti"),"Plane changes during confirmation invalidate the prepared trace",checks);
+            canvas.UndoPoint();trace.ConfirmForVerification=_=>true;trace.TryApply();
+            var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);var evidence=AssertSingle(added.PhotoTraceHistory!);
+            Check(wasClosed && !draft.Closed && draft.Points.Count==3 && Math.Abs(draft.Points[0].X-25)<1e-8 && Math.Abs(draft.Points[0].Y-12.5)<1e-8 &&
+                Math.Abs(draft.Points[2].X-175)<1e-8 && Math.Abs(draft.Points[2].Y-87.5)<1e-8 && evidence.AlgorithmVersion==2 && evidence.PlaneCalibration is { Corners.Count:4,WidthMm:200,HeightMm:100 },
+                "Accepted planar photo trace produces scaled draft and full plane history",checks);
+            var path=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-plane-"+Guid.NewGuid().ToString("N")+".tcad");
+            try { ProjectStorage.Save(added,path);using var json=JsonDocument.Parse(File.ReadAllBytes(path));
+                Check(json.RootElement[0].GetInt32()==9 && DocumentSession.ContentEquals(added,ProjectStorage.Load(path)),"Planar trace saves and reloads as version nine",checks); }
+            finally { if(File.Exists(path))File.Delete(path); }
+            Check(session.Undo() && DocumentSession.ContentEquals(original,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),"Planar draft and its history undo and redo together",checks);
+        }
+        finally
+        {
+            if(!wasClosed) { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
+            typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close();
+        }
     }
 
     private sealed class PhotoTraceCloseBarrierWriter(RecoveryStore store) : IRecoveryWriter
