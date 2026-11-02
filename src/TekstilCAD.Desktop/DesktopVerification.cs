@@ -9407,6 +9407,9 @@ internal static class DesktopVerification
                     "Batch search previews each trace interval without changing points and discloses the open end",checks);
                 Check(trace.StatusForVerification.Text.Contains("Piksel geometrisi kontrolünde sorun bulunmadı") && trace.StatusForVerification.Text.Contains("üretim onayı değildir"),
                     "Noncrossing photo path preview receives a limited pixel geometry check",checks);
+                var previewCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>previewCheck.IsCompleted);previewCheck.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("Yol önerisi") && trace.StatusForVerification.Text.Contains("sorun bulunmadı"),
+                    "Explicit pixel review checks a pending proposal without applying it",checks);
                 var preview=canvas.PathSuggestion!.ToArray();var inspectionRevision=trace.DraftRevision;
                 Check(canvas.TryMapPixelToView(new Point(15,11),canvas.RenderSize,out var inspectView) && canvas.TryInspectAtView(inspectView,canvas.RenderSize),
                     "Photo inspection selects a displayed position without adding a point",checks);
@@ -9498,6 +9501,32 @@ internal static class DesktopVerification
                     "Zooming an applied crossing retains its warning",checks);
                 canvas.ResetZoom();Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom) && canvas.TopologyWarningEdgesForVerification is null,
                     "Undoing an applied crossing removes its obsolete highlight",checks);
+                canvas.TryAddPixelPoint(new Point(15,5));
+                var currentCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>currentCheck.IsCompleted);currentCheck.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is null && canvas.TopologyWarningEdgesForVerification is { Length:4 } && trace.StatusForVerification.Text.Contains("turuncu"),
+                    "Explicit pixel review finds a crossing in the current manual trace",checks);
+                Check(canvas.TryMoveTracePoint(5,new Point(30,20)) && canvas.TopologyWarningEdgesForVerification is null,
+                    "Editing the manual trace clears its previous diagnostic",checks);
+                currentCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>currentCheck.IsCompleted);currentCheck.GetAwaiter().GetResult();
+                Check(canvas.TopologyWarningEdgesForVerification is null && trace.StatusForVerification.Text.Contains("sorun bulunmadı") && trace.StatusForVerification.Text.Contains("üretim onayı değildir"),
+                    "Explicit pixel review checks the corrected current trace without claiming production approval",checks);
+                using(var checkReached=new ManualResetEventSlim())using(var checkRelease=new ManualResetEventSlim())
+                {
+                    trace.BeforeTopologyReviewForVerification=token=> { checkReached.Set();checkRelease.Wait(token); };
+                    var staleCheck=trace.StartTraceTopologyReviewAsync();
+                    try { PumpUntil(()=>checkReached.IsSet);canvas.TryMoveTracePoint(5,new Point(25,25));checkRelease.Set();PumpUntil(()=>staleCheck.IsCompleted);staleCheck.GetAwaiter().GetResult();
+                        Check(canvas.TopologyWarningEdgesForVerification is null && !trace.StatusForVerification.Text.Contains("sorun bulunmadı"),"A changed trace discards a stale pixel check",checks); }
+                    finally { checkRelease.Set();trace.BeforeTopologyReviewForVerification=null; }
+                }
+                using(var cancelCheckReached=new ManualResetEventSlim())
+                {
+                    var beforeCancelCheck=canvas.Points.ToArray();trace.BeforeTopologyReviewForVerification=token=> { cancelCheckReached.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested(); };
+                    var cancelledCheck=trace.StartTraceTopologyReviewAsync();
+                    try { PumpUntil(()=>cancelCheckReached.IsSet);trace.CancelPathSuggestion();PumpUntil(()=>cancelledCheck.IsCompleted);cancelledCheck.GetAwaiter().GetResult();
+                        Check(canvas.Points.SequenceEqual(beforeCancelCheck) && trace.StatusForVerification.Text.Contains("iptal edildi"),"Cancelling a pixel review preserves the current photo trace",checks); }
+                    finally { trace.CancelPathSuggestion();trace.BeforeTopologyReviewForVerification=null; }
+                }
+                canvas.UndoPoint();Check(canvas.Points.SequenceEqual(beforeZoom),"Manual trace review does not alter existing reference or trace points",checks);
                 canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(10,20),new Point(20,20) })canvas.TryAddPixelPoint(p);
                 trace.ReviewClosureForVerification.IsChecked=true;
                 trace.ComputePathForVerification=(_,start,end,_)=>start==new Point(10,10) && end==new Point(20,10)

@@ -27,6 +27,7 @@ internal sealed class PhotoTraceWindow : Window
     internal Func<string,bool>? ConfirmForVerification { get; set; }
     internal Action<Guid>? OpenClosureForVerification { get; set; }
     internal Func<BitmapSource,Point,Point,CancellationToken,IReadOnlyList<Point>?>? ComputePathForVerification { get; set; }
+    internal Action<CancellationToken>? BeforeTopologyReviewForVerification { get; set; }
     internal (double Width,double Height)? PlaneSettings { get; private set; }
     private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
     private bool allowClose,closed;
@@ -82,7 +83,8 @@ internal sealed class PhotoTraceWindow : Window
         PathAction("Yol öner","Son iki çizgi noktası arasında kontrast yolunu arar; kesikli mavi çizgi yalnız önizlemedir.",()=>_ = StartPathSuggestionAsync());
         PathAction("Yolu uygula","Kesikli öneriyi seçilen aralığa uygular; önceden seçilen uçları korur.",()=> { if(pathCancellation is not null) { StatusForVerification.Text="Yol araması ve piksel denetiminin bitmesini bekleyin.";return; } if(!CanvasForVerification.ApplyPathSuggestion())StatusForVerification.Text="Uygulanabilir yol önerisi yok."; });
         PathAction("Geri al","Son uygulanan yolu veya son nokta düzenlemesini tek adımda geri alır; başka nokta değişikliği yapılmamış olmalıdır.",()=> { if(!CanvasForVerification.UndoPath())StatusForVerification.Text="Geri alınacak son yol veya nokta düzenlemesi yok."; });
-        PathAction("Aramayı iptal et","Süren yol aramasına iptal isteği gönderir.",CancelPathSuggestion);
+        PathAction("Denetle","Geçerli çizgiyi veya varsa yol önerisini piksel geometrisinde denetler; kapanış seçiliyse son kenarı da kontrol eder.",()=>_ = StartTraceTopologyReviewAsync());
+        PathAction("İptal et","Süren yol araması veya piksel denetimine iptal isteği gönderir.",CancelPathSuggestion);
         AutomationProperties.SetHelpText(ReviewClosureForVerification,"Seçiliyken toplu yol önerisi kapanış yolunu da arar; taslak eklendikten sonra ayrı kapanış incelemesi açılır. Kapalı parça otomatik eklenmez; fotoğraf geçmişi açık kaynakta kalır.");pathActions.Children.Add(ReviewClosureForVerification);
         AutomationProperties.SetName(StatusForVerification,"Fotoğraf taslağı durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);
@@ -143,16 +145,21 @@ internal sealed class PhotoTraceWindow : Window
         { StatusForVerification.Text="Ölçü karşılaştırması açılamadı: "+ex.Message;return null; }
     }
     internal void CancelPathSuggestion()=>pathCancellation?.Cancel();
+    private Task<(bool Valid,Point[]? Edges)> AnalyzePixelTopologyAsync(Point[] snapshot,bool closure,CancellationToken token)
+    {
+        var pixelPoints=snapshot.Select(p=>new Point2(p.X,p.Y)).ToArray();
+        return Task.Run(()=>
+        {
+            BeforeTopologyReviewForVerification?.Invoke(token);
+            try { LargeOpenPathValidator.Validate(pixelPoints,token);if(closure)LargeContourValidator.Validate(pixelPoints,token);return (Valid:true,Edges:(Point[]?)null); }
+            catch(ArgumentException) { return (Valid:false,Edges:PhotoPathCrossingDiagnostic.Find(snapshot,closure,token)); }
+        },token);
+    }
     private async Task ReviewProposedTopologyAsync(long revision,CancellationToken token)
     {
         var snapshot=CanvasForVerification.ProposedTraceSnapshot();if(snapshot is null)return;
         var closure=ReviewClosureForVerification.IsChecked==true;
-        var pixelPoints=snapshot.Select(p=>new Point2(p.X,p.Y)).ToArray();
-        var result=await Task.Run(()=>
-        {
-            try { LargeOpenPathValidator.Validate(pixelPoints,token);if(closure)LargeContourValidator.Validate(pixelPoints,token);return (Valid:true,Edges:(Point[]?)null); }
-            catch(ArgumentException) { return (Valid:false,Edges:PhotoPathCrossingDiagnostic.Find(snapshot,closure,token)); }
-        },token);
+        var result=await AnalyzePixelTopologyAsync(snapshot,closure,token);
         token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
         var current=CanvasForVerification.ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(snapshot))return;
         CanvasForVerification.SetTopologyWarning(snapshot,result.Edges);
@@ -160,6 +167,33 @@ internal sealed class PhotoTraceWindow : Window
             ? " Piksel geometrisi kontrolünde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
             : result.Edges is not null ? " Piksel geometrisi uyarısı: turuncu kenarlar kesişiyor veya temas ediyor; inceleyin."
             : " Piksel geometrisi uyarısı: çakışma, sıfır kenar veya kapanış sorunu olabilir; öneriyi düzeltin.";
+    }
+    internal async Task StartTraceTopologyReviewAsync()
+    {
+        if(closed)return;
+        if(pathCancellation is not null) { StatusForVerification.Text="Yol araması veya denetim zaten sürüyor.";return; }
+        var proposal=CanvasForVerification.ProposedTraceSnapshot();var usesProposal=proposal is not null;
+        var snapshot=proposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray();
+        if(snapshot.Length<2) { StatusForVerification.Text="Denetlemek için en az iki çizgi noktası seçin.";return; }
+        var closure=ReviewClosureForVerification.IsChecked==true;var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;
+        StatusForVerification.Text=usesProposal ? "Yol önerisi piksel geometrisinde denetleniyor." : "Çizgi piksel geometrisinde denetleniyor.";
+        try
+        {
+            var result=await AnalyzePixelTopologyAsync(snapshot,closure,cts.Token);
+            cts.Token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
+            var currentProposal=CanvasForVerification.ProposedTraceSnapshot();
+            if((currentProposal is not null)!=usesProposal || !(currentProposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray()).SequenceEqual(snapshot))return;
+            if(usesProposal)CanvasForVerification.SetTopologyWarning(snapshot,result.Edges);else CanvasForVerification.SetCurrentTopologyWarning(snapshot,result.Edges);
+            var prefix=usesProposal ? "Yol önerisi" : "Çizgi";
+            StatusForVerification.Text=result.Valid ? $"{prefix}: piksel geometrisinde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
+                : result.Edges is not null ? $"{prefix}: piksel geometrisi uyarısı; turuncu kenarlar kesişiyor veya temas ediyor."
+                : $"{prefix}: piksel geometrisi uyarısı; çakışma, sıfır kenar veya kapanış sorunu olabilir.";
+            if(closure)StatusForVerification.Text+=" Kapanış kenarı önizlemedir; taslak açık kalır.";
+        }
+        catch(OperationCanceledException) { if(!closed && DraftRevision==revision)StatusForVerification.Text="Piksel denetimi iptal edildi; çizgi değişmedi."; }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
+        { if(!closed && DraftRevision==revision)StatusForVerification.Text="Piksel denetimi yapılamadı: "+ex.Message; }
+        finally { if(ReferenceEquals(pathCancellation,cts))pathCancellation=null;cts.Dispose(); }
     }
     internal async Task StartReplacementPathAsync(int first,int last,long expectedRevision)
     {

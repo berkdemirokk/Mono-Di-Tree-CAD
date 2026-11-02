@@ -180,6 +180,11 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         var current=ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(expected) || (edges is not null && edges.Length!=4))return false;
         topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
     }
+    internal bool SetCurrentTopologyWarning(Point[] expected,Point[]? edges)
+    {
+        if(pathSuggestion is not null || !points.Skip(ReferencePointCount).SequenceEqual(expected) || (edges is not null && edges.Length!=4))return false;
+        topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
+    }
     internal bool UndoPath()
     {
         if(pathUndo is null)return false;
