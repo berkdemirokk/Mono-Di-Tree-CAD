@@ -13,6 +13,22 @@ await using(var owner=new SyntheticPreviewOwner()) {var run=owner.RunAsync(dotne
 await using(var owner=new SyntheticPreviewOwner()) {owner.Cancel();await Expect<OperationCanceledException>(async()=>await owner.RunAsync(dotnet,runner,node,Script("stdio-worker.mjs"),request,TimeSpan.FromSeconds(8)));}
 var raceOwner=new SyntheticPreviewOwner();var raceRun=raceOwner.RunAsync(dotnet,runner,node,Script("process-test-fixtures/hang.mjs"),request,TimeSpan.FromSeconds(8));await Task.Delay(200);
 var race=Enumerable.Range(0,16).Select(i=>Task.Run(async()=>{if(i%2==0){try{raceOwner.Cancel();}catch(ObjectDisposedException){}}else await raceOwner.DisposeAsync();})).ToArray();await Task.WhenAll(race);await Expect<OperationCanceledException>(async()=>await raceRun);await raceOwner.DisposeAsync();
+// Inject pre-action failures into the very same cleanup sequencer; later steps must still run.
+foreach(var failedStage in new[]{"kill","wait","streams","dispose"}) {
+    var called=new List<string>();const string secretMarker="SYNTHETIC_CLEANUP_SECRET_729";
+    var stages=new[]{"cancel","stdin","kill","wait","streams","dispose"}.Select(name=>(name,(Func<Task>)(()=>{called.Add(name);if(name==failedStage)throw new System.ComponentModel.Win32Exception(5,secretMarker);return Task.CompletedTask;}))).ToArray();
+    try{await SyntheticPreviewOwner.RunCleanupAsync(stages);throw new Exception("Temizlik hatası kayboldu.");}catch(SyntheticPreviewOwner.CleanupException ex){if(ex.ToString().Contains(secretMarker,StringComparison.Ordinal))throw new Exception("Hata metni veri içeriyor.");}
+    if(called.Count!=6||called[^1]!="dispose")throw new Exception("Sonraki temizlik adımı atlandı.");
+}
+// Real subprocess: inject failure after each real stage, then check all concurrent Dispose calls report it.
+foreach(var failedStage in new[]{"kill","wait","streams","dispose"}) {
+    var visited=new List<string>();var owner=new SyntheticPreviewOwner {AfterCleanupStageForTest=stage=>{visited.Add(stage);if(stage==failedStage)throw new System.ComponentModel.Win32Exception(5,"SYNTHETIC_CLEANUP_SECRET_729");}};
+    var running=owner.RunAsync(dotnet,runner,node,Script("process-test-fixtures/hang.mjs"),request,TimeSpan.FromSeconds(8));await Task.Delay(250);
+    var disposals=Enumerable.Range(0,6).Select(_=>Task.Run(async()=>await owner.DisposeAsync().AsTask())).ToArray();
+    foreach(var dispose in disposals)await Expect<SyntheticPreviewOwner.CleanupException>(async()=>await dispose);
+    await Expect<SyntheticPreviewOwner.CleanupException>(async()=>await running);
+    if(!visited.SequenceEqual(new[]{"cancel","stdin","kill","wait","streams","dispose"}))throw new Exception("Gerçek temizlik adımları eksik.");
+}
 var id=Convert.ToHexString(SHA256.HashData(request)).ToLowerInvariant()[..32];var dir="work/breanna-probe/atomic-case-"+id;var cp=Path.Combine(dir,"child.pid");var rp=Path.Combine(dir,"root.pid");var release=Path.Combine(dir,"release");
 if(Directory.Exists(dir))throw new IOException("Sentinel çakışması");Directory.CreateDirectory(dir);
 var treeOwner=new SyntheticPreviewOwner();Process? child=null;try {
