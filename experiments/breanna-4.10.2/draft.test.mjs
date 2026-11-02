@@ -1,15 +1,9 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { draftExperimental, measurementNames } from './draft.mjs';
+import test from 'node:test';import assert from 'node:assert/strict';
+import {draftExperimental,measurementNames,optionDefinitions,toIntermediate} from './draft.mjs';
 const sample={biceps:300,bustFront:500,bustSpan:190,highBust:900,highBustFront:450,hpsToBust:270,hpsToWaistBack:420,hpsToWaistFront:450,waist:740,waistToHips:200,neck:370,shoulderToShoulder:390,shoulderSlope:15,shoulderToWrist:580,wrist:160};
-test('sentetik ölçülerle ön arka ve kol için sonlu noktalar ve SVG üretir',()=>{
- const result=draftExperimental(sample);
- for(const name of ['breanna.front','breanna.back','breanna.sleeve']) assert.ok(result.partNames.includes(name));
- assert.ok(result.pointCount>0); assert.match(result.svg,/<path\b/); assert.match(result.status,/onaysız/);
-});
-test('her eksik ölçüyü geometri üretmeden reddeder',()=>{
- for(const key of measurementNames) { const input={...sample}; delete input[key]; assert.throws(()=>draftExperimental(input),new RegExp(key)); }
-});
-test('sıfır uzunluk, NaN, sonsuzluk ve geçersiz açı reddedilir',()=>{
- for(const input of [{...sample,waist:0},{...sample,neck:NaN},{...sample,wrist:Infinity},{...sample,shoulderSlope:90}]) assert.throws(()=>draftExperimental(input),RangeError);
-});
+// Values are explicitly assembled for this synthetic experiment, not product defaults.
+const options=Object.fromEntries(Object.entries(optionDefinitions).map(([k,d])=>[k,'pct' in d?d.pct/100:'bool' in d?d.bool:d.dflt]));
+test('seçenekler ve ölçüler açıkken eğrileri ve dikiş sınırlarını ayırır',()=>{const r=draftExperimental(sample,options);assert.equal(r.model.unit,'mm');assert.equal(r.model.cutBoundaryAvailable,false);assert.equal(r.model.parts.length,3);for(const p of r.model.parts){const seam=p.paths.find(x=>x.kind==='sewing-boundary');assert.equal(seam.segments.at(-1).type,'close');assert.ok(seam.segments.some(x=>x.type==='cubic'));}assert.match(r.status,/onaysız/);});
+test('her eksik ölçü ve seçenek reddedilir',()=>{for(const k of measurementNames){const a={...sample};delete a[k];assert.throws(()=>draftExperimental(a,options),new RegExp(k));}for(const k of Object.keys(options)){const a={...options};delete a[k];assert.throws(()=>draftExperimental(sample,a),new RegExp(k));}});
+test('geçersiz ölçü ve seçenek reddedilir',()=>{assert.throws(()=>draftExperimental({...sample,neck:0},options));assert.throws(()=>draftExperimental({...sample,wrist:Infinity},options));assert.throws(()=>draftExperimental(sample,{...options,chestEase:Infinity}));});
+test('bilinmeyen yol ve açık sınır aktarılmaz',()=>{const r=draftExperimental(sample,options);const parts=Object.fromEntries(r.model.parts.map(p=>[p.name,{paths:Object.fromEntries(p.paths.map(x=>[x.name,{hidden:x.kind==='construction',ops:x.segments.map(s=>s.type==='cubic'?{...s,type:'curve'}:s)}]))}]));parts['breanna.front'].paths.unknown={hidden:false,ops:[{type:'move',to:{x:0,y:0}}]};assert.throws(()=>toIntermediate(parts),/Sınıflandırılamayan/);delete parts['breanna.front'].paths.unknown;parts['breanna.front'].paths.seam.ops.pop();assert.throws(()=>toIntermediate(parts),/Açık sınır/);});
