@@ -25,15 +25,15 @@ public static class BreannaMeasurementGate
         D("bustSpan","Göğüs noktaları arası","İki göğüs noktası arasındaki mesafeyi ölçün.","bustspan"),
         D("highBust","Üst göğüs çevresi","Göğsün üstünden geçen üst göğüs çevresini ölçün.","highbust"),
         D("highBustFront","Ön üst göğüs","Üst göğüs hattında yan dikiş noktaları arasında ön kısmı ölçün.","highbustfront"),
-        D("hpsToBust","Omuz üst noktasından göğse","Boyun dibindeki omuz üst noktasından göğüs noktasına ölçün.","hpstobust"),
+        D("hpsToBust","Omuz üst noktasından göğse","Boyun ile omzun birleştiği omuz üst noktasından (HPS), göğüs noktalarından geçen göğüs çevresi hizasına doğru düz aşağı ölçün.","hpstobust"),
         D("hpsToWaistBack","Omuz üst noktasından arka bele","Boyun dibindeki omuz üst noktasından sırt üzerinden bele ölçün.","hpstowaistback"),
         D("hpsToWaistFront","Omuz üst noktasından ön bele","Boyun dibindeki omuz üst noktasından ön taraftan bele ölçün.","hpstowaistfront"),
         D("waist","Bel çevresi","Bel çevresini ölçün.","waist"),
-        D("waistToHips","Belden kalçaya","Bel hattı ile kalça hattı arasındaki düşey mesafeyi ölçün.","waisttohips"),
+        D("waistToHips","Belden kalçaya","Bedenin yan tarafında bel hattından kalça kemiğinin üst noktasına doğru aşağı ölçün.","waisttohips"),
         D("neck","Boyun çevresi","Boyun çevresini ölçün.","neck"),
         D("shoulderToShoulder","Omuzdan omuza","Bir omuz ucundan sırt üzerinden diğer omuz ucuna ölçün.","shouldertoshoulder"),
         D("shoulderSlope","Omuz eğimi","Omuz çizgisinin yataya göre aşağı eğimini dereceyle belirtin.","shoulderslope",true),
-        D("shoulderToWrist","Omuzdan bileğe","Omuz ucundan bileğe kol boyunca ölçün.","shouldertowrist"),
+        D("shoulderToWrist","Omuzdan bileğe","Kol doğal şekilde hafif bükülü dururken omuz ucundan kol boyunca bileğe kadar ölçün.","shouldertowrist"),
         D("wrist","Bilek çevresi","Bilek çevresini ölçün.","wrist")
     });
     public static BreannaMeasurementResult Review(IEnumerable<BreannaMeasurementInput> input)
