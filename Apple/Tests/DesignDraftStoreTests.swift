@@ -438,6 +438,23 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(overview.hasPendingMeasurements); XCTAssertEqual(overview.referenceName, "örnek.png")
         XCTAssertEqual(entered.bust, "92 cm")
     }
+    func testCompletePortableRequestPreservesAmbiguityWhitespaceAndImage() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-complete-request.tcad-request", withExtension: "json"))
+        let bytes = try Data(contentsOf: url)
+        let original = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: bytes)
+        let draft = try ExperimentalDesignBrief.portableDraft(bytes)
+        XCTAssertEqual(draft.prompt, original.prompt)
+        XCTAssertEqual(draft.measurements, original.measurements)
+        XCTAssertEqual(draft.image, Data(base64Encoded: try XCTUnwrap(original.reference).dataBase64))
+        XCTAssertEqual(draft.imageName, original.reference?.name)
+        let output = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: draft.image, imageName: draft.imageName)
+        let reopened = try ExperimentalDesignBrief.portableDraft(output)
+        XCTAssertEqual(reopened.prompt, draft.prompt)
+        XCTAssertEqual(reopened.measurements, draft.measurements)
+        XCTAssertEqual(reopened.image, draft.image)
+        let entered = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "  ", hips: "", length: "", other: "bel çevresi yaklaşık 72 cm olsun; kalça çevresi 98 cm olmasın")
+        XCTAssertEqual(entered, original.measurements)
+    }
     func testMeasurementMessagePreservedAsUserAuthoredText() throws {
         let message = "Göğüs çevresi 92 cm, bel çevresi 72 cm.\nKol ölçüsünü bilmiyorum 👗"
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)

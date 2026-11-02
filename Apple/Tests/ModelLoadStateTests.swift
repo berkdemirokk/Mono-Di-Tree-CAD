@@ -45,7 +45,7 @@ final class ModelLoadStateTests: XCTestCase {
         let data = try ExperimentalDesignBrief.make(prompt: prompt, measurements: measures, image: nil, imageName: nil)
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
         XCTAssertEqual(brief.prompt, "Seçilen elbise modeli: A kesim elbise\nUzun kollu")
-        XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nElbise boyu: 110 cm\nOmuz: 38 cm")
+        XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nKalça çevresi:   \nElbise boyu: 110 cm\nOmuz: 38 cm")
         XCTAssertEqual(ExperimentalDesignBrief.prompt(style: .describe, description: "Kendi tarifim"), "Kendi tarifim")
         XCTAssertEqual(ExperimentalDesignBrief.measurements(bust: "", waist: "", hips: "", length: "", other: ""), "")
     }

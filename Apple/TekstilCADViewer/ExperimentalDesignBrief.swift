@@ -288,7 +288,7 @@ enum ExperimentalDesignBrief {
     static func measurements(bust: String, waist: String, hips: String, length: String, other: String) -> String {
         let items = [("Göğüs çevresi", bust), ("Bel çevresi", waist), ("Kalça çevresi", hips), ("Elbise boyu", length)]
         var lines = items.compactMap { label, value -> String? in
-            value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "\(label): \(value)"
+            value.isEmpty ? nil : "\(label): \(value)"
         }
         if !other.isEmpty { lines.append(other) }
         return lines.joined(separator: "\n")
