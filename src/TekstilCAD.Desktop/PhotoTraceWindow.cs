@@ -233,6 +233,8 @@ internal sealed class PhotoTraceWindow : Window
         var n=CanvasForVerification.Points.Count;
         var references=CanvasForVerification.ReferencePointCount;
         StatusForVerification.Text=$"Önizleme: {image.PixelWidth} × {image.PixelHeight} piksel; yakınlaştırma {MeasurementInput.Format(CanvasForVerification.Zoom)}×. "+(n<references ? $"{(references==4 ? "Düzlem köşesi" : "Referans ucu")} seçin: {n}/{references}." : $"Referans hazır; çizgi noktası: {n-references}. İlk referans CAD'de 0,0 olur; Y aşağı artar.");
+        if(CanvasForVerification.HasTopologyWarning && CanvasForVerification.PathSuggestion is null)
+            StatusForVerification.Text+=" Turuncu kenarlar kesişiyor veya temas ediyor; düzeltin."+(ReviewClosureForVerification.IsChecked==true ? " Kapanış kenarı önizlemedir; taslak açık kalır." : "");
     }
     internal void TryApply()
     {
