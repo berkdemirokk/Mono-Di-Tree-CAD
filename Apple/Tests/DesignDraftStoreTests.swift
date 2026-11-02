@@ -459,6 +459,23 @@ final class DesignDraftStoreTests: XCTestCase {
         let partial = try MeasurementMessageParser.parse("göğüs çevresi 92 cm", existing: [:])
         XCTAssertTrue(partial.preview.contains("Mesajda belirtilmeyenler: bel çevresi"))
     }
+    func testMeasurementMessageOlsunPreservesTextAndRejectsAmbiguity() throws {
+        let source = "Göğüs çevresi 92,5 cm olsun; bel çevresi 720 mm olsun"
+        let result = try MeasurementMessageParser.parse(source, existing: [:])
+        XCTAssertEqual(result.source, source)
+        XCTAssertEqual(result.values["göğüs çevresi"], "92,5 cm")
+        XCTAssertEqual(result.values["bel çevresi"], "720 mm")
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("göğüs çevresi 92 cm olsun ve bel çevresi 72 cm"))
+        XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun; bel çevresi 73 cm olsun", existing: [:]))
+        XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun; kol uzun olsun", existing: [:]))
+        XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 72 cm olsun", existing: ["bel çevresi": "70 cm"]))
+        let raw = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-message-olsun.tcad-request", withExtension: "json"))
+        let data = try Data(contentsOf: raw)
+        let draft = try ExperimentalDesignBrief.portableDraft(data)
+        XCTAssertEqual(draft.otherMeasurements, source)
+        let serialized = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(serialized).otherMeasurements, source)
+    }
     func testMeasurementMessageParserRejectsConflictsWithoutMutatingInputs() {
         let existing = ["bel çevresi": "70 cm"]
         let cases = ["bel çevresi 72 cm, bel çevresi 73 cm", "bel çevresi 72", "bel 72 cm", "bel çevresi 0 cm", "bel çevresi 1001 cm", "bel çevresi 72 cm ve kol uzun", "bel çevresi 72 cm, kalça çevresi 100 cm"]

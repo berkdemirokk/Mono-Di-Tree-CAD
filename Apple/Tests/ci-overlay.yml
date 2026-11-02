@@ -10,6 +10,8 @@
         buildPhase: resources
       - path: Tests/Fixtures/ios-unicode-photo.tcad-request.json
         buildPhase: resources
+      - path: Tests/Fixtures/ios-message-olsun.tcad-request.json
+        buildPhase: resources
       - path: Tests/Fixtures/ios-message-ve.tcad-request.json
         buildPhase: resources
       - path: Tests/Fixtures/ios-whitespace-notes.tcad-request.json

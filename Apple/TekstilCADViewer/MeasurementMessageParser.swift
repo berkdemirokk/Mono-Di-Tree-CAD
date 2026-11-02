@@ -23,13 +23,13 @@ enum MeasurementMessageParser {
     /// This is only a narrow warning, not proof of downstream interpretation.
     static func mayNeedDesktopReview(_ message: String) -> Bool {
         guard message.utf16.count <= 16_384 else { return true }
-        let expression = #"(?i)(?:cm|mm)(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
+        let expression = #"(?i)(?:cm|mm)(?:[ \t]+olsun)?(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
         return message.range(of: expression, options: .regularExpression) != nil
     }
     static func parse(_ message: String, existing: [String: String]) throws -> Proposal {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }
         guard message.utf16.count <= 16_384 else { throw Failure.unrecognized }
-        let expression = try NSRegularExpression(pattern: #"[ \t]*(göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)(?:[ \t]+(ve)(?=[ \t])|[ \t]*([,;.\n])[ \t]*(?:\n[ \t]*)?|[ \t]*$)"#, options: [.caseInsensitive])
+        let expression = try NSRegularExpression(pattern: #"[ \t]*(göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)(?:[ \t]+olsun)?(?:[ \t]+(ve)(?=[ \t])|[ \t]*([,;.\n])[ \t]*(?:\n[ \t]*)?|[ \t]*$)"#, options: [.caseInsensitive])
         let normalized = message.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         let source = normalized as NSString
         var cursor = 0, found: [String: String] = [:]
