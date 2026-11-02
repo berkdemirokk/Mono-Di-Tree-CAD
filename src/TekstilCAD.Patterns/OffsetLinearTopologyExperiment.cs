@@ -36,6 +36,10 @@ internal static class OffsetLinearTopologyExperiment
             token.ThrowIfCancellationRequested();
             if (j == i + 1 || (i == 0 && j == n - 1)) continue;
             int i2 = (i + 1) % n, j2 = (j + 1) % n;
+            // Each endpoint moves linearly; the box of its two endpoint
+            // positions contains the complete motion. Disjoint swept edge
+            // boxes prove separation even for collinear supporting lines.
+            if (SweptBoxesDisjoint(a[i], b[i], a[i2], b[i2], a[j], b[j], a[j2], b[j2])) continue;
             // Either both endpoints of one moving segment stay strictly on
             // one side of the other's supporting line for the entire motion.
             int s = TurnSign(i, i2, j), t = TurnSign(i, i2, j2);
@@ -62,6 +66,14 @@ internal static class OffsetLinearTopologyExperiment
 
     private static (BigInteger X, BigInteger Y) Vector(GridPoint p, GridPoint q) =>
         ((BigInteger)q.X - p.X, (BigInteger)q.Y - p.Y);
+    private static bool SweptBoxesDisjoint(GridPoint a, GridPoint b, GridPoint c, GridPoint d,
+        GridPoint e, GridPoint f, GridPoint g, GridPoint h)
+    {
+        static bool Apart(long a, long b, long c, long d, long e, long f, long g, long h) =>
+            Math.Max(Math.Max(a,b),Math.Max(c,d)) < Math.Min(Math.Min(e,f),Math.Min(g,h)) ||
+            Math.Max(Math.Max(e,f),Math.Max(g,h)) < Math.Min(Math.Min(a,b),Math.Min(c,d));
+        return Apart(a.X,b.X,c.X,d.X,e.X,f.X,g.X,h.X) || Apart(a.Y,b.Y,c.Y,d.Y,e.Y,f.Y,g.Y,h.Y);
+    }
     private static BigInteger Cross((BigInteger X, BigInteger Y) a, (BigInteger X, BigInteger Y) b) =>
         a.X * b.Y - a.Y * b.X;
 }
