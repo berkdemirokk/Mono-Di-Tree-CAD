@@ -1,0 +1,139 @@
+{
+  "opencv_version": "4.10.0",
+  "files_seen": 13,
+  "detected": 13,
+  "evaluated": 13,
+  "jitter_trials": 260,
+  "jitter_succeeded": 260,
+  "failed": [],
+  "hashes": {
+    "left01.jpg": "9621899098adffa1440c8264606bb7be535ccfd9ad126ae8e0bd9b0c5a5b8676",
+    "left02.jpg": "052e700bbcc865c112958ec2ea105cb1bce4deca50ac8d6efae13adca9df7a2c",
+    "left03.jpg": "c85b9426c3d8fcf161e1e727356105091009c3fd0b1b1a65bc2da91fea2724d2",
+    "left04.jpg": "b490599dccfbfe5eb56d33363415b02227a9548ab8c9b8e7b05d3580e97266d9",
+    "left05.jpg": "40bab8934fa76f82ec614a7fd0e6ebb4d9f74391d5e8b0c6f2f0ed6080c6c4de",
+    "left06.jpg": "1cb164db61b3bd52f58a7e9340bb27c5e0278895bc80b6f292fba5cf9bccc4a1",
+    "left07.jpg": "d2211fe9f971646b6ff88ed93a4f0d3f443741eb2894095cba15caade7c8c6e4",
+    "left08.jpg": "f7a0737894812a28243af5b409c5689f4fadfe7610958b8ca5fc79aec2f2cd1b",
+    "left09.jpg": "753939bc62d093c001d9118e989bef2b887f1b2f9ac03603df915a8b85aa81d3",
+    "left11.jpg": "e736ace3d515c94c547009c3c10d818c81506ed7059cb31123749b9cc3f94ee8",
+    "left12.jpg": "04bdd78b3b507fe0551aa7062a3ffd94846a147ee2bea7fb38082c720bdbe231",
+    "left13.jpg": "2637fb6dd5e557f4fadb06b353a453eb0b9223f4671f6f572f815302bc4a70b3",
+    "left14.jpg": "d4c032971dd7b859f9d6aed5090c9888bd8039b82e0604bee5bfe05444fce834"
+  },
+  "method": "9x6 detected inner corners; four extremes define 8x5 square units; 28 interior corners and 45 adjacent edges per image; absolute length error from one square side; no lens correction; 20 deterministic trials/image with independent uniform +/-1 pixel x/y corner perturbations",
+  "plane_error_square_sides": {
+    "count": 585,
+    "mean": 0.024104933258135862,
+    "median": 0.02466287898027031,
+    "p95": 0.04273861653924893,
+    "max": 0.052285447213413994
+  },
+  "single_error_square_sides": {
+    "count": 585,
+    "mean": 0.09749868841252636,
+    "median": 0.0764163554416174,
+    "p95": 0.24241196654213426,
+    "max": 0.6278517268402435
+  },
+  "plane_jitter_error_square_sides": {
+    "count": 11700,
+    "mean": 0.024357650909223157,
+    "median": 0.024836729926790424,
+    "p95": 0.04359720089886365,
+    "max": 0.05772669111811646
+  },
+  "per_image": [
+    {
+      "image": "left01.jpg",
+      "plane_mean": 0.01745880160137798,
+      "single_mean": 0.03793337521549498,
+      "plane_max": 0.03678489550095443,
+      "single_max": 0.09012765755326357
+    },
+    {
+      "image": "left02.jpg",
+      "plane_mean": 0.024694422551177958,
+      "single_mean": 0.2602802100565173,
+      "plane_max": 0.039530932112686434,
+      "single_max": 0.6278517268402435
+    },
+    {
+      "image": "left03.jpg",
+      "plane_mean": 0.0319954267748826,
+      "single_mean": 0.07557152614216196,
+      "plane_max": 0.051163249229586594,
+      "single_max": 0.17381716171908734
+    },
+    {
+      "image": "left04.jpg",
+      "plane_mean": 0.027874322611395472,
+      "single_mean": 0.07358022887640576,
+      "plane_max": 0.04283859276220392,
+      "single_max": 0.154302546584016
+    },
+    {
+      "image": "left05.jpg",
+      "plane_mean": 0.03038595017481173,
+      "single_mean": 0.1409204340621053,
+      "plane_max": 0.052285447213413994,
+      "single_max": 0.3096817764776123
+    },
+    {
+      "image": "left06.jpg",
+      "plane_mean": 0.017154619548433794,
+      "single_mean": 0.0360084398027979,
+      "plane_max": 0.03555685404807796,
+      "single_max": 0.09517122105394804
+    },
+    {
+      "image": "left07.jpg",
+      "plane_mean": 0.0173700588119285,
+      "single_mean": 0.09560931441412525,
+      "plane_max": 0.03201358096919593,
+      "single_max": 0.2084303365463357
+    },
+    {
+      "image": "left08.jpg",
+      "plane_mean": 0.027402115297864075,
+      "single_mean": 0.06700245678397594,
+      "plane_max": 0.04629314091646575,
+      "single_max": 0.1807658054635627
+    },
+    {
+      "image": "left09.jpg",
+      "plane_mean": 0.021340838801557488,
+      "single_mean": 0.09934641746920253,
+      "plane_max": 0.03429975711059918,
+      "single_max": 0.22472774371972148
+    },
+    {
+      "image": "left11.jpg",
+      "plane_mean": 0.02417298938958977,
+      "single_mean": 0.10778117755529315,
+      "plane_max": 0.0437957277421126,
+      "single_max": 0.24273312696476834
+    },
+    {
+      "image": "left12.jpg",
+      "plane_mean": 0.029558646165447133,
+      "single_mean": 0.09407661508254743,
+      "plane_max": 0.04856319338024595,
+      "single_max": 0.19522655979880166
+    },
+    {
+      "image": "left13.jpg",
+      "plane_mean": 0.01918003983797524,
+      "single_mean": 0.09917500158945483,
+      "plane_max": 0.03050075998126789,
+      "single_max": 0.234068083746654
+    },
+    {
+      "image": "left14.jpg",
+      "plane_mean": 0.02477590078932448,
+      "single_mean": 0.08019775231276027,
+      "plane_max": 0.03932109775318593,
+      "single_max": 0.23347923028533946
+    }
+  ]
+}
