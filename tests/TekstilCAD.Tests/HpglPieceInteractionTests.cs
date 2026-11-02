@@ -16,6 +16,7 @@ public sealed class HpglPieceInteractionTests
         var result=Prepare(a,b).Interactions!;
         Assert.Equal(HpglPieceInteraction.State.Found,result.Status);
         Assert.Equal(a.Id,result.FirstPiece);Assert.Equal(b.Id,result.SecondPiece);
+        Assert.Equal(HpglPieceInteraction.Finding.Boundary,result.Kind);Assert.Equal(0,result.FirstEdge);Assert.Equal(0,result.SecondEdge);
         var touching=Prepare(Line(0,0,1,0),Line(1.01,0,2,0)).Interactions!;
         Assert.Equal(HpglPieceInteraction.State.Found,touching.Status);
     }
@@ -23,8 +24,8 @@ public sealed class HpglPieceInteractionTests
     [Fact]
     public void ContainmentAndDisjointPathsAreDistinguished()
     {
-        Assert.Equal(HpglPieceInteraction.State.Found,Prepare(Box(0,0,20,20),Box(3,3,5,5)).Interactions!.Status);
-        Assert.Equal(HpglPieceInteraction.State.Found,Prepare(Line(3,3,5,5),Box(0,0,20,20)).Interactions!.Status);
+        Assert.Equal(HpglPieceInteraction.Finding.SecondInsideFirst,Prepare(Box(0,0,20,20),Box(3,3,5,5)).Interactions!.Kind);
+        Assert.Equal(HpglPieceInteraction.Finding.FirstInsideSecond,Prepare(Line(3,3,5,5),Box(0,0,20,20)).Interactions!.Kind);
         Assert.Equal(HpglPieceInteraction.State.Clear,Prepare(Box(0,0,2,2),Box(3,3,5,5)).Interactions!.Status);
         Assert.Equal(HpglPieceInteraction.State.Clear,Prepare(Line(0,0,10,10),Line(0,5,2,5)).Interactions!.Status);
     }

@@ -32,6 +32,9 @@ internal sealed class HpglReviewWindow : Window
     internal TextBlock PageStatus { get; } = new() { Text="Parça seçin.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
     internal TextBlock BoundsSummary { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,4) };
     internal string InteractionTextForVerification { get; private set; } = "";
+    internal TextBox InteractionDetailsForVerification { get; } = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Padding=new Thickness(6) };
+    internal Button FirstInteractionButtonForVerification { get; } = new() { Content="İlk parçayı göster",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+    internal Button SecondInteractionButtonForVerification { get; } = new() { Content="İkinci parçayı göster",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
     internal CheckBox ChangedOnlyFilter { get; } = new() { Content="Yalnız değişen parçaları göster",Margin=new Thickness(0,5,0,4) };
     internal Button MoreSamplesButton { get; } = new() { Content="Seçili parçayı ayrıntılı incele",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),IsEnabled=false };
     internal Button CancelReviewButton { get; } = new() { Content="İncelemeyi iptal et",Margin=new Thickness(8,2,0,2),Padding=new Thickness(8,4,8,4),Visibility=Visibility.Collapsed };
@@ -76,7 +79,7 @@ internal sealed class HpglReviewWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });Content=root;
         var interaction=prepared.Interactions;
         var interactionHeadline=interaction?.Status switch {
-            HpglPieceInteraction.State.Found=>"Parçalar arası temas veya iç içe yerleşim bulundu; ayrıntı için kaydırın.",
+            HpglPieceInteraction.State.Found=>"Parçalar arası bulgu var; Yol ilişkisi sekmesini açın.",
             HpglPieceInteraction.State.Clear=>"Parçalar arası temas veya iç içe yerleşim bulunmadı; sınırlar için kaydırın.",
             _=>"Parçalar arası kontrol tamamlanmadı; ayrıntı için kaydırın." };
         var interactionDetails=interaction?.Status==HpglPieceInteraction.State.Found
@@ -180,6 +183,36 @@ internal sealed class HpglReviewWindow : Window
         detailsTabs.Items.Add(new TabItem { Header="Parçalar ve noktalar",Content=sourcePanel });
         detailsTabs.Items.Add(new TabItem { Header="Kaynak / HPGL karşılaştırması",Content=comparisonPanel });
         detailsTabs.Items.Add(new TabItem { Header="Örnek koordinatları",Content=GeometryText });
+        if(interaction is { Status:HpglPieceInteraction.State.Found,FirstPiece:Guid firstId,SecondPiece:Guid secondId })
+        {
+            var first=rows.Single(r=>r.Report.PieceId==firstId);var second=rows.Single(r=>r.Report.PieceId==secondId);
+            string EdgeDescription(Guid id,int index)
+            {
+                var geometry=prepared.GetPieceGeometry(id);var a=geometry.Points[index];var b=geometry.Points[(index+1)%geometry.Points.Count];
+                return $"Kenar {index+1}: ({a.PlotX}, {a.PlotY}) → ({b.PlotX}, {b.PlotY}) HPGL birimi";
+            }
+            var detail=interaction.Kind switch {
+                HpglPieceInteraction.Finding.Boundary when interaction.FirstEdge is int a && interaction.SecondEdge is int b =>
+                    "Kenarlar kesişiyor veya temas ediyor.\nİlk parça: "+EdgeDescription(firstId,a)+"\nİkinci parça: "+EdgeDescription(secondId,b),
+                HpglPieceInteraction.Finding.SecondInsideFirst=>"İkinci yol, ilk kapalı yolun içinde.",
+                HpglPieceInteraction.Finding.FirstInsideSecond=>"İlk yol, ikinci kapalı yolun içinde.",
+                _=>"Bulgunun türü belirlenemedi; iki yolu kontrol edin." };
+            InteractionDetailsForVerification.Text=$"İlk parça: {SafeText(first.FullName)}\nKimlik: {first.Identity}\nİkinci parça: {SafeText(second.FullName)}\nKimlik: {second.Identity}\n\n{detail}\n\nYalnız ilk bulgu gösterilir. Koordinatlar yuvarlanmış çıktıdır; mesafe veya üretim onayı değildir.";
+            AutomationProperties.SetName(InteractionDetailsForVerification,"İlk yol ilişkisi ve parça kimlikleri");
+            AutomationProperties.SetHelpText(InteractionDetailsForVerification,"Kimlikleri ve varsa kenar koordinatlarını okuyabilir ve kopyalayabilirsiniz.");
+            var interactionPanel=new DockPanel();var interactionActions=new WrapPanel();
+            interactionActions.Children.Add(FirstInteractionButtonForVerification);interactionActions.Children.Add(SecondInteractionButtonForVerification);
+            DockPanel.SetDock(interactionActions,Dock.Top);interactionPanel.Children.Add(interactionActions);interactionPanel.Children.Add(InteractionDetailsForVerification);
+            void SelectInteraction(Row row)
+            {
+                ChangedOnlyFilter.IsChecked=false;detailsTabs.SelectedIndex=0;ReportsGrid.SelectedItem=row;ReportsGrid.ScrollIntoView(row);ReportsGrid.Focus();
+            }
+            FirstInteractionButtonForVerification.Click+=(_,_)=>SelectInteraction(first);
+            SecondInteractionButtonForVerification.Click+=(_,_)=>SelectInteraction(second);
+            AutomationProperties.SetHelpText(FirstInteractionButtonForVerification,"Dönüş filtresini kaldırır ve bulunan çiftin ilk parçasını tabloda seçer.");
+            AutomationProperties.SetHelpText(SecondInteractionButtonForVerification,"Dönüş filtresini kaldırır ve bulunan çiftin ikinci parçasını tabloda seçer.");
+            detailsTabs.Items.Add(new TabItem { Header="Yol ilişkisi",Content=interactionPanel });
+        }
         SampleSelector.SelectionChanged+=(_,_)=>
         {
             if(updatingSamples || currentGeometry is null || currentPage is null)return;

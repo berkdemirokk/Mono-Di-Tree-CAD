@@ -3969,9 +3969,20 @@ internal static class DesktopVerification
         Check(review.InteractionTextForVerification.Contains("bulunmadı"),"HPGL review reports completed distinct-path check for separate pieces",checks);
         var overlapDocument=new ProjectDocument { Pieces=[Piece(0,false),Piece(5,false)] };
         var overlapReview=new HpglReviewWindow(studio,HpglFormat.Prepare(overlapDocument,40),overlapDocument.Pieces);
-        Render(overlapReview,Path.ChangeExtension(reportPath,".hpgl-interaction-compact.png"),580,420);
-        Check(overlapReview.InteractionTextForVerification.Contains("bulundu") && overlapDocument.Pieces.All(p=>overlapReview.InteractionTextForVerification.Contains(p.Id.ToString("D"))),
+        var overlapTabs=Descendants<TabControl>((FrameworkElement)overlapReview.Content).Single();overlapTabs.SelectedIndex=3;
+        Render(overlapReview,Path.ChangeExtension(reportPath,".hpgl-interaction-details.png"),580,420);
+        Check(overlapReview.InteractionTextForVerification.Contains("bulgu var") && overlapDocument.Pieces.All(p=>overlapReview.InteractionTextForVerification.Contains(p.Id.ToString("D"))) &&
+            overlapReview.InteractionDetailsForVerification.Text.Contains("Kenar") && overlapReview.InteractionDetailsForVerification.Text.Contains("HPGL birimi"),
             "HPGL review identifies a distinct-path interaction by captured piece IDs",checks);
+        Check(FullyVisible(overlapReview.FirstInteractionButtonForVerification,(FrameworkElement)overlapReview.Content) && FullyVisible(overlapReview.SecondInteractionButtonForVerification,(FrameworkElement)overlapReview.Content),
+            "Compact HPGL interaction tab keeps both navigation buttons visible",checks);
+        overlapReview.ChangedOnlyFilter.IsChecked=true;
+        overlapReview.SecondInteractionButtonForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(overlapReview.ChangedOnlyFilter.IsChecked==false && overlapReview.SelectedDetails.Text.Contains(overlapDocument.Pieces[1].Id.ToString("D")),
+            "Interaction navigation clears the changed-only filter and selects the second captured piece",checks);
+        overlapReview.FirstInteractionButtonForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        Check(overlapReview.SelectedDetails.Text.Contains(overlapDocument.Pieces[0].Id.ToString("D")),
+            "Interaction navigation selects the first captured piece even when names match",checks);
         overlapReview.Close();
         Check(review.BoundsSummary.Text.Contains("X 0…1200") && review.BoundsSummary.Text.Contains("Y 0…400") &&
             review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),

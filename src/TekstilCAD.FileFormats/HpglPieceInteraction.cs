@@ -4,7 +4,9 @@ namespace TekstilCAD.FileFormats;
 public static class HpglPieceInteraction
 {
     public enum State { Clear, Found, Incomplete }
-    public sealed record Result(State Status,Guid? FirstPiece,Guid? SecondPiece,long Operations);
+    public enum Finding { Boundary, SecondInsideFirst, FirstInsideSecond }
+    public sealed record Result(State Status,Guid? FirstPiece,Guid? SecondPiece,long Operations,
+        Finding? Kind=null,int? FirstEdge=null,int? SecondEdge=null);
     private readonly record struct P(int X,int Y);
     private readonly record struct Bounds(int MinX,int MinY,int MaxX,int MaxY);
     private sealed record Shape(Guid Id,bool Closed,P[] Points,Bounds Box);
@@ -40,11 +42,11 @@ public static class HpglPieceInteraction
                 if(!Step())return Incomplete();
                 var p=a.Points[x];var q=a.Points[(x+1)%a.Points.Length];
                 var r=b.Points[y];var s=b.Points[(y+1)%b.Points.Length];
-                if(Intersects(p,q,r,s))return new(State.Found,a.Id,b.Id,ops);
+                if(Intersects(p,q,r,s))return new(State.Found,a.Id,b.Id,ops,Finding.Boundary,x,y);
             }
             // With no boundary contact, one point is sufficient for containment of a connected path.
-            if(a.Closed) { var inside=Contains(a,b.Points[0]);if(inside is null)return Incomplete();if(inside.Value)return new(State.Found,a.Id,b.Id,ops); }
-            if(b.Closed) { var inside=Contains(b,a.Points[0]);if(inside is null)return Incomplete();if(inside.Value)return new(State.Found,a.Id,b.Id,ops); }
+            if(a.Closed) { var inside=Contains(a,b.Points[0]);if(inside is null)return Incomplete();if(inside.Value)return new(State.Found,a.Id,b.Id,ops,Finding.SecondInsideFirst); }
+            if(b.Closed) { var inside=Contains(b,a.Points[0]);if(inside is null)return Incomplete();if(inside.Value)return new(State.Found,a.Id,b.Id,ops,Finding.FirstInsideSecond); }
         }
         return new(State.Clear,null,null,ops);
 
