@@ -6,6 +6,7 @@ public sealed class PlotterCalibrationSquareTests
 {
     [Theory]
     [InlineData(1, 100)] [InlineData(40, 4000)] [InlineData(101.25, 10125)]
+    [InlineData(0.07, 7)] [InlineData(0.29, 29)]
     public void SquareHasExactHundredMillimeterBounds(double units, int side)
     {
         var prepared = PlotterCalibrationSquare.Prepare(units, 1);
@@ -24,7 +25,7 @@ public sealed class PlotterCalibrationSquareTests
 
     [Theory]
     [InlineData(0)] [InlineData(-1)] [InlineData(10001)] [InlineData(double.NaN)]
-    [InlineData(double.PositiveInfinity)] [InlineData(0.015)]
+    [InlineData(double.PositiveInfinity)] [InlineData(0.015)] [InlineData(0.070001)]
     public void InvalidOrNonIntegralReferenceUnitsAreRejected(double units)
     { Assert.ThrowsAny<ArgumentException>(() => PlotterCalibrationSquare.Prepare(units, 1)); }
 
