@@ -497,6 +497,9 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageOrientationAllowed(nil))
         for value in 1...8 { XCTAssertTrue(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: value))) }
         for value in [0, 9, -1] { XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: value))) }
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: true)))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: false)))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.0)))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.5)))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed("9"))
     }

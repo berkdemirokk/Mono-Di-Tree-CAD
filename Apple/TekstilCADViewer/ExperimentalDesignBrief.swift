@@ -348,9 +348,11 @@ enum ExperimentalDesignBrief {
     }
     static func v2ImageOrientationAllowed(_ value: Any?) -> Bool {
         guard let value else { return true }
-        guard let number = value as? NSNumber else { return false }
-        let orientation = number.doubleValue
-        return orientation.rounded() == orientation && orientation >= 1 && orientation <= 8
+        guard let number = value as? NSNumber,
+              CFGetTypeID(number) != CFBooleanGetTypeID(),
+              ["c", "C", "s", "S", "i", "I", "l", "L", "q", "Q"].contains(String(cString: number.objCType)) else { return false }
+        let orientation = number.int64Value
+        return orientation >= 1 && orientation <= 8
     }
     private static func validateV2Image(_ data: Data) throws {
         guard !data.isEmpty, data.count <= maxImageBytes,
