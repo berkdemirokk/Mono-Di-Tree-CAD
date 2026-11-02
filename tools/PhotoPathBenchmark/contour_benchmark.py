@@ -1,6 +1,6 @@
 """Measure full closed contours using annotation-derived anchors; no dataset is redistributed.
 
-Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY
+Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS]
 """
 import collections
 import hashlib
@@ -12,7 +12,12 @@ import subprocess
 import sys
 import zipfile
 
+if len(sys.argv) not in (4, 5):
+    raise SystemExit("Expected 3–17 anchors and DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS].")
 archive, dotnet, work = Path(sys.argv[1]).resolve(), sys.argv[2], Path(sys.argv[3]).resolve()
+anchor_count = int(sys.argv[4]) if len(sys.argv) == 5 else 12
+if not 3 <= anchor_count <= 17:
+    raise SystemExit("Anchor count must be between 3 and 17.")
 work.mkdir(parents=True, exist_ok=True)
 if any(work.iterdir()):
     raise SystemExit("Work directory must be empty; existing files are not overwritten.")
@@ -36,8 +41,8 @@ with zipfile.ZipFile(archive) as z:
         lengths = [math.dist(a, b) for a, b in zip(points, points[1:])]
         perimeter = sum(lengths)
         anchors, index, traversed = [], 0, 0.0
-        for k in range(12):
-            distance = perimeter * k / 12
+        for k in range(anchor_count):
+            distance = perimeter * k / anchor_count
             while index < len(lengths) - 1 and traversed + lengths[index] < distance:
                 traversed += lengths[index]
                 index += 1
@@ -52,7 +57,7 @@ with zipfile.ZipFile(archive) as z:
         for a, b in zip(anchors, anchors[1:] + anchors[:1]):
             ids.append(len(jobs))
             jobs.append({"Id": ids[-1], "Image": str(image), "X1": a[0], "Y1": a[1], "X2": b[0], "Y2": b[1]})
-        contours.append((category, points, anchors, ids))
+        contours.append((category, points, anchors, ids, ann["id"]))
 
 input_file, output_file = work / "jobs.json", work / "results.json"
 input_file.write_text(json.dumps(jobs), encoding="utf-8")
@@ -108,7 +113,7 @@ def product_interior(path):
         yield p
 
 rows = []
-for category, truth, anchors, ids in contours:
+for category, truth, anchors, ids, annotation_id in contours:
     baseline = anchors + anchors[:1]
     if all(results[i]["Found"] for i in ids):
         # Product retains the selected, possibly fractional, anchors instead of rounded search endpoints.
@@ -128,9 +133,9 @@ for category, truth, anchors, ids in contours:
         accepted = accepted and len(proposed) <= 510 and len(proposed) > len(anchors)
         proposed.append(anchors[0])
         rows.append((category, error(baseline, truth), error(proposed, truth) if accepted else None,
-                     proper_crossings(proposed) if accepted else None, True))
+                     proper_crossings(proposed) if accepted else None, True, annotation_id))
     else:
-        rows.append((category, error(baseline, truth), None, None, False))
+        rows.append((category, error(baseline, truth), None, None, False, annotation_id))
 
 summary = {}
 for category in ("shorts", "tshirt", "all"):
@@ -147,6 +152,11 @@ for category in ("shorts", "tshirt", "all"):
         "strict_self_crossing": sum(r[3] for r in complete)}
 with archive.open("rb") as f:
     digest = hashlib.file_digest(f, "sha256").hexdigest()
-report = {"archive_sha256": digest, "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation", "categories": summary}
+report = {"archive_sha256": digest, "method": f"Same 80 selected test annotations as earlier experiments; {anchor_count} equally spaced perimeter anchors from ground truth; {anchor_count} independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation", "categories": summary}
 (work / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
+(work / "measurements.json").write_text(json.dumps([
+    {"ordinal": i, "annotation_id": r[5], "category": r[0], "straight_mean": r[1][0], "straight_max": r[1][1],
+     "proposal_mean": r[2][0] if r[2] is not None else None, "proposal_max": r[2][1] if r[2] is not None else None,
+     "strict_crossing": r[3], "all_segments_found": r[4]} for i, r in enumerate(rows)
+], indent=2), encoding="utf-8")
 print(json.dumps(report, indent=2))

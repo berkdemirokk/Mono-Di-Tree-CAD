@@ -18,6 +18,8 @@ Bu düzen **iyimserdir**: 12 nokta gerçek anotasyondan gelir, kullanıcı seçi
 
 Kesişim sayacı yalnız birbirini iç kısımlarında çapraz kesen kenarları sayar; teğet temasları veya çakışan kenarları saptamaz ve tam topoloji doğrulaması değildir. Örnekleme sürekli eğrideki gerçek en büyük sapmayı garanti etmez. Ortalama iyileşmeye rağmen çok sayıdaki yerel sapma, önerinin ayrıntılı kullanıcı incelemesi olmadan kalıp kabul edilemeyeceğini gösterir. Perspektif, kumaş dökümü, gerçek ölçüler, parça ayrımı ve üretim uygunluğu ölçülmedi. [Ham sonuç](PHOTO_CONTOUR_EXPERIMENT.json) iki ayrı çalıştırmada aynı çıktı; kaynak ZIP SHA-256 değeri `af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6`.
 
+Aynı görüntülerde [12 ve 16 anotasyon ucu karşılaştırması](PHOTO_ANCHOR_DENSITY_EXPERIMENT.md) daha sık örneklemenin ortalamayı azalttığını, ancak yerel sapmaları ve kesişimleri ortadan kaldırmadığını gösterdi.
+
 ## Tekrarlama
 
 Veri kümesinin `artf-all-categories-resized_512x256.zip` dosyasını bağımsız indirin. Windows, Python 3.12, .NET 10 SDK ve boş bir çalışma klasörüyle:
