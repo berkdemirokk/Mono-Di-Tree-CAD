@@ -55,4 +55,20 @@ public sealed class ExperimentalNotchContourBindingTests
         var (p,o,s)=Fixture(false,0);o.Points[1]=new Point2(48,.1);s=s with {PositionTolerance=.2,WidthTolerance=.1,DepthTolerance=.1};
         Assert.False(ExperimentalNotchContourBinding.Verify(p,o,o.Id,s,out _));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void LargeSquareWithHalfSquareMillimeterNotchKeepsExactAreaOrdering(bool reverse)
+    {
+        const double size=100_000_000;
+        var p=new PatternPiece{Closed=true,Points=[new(0,0),new(size,0),new(size,size),new(0,size)]};
+        var o=new PatternPiece{Closed=true,Points=[new(0,0),new(size/2-.5,0),new(size/2,1),new(size/2+.5,0),
+            new(size,0),new(size,size),new(0,size)]};
+        if(reverse){p.Points.Reverse();o.Points.Reverse();}
+        int edge=reverse?2:0;
+        var s=new ExperimentalPhysicalNotchV1(1,p.Id,ExperimentalPhysicalNotchValidation.Fingerprint(p),edge,p.Points[edge],p.Points[(edge+1)%p.Points.Count],
+            "straight",.5,reverse?"right":"left","mm",1,1,0,0,0);
+        Assert.Equal(Geometry.SignedArea(p.Points),Geometry.SignedArea(o.Points));
+        Assert.True(ExperimentalNotchContourBinding.Verify(p,o,o.Id,s,out var reason),reason);
+    }
 }

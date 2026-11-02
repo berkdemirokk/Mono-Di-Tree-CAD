@@ -33,8 +33,8 @@ internal static class ExperimentalNotchContourBinding
         try
         {
             Geometry.ValidateContour(result);
-            double inputArea=Geometry.SignedArea(input.Points),resultArea=Geometry.SignedArea(result);
-            if(Math.Sign(inputArea)!=Math.Sign(resultArea) || Math.Abs(resultArea)>=Math.Abs(inputArea))
+            var inputArea=ExactDoubleArea(input.Points);var resultArea=ExactDoubleArea(result);
+            if(inputArea.IsZero || resultArea.IsZero || inputArea.Sign!=resultArea.Sign || BigInteger.Abs(resultArea)>=BigInteger.Abs(inputArea))
             {reason="Output changes orientation or does not reduce area.";return false;}
         }
         catch(ArgumentException){reason="Output contour is invalid or intersects itself.";return false;}
@@ -47,6 +47,19 @@ internal static class ExperimentalNotchContourBinding
     {
         long bits=BitConverter.DoubleToInt64Bits(v);int e=(int)((bits>>52)&0x7ff);long f=bits&0x000f_ffff_ffff_ffffL;
         BigInteger m=e==0?f:f|(1L<<52);if(bits<0)m=-m;return m<<(e==0?0:e-1);
+    }
+    // Every finite binary64 is an integer multiple of 2^-1074. The common
+    // positive factor and factor of 2 cancel in this signed-area comparison.
+    private static BigInteger ExactDoubleArea(IReadOnlyList<Point2> points)
+    {
+        BigInteger ox=Exact(points[0].X),oy=Exact(points[0].Y),sum=0;
+        for(int i=1;i+1<points.Count;i++)
+        {
+            BigInteger ax=Exact(points[i].X)-ox,ay=Exact(points[i].Y)-oy;
+            BigInteger bx=Exact(points[i+1].X)-ox,by=Exact(points[i+1].Y)-oy;
+            sum+=ax*by-ay*bx;
+        }
+        return sum;
     }
     private static bool OnSourceEdge(Point2 a,Point2 b,Point2 x,Point2 y)
     {
