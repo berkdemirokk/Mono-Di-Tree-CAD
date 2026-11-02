@@ -24,6 +24,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private List<Point>? pathSuggestion,pathUndo;
     private Point[]? pathOriginal;
     private int pathStartIndex;
+    private Point? pathClosingTarget;
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
 
@@ -52,7 +53,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
                 image=snapshot;
             }
             sourceWidth=image?.PixelWidth ?? 0;sourceHeight=image?.PixelHeight ?? 0;
-            points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
+            points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
             zoom=1;zoomCenter=new Point(0.5,0.5);
             InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
         }
@@ -73,7 +74,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal void SetReferencePointCount(int count)
     {
         if(count is not (2 or 4) || points.Count!=0)throw new InvalidOperationException("Referans türü yalnız noktalar temizken değiştirilebilir.");
-        ReferencePointCount=count;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;InvalidateVisual();
+        ReferencePointCount=count;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;InvalidateVisual();
     }
 
     // View-only state: never change selected pixel coordinates or draft revision.
@@ -86,60 +87,60 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         zoom=next;InvalidateVisual();
     }
     internal void ResetZoom() { zoom=1;zoomCenter=new Point(0.5,0.5);InvalidateVisual(); }
-    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;InvalidateVisual(); }
+    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;InvalidateVisual(); }
     internal bool SuggestLastEdge()
     {
-        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;
+        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
         if(image is not null && points.Count>ReferencePointCount && PhotoEdgeSuggestion.TryFind(image,points[^1],out var found))edgeSuggestion=found;
         InvalidateVisual();return edgeSuggestion.HasValue;
     }
     internal bool ApplyEdgeSuggestion()
     {
         if(edgeSuggestion is not Point proposed || points.Count<=ReferencePointCount || proposed==points[^1] || (points.Count>ReferencePointCount+1 && proposed==points[^2]))return false;
-        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool SetPathSuggestion(Point start,Point end,IReadOnlyList<Point> candidate)
         =>SetPathSegments(points.Count-2,[start,end],[candidate]);
 
-    internal bool SetAllPathSuggestions(IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates)
-        =>SetPathSegments(ReferencePointCount,anchors,candidates);
+    internal bool SetAllPathSuggestions(IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
+        =>SetPathSegments(ReferencePointCount,anchors,candidates,includeClosing);
 
-    private bool SetPathSegments(int startIndex,IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates)
+    private bool SetPathSegments(int startIndex,IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
     {
-        pathSuggestion=null;pathOriginal=null;edgeSuggestion=null;InvalidateVisual();
-        if(image is null || startIndex<ReferencePointCount || anchors.Count<2 || anchors.Count>17 || candidates.Count!=anchors.Count-1 ||
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();
+        if(image is null || startIndex<ReferencePointCount || anchors.Count<(includeClosing ? 3 : 2) || anchors.Count>17 || candidates.Count!=anchors.Count-1+(includeClosing ? 1 : 0) ||
            points.Count!=startIndex+anchors.Count || !points.Skip(startIndex).SequenceEqual(anchors))return false;
         Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
         var simplified=new List<Point> { anchors[0] };
         for(int segment=0;segment<candidates.Count;segment++)
         {
-            var candidate=candidates[segment];var end=anchors[segment+1];
+            var candidate=candidates[segment];var closing=includeClosing && segment==candidates.Count-1;var end=closing ? anchors[0] : anchors[segment+1];
             if(candidate is null || candidate.Count<2 || candidate.Count>4096 || candidate[0]!=Rounded(anchors[segment]) || candidate[^1]!=Rounded(end))return false;
             for(int i=1;i<candidate.Count-1;i++)
             {
                 var p=candidate[i];var a=candidate[i-1];var b=candidate[i+1];
                 if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || p.X<0 || p.Y<0 || p.X>image.PixelWidth-1 || p.Y>image.PixelHeight-1)return false;
                 if((p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
-                if(p==simplified[^1])return false;simplified.Add(p);
+                if(p==simplified[^1] || (closing && p==anchors[0]))return false;simplified.Add(p);
                 if(startIndex+simplified.Count>MaximumPoints)return false;
             }
-            if(end==simplified[^1])return false;simplified.Add(end);
+            if(end==simplified[^1])return false;if(!closing)simplified.Add(end);
         }
         if(simplified.Count<=anchors.Count || startIndex+simplified.Count>MaximumPoints)return false;
-        pathSuggestion=simplified;pathOriginal=anchors.ToArray();pathStartIndex=startIndex;InvalidateVisual();return true;
+        pathSuggestion=simplified;pathOriginal=anchors.ToArray();pathStartIndex=startIndex;pathClosingTarget=includeClosing ? anchors[0] : null;InvalidateVisual();return true;
     }
     internal bool ApplyPathSuggestion()
     {
         if(pathSuggestion is not { Count:>=2 } path || pathOriginal is null || pathStartIndex<ReferencePointCount ||
            points.Count!=pathStartIndex+pathOriginal.Length || !points.Skip(pathStartIndex).SequenceEqual(pathOriginal))return false;
         pathUndo=points.ToList();points.RemoveRange(pathStartIndex,pathOriginal.Length);points.AddRange(path);
-        pathSuggestion=null;pathOriginal=null;edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        cursor=points[^1];pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal bool UndoPath()
     {
         if(pathUndo is null)return false;
-        points.Clear();points.AddRange(pathUndo);pathUndo=null;pathSuggestion=null;pathOriginal=null;edgeSuggestion=null;cursor=points[^1];
+        points.Clear();points.AddRange(pathUndo);pathUndo=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;cursor=points[^1];
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
@@ -148,18 +149,18 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || points.Count>=MaximumPoints || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
             point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 ||
             (points.Count>0 && points.Count!=ReferencePointCount && points[^1]==point))return false;
-        points.Add(point);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.Add(point);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool UndoPoint()
     {
         if(points.Count==0)return false;
-        points.RemoveAt(points.Count-1);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.RemoveAt(points.Count-1);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal void ClearPoints()
     {
         if(points.Count==0)return;
-        points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
+        points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
     }
 
     // Rectangle is the actual uniform-fit image, excluding letterbox regions.
@@ -229,6 +230,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             var proposalPen=new Pen(Brushes.DeepSkyBlue,3) { DashStyle=DashStyles.Dash };
             for(int i=1;i<suggestedPath.Count;i++)
                 if(TryMapPixelToView(suggestedPath[i-1],RenderSize,out var a) && TryMapPixelToView(suggestedPath[i],RenderSize,out var b))dc.DrawLine(proposalPen,a,b);
+            if(pathClosingTarget is Point closing && TryMapPixelToView(suggestedPath[^1],RenderSize,out var last) && TryMapPixelToView(closing,RenderSize,out var first))dc.DrawLine(proposalPen,last,first);
         }
         var stroke=new Pen(DesignRequestWindow.Accent,2);Point? previous=null;
         var dip=VisualTreeHelper.GetDpi(this).PixelsPerDip;

@@ -9241,6 +9241,8 @@ internal static class DesktopVerification
         Check(batchCanvas.ApplyPathSuggestion() && batchCanvas.Points.Count>batchBefore.Length && anchors.All(a=>batchCanvas.Points.Contains(a)) &&
             batchCanvas.Points[0]==batchBefore[0] && batchCanvas.Points[1]==batchBefore[1],"Accepted batch photo paths retain every exact user anchor and both references",checks);
         Check(batchCanvas.UndoPath() && batchCanvas.Points.SequenceEqual(batchBefore),"Batch photo path is undone in one step",checks);
+        Check(!batchCanvas.SetAllPathSuggestions(anchors,segments,includeClosing:true) && batchCanvas.Points.SequenceEqual(batchBefore),
+            "A closing batch without its last interval is rejected atomically",checks);
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
@@ -9307,6 +9309,32 @@ internal static class DesktopVerification
                     "Batch search previews each trace interval without changing points and discloses the open end",checks);
                 Check(canvas.ApplyPathSuggestion() && canvas.Points.Count>beforeZoom.Length && canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),
                     "Batch proposal applies and undoes as one operation",checks);
+                trace.ReviewClosureForVerification.IsChecked=true;calls=0;
+                trace.ComputePathForVerification=(_,start,end,_)=> { calls++;
+                    if(start==new Point(10,10) && end==new Point(20,10))return new[] { start,new Point(15,11),end };
+                    if(start==new Point(20,10) && end==new Point(20,20))return new[] { start,new Point(21,15),end };
+                    if(start==new Point(20,20) && end==new Point(10,10))return new[] { start,new Point(18,17),end };
+                    return null; };
+                var closingBatch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>closingBatch.IsCompleted);closingBatch.GetAwaiter().GetResult();
+                Check(calls==3 && canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("taslak açık"),
+                    "Closure-enabled batch previews all intervals including the closing path without changing points",checks);
+                trace.ReviewClosureForVerification.IsChecked=false;Check(canvas.PathSuggestion is null,"Changing closure choice invalidates the old photo path preview",checks);
+                trace.ReviewClosureForVerification.IsChecked=true;closingBatch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>closingBatch.IsCompleted);closingBatch.GetAwaiter().GetResult();
+                Render(trace,Path.ChangeExtension(reportPath,".photo-batch-closing.png"),560,480);
+                Check(canvas.ApplyPathSuggestion() && canvas.Points[^1]==new Point(18,17) && canvas.Points[2]==new Point(10,10) && canvas.Points[^1]!=canvas.Points[2],
+                    "Accepted closing path retains the original first point and keeps an open endpoint",checks);
+                var closingPixels=canvas.Points.Skip(2).Select(p=>new Point2(p.X,p.Y)).ToArray();
+                var closingGeometry=PhotoTraceCalibration.Convert(100,50,100,50,new(10,10),new(20,10),100,closingPixels);
+                var openClosing=new PatternPiece { Closed=false,Points=closingGeometry.ToList() };
+                var closedResult=TekstilCAD.Patterns.OpenPathClosure.Close(openClosing,150);
+                Check(closedResult.Piece.Closed && closedResult.Piece.Points.SequenceEqual(openClosing.Points) && !openClosing.Closed,
+                    "Reviewed closing path can form a separately validated closed piece while the open source remains unchanged",checks);
+                Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),"Accepted closing path undoes in one step",checks);
+                calls=0;trace.ComputePathForVerification=(_,start,end,_)=> { calls++;if(end==new Point(10,10))return null;
+                    return start==new Point(10,10) ? new[] { start,new Point(15,11),end } : new[] { start,new Point(21,15),end }; };
+                var failedClosing=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>failedClosing.IsCompleted);failedClosing.GetAwaiter().GetResult();
+                Check(calls==3 && canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom),"A failed closing interval discards the entire batch",checks);
+                trace.ReviewClosureForVerification.IsChecked=false;
                 calls=0;trace.ComputePathForVerification=(_,_,_,_)=> { calls++;return calls==1 ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) } : null; };
                 var failedBatch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>failedBatch.IsCompleted);failedBatch.GetAwaiter().GetResult();
                 Check(calls==2 && canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom),"One failed batch interval discards the entire proposal",checks);
@@ -9359,8 +9387,8 @@ internal static class DesktopVerification
             trace.LengthForVerification.Text="100";
             var savedSegment=canvas.Points.ToArray();
             var proposal=new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) };
-            Check(canvas.SetPathSuggestion(savedSegment[^2],savedSegment[^1],proposal),"Photo path can be prepared for draft confirmation",checks);
             Guid? closureRequested=null;trace.OpenClosureForVerification=id=>closureRequested=id;trace.ReviewClosureForVerification.IsChecked=true;
+            Check(canvas.SetPathSuggestion(savedSegment[^2],savedSegment[^1],proposal),"Photo path can be prepared for draft confirmation",checks);
             var pendingWarning=false;var closureNotice=false;trace.ConfirmForVerification=message=> { pendingWarning=message.Contains("Uygulanmamış mavi öneri");closureNotice=message.Contains("fotoğraf geçmişi açık kaynakta kalır");return false; };trace.TryApply();
             Check(pendingWarning && closureNotice && closureRequested is null && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Draft confirmation discloses an unaccepted photo path and leaves the project unchanged on cancellation",checks);
