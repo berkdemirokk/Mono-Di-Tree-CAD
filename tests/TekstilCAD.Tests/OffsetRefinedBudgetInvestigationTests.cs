@@ -60,8 +60,8 @@ public sealed class OffsetRefinedBudgetInvestigationTests(ITestOutputHelper log)
     {
         var m=typeof(PatternTools).Assembly.GetType("TekstilCAD.Patterns.OffsetBudgetEvidenceExperiment",true)!
             .GetMethod("TryVerify",BindingFlags.Static|BindingFlags.NonPublic)!;
-        object?[] args=[source,candidates,delta,budget,126L,1_000_000L,1_000L,null,CancellationToken.None];
-        bool ok=(bool)m.Invoke(null,args)!;return (ok,(string)args[7]!);
+        object?[] args=[source,candidates,delta,budget,126L,1_000_000L,1_000L,1L,null,CancellationToken.None];
+        bool ok=(bool)m.Invoke(null,args)!;return (ok,(string)args[8]!);
     }
     [Theory]
     [InlineData(false)]

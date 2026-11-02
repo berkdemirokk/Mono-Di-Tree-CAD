@@ -1,4 +1,5 @@
 using System.Numerics;
+using TekstilCAD.Core;
 using static TekstilCAD.Patterns.OffsetMiterIntervalDiagnostic;
 
 namespace TekstilCAD.Patterns;
@@ -13,14 +14,14 @@ namespace TekstilCAD.Patterns;
 internal static class OffsetBudgetEvidenceExperiment
 {
     internal static bool TryVerify(IReadOnlyList<GridPoint> source,IReadOnlyList<IReadOnlyList<GridPoint>> candidates,
-        long delta,long vertexBudget,long edgeBand,long chordBudget,long heightBudget,
+        long delta,long vertexBudget,long edgeBand,long chordBudget,long heightBudget,long minimumSeparation,
         out string reason,CancellationToken token=default)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(candidates);
         token.ThrowIfCancellationRequested();reason="Invalid contour count or caller budgets.";
         int n=source.Count;
         if(n<3 || n>707 || candidates.Count!=1 || candidates[0] is null || candidates[0].Count!=n ||
-           delta<=0 || vertexBudget<0 || edgeBand<0 || edgeBand>=delta || chordBudget<0 || heightBudget<0)return false;
+           delta<=0 || vertexBudget<0 || edgeBand<0 || edgeBand>=delta || chordBudget<0 || heightBudget<0 || minimumSeparation<=0)return false;
         var s=new GridPoint[n];var c=new GridPoint[n];
         for(int i=0;i<n;i++){token.ThrowIfCancellationRequested();s[i]=source[i];c[i]=candidates[0][i];}
         if(!OffsetCandidateProof.TryCreate(s,delta,out var ideal,out reason,token) ||
@@ -38,10 +39,39 @@ internal static class OffsetBudgetEvidenceExperiment
         }
         if(start<0){reason="No cyclic indexed mapping meets the vertex budget.";return false;}
         var mapped=new GridPoint[n];for(int i=0;i<n;i++){token.ThrowIfCancellationRequested();mapped[i]=c[(start+i)%n];}
+        const long coordinateLimit=100_000_000L*1_000_000;
+        var sm=new Point2[n];var cm=new Point2[n];
+        for(int i=0;i<n;i++)
+        {
+            token.ThrowIfCancellationRequested();var p=mapped[i];
+            if(p.X < -coordinateLimit || p.X > coordinateLimit || p.Y < -coordinateLimit || p.Y > coordinateLimit)
+            {reason="Mapped candidate exceeds the supported coordinate range.";return false;}
+            sm[i]=new Point2(s[i].X/1_000_000d,s[i].Y/1_000_000d);
+            cm[i]=new Point2(p.X/1_000_000d,p.Y/1_000_000d);
+        }
         if(!OffsetLinearTopologyExperiment.TryVerify(s,mapped,out reason,token) ||
            !OffsetIndexedEdgeEvidence.TryVerify(s,mapped,delta,edgeBand,out reason,token) ||
-           !OffsetAllTurnsEvidence.TryVerify(s,mapped,chordBudget,heightBudget,out reason,token))return false;
-        reason="Caller-budgeted indexed vertex, edge, local turn and linear topology checks passed; feature discovery, dimensional preservation and production suitability are not certified.";
+           !OffsetAllTurnsEvidence.TryVerify(s,mapped,chordBudget,heightBudget,out reason,token) ||
+           !OffsetMillimeterProof.TryValidate(s,mapped,sm,cm,out reason,token))return false;
+        BigInteger separationSquared=(BigInteger)minimumSeparation*minimumSeparation;
+        for(int i=0;i<n;i++)for(int j=i+1;j<n;j++)
+        {
+            token.ThrowIfCancellationRequested();if(j==i+1 || (i==0 && j==n-1))continue;
+            var a=mapped[i];var b=mapped[(i+1)%n];var x=mapped[j];var y=mapped[(j+1)%n];
+            if(!AtLeast(a,x,y,separationSquared) || !AtLeast(b,x,y,separationSquared) ||
+               !AtLeast(x,a,b,separationSquared) || !AtLeast(y,a,b,separationSquared))
+            {reason=$"Candidate edges {i} and {j} violate the caller's minimum separation.";return false;}
+        }
+        reason="Caller-budgeted indexed vertex, edge, turn, topology, binary64 and minimum-separation checks passed; feature discovery, dimensional preservation and production suitability are not certified.";
         return true;
+    }
+    private static bool AtLeast(GridPoint p,GridPoint a,GridPoint b,BigInteger minimumSquared)
+    {
+        BigInteger dx=(BigInteger)b.X-a.X,dy=(BigInteger)b.Y-a.Y;
+        BigInteger px=(BigInteger)p.X-a.X,py=(BigInteger)p.Y-a.Y;
+        var length=dx*dx+dy*dy;var dot=px*dx+py*dy;
+        if(length.IsZero || dot<=0)return px*px+py*py>=minimumSquared;
+        if(dot>=length){var x=px-dx;var y=py-dy;return x*x+y*y>=minimumSquared;}
+        var cross=dx*py-dy*px;return cross*cross>=minimumSquared*length;
     }
 }
