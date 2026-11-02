@@ -77,4 +77,55 @@ public class DressMeasurementParserTests
         Assert.DoesNotContain(result.Measurements,x=>x.Label=="bel çevresi");
         Assert.Contains(result.Questions,x=>x.StartsWith("bel çevresi"));
     }
+    [Theory]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi 72 cm.", 920, 720)]
+    [InlineData("GÖĞÜS ÇEVRESİ 92 CM VE BEL ÇEVRESİ 720 MM!", 920, 720)]
+    [InlineData("göğüs çevresi: 92,5 cm ve bel çevresi = 72 cm", 925, 720)]
+    public void PhoneCompatibleConjunctionAcceptsOnlyExplicitMeasurementsAndPreservesEvidence(string message,int chest,int waist)
+    {
+        var original=message;
+        var result=DressMeasurementParser.Review("",message);
+        Assert.Equal(original,message);
+        Assert.Equal(chest,result.Measurements.Single(m=>m.Label=="göğüs çevresi").Millimeters);
+        Assert.Equal(waist,result.Measurements.Single(m=>m.Label=="bel çevresi").Millimeters);
+        Assert.Contains(result.Measurements.Single(m=>m.Label=="göğüs çevresi").SourceExpressions,source=>original.Contains(source));
+        Assert.Contains(result.Measurements.Single(m=>m.Label=="bel çevresi").SourceExpressions,source=>original.Contains(source));
+        Assert.Empty(result.Unrecognized);
+    }
+    [Theory]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi 72")]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi yaklaşık 72 cm")]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi 0 cm")]
+    [InlineData("göğüs çevresi 92 cm ve bilinmeyen ölçü 72 cm")]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi 72 cm ve göğüs çevresi 93 cm")]
+    [InlineData("göğüs çevresi 92 cm ve bel çevresi 72 cm ve")]
+    public void InvalidJoinedStatementDoesNotPartiallyAcceptValues(string message)
+    {
+        var result=DressMeasurementParser.Review("",message);
+        Assert.Empty(result.Measurements);
+        Assert.Contains(message,result.Unrecognized);
+    }
+    [Fact]
+    public void ConflictOutsideJoinedStatementInvalidatesAllItsMeasurements()
+    {
+        var result=DressMeasurementParser.Review("göğüs çevresi 93 cm", "göğüs çevresi 92 cm ve bel çevresi 72 cm.");
+        Assert.DoesNotContain(result.Measurements,m=>m.Label=="göğüs çevresi" || m.Label=="bel çevresi");
+        Assert.Contains(result.Questions,q=>q.StartsWith("göğüs çevresi"));
+        Assert.Contains(result.Questions,q=>q.StartsWith("bel çevresi"));
+    }
+    [Fact]
+    public void IosFixtureLoadsRoundTripsAndReviewsJoinedMessage()
+    {
+        // Exact content of the independent iOS ios-message-ve fixture; no iOS
+        // worktree dependency and no writes to its source directory.
+        const string json="""{"format":"tekstilcad.design-request","version":1,"prompt":"A kesim 👗","measurements":"göğüs çevresi: 92 cm\nbel çevresi: 72 cm\ngöğüs çevresi 92 cm ve bel çevresi 72 cm","reference":null}""";
+        var loaded=DesignRequestStorage.Deserialize(json);
+        var roundTrip=DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(loaded));
+        Assert.Equal(loaded.Prompt,roundTrip.Prompt);Assert.Equal(loaded.Measurements,roundTrip.Measurements);
+        Assert.Equal("göğüs çevresi: 92 cm\nbel çevresi: 72 cm\ngöğüs çevresi 92 cm ve bel çevresi 72 cm",roundTrip.Measurements);
+        var result=DressMeasurementParser.Review(roundTrip.Prompt,roundTrip.Measurements);
+        Assert.Equal(920m,result.Measurements.Single(m=>m.Label=="göğüs çevresi").Millimeters);
+        Assert.Equal(720m,result.Measurements.Single(m=>m.Label=="bel çevresi").Millimeters);
+        Assert.DoesNotContain(result.Questions,q=>q.StartsWith("göğüs çevresi") || q.StartsWith("bel çevresi"));
+    }
 }

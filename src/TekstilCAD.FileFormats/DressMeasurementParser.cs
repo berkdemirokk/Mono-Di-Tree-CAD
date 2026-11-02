@@ -13,6 +13,7 @@ public static partial class DressMeasurementParser
     private const string Labels=@"(?:göğüs(?:\s+çevresi)?|bel(?:\s+çevresi)?|kalça(?:\s+çevresi)?|elbise\s+boyu|kol\s+boyu)";
     private const string ExactLabels=@"(?:göğüs\s+çevresi|bel\s+çevresi|kalça\s+çevresi|elbise\s+boyu|kol\s+boyu)";
     private static readonly Regex SegmentSplit=new(@"[;\r\n]+|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Conjunction=new(@"\s+ve\s+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!?]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // These distinct experimental measurements mention "göğüs" but are not
@@ -34,6 +35,7 @@ public static partial class DressMeasurementParser
             throw new ArgumentException("İstek metni sınırı aşıyor.");
         var values=new Dictionary<string,List<(decimal Value,string Source)>>(StringComparer.Ordinal);
         var unclear=new HashSet<string>(StringComparer.Ordinal);var other=new List<string>();
+        var coupled=new List<HashSet<string>>();
         foreach(var text in new[] { description,measurements })
         {
         var folded=FoldCase(text);var start=0;
@@ -44,21 +46,41 @@ public static partial class DressMeasurementParser
             if(segment.Length==0)continue;
             var search=FoldCase(segment);
             if(OtherChestMeasurement.IsMatch(search)) { other.Add(segment);continue; }
-            var labels=LabelPattern.Matches(search);var match=Exact.Match(search);
-            if(!match.Success)
+            // A conjunction is accepted only if every constituent is an exact,
+            // valid measurement and repeated labels agree. Otherwise the whole
+            // original segment remains unrecognized and all its labels are unclear.
+            var parts=new List<string>();var partStart=0;
+            foreach(Match conjunction in Conjunction.Matches(search))
+            { parts.Add(segment[partStart..conjunction.Index].Trim());partStart=conjunction.Index+conjunction.Length; }
+            parts.Add(segment[partStart..].Trim());
+            var parsed=new List<(string Key,decimal Value,string Source)>();
+            foreach(var part in parts)
             {
-                foreach(Match label in labels)unclear.Add(Canonical(label.Value));
+                var match=Exact.Match(FoldCase(part));
+                if(!match.Success || !decimal.TryParse(match.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))
+                    break;
+                var key=Canonical(match.Groups["label"].Value);
+                if(match.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))value*=10m;
+                if(value<=0 || value>10_000m)break;
+                parsed.Add((key,value,part));
+            }
+            if(parsed.Count!=parts.Count || parsed.GroupBy(p=>p.Key).Any(g=>g.Any(p=>p.Value!=g.First().Value)))
+            {
+                foreach(Match label in LabelPattern.Matches(search))unclear.Add(Canonical(label.Value));
                 other.Add(segment);continue;
             }
-            var key=Canonical(match.Groups["label"].Value);
-            if(!decimal.TryParse(match.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))
-            { unclear.Add(key);other.Add(segment);continue; }
-            if(match.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))value*=10m;
-            if(value<=0 || value>10_000m) { unclear.Add(key);other.Add(segment);continue; }
-            if(!values.TryGetValue(key,out var list))values[key]=list=[];
-            list.Add((value,segment));
+            if(parts.Count>1)coupled.Add(parsed.Select(p=>p.Key).ToHashSet(StringComparer.Ordinal));
+            foreach(var item in parsed)
+            {
+                if(!values.TryGetValue(item.Key,out var list))values[item.Key]=list=[];
+                list.Add((item.Value,item.Source));
+            }
         }
         }
+        // A conflict elsewhere invalidates every measurement from a joined
+        // expression, including chains of joined expressions.
+        foreach(var (key,items) in values)if(items.Any(x=>x.Value!=items[0].Value))unclear.Add(key);
+        bool changed;do { changed=false;foreach(var group in coupled)if(group.Overlaps(unclear))foreach(var key in group)changed|=unclear.Add(key); } while(changed);
         var output=new List<ExplicitDressMeasurement>();var questions=new List<string>();
         foreach(var key in Required.Append("kol boyu"))
         {

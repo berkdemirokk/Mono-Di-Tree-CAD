@@ -5,7 +5,7 @@ using System.Windows.Media.Imaging;
 using TekstilCAD.Core;
 using TekstilCAD.Desktop;
 
-// Reads the 12-anchor output from contour_benchmark.py; never shows a window or
+// Reads 80 contour jobs from contour_benchmark.py; never shows a window or
 // opens a device. Uses production canvas and pixel validators, not an imitation.
 internal static class Program
 {
@@ -16,15 +16,17 @@ internal static class Program
         var jobs=JsonSerializer.Deserialize<Job[]>(File.ReadAllText(args[0])) ?? throw new InvalidDataException();
         var paths=JsonSerializer.Deserialize<PathResult[]>(File.ReadAllText(args[1])) ?? throw new InvalidDataException();
         var indexed=paths.ToDictionary(p=>p.Id);
-        if(jobs.Length!=960 || indexed.Count!=jobs.Length)throw new InvalidDataException("Expected 80 complete 12-segment jobs.");
+        if(jobs.Length%80!=0 || indexed.Count!=jobs.Length)throw new InvalidDataException("Expected 80 equally grouped contour jobs.");
+        int anchorCount=jobs.Length/80;
+        if(anchorCount<3 || anchorCount>17)throw new InvalidDataException("Expected 3 to 17 anchors per contour.");
         var output=new List<Report>();
         for(int ordinal=0;ordinal<80;ordinal++)
         {
-            var group=jobs.Skip(ordinal*12).Take(12).ToArray();
-            if(group.Where((job,i)=>job.Id!=ordinal*12+i || job.Image!=group[0].Image).Any())
+            var group=jobs.Skip(ordinal*anchorCount).Take(anchorCount).ToArray();
+            if(group.Where((job,i)=>job.Id!=ordinal*anchorCount+i || job.Image!=group[0].Image).Any())
                 throw new InvalidDataException("Unexpected job grouping.");
             var anchors=group.Select(job=>new Point(job.X1,job.Y1)).ToArray();
-            if(group.Where((job,i)=>job.X2!=anchors[(i+1)%12].X || job.Y2!=anchors[(i+1)%12].Y).Any())
+            if(group.Where((job,i)=>job.X2!=anchors[(i+1)%anchorCount].X || job.Y2!=anchors[(i+1)%anchorCount].Y).Any())
                 throw new InvalidDataException("Segments do not form the expected anchor loop.");
             var candidates=group.Select(job=>indexed[job.Id]).ToArray();
             if(candidates.Any(p=>!p.Found || p.Path.Any(point=>point.Length!=2)))

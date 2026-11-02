@@ -10153,7 +10153,14 @@ internal static class DesktopVerification
             Check(window.ChatInputForVerification.Text=="göğüs çevresi 140 cm" && window.StatusForVerification.Text.Contains("Gönderilmemiş") &&
                 window.ReviewForVerification.Text.Length>0 && !window.ReviewForVerification.Text.Contains("140"),
                 "Primary review action preserves unsent messages and reviews only submitted measurements",checks);
-            window.ChatInputForVerification.Clear();window.LoadForVerification(input);
+            window.ChatInputForVerification.Clear();window.LoadForVerification(new DesignRequest("A kesim", "", null));
+            const string phoneMessage="göğüs çevresi 92 cm ve bel çevresi 72 cm.";
+            window.ChatInputForVerification.Text=phoneMessage;
+            Descendants<Button>(requestRoot).Single(b=>Equals(b.Content,"Gönder")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text.Replace("\r\n","\n")=="A kesim\n"+phoneMessage && window.ChatInputForVerification.Text=="" &&
+                window.MeasurementTilesForVerification["göğüs çevresi"].Text=="92 cm" && window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm",
+                "Phone-style joined measurement message is preserved and updates both desktop tiles",checks);
+            window.LoadForVerification(input);
             _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try
             {
