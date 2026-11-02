@@ -34,7 +34,7 @@ public class PhysicalContourStorageTests
         try
         {
             var doc=Document(); ProjectStorage.Save(doc,path);
-            Assert.Equal(8,JsonNode.Parse(File.ReadAllText(path))![0]!.GetValue<int>());
+            Assert.Equal(10,JsonNode.Parse(File.ReadAllText(path))![0]!.GetValue<int>());
             var loaded=ProjectStorage.Load(path);
             Assert.True(DocumentSession.ContentEquals(doc,loaded));
             loaded.Pieces[0].PhysicalFeatures!.EdgeIds[0]=Guid.NewGuid();

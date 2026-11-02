@@ -54,7 +54,7 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
@@ -62,7 +62,13 @@ public static class ProjectStorage
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 ValidateSerializedGrainlines(root[1], version);
                 ValidateSerializedNotches(root[1],version);
-                ValidateSerializedPhysicalFeatures(root[1],version);
+                var hasPhysical=HasPhysicalField(root[1]);
+                var hasPhoto=root[1].TryGetProperty("PhotoTraceHistory",out _);
+                if(version==8 && hasPhysical==hasPhoto)throw new InvalidDataException("Sürüm 8 biçimi belirsiz veya karışık.");
+                if(version==9 && hasPhysical)throw new InvalidDataException("Sürüm 9 fiziksel kontur içeremez.");
+                if(version==10 && !hasPhysical && !hasPhoto)throw new InvalidDataException("Sürüm 10 ek bilgi içermiyor.");
+                ValidateSerializedPhysicalFeatures(root[1],version==9 || (version==8 && hasPhoto) ? 0 : version);
+                ValidateSerializedPhotoTraceHistory(root[1],version==8 && hasPhysical ? 0 : version,cancellationToken);
                 if (version < 3 && root[1].TryGetProperty("NestingSnapshot", out _))
                     throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
                 if (version == 3 || (version >= 4 && root[1].TryGetProperty("NestingSnapshot", out _))) ValidateSerializedNestingSnapshot(root[1]);
@@ -92,6 +98,7 @@ public static class ProjectStorage
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
                 ValidateSerializedPhysicalFeatures(root,0);
+                ValidateSerializedPhotoTraceHistory(root,0,cancellationToken);
                 ValidateSerializedImportProvenance(root, 0);
                 if (HasSerializedMetadata(root)) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
                 if (root.TryGetProperty("NestingSnapshot", out _)) throw new InvalidDataException("Pastal geçmişi için sürüm 3 gereklidir.");
@@ -128,6 +135,63 @@ public static class ProjectStorage
         { throw new InvalidDataException("Proje dosyasının metin kodlaması bozuk; dosya açılmadı.", ex); }
     }
     private static bool HasSerializedMetadata(JsonElement project) => project.TryGetProperty("Pieces", out var pieces) && pieces.ValueKind == JsonValueKind.Array && pieces.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Metadata", out _));
+    private static void ValidateSerializedPhotoTraceHistory(JsonElement project,int version,CancellationToken cancellationToken)
+    {
+        var present=project.TryGetProperty("PhotoTraceHistory",out var history);
+        if(version<8)
+        {
+            if(present)throw new InvalidDataException("Fotoğraf taslağı geçmişi için sürüm 8 gereklidir.");
+            return;
+        }
+        if(!present && version==10)return;
+        if(!present || history.ValueKind!=JsonValueKind.Array || history.GetArrayLength() is <1 or >512)
+            throw new InvalidDataException("Fotoğraf taslağı geçmişi eksik veya geçersiz.");
+        static void Point(JsonElement p)
+        {
+            if(p.ValueKind!=JsonValueKind.Object || !p.TryGetProperty("X",out var x) || x.ValueKind!=JsonValueKind.Number || !x.TryGetDouble(out var xv) || !double.IsFinite(xv) ||
+               !p.TryGetProperty("Y",out var y) || y.ValueKind!=JsonValueKind.Number || !y.TryGetDouble(out var yv) || !double.IsFinite(yv) ||
+               (p.TryGetProperty("IsFinite",out var finite) && finite.ValueKind!=JsonValueKind.True) ||
+               p.EnumerateObject().Any(v=>v.Name is not ("X" or "Y" or "IsFinite")))
+                throw new InvalidDataException("Fotoğraf taslağı noktası eksik veya geçersiz.");
+        }
+        string[] required=["AlgorithmVersion","PieceId","SourceSha256","SourceByteLength","SourceOrientation","SourceWidth","SourceHeight","PreviewWidth","PreviewHeight","ReferenceStart","ReferenceEnd","ReferenceLengthMm","TracePixels","GeneratedPoints"];
+        long total=0;var hasPlane=false;
+        foreach(var record in history.EnumerateArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(record.ValueKind!=JsonValueKind.Object || record.EnumerateObject().Any(p=>!required.Contains(p.Name,StringComparer.Ordinal) && p.Name!="PlaneCalibration") ||
+               required.Any(name=>!record.TryGetProperty(name,out _)))throw new InvalidDataException("Fotoğraf taslağı kaydı eksik veya bilinmeyen alan içeriyor.");
+            foreach(var name in new[] { "AlgorithmVersion","SourceOrientation","SourceWidth","SourceHeight","PreviewWidth","PreviewHeight" })
+                if(record.GetProperty(name).ValueKind!=JsonValueKind.Number || !record.GetProperty(name).TryGetInt32(out _))throw new InvalidDataException("Fotoğraf taslağı tamsayı alanı geçersiz.");
+            var algorithm=record.GetProperty("AlgorithmVersion").GetInt32();var planePresent=record.TryGetProperty("PlaneCalibration",out var plane);
+            if(algorithm==1 && planePresent || algorithm==2 && (!planePresent || version<9) || algorithm is not (1 or 2))
+                throw new InvalidDataException("Fotoğraf taslağı algoritması ve düzlem kaydı uyuşmuyor.");
+            if(algorithm==2)
+            {
+                hasPlane=true;
+                if(plane.ValueKind!=JsonValueKind.Object || plane.EnumerateObject().Any(p=>p.Name is not ("Corners" or "WidthMm" or "HeightMm")) ||
+                   !plane.TryGetProperty("Corners",out var corners) || corners.ValueKind!=JsonValueKind.Array || corners.GetArrayLength()!=4 ||
+                   !plane.TryGetProperty("WidthMm",out var width) || width.ValueKind!=JsonValueKind.Number || !width.TryGetDouble(out var w) || !double.IsFinite(w) ||
+                   !plane.TryGetProperty("HeightMm",out var height) || height.ValueKind!=JsonValueKind.Number || !height.TryGetDouble(out var h) || !double.IsFinite(h) || (total+=4)>200_000)
+                    throw new InvalidDataException("Fotoğraf düzlem kaydı eksik veya geçersiz.");
+                foreach(var corner in corners.EnumerateArray())Point(corner);
+            }
+            if(record.GetProperty("SourceByteLength").ValueKind!=JsonValueKind.Number || !record.GetProperty("SourceByteLength").TryGetInt64(out _) ||
+               record.GetProperty("SourceSha256").ValueKind!=JsonValueKind.String || record.GetProperty("PieceId").ValueKind!=JsonValueKind.String ||
+               !record.GetProperty("PieceId").TryGetGuid(out _) || record.GetProperty("ReferenceLengthMm").ValueKind!=JsonValueKind.Number ||
+               !record.GetProperty("ReferenceLengthMm").TryGetDouble(out var length) || !double.IsFinite(length))
+                throw new InvalidDataException("Fotoğraf taslağı bilgisi geçersiz.");
+            Point(record.GetProperty("ReferenceStart"));Point(record.GetProperty("ReferenceEnd"));
+            foreach(var name in new[] { "TracePixels","GeneratedPoints" })
+            {
+                var list=record.GetProperty(name);
+                if(list.ValueKind!=JsonValueKind.Array || list.GetArrayLength() is <2 or >512 || (total+=list.GetArrayLength())>200_000)
+                    throw new InvalidDataException("Fotoğraf taslağı nokta sınırı aşıldı.");
+                var i=0;foreach(var point in list.EnumerateArray()) { if((i++&255)==0)cancellationToken.ThrowIfCancellationRequested();Point(point); }
+            }
+        }
+        if(version==9 && !hasPlane)throw new InvalidDataException("Sürüm 9 için fotoğraf düzlem kaydı gereklidir.");
+    }
     // A v5 record is complete or the document cannot be opened. Constructor
     // defaults must never turn missing historical information into facts.
     private static void ValidateSerializedImportProvenance(JsonElement project, int version)
@@ -152,6 +216,8 @@ public static class ProjectStorage
         foreach (var id in ids.EnumerateArray())
             if (id.ValueKind != JsonValueKind.String || !id.TryGetGuid(out _)) throw new InvalidDataException("DXF kaynak parça kimliği geçersiz.");
     }
+    private static bool HasPhysicalField(JsonElement project) => project.TryGetProperty("Pieces",out var pieces) && pieces.ValueKind==JsonValueKind.Array &&
+        pieces.EnumerateArray().Any(p=>p.ValueKind==JsonValueKind.Object && p.TryGetProperty("PhysicalFeatures",out _));
     private static void ValidateSerializedPhysicalFeatures(JsonElement project,int version)
     {
         if(!project.TryGetProperty("Pieces",out var pieces) || pieces.ValueKind!=JsonValueKind.Array)return;
@@ -391,8 +457,8 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.Pieces.Any(p=>p.PhysicalFeatures is not null)
-            ? JsonSerializer.Serialize<object[]>([8, project], Options)
+        var text = project.Pieces.Any(p=>p.PhysicalFeatures is not null) || project.PhotoTraceHistory is not null
+            ? JsonSerializer.Serialize<object[]>([10, project], Options)
             : project.NestingSnapshot?.RotationTrace is not null
             ? JsonSerializer.Serialize<object[]>([7, project], Options)
             : project.Pieces.Any(p=>p.Notches is not null)
@@ -410,7 +476,7 @@ public static class ProjectStorage
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
-        if(project.NestingSnapshot?.RotationTrace is not null)
+        if(project.NestingSnapshot?.RotationTrace is not null || project.PhotoTraceHistory is not null || project.Pieces.Any(p=>p.PhysicalFeatures is not null))
         {
             var reread=DeserializeProject(Encoding.UTF8.GetBytes(text),cancellationToken);
             if(!DocumentSession.ContentEquals(project,reread))
@@ -460,6 +526,8 @@ public static class ProjectStorage
         ValidateCore(project,allowInvalidPieceNameUtf16:true,token);
         if(project.Pieces.Any(p=>p.PhysicalFeatures is not null))
             throw new InvalidDataException("Fiziksel kontur ve çentik kimlikleri DXF dışa aktarımında korunamıyor; aktarım yapılmadı.");
+        if(project.PhotoTraceHistory is not null)
+            throw new InvalidDataException("Fotoğraf geçmişi DXF dışa aktarımında korunamıyor; aktarım yapılmadı.");
     }
 
     private static void ValidateCore(ProjectDocument project, bool allowInvalidPieceNameUtf16,CancellationToken token=default)
@@ -467,6 +535,18 @@ public static class ProjectStorage
         token.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(project);
         project.ImportProvenance?.Validate();
+        if(project.PhotoTraceHistory is { } history)
+        {
+            if(history.Count is <1 or >512 || history.Any(x=>x is null) || history.Select(x=>x.PieceId).Distinct().Count()!=history.Count)
+                throw new InvalidDataException("Fotoğraf taslağı geçmişi eksik veya yinelenen kimlik içeriyor.");
+            long photoPoints=0;
+            foreach(var photo in history)
+            {
+                token.ThrowIfCancellationRequested();photo.Validate();
+                photoPoints+=(long)photo.TracePixels.Count+photo.GeneratedPoints.Count+(photo.PlaneCalibration is null ? 0 : 4);
+                if(photoPoints>200_000)throw new InvalidDataException("Fotoğraf taslağı geçmişinin nokta sınırı aşıldı.");
+            }
+        }
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
         if (project.Pieces is null || project.Pieces.Count > MaximumPieces) throw new InvalidDataException("Geçersiz parça listesi.");
         var ids = new HashSet<Guid>(); var physicalIds=new HashSet<Guid>(); long total = 0; long totalNotches=0;

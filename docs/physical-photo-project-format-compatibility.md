@@ -1,6 +1,6 @@
 # Physical contour and photo history format compatibility
 
-Status: design only. No merged reader or writer is implemented or verified. Do not deploy either branch's version 8 writer as a combined format.
+Status: isolated prototype only. This worktree includes a version-10 reader/writer prototype; it has not been integrated into either active branch or approved for release. Do not deploy either branch's version 8 writer as a combined format.
 
 Two independently developed formats use version 8: the physical-contour branch requires at least one `Pieces[].PhysicalFeatures` object, while desktop commit `d8a1ea6` requires a nonempty root `PhotoTraceHistory`. Desktop version 9 adds algorithm-2 photo plane calibration. Version 10 is a candidate for the combined format, subject to checking every maintained reader, writer, and any other reserved versions before implementation.
 
@@ -8,6 +8,7 @@ Two independently developed formats use version 8: the physical-contour branch r
 
 - Preserve the existing semantics of versions 1–7. For version 8, reject duplicate JSON properties before inspecting its shape. A physical candidate has at least one physical-feature field and no photo-history field; a photo candidate has photo history and no physical-feature fields. Explicit null, empty, malformed, mixed, or missing discriminants are errors, not evidence for another variant.
 - The discriminant selects a complete validator, not an acceptance shortcut. Require every serialized field, validate GUIDs, uniqueness, ownership, exact source-contour association, V geometry and resource limits for physical features; apply the complete `d8a1ea6` raw and model validators, algorithm rules and limits for photo history. Reject unknown fields and failed validation. Never discard either field to make deserialization succeed.
+- Photo history is historical evidence: the legacy photo model permits its piece to have been deleted later. Do not turn a nonempty historical piece identity into a requirement that the piece still exists in the current visible project.
 - Version 9 retains its existing photo-plane meaning and full checks. A version-9 document carrying physical features is rejected unless a separately documented historical producer proves such a format exists.
 - A new combined version must explicitly define which optional combinations are valid, require at least one feature justifying that version, and validate each present feature. Preserve photo algorithm/plane invariants, rotation traces, other older fields, project-wide physical identity uniqueness, and the existing size and cancellation limits. Reject unknown fields and invalid mixtures.
 - Readers limited to versions 1–7, including the identified iPhone reader, must reject the new versions without replacing, rewriting, or silently stripping data. Verify that behavior against the actual reader rather than assuming it.
@@ -31,3 +32,11 @@ Only the integrated writer may emit the new, verified version. It must write to 
 ## Implementation boundary
 
 Integrating this design requires both branches' actual models and validators together in a separate worktree. Neither existing branch alone can faithfully read or validate the other's data. Do not merge or invent a partial photo model as a compatibility shim. Review and test the integrated result before selecting a version or enabling its writer.
+
+## Prototype verification
+
+The prototype imports the frozen photo calibration and rectification implementations and their history validator from `d8a1ea6`, retains the physical model from `8f2df87`, and always writes version 10 whenever either feature is present. It accepts the two unambiguous version-8 variants and the historical photo-plane version 9. Its version-10 writer rereads its output and compares both models before an atomic save. Export formats that cannot carry photo history or physical identities are rejected. Existing project saving does not implement a new migration-consent UI; that is a release blocker, and the prototype must not be merged into the user-facing application as-is.
+
+For an independent historical-reader run, prepare two separate detached worktrees at `8f2df87` and `d8a1ea6`. In each, copy the two files from this worktree's `tests/HistoricalProjectReader` into `work/schema-reader`, then build `work/schema-reader/SchemaReader.csproj` with .NET 10. Set `TEKSTILCAD_OLD_PHYSICAL_READER` and `TEKSTILCAD_OLD_PHOTO_READER` to the respective built `SchemaReader.dll` paths before running `PhysicalPhotoCompatibilityTests`. The cross-reader test is explicitly skipped when those variables are absent; a skipped test does not establish compatibility. Only synthetic temporary files may be passed to these harnesses.
+
+The Apple/iPhone reader was not executed in this Windows prototype. Its version checks and unchanged-source behavior remain separate release gates. Version 10 is reserved only within the two reviewed source histories, not asserted to be globally unused across all unpublished branches or deployed formats.

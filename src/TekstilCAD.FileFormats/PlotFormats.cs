@@ -23,6 +23,8 @@ internal static class PhysicalExportGuard
     {
         if(project.Pieces.Any(piece=>piece.PhysicalFeatures is not null))
             throw new InvalidDataException("Fiziksel kontur kimlikleri bu çıktı biçiminde korunamıyor; dosya hazırlanmadı.");
+        if(project.PhotoTraceHistory is not null)
+            throw new InvalidDataException("Fotoğraf geçmişi bu çıktı biçiminde korunamıyor; dosya hazırlanmadı.");
     }
 }
 

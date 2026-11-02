@@ -70,6 +70,8 @@ public sealed class DocumentSession
             action(Document);
             validate?.Invoke(Document);
             ProtectPhysicalFeatures(before, Document);
+            if(before.PhotoTraceHistory is { } oldHistory && (Document.PhotoTraceHistory is not { } newHistory || newHistory.Count<oldHistory.Count || !PhotoTraceEquals(oldHistory,newHistory.Take(oldHistory.Count).ToList())))
+                throw new InvalidOperationException("Fotoğraf taslağı geçmişi işlem sırasında silinemez veya değiştirilemez.");
             var changed = !ContentEquals(before, Document);
             // Clone even on no-op to detach lists/references supplied by the action or validator.
             var committed = changed ? Document.Clone() : before;
@@ -182,9 +184,23 @@ public sealed class DocumentSession
         (a is not null && b is not null && a.SourceFileName==b.SourceFileName && a.SourceSha256==b.SourceSha256 &&
          a.SourceByteLength==b.SourceByteLength && a.MillimetersPerUnit==b.MillimetersPerUnit &&
          a.Warnings.SequenceEqual(b.Warnings) && a.PieceIds.SequenceEqual(b.PieceIds));
+    private static bool PhotoPlaneEquals(PhotoPlaneCalibration? a,PhotoPlaneCalibration? b)=>ReferenceEquals(a,b) ||
+        (a is not null && b is not null && PointListsEqual(a.Corners,b.Corners) &&
+         BitConverter.DoubleToInt64Bits(a.WidthMm)==BitConverter.DoubleToInt64Bits(b.WidthMm) &&
+         BitConverter.DoubleToInt64Bits(a.HeightMm)==BitConverter.DoubleToInt64Bits(b.HeightMm));
+    private static bool PhotoTraceEquals(List<PhotoTraceProvenance>? a,List<PhotoTraceProvenance>? b) => ReferenceEquals(a,b) ||
+        (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(p=>
+            p.First.AlgorithmVersion==p.Second.AlgorithmVersion && p.First.PieceId==p.Second.PieceId && p.First.SourceSha256==p.Second.SourceSha256 &&
+            p.First.SourceByteLength==p.Second.SourceByteLength && p.First.SourceOrientation==p.Second.SourceOrientation && p.First.SourceWidth==p.Second.SourceWidth && p.First.SourceHeight==p.Second.SourceHeight &&
+            p.First.PreviewWidth==p.Second.PreviewWidth && p.First.PreviewHeight==p.Second.PreviewHeight &&
+            PointBitsEqual(p.First.ReferenceStart,p.Second.ReferenceStart) && PointBitsEqual(p.First.ReferenceEnd,p.Second.ReferenceEnd) &&
+            BitConverter.DoubleToInt64Bits(p.First.ReferenceLengthMm)==BitConverter.DoubleToInt64Bits(p.Second.ReferenceLengthMm) &&
+            PhotoPlaneEquals(p.First.PlaneCalibration,p.Second.PlaneCalibration) &&
+            PointListsEqual(p.First.TracePixels,p.Second.TracePixels) && PointListsEqual(p.First.GeneratedPoints,p.Second.GeneratedPoints)));
     public static bool ContentEquals(ProjectDocument left, ProjectDocument right)
     {
         if (!ProvenanceEquals(left.ImportProvenance,right.ImportProvenance)) return false;
+        if (!PhotoTraceEquals(left.PhotoTraceHistory,right.PhotoTraceHistory)) return false;
         if (!NestingEquals(left.NestingSnapshot,right.NestingSnapshot)) return false;
         if (!string.Equals(left.Name, right.Name, StringComparison.Ordinal) || left.Pieces.Count != right.Pieces.Count) return false;
         for (var i = 0; i < left.Pieces.Count; i++)
