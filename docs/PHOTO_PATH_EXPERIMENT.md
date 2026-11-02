@@ -20,7 +20,7 @@ Kullanıcı en fazla 17 çizgi noktası seçerek ardışık aralıkların tamam�
 
 Öneri incelenirken fotoğrafa sağ tıklamak inceleme imlecini taşır; yakınlaştırılmış görünüm o konuma ortalanır. Yakınlaştırma düğmesi imleç konumunu kullanır. Bu görünüm işlemleri seçilmiş noktaları veya bekleyen öneriyi değiştirmez. Klavyeyle imleç ok tuşlarıyla, daha hızlı olarak Shift ve ok tuşlarıyla taşınabilir. Görünüm kontrolü sapmayı otomatik saptamaz; gerçek fare ve erişilebilirlik kullanıcı kabulü yapılmadı.
 
-`Düzelt…`, seçilmiş bir çizgi noktasını önizleme piksel koordinatlarıyla değiştirir. Kullanıcı yeni yeri önce sağ tıklayıp açılan pencerede `İnceleme imlecini kullan` seçebilir veya koordinat girebilir. Referans noktaları bu işlemle değiştirilemez; komşu noktayla aynı konum reddedilir. Değişiklik bekleyen öneriyi ve son yol uygulamasını geri alma olanağını kaldırır; CAD'e kaydedilen fotoğraf geçmişi düzeltilmiş son noktaları içerir. Düzeltme, bütün konturun geçerli ya da üretime uygun olduğunu kanıtlamaz.
+`Düzelt…`, seçilmiş bir çizgi noktasını önizleme piksel koordinatlarıyla değiştirir, seçilenin sonrasına nokta ekler veya seçilen noktayı siler. Kullanıcı yeni yeri önce sağ tıklayıp açılan pencerede `İnceleme imlecini kullan` seçebilir veya koordinat girebilir. Referans noktaları değiştirilemez; komşu noktayla aynı konum ve iki çizgi noktasından daha aza inen silme reddedilir. Değişiklik bekleyen öneriyi kaldırır; `Geri al` son nokta düzenlemesini veya ondan önce düzenleme yapılmadıysa son uygulanan yolu bir kez geri alır. CAD'e kaydedilen fotoğraf geçmişi düzeltilmiş son noktaları içerir. Düzeltme, bütün konturun geçerli ya da üretime uygun olduğunu kanıtlamaz.
 
 ## Tekrarlama
 

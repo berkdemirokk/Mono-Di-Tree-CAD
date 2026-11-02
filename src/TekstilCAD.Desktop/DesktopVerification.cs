@@ -9319,7 +9319,7 @@ internal static class DesktopVerification
             try
             {
                 editor.PointSelector.SelectedIndex=1;editor.XInput.Text="21";editor.YInput.Text="11";
-                Render(editor,Path.ChangeExtension(reportPath,".photo-point-edit.png"),440,340);
+                Render(editor,Path.ChangeExtension(reportPath,".photo-point-edit.png"),440,400);
                 Check(editor.PointSelector.Items.Count==3 && FullyVisible(editor.PointSelector,(FrameworkElement)editor.Content) &&
                     !canvas.TryMoveTracePoint(0,new Point(11,11)) && !canvas.TryMoveTracePoint(3,new Point(20,20)),
                     "Photo point editor exposes only trace points and rejects reference or adjacent-point moves",checks);
@@ -9331,9 +9331,26 @@ internal static class DesktopVerification
                     "Photo point edit preserves references and invalidates pending proposals",checks);
                 Check(!staleEditor.TryApplyEdit() && staleEditor.Status.Text.Contains("Taslak değişti") && canvas.Points[3]==new Point(21,11),
                     "Stale photo point editor cannot overwrite a newer draft",checks);
-                Check(canvas.TryMoveTracePoint(3,beforeZoom[3]) && canvas.Points.SequenceEqual(beforeZoom),"Photo edit can be corrected without changing other points",checks);
+                Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom) && !canvas.UndoPath(),"Photo point move can be undone once without changing other points",checks);
             }
             finally { editor.Close();staleEditor.Close(); }
+            var insertEditor=trace.CreatePointEditor()!;
+            try
+            {
+                insertEditor.PointSelector.SelectedIndex=0;insertEditor.XInput.Text="15";insertEditor.YInput.Text="12";
+                Check(insertEditor.TryInsert() && canvas.Points.Count==beforeZoom.Length+1 && canvas.Points[3]==new Point(15,12) &&
+                    canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),"Photo editor inserts an intermediate point and undoes it",checks);
+            }
+            finally { insertEditor.Close(); }
+            var removeEditor=trace.CreatePointEditor()!;
+            try
+            {
+                removeEditor.PointSelector.SelectedIndex=1;
+                Check(removeEditor.TryRemove() && canvas.Points.Count==beforeZoom.Length-1 && canvas.Points[3]==beforeZoom[4] &&
+                    !canvas.TryRemoveTracePoint(2) && canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),
+                    "Photo editor removes a selected point, preserves the two-point minimum and undoes it",checks);
+            }
+            finally { removeEditor.Close(); }
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
@@ -9443,8 +9460,9 @@ internal static class DesktopVerification
             Check(pendingWarning && closureNotice && closureRequested is null && canvas.Points.SequenceEqual(savedSegment) && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Draft confirmation discloses an unaccepted photo path and leaves the project unchanged on cancellation",checks);
             Check(canvas.ApplyPathSuggestion(),"Reviewed photo path is explicitly accepted",checks);
-            Check(canvas.TryMoveTracePoint(4,new Point(22,11)) && !canvas.UndoPath(),
-                "Correcting an accepted path point invalidates the previous path undo",checks);
+            Check(canvas.TryMoveTracePoint(4,new Point(22,11)) && canvas.UndoPath() && canvas.Points[4]==new Point(21,11) &&
+                canvas.TryMoveTracePoint(4,new Point(22,11)),
+                "Correcting an accepted path point has its own one-step undo",checks);
             trace.ConfirmForVerification=_=>true;trace.TryApply();
             var added=workspace.Document.Clone();var draft=AssertSingle(added.Pieces);
             Check(closureRequested==draft.Id,"Photo draft requests closure review for the exact newly added source",checks);

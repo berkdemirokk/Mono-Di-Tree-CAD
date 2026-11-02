@@ -164,7 +164,23 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || index<ReferencePointCount || index>=points.Count || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
             point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 || point==points[index] ||
             (index>ReferencePointCount && point==points[index-1]) || (index+1<points.Count && point==points[index+1]))return false;
-        points[index]=point;cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;pathUndo=null;
+        pathUndo=points.ToList();points[index]=point;cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
+        InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+    }
+
+    internal bool TryInsertTracePointAfter(int index,Point point)
+    {
+        if(image is null || points.Count>=MaximumPoints || index<ReferencePointCount || index>=points.Count ||
+            !double.IsFinite(point.X) || !double.IsFinite(point.Y) || point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 ||
+            point==points[index] || (index+1<points.Count && point==points[index+1]))return false;
+        pathUndo=points.ToList();points.Insert(index+1,point);cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
+        InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+    }
+    internal bool TryRemoveTracePoint(int index)
+    {
+        if(index<ReferencePointCount || index>=points.Count || points.Count-ReferencePointCount<=2 ||
+            (index>ReferencePointCount && index+1<points.Count && points[index-1]==points[index+1]))return false;
+        pathUndo=points.ToList();points.RemoveAt(index);cursor=points[Math.Min(index,points.Count-1)];edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 

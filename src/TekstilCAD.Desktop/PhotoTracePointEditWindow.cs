@@ -22,7 +22,7 @@ internal sealed class PhotoTracePointEditWindow : Window
     internal PhotoTracePointEditWindow(PhotoTraceWindow owner)
     {
         this.owner=owner;Owner=owner;revision=owner.DraftRevision;snapshot=owner.CanvasForVerification.Points.ToArray();
-        Title="Çizgi noktasını düzelt";Width=480;Height=360;MinWidth=440;MinHeight=340;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
+        Title="Çizgi noktasını düzelt";Width=500;Height=440;MinWidth=440;MinHeight=400;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
@@ -39,7 +39,15 @@ internal sealed class PhotoTracePointEditWindow : Window
         AutomationProperties.SetHelpText(cursorButton,"Pencere açılmadan önce fotoğrafta sağ tıklanan veya klavyeyle taşınan imleç konumunu yeni koordinatlara yazar.");
         var cursor=owner.CanvasForVerification.CursorForVerification;
         cursorButton.Click+=(_,_)=> { XInput.Text=MeasurementInput.Format(cursor.X);YInput.Text=MeasurementInput.Format(cursor.Y); };
-        body.Children.Add(cursorButton);Status.Text="Değişiklik bekleyen öneriyi ve yol geri almasını kaldırır.";AutomationProperties.SetName(Status,"Nokta düzenleme durumu");AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);body.Children.Add(Status);
+        body.Children.Add(cursorButton);
+        var editActions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
+        var insert=new Button { Content="Seçilenden sonra ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+        var remove=new Button { Content="Seçili noktayı sil",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,0,4) };
+        AutomationProperties.SetHelpText(insert,"Girilen koordinatlarda seçili çizgi noktasından sonra yeni nokta ekler.");
+        AutomationProperties.SetHelpText(remove,"Yalnız seçili çizgi noktasını siler; en az iki çizgi noktası kalmalıdır.");
+        insert.Click+=(_,_)=> { if(TryInsert())DialogResult=true; };remove.Click+=(_,_)=> { if(TryRemove())DialogResult=true; };
+        editActions.Children.Add(insert);editActions.Children.Add(remove);body.Children.Add(editActions);
+        Status.Text="Son nokta düzenlemesi ana pencerede geri alınabilir; bekleyen öneri kaldırılır.";AutomationProperties.SetName(Status,"Nokta düzenleme durumu");AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);body.Children.Add(Status);
         PointSelector.SelectionChanged+=(_,_)=> { if(PointSelector.SelectedItem is Choice c) { XInput.Text=MeasurementInput.Format(c.Pixel.X);YInput.Text=MeasurementInput.Format(c.Pixel.Y); } };
         for(int i=owner.CanvasForVerification.ReferencePointCount;i<snapshot.Length;i++)PointSelector.Items.Add(new Choice(i,snapshot[i]));
         if(PointSelector.Items.Count>0)
@@ -49,10 +57,30 @@ internal sealed class PhotoTracePointEditWindow : Window
     }
     internal bool TryApplyEdit()
     {
-        if(owner.DraftRevision!=revision || !owner.CanvasForVerification.Points.SequenceEqual(snapshot)) { Status.Text="Taslak değişti; pencereyi kapatıp yeniden açın.";return false; }
+        if(!IsCurrent())return false;
         if(PointSelector.SelectedItem is not Choice choice || !MeasurementInput.TryParseMillimeters(XInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(YInput.Text,out var y) ||
             !owner.CanvasForVerification.TryMoveTracePoint(choice.Index,new Point(x,y)))
         { Status.Text="Nokta değişmedi. Görüntü içindeki yeni koordinatları seçin; komşu noktayla aynı konum kullanılamaz.";return false; }
         return true;
+    }
+    internal bool TryInsert()
+    {
+        if(!IsCurrent())return false;
+        if(PointSelector.SelectedItem is not Choice choice || !MeasurementInput.TryParseMillimeters(XInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(YInput.Text,out var y) ||
+            !owner.CanvasForVerification.TryInsertTracePointAfter(choice.Index,new Point(x,y)))
+        { Status.Text="Nokta eklenemedi. Görüntü içindeki farklı bir konum seçin ve nokta sınırını kontrol edin.";return false; }
+        return true;
+    }
+    internal bool TryRemove()
+    {
+        if(!IsCurrent())return false;
+        if(PointSelector.SelectedItem is not Choice choice || !owner.CanvasForVerification.TryRemoveTracePoint(choice.Index))
+        { Status.Text="Nokta silinemedi. En az iki çizgi noktası kalmalı ve komşular aynı konumda olmamalıdır.";return false; }
+        return true;
+    }
+    private bool IsCurrent()
+    {
+        if(owner.DraftRevision==revision && owner.CanvasForVerification.Points.SequenceEqual(snapshot))return true;
+        Status.Text="Taslak değişti; pencereyi kapatıp yeniden açın.";return false;
     }
 }
