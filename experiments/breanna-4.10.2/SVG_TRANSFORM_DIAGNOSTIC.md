@@ -5,3 +5,5 @@ The probe uses a DTD-disabled XML reader on synthetic FreeSewing 4.10.2 SVG, ide
 Each reported box encloses transformed endpoints and cubic control points. It is conservative, not an exact Bézier-extrema box. The real generated SVG coordinates are rounded; the test allows 0.0051 mm when comparing against the intermediate model before placement. A separate synthetic nested transform test uses hand-computed positions and bounds; it is not a renderer or a physical printing calibration.
 
 The result is diagnostic only, with topology and transfer flags false. This probe does not establish contour validity, cutting suitability, production approval, licensing clearance, or SVG support beyond the explicitly listed subset. It does not connect to CAD, persistence, real measurements, plotting or cutting.
+
+The XML input is capped at 1,000,000 UTF-8 bytes and three seconds before parsing. Animation elements are rejected. Fabric paths nested under a piece or carrying unrecognized extra classes are rejected; FreeSewing's known direct `fabric dotted stroke-sm` open guide paths are excluded. The path tokenizer has a fixed token limit and avoids repeated suffix copies.

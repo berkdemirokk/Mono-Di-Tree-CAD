@@ -1,12 +1,13 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
 XNamespace Ns="http://www.w3.org/2000/svg";
 try {
- using var reader=XmlReader.Create(Console.In,new XmlReaderSettings{DtdProcessing=DtdProcessing.Prohibit,XmlResolver=null,MaxCharactersInDocument=1_000_000});
+ using var deadline=new CancellationTokenSource(TimeSpan.FromSeconds(3));using var buffer=new MemoryStream();byte[] chunk=new byte[8192];var stdin=Console.OpenStandardInput();while(true){int n=await Task.Run(()=>stdin.Read(chunk,0,chunk.Length)).WaitAsync(deadline.Token);if(n==0)break;if(buffer.Length+n>1_000_000)throw new InvalidDataException();buffer.Write(chunk,0,n);}using var text=new StringReader(new UTF8Encoding(false,true).GetString(buffer.ToArray()));using var reader=XmlReader.Create(text,new XmlReaderSettings{DtdProcessing=DtdProcessing.Prohibit,XmlResolver=null,MaxCharactersInDocument=1_000_000});
  var doc=XDocument.Load(reader); var root=doc.Root??throw new InvalidDataException();
  if(root.Name!=Ns+"svg" || doc.Nodes().OfType<XProcessingInstruction>().Any() || root.Attributes().Any(a=>!a.IsNamespaceDeclaration && a.Name!=XNamespace.Xml+"lang" && (a.Name.Namespace!=XNamespace.None || !new[]{"freesewing","width","height","viewBox","preserveAspectRatio"}.Contains(a.Name.LocalName))) || root.Attribute("transform")!=null || root.Attribute("style")!=null) throw new InvalidDataException();
  double width=Mm(root,"width"),height=Mm(root,"height");var vb=Numbers((string?)root.Attribute("viewBox")??throw new InvalidDataException());
@@ -14,12 +15,13 @@ try {
  double sx=width/vb[2],sy=height/vb[3];string preserve=(string?)root.Attribute("preserveAspectRatio")??"xMidYMid meet";
  double ox=0,oy=0;if(preserve=="xMidYMid meet"){sx=sy=Math.Min(sx,sy);ox=(width-vb[2]*sx)/2;oy=(height-vb[3]*sy)/2;}else if(preserve!="none")throw new InvalidDataException();
  var viewport=new M(sx,0,0,sy,ox-vb[0]*sx,oy-vb[1]*sy);Check(viewport);
+ if(doc.Descendants().Any(e=>e.Name.Namespace==Ns && new[]{"animate","animateTransform","animateMotion","set"}.Contains(e.Name.LocalName)))throw new InvalidDataException();
  if(doc.Descendants(Ns+"style").Any(e=>!string.IsNullOrWhiteSpace(e.Value)))throw new InvalidDataException();
  string[] ids={"breanna.front","breanna.back","breanna.sleeve"};var output=new List<object>();
  foreach(var id in ids){
   var groups=doc.Descendants(Ns+"g").Where(e=>(string?)e.Attribute("id")=="fs-stack-"+id+"-part-"+id).ToArray();if(groups.Length!=1)throw new InvalidDataException();var group=groups[0];
   var stack=group.Parent;if(stack?.Name!=Ns+"g"||(string?)stack.Attribute("id")!="fs-stack-"+id)throw new InvalidDataException();
-  var candidates=group.Elements(Ns+"path").Where(e=>(string?)e.Attribute("class")=="fabric").ToArray();if(candidates.Length!=1)throw new InvalidDataException();var path=candidates[0];
+  var fabricPaths=group.Descendants(Ns+"path").Where(e=>((string?)e.Attribute("class")??"").Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries).Contains("fabric")).ToArray();if(fabricPaths.Any(e=>e.Parent!=group || ((string?)e.Attribute("class")!="fabric" && ((string?)e.Attribute("class")!="fabric dotted stroke-sm" || Regex.IsMatch((string?)e.Attribute("d")??"",@"[zZ]")))))throw new InvalidDataException();var candidates=fabricPaths.Where(e=>(string?)e.Attribute("class")=="fabric").ToArray();if(candidates.Length!=1)throw new InvalidDataException();var path=candidates[0];
   var chain=path.AncestorsAndSelf().Reverse().Skip(1).ToArray();var matrix=viewport;foreach(var node in chain){if(node.Name!=Ns+"g"&&node!=path)throw new InvalidDataException();if(node.Attributes().Any(a=>!a.IsNamespaceDeclaration && (a.Name.Namespace!=XNamespace.None || !(node==path?new[]{"id","class","d","transform"}:new[]{"id","transform"}).Contains(a.Name.LocalName))))throw new InvalidDataException();matrix=Mul(matrix,Transform((string?)node.Attribute("transform")));}
   var ops=Path((string?)path.Attribute("d")??throw new InvalidDataException(),matrix);var pts=ops.SelectMany(x=>x.Points).ToArray();if(pts.Length==0)throw new InvalidDataException();
   output.Add(new{id,segments=ops.Select(x=>new{type=x.Kind,points=x.Points}),bounds=new[]{pts.Min(p=>p[0]),pts.Min(p=>p[1]),pts.Max(p=>p[0]),pts.Max(p=>p[1])}});
@@ -42,10 +44,10 @@ static M Transform(string? s){var result=new M(1,0,0,1,0,0);if(s==null)return re
  case "translate" when n.Length is 1 or 2:z=new(1,0,0,1,n[0],n.Length==2?n[1]:0);break;
  case "scale" when n.Length is 1 or 2:z=new(n[0],0,0,n.Length==2?n[1]:n[0],0,0);break;
  case "rotate" when n.Length is 1 or 3:double a=n[0]*Math.PI/180,c=Math.Cos(a),v=Math.Sin(a);z=new(c,v,-v,c,0,0);if(n.Length==3)z=Mul(Mul(new(1,0,0,1,n[1],n[2]),z),new(1,0,0,1,-n[1],-n[2]));break;
- default:throw new InvalidDataException();}result=Mul(result,z);pos+=m.Length;if(string.IsNullOrWhiteSpace(s[pos..])){pos=s.Length;break;}}
+ default:throw new InvalidDataException();}result=Mul(result,z);pos+=m.Length;if(s.AsSpan(pos).Trim().IsEmpty){pos=s.Length;break;}}
  if(pos==0)throw new InvalidDataException();return result;}
 static List<Op> Path(string s,M m){
- if(Regex.IsMatch(s,@"^\s*,|,\s*$|,\s*,|,\s*[MLCzZ]|[MLCzZ]\s*,"))throw new InvalidDataException();var token=new Regex(@"\G\s*(?:,\s*)?([MLCzZ]|[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+)?)");var t=new List<string>();int pos=0;while(pos<s.Length){if(string.IsNullOrWhiteSpace(s[pos..]))break;var z=token.Match(s,pos);if(!z.Success)throw new InvalidDataException();t.Add(z.Groups[1].Value);pos+=z.Length;}var result=new List<Op>();int i=0;while(i<t.Count){var k=t[i++];int count=k switch{"M"=>2,"L"=>2,"C"=>6,"z" or "Z"=>0,_=>throw new InvalidDataException()};if(i+count>t.Count)throw new InvalidDataException();var points=new List<double[]>();for(int j=0;j<count;j+=2){if(!double.TryParse(t[i++],NumberStyles.Float,CultureInfo.InvariantCulture,out double x)||!double.TryParse(t[i++],NumberStyles.Float,CultureInfo.InvariantCulture,out double y))throw new InvalidDataException();double u=m.A*x+m.C*y+m.E,v=m.B*x+m.D*y+m.F;if(!double.IsFinite(u)||!double.IsFinite(v)||Math.Abs(u)>1e8||Math.Abs(v)>1e8)throw new InvalidDataException();points.Add(new[]{u,v});}result.Add(new(k,points));if(result.Count>4096)throw new InvalidDataException();}
+ if(Regex.IsMatch(s,@"^\s*,|,\s*$|,\s*,|,\s*[MLCzZ]|[MLCzZ]\s*,"))throw new InvalidDataException();var token=new Regex(@"\G\s*(?:,\s*)?([MLCzZ]|[+-]?(?:(?:\d+\.?\d*)|(?:\.\d+))(?:[eE][+-]?\d+)?)");var t=new List<string>();int pos=0;while(pos<s.Length){if(s.AsSpan(pos).Trim().IsEmpty)break;var z=token.Match(s,pos);if(!z.Success)throw new InvalidDataException();if(t.Count>=24576)throw new InvalidDataException();t.Add(z.Groups[1].Value);pos+=z.Length;}var result=new List<Op>();int i=0;while(i<t.Count){var k=t[i++];int count=k switch{"M"=>2,"L"=>2,"C"=>6,"z" or "Z"=>0,_=>throw new InvalidDataException()};if(i+count>t.Count)throw new InvalidDataException();var points=new List<double[]>();for(int j=0;j<count;j+=2){if(!double.TryParse(t[i++],NumberStyles.Float,CultureInfo.InvariantCulture,out double x)||!double.TryParse(t[i++],NumberStyles.Float,CultureInfo.InvariantCulture,out double y))throw new InvalidDataException();double u=m.A*x+m.C*y+m.E,v=m.B*x+m.D*y+m.F;if(!double.IsFinite(u)||!double.IsFinite(v)||Math.Abs(u)>1e8||Math.Abs(v)>1e8)throw new InvalidDataException();points.Add(new[]{u,v});}result.Add(new(k,points));if(result.Count>4096)throw new InvalidDataException();}
  if(result.Count<3||result[0].Kind!="M"||result[^1].Kind is not ("z" or "Z")||result.Skip(1).SkipLast(1).Any(x=>x.Kind is "M" or "z" or "Z"))throw new InvalidDataException();return result;
 }
 record struct M(double A,double B,double C,double D,double E,double F);
