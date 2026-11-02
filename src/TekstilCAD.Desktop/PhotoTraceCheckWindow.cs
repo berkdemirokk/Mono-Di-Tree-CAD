@@ -30,7 +30,7 @@ internal sealed class PhotoTraceCheckWindow : Window
     private string sensitivitySummary="";
     internal TextBox ResultForVerification { get; } = new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,AcceptsReturn=true,MinHeight=75,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     internal PhotoTraceMeasurementResult? LastResultForVerification { get; private set; }
-    private sealed record Comparison(int First,int Second,PhotoTraceMeasurementResult Result,double? AssumedPixelError,string Sensitivity,string Display)
+    private sealed record Comparison(int First,int Second,bool AlongTrace,PhotoTraceMeasurementResult Result,double? AssumedPixelError,string Sensitivity,string Display)
     { public override string ToString()=>Display; }
     private readonly ObservableCollection<Comparison> comparisons=[];
     internal IReadOnlyList<string> ComparisonsForVerification=>comparisons.Select(c=>c.Display).ToArray();
@@ -42,6 +42,7 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal TextBox ControlXForVerification { get; } = new() { Width=90,MaxLength=24,Margin=new Thickness(0,2,8,2) };
     internal TextBox ControlYForVerification { get; } = new() { Width=90,MaxLength=24,Margin=new Thickness(0,2,8,2) };
     internal CheckBox AddControlModeForVerification { get; } = new() { Content="Fotoğrafa tıklayarak kontrol noktası ekle",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
+    internal CheckBox AlongTraceForVerification { get; } = new() { Content="İki çizgi noktası arasında çizgi boyunca ölç",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
 
     internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
     {
@@ -57,7 +58,7 @@ internal sealed class PhotoTraceCheckWindow : Window
         var close=new Button { Content="Kapat",Padding=new Thickness(12,7,12,7),IsCancel=true };actions.Children.Add(calculate);actions.Children.Add(close);
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };root.Children.Add(scroll);
         var body=new StackPanel();scroll.Content=body;
-        body.Children.Add(new TextBlock { Text="Fotoğraf taslağının bu pencere açıldığındaki noktaları kullanılır. İki referans köşesini birlikte seçmeyin. Başka bir gerçek mesafeyi bağımsız olarak ölçüp girin; karşılaştırma yalnız iki nokta arasındaki düz mesafeyi değerlendirir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        body.Children.Add(new TextBlock { Text="Fotoğraf taslağının bu pencere açıldığındaki noktaları kullanılır. İki referans köşesini birlikte seçmeyin. Başka bir gerçek mesafeyi bağımsız olarak ölçüp girin; düz mesafe veya çizgi boyunca ölçüm seçebilirsiniz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var selection=new Grid();selection.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });selection.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
         var selectors=new StackPanel();selectors.Children.Add(new Label { Content="1 · Kontrol başlangıcı",Target=FirstForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(FirstForVerification);
         selectors.Children.Add(new Label { Content="2 · Kontrol bitişi",Target=SecondForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(SecondForVerification);selection.Children.Add(selectors);
@@ -77,6 +78,8 @@ internal sealed class PhotoTraceCheckWindow : Window
         var addControl=new Button { Content="Kontrol noktası ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,2,0,2) };
         addControl.Click+=(_,_)=> { if(!MeasurementInput.TryParseMillimeters(ControlXForVerification.Text,out var x) || !MeasurementInput.TryParseMillimeters(ControlYForVerification.Text,out var y)) { PickStatusForVerification.Text="Piksel koordinatlarını girin.";return; } AddControlPoint(new Point2(x,y)); };controlCoordinates.Children.Add(addControl);body.Children.Add(controlCoordinates);
         body.Children.Add(new TextBlock { Text="Ek noktalar yalnız bu ölçüm penceresinde kalır; çizgiye ve projeye eklenmez. En fazla 100 nokta eklenebilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,5) });
+        body.Children.Add(AlongTraceForVerification);
+        body.Children.Add(new TextBlock { Text="Bu seçenek iki çizgi noktası arasındaki sıralı düz kenarları toplar; kapanış kenarını ve geçici kontrol noktalarını içermez. Seçili noktalar arasında farklı bir rota seçmez. Kıvrımlı gerçek kenarı ve nokta seçim hatasını doğrulamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,5) });
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         if(plane is null)
         {
@@ -113,6 +116,7 @@ internal sealed class PhotoTraceCheckWindow : Window
         AutomationProperties.SetName(KnownForVerification,"Bağımsız bilinen kontrol mesafesi milimetre");AutomationProperties.SetName(ResultForVerification,"Ölçü karşılaştırması sonucu");AutomationProperties.SetLiveSetting(ResultForVerification,AutomationLiveSetting.Polite);
         void SelectionChanged() { ClearResult();PreviewForVerification.Select((FirstForVerification.SelectedItem as Choice)?.Index,(SecondForVerification.SelectedItem as Choice)?.Index); }
         FirstForVerification.SelectionChanged+=(_,_)=>SelectionChanged();SecondForVerification.SelectionChanged+=(_,_)=>SelectionChanged();KnownForVerification.TextChanged+=(_,_)=>ClearResult();PixelUncertaintyForVerification.TextChanged+=(_,_)=>ClearResult();
+        AlongTraceForVerification.Checked+=(_,_)=>ClearResult();AlongTraceForVerification.Unchecked+=(_,_)=>ClearResult();
         PreviewForVerification.PointChosen+=(index,second)=> { if(second)SecondForVerification.SelectedIndex=index;else FirstForVerification.SelectedIndex=index; };
         PreviewForVerification.ControlPointChosen+=point=>AddControlPoint(point);
         PreviewForVerification.PickMessage+=message=>PickStatusForVerification.Text=message;
@@ -139,8 +143,9 @@ internal sealed class PhotoTraceCheckWindow : Window
         if(LastResultForVerification is not { } result || FirstForVerification.SelectedItem is not Choice first || SecondForVerification.SelectedItem is not Choice second)return false;
         var relative=result.DifferenceMm/result.KnownMm*100;
         var percent=double.IsFinite(relative) ? relative.ToString("G6",System.Globalization.CultureInfo.CurrentCulture)+" %" : "gösterilemiyor";
-        var display=$"{first.Label} → {second.Label} | tahmin {MeasurementInput.Format(result.EstimatedMm)} mm | ölçülen {MeasurementInput.Format(result.KnownMm)} mm | fark {MeasurementInput.Format(result.DifferenceMm)} mm ({percent})"+(sensitivitySummary.Length>0 ? " | "+sensitivitySummary : "");
-        comparisons.Add(new(first.Index,second.Index,result,assumedPixelError,sensitivitySummary,display));
+        var along=AlongTraceForVerification.IsChecked==true;
+        var display=$"{(along ? "Çizgi boyunca" : "Düz mesafe")} · {first.Label} → {second.Label} | tahmin {MeasurementInput.Format(result.EstimatedMm)} mm | ölçülen {MeasurementInput.Format(result.KnownMm)} mm | fark {MeasurementInput.Format(result.DifferenceMm)} mm ({percent})"+(sensitivitySummary.Length>0 ? " | "+sensitivitySummary : "");
+        comparisons.Add(new(first.Index,second.Index,along,result,assumedPixelError,sensitivitySummary,display));
         return true;
     }
     internal bool RemoveComparison()
@@ -158,7 +163,19 @@ internal sealed class PhotoTraceCheckWindow : Window
             if(!MeasurementInput.TryParseMillimeters(KnownForVerification.Text,out var known))
             { ResultForVerification.Text="Bilinen kontrol mesafesini milimetre olarak girin.";return; }
             PhotoTraceMeasurementResult result;
-            if(plane is null)result=PhotoTraceMeasurement.Compare(previewWidth,previewHeight,sourceWidth,sourceHeight,points[0],points[1],referenceLength,points[first.Index],points[second.Index],known);
+            var along=AlongTraceForVerification.IsChecked==true;
+            if(along)
+            {
+                var referenceCount=plane is null ? 2 : 4;
+                if(first.Index<referenceCount || second.Index<referenceCount || first.Index>=originalPointCount || second.Index>=originalPointCount || first.Index==second.Index)
+                    throw new ArgumentException("Çizgi boyunca ölçmek için iki farklı çizgi noktası seçin; referans ve geçici kontrol noktaları kullanılamaz.");
+                if(!string.IsNullOrWhiteSpace(PixelUncertaintyForVerification.Text))throw new ArgumentException("Çizgi boyunca ölçüm için piksel duyarlılık alanını boş bırakın; bu aralık yalnız düz mesafeye uygulanır.");
+                var low=Math.Min(first.Index,second.Index);var high=Math.Max(first.Index,second.Index);
+                var trace=points.GetRange(low,high-low+1);
+                result=plane is null ? PhotoTraceMeasurement.ComparePolyline(previewWidth,previewHeight,sourceWidth,sourceHeight,points[0],points[1],referenceLength,trace,known)
+                    : PhotoTraceMeasurement.ComparePlanePolyline(previewWidth,previewHeight,plane,trace,known);
+            }
+            else if(plane is null)result=PhotoTraceMeasurement.Compare(previewWidth,previewHeight,sourceWidth,sourceHeight,points[0],points[1],referenceLength,points[first.Index],points[second.Index],known);
             else
             {
                 if(!double.IsFinite(known) || known<=0 || known>Geometry.MaxCoordinate)throw new ArgumentOutOfRangeException(nameof(known),"Kontrol mesafesi pozitif ve desteklenen aralıkta olmalıdır.");
@@ -167,7 +184,7 @@ internal sealed class PhotoTraceCheckWindow : Window
                 var corrected=PhotoPlaneRectification.Convert(previewWidth,previewHeight,plane.Corners,plane.WidthMm,plane.HeightMm,[start,end]);
                 var estimated=Geometry.Distance(corrected[0],corrected[1]);result=new PhotoTraceMeasurementResult(estimated,known,estimated-known);
             }
-            if(plane is null && !string.IsNullOrWhiteSpace(PixelUncertaintyForVerification.Text))
+            if(!along && plane is null && !string.IsNullOrWhiteSpace(PixelUncertaintyForVerification.Text))
             {
                 if(!MeasurementInput.TryParseMillimeters(PixelUncertaintyForVerification.Text,out var assumedPixels) || assumedPixels<0 || assumedPixels>1000)
                     throw new ArgumentException("Piksel sapmasını 0–1000 arasında girin veya alanı boş bırakın.");
@@ -182,7 +199,7 @@ internal sealed class PhotoTraceCheckWindow : Window
             var relative=double.IsFinite(percent)
                 ? $"Göreli fark (fark / girilen): {percent.ToString("G6",System.Globalization.CultureInfo.CurrentCulture)} %"
                 : "Göreli fark bu sayısal aralıkta gösterilemiyor.";
-            ResultForVerification.Text=$"Fotoğraftan tahmin: {MeasurementInput.Format(result.EstimatedMm)} mm\nGirilen mesafe: {MeasurementInput.Format(result.KnownMm)} mm\nFark (tahmin − girilen): {MeasurementInput.Format(result.DifferenceMm)} mm\n{relative}"+(sensitivitySummary.Length>0 ? "\n\n"+sensitivitySummary : "")+"\n\nYalnız seçilen iki nokta karşılaştırıldı; ölçü veya üretim onayı verilmedi.";
+            ResultForVerification.Text=$"{(along ? "Çizgi boyunca" : "Düz mesafe")} fotoğraf tahmini: {MeasurementInput.Format(result.EstimatedMm)} mm\nGirilen mesafe: {MeasurementInput.Format(result.KnownMm)} mm\nFark (tahmin − girilen): {MeasurementInput.Format(result.DifferenceMm)} mm\n{relative}"+(sensitivitySummary.Length>0 ? "\n\n"+sensitivitySummary : "")+"\n\nYalnız seçilen aralık karşılaştırıldı; ölçü veya üretim onayı verilmedi.";
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { ResultForVerification.Text="Karşılaştırma yapılamadı: "+ex.Message; }
@@ -194,15 +211,19 @@ internal sealed class PhotoTraceCheckWindow : Window
         {
             if(comparisons.Count==0)throw new InvalidOperationException("Önce karşılaştırmaları listeye ekleyin.");
             if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0)throw new InvalidOperationException("Fotoğraf kaynak özeti bulunamadı; rapor kaydedilmedi.");
+            var version=comparisons.Any(c=>c.AlongTrace) ? 2 : 1;
             var report=new {
-                format="tekstilcad.photo-measurement-review",version=1,coordinateUnit="preview-pixel",lengthUnit="mm",
-                notice="Yalnız seçilen nokta çiftleri karşılaştırılmıştır. Ölçüm bağımsızlığı, fotoğraf, kalıp ve üretim uygunluğu doğrulanmamıştır.",
+                format="tekstilcad.photo-measurement-review",version,coordinateUnit="preview-pixel",lengthUnit="mm",
+                notice=version==1 ? "Yalnız seçilen nokta çiftleri karşılaştırılmıştır. Ölçüm bağımsızlığı, fotoğraf, kalıp ve üretim uygunluğu doğrulanmamıştır." : "Yalnız seçilen aralıklar karşılaştırılmıştır. Ölçüm bağımsızlığı, fotoğraf, kalıp ve üretim uygunluğu doğrulanmamıştır.",
                 source=new { sha256=sourceSha256,byteLength=sourceByteLength,orientation=sourceOrientation,sourceWidth,sourceHeight,previewWidth,previewHeight },
                 reference=new { mode=plane is null ? "single-distance" : "four-corner-plane",lengthMm=referenceLength,
                     planeWidthMm=plane?.WidthMm,planeHeightMm=plane?.HeightMm,
                     points=points.Take(plane is null ? 2 : 4).Select(p=>new { x=p.X,y=p.Y }).ToArray() },
                 points=points.Select((p,i)=>new { index=i+1,kind=i<(plane is null ? 2 : 4) ? "reference" : i<originalPointCount ? "draft" : "temporary-control",x=p.X,y=p.Y }).ToArray(),
-                comparisons=comparisons.Select(c=>new { firstIndex=c.First+1,secondIndex=c.Second+1,
+                comparisons=comparisons.Select(c=>version==1 ? (object)new { firstIndex=c.First+1,secondIndex=c.Second+1,
+                    estimatedMm=c.Result.EstimatedMm,knownMm=c.Result.KnownMm,differenceMm=c.Result.DifferenceMm,
+                    assumedPixelError=c.AssumedPixelError,sensitivity=c.Sensitivity } : new { firstIndex=c.First+1,secondIndex=c.Second+1,
+                    kind=c.AlongTrace ? "trace-polyline" : "straight",pointIndices=c.AlongTrace ? Enumerable.Range(Math.Min(c.First,c.Second),Math.Abs(c.First-c.Second)+1).Select(i=>i+1).ToArray() : new[] { c.First+1,c.Second+1 },
                     estimatedMm=c.Result.EstimatedMm,knownMm=c.Result.KnownMm,differenceMm=c.Result.DifferenceMm,
                     assumedPixelError=c.AssumedPixelError,sensitivity=c.Sensitivity }).ToArray() };
             var text=JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented=true });

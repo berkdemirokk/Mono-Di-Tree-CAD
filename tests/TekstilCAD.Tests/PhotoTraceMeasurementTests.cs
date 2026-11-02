@@ -5,6 +5,25 @@ namespace TekstilCAD.Tests;
 public class PhotoTraceMeasurementTests
 {
     [Fact]
+    public void PolylineUsesEveryEdgeAndIsIndependentOfDirection()
+    {
+        Point2[] trace=[new(20,20),new(50,20),new(50,60)];
+        var forward=PhotoTraceMeasurement.ComparePolyline(100,100,100,100,new(0,0),new(10,0),10,trace,65);
+        var reversed=PhotoTraceMeasurement.ComparePolyline(100,100,100,100,new(0,0),new(10,0),10,trace.Reverse().ToArray(),65);
+        Assert.Equal(70,forward.EstimatedMm,8);Assert.Equal(5,forward.DifferenceMm,8);Assert.Equal(forward,reversed);
+    }
+    [Fact]
+    public void PlanePolylineUsesCorrectedEdgesAndRejectsInvalidInputs()
+    {
+        var plane=new PhotoPlaneCalibration { Corners=[new(10,10),new(90,10),new(90,90),new(10,90)],WidthMm=200,HeightMm=100 };
+        Point2[] trace=[new(20,20),new(80,20),new(80,80)];
+        var measured=PhotoTraceMeasurement.ComparePlanePolyline(100,100,plane,trace,225);
+        Assert.Equal(225,measured.EstimatedMm,8);Assert.Equal(0,measured.DifferenceMm,8);
+        Assert.Throws<ArgumentException>(()=>PhotoTraceMeasurement.ComparePlanePolyline(100,100,plane,[new(20,20),new(20,20)],10));
+        Assert.Throws<ArgumentOutOfRangeException>(()=>PhotoTraceMeasurement.ComparePlanePolyline(100,100,plane,trace,0));
+        Assert.Throws<ArgumentException>(()=>PhotoTraceMeasurement.ComparePlanePolyline(100,100,plane,[new(10,10),new(90,10)],100));
+    }
+    [Fact]
     public void SeparateMeasurementUsesSameSourceAspectAsPhotoTrace()
     {
         var value=PhotoTraceMeasurement.Compare(1024,256,4001,1001,new(10,20),new(110,20),100,new(10,20),new(10,120),102);

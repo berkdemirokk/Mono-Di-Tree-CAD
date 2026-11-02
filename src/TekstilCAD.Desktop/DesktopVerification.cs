@@ -9602,6 +9602,17 @@ internal static class DesktopVerification
                         reduced.RootElement.GetProperty("comparisons")[0].GetProperty("knownMm").GetDouble()==125 &&
                         File.ReadAllBytes(reviewPath).SequenceEqual(reportBytes),
                         "Removing a comparison affects only later reports and leaves the earlier report intact",checks);
+                var previousFirst=checkWindow.FirstForVerification.SelectedIndex;var previousSecond=checkWindow.SecondForVerification.SelectedIndex;
+                checkWindow.AlongTraceForVerification.IsChecked=true;checkWindow.FirstForVerification.SelectedIndex=2;checkWindow.SecondForVerification.SelectedIndex=4;
+                checkWindow.AlongTraceForVerification.BringIntoView();Render(checkWindow,Path.ChangeExtension(reportPath,".photo-polyline-measurement.png"),460,420);
+                Check(FullyVisible(checkWindow.AlongTraceForVerification,checkRoot) && checkWindow.AlongTraceForVerification.Focusable,
+                    "Polyline measurement choice is visible and keyboard focusable in the compact scrolled view",checks);
+                checkWindow.KnownForVerification.Text="200";checkWindow.Calculate();
+                Check(checkWindow.LastResultForVerification is { } singlePolyline && Math.Abs(singlePolyline.EstimatedMm-200)<1e-8 && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Single-distance photo comparison sums the draft polyline without changing it",checks);
+                checkWindow.PixelUncertaintyForVerification.Text="1";checkWindow.Calculate();
+                Check(checkWindow.LastResultForVerification is null && checkWindow.ResultForVerification.Text.Contains("piksel duyarlılık alanını boş"),"Polyline measurement does not apply a two-point sensitivity formula",checks);
+                checkWindow.PixelUncertaintyForVerification.Clear();checkWindow.AlongTraceForVerification.IsChecked=false;checkWindow.FirstForVerification.SelectedIndex=previousFirst;checkWindow.SecondForVerification.SelectedIndex=previousSecond;
                 checkWindow.KnownForVerification.Text="150";checkWindow.Calculate();
                 var resultBeforePreviewZoom=checkWindow.ResultForVerification.Text;
                 checkWindow.PreviewForVerification.ZoomSelected(2);
@@ -10093,6 +10104,23 @@ internal static class DesktopVerification
                         DocumentSession.ContentEquals(original,workspace.Document),
                         "Saved plane comparison includes calibration and never invents a single-distance sensitivity",checks);
                 }
+                measurement.AlongTraceForVerification.IsChecked=true;measurement.FirstForVerification.SelectedIndex=6;measurement.SecondForVerification.SelectedIndex=4;measurement.KnownForVerification.Text="225";measurement.Calculate();
+                Check(measurement.LastResultForVerification is { } along && Math.Abs(along.EstimatedMm-225)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
+                    "Plane photo measurement sums the selected contiguous draft edges in either direction",checks);
+                Check(measurement.AddComparison() && measurement.ComparisonsForVerification.Last().Contains("Çizgi boyunca"),"Polyline measurement can be retained alongside a straight measurement",checks);
+                var mixedReportPath=Path.ChangeExtension(reportPath,".photo-mixed-measurement-review.json");
+                Check(measurement.TrySaveReport(mixedReportPath),"Mixed photo measurement review can be saved independently",checks);
+                using(var mixed=JsonDocument.Parse(File.ReadAllBytes(mixedReportPath)))
+                {
+                    var data=mixed.RootElement;var entries=data.GetProperty("comparisons");
+                    Check(data.GetProperty("version").GetInt32()==2 && entries[0].GetProperty("kind").GetString()=="straight" &&
+                        entries[1].GetProperty("kind").GetString()=="trace-polyline" && entries[1].GetProperty("pointIndices").EnumerateArray().Select(p=>p.GetInt32()).SequenceEqual(new[] { 5,6,7 }) &&
+                        Math.Abs(entries[1].GetProperty("estimatedMm").GetDouble()-225)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
+                        "Version two mixed review identifies straight and ordered polyline measurements without changing the project",checks);
+                }
+                measurement.FirstForVerification.SelectedIndex=0;measurement.Calculate();
+                Check(measurement.LastResultForVerification is null && measurement.ResultForVerification.Text.Contains("iki farklı çizgi noktası"),"Polyline measurement rejects reference points",checks);
+                measurement.AlongTraceForVerification.IsChecked=false;
                 Check(measurement.AddControlPoint(new Point2(30,30)) && measurement.AddControlPoint(new Point2(70,30)),"Planar measurement accepts two detached control points",checks);
                 measurement.FirstForVerification.SelectedIndex=7;measurement.SecondForVerification.SelectedIndex=8;measurement.KnownForVerification.Text="100";measurement.Calculate();
                 Check(measurement.LastResultForVerification is { } extraPlane && Math.Abs(extraPlane.EstimatedMm-100)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
