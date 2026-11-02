@@ -12,6 +12,8 @@ Tolerans/özellik bilgisi verilmezse deney uygun parça vermez. Yanlış, tekrar
 
 İki kenar arasındaki 5 mm sınırının tam eşitliği/geçen bir sonraki binary64 değerin reddi, kesişme, sıfır kenar ve büyük koordinat karşı örnekleri test edilir. Bir gridlik çentik ve kapanan dar kanal örnekleri önceki güvenlik kontrollerinde reddedilir. Uzun kollu, 1–7 grid derinlikli sığ V denemelerinde ise test edilen üretim sonuçlarında ters ofset tepe noktası korunmuştur; bu gözlem bütün sığ V'ler için kanıt değildir.
 
+Özellik sayıları ayrı ayrı 0–64 aralığında doğrulanıp sonra toplanır; sahte aşırı büyük/negatif `Count` değerleri ve toplamın 64'ü aşması listeler okunmadan reddedilir. Kanal testleri kollinear ayrı ve örtüşen parçaları, uç temasını, eğik iç izdüşümü ve uç–uç minimumunu da kapsar. Bir seçili üçlüde ağız ve tanık aynı kalırken aradaki başka bir nokta derinlik değiştirebilir; seçili üçlü ölçümünün geçmesi o noktayı veya seçilmeyen bir kanalı doğrulamaz. Bu gösterim tam gate'in geçtiği iddiası değildir.
+
 ## Üretime geçmeden önce
 
 Kaynak ve adayda bütün önemli özelliklerin nasıl belirleneceği veya belirsizlikte kullanıcıya nasıl gösterileceği, ilgili toleransların kaynağı, kaynak–aday kimlik/eşleme ve seçili segment çiftinin gerçekten ilgili kanal olup olmadığı, istenen paya göre interval sınırı, uyumluluk, iptal ve performans ayrı olarak çözülmelidir. Deneyin seçili özellikleri geçmesi, `NotchMark` veya imalat semantiğini kapsamaz ve otomatik olarak parçaya dönüştürülmez.

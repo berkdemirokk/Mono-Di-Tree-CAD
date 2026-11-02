@@ -6,6 +6,13 @@ namespace TekstilCAD.Tests;
 
 public sealed class ExperimentalExplicitFeatureGateTests
 {
+    private sealed class ReportedCountOnly<T>(int count):IReadOnlyList<T>
+    {
+        public int Count=>count;
+        public T this[int index]=>throw new InvalidOperationException("Must not index an oversized collection.");
+        public IEnumerator<T> GetEnumerator()=>throw new InvalidOperationException("Must not enumerate an oversized collection.");
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
+    }
     private static PatternPiece Lobed()
     {
         var m=typeof(SmoothAllowanceRegressionTests).GetMethod("Radial",BindingFlags.NonPublic|BindingFlags.Static)!;
@@ -49,6 +56,50 @@ public sealed class ExperimentalExplicitFeatureGateTests
         Assert.False(ExperimentalExplicitFeatureGate.SegmentsAtLeast(a,b,c,d,double.NaN));
         double origin=50_000_000;
         Assert.True(ExperimentalExplicitFeatureGate.SegmentsAtLeast(new(origin,0),new(origin,10),new(origin+5,2),new(origin+5,8),5));
+    }
+    [Fact]
+    public void HugeOrInvalidReportedFeatureCountsAreRejectedBeforeEnumeration()
+    {
+        var p=Lobed();
+        var hugeV=new ReportedCountOnly<ExperimentalExplicitFeatureGate.V>(int.MaxValue);
+        var hugeChannel=new ReportedCountOnly<ExperimentalExplicitFeatureGate.Channel>(int.MaxValue);
+        var oneV=new ReportedCountOnly<ExperimentalExplicitFeatureGate.V>(1);
+        var oneChannel=new ReportedCountOnly<ExperimentalExplicitFeatureGate.Channel>(1);
+        var sixtyFourV=new ReportedCountOnly<ExperimentalExplicitFeatureGate.V>(64);
+        var negative=new ReportedCountOnly<ExperimentalExplicitFeatureGate.Channel>(-1);
+        Assert.False(ExperimentalExplicitFeatureGate.Evaluate(p,1,hugeV,oneChannel).SelectedChecksPassed);
+        Assert.False(ExperimentalExplicitFeatureGate.Evaluate(p,1,oneV,hugeChannel).SelectedChecksPassed);
+        Assert.False(ExperimentalExplicitFeatureGate.Evaluate(p,1,sixtyFourV,oneChannel).SelectedChecksPassed);
+        Assert.False(ExperimentalExplicitFeatureGate.Evaluate(p,1,oneV,negative).SelectedChecksPassed);
+    }
+    [Fact]
+    public void CollinearObliqueAndEndpointDistancesHandleAllClosestRegions()
+    {
+        static bool Check(Point2 a,Point2 b,Point2 c,Point2 d,double min)=>
+            ExperimentalExplicitFeatureGate.SegmentsAtLeast(a,b,c,d,min);
+        Point2 a=new(0,0),b=new(2,0),c=new(5,0),d=new(8,0);
+        Assert.True(Check(a,b,c,d,3));Assert.False(Check(a,b,c,d,Math.BitIncrement(3)));
+        Assert.True(Check(d,c,b,a,3));
+        Assert.False(Check(a,b,new(1,0),new(3,0),.01));
+        Assert.False(Check(a,b,new(2,0),new(5,0),.01));
+        Assert.True(Check(new(0,0),new(4,4),new(0,2),new(4,6),1));
+        Assert.False(Check(new(0,0),new(4,4),new(0,2),new(4,6),1.5));
+        Assert.True(Check(new(0,0),new(1,0),new(4,4),new(5,4),5));
+        Assert.False(Check(new(0,0),new(1,0),new(4,4),new(5,4),Math.BitIncrement(5)));
+    }
+    [Fact]
+    public void OneSelectedWitnessCannotProveAnotherPointOrUnselectedChannel()
+    {
+        Point2[] source=[new(0,0),new(10,0),new(10,10),new(7,10),new(6,8),
+            new(5,6),new(4,8),new(3,10),new(0,10)];
+        var candidate=source.ToArray();candidate[5]=new Point2(5,9);
+        var method=typeof(PatternTools).Assembly.GetType("TekstilCAD.Patterns.OffsetUserFeatureToleranceExperiment",true)!
+            .GetMethod("TryVerify",BindingFlags.NonPublic|BindingFlags.Static)!;
+        object?[] args=[source,candidate,3,4,7,0d,0d,null,CancellationToken.None];
+        Assert.True((bool)method.Invoke(null,args)!, (string?)args[7]);
+        Assert.NotEqual(source[5],candidate[5]);
+        // The selected three-point measurement did not inspect index 5 or any
+        // unselected edge pair. It is not an end-to-end gate acceptance.
     }
     [Fact]
     public void SelectedEdgePairIsCheckedOnTheActualIndexedCandidate()

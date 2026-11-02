@@ -20,8 +20,10 @@ internal static class ExperimentalExplicitFeatureGate
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(notches);ArgumentNullException.ThrowIfNull(channels);
         Result Fail(string why)=>new(false,0,why);
+        int notchCount=notches.Count,channelCount=channels.Count;
         if(source.Points is null || source.Points.Count<3 || source.Points.Count>707 || source.Notches is not null ||
-           notches.Count+channels.Count==0 || notches.Count+channels.Count>64)
+           notchCount<0 || notchCount>64 || channelCount<0 || channelCount>64 ||
+           notchCount+channelCount==0 || notchCount+channelCount>64)
             return Fail("No explicit features, marked source, or invalid work budget; complete discovery is unknown.");
         var p=source.Clone();var v=notches.ToArray();var ch=channels.ToArray();int n=p.Points.Count;
         var witnesses=new HashSet<int>();var pairs=new HashSet<(int,int)>();
