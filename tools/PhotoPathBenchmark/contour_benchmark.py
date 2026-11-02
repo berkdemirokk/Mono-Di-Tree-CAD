@@ -214,10 +214,17 @@ if jitter:
     report["jitter_pixels"] = jitter
     report["jitter_seed_base"] = 982451653
     report["clamped_anchors"] = clamped_anchors
-(work / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 (work / "measurements.json").write_text(json.dumps([
     {"ordinal": i, "annotation_id": r[5], "category": r[0], "straight_mean": r[1][0], "straight_max": r[1][1],
      "proposal_mean": r[2][0] if r[2] is not None else None, "proposal_max": r[2][1] if r[2] is not None else None,
      "strict_crossing": r[3], "all_segments_found": r[4]} for i, r in enumerate(rows)
 ], indent=2), encoding="utf-8")
+def sha256_file(path):
+    with path.open("rb") as file:
+        return hashlib.file_digest(file, "sha256").hexdigest()
+report["pairing"] = {"version": 1, "jobs_sha256": sha256_file(input_file),
+                     "results_sha256": sha256_file(output_file),
+                     "measurements_sha256": sha256_file(work / "measurements.json"),
+                     "images_sha256": [sha256_file(Path(jobs[i*anchor_count]["Image"])) for i in range(80)]}
+(work / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 print(json.dumps(report, indent=2))

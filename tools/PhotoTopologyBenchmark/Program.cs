@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Security.Cryptography;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using TekstilCAD.Core;
@@ -13,13 +14,15 @@ internal static class Program
     private static void Main(string[] args)
     {
         if(args.Length!=3)throw new ArgumentException("Expected jobs.json results.json new-output.json.");
-        var jobs=JsonSerializer.Deserialize<Job[]>(File.ReadAllText(args[0])) ?? throw new InvalidDataException();
-        var paths=JsonSerializer.Deserialize<PathResult[]>(File.ReadAllText(args[1])) ?? throw new InvalidDataException();
+        var jobBytes=File.ReadAllBytes(args[0]);var pathBytes=File.ReadAllBytes(args[1]);
+        var jobs=JsonSerializer.Deserialize<Job[]>(jobBytes) ?? throw new InvalidDataException();
+        var paths=JsonSerializer.Deserialize<PathResult[]>(pathBytes) ?? throw new InvalidDataException();
+        static string Hash(byte[] bytes)=>Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
         var indexed=paths.ToDictionary(p=>p.Id);
         if(jobs.Length%80!=0 || indexed.Count!=jobs.Length)throw new InvalidDataException("Expected 80 equally grouped contour jobs.");
         int anchorCount=jobs.Length/80;
         if(anchorCount<3 || anchorCount>17)throw new InvalidDataException("Expected 3 to 17 anchors per contour.");
-        var output=new List<Report>();
+        var output=new List<Report>();var imageHashes=new List<string>();
         for(int ordinal=0;ordinal<80;ordinal++)
         {
             var group=jobs.Skip(ordinal*anchorCount).Take(anchorCount).ToArray();
@@ -28,10 +31,11 @@ internal static class Program
             var anchors=group.Select(job=>new Point(job.X1,job.Y1)).ToArray();
             if(group.Where((job,i)=>job.X2!=anchors[(i+1)%anchorCount].X || job.Y2!=anchors[(i+1)%anchorCount].Y).Any())
                 throw new InvalidDataException("Segments do not form the expected anchor loop.");
+            var imageBytes=File.ReadAllBytes(group[0].Image);imageHashes.Add(Hash(imageBytes));
             var candidates=group.Select(job=>indexed[job.Id]).ToArray();
             if(candidates.Any(p=>!p.Found || p.Path.Any(point=>point.Length!=2)))
             { output.Add(new(ordinal,false,false,null,null));continue; }
-            using var stream=File.OpenRead(group[0].Image);
+            using var stream=new MemoryStream(imageBytes,writable:false);
             var image=BitmapFrame.Create(stream,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.OnLoad);image.Freeze();
             var canvas=new PhotoTraceCanvas { Image=image };
             if(!canvas.TryAddPixelPoint(new Point(0,0)) || !canvas.TryAddPixelPoint(new Point(1,0)) ||
@@ -49,7 +53,7 @@ internal static class Program
             output.Add(new(ordinal,true,true,valid,edges is not null));
         }
         using var file=new FileStream(args[2],FileMode.CreateNew,FileAccess.Write,FileShare.None);
-        JsonSerializer.Serialize(file,output,new JsonSerializerOptions { WriteIndented=true });
+        JsonSerializer.Serialize(file,new { version=1,jobs_sha256=Hash(jobBytes),results_sha256=Hash(pathBytes),images_sha256=imageHashes,rows=output },new JsonSerializerOptions { WriteIndented=true });
     }
     private sealed record Job(int Id,string Image,double X1,double Y1,double X2,double Y2);
     private sealed record PathResult(int Id,bool Found,double[][] Path);

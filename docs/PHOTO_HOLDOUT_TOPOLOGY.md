@@ -26,4 +26,15 @@ dotnet tools/PhotoTopologyBenchmark/bin/Release/net10.0-windows/PhotoTopologyBen
 python tools/PhotoTopologyBenchmark/summarize.py <yeni-topoloji.json> <klasör/measurements.json> <klasör/summary.json> <yeni-özet.json>
 ```
 
-Önceki arşivin SHA-256 değeri `af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6` idi. Dosyaların eşleşmesini araç çalıştıran kişi sağlamalıdır; sıra numarası tek başına farklı koşulların karıştırılmasını saptamaz.
+Önceki arşivin SHA-256 değeri `af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6` idi. Önceki sonuçlar yalnız sıra numarasına dayanıyordu; aşağıdaki yeni eşleştirme bu eski kanıtı geriye dönük doğrulamaz.
+
+
+## Kaynağı eşleştirilmiş tekrar
+
+Özetleyici, yeni çalıştırmalarda kontur deneyi ile topoloji sonucundaki `jobs.json`, `results.json` ve 80 görselin SHA-256 değerlerini eşleştirir; ölçüm dosyasının bayt özeti de kontur çalıştırmasının kaydıyla aynı olmalıdır. Eşleşmeyen veya eski biçimli girdiler reddedilir ve özet dosyası oluşturulmaz. İş dosyasında mutlak görsel yolları bulunduğundan farklı klasörlerdeki ayrı çalıştırmaların eşit sayılması beklenmez. Geçmişte yalnız sıra numarasıyla yapılan özetler bu korumadan yararlanmamıştı; geçmişteki eşleşme bu yöntemle geriye dönük kanıtlanmış sayılmaz.
+
+Güncel araçlarla 80 ayrılmış fotoğrafta deney yeniden çalıştırıldı: 8/80 topoloji uyarısı, 72 geçerli içinde 51/72 için 5 piksel üzeri örneklenmiş yerel sapma elde edildi. Önceki sayılarla uyumlu olsa da bu, aynı kaynak kümesinde tekrardır; bağımsız bir kullanıcı veya fiziksel kalıp testi değildir. Gerçek 16 noktalı topoloji dosyasının 12 noktalı ölçümle karıştırılması `jobs_sha256` uyuşmazlığıyla reddedildi. Kontrolün otomatik testleri, iş, yol, görsel ve ölçüm uyumsuzlukları ile eski biçimi de sınar. [Çalıştırma özeti](PHOTO_PAIRED_HOLDOUT_SUMMARY.json), [topoloji özeti](PHOTO_PAIRED_HOLDOUT_TOPOLOGY.json), [topoloji satırları](PHOTO_PAIRED_HOLDOUT_TOPOLOGY_ROWS.json) ve [ölçüm satırları](PHOTO_PAIRED_HOLDOUT_ROWS.json) saklandı; fotoğraflar depoya eklenmedi.
+
+Bu özetler yanlışlıkla dosya karışmasını saptar; imzalı kayıt, eşzamanlı kötü niyetli değişikliğe karşı koruma veya görüntünün giysi sınırına uygunluğu kanıtı değildir. Veri, çalışma boyunca değiştirilmemelidir. Tekrar için yukarıdaki komutlardan önce güncel `contour_benchmark.py` ile yeni boş klasörde bir kontur çalıştırması yapılmalıdır; eski özet ve topoloji dosyaları yeni özetleyiciyle karıştırılamaz.
+
+Eşleştirme regresyonlarını veri indirmeden çalıştırmak için `python tools/PhotoTopologyBenchmark/test_pairing.py` kullanılabilir. Test verileri sentetiktir; test dosyaları `work` altında geçici olarak oluşturulur.

@@ -1,0 +1,46 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "contour_method": "80 holdout annotations from distinct images, excluding development image IDs and byte-identical files; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+  "jitter_pixels": 0,
+  "categories": {
+    "shorts": {
+      "contours": 40,
+      "points_accepted": 40,
+      "proposals_accepted": 40,
+      "pixel_geometry_invalid": 5,
+      "crossing_pair_found": 5,
+      "strict_crossing_counter": 1,
+      "strict_crossing_not_flagged": 0,
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 35,
+      "geometry_valid_local_over_5_pixels": 24,
+      "geometry_valid_max_sampled_local_pixels": 19.25825454094692
+    },
+    "tshirt": {
+      "contours": 40,
+      "points_accepted": 40,
+      "proposals_accepted": 40,
+      "pixel_geometry_invalid": 3,
+      "crossing_pair_found": 3,
+      "strict_crossing_counter": 0,
+      "strict_crossing_not_flagged": 0,
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 37,
+      "geometry_valid_local_over_5_pixels": 27,
+      "geometry_valid_max_sampled_local_pixels": 25.612496949731394
+    },
+    "all": {
+      "contours": 80,
+      "points_accepted": 80,
+      "proposals_accepted": 80,
+      "pixel_geometry_invalid": 8,
+      "crossing_pair_found": 8,
+      "strict_crossing_counter": 1,
+      "strict_crossing_not_flagged": 0,
+      "strict_crossing_without_pair": 0,
+      "pixel_geometry_valid": 72,
+      "geometry_valid_local_over_5_pixels": 51,
+      "geometry_valid_max_sampled_local_pixels": 25.612496949731394
+    }
+  }
+}

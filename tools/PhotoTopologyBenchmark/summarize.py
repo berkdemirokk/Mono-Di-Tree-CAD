@@ -2,6 +2,7 @@
 
 Usage: python summarize.py TOPOLOGY.json MEASUREMENTS.json CONTOUR_SUMMARY.json NEW_OUTPUT.json
 """
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -11,9 +12,23 @@ if len(sys.argv) != 5:
 topology_path, measurements_path, summary_path, output_path = map(Path, sys.argv[1:])
 if output_path.exists():
     raise SystemExit("Output already exists; it will not be overwritten.")
-topology = json.loads(topology_path.read_text(encoding="utf-8"))
-measurements = json.loads(measurements_path.read_text(encoding="utf-8"))
+topology_envelope = json.loads(topology_path.read_text(encoding="utf-8"))
+measurement_bytes = measurements_path.read_bytes()
+measurements = json.loads(measurement_bytes)
 source = json.loads(summary_path.read_text(encoding="utf-8"))
+pairing = source.get("pairing")
+if not isinstance(pairing, dict) or pairing.get("version") != 1 or not isinstance(topology_envelope, dict) or topology_envelope.get("version") != 1:
+    raise SystemExit("Unbound legacy inputs cannot be safely paired; rerun both experiments with the current tools.")
+for key in ("jobs_sha256", "results_sha256", "images_sha256"):
+    if key not in pairing or pairing[key] != topology_envelope.get(key):
+        raise SystemExit(f"Mismatched source evidence: {key}.")
+if not isinstance(pairing.get("images_sha256"), list) or len(pairing["images_sha256"]) != 80:
+    raise SystemExit("Expected 80 image digests.")
+if hashlib.sha256(measurement_bytes).hexdigest() != pairing.get("measurements_sha256"):
+    raise SystemExit("Measurements do not match the recorded run.")
+topology = topology_envelope.get("rows")
+if not isinstance(topology, list):
+    raise SystemExit("Missing topology rows.")
 if len(topology) != 80 or len(measurements) != 80 or any(
     t["Ordinal"] != i or m["ordinal"] != i for i, (t, m) in enumerate(zip(topology, measurements))
 ):
