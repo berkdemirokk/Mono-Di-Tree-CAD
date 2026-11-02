@@ -9341,6 +9341,25 @@ internal static class DesktopVerification
         {
             var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
             trace=new PhotoTraceWindow(workspace,bitmap,stamp,100,50,photoHash,encodedPhoto.Length);trace.ConfirmForVerification=_=>false;
+            Render(trace,Path.ChangeExtension(reportPath,".photo-purpose-unselected.png"),560,480);
+            Check(trace.SourcePurpose==PhotoSourcePurpose.Unspecified && trace.SourcePurposeForVerification.SelectedIndex==-1 &&
+                trace.ReferenceInputsForVerification.Visibility==Visibility.Collapsed && trace.ApplyForVerification.Visibility==Visibility.Collapsed &&
+                !trace.CanvasForVerification.IsEnabled && trace.StatusForVerification.Text.Contains("otomatik sınıflandırma yapılmaz") &&
+                FullyVisible(trace.SourcePurposeForVerification,(FrameworkElement)trace.Content),
+                "Photo source starts unclassified without scale or drawing actions",checks);
+            try { trace.SetPlaneSettings((100,100));throw new InvalidOperationException("Unclassified photo accepted plane settings."); }
+            catch(InvalidOperationException ex) when(ex.Message.Contains("düz serilmiş kalıp"))
+            { Check(trace.PlaneSettings is null,"Unclassified photo cannot receive plane calibration",checks); }
+            trace.SourcePurposeForVerification.SelectedIndex=0;trace.TryApply();
+            Render(trace,Path.ChangeExtension(reportPath,".photo-purpose-garment.png"),560,480);
+            Check(trace.SourcePurpose==PhotoSourcePurpose.GarmentReference && trace.ReferenceInputsForVerification.Visibility==Visibility.Collapsed &&
+                trace.ApplyForVerification.Visibility==Visibility.Collapsed && !trace.CanvasForVerification.IsEnabled &&
+                trace.StatusForVerification.Text.Contains("giysi/model referansı kalıp değildir") && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Garment reference remains a visual reference and cannot be added as a scaled pattern",checks);
+            trace.SourcePurposeForVerification.SelectedIndex=-1;
+            Check(trace.SourcePurpose==PhotoSourcePurpose.Unspecified && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Clearing the photo type does not change the project",checks);
+            trace.SourcePurposeForVerification.SelectedIndex=1;
             Render(trace,Path.ChangeExtension(reportPath,".photo-trace-compact.png"),560,480);
             var root=(FrameworkElement)trace.Content;var canvas=trace.CanvasForVerification;
             Check(canvas.Focusable && FullyVisible(canvas,root) && FullyVisible(trace.LengthForVerification,root) &&
@@ -9359,6 +9378,15 @@ internal static class DesktopVerification
             foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(20,20) })
                 Check(canvas.TryAddPixelPoint(p),"Photo tracing accepts an explicitly selected point",checks);
             var beforeZoom=canvas.Points.ToArray();var beforeZoomRevision=trace.DraftRevision;
+            trace.LengthForVerification.Text="100";trace.SourcePurposeForVerification.SelectedIndex=0;trace.TryApply();
+            Check(canvas.Points.SequenceEqual(beforeZoom) && trace.LengthForVerification.Text=="100" &&
+                trace.ReferenceInputsForVerification.Visibility==Visibility.Collapsed && trace.StatusForVerification.Text.Contains("giysi/model referansı kalıp değildir") &&
+                DocumentSession.ContentEquals(initial,workspace.Document),
+                "Changing to garment reference preserves the pending flat-pattern draft without applying it",checks);
+            trace.SourcePurposeForVerification.SelectedIndex=1;
+            Check(canvas.Points.SequenceEqual(beforeZoom) && trace.LengthForVerification.Text=="100" && trace.ReferenceInputsForVerification.Visibility==Visibility.Visible,
+                "Returning to the flat-pattern choice restores the untouched draft",checks);
+            beforeZoomRevision=trace.DraftRevision;
             canvas.ZoomAtCursor(2);var viewSize=new Size(200,200);
             Check(canvas.Zoom==2 && canvas.TryMapPixelToView(new Point(20,20),viewSize,out var zoomView) && Math.Abs(zoomView.X-100)<1e-9 && Math.Abs(zoomView.Y-100)<1e-9 &&
                 canvas.TryMapViewToPixel(zoomView,viewSize,out var zoomPixel) && Math.Abs(zoomPixel.X-20)<1e-9 && Math.Abs(zoomPixel.Y-20)<1e-9 &&
@@ -9596,7 +9624,20 @@ internal static class DesktopVerification
                 var pendingPath=trace.StartPathSuggestionAsync();PumpUntil(()=>reached.IsSet);
                 canvas.TryAddPixelPoint(new Point(25,25));release.Set();PumpUntil(()=>pendingPath.IsCompleted);pendingPath.GetAwaiter().GetResult();
                 Check(canvas.PathSuggestion is null && trace.StatusForVerification.Text.Contains("değişti"),"Editing while a photo path is computed discards the stale proposal",checks);
-                canvas.UndoPoint();using var cancelReached=new ManualResetEventSlim();
+                canvas.UndoPoint();
+                using(var purposeReached=new ManualResetEventSlim())using(var purposeRelease=new ManualResetEventSlim())
+                {
+                    trace.ComputePathForVerification=(_,_,_,token)=> { purposeReached.Set();purposeRelease.Wait(token);return new[] { new Point(20,10),new Point(21,11),new Point(20,20) }; };
+                    var typeChangePath=trace.StartPathSuggestionAsync();
+                    try
+                    {
+                        PumpUntil(()=>purposeReached.IsSet);trace.SourcePurposeForVerification.SelectedIndex=0;purposeRelease.Set();PumpUntil(()=>typeChangePath.IsCompleted);typeChangePath.GetAwaiter().GetResult();
+                        Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("Giysi/model yalnız görsel referanstır"),
+                            "Changing photo type during path calculation discards the stale result and preserves points",checks);
+                    }
+                    finally { purposeRelease.Set();trace.SourcePurposeForVerification.SelectedIndex=1; }
+                }
+                using var cancelReached=new ManualResetEventSlim();
                 trace.ComputePathForVerification=(_,_,_,token)=> { cancelReached.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested();return null; };
                 var cancelledPath=trace.StartPathSuggestionAsync();PumpUntil(()=>cancelReached.IsSet);trace.CancelPathSuggestion();PumpUntil(()=>cancelledPath.IsCompleted);cancelledPath.GetAwaiter().GetResult();
                 Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("iptal"),
@@ -9694,6 +9735,10 @@ internal static class DesktopVerification
             Check(DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("değişti"),
                 "Photo input changed during draft confirmation prevents applying stale geometry",checks);
             trace.LengthForVerification.Text="100";
+            trace.ConfirmForVerification=_=> { trace.SourcePurposeForVerification.SelectedIndex=0;return true; };trace.TryApply();
+            Check(DocumentSession.ContentEquals(initial,workspace.Document) && trace.StatusForVerification.Text.Contains("değişti") && canvas.Points.Count>0,
+                "Changing the photo type during confirmation prevents a stale scaled draft",checks);
+            trace.SourcePurposeForVerification.SelectedIndex=1;
             var savedSegment=canvas.Points.ToArray();
             var proposal=new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) };
             Guid? closureRequested=null;trace.OpenClosureForVerification=id=>closureRequested=id;trace.ReviewClosureForVerification.IsChecked=true;
@@ -9748,7 +9793,8 @@ internal static class DesktopVerification
             finally { editedHistory.Close(); }
             var text=ProjectStorage.SerializeProject(added);
             using var serializedPhotoProject=JsonDocument.Parse(text);
-            Check(serializedPhotoProject.RootElement[0].GetInt32()==8 && !text.Contains(Convert.ToBase64String(encodedPhoto),StringComparison.Ordinal),
+            Check(serializedPhotoProject.RootElement[0].GetInt32()==8 && !text.Contains(Convert.ToBase64String(encodedPhoto),StringComparison.Ordinal) &&
+                !text.Contains("SourcePurpose",StringComparison.OrdinalIgnoreCase),
                 "Photo evidence uses version eight without embedding reference image bytes",checks);
             Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
                 "Manual photo draft participates in undo and redo",checks);
@@ -9774,6 +9820,7 @@ internal static class DesktopVerification
             var stale=workspace.CapturePhotoTrace()!;var staleWindow=new PhotoTraceWindow(workspace,bitmap,stale,100,50,photoHash,encodedPhoto.Length);
             try
             {
+                staleWindow.SourcePurposeForVerification.SelectedIndex=1;
                 foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10) })staleWindow.CanvasForVerification.TryAddPixelPoint(p);
                 staleWindow.LengthForVerification.Text="100";
                 staleWindow.ConfirmForVerification=_=> { workspace.Commit("test",()=>workspace.Document.Name="Değişmiş proje");return true; };
@@ -9796,7 +9843,7 @@ internal static class DesktopVerification
         var session=new DocumentSession(new ProjectDocument { Name="Düzlem fotoğraf testi" });var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,100,96,96,PixelFormats.Bgra32,null,new byte[100*100*4],400);bitmap.Freeze();
         byte[] photo;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);photo=stream.ToArray(); }
-        var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length);_ = new WindowInteropHelper(trace).EnsureHandle();
+        var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length);trace.SourcePurposeForVerification.SelectedIndex=1;_ = new WindowInteropHelper(trace).EnsureHandle();
         var wasClosed=false;trace.Closed+=(_,_)=>wasClosed=true;
         try
         {
