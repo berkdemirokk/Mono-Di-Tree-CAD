@@ -469,9 +469,12 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(text.replacingOccurrences(of: "\"aline\"", with: "\"unknown\"").utf8)))
         XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(text.replacingOccurrences(of: "\"id\":\"aline\"", with: "\"id\":\"aline\",\"id\":\"wrap\"").utf8)))
         let conflict = ExperimentalDesignBrief.Draft(style: .aline, description: "Model: düz", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
-        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(conflict))
+        let conflictingBytes = try ExperimentalDesignBrief.makeV2(conflict)
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(conflictingBytes).description, conflict.description)
         let conflictingImport = #"{"format":"tekstilcad.design-request","version":2,"prompt":"Model: düz","measurements":"","reference":null,"model":{"id":"aline"}}"#
-        XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(conflictingImport.utf8)))
+        let conflicting = try ExperimentalDesignBrief.portableDraft(Data(conflictingImport.utf8))
+        XCTAssertEqual(conflicting.style, .aline)
+        XCTAssertEqual(conflicting.description, "Model: düz")
         let unknownField = #"{"format":"tekstilcad.design-request","version":2,"prompt":"İpek","measurements":"","reference":null,"model":{"id":"aline","extra":true}}"#
         XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(unknownField.utf8)))
         let v1 = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: image, imageName: original.imageName)
@@ -489,6 +492,35 @@ final class DesignDraftStoreTests: XCTestCase {
         let recovered = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
         XCTAssertEqual(recovered.style, .aline)
         XCTAssertEqual(recovered.description, "Düz elbise istiyorum")
+    }
+    func testSharedV2Fixtures() throws {
+        let bundle = Bundle(for: Self.self)
+        func fixture(_ name: String) throws -> Data {
+            try Data(contentsOf: XCTUnwrap(bundle.url(forResource: name, withExtension: "json")))
+        }
+        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg"] {
+            XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(fixture(name)), name)
+        }
+        for name in ["v2-model-matching", "v2-model-conflicting"] {
+            let raw = try fixture(name)
+            let parsed = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: raw)
+            let draft = try ExperimentalDesignBrief.portableDraft(raw)
+            XCTAssertEqual(draft.style, .aline)
+            XCTAssertEqual(draft.description, parsed.prompt)
+            let restored = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
+            XCTAssertEqual(restored.description, parsed.prompt)
+            XCTAssertEqual(restored.style, .aline)
+        }
+    }
+    func testV2EmptyPromptAndModelLines() throws {
+        let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(empty))
+        for text in ["Seçilen elbise modeli: A kesim elbise", "Seçilen elbise modeli: Düz elbise"] {
+            let draft = ExperimentalDesignBrief.Draft(style: .aline, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            let reopened = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
+            XCTAssertEqual(reopened.style, .aline)
+            XCTAssertEqual(reopened.description, text)
+        }
     }
     func testV2ToV1RejectsOverLimitWithoutTruncatingEmoji() throws {
         let text = String(repeating: "👗", count: 8192)

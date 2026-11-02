@@ -2805,7 +2805,7 @@ private struct ExperimentalDesignBriefView: View {
         guard measurementForm?.hasValues != true else {
             message = "Ölçü formunda onaylanmamış giriş var; yalnız boşluk içeren alanlar da buna dahildir. Formu inceleyin veya ayrı kurtarma kopyası kullanın."; step = 1; return
         }
-        guard !ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) else {
+        guard requestExportVersion == 2 || !ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) else {
             message = "Açıklamada önceki model satırı var. Metni gözden geçirip düzenleyin veya Tarif edeceğim seçin; mevcut metin korunuyor."
             step = 0; return
         }

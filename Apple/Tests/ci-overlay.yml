@@ -8,6 +8,16 @@
       - path: Tests/DesignDraftStoreTests.swift
       - path: Tests/Fixtures/portable-desktop-and-v1.json
         buildPhase: resources
+      - path: Tests/Fixtures/v2-empty-model.json
+        buildPhase: resources
+      - path: Tests/Fixtures/v2-model-matching.json
+        buildPhase: resources
+      - path: Tests/Fixtures/v2-model-conflicting.json
+        buildPhase: resources
+      - path: Tests/Fixtures/v2-invalid-signature-png.json
+        buildPhase: resources
+      - path: Tests/Fixtures/v2-invalid-signature-jpeg.json
+        buildPhase: resources
       - path: Tests/Fixtures/ios-complete-request.tcad-request.json
         buildPhase: resources
       - path: Tests/Fixtures/ios-unicode-photo.tcad-request.json
