@@ -1,6 +1,6 @@
 """Measure full closed contours using annotation-derived anchors; no dataset is redistributed.
 
-Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS]
+Usage: python contour_benchmark.py DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS]]
 """
 import collections
 import hashlib
@@ -12,17 +12,21 @@ import subprocess
 import sys
 import zipfile
 
-if len(sys.argv) not in (4, 5):
-    raise SystemExit("Expected 3–17 anchors and DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS].")
+if len(sys.argv) not in (4, 5, 6):
+    raise SystemExit("Expected DATASET.zip DOTNET_EXE EMPTY_WORK_DIRECTORY [ANCHORS [JITTER_PIXELS]].")
 archive, dotnet, work = Path(sys.argv[1]).resolve(), sys.argv[2], Path(sys.argv[3]).resolve()
-anchor_count = int(sys.argv[4]) if len(sys.argv) == 5 else 12
+anchor_count = int(sys.argv[4]) if len(sys.argv) >= 5 else 12
+jitter = float(sys.argv[5]) if len(sys.argv) == 6 else 0.0
 if not 3 <= anchor_count <= 17:
     raise SystemExit("Anchor count must be between 3 and 17.")
+if not math.isfinite(jitter) or not 0 <= jitter <= 10:
+    raise SystemExit("Jitter must be finite and between 0 and 10 pixels.")
 work.mkdir(parents=True, exist_ok=True)
 if any(work.iterdir()):
     raise SystemExit("Work directory must be empty; existing files are not overwritten.")
 root, prefix = Path(__file__).resolve().parent, "artf-test_resized_512x256/"
 jobs, contours = [], []
+clamped_anchors = 0
 with zipfile.ZipFile(archive) as z:
     data = json.loads(z.read(prefix + "annotations.json"))
     images = {i["id"]: i for i in data["images"]}
@@ -50,6 +54,19 @@ with zipfile.ZipFile(archive) as z:
             a, b = points[index:index + 2]
             anchors.append((a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])))
         info = images[ann["image_id"]]
+        if jitter:
+            # A deterministic stress test, not a model of real user clicks.
+            # Seed each annotation independently to keep the paired selection stable.
+            jitter_rng = random.Random(982451653 + ann["id"])
+            shifted = []
+            for x, y in anchors:
+                angle = jitter_rng.uniform(0, math.tau)
+                px, py = x + jitter * math.cos(angle), y + jitter * math.sin(angle)
+                clamped = (max(0.0, min(info["width"] - 1.0, px)),
+                           max(0.0, min(info["height"] - 1.0, py)))
+                clamped_anchors += clamped != (px, py)
+                shifted.append(clamped)
+            anchors = shifted
         image = work / (str(info["id"]) + ".png")
         if not image.exists():
             image.write_bytes(z.read(prefix + info["file_name"]))
@@ -153,6 +170,11 @@ for category in ("shorts", "tshirt", "all"):
 with archive.open("rb") as f:
     digest = hashlib.file_digest(f, "sha256").hexdigest()
 report = {"archive_sha256": digest, "method": f"Same 80 selected test annotations as earlier experiments; {anchor_count} equally spaced perimeter anchors from ground truth; {anchor_count} independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation", "categories": summary}
+if jitter:
+    report["method"] += f"; anchors independently shifted {jitter:g} pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks"
+    report["jitter_pixels"] = jitter
+    report["jitter_seed_base"] = 982451653
+    report["clamped_anchors"] = clamped_anchors
 (work / "summary.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
 (work / "measurements.json").write_text(json.dumps([
     {"ordinal": i, "annotation_id": r[5], "category": r[0], "straight_mean": r[1][0], "straight_max": r[1][1],

@@ -1,0 +1,48 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation; anchors independently shifted 2 pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks",
+  "categories": {
+    "shorts": {
+      "contours": 40,
+      "all_segments_found": 40,
+      "proposal_accepted_by_simulated_point_checks": 40,
+      "mean_straight_complete": 2.4096513366047025,
+      "mean_proposed_complete": 1.4992234992659366,
+      "improved_gt_half_pixel": 25,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 3.658629988531712,
+      "max_sampled_local_error": 21.044314513154696,
+      "local_error_over_5_pixels": 36,
+      "strict_self_crossing": 0
+    },
+    "tshirt": {
+      "contours": 40,
+      "all_segments_found": 40,
+      "proposal_accepted_by_simulated_point_checks": 40,
+      "mean_straight_complete": 3.0222485227179408,
+      "mean_proposed_complete": 1.5615517414256197,
+      "improved_gt_half_pixel": 36,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 3.0139900672404076,
+      "max_sampled_local_error": 26.084228406750036,
+      "local_error_over_5_pixels": 33,
+      "strict_self_crossing": 1
+    },
+    "all": {
+      "contours": 80,
+      "all_segments_found": 80,
+      "proposal_accepted_by_simulated_point_checks": 80,
+      "mean_straight_complete": 2.7159499296613214,
+      "mean_proposed_complete": 1.5303876203457782,
+      "improved_gt_half_pixel": 61,
+      "worsened_gt_half_pixel": 0,
+      "max_contour_mean_error": 3.658629988531712,
+      "max_sampled_local_error": 26.084228406750036,
+      "local_error_over_5_pixels": 69,
+      "strict_self_crossing": 1
+    }
+  },
+  "jitter_pixels": 2.0,
+  "jitter_seed_base": 982451653,
+  "clamped_anchors": 0
+}

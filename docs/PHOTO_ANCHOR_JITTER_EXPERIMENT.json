@@ -1,0 +1,51 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "first_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+  "second_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation; anchors independently shifted 2 pixels in deterministic random directions and clamped to image bounds; synthetic perturbation, not observed user clicks",
+  "total_first": 80,
+  "total_second": 80,
+  "categories": {
+    "shorts": {
+      "paired": 40,
+      "mean_error_change": 0.13313081738219273,
+      "mean_improved_gt_half": 0,
+      "mean_worsened_gt_half": 3,
+      "worst_mean_increase": 1.1969466023107134,
+      "local_max_improved_gt_one": 4,
+      "local_max_worsened_gt_one": 10,
+      "both_local_over_5": 32,
+      "only_first_local_over_5": 1,
+      "only_second_local_over_5": 4,
+      "strict_crossing_first": 0,
+      "strict_crossing_second": 0
+    },
+    "tshirt": {
+      "paired": 40,
+      "mean_error_change": 0.08222759651269777,
+      "mean_improved_gt_half": 0,
+      "mean_worsened_gt_half": 1,
+      "worst_mean_increase": 0.5530716422620707,
+      "local_max_improved_gt_one": 7,
+      "local_max_worsened_gt_one": 9,
+      "both_local_over_5": 32,
+      "only_first_local_over_5": 0,
+      "only_second_local_over_5": 1,
+      "strict_crossing_first": 0,
+      "strict_crossing_second": 1
+    },
+    "all": {
+      "paired": 80,
+      "mean_error_change": 0.10767920694744526,
+      "mean_improved_gt_half": 0,
+      "mean_worsened_gt_half": 4,
+      "worst_mean_increase": 1.1969466023107134,
+      "local_max_improved_gt_one": 11,
+      "local_max_worsened_gt_one": 19,
+      "both_local_over_5": 64,
+      "only_first_local_over_5": 1,
+      "only_second_local_over_5": 5,
+      "strict_crossing_first": 0,
+      "strict_crossing_second": 1
+    }
+  }
+}
