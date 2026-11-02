@@ -10306,6 +10306,32 @@ internal static class DesktopVerification
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
             try
             {
+                foreach(var (bytes,type,name) in new[] { (validPng,"image/png","valid.png"),(validJpeg,"image/jpeg","valid.jpg") })
+                {
+                    var saved=new DesignRequest(input.Prompt,input.Measurements,new DesignReference(name,type,bytes));selectionWindow.LoadForVerification(saved);
+                    var check=selectionWindow.ValidateExistingReferenceAsync();PumpUntil(()=>check.IsCompleted);
+                    Check(check.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(bytes) &&
+                        selectionWindow.ReferenceLabelForVerification.Text.Contains("telefon uyumluluğu") && !selectionWindow.DirtyForVerification,
+                        "Saved valid "+type+" can be checked without editing the request or claiming phone compatibility",checks);
+                }
+                foreach(var saved in new[] { input,truncatedJpeg })
+                {
+                    selectionWindow.LoadForVerification(saved);var check=selectionWindow.ValidateExistingReferenceAsync();PumpUntil(()=>check.IsCompleted);
+                    Check(!check.GetAwaiter().GetResult() && selectionWindow.StatusForVerification.Text.Contains("çözümlenemedi") &&
+                        selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(saved.Reference!.Data) && !selectionWindow.DirtyForVerification,
+                        "Saved truncated "+saved.Reference!.MediaType+" fails the transfer check while retaining its original bytes",checks);
+                }
+                using(var validationEntered=new ManualResetEventSlim())using(var validationRelease=new ManualResetEventSlim())
+                {
+                    selectionWindow.LoadForVerification(new DesignRequest(input.Prompt,input.Measurements,new DesignReference("valid.png","image/png",validPng)));
+                    selectionWindow.ExistingReferenceDecoderForVerification=bytes=> { validationEntered.Set();validationRelease.Wait();return ReferencePhotoDecoder.DecodeWithGeometry(bytes); };
+                    try { var pending=selectionWindow.ValidateExistingReferenceAsync();PumpUntil(()=>validationEntered.IsSet);selectionWindow.LoadForVerification(input);
+                        validationRelease.Set();PumpUntil(()=>pending.IsCompleted);
+                        Check(!pending.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) &&
+                            selectionWindow.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir"),
+                            "Replacing a request invalidates an in-flight saved-reference check",checks); }
+                    finally { validationRelease.Set();selectionWindow.ExistingReferenceDecoderForVerification=null; }
+                }
                 foreach(var (path,expectedBytes,label) in new[] { (pngPath,validPng,"PNG"),(jpegPath,validJpeg,"oriented JPEG"),(widePath,widePhoto,"reduced preview") })
                 {
                     selectionWindow.LoadForVerification(input);var task=selectionWindow.ChooseReferenceFileAsync(path);PumpUntil(()=>task.IsCompleted);

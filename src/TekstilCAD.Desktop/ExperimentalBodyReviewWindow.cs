@@ -28,8 +28,7 @@ internal sealed class ExperimentalBodyReviewWindow : Window
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var close=new Button { Content="Kapat",IsCancel=true,Padding=new Thickness(12,6,12,6),HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(close,Dock.Bottom);root.Children.Add(close);close.Click+=(_,_)=>Close();
         var title=new TextBlock { Text="Ölçü özeti · deneysel",FontSize=20,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(title,Dock.Top);root.Children.Add(title);
-        var message=new TextBlock { Text="15 değer yalnız teknik olarak denetlendi; ölçüm yöntemini ve değerleri kontrol edin. Henüz beden görüntüsü veya kalıp üretilmedi. Bu geçici özet dış bir programa gönderilmez, projeye eklenmez ve pencere kapanınca saklanmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(message,Dock.Top);root.Children.Add(message);
-        ValuesForVerification.Background=DesignRequestWindow.Surface;ValuesForVerification.Foreground=DesignRequestWindow.Ink;ValuesForVerification.BorderBrush=DesignRequestWindow.BorderColor;
+        var message=new TextBlock { Text="Yalnız formdaki 15 değer teknik olarak denetlendi; önceki notları, ölçüm yöntemini ve değerleri kontrol edin. Henüz beden görüntüsü veya kalıp üretilmedi. Bu geçici özet dış bir programa gönderilmez, projeye eklenmez ve pencere kapanınca saklanmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(message,Dock.Top);root.Children.Add(message);
         ValuesForVerification.ItemsSource=BreannaMeasurementGate.Definitions.Select(d=>$"{d.Label}: {request.Values[d.Key].ToString(System.Globalization.CultureInfo.CurrentCulture)} {(d.IsAngle ? "derece" : "mm")}").ToArray();
         AutomationProperties.SetName(ValuesForVerification,"Denetlenmiş deneysel ölçü özeti");root.Children.Add(ValuesForVerification);
     }

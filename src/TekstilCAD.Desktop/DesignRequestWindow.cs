@@ -31,6 +31,7 @@ internal sealed class DesignRequestWindow : Window
     private long referenceRevision;
     private bool referenceLoadRunning,closed,referenceDecoded;
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
+    internal Func<byte[],ReferencePhotoPreview>? ExistingReferenceDecoderForVerification { get; set; }
     private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
     private readonly Dictionary<string,TextBlock> measurementTiles=new(StringComparer.Ordinal);
@@ -144,6 +145,9 @@ internal sealed class DesignRequestWindow : Window
         var refActions=new WrapPanel();body.Children.Add(refActions);
         var choose=new Button { Content="Görsel seç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,8,4) };refActions.Children.Add(choose);choose.Click+=(_,_)=>ChooseReference();
         var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=>RemoveReference();
+        var verifyAndSave=new Button { Content="Görseli denetleyip yeni istek kaydet…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(8,4,0,4) };
+        AutomationProperties.SetHelpText(verifyAndSave,"Kayıtlı referansı Windows'ta açılabilirlik için denetler; başarılıysa yeni dosya kaydetme penceresini açar. Telefon uyumluluğunu garanti etmez.");
+        verifyAndSave.Click+=async (_,_)=>await ValidateAndSaveAsync();refActions.Children.Add(verifyAndSave);
         body.Children.Add(new TextBlock { Text="PNG/JPEG görsel seçilirken çizim için çözümlenebilirliği kontrol edilir; en fazla 8 MiB, 12.000 piksel ve 24 milyon piksel desteklenir. Bu sınırları aşan görsel otomatik küçültülmez. Tüm kaynak baytları ve metadata isteğe eklenir; görsel içeriği, ölçüler ve üretime uygunluk doğrulanmaz. Eski isteklerdeki görseller açılmadan doğrulanmamış olabilir.",TextWrapping=TextWrapping.Wrap,Foreground=Muted,Margin=new Thickness(0,10,0,0) });
 
         prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
@@ -285,7 +289,7 @@ internal sealed class DesignRequestWindow : Window
         catch(ArgumentException ex) { measurementReview.Text="Ölçü denetlenemedi: "+ex.Message; }
     }
     private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt"+
-        (referenceDecoded ? "" : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
+        (referenceDecoded ? "\nWindows görsel denetiminden geçti; telefon uyumluluğu ayrıca doğrulanmalıdır." : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
     private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() });
     private void Apply(DesignRequest value)
     {
@@ -307,6 +311,34 @@ internal sealed class DesignRequestWindow : Window
         var dialog=new OpenFileDialog { Title="Referans görseli seç",Filter="PNG veya JPEG (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
         _=ChooseReferenceFileAsync(dialog.FileName);
+    }
+    internal async Task<bool> ValidateExistingReferenceAsync()
+    {
+        if(closed || referenceLoadRunning) { if(!closed)SetStatus("Görsel denetimi sürüyor; tamamlanmasını bekleyin.");return false; }
+        if(reference is null) { SetStatus("İstekte görsel yok; görsel denetimi gerekmedi.");return true; }
+        var revision=referenceRevision;var bytes=(byte[])reference.Data.Clone();var decoder=ExistingReferenceDecoderForVerification;
+        referenceLoadRunning=true;SetStatus("Kayıtlı görsel Windows'ta denetleniyor; özgün baytlar korunuyor.");
+        try
+        {
+            _=await Task.Run(()=>decoder is null ? ReferencePhotoDecoder.DecodeWithGeometry(bytes) : decoder(bytes));
+            if(closed)return false;
+            if(referenceRevision!=revision) { SetStatus("Referans değişti; önceki denetim kullanılmadı.");return false; }
+            referenceDecoded=true;UpdateReference();SetStatus("Görsel Windows'ta açıldı; telefon uyumluluğu ayrıca doğrulanmalıdır. Özgün baytlar değişmedi.");return true;
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        {
+            if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; önceki denetim kullanılmadı." : "Kayıtlı görsel çözümlenemedi veya desteklenen 8 MiB / 12.000 piksel / 24 milyon piksel sınırını aşıyor. İstek ve görsel korunuyor; özgün dosyayı saklayın ve gerekirse yeni bir PNG/JPEG seçin.");return false;
+        }
+        finally { referenceLoadRunning=false; }
+    }
+    private async Task ValidateAndSaveAsync()
+    {
+        var description=prompt.Text;var notes=measurements.Text;var message=chatInput.Text;var revision=referenceRevision;
+        if(!await ValidateExistingReferenceAsync())return;
+        if(closed)return;
+        if(prompt.Text!=description || measurements.Text!=notes || chatInput.Text!=message || referenceRevision!=revision)
+        { SetStatus("İstek denetim sırasında değişti; kaydetme açılmadı. Tekrar deneyin.");return; }
+        Save();
     }
     internal async Task<bool> ChooseReferenceFileAsync(string path)
     {
