@@ -3,6 +3,7 @@ using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 using TekstilCAD.Patterns;
 using TekstilCAD.Grading;
+using TekstilCAD.Nesting;
 
 namespace TekstilCAD.Tests;
 
@@ -111,5 +112,37 @@ public class PhysicalContourStorageTests
         other.PhysicalFeatures!.EdgeIds[0]=doc.Pieces[0].PhysicalFeatures!.EdgeIds[0];
         doc.Pieces.Add(other);
         Assert.Throws<InvalidDataException>(()=>ProjectStorage.Validate(doc));
+    }
+    [Fact] public void RotationAndNestingRejectPhysicalIdentityLossWithoutChangingInput()
+    {
+        var doc=Document(); var before=doc.Clone(); var piece=doc.Pieces[0];
+        Assert.Throws<ArgumentException>(()=>OrthogonalRotation.Rotate(piece,0));
+        Assert.Throws<ArgumentException>(()=>OrthogonalRotation.Rotate(piece,90));
+        Assert.ThrowsAny<ArgumentException>(()=>NestingEngine.Arrange([piece],50,1));
+        piece.Metadata=new() { Role="Kesim", Quantity=1, Material="Kumaş" };
+        piece.Grainline=new() { Start=new(0,0), End=new(0,1) };
+        Assert.ThrowsAny<ArgumentException>(()=>ProductionNestingPlan.Arrange(doc,[piece.Id],50,1));
+        Assert.ThrowsAny<ArgumentException>(()=>GrainConstrainedNesting.Arrange(doc,[piece.Id],50,1,100,0,GrainDirectionPolicy.Direction.OneWay,0));
+        Assert.ThrowsAny<ArgumentException>(()=>OrthogonalGrainNesting.Arrange(doc,[piece.Id],50,1,100,0,[0],GrainDirectionPolicy.Direction.OneWay,0));
+        Assert.ThrowsAny<ArgumentException>(()=>PerCopyOrthogonalNesting.Arrange(doc,[piece.Id],new Dictionary<(Guid,int),int> { [(piece.Id,1)]=0 },50,1,100,0,GrainDirectionPolicy.Direction.OneWay,0));
+        Assert.ThrowsAny<ArgumentException>(()=>AutomaticPerCopyNesting.Arrange(doc,[piece.Id],new Dictionary<Guid,IReadOnlyList<int>> { [piece.Id]=new[] { 0 } },50,1,100,0,GrainDirectionPolicy.Direction.OneWay,0));
+        piece.Metadata=null;
+        piece.Grainline=null;
+        Assert.True(DocumentSession.ContentEquals(before,doc));
+    }
+    [Fact] public void SvgHpglAndPdfRejectPhysicalIdentityLossWithoutWriting()
+    {
+        var doc=Document(); var path=Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(path,"preserve");
+            Assert.Throws<InvalidDataException>(()=>SvgFormat.Export(doc,path));
+            Assert.Throws<InvalidDataException>(()=>HpglFormat.Export(doc,path));
+            var version=ProjectStorage.CaptureVersion(path);
+            Assert.Throws<InvalidDataException>(()=>PdfFormat.Export(doc,path,version));
+            Assert.Throws<InvalidDataException>(()=>PdfTiledFormat.Export(doc,path,version));
+            Assert.Equal("preserve",File.ReadAllText(path));
+        }
+        finally { File.Delete(path); }
     }
 }

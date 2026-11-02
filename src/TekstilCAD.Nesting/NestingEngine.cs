@@ -156,6 +156,8 @@ public static class NestingEngine
 
     internal static void ValidateMarkers(PatternPiece piece,CancellationToken token)
     {
+        if(piece.PhysicalFeatures is not null)
+            throw new ArgumentException("Fiziksel kontur kimlikleri yerleşim veya döndürme sırasında korunamıyor.",nameof(piece));
         if(piece.Notches is not { } marks)return;
         if(piece.Points is null || marks.Count==0 || marks.Count>piece.Points.Count)throw new ArgumentException("Geçersiz köşe işareti listesi.");
         var indices=new HashSet<int>();

@@ -11,8 +11,18 @@ internal static class NotchExportGuard
 {
     internal static void EnsureSupported(ProjectDocument project)
     {
+        PhysicalExportGuard.EnsureSupported(project);
         if (project.Pieces.Any(piece => piece.Notches is { Count: > 0 }))
             throw new InvalidDataException("Çentik işaretleri bu çıktı biçimine henüz aktarılamıyor; veri kaybını önlemek için dosya hazırlanmadı.");
+    }
+}
+
+internal static class PhysicalExportGuard
+{
+    internal static void EnsureSupported(ProjectDocument project)
+    {
+        if(project.Pieces.Any(piece=>piece.PhysicalFeatures is not null))
+            throw new InvalidDataException("Fiziksel kontur kimlikleri bu çıktı biçiminde korunamıyor; dosya hazırlanmadı.");
     }
 }
 
