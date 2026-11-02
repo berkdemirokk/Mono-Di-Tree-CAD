@@ -100,6 +100,7 @@ public class MainWindow : Window
     private bool savedFileHasImportProvenance;
     private bool savedFileHasNotches;
     private bool savedFileHasPhotoTraceHistory;
+    private bool savedFileHasPlaneTraceHistory;
     private RecoveredDocument? recoveredSource;
     // A saved project can still have a pending drawing omitted from that file.
     // Defer archival of its original recovery record until that drawing is resolved.
@@ -835,7 +836,7 @@ public class MainWindow : Window
         projectEpoch=Guid.NewGuid();
         if(markUnsaved)session.MarkUnsaved();
         dirty=markUnsaved;
-        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;
+        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;
         SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
         onLoaded?.Invoke();
         ClearRecovery();canvas.CancelDrawing();canvas.IsEnabled=true;
@@ -1916,6 +1917,7 @@ public class MainWindow : Window
                 savedFileHasImportProvenance=loaded.Project.ImportProvenance is not null;
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
                 savedFileHasPhotoTraceHistory=loaded.Project.PhotoTraceHistory is { Count:>0 };
+                savedFileHasPlaneTraceHistory=loaded.Project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;
                 applied=true;
             },openingProject:true);
             SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
@@ -1931,7 +1933,7 @@ public class MainWindow : Window
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
         if (filePath is null) { SaveAs(); return; }
-        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory))
+        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory))
         {
             var choice=ChooseGradingCompatibility(true);
             if(choice==GradingSaveChoice.Cancel)return;
@@ -1958,7 +1960,7 @@ public class MainWindow : Window
             ? fileVersion : ProjectStorage.CaptureVersion(path));
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
-        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };
+        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };savedFileHasPlaneTraceHistory=candidate.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;
         try
         {
             if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
@@ -2088,7 +2090,9 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=Document.PhotoTraceHistory is { Count:>0 }
+        var description=Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true
+            ? "Düzlem perspektifli fotoğraf geçmişi proje biçimi sürüm 9 gerektirir. Önceki TekstilCAD sürümleri bu dosyayı açamaz. Fotoğraf projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
+            : Document.PhotoTraceHistory is { Count:>0 }
             ? "Fotoğraf taslağı geçmişi proje biçimi sürüm 8 ile saklanır. Eski TekstilCAD sürümleri bu dosyayı açamaz. Fotoğrafın kendisi projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
             : Document.NestingSnapshot?.RotationTrace is not null
             ? "Döndürmeli pastal geçmişi proje biçimi sürüm 7 ile saklanır. Önceki TekstilCAD ve desteklemeyen mobil sürümler bu dosyayı açamaz. Geçmiş iz üretim onayı değildir."
@@ -3970,7 +3974,7 @@ public class MainWindow : Window
         canvas.InstallPreparedPendingDrawing(preparedDrawing);
         if(pending is not null)ActiveTool=pending.Tool;
         projectEpoch=Guid.NewGuid();session.MarkUnsaved();dirty=true;
-        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;
+        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;
         SelectedId=null;recoveredSource=chosen;recoveredDocumentSaved=false;recoveryRestoreIncomplete=true;
         propertyDrafts.Clear();
         foreach(var (id,draft) in drafts)propertyDrafts.Add(id,draft);

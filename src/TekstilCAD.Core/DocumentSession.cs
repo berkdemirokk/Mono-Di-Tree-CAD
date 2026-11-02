@@ -159,6 +159,10 @@ public sealed class DocumentSession
         (a is not null && b is not null && a.SourceFileName==b.SourceFileName && a.SourceSha256==b.SourceSha256 &&
          a.SourceByteLength==b.SourceByteLength && a.MillimetersPerUnit==b.MillimetersPerUnit &&
          a.Warnings.SequenceEqual(b.Warnings) && a.PieceIds.SequenceEqual(b.PieceIds));
+    private static bool PhotoPlaneEquals(PhotoPlaneCalibration? a,PhotoPlaneCalibration? b)=>ReferenceEquals(a,b) ||
+        (a is not null && b is not null && PointListsEqual(a.Corners,b.Corners) &&
+         BitConverter.DoubleToInt64Bits(a.WidthMm)==BitConverter.DoubleToInt64Bits(b.WidthMm) &&
+         BitConverter.DoubleToInt64Bits(a.HeightMm)==BitConverter.DoubleToInt64Bits(b.HeightMm));
     private static bool PhotoTraceEquals(List<PhotoTraceProvenance>? a,List<PhotoTraceProvenance>? b) => ReferenceEquals(a,b) ||
         (a is not null && b is not null && a.Count==b.Count && a.Zip(b).All(p=>
             p.First.AlgorithmVersion==p.Second.AlgorithmVersion && p.First.PieceId==p.Second.PieceId && p.First.SourceSha256==p.Second.SourceSha256 &&
@@ -166,6 +170,7 @@ public sealed class DocumentSession
             p.First.PreviewWidth==p.Second.PreviewWidth && p.First.PreviewHeight==p.Second.PreviewHeight &&
             PointBitsEqual(p.First.ReferenceStart,p.Second.ReferenceStart) && PointBitsEqual(p.First.ReferenceEnd,p.Second.ReferenceEnd) &&
             BitConverter.DoubleToInt64Bits(p.First.ReferenceLengthMm)==BitConverter.DoubleToInt64Bits(p.Second.ReferenceLengthMm) &&
+            PhotoPlaneEquals(p.First.PlaneCalibration,p.Second.PlaneCalibration) &&
             PointListsEqual(p.First.TracePixels,p.Second.TracePixels) && PointListsEqual(p.First.GeneratedPoints,p.Second.GeneratedPoints)));
     public static bool ContentEquals(ProjectDocument left, ProjectDocument right)
     {

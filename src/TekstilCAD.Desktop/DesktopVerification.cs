@@ -1060,6 +1060,7 @@ internal static class DesktopVerification
             VerifyOptInRealMarkedBulkCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
+            VerifyPlaneSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyMarkedGrading(studio,checks);
             VerifyLargeGradeWorker(studio,checks);
@@ -10932,6 +10933,43 @@ internal static class DesktopVerification
                 "Undo restores rotated contour and grainline together",checks);
         }
         finally { canvas.CancelDrawing();SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+
+    private static void VerifyPlaneSaveCompatibility(MainWindow studio,string work,List<string> checks)
+    {
+        var piece=new PatternPiece { Name="Fotoğraf",Closed=false,Points=[new(0,0),new(10,0)] };
+        var legacy=new PhotoTraceProvenance { AlgorithmVersion=1,PieceId=piece.Id,SourceSha256=new string('A',64),SourceByteLength=100,SourceOrientation=1,
+            SourceWidth=100,SourceHeight=100,PreviewWidth=100,PreviewHeight=100,ReferenceStart=new(0,0),ReferenceEnd=new(10,0),ReferenceLengthMm=10,
+            TracePixels=[new(0,0),new(10,0)],GeneratedPoints=[new(0,0),new(10,0)] };
+        var path=Path.Combine(work,"photo-plane-upgrade.tcad");ProjectStorage.Save(new ProjectDocument { Pieces=[piece],PhotoTraceHistory=[legacy] },path);
+        var oldBytes=File.ReadAllBytes(path);studio.OpenProjectFile(path);
+        Point2[] corners=[new(10,10),new(90,10),new(80,90),new(20,90)];Point2[] pixels=[new(25,25),new(70,25),new(70,70)];
+        var plane=new PhotoTraceProvenance { AlgorithmVersion=2,PieceId=Guid.NewGuid(),SourceSha256=new string('B',64),SourceByteLength=100,SourceOrientation=1,
+            SourceWidth=100,SourceHeight=100,PreviewWidth=100,PreviewHeight=100,ReferenceStart=corners[0],ReferenceEnd=corners[1],ReferenceLengthMm=200,
+            PlaneCalibration=new PhotoPlaneCalibration { Corners=[..corners],WidthMm=200,HeightMm=150 },TracePixels=[..pixels],
+            GeneratedPoints=PhotoPlaneRectification.Convert(100,100,corners,200,150,pixels).ToList() };
+        studio.Commit("Düzlem geçmişi",()=>studio.Document.PhotoTraceHistory!.Add(plane));
+        var history=new PhotoTraceHistoryWindow(studio,studio.Document);
+        try
+        {
+            history.RecordsForVerification.SelectedIndex=1;
+            Check(history.DetailsForVerification.Text.Contains("Düzlem perspektifi") && history.DetailsForVerification.Text.Contains("Köşe 4") && history.DetailsForVerification.Text.Contains("200 × 150 mm"),
+                "Photo history identifies plane calibration and its four corners",checks);
+        }
+        finally { history.Close(); }
+        try
+        {
+            var prompts=0;studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==1 && File.ReadAllBytes(path).SequenceEqual(oldBytes),"Declining a photo plane version upgrade preserves the version-eight file",checks);
+            studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            using var saved=JsonDocument.Parse(File.ReadAllBytes(path));
+            Check(prompts==2 && saved.RootElement[0].GetInt32()==9 && DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
+                "Approved photo plane upgrade writes version nine and reopens without loss",checks);
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);Check(prompts==2,"Saving existing version nine does not repeat the upgrade prompt",checks);
+        }
+        finally { studio.ChooseCompatibilityForVerification=null; }
     }
 
     private static void VerifyNotchSaveCompatibility(MainWindow studio,string work,List<string> checks)

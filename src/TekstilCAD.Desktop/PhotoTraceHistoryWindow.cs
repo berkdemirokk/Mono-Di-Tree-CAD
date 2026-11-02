@@ -30,7 +30,12 @@ internal sealed class PhotoTraceHistoryWindow : Window
             b.Append(same ? "İlk açık geometriyle eşleşiyor; doğrulama değildir." : "İlk geometriyle eşleşmiyor veya kaynak parça silinmiş.").Append("\n");
             b.Append("Fotoğraf SHA-256: ").Append(r.SourceSha256).Append("\nBayt: ").Append(r.SourceByteLength).Append(" · Uygulanan yön dönüşümü: ").Append(r.SourceOrientation).Append(" (etiket yoksa 1 varsayılır)\n");
             b.Append("Yönlendirilmiş kaynak: ").Append(r.SourceWidth).Append(" × ").Append(r.SourceHeight).Append(" px · Önizleme: ").Append(r.PreviewWidth).Append(" × ").Append(r.PreviewHeight).Append(" px\n");
-            b.Append("Referans: (").Append(MeasurementInput.Format(r.ReferenceStart.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceStart.Y)).Append(") → (").Append(MeasurementInput.Format(r.ReferenceEnd.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceEnd.Y)).Append(") px · ").Append(MeasurementInput.Format(r.ReferenceLengthMm)).Append(" mm\n");
+            if(r.AlgorithmVersion==2 && r.PlaneCalibration is { } plane)
+            {
+                b.Append("Düzlem perspektifi · ").Append(MeasurementInput.Format(plane.WidthMm)).Append(" × ").Append(MeasurementInput.Format(plane.HeightMm)).Append(" mm\n");
+                for(int i=0;i<plane.Corners.Count;i++)b.Append("Köşe ").Append(i+1).Append(": (").Append(MeasurementInput.Format(plane.Corners[i].X)).Append(", ").Append(MeasurementInput.Format(plane.Corners[i].Y)).Append(") px\n");
+            }
+            else b.Append("Referans: (").Append(MeasurementInput.Format(r.ReferenceStart.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceStart.Y)).Append(") → (").Append(MeasurementInput.Format(r.ReferenceEnd.X)).Append(", ").Append(MeasurementInput.Format(r.ReferenceEnd.Y)).Append(") px · ").Append(MeasurementInput.Format(r.ReferenceLengthMm)).Append(" mm\n");
             b.Append("İlk çizim noktaları (önizleme px → CAD mm):\n");
             for(int i=0;i<r.TracePixels.Count;i++)b.Append(i+1).Append(": (").Append(MeasurementInput.Format(r.TracePixels[i].X)).Append(", ").Append(MeasurementInput.Format(r.TracePixels[i].Y)).Append(") → (").Append(MeasurementInput.Format(r.GeneratedPoints[i].X)).Append(", ").Append(MeasurementInput.Format(r.GeneratedPoints[i].Y)).Append(")\n");
             DetailsForVerification.Text=b.ToString();

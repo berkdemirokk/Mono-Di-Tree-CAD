@@ -483,6 +483,15 @@ public sealed class DxfImportProvenance
     }
 }
 
+/// <summary>Four ordered preview-pixel corners and their physical rectangle dimensions.</summary>
+public sealed class PhotoPlaneCalibration
+{
+    public List<Point2> Corners { get; set; } = [];
+    public double WidthMm { get; set; }
+    public double HeightMm { get; set; }
+    public PhotoPlaneCalibration Clone()=>new() { Corners=[..Corners],WidthMm=WidthMm,HeightMm=HeightMm };
+}
+
 /// <summary>Immutable-in-meaning historical photo trace evidence, not approval of current geometry.</summary>
 public sealed class PhotoTraceProvenance
 {
@@ -498,20 +507,37 @@ public sealed class PhotoTraceProvenance
     public Point2 ReferenceStart { get; set; }
     public Point2 ReferenceEnd { get; set; }
     public double ReferenceLengthMm { get; set; }
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public PhotoPlaneCalibration? PlaneCalibration { get; set; }
     public List<Point2> TracePixels { get; set; } = [];
     public List<Point2> GeneratedPoints { get; set; } = [];
     public PhotoTraceProvenance Clone() => new() { AlgorithmVersion=AlgorithmVersion,PieceId=PieceId,SourceSha256=SourceSha256,SourceByteLength=SourceByteLength,SourceOrientation=SourceOrientation,
         SourceWidth=SourceWidth,SourceHeight=SourceHeight,PreviewWidth=PreviewWidth,PreviewHeight=PreviewHeight,ReferenceStart=ReferenceStart,ReferenceEnd=ReferenceEnd,
-        ReferenceLengthMm=ReferenceLengthMm,TracePixels=[..TracePixels],GeneratedPoints=[..GeneratedPoints] };
+        ReferenceLengthMm=ReferenceLengthMm,PlaneCalibration=PlaneCalibration?.Clone(),TracePixels=[..TracePixels],GeneratedPoints=[..GeneratedPoints] };
     public void Validate()
     {
-        if(AlgorithmVersion!=1 || SourceOrientation is <1 or >8 || PieceId==Guid.Empty || SourceSha256 is null || SourceSha256.Length!=64 ||
+        if(AlgorithmVersion is not (1 or 2) || SourceOrientation is <1 or >8 || PieceId==Guid.Empty || SourceSha256 is null || SourceSha256.Length!=64 ||
            SourceSha256.Any(c=>!((c>='0' && c<='9') || (c>='A' && c<='F'))) || SourceByteLength<1 || SourceByteLength>8L*1024*1024 ||
            TracePixels is null || GeneratedPoints is null || TracePixels.Count is <2 or >512 || GeneratedPoints.Count!=TracePixels.Count)
             throw new InvalidDataException("Fotoğraf taslağı geçmişi eksik veya geçersiz.");
         try
         {
-            var expected=PhotoTraceCalibration.ConvertVersion1(PreviewWidth,PreviewHeight,SourceWidth,SourceHeight,ReferenceStart,ReferenceEnd,ReferenceLengthMm,TracePixels);
+            IReadOnlyList<Point2> expected;
+            if(AlgorithmVersion==1)
+            {
+                if(PlaneCalibration is not null)throw new InvalidDataException("Tek ölçekli fotoğraf kaydında düzlem bilgisi bulunamaz.");
+                expected=PhotoTraceCalibration.ConvertVersion1(PreviewWidth,PreviewHeight,SourceWidth,SourceHeight,ReferenceStart,ReferenceEnd,ReferenceLengthMm,TracePixels);
+            }
+            else
+            {
+                var plane=PlaneCalibration;
+                if(plane?.Corners is not { Count:4 } || SourceWidth<PreviewWidth || SourceHeight<PreviewHeight || SourceWidth>PhotoTraceCalibration.MaximumImageDimension ||
+                   SourceHeight>PhotoTraceCalibration.MaximumImageDimension || (long)SourceWidth*SourceHeight>PhotoTraceCalibration.MaximumImagePixels ||
+                   !SameBits(ReferenceStart,plane.Corners[0]) || !SameBits(ReferenceEnd,plane.Corners[1]) ||
+                   BitConverter.DoubleToInt64Bits(ReferenceLengthMm)!=BitConverter.DoubleToInt64Bits(plane.WidthMm))
+                    throw new InvalidDataException("Düzlem referansı veya kaynak boyutu geçersiz.");
+                expected=PhotoPlaneRectification.ConvertVersion1(PreviewWidth,PreviewHeight,plane.Corners,plane.WidthMm,plane.HeightMm,TracePixels);
+            }
             for(var i=0;i<expected.Count;i++)
                 if(BitConverter.DoubleToInt64Bits(expected[i].X)!=BitConverter.DoubleToInt64Bits(GeneratedPoints[i].X) ||
                    BitConverter.DoubleToInt64Bits(expected[i].Y)!=BitConverter.DoubleToInt64Bits(GeneratedPoints[i].Y))
@@ -519,6 +545,7 @@ public sealed class PhotoTraceProvenance
         }
         catch(ArgumentException ex) { throw new InvalidDataException("Fotoğraf taslağı geçmişi geçersiz.",ex); }
     }
+    private static bool SameBits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
 }
 
 public sealed class ProjectDocument

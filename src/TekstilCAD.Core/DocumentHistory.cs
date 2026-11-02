@@ -42,7 +42,7 @@ public sealed class DocumentHistory
         static long Pieces(IEnumerable<PatternPiece> pieces) => pieces.Sum(p => (long)p.Points.Count + (p.Notches?.Count ?? 0) + (p.Grainline is null ? 0 : 2));
         var points = Pieces(document.Pieces) + document.GradingRules.Sum(r => (long)r.SourcePoints.Count + r.Deltas.Count);
         if(document.PhotoTraceHistory is { } photos)
-            points += photos.Sum(p=>(long)p.TracePixels.Count+p.GeneratedPoints.Count+2);
+            points += photos.Sum(p=>(long)p.TracePixels.Count+p.GeneratedPoints.Count+2+(p.PlaneCalibration is null ? 0 : 4));
         // Rotation history is deep-cloned with every undo entry. Count both
         // historical source and placed geometry, including their marks and grainlines.
         if (document.NestingSnapshot?.RotationTrace is { } trace)

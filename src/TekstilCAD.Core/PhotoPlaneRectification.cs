@@ -21,6 +21,12 @@ public static class PhotoPlaneRectification
     /// </summary>
     public static IReadOnlyList<Point2> Convert(int previewWidth,int previewHeight,IReadOnlyList<Point2> corners,
         double widthMm,double heightMm,IReadOnlyList<Point2> trace,CancellationToken token=default)
+        =>ConvertVersion1(previewWidth,previewHeight,corners,widthMm,heightMm,trace,token);
+
+    // Frozen implementation for versioned project history; future algorithms
+    // must use a new historical version rather than changing stored results.
+    internal static IReadOnlyList<Point2> ConvertVersion1(int previewWidth,int previewHeight,IReadOnlyList<Point2> corners,
+        double widthMm,double heightMm,IReadOnlyList<Point2> trace,CancellationToken token=default)
     {
         ArgumentNullException.ThrowIfNull(corners);ArgumentNullException.ThrowIfNull(trace);token.ThrowIfCancellationRequested();
         if(previewWidth<2 || previewHeight<2 || previewWidth>PhotoTraceCalibration.MaximumImageDimension ||
