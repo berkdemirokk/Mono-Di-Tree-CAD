@@ -9381,12 +9381,17 @@ internal static class DesktopVerification
             "Photo edge suggestion finds nearby synthetic contrast and declines absent or invalid input",checks);
         var edgeCanvas=new PhotoTraceCanvas { Image=edgeBitmap };edgeCanvas.TryAddPixelPoint(new Point(1,1));edgeCanvas.TryAddPixelPoint(new Point(2,1));
         Check(!edgeCanvas.SuggestLastEdge(),"Photo edge suggestion never alters calibration endpoints",checks);
-        edgeCanvas.TryAddPixelPoint(new Point(7,10));var edgeBefore=edgeCanvas.Points.ToArray();
+        edgeCanvas.TryAddPixelPoint(new Point(7.2,10));var edgeBefore=edgeCanvas.Points.ToArray();
         Check(edgeCanvas.SuggestLastEdge() && edgeCanvas.EdgeSuggestion==new Point(9,10) && edgeCanvas.Points.SequenceEqual(edgeBefore),
             "Photo edge suggestion is a preview and does not alter selected points",checks);
         Check(edgeCanvas.ApplyEdgeSuggestion() && edgeCanvas.Points[2]==new Point(9,10) && edgeCanvas.Points[0]==edgeBefore[0] && edgeCanvas.Points[1]==edgeBefore[1] && edgeCanvas.EdgeSuggestion is null,
             "Explicitly applying the edge suggestion changes only the last trace point",checks);
-        edgeCanvas.SuggestLastEdge();edgeCanvas.TryAddPixelPoint(new Point(11,12));
+        Check(edgeCanvas.UndoPath() && edgeCanvas.Points.SequenceEqual(edgeBefore) && edgeCanvas.EdgeSuggestion is null && !edgeCanvas.UndoPath(),
+            "One undo restores the exact prior subpixel trace and references after an edge suggestion",checks);
+        Check(edgeCanvas.SuggestLastEdge() && edgeCanvas.ApplyEdgeSuggestion(),"Edge suggestion can be applied again after undo",checks);
+        edgeCanvas.TryAddPixelPoint(new Point(11,12));
+        Check(!edgeCanvas.UndoPath(),"A subsequent point edit invalidates the edge-suggestion undo rather than discarding later work",checks);
+        edgeCanvas.SuggestLastEdge();edgeCanvas.TryAddPixelPoint(new Point(12,12));
         Check(edgeCanvas.EdgeSuggestion is null && !edgeCanvas.ApplyEdgeSuggestion(),"Changing photo points invalidates an old edge suggestion",checks);
         var pathCanvas=new PhotoTraceCanvas { Image=edgeBitmap };
         foreach(var p in new[] { new Point(1,1),new Point(2,1),new Point(4.2,2.1),new Point(9.2,6.2) })pathCanvas.TryAddPixelPoint(p);

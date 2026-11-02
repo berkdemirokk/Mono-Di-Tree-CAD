@@ -107,7 +107,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal bool ApplyEdgeSuggestion()
     {
         if(edgeSuggestion is not Point proposed || points.Count<=ReferencePointCount || proposed==points[^1] || (points.Count>ReferencePointCount+1 && proposed==points[^2]))return false;
-        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        pathUndo=points.ToList();points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool SetPathSuggestion(Point start,Point end,IReadOnlyList<Point> candidate)
