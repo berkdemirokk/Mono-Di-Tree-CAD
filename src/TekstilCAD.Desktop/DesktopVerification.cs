@@ -9429,6 +9429,22 @@ internal static class DesktopVerification
                 Check(checkWindow.ResultForVerification.Text.Contains("Göreli fark (fark / girilen)") && checkWindow.ResultForVerification.Text.Contains(expectedPercent+" %") &&
                     checkWindow.ResultForVerification.Text.Contains("üretim onayı verilmedi"),
                     "Photo comparison reports the signed relative difference without an acceptance claim",checks);
+                Check(checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==1 && checkWindow.ComparisonsForVerification[0].Contains("ölçülen 150 mm"),
+                    "Photo comparison can retain the selected endpoints and independent measurement in a temporary list",checks);
+                checkWindow.KnownForVerification.Text="125";
+                Check(checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==2 && checkWindow.ComparisonsForVerification[1].Contains("ölçülen 125 mm") &&
+                    checkWindow.ComparisonsForVerification[0].Contains("ölçülen 150 mm") && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Additional photo comparisons preserve prior entries and leave the project unchanged",checks);
+                var comparisonScroll=Descendants<ScrollViewer>(checkRoot).First();comparisonScroll.ScrollToBottom();
+                Render(checkWindow,Path.ChangeExtension(reportPath,".photo-comparison-list.png"),460,420);
+                Check(FullyVisible(checkWindow.ComparisonListForVerification,checkRoot) && checkWindow.ComparisonListForVerification.Focusable &&
+                    AutomationProperties.GetName(checkWindow.ComparisonListForVerification)=="Fotoğraf ölçü karşılaştırmaları",
+                    "Photo comparison list is visible and keyboard focusable in the compact scrolled view",checks);
+                comparisonScroll.ScrollToTop();Render(checkWindow,Path.ChangeExtension(reportPath,".photo-check-restored.png"),460,420);
+                checkWindow.ComparisonListForVerification.SelectedIndex=0;
+                Check(checkWindow.RemoveComparison() && checkWindow.ComparisonsForVerification.Count==1 && checkWindow.ComparisonsForVerification[0].Contains("ölçülen 125 mm"),
+                    "Removing one photo comparison leaves the other intact",checks);
+                checkWindow.KnownForVerification.Text="150";checkWindow.Calculate();
                 var resultBeforePreviewZoom=checkWindow.ResultForVerification.Text;
                 checkWindow.PreviewForVerification.ZoomSelected(2);
                 Check(checkWindow.PreviewForVerification.Zoom==2 && checkWindow.ResultForVerification.Text==resultBeforePreviewZoom &&
@@ -9456,6 +9472,8 @@ internal static class DesktopVerification
                 checkWindow.KnownForVerification.Text="151";Check(checkWindow.ResultForVerification.Text=="","Changing a comparison input clears the old measurement",checks);
                 checkWindow.SecondForVerification.SelectedIndex=1;checkWindow.Calculate();
                 Check(checkWindow.ResultForVerification.Text.Contains("aynı iki ucu"),"Photo measurement refuses to reuse the calibration segment",checks);
+                Check(!checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==1,
+                    "An invalid reference-only comparison cannot enter the temporary list",checks);
                 canvas.TryAddPixelPoint(new Point(25,25));Check(checkWindow.FirstForVerification.Items.Count==beforeZoom.Length,"Photo comparison uses a detached point snapshot",checks);canvas.UndoPoint();
             }
             finally { checkWindow.Close(); }
@@ -9876,6 +9894,8 @@ internal static class DesktopVerification
                 measurement.KnownForVerification.Text="125";measurement.Calculate();
                 Check(measurement.ResultForVerification.Text.Contains("20 %") && measurement.LastResultForVerification is { KnownMm:125 },
                     "Plane photo comparison reports a positive relative difference against the entered measurement",checks);
+                Check(measurement.AddComparison() && measurement.ComparisonsForVerification.Single().Contains("ölçülen 125 mm") && DocumentSession.ContentEquals(original,workspace.Document),
+                    "Plane photo comparison can be retained without editing the project",checks);
                 measurement.FirstForVerification.SelectedIndex=0;measurement.SecondForVerification.SelectedIndex=2;measurement.Calculate();
                 Check(measurement.LastResultForVerification is null && measurement.ResultForVerification.Text.Contains("referans köşesini"),"Plane measurement rejects two reference corners as a tautological check",checks);
             }

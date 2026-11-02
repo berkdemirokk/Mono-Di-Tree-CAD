@@ -2,6 +2,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media.Imaging;
+using System.Collections.ObjectModel;
+using System.Windows.Data;
 using TekstilCAD.Core;
 
 namespace TekstilCAD.Desktop;
@@ -18,6 +20,8 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal TextBox KnownForVerification { get; } = new() { MinWidth=120,MaxLength=32,Margin=new Thickness(0,3,0,6) };
     internal TextBox ResultForVerification { get; } = new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,AcceptsReturn=true,MinHeight=75,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     internal PhotoTraceMeasurementResult? LastResultForVerification { get; private set; }
+    internal ObservableCollection<string> ComparisonsForVerification { get; } = [];
+    internal ListBox ComparisonListForVerification { get; } = new() { MinHeight=75,MaxHeight=160,Margin=new Thickness(0,4,0,4) };
     internal PhotoMeasurementPreview PreviewForVerification { get; }
     internal TextBlock PickStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4),Text="Fotoğrafta sol tık: 1; sağ tık: 2. Yakın noktalar için listeyi kullanın." };
 
@@ -50,6 +54,19 @@ internal sealed class PhotoTraceCheckWindow : Window
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
         body.Children.Add(ResultForVerification);
+        body.Children.Add(new TextBlock { Text="Bu penceredeki kontrol listesi",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,12,0,0) });
+        body.Children.Add(new TextBlock { Text="Farklı nokta çiftlerini ve bağımsız ölçüleri karşılaştırıp listeye ekleyin. Liste geçicidir; pencere kapanınca silinir. Eşleşmeler diğer bölgeleri veya üretime uygunluğu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) });
+        ComparisonListForVerification.ItemsSource=ComparisonsForVerification;ComparisonListForVerification.HorizontalContentAlignment=HorizontalAlignment.Stretch;
+        ScrollViewer.SetHorizontalScrollBarVisibility(ComparisonListForVerification,ScrollBarVisibility.Disabled);
+        var comparisonText=new FrameworkElementFactory(typeof(TextBlock));comparisonText.SetBinding(TextBlock.TextProperty,new Binding());comparisonText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);
+        ComparisonListForVerification.ItemTemplate=new DataTemplate { VisualTree=comparisonText };
+        AutomationProperties.SetName(ComparisonListForVerification,"Fotoğraf ölçü karşılaştırmaları");body.Children.Add(ComparisonListForVerification);
+        var listActions=new WrapPanel();
+        var addComparison=new Button { Content="Bu karşılaştırmayı listeye ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+        var removeComparison=new Button { Content="Seçileni kaldır",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+        var clearComparisons=new Button { Content="Listeyi temizle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+        addComparison.Click+=(_,_)=> { if(!AddComparison())ResultForVerification.BringIntoView(); };removeComparison.Click+=(_,_)=>RemoveComparison();clearComparisons.Click+=(_,_)=>ComparisonsForVerification.Clear();
+        listActions.Children.Add(addComparison);listActions.Children.Add(removeComparison);listActions.Children.Add(clearComparisons);body.Children.Add(listActions);
         var referenceCount=plane is null ? 2 : 4;
         var options=points.Select((p,i)=>new Choice(i,$"{i+1} · {(i<referenceCount ? "referans" : "çizgi")} · X {MeasurementInput.Format(p.X)}, Y {MeasurementInput.Format(p.Y)}")).ToArray();
         FirstForVerification.ItemsSource=options;SecondForVerification.ItemsSource=options;
@@ -62,6 +79,21 @@ internal sealed class PhotoTraceCheckWindow : Window
         calculate.Click+=(_,_)=> { Calculate();ResultForVerification.BringIntoView(); };close.Click+=(_,_)=>Close();
     }
     private void ClearResult() { LastResultForVerification=null;ResultForVerification.Text=""; }
+    internal bool AddComparison()
+    {
+        if(ComparisonsForVerification.Count>=100) { ResultForVerification.Text="Liste 100 karşılaştırmayla sınırlıdır; yeni eklemeden önce bir satırı kaldırın.";LastResultForVerification=null;return false; }
+        Calculate();
+        if(LastResultForVerification is not { } result || FirstForVerification.SelectedItem is not Choice first || SecondForVerification.SelectedItem is not Choice second)return false;
+        var relative=result.DifferenceMm/result.KnownMm*100;
+        var percent=double.IsFinite(relative) ? relative.ToString("G6",System.Globalization.CultureInfo.CurrentCulture)+" %" : "gösterilemiyor";
+        ComparisonsForVerification.Add($"{first.Label} → {second.Label} | tahmin {MeasurementInput.Format(result.EstimatedMm)} mm | ölçülen {MeasurementInput.Format(result.KnownMm)} mm | fark {MeasurementInput.Format(result.DifferenceMm)} mm ({percent})");
+        return true;
+    }
+    internal bool RemoveComparison()
+    {
+        if(ComparisonListForVerification.SelectedIndex<0)return false;
+        ComparisonsForVerification.RemoveAt(ComparisonListForVerification.SelectedIndex);return true;
+    }
     internal void Calculate()
     {
         LastResultForVerification=null;
