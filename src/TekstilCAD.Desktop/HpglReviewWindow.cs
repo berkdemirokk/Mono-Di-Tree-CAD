@@ -98,7 +98,7 @@ internal sealed class HpglReviewWindow : Window
         InteractionTextForVerification=interactionHeadline+" "+interactionDetails;
         var description=new TextBlock { TextWrapping=TextWrapping.Wrap,Text=
             interactionHeadline+"\n"+interactionDetails+
-            "Bu kontrol yalnız yuvarlanmış HPGL yollarını inceler; kaynak geometrisi, mesafe, üretim veya cihaz uygunluğu onayı değildir. İlk bulguda durur; tamamlanmamış kontrol bulgu yok anlamına gelmez.\n"+
+            "Bulgu araması yuvarlanmış HPGL yollarını inceler; bulunan iki kenar varsa kaynakta da karşılaştırılır. Tüm kaynak geometrisi, mesafe, üretim veya cihaz uygunluğu onayı değildir. İlk bulguda durur; tamamlanmamış kontrol bulgu yok anlamına gelmez.\n"+
             $"{rows.Length} {(simulation ? "seçili " : "")}parça · {rows.Sum(r=>(long)r.Examined)} dönüş incelendi · {rows.Sum(r=>(long)r.Changed)} dönüşün yön sınıfı değişti. "+
             (simulation ? $"Seçili parçalar {MeasurementInput.Format(simulationScale!.Value)} ölçek çarpanı uygulanarak incelendi. " : "")+
             $"{MeasurementInput.Format(prepared.UnitsPerMillimeter)} birim/mm; dosya koordinat adımı {MeasurementInput.Format(1/prepared.UnitsPerMillimeter)} mm.\n"+
@@ -206,11 +206,13 @@ internal sealed class HpglReviewWindow : Window
             }
             var detail=interaction.Kind switch {
                 HpglPieceInteraction.Finding.Boundary when interaction.FirstEdge is int a && interaction.SecondEdge is int b =>
-                    "Kenarlar kesişiyor veya temas ediyor.\nİlk parça: "+EdgeDescription(firstId,a)+"\nİkinci parça: "+EdgeDescription(secondId,b),
+                    "Kenarlar kesişiyor veya temas ediyor.\nİlk parça: "+EdgeDescription(firstId,a)+"\nİkinci parça: "+EdgeDescription(secondId,b)+
+                    (interaction.SourceEdgesTouch==true ? "\nBu iki kenar kaynak koordinatlarında da temas ediyor veya kesişiyor." :
+                     interaction.SourceEdgesTouch==false ? "\nBu iki kenar kaynakta temas etmiyor; HPGL yuvarlamasında temas oluşmuş." : "\nBu kenarların kaynak ilişkisi belirlenemedi."),
                 HpglPieceInteraction.Finding.SecondInsideFirst=>"İkinci yol, ilk kapalı yolun içinde.",
                 HpglPieceInteraction.Finding.FirstInsideSecond=>"İlk yol, ikinci kapalı yolun içinde.",
                 _=>"Bulgunun türü belirlenemedi; iki yolu kontrol edin." };
-            InteractionDetailsForVerification.Text=$"İlk parça: {SafeText(first.FullName)}\nKimlik: {first.Identity}\nİkinci parça: {SafeText(second.FullName)}\nKimlik: {second.Identity}\n\n{detail}\n\nYalnız ilk bulgu gösterilir. Koordinatlar yuvarlanmış çıktıdır; mesafe veya üretim onayı değildir.";
+            InteractionDetailsForVerification.Text=$"İlk parça: {SafeText(first.FullName)}\nKimlik: {first.Identity}\nİkinci parça: {SafeText(second.FullName)}\nKimlik: {second.Identity}\n\n{detail}\n\nYalnız ilk bulgu ve varsa onun iki kaynak kenarı incelenir. Koordinatlar yuvarlanmış çıktıdır; diğer kenarlar, mesafe veya üretim uygunluğu doğrulanmaz.";
             AutomationProperties.SetName(InteractionDetailsForVerification,"İlk yol ilişkisi ve parça kimlikleri");
             AutomationProperties.SetHelpText(InteractionDetailsForVerification,"Kimlikleri ve varsa kenar koordinatlarını okuyabilir ve kopyalayabilirsiniz.");
             var interactionPanel=new DockPanel();var interactionActions=new WrapPanel();

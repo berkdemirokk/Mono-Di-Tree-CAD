@@ -4082,7 +4082,18 @@ internal static class DesktopVerification
         overlapReview.FirstInteractionButtonForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Check(overlapReview.SelectedDetails.Text.Contains(overlapDocument.Pieces[0].Id.ToString("D")),
             "Interaction navigation selects the first captured piece even when names match",checks);
+        Check(overlapReview.InteractionDetailsForVerification.Text.Contains("kaynak koordinatlarında da temas"),
+            "HPGL interaction review explains when the reported pair also contacts in the source",checks);
         overlapReview.Close();
+        var roundedTouchDocument=new ProjectDocument { Pieces=[
+            new PatternPiece { Name="bir",Closed=false,Points=[new(0,0),new(10,0)] },
+            new PatternPiece { Name="iki",Closed=false,Points=[new(0,0.01),new(10,0.01)] }] };
+        var roundedTouchReview=new HpglReviewWindow(studio,HpglFormat.Prepare(roundedTouchDocument,40),roundedTouchDocument.Pieces);
+        Check(roundedTouchReview.InteractionDetailsForVerification.Text.Contains("kaynakta temas etmiyor") &&
+            roundedTouchReview.InteractionDetailsForVerification.Text.Contains("yuvarlamasında temas oluşmuş") &&
+            roundedTouchReview.InteractionDetailsForVerification.Text.Contains("diğer kenarlar"),
+            "HPGL interaction review identifies a rounding-created contact while stating the limited scope",checks);
+        roundedTouchReview.Close();
         Check(review.BoundsSummary.Text.Contains("X 0…1200") && review.BoundsSummary.Text.Contains("Y 0…400") &&
             review.BoundsSummary.Text.Contains("30 × 10 mm") && review.BoundsSummary.Text.Contains("doğrulanmadı") && FullyVisible(review.BoundsSummary,root),
             "Compact HPGL review exposes full encoded bounds without claiming machine compatibility",checks);
