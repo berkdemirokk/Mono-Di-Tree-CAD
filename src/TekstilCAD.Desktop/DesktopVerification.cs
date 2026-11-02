@@ -9429,6 +9429,23 @@ internal static class DesktopVerification
                 Check(checkWindow.ResultForVerification.Text.Contains("Göreli fark (fark / girilen)") && checkWindow.ResultForVerification.Text.Contains(expectedPercent+" %") &&
                     checkWindow.ResultForVerification.Text.Contains("üretim onayı verilmedi"),
                     "Photo comparison reports the signed relative difference without an acceptance claim",checks);
+                checkWindow.PixelUncertaintyForVerification.Text="1";checkWindow.Calculate();
+                Check(checkWindow.LastResultForVerification is not null && checkWindow.ResultForVerification.Text.Contains("±1 önizleme pikseli") &&
+                    checkWindow.ResultForVerification.Text.Contains("perspektif ve diğer hatalar dahil değil") && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Photo comparison shows conditional pixel sensitivity without modifying the project",checks);
+                var sensitivityScroll=Descendants<ScrollViewer>(checkRoot).First();var sensitivityY=checkWindow.PixelUncertaintyForVerification.TransformToAncestor(sensitivityScroll).Transform(new Point(0,0)).Y+sensitivityScroll.VerticalOffset;
+                sensitivityScroll.ScrollToVerticalOffset(Math.Max(0,sensitivityY-50));Render(checkWindow,Path.ChangeExtension(reportPath,".photo-sensitivity-compact.png"),460,420);
+                Check(FullyVisible(checkWindow.PixelUncertaintyForVerification,checkRoot) && checkWindow.PixelUncertaintyForVerification.Focusable &&
+                    AutomationProperties.GetName(checkWindow.PixelUncertaintyForVerification).Contains("her uç",StringComparison.OrdinalIgnoreCase),
+                    "Pixel sensitivity assumption is visible and keyboard accessible in the compact scrolled view",checks);
+                sensitivityScroll.ScrollToTop();Render(checkWindow,Path.ChangeExtension(reportPath,".photo-sensitivity-restored.png"),460,420);
+                Check(checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Single().Contains("±1 önizleme pikseli"),
+                    "A saved temporary photo comparison retains its sensitivity assumption",checks);
+                checkWindow.ComparisonListForVerification.SelectedIndex=0;checkWindow.RemoveComparison();
+                checkWindow.PixelUncertaintyForVerification.Text="-1";checkWindow.Calculate();
+                Check(checkWindow.LastResultForVerification is null && checkWindow.ResultForVerification.Text.Contains("0–1000"),
+                    "Invalid pixel sensitivity assumption cannot create a comparison",checks);
+                checkWindow.PixelUncertaintyForVerification.Clear();checkWindow.Calculate();
                 Check(checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==1 && checkWindow.ComparisonsForVerification[0].Contains("ölçülen 150 mm"),
                     "Photo comparison can retain the selected endpoints and independent measurement in a temporary list",checks);
                 checkWindow.KnownForVerification.Text="125";
@@ -9917,6 +9934,7 @@ internal static class DesktopVerification
                 measurement.FirstForVerification.SelectedIndex=4;measurement.SecondForVerification.SelectedIndex=5;measurement.KnownForVerification.Text="150";measurement.Calculate();
                 Check(measurement.LastResultForVerification is { } result && Math.Abs(result.EstimatedMm-150)<1e-8 && Math.Abs(result.DifferenceMm)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),
                     "Independent photo measurement uses the selected plane transform without changing the project",checks);
+                Check(measurement.PixelUncertaintyForVerification.Parent is null,"Single-distance pixel sensitivity is not presented for the planar transform",checks);
                 measurement.KnownForVerification.Text="125";measurement.Calculate();
                 Check(measurement.ResultForVerification.Text.Contains("20 %") && measurement.LastResultForVerification is { KnownMm:125 },
                     "Plane photo comparison reports a positive relative difference against the entered measurement",checks);
