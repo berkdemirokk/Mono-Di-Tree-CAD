@@ -5,6 +5,28 @@ namespace TekstilCAD.Tests;
 public class DesignRequestStorageTests
 {
     [Fact]
+    public void SharedIphoneFixturePreservesUnicodeMeasurementsAndImageOnWindows()
+    {
+        // This synthetic fixture is also consumed by the iPhone XCTest suite.
+        // Running this test does not establish that the iPhone test was run.
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "AGENTS.md"))) root = root.Parent;
+        Assert.NotNull(root);
+        var path = Path.Combine(root!.FullName, "tests", "TekstilCAD.Tests", "Fixtures", "portable-design-request-v1.json");
+        var original = DesignRequestStorage.Deserialize(File.ReadAllText(path));
+        Assert.Equal("A kesim • İpek 👗\nÇift kat", original.Prompt);
+        Assert.Equal("Göğüs çevresi: 92 cm\nBel çevresi: 72 cm", original.Measurements);
+        Assert.NotNull(original.Reference);
+        Assert.Equal("örnek.png", original.Reference!.Name);
+        Assert.Equal("image/png", original.Reference.MediaType);
+        Assert.Equal(Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="), original.Reference.Data);
+        var roundTrip = DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(original));
+        Assert.Equal(original.Prompt, roundTrip.Prompt);
+        Assert.Equal(original.Measurements, roundTrip.Measurements);
+        Assert.Equal(original.Reference.Data, roundTrip.Reference!.Data);
+    }
+
+    [Fact]
     public void RequestRoundTripsUnicodeMeasurementsAndExactReferenceBytes()
     {
         byte[] image=[137,80,78,71,13,10,26,10,1,2,3];
