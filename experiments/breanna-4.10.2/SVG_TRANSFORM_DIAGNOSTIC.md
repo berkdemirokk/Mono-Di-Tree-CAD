@@ -9,3 +9,5 @@ The result is diagnostic only, with topology and transfer flags false. This prob
 The XML input is capped at 1,000,000 UTF-8 bytes and three seconds before parsing. Animation elements are rejected. Fabric paths nested under a piece or carrying unrecognized extra classes are rejected; FreeSewing's known direct `fabric dotted stroke-sm` open guide paths are excluded. The path tokenizer has a fixed token limit and avoids repeated suffix copies.
 
 Known dotted guide paths are parsed using the supported command subset and rejected if an endpoint returns to the initial point, even without `Z`; unsupported or ambiguous guides fail closed. Each path has a 65,536-character limit, a token limit and a parsing time budget, with single-pass whitespace advancement and regex timeouts. The overall XML read remains bounded separately.
+
+Dotted fabric guide paths are accepted only in the observed limited form: a move followed by one or two lines with distinct endpoints. More complex guides are ambiguous and rejected. Transform strings have a separate 65,536-character, 128-operation and execution-time budget with single-pass whitespace handling.
