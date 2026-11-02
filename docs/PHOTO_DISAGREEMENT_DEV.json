@@ -1,0 +1,73 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "baseline_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+  "alternative_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent base-cost 0.03 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+  "jitter_pixels": 0,
+  "method": "Any segment with symmetric raster-point disagreement exceeding a fixed radius; scored against baseline sampled local error over 5 px. Ground-truth-derived anchors; exploratory, not user or physical validation.",
+  "contours": 80,
+  "bad_baseline": 65,
+  "thresholds_pixels": {
+    "1": {
+      "warned": 46,
+      "bad_and_warned": 41,
+      "bad_without_warning": 24,
+      "good_and_warned": 5,
+      "good_without_warning": 10,
+      "recall_bad": 0.6307692307692307,
+      "precision_warned": 0.8913043478260869,
+      "segments": {
+        "warned_and_path_vertex_over_5px": 34,
+        "warned_without_path_vertex_over_5px": 37,
+        "unwarned_and_path_vertex_over_5px": 123,
+        "unwarned_without_path_vertex_over_5px": 766
+      }
+    },
+    "2": {
+      "warned": 37,
+      "bad_and_warned": 33,
+      "bad_without_warning": 32,
+      "good_and_warned": 4,
+      "good_without_warning": 11,
+      "recall_bad": 0.5076923076923077,
+      "precision_warned": 0.8918918918918919,
+      "segments": {
+        "warned_and_path_vertex_over_5px": 26,
+        "warned_without_path_vertex_over_5px": 26,
+        "unwarned_and_path_vertex_over_5px": 131,
+        "unwarned_without_path_vertex_over_5px": 777
+      }
+    },
+    "3": {
+      "warned": 31,
+      "bad_and_warned": 27,
+      "bad_without_warning": 38,
+      "good_and_warned": 4,
+      "good_without_warning": 11,
+      "recall_bad": 0.4153846153846154,
+      "precision_warned": 0.8709677419354839,
+      "segments": {
+        "warned_and_path_vertex_over_5px": 21,
+        "warned_without_path_vertex_over_5px": 15,
+        "unwarned_and_path_vertex_over_5px": 136,
+        "unwarned_without_path_vertex_over_5px": 788
+      }
+    },
+    "5": {
+      "warned": 20,
+      "bad_and_warned": 19,
+      "bad_without_warning": 46,
+      "good_and_warned": 1,
+      "good_without_warning": 14,
+      "recall_bad": 0.2923076923076923,
+      "precision_warned": 0.95,
+      "segments": {
+        "warned_and_path_vertex_over_5px": 19,
+        "warned_without_path_vertex_over_5px": 5,
+        "unwarned_and_path_vertex_over_5px": 138,
+        "unwarned_without_path_vertex_over_5px": 798
+      }
+    }
+  },
+  "segment_method": "Baseline raster vertices to nearest annotation segment, one direction only; omission of unvisited boundary is not detected. Threshold strictly greater than 5 pixels.",
+  "segments_with_path_vertex_over_5px": 157
+}
