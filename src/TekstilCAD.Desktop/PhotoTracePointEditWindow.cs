@@ -27,8 +27,11 @@ internal sealed class PhotoTracePointEditWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
         var apply=new Button { Content="Noktayı değiştir",Padding=new Thickness(12,6,12,6) };
+        var range=new Button { Content="Aralığı düzleştir…",Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
+        AutomationProperties.SetHelpText(range,"İki uç seçerek aradaki çizgi noktalarını düz kenarla değiştirir; referanslar değişmez.");
+        range.Click+=(_,_)=> { if(!IsCurrent())return;var dialog=new PhotoTraceRangeWindow(this,owner);if(dialog.ShowDialog()==true)DialogResult=true; };
         apply.Click+=(_,_)=> { if(TryApplyEdit())DialogResult=true; };
-        actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        actions.Children.Add(range);actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();root.Children.Add(body);
         body.Children.Add(new TextBlock { Text="Çizgi noktasını seçin; yeni önizleme piksel koordinatlarını girin. Referans noktaları değişmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         body.Children.Add(new Label { Content="Çizgi noktası",Target=PointSelector,Padding=new Thickness(0),Foreground=StudioTheme.Text });body.Children.Add(PointSelector);

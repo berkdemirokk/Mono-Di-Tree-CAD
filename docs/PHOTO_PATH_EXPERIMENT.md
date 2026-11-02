@@ -22,6 +22,8 @@ Kullanıcı en fazla 17 çizgi noktası seçerek ardışık aralıkların tamam�
 
 `Düzelt…`, seçilmiş bir çizgi noktasını önizleme piksel koordinatlarıyla değiştirir, seçilenin sonrasına nokta ekler veya seçilen noktayı siler. Kullanıcı yeni yeri önce sağ tıklayıp açılan pencerede `İnceleme imlecini kullan` seçebilir veya koordinat girebilir. Referans noktaları değiştirilemez; komşu noktayla aynı konum ve iki çizgi noktasından daha aza inen silme reddedilir. Değişiklik bekleyen öneriyi kaldırır; `Geri al` son nokta düzenlemesini veya ondan önce düzenleme yapılmadıysa son uygulanan yolu bir kez geri alır. CAD'e kaydedilen fotoğraf geçmişi düzeltilmiş son noktaları içerir. Düzeltme, bütün konturun geçerli ya da üretime uygun olduğunu kanıtlamaz.
 
+Aynı penceredeki `Aralığı düzleştir…` iki çizgi ucu arasında kaç noktanın kaldırılacağını gösterir; açık onayla aradaki tüm noktaları kaldırır ve uçları düz bir kenarla bağlar. Uçlar ve diğer noktalar korunur; son işlem bir kez geri alınabilir. Araç sorunlu aralığı tespit etmez, uçların seçimi ve yeni düz kenarın uygunluğu kullanıcıya aittir. Referans noktaları bu işlemle kaldırılamaz.
+
 ## Tekrarlama
 
 ZIP'i bağımsız olarak indirin; Windows, .NET 10 SDK ve Python 3.12.14 ile boş bir çalışma klasörü kullanın:

@@ -183,6 +183,12 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         pathUndo=points.ToList();points.RemoveAt(index);cursor=points[Math.Min(index,points.Count-1)];edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
+    internal bool TryFlattenTraceRange(int first,int last)
+    {
+        if(first<ReferencePointCount || first>=points.Count || last<0 || last>=points.Count || last<=first+1 || points[first]==points[last])return false;
+        pathUndo=points.ToList();points.RemoveRange(first+1,last-first-1);cursor=points[first+1];
+        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+    }
 
     internal bool UndoPoint()
     {

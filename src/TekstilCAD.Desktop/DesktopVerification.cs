@@ -9351,6 +9351,22 @@ internal static class DesktopVerification
                     "Photo editor removes a selected point, preserves the two-point minimum and undoes it",checks);
             }
             finally { removeEditor.Close(); }
+            var rangeEditor=new PhotoTraceRangeWindow(trace,trace);var staleRange=new PhotoTraceRangeWindow(trace,trace);
+            try
+            {
+                Render(rangeEditor,Path.ChangeExtension(reportPath,".photo-range-edit.png"),440,360);
+                Check(!rangeEditor.TryApply() && !canvas.TryFlattenTraceRange(0,4) && !canvas.TryFlattenTraceRange(2,3) &&
+                    !canvas.TryFlattenTraceRange(2,int.MinValue) && canvas.Points.SequenceEqual(beforeZoom),
+                    "Photo range edit requires ordered trace endpoints and at least one intermediate point",checks);
+                Check(canvas.SetPathSuggestion(new Point(20,10),new Point(20,20),[new Point(20,10),new Point(21,15),new Point(20,20)]),
+                    "Photo range edit can begin with an existing path preview",checks);
+                rangeEditor.First.SelectedIndex=0;rangeEditor.Last.SelectedIndex=2;
+                Check(rangeEditor.Status.Text.Contains("1 nokta") && rangeEditor.TryApply() && canvas.Points.SequenceEqual(new[] { beforeZoom[0],beforeZoom[1],beforeZoom[2],beforeZoom[4] }) &&
+                    canvas.PathSuggestion is null && !staleRange.TryApply() && staleRange.Status.Text.Contains("Taslak değişti"),
+                    "Photo range edit preserves reference and endpoints while rejecting a stale dialog",checks);
+                Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom) && !canvas.UndoPath(),"Photo range edit is undone in one step",checks);
+            }
+            finally { rangeEditor.Close();staleRange.Close(); }
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
