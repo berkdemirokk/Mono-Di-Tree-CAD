@@ -9,4 +9,10 @@ public class BreannaMeasurementGateTests
     [Fact] public void RejectsWrongUnitInvalidValueAndContradictions() { var list=Sample();list=list.Select(x=>x.Key switch {"wrist"=>x with{Value=0},"shoulderSlope"=>x with{Unit=BreannaUnit.Centimeter},"highBustFront"=>x with{Value=150},_=>x}).ToList();var r=BreannaMeasurementGate.Review(list);Assert.Null(r.Values);Assert.Contains(r.Errors,e=>e.Key=="wrist");Assert.Contains(r.Errors,e=>e.Key=="shoulderSlope");Assert.Contains(r.Errors,e=>e.Key=="highBustFront"); }
     [Fact] public void DifferentInputsProduceDifferentValues() { var a=Sample();var b=Sample().Select(x=>x.Key=="waist"?x with{Value=95}:x).ToList();Assert.NotEqual(BreannaMeasurementGate.Review(a).Values!["waist"],BreannaMeasurementGate.Review(b).Values!["waist"]); }
     [Fact] public void RejectsOverflowUnknownAndImproperAngle() { var list=Sample();list=list.Select(x=>x.Key switch { "waist"=>x with{Value=decimal.MaxValue}, "shoulderSlope"=>x with{Value=90}, _=>x }).ToList();list.Add(new("unknown",1,BreannaUnit.Millimeter));var r=BreannaMeasurementGate.Review(list);Assert.Null(r.Values);Assert.Contains(r.Errors,e=>e.Key=="waist");Assert.Contains(r.Errors,e=>e.Key=="shoulderSlope");Assert.Contains(r.Errors,e=>e.Key==""); }
+    [Fact] public void InstructionsIdentifyReferencePointsAndDoNotUseOldAmbiguity() {
+        var defs=BreannaMeasurementGate.Definitions.ToDictionary(d=>d.Key);
+        var hips=defs["waistToHips"].Instructions;Assert.Contains("yan tarafında",hips);Assert.Contains("kalça kemiğinin üst",hips);Assert.DoesNotContain("kalça hattı arasındaki",hips);
+        var bust=defs["hpsToBust"].Instructions;Assert.Contains("HPS",bust);Assert.Contains("düz aşağı",bust);Assert.Contains("göğüs çevresi hizasına",bust);Assert.DoesNotContain("göğüs noktasına ölçün",bust);
+        var wrist=defs["shoulderToWrist"].Instructions;Assert.Contains("hafif bükülü",wrist);Assert.Contains("omuz ucundan",wrist);Assert.Contains("bileğe kadar",wrist);
+    }
 }
