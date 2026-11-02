@@ -47,7 +47,7 @@ public sealed class ExperimentalExactGridRoundingTests(ITestOutputHelper log)
         Assert.True(ExperimentalExactGridRounding.TryRound(p.X,out var x));Assert.True(ExperimentalExactGridRounding.TryRound(p.Y,out var y));
         return new GridPoint(x,y);
     }).ToArray();
-    private static (bool Ok,IReadOnlyList<GridPoint> Candidate,string Reason) Evaluate(PatternPiece piece,double mm)
+    internal static (bool Ok,IReadOnlyList<GridPoint> Candidate,string Reason) Evaluate(PatternPiece piece,double mm)
     {
         try{_ = PatternTools.Offset(piece,mm);return(false,Array.Empty<GridPoint>(),"Production already succeeded.");}
         catch(OffsetLocalDetailUnverifiedException){}
@@ -95,8 +95,7 @@ public sealed class ExperimentalExactGridRoundingTests(ITestOutputHelper log)
             (ExperimentalExactGridRounding.TryRound(p.Y,out var y) && y!=(long)Math.Round(p.Y*U,MidpointRounding.AwayFromZero)?1:0));
         var result=Evaluate(piece,1);log.WriteLine($"origin={origin} reverse={reverse} differences={different} experimental={result.Ok} reason={result.Reason}");
         Assert.Equal(before,piece.Points);Assert.Equal(origin==0?0:origin==50_000_000?3:4,different);
-        if(origin==0)Assert.True(result.Ok,result.Reason);
-        if(!result.Ok)Assert.Empty(result.Candidate);
+        Assert.True(result.Ok,result.Reason);
     }
     [Theory]
     [InlineData(false)]

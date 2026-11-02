@@ -2,6 +2,8 @@
 
 `ExperimentalExactGridRounding` yalnız test projesindedir. Sonlu binary64 sayısının tam ikili değerini çözümler, 1.000.000 ile `UInt128` tamsayı aritmetiğinde çarpar ve en yakın tamsayıya, eşitlikte sıfırdan uzağa yuvarlar. Sonuç orijinal ondalık girdiyi değil uygulamanın elindeki binary64 değerini temsil eder. `Geometry.MaxCoordinate` dışı ve sonlu olmayan değerler reddedilir.
 
+Bu kesin dönüşüm yalnız kaynak noktalarının koordinatlarına uygulanır. Dikiş payı `delta`, deneysel akışta mevcut `Math.Round(mm * 1_000_000)` ile hesaplanır; bütün uçtan uca ofset hesabı kesin aritmetik değildir.
+
 Bağımsız `BigInteger` rasyonel oracle ile sıfır, negatif sıfır, subnormal değerler, tam ikili yarım bağlar, yanlarındaki temsil edilebilir sayılar, pozitif/negatif koordinat sınırları ve sabit tohumlu 25.000 bit örneği sınandı. Yarım bağa örnek `±0,0078125 mm`: kesin grid `±7813`.
 
 Gerçek üretim `PatternTools.Offset` önce çağrılır; yalnız mevcut yerel ayrıntı istisnası alınırsa test akışı kesin kaynak gridi, mevcut dönüş koruması, açık kaynak/grid fiziksel bütçeleri, indeksli miter/sweep ve mevcut 8-grid ters örneklemesi ile XOR alan koşulunu sınar. Bu test akışı üretim değişikliği veya onay değildir. Özgün 512 loblu şekil iki yönde ve 0, 50.000.000, 99.998.000 mm ötelemelerinde bu deneysel kontrollerden geçti. Üretim çağrısı aynı örneklerde yerel ayrıntı istisnası vermeye devam eder. Büyük ötelenmiş iki örnekte kesin kaynak gridinin mevcut üretim dönüşümünden sırasıyla üç ve dört eksen değerinde birer grid farklı olması, kaydedilmiş veya dışarı verilen koordinatların değişebileceği bir geriye uyumluluk etkisidir.
