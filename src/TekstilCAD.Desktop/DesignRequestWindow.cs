@@ -29,7 +29,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly ScrollViewer modelScroller=new() { HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
     private DesignReference? reference;
     private long referenceRevision;
-    private bool referenceLoadRunning,closed;
+    private bool referenceLoadRunning,closed,referenceDecoded;
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
@@ -43,6 +43,7 @@ internal sealed class DesignRequestWindow : Window
     internal TextBox ChatInputForVerification=>chatInput;
     internal TextBox ConversationForVerification=>conversation;
     internal TextBlock StatusForVerification=>status;
+    internal TextBlock ReferenceLabelForVerification=>referenceLabel;
     internal ScrollViewer StatusViewportForVerification=>statusViewport;
     internal ScrollViewer BodyScrollerForVerification=>bodyScroller;
     internal ScrollViewer ModelScrollerForVerification=>modelScroller;
@@ -281,12 +282,13 @@ internal sealed class DesignRequestWindow : Window
         }
         catch(ArgumentException ex) { measurementReview.Text="Ölçü denetlenemedi: "+ex.Message; }
     }
-    private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt";
+    private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt"+
+        (referenceDecoded ? "" : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
     private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() });
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
+        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=false;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
@@ -294,7 +296,7 @@ internal sealed class DesignRequestWindow : Window
     private void RemoveReference()
     {
         referenceRevision++;
-        if(reference is not null) { reference=null;dirty=true;UpdateReference(); }
+        if(reference is not null) { reference=null;referenceDecoded=false;dirty=true;UpdateReference(); }
         if(referenceLoadRunning)SetStatus("Bekleyen görsel seçimi iptal edildi; mevcut referans kaldırıldı.");
     }
     private void ChooseReference()
@@ -314,7 +316,7 @@ internal sealed class DesignRequestWindow : Window
             var candidate=await Task.Run(()=>loader is null ? ReferencePhotoFileLoader.LoadRequestReference(path) : loader(path));
             if(closed)return false;
             if(referenceRevision!=revision) { SetStatus("Referans değişti; bekleyen görsel eklenmedi.");return false; }
-            reference=candidate;referenceRevision++;dirty=true;UpdateReference();SetStatus("Görsel çizim için açılabilir; orijinal baytlar isteğe eklendi ve kaynak dosya değiştirilmedi.");return true;
+            reference=candidate;referenceDecoded=loader is null;referenceRevision++;dirty=true;UpdateReference();SetStatus("Görsel çizim için açılabilir; orijinal baytlar isteğe eklendi ve kaynak dosya değiştirilmedi.");return true;
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         { if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; bekleyen görsel eklenmedi." : "Görsel açılamadı. PNG/JPEG için 8 MiB, 12.000 piksel ve 24 milyon piksel sınırlarını kontrol edin; bu sınırları aşan görsel otomatik küçültülmez. Önceki görsel korundu.");return false; }
@@ -336,7 +338,7 @@ internal sealed class DesignRequestWindow : Window
         catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
-        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."); }
+        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
 }

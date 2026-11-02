@@ -18,7 +18,7 @@ public static partial class DressMeasurementParser
     // These distinct experimental measurements mention "göğüs" but are not
     // chest circumference. Only an entire, explicit field is excluded from
     // ambiguity detection; mixed or qualified statements remain conservative.
-    private static readonly Regex OtherChestMeasurement=new(@"^\s*(?:ön göğüs|göğüs noktaları arası|üst göğüs çevresi|ön üst göğüs)\s+[0-9]{1,5}(?:[.,][0-9]{1,8})?\s+cm\s*$",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex OtherChestMeasurement=new(@"^\s*(?:ön göğüs|göğüs noktaları arası|üst göğüs çevresi|ön üst göğüs)\s*(?::|=|\s)\s*[0-9]{1,5}(?:[.,][0-9]{1,8})?\s*(?:mm|cm)\s*[.!?]?\s*$",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Invariant regex case folding does not match Turkish capital dotted İ. Keep
     // this transformation length-preserving so match offsets still index the
     // original text, which is retained as evidence.

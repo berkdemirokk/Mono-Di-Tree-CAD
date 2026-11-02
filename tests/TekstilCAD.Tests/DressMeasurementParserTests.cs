@@ -9,6 +9,10 @@ public class DressMeasurementParserTests
     [InlineData("göğüs noktaları arası 20 cm")]
     [InlineData("üst göğüs çevresi 90 cm")]
     [InlineData("ön üst göğüs 40 cm")]
+    [InlineData("ön göğüs 420 mm")]
+    [InlineData("ön göğüs: 42 cm")]
+    [InlineData("ön göğüs 42 cm.")]
+    [InlineData("ÖN GÖĞÜS = 42,5 CM!")]
     public void DistinctExperimentalMeasurementsDoNotObscureChestCircumference(string note)
     {
         var result=DressMeasurementParser.Review("göğüs çevresi 96 cm",note);

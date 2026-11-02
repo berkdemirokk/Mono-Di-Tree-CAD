@@ -10051,6 +10051,25 @@ internal static class DesktopVerification
                     "Experimental intake rejects stale request changes without losing entered text",checks); }
             finally { staleExperimental.Close(); }
             window.LoadForVerification(input);
+            Check(window.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir") && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                "A legacy truncated PNG is retained with an explicit phone compatibility warning",checks);
+            var truncatedJpeg=new DesignRequest(input.Prompt,input.Measurements,new DesignReference("eksik.jpg","image/jpeg",[0xff,0xd8,0xff]));
+            window.LoadForVerification(truncatedJpeg);
+            Check(window.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir") && window.CaptureForVerification().Reference!.Data.SequenceEqual(truncatedJpeg.Reference!.Data),
+                "A legacy truncated JPEG is retained with an explicit phone compatibility warning",checks);
+            foreach(var legacy in new[] { input,truncatedJpeg })
+            {
+                var legacyDirectory=Path.Combine(Path.GetDirectoryName(reportPath)!,"legacy-reference-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(legacyDirectory);
+                var originalFile=Path.Combine(legacyDirectory,"original.tcad-request.json");var copyFile=Path.Combine(legacyDirectory,"copy.tcad-request.json");
+                DesignRequestStorage.SaveNew(originalFile,legacy);var originalBytes=File.ReadAllBytes(originalFile);
+                window.LoadForVerification(DesignRequestStorage.Load(originalFile));DesignRequestStorage.SaveNew(copyFile,window.CaptureForVerification());
+                var copy=DesignRequestStorage.Load(copyFile);
+                Check(window.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir") &&
+                    File.ReadAllBytes(originalFile).SequenceEqual(originalBytes) && copy.Reference!.Data.SequenceEqual(legacy.Reference!.Data) &&
+                    copy.Prompt==legacy.Prompt && copy.Measurements==legacy.Measurements,
+                    "Legacy truncated "+legacy.Reference!.MediaType+" survives request load and separate save without changing original",checks);
+            }
+            window.LoadForVerification(input);
             var overviewScroll=window.BodyScrollerForVerification;var tileY=tiles["göğüs çevresi"].TransformToAncestor(overviewScroll).Transform(new Point(0,0)).Y+overviewScroll.VerticalOffset;
             overviewScroll.ScrollToVerticalOffset(Math.Max(0,tileY-80));Render(window,Path.ChangeExtension(reportPath,".atelier-measurements.png"),900,700);overviewScroll.ScrollToVerticalOffset(0);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
