@@ -1,0 +1,12 @@
+using TekstilCAD.Patterns;
+namespace TekstilCAD.Tests;
+public class BreannaMeasurementGateTests
+{
+    private static List<BreannaMeasurementInput> Sample() => BreannaMeasurementGate.Definitions.Select(d=>new BreannaMeasurementInput(d.Key,d.IsAngle?15:100,d.IsAngle?BreannaUnit.Degree:BreannaUnit.Centimeter)).Select(x=>x.Key switch { "highBustFront"=>x with { Value=45 }, "hpsToBust"=>x with { Value=30 }, _=>x }).ToList();
+    [Fact] public void AllFifteenHaveTurkishLabelsAndDescriptions() { Assert.Equal(15,BreannaMeasurementGate.Definitions.Count);Assert.All(BreannaMeasurementGate.Definitions,d=>{Assert.False(string.IsNullOrWhiteSpace(d.Label));Assert.False(string.IsNullOrWhiteSpace(d.Instructions));}); }
+    [Fact] public void MissingAndDuplicateNeverReturnPreviewValues() { var list=Sample();list.RemoveAt(0);list.Add(list[0]);var r=BreannaMeasurementGate.Review(list);Assert.Null(r.Values);Assert.Contains(r.Errors,e=>e.Key=="biceps");Assert.Contains(r.Errors,e=>e.Message.Contains("birden fazla")); }
+    [Fact] public void ConvertsCentimetersAndKeepsAngleInDegrees() { var r=BreannaMeasurementGate.Review(Sample());Assert.True(r.IsValid);Assert.Equal(1000m,r.Values!["waist"]);Assert.Equal(15m,r.Values["shoulderSlope"]);Assert.False(r.IsProductionApproved);Assert.False(r.IsPlotterApproved); }
+    [Fact] public void RejectsWrongUnitInvalidValueAndContradictions() { var list=Sample();list=list.Select(x=>x.Key switch {"wrist"=>x with{Value=0},"shoulderSlope"=>x with{Unit=BreannaUnit.Centimeter},"highBustFront"=>x with{Value=150},_=>x}).ToList();var r=BreannaMeasurementGate.Review(list);Assert.Null(r.Values);Assert.Contains(r.Errors,e=>e.Key=="wrist");Assert.Contains(r.Errors,e=>e.Key=="shoulderSlope");Assert.Contains(r.Errors,e=>e.Key=="highBustFront"); }
+    [Fact] public void DifferentInputsProduceDifferentValues() { var a=Sample();var b=Sample().Select(x=>x.Key=="waist"?x with{Value=95}:x).ToList();Assert.NotEqual(BreannaMeasurementGate.Review(a).Values!["waist"],BreannaMeasurementGate.Review(b).Values!["waist"]); }
+    [Fact] public void RejectsOverflowUnknownAndImproperAngle() { var list=Sample();list=list.Select(x=>x.Key switch { "waist"=>x with{Value=decimal.MaxValue}, "shoulderSlope"=>x with{Value=90}, _=>x }).ToList();list.Add(new("unknown",1,BreannaUnit.Millimeter));var r=BreannaMeasurementGate.Review(list);Assert.Null(r.Values);Assert.Contains(r.Errors,e=>e.Key=="waist");Assert.Contains(r.Errors,e=>e.Key=="shoulderSlope");Assert.Contains(r.Errors,e=>e.Key==""); }
+}
