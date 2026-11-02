@@ -10118,6 +10118,94 @@ internal static class DesktopVerification
             var largePhoto=EncodePhoto(12001,1,false);var refused=false;
             try { _=Task.Run(()=>ReferencePhotoDecoder.Decode(largePhoto)).GetAwaiter().GetResult(); } catch(InvalidDataException) { refused=true; }
             Check(refused,"Oversized photo dimensions are rejected before preview",checks);
+            byte[] PngWithDeclaredDimensions(uint width,uint height)
+            {
+                var png=EncodePhoto(1,1,false);
+                if(!png.AsSpan(12,4).SequenceEqual("IHDR"u8))throw new InvalidOperationException("PNG fixture has no IHDR.");
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(16,4),width);
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(20,4),height);
+                uint crc=0xffffffff;
+                foreach(var b in png.AsSpan(12,17)) { crc^=b;for(int bit=0;bit<8;bit++)crc=(crc>>1)^((crc&1)==0 ? 0u : 0xedb88320u); }
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(png.AsSpan(29,4),~crc);
+                return png;
+            }
+            var selectionDir=Path.Combine(Path.GetDirectoryName(reportPath)!,"request-reference-fixture-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(selectionDir);
+            string PhotoFixture(string name,byte[] contents) { var path=Path.Combine(selectionDir,name);File.WriteAllBytes(path,contents);return path; }
+            var validPng=EncodePhoto(32,16,false);var validJpeg=OrientedJpeg(6);
+            var pngPath=PhotoFixture("valid.png",validPng);var jpegPath=PhotoFixture("oriented.jpg",validJpeg);
+            var widePath=PhotoFixture("wide.png",widePhoto);
+            var bomb=PngWithDeclaredDimensions(6000,4001);
+            using(var header=new MemoryStream(bomb,false))
+            {
+                var decoder=BitmapDecoder.Create(header,BitmapCreateOptions.PreservePixelFormat,BitmapCacheOption.None);
+                Check(decoder.Frames[0].PixelWidth==6000 && decoder.Frames[0].PixelHeight==4001,
+                    "Reference image bomb fixture exposes a valid over-limit pixel count in its header",checks);
+            }
+            var invalidPaths=new[] { PhotoFixture("truncated.png",input.Reference!.Data),PhotoFixture("bad-orientation.jpg",OrientedJpeg(9)),
+                PhotoFixture("too-wide.png",largePhoto),PhotoFixture("pixel-bomb.png",bomb) };
+            var oversizedPath=Path.Combine(selectionDir,"too-large.png");using(var stream=new FileStream(oversizedPath,FileMode.CreateNew,FileAccess.Write))stream.SetLength(DesignRequestStorage.MaximumReferenceBytes+1L);
+            var selectionWindow=new DesignRequestWindow(studio);var selectionContext=SynchronizationContext.Current;
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+            try
+            {
+                foreach(var (path,expectedBytes,label) in new[] { (pngPath,validPng,"PNG"),(jpegPath,validJpeg,"oriented JPEG"),(widePath,widePhoto,"reduced preview") })
+                {
+                    selectionWindow.LoadForVerification(input);var task=selectionWindow.ChooseReferenceFileAsync(path);PumpUntil(()=>task.IsCompleted);
+                    Check(task.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(expectedBytes) &&
+                        File.ReadAllBytes(path).SequenceEqual(expectedBytes) && selectionWindow.DirtyForVerification && DocumentSession.ContentEquals(before,studio.Document),
+                        "Reference selection validates "+label+" and preserves original source bytes",checks);
+                }
+                foreach(var path in invalidPaths.Append(oversizedPath))
+                {
+                    selectionWindow.LoadForVerification(input);var task=selectionWindow.ChooseReferenceFileAsync(path);PumpUntil(()=>task.IsCompleted);
+                    Check(!task.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) &&
+                        !selectionWindow.DirtyForVerification && selectionWindow.StatusForVerification.Text.Contains("24 milyon") &&
+                        selectionWindow.StatusForVerification.Text.Contains("otomatik küçültülmez") && DocumentSession.ContentEquals(before,studio.Document),
+                        "Unreadable or oversized reference selection explains limits and preserves the previous request",checks);
+                }
+                selectionWindow.LoadForVerification(input);
+                using var entered=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
+                selectionWindow.ReferenceLoaderForVerification=p=> { entered.Set();release.Wait();return ReferencePhotoFileLoader.LoadRequestReference(p); };
+                try
+                {
+                    var pending=selectionWindow.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>entered.IsSet);
+                    var duplicate=selectionWindow.ChooseReferenceFileAsync(jpegPath);
+                    typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(selectionWindow,null);
+                    Check(selectionWindow.StatusForVerification.Text.Contains("kaydetmeden önce") && duplicate.IsCompleted && !duplicate.GetAwaiter().GetResult() && selectionWindow.CreateDrawingNotes() is null &&
+                        selectionWindow.StatusForVerification.Text.Contains("denetimi sürüyor"),
+                        "Pending reference validation blocks save, duplicate selection and drawing handoff",checks);
+                    var replacement=new DesignRequest("Yeni istek","bel çevresi 72 cm",null);selectionWindow.LoadForVerification(replacement);
+                    release.Set();PumpUntil(()=>pending.IsCompleted);
+                    Check(!pending.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference is null &&
+                        selectionWindow.CaptureForVerification().Prompt==replacement.Prompt && !selectionWindow.DirtyForVerification,
+                        "A newer opened request invalidates a pending reference without overwriting it",checks);
+                }
+                finally { release.Set();selectionWindow.ReferenceLoaderForVerification=null; }
+                selectionWindow.LoadForVerification(input);
+                using var removalEntered=new ManualResetEventSlim();using var removalRelease=new ManualResetEventSlim();
+                selectionWindow.ReferenceLoaderForVerification=p=> { removalEntered.Set();removalRelease.Wait();return ReferencePhotoFileLoader.LoadRequestReference(p); };
+                try
+                {
+                    var pending=selectionWindow.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>removalEntered.IsSet);
+                    typeof(DesignRequestWindow).GetMethod("RemoveReference",PrivateInstance)!.Invoke(selectionWindow,null);
+                    removalRelease.Set();PumpUntil(()=>pending.IsCompleted);
+                    Check(!pending.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference is null && selectionWindow.DirtyForVerification,
+                        "Removing the reference while validation runs prevents its later replacement",checks);
+                }
+                finally { removalRelease.Set();selectionWindow.ReferenceLoaderForVerification=null; }
+                var closingSelection=new DesignRequestWindow(studio);closingSelection.LoadForVerification(input);
+                using var closeEntered=new ManualResetEventSlim();using var closeRelease=new ManualResetEventSlim();var selectionClosed=false;
+                closingSelection.Closed+=(_,_)=>selectionClosed=true;
+                closingSelection.ReferenceLoaderForVerification=p=> { closeEntered.Set();closeRelease.Wait();return ReferencePhotoFileLoader.LoadRequestReference(p); };
+                try
+                {
+                    var pending=closingSelection.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>closeEntered.IsSet);closingSelection.Close();closeRelease.Set();PumpUntil(()=>pending.IsCompleted);
+                    Check(selectionClosed && !pending.GetAwaiter().GetResult() && DocumentSession.ContentEquals(before,studio.Document),
+                        "Closing the request while reference validation runs discards the late result",checks);
+                }
+                finally { closeRelease.Set();if(!selectionClosed)closingSelection.Close(); }
+            }
+            finally { selectionWindow.LoadForVerification(input);selectionWindow.Close();SynchronizationContext.SetSynchronizationContext(selectionContext); }
             var badPhoto=new ReferencePhotoWindow(studio,input.Reference!.Data);var oldContext=SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
             try

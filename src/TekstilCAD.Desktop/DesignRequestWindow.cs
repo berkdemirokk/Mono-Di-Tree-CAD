@@ -28,6 +28,9 @@ internal sealed class DesignRequestWindow : Window
     private readonly ScrollViewer bodyScroller=new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     private readonly ScrollViewer modelScroller=new() { HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
     private DesignReference? reference;
+    private long referenceRevision;
+    private bool referenceLoadRunning,closed;
+    internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
     private readonly Dictionary<string,TextBlock> measurementTiles=new(StringComparer.Ordinal);
@@ -134,10 +137,10 @@ internal sealed class DesignRequestWindow : Window
         body.Children.Add(new TextBlock { Text="03  ·  REFERANS GÖRSELİ",Foreground=Ink,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,12,0,4) });body.Children.Add(referenceLabel);
         var refActions=new WrapPanel();body.Children.Add(refActions);
         var choose=new Button { Content="Görsel seç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,8,4) };refActions.Children.Add(choose);choose.Click+=(_,_)=>ChooseReference();
-        var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=> { if(reference is not null) { reference=null;dirty=true;UpdateReference(); } };
-        body.Children.Add(new TextBlock { Text="Görsel dosyanın tüm baytları ve varsa içindeki metadata isteğe eklenir. Yalnızca PNG/JPEG imzası kontrol edilir; görsel içeriği, ölçüler veya üretime uygunluk doğrulanmaz. Kaydetme yeni ve ayrı bir dosya oluşturur; kalıp çizimi ve plotter çıktısı için sonraki işlem ve kullanıcı kontrolü gerekir.",TextWrapping=TextWrapping.Wrap,Foreground=Muted,Margin=new Thickness(0,10,0,0) });
+        var remove=new Button { Content="Görseli kaldır",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,4,0,4) };refActions.Children.Add(remove);remove.Click+=(_,_)=>RemoveReference();
+        body.Children.Add(new TextBlock { Text="PNG/JPEG görsel seçilirken çizim için çözümlenebilirliği kontrol edilir; en fazla 8 MiB, 12.000 piksel ve 24 milyon piksel desteklenir. Bu sınırları aşan görsel otomatik küçültülmez. Tüm kaynak baytları ve metadata isteğe eklenir; görsel içeriği, ölçüler ve üretime uygunluk doğrulanmaz. Eski isteklerdeki görseller açılmadan doğrulanmamış olabilir.",TextWrapping=TextWrapping.Wrap,Foreground=Muted,Margin=new Thickness(0,10,0,0) });
 
-        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;
+        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
     }
     private void SetStatus(string message)
     {
@@ -159,6 +162,7 @@ internal sealed class DesignRequestWindow : Window
     }
     internal RequestNotesWindow? CreateDrawingNotes()
     {
+        if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; çizime geçmeden önce tamamlanmasını bekleyin.");return null; }
         if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Çizime geçmeden önce mesajı gönderin veya silin ve isteği kaydedin; mesaj korundu.");return null; }
         if(!hasSavedRequest || dirty) { SetStatus("Çizime geçmeden önce isteği yeni bir dosyaya kaydedin; mevcut alanlar korundu.");return null; }
         if(Owner is not Window owner) { SetStatus("Ana çizim penceresi bulunamadı; istek korundu.");return null; }
@@ -279,25 +283,39 @@ internal sealed class DesignRequestWindow : Window
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
+        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     private void OnClosing(object? sender,CancelEventArgs e) { if(!ConfirmDiscard())e.Cancel=true; }
+    private void RemoveReference()
+    {
+        referenceRevision++;
+        if(reference is not null) { reference=null;dirty=true;UpdateReference(); }
+        if(referenceLoadRunning)SetStatus("Bekleyen görsel seçimi iptal edildi; mevcut referans kaldırıldı.");
+    }
     private void ChooseReference()
     {
+        if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; tamamlanmasını bekleyin.");return; }
         var dialog=new OpenFileDialog { Title="Referans görseli seç",Filter="PNG veya JPEG (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
+        _=ChooseReferenceFileAsync(dialog.FileName);
+    }
+    internal async Task<bool> ChooseReferenceFileAsync(string path)
+    {
+        if(closed || referenceLoadRunning)return false;
+        var revision=referenceRevision;referenceLoadRunning=true;SetStatus("Görsel çizim için denetleniyor; önceki seçim korunuyor.");
         try
         {
-            using var file=new FileStream(dialog.FileName,FileMode.Open,FileAccess.Read,FileShare.Read);
-            if(file.Length>DesignRequestStorage.MaximumReferenceBytes)throw new InvalidDataException("Görsel 8 MiB sınırını aşıyor.");
-            using var bytes=new MemoryStream();var buffer=new byte[81920];int count;
-            while((count=file.Read(buffer))>0) { if(bytes.Length+count>DesignRequestStorage.MaximumReferenceBytes)throw new InvalidDataException("Görsel 8 MiB sınırını aşıyor.");bytes.Write(buffer,0,count); }
-            var data=bytes.ToArray();var type=data.Length>=8 && data.AsSpan(0,8).SequenceEqual(new byte[] {137,80,78,71,13,10,26,10}) ? "image/png" : "image/jpeg";
-            var candidate=new DesignReference(Path.GetFileName(dialog.FileName),type,data);DesignRequestStorage.Validate(new DesignRequest("", "",candidate));reference=candidate;dirty=true;UpdateReference();SetStatus("Görsel isteğe eklendi; kaynak dosya değiştirilmedi.");
+            var loader=ReferenceLoaderForVerification;
+            var candidate=await Task.Run(()=>loader is null ? ReferencePhotoFileLoader.LoadRequestReference(path) : loader(path));
+            if(closed)return false;
+            if(referenceRevision!=revision) { SetStatus("Referans değişti; bekleyen görsel eklenmedi.");return false; }
+            reference=candidate;referenceRevision++;dirty=true;UpdateReference();SetStatus("Görsel çizim için açılabilir; orijinal baytlar isteğe eklendi ve kaynak dosya değiştirilmedi.");return true;
         }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("Görsel eklenemedi; önceki seçim korundu: "+ex.Message); }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        { if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; bekleyen görsel eklenmedi." : "Görsel açılamadı. PNG/JPEG için 8 MiB, 12.000 piksel ve 24 milyon piksel sınırlarını kontrol edin; bu sınırları aşan görsel otomatik küçültülmez. Önceki görsel korundu.");return false; }
+        finally { referenceLoadRunning=false; }
     }
     private void Open()
     {
@@ -309,6 +327,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void Save()
     {
+        if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; kaydetmeden önce tamamlanmasını bekleyin.");return; }
         if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Kaydetmeden önce mesajı gönderin veya silin; mevcut mesaj korunuyor.");return; }
         try { DesignRequestStorage.Validate(Capture()); }
         catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
