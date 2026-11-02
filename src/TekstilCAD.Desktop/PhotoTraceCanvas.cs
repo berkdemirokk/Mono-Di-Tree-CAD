@@ -24,6 +24,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private List<Point>? pathSuggestion,pathUndo;
     private Point[]? pathOriginal;
     private int pathStartIndex;
+    private int pathOriginalTotalCount;
     private Point? pathClosingTarget;
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
@@ -135,14 +136,34 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             if(end==simplified[^1])return false;if(!closing)simplified.Add(end);
         }
         if(simplified.Count<=anchors.Count || startIndex+simplified.Count>MaximumPoints)return false;
-        pathSuggestion=simplified;pathOriginal=anchors.ToArray();pathStartIndex=startIndex;pathClosingTarget=includeClosing ? anchors[0] : null;InvalidateVisual();return true;
+        pathSuggestion=simplified;pathOriginal=anchors.ToArray();pathStartIndex=startIndex;pathOriginalTotalCount=points.Count;pathClosingTarget=includeClosing ? anchors[0] : null;InvalidateVisual();return true;
+    }
+    internal bool SetReplacementPath(int first,int last,IReadOnlyList<Point> candidate)
+    {
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();
+        if(image is null || candidate is null || first<ReferencePointCount || first>=points.Count || last<=first || last>=points.Count ||
+            candidate.Count<2 || candidate.Count>4096 || points[first]==points[last])return false;
+        Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
+        if(candidate[0]!=Rounded(points[first]) || candidate[^1]!=Rounded(points[last]))return false;
+        var replacement=new List<Point> { points[first] };
+        for(int i=1;i<candidate.Count-1;i++)
+        {
+            var p=candidate[i];var a=candidate[i-1];var b=candidate[i+1];
+            if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || p.X<0 || p.Y<0 || p.X>image.PixelWidth-1 || p.Y>image.PixelHeight-1)return false;
+            if((p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
+            if(p==replacement[^1] || p==points[last])return false;replacement.Add(p);
+        }
+        if(replacement[^1]==points[last])return false;replacement.Add(points[last]);
+        var original=points.Skip(first).Take(last-first+1).ToArray();
+        if(points.Count-original.Length+replacement.Count>MaximumPoints || replacement.SequenceEqual(original))return false;
+        pathOriginal=original;pathOriginalTotalCount=points.Count;pathStartIndex=first;pathSuggestion=replacement;InvalidateVisual();return true;
     }
     internal bool ApplyPathSuggestion()
     {
         if(pathSuggestion is not { Count:>=2 } path || pathOriginal is null || pathStartIndex<ReferencePointCount ||
-           points.Count!=pathStartIndex+pathOriginal.Length || !points.Skip(pathStartIndex).SequenceEqual(pathOriginal))return false;
-        pathUndo=points.ToList();points.RemoveRange(pathStartIndex,pathOriginal.Length);points.AddRange(path);
-        cursor=points[^1];pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+           points.Count!=pathOriginalTotalCount || pathStartIndex+pathOriginal.Length>points.Count || !points.Skip(pathStartIndex).Take(pathOriginal.Length).SequenceEqual(pathOriginal))return false;
+        pathUndo=points.ToList();points.RemoveRange(pathStartIndex,pathOriginal.Length);points.InsertRange(pathStartIndex,path);
+        cursor=path[^1];pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;edgeSuggestion=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal bool UndoPath()
     {

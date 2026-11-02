@@ -27,9 +27,11 @@ internal sealed class PhotoTracePointEditWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
         var apply=new Button { Content="Noktayı değiştir",Padding=new Thickness(12,6,12,6) };
-        var range=new Button { Content="Aralığı düzleştir…",Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
-        AutomationProperties.SetHelpText(range,"İki uç seçerek aradaki çizgi noktalarını düz kenarla değiştirir; referanslar değişmez.");
-        range.Click+=(_,_)=> { if(!IsCurrent())return;var dialog=new PhotoTraceRangeWindow(this,owner);if(dialog.ShowDialog()==true)DialogResult=true; };
+        var range=new Button { Content="Aralığı düzenle…",Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
+        AutomationProperties.SetHelpText(range,"İki uç arasında yol önerir veya aradaki noktaları düz kenarla değiştirir; referanslar değişmez.");
+        range.Click+=(_,_)=> { if(!IsCurrent())return;var dialog=new PhotoTraceRangeWindow(this,owner);if(dialog.ShowDialog()!=true)return;
+            if(dialog.RequestedPath is { } request)owner.Dispatcher.BeginInvoke(new Action(()=>_ = owner.StartReplacementPathAsync(request.First,request.Last,request.Revision)));
+            DialogResult=true; };
         apply.Click+=(_,_)=> { if(TryApplyEdit())DialogResult=true; };
         actions.Children.Add(range);actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         var body=new StackPanel();root.Children.Add(body);

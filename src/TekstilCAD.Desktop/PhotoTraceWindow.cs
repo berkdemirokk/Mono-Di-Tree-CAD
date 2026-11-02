@@ -80,7 +80,7 @@ internal sealed class PhotoTraceWindow : Window
         var pathActions=new WrapPanel { Margin=new Thickness(0,2,0,2) };DockPanel.SetDock(pathActions,Dock.Top);root.Children.Add(pathActions);
         Button PathAction(string text,string help,Action action) { var b=new Button { Content=text,Padding=new Thickness(8,3,8,3),Margin=new Thickness(0,0,6,2) };AutomationProperties.SetHelpText(b,help);b.Click+=(_,_)=>action();pathActions.Children.Add(b);return b; }
         PathAction("Yol öner","Son iki çizgi noktası arasında kontrast yolunu arar; kesikli mavi çizgi yalnız önizlemedir.",()=>_ = StartPathSuggestionAsync());
-        PathAction("Yolu uygula","Kesikli öneriyi son iki nokta arasına ekler; önceden seçilen uçları korur.",()=> { if(!CanvasForVerification.ApplyPathSuggestion())StatusForVerification.Text="Uygulanabilir yol önerisi yok."; });
+        PathAction("Yolu uygula","Kesikli öneriyi seçilen aralığa uygular; önceden seçilen uçları korur.",()=> { if(!CanvasForVerification.ApplyPathSuggestion())StatusForVerification.Text="Uygulanabilir yol önerisi yok."; });
         PathAction("Geri al","Son uygulanan yolu veya son nokta düzenlemesini tek adımda geri alır; başka nokta değişikliği yapılmamış olmalıdır.",()=> { if(!CanvasForVerification.UndoPath())StatusForVerification.Text="Geri alınacak son yol veya nokta düzenlemesi yok."; });
         PathAction("Aramayı iptal et","Süren yol aramasına iptal isteği gönderir.",CancelPathSuggestion);
         AutomationProperties.SetHelpText(ReviewClosureForVerification,"Seçiliyken toplu yol önerisi kapanış yolunu da arar; taslak eklendikten sonra ayrı kapanış incelemesi açılır. Kapalı parça otomatik eklenmez; fotoğraf geçmişi açık kaynakta kalır.");pathActions.Children.Add(ReviewClosureForVerification);
@@ -143,6 +143,31 @@ internal sealed class PhotoTraceWindow : Window
         { StatusForVerification.Text="Ölçü karşılaştırması açılamadı: "+ex.Message;return null; }
     }
     internal void CancelPathSuggestion()=>pathCancellation?.Cancel();
+    internal async Task StartReplacementPathAsync(int first,int last,long expectedRevision)
+    {
+        if(closed)return;
+        if(pathCancellation is not null) { StatusForVerification.Text="Yol araması zaten sürüyor.";return; }
+        var points=CanvasForVerification.Points;
+        if(DraftRevision!=expectedRevision || first<CanvasForVerification.ReferencePointCount || first>=points.Count || last<=first || last>=points.Count ||
+            points[first]==points[last] || CanvasForVerification.Image is not BitmapSource source)
+        { StatusForVerification.Text="Taslak veya seçili aralık değişti; yol aranmadı.";return; }
+        var start=points[first];var end=points[last];var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
+        StatusForVerification.Text="Seçili aralık için yol aranıyor; iptal edebilirsiniz.";
+        try
+        {
+            var compute=ComputePathForVerification;
+            var candidate=await Task.Run(()=>compute is null ? (PhotoEdgePath.TryFind(source,start,end,out var found,cts.Token) ? found : null) : compute(source,start,end,cts.Token),cts.Token);
+            cts.Token.ThrowIfCancellationRequested();if(closed)return;
+            if(DraftRevision!=revision) { StatusForVerification.Text="Taslak arama sırasında değişti; öneri kullanılmadı.";return; }
+            StatusForVerification.Text=candidate is not null && CanvasForVerification.SetReplacementPath(first,last,candidate)
+                ? "Mavi yol seçili aralık için öneridir; uygularsanız aradaki eski noktalar değişir. Doku ve gölgeyi inceleyin."
+                : "Uygun yeni yol bulunamadı veya nokta sınırı aşıldı; taslak değişmedi.";
+        }
+        catch(OperationCanceledException) { if(!closed)StatusForVerification.Text="Yol araması iptal edildi; taslak değişmedi."; }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or System.IO.IOException or OverflowException)
+        { if(!closed)StatusForVerification.Text="Yol önerisi hazırlanamadı: "+ex.Message; }
+        finally { if(ReferenceEquals(pathCancellation,cts))pathCancellation=null;cts.Dispose(); }
+    }
     internal async Task StartPathSuggestionAsync(bool allSegments=false)
     {
         if(pathCancellation is not null) { StatusForVerification.Text="Yol araması zaten sürüyor.";return; }

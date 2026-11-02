@@ -9361,7 +9361,7 @@ internal static class DesktopVerification
                 Check(canvas.SetPathSuggestion(new Point(20,10),new Point(20,20),[new Point(20,10),new Point(21,15),new Point(20,20)]),
                     "Photo range edit can begin with an existing path preview",checks);
                 rangeEditor.First.SelectedIndex=0;rangeEditor.Last.SelectedIndex=2;
-                Check(rangeEditor.Status.Text.Contains("1 nokta") && rangeEditor.TryApply() && canvas.Points.SequenceEqual(new[] { beforeZoom[0],beforeZoom[1],beforeZoom[2],beforeZoom[4] }) &&
+                Check(rangeEditor.Status.Text.Contains("1 ara nokta") && rangeEditor.TryApply() && canvas.Points.SequenceEqual(new[] { beforeZoom[0],beforeZoom[1],beforeZoom[2],beforeZoom[4] }) &&
                     canvas.PathSuggestion is null && !staleRange.TryApply() && staleRange.Status.Text.Contains("Taslak değişti"),
                     "Photo range edit preserves reference and endpoints while rejecting a stale dialog",checks);
                 Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom) && !canvas.UndoPath(),"Photo range edit is undone in one step",checks);
@@ -9370,6 +9370,33 @@ internal static class DesktopVerification
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
+                canvas.TryAddPixelPoint(new Point(30,20));var rangeBefore=canvas.Points.ToArray();
+                var pathRange=new PhotoTraceRangeWindow(trace,trace);
+                try
+                {
+                    pathRange.First.SelectedIndex=0;pathRange.Last.SelectedIndex=2;
+                    Check(pathRange.TryRequestPath() && pathRange.RequestedPath is { First:2,Last:4 },"Photo range dialog captures ordered endpoints for a path suggestion",checks);
+                }
+                finally { pathRange.Close(); }
+                trace.ComputePathForVerification=(_,start,end,_)=>new[] { start,new Point(16,12),end };
+                var replacement=trace.StartReplacementPathAsync(2,4,trace.DraftRevision);PumpUntil(()=>replacement.IsCompleted);replacement.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(rangeBefore) && trace.StatusForVerification.Text.Contains("eski noktalar"),
+                    "Photo replacement path previews without modifying the selected interval",checks);
+                Check(canvas.ApplyPathSuggestion() && canvas.Points.SequenceEqual(new[] { rangeBefore[0],rangeBefore[1],rangeBefore[2],new Point(16,12),rangeBefore[4],rangeBefore[5] }) &&
+                    canvas.UndoPath() && canvas.Points.SequenceEqual(rangeBefore),"Applying and undoing a replacement preserves both outside segments",checks);
+                var oldRevision=trace.DraftRevision;canvas.TryMoveTracePoint(3,new Point(21,10));
+                var staleReplacement=trace.StartReplacementPathAsync(2,4,oldRevision);PumpUntil(()=>staleReplacement.IsCompleted);staleReplacement.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is null && trace.StatusForVerification.Text.Contains("değişti"),"Stale replacement request cannot apply to modified points",checks);
+                canvas.UndoPath();
+                using(var rangeReached=new ManualResetEventSlim())using(var rangeRelease=new ManualResetEventSlim())
+                {
+                    trace.ComputePathForVerification=(_,start,end,token)=> { rangeReached.Set();rangeRelease.Wait(token);return new[] { start,new Point(16,12),end }; };
+                    var running=trace.StartReplacementPathAsync(2,4,trace.DraftRevision);
+                    try { PumpUntil(()=>rangeReached.IsSet);canvas.TryMoveTracePoint(3,new Point(21,10));rangeRelease.Set();PumpUntil(()=>running.IsCompleted);running.GetAwaiter().GetResult();
+                        Check(canvas.PathSuggestion is null && trace.StatusForVerification.Text.Contains("değişti"),"Replacement computed during an edit is discarded",checks); }
+                    finally { rangeRelease.Set(); }
+                }
+                canvas.UndoPath();canvas.UndoPoint();
                 var calls=0;
                 trace.ComputePathForVerification=(_,start,end,_)=> { calls++;return start.Y==end.Y
                     ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) }
