@@ -346,6 +346,12 @@ enum ExperimentalDesignBrief {
     static func v2ImageGeometryAllowed(width: Int, height: Int, frames: Int) -> Bool {
         frames == 1 && width > 0 && height > 0 && width <= 12_000 && height <= 12_000 && width <= 24_000_000 / height
     }
+    static func v2ImageOrientationAllowed(_ value: Any?) -> Bool {
+        guard let value else { return true }
+        guard let number = value as? NSNumber else { return false }
+        let orientation = number.doubleValue
+        return orientation.rounded() == orientation && orientation >= 1 && orientation <= 8
+    }
     private static func validateV2Image(_ data: Data) throws {
         guard !data.isEmpty, data.count <= maxImageBytes,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -353,6 +359,7 @@ enum ExperimentalDesignBrief {
               let width = properties[kCGImagePropertyPixelWidth] as? Int,
               let height = properties[kCGImagePropertyPixelHeight] as? Int,
               v2ImageGeometryAllowed(width: width, height: height, frames: CGImageSourceGetCount(source)),
+              ((CGImageSourceGetType(source) as String?) != "public.jpeg" || v2ImageOrientationAllowed(properties[kCGImagePropertyOrientation])),
               CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw Error.invalidImage }
     }
     static func makeV2(_ draft: Draft) throws -> Data {

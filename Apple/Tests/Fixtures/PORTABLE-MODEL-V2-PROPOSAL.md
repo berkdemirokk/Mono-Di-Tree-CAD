@@ -23,3 +23,5 @@ Durum: iPhone dalında deneysel v2 okuyucu/yazıcı uygulanmıştır; Xcode ve c
 Görsel sınırlaması: V1 iPhone ImageIO tür ve sayı doğrulaması yapar; incelenen eski Windows kodu dosya imzasını doğrular. Yalnız imza içeren bozuk PNG/JPEG örnekleri iPhone tarafından reddedilmek üzere testlere eklenmiştir; Windows okuyucusunun bu örnekleri kabul edip etmediği bu dalda doğrulanmadı. Fark giderilene kadar ortak ret iddiası yapılmaz.
 
 V2 iPhone kodu artık tek kare, eksen başına 12.000 ve toplam 24.000.000 piksel sınırı ile ImageIO görüntü açma kontrolü uygular. 6000×5000 PNG ve iki kareli APNG sentetik örnekleri testlerde yer alır; ImageIO ve Windows çözücü sonuçları cihazlarda henüz çalıştırılmadı. V1 görsel kabul yolu değiştirilmedi ve kabul edilen görselin özgün baytları korunur.
+
+V2 ImageIO tarafından sağlanan yön etiketi varsa yalnız 1–8 kabul edilir; eksik yön etiketi kabul edilir. Sentetik JPEG EXIF yönü 9 test girdisidir. ImageIO'nun geçersiz etiketi nasıl sunduğu Mac/iPhone üzerinde doğrulanmadı; çözücüler arasında eksiksiz eşitlik iddia edilmez.

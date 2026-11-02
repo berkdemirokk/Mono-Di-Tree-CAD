@@ -493,6 +493,13 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(recovered.style, .aline)
         XCTAssertEqual(recovered.description, "Düz elbise istiyorum")
     }
+    func testV2PhotoOrientationBoundary() {
+        XCTAssertTrue(ExperimentalDesignBrief.v2ImageOrientationAllowed(nil))
+        for value in 1...8 { XCTAssertTrue(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: value))) }
+        for value in [0, 9, -1] { XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: value))) }
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed(NSNumber(value: 1.5)))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageOrientationAllowed("9"))
+    }
     func testV2PhotoGeometryBoundaries() {
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 4000, frames: 1))
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 12000, height: 2000, frames: 1))
@@ -508,7 +515,7 @@ final class DesignDraftStoreTests: XCTestCase {
         func fixture(_ name: String) throws -> Data {
             try Data(contentsOf: XCTUnwrap(bundle.url(forResource: name, withExtension: "json")))
         }
-        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng"] {
+        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng", "v2-jpeg-orientation-9"] {
             XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(fixture(name)), name)
         }
         for name in ["v2-model-matching", "v2-model-conflicting"] {
