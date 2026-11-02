@@ -10054,6 +10054,28 @@ internal static class DesktopVerification
                 Check(experimentalEntry.InputsForVerification.Count==15 && experimentalEntry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable) &&
                     !experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
                     "Experimental body intake starts empty and does not modify the request",checks);
+                Check(!experimentalEntry.TryPrepare(out var missingDraft) && missingDraft is null && experimentalEntry.StatusForVerification.Text.Contains("gerekli"),
+                    "Experimental request requires all fifteen explicit fields before review",checks);
+                foreach(var field in experimentalEntry.InputsForVerification.Values)field.Text="100";
+                experimentalEntry.InputsForVerification["omuz eğimi"].Text="15";
+                experimentalEntry.InputsForVerification["ön üst göğüs"].Text="101";
+                experimentalEntry.InputsForVerification["omuz üst noktasından göğse"].Text="30";
+                Check(!experimentalEntry.TryPrepare(out var contradictoryDraft) && contradictoryDraft is null && experimentalEntry.StatusForVerification.Text.Contains("ön üst göğüs"),
+                    "Experimental request refuses contradictory measurements and reports the affected field",checks);
+                experimentalEntry.InputsForVerification["ön üst göğüs"].Text="45";
+                Check(experimentalEntry.TryPrepare(out var preparedDraft) && preparedDraft is not null && preparedDraft.Values.Count==15 && preparedDraft.Values["waist"]==1000m &&
+                    preparedDraft.Values["shoulderSlope"]==15m && !preparedDraft.ToString().Contains("1000") && window.MeasurementsForVerification.Text==input.Measurements &&
+                    window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Complete experimental input creates a detached local metric snapshot without modifying request or image",checks);
+                _=new WindowInteropHelper(experimentalEntry).EnsureHandle();var bodyReview=new ExperimentalBodyReviewWindow(experimentalEntry,preparedDraft!);
+                try { Render(bodyReview,Path.ChangeExtension(reportPath,".experimental-body-review.png"),430,400);
+                    experimentalEntry.InputsForVerification["bel çevresi"].Text="95";
+                    Check(bodyReview.ValuesForVerification.Items.Count==15 && preparedDraft!.Values["waist"]==1000m &&
+                        bodyReview.ValuesForVerification.Items.Cast<string>().Any(s=>s.Contains("1000 mm")) &&
+                        !Descendants<Button>((FrameworkElement)bodyReview.Content).Any(b=>b.Content?.ToString()?.Contains("oluştur")==true),
+                        "Experimental review retains its immutable snapshot and offers no generation action",checks); }
+                finally { bodyReview.Close(); }
+                foreach(var field in experimentalEntry.InputsForVerification.Values)field.Clear();
                 experimentalEntry.InputsForVerification["üst kol çevresi"].Text="31,5";
                 experimentalEntry.InputsForVerification["omuz eğimi"].Text="90";
                 Check(!experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
@@ -10070,6 +10092,14 @@ internal static class DesktopVerification
                 Check(!staleExperimental.TryApply() && window.MeasurementsForVerification.Text==expected && staleExperimental.InputsForVerification["boyun çevresi"].Text=="35",
                     "Experimental intake rejects stale request changes without losing entered text",checks); }
             finally { staleExperimental.Close(); }
+            window.LoadForVerification(input);
+            var partialExperimental=new ExperimentalBodyMeasurementsWindow(window);
+            try { partialExperimental.InputsForVerification["üst göğüs çevresi"].Text="90";partialExperimental.InputsForVerification["ön üst göğüs"].Text="100";
+                Check(!partialExperimental.TryPrepare(out _) && partialExperimental.TryApply() && window.MeasurementsForVerification.Text.Contains("üst göğüs çevresi 90 cm") &&
+                    window.MeasurementsForVerification.Text.Contains("ön üst göğüs 100 cm") && window.StatusForVerification.Text.Contains("Çelişkileri") &&
+                    window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Conflicting partial notes can be retained as unvalidated notes while full experimental review is refused",checks); }
+            finally { partialExperimental.Close(); }
             window.LoadForVerification(input);
             Check(window.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir") && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "A legacy truncated PNG is retained with an explicit phone compatibility warning",checks);
