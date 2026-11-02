@@ -9313,6 +9313,17 @@ internal static class DesktopVerification
                 Check(Descendants<Button>(checkRoot).Where(b=>Equals(b.Content,"Karşılaştır") || Equals(b.Content,"Kapat")).All(b=>FullyVisible(b,checkRoot)) && checkWindow.ResultForVerification.IsReadOnly,
                     "Photo measurement dialog has visible compact actions and a read-only result",checks);
                 checkWindow.FirstForVerification.SelectedIndex=0;checkWindow.SecondForVerification.SelectedIndex=4;checkWindow.KnownForVerification.Text="150";checkWindow.Calculate();
+                var marker=checkWindow.PreviewForVerification.MapPixel(new Point2(10,10),new Size(200,200));
+                Check(checkWindow.PreviewForVerification.FirstIndex==0 && checkWindow.PreviewForVerification.SecondIndex==4 &&
+                    Math.Abs(marker.X-29.69)<1e-9 && Math.Abs(marker.Y-74.19)<1e-9 && FullyVisible(checkWindow.PreviewForVerification,checkRoot) &&
+                    AutomationProperties.GetHelpText(checkWindow.PreviewForVerification).Contains("noktaları değiştirmez"),
+                    "Photo measurement preview marks the selected snapshot endpoints at their pixel-centre positions",checks);
+                var previewEdge=checkWindow.PreviewForVerification.MapPixel(new Point2(0,0),new Size(200,200));
+                var aspectPreview=new PhotoMeasurementPreview(bitmap,[new Point2(10,10)],1000,400);
+                var aspectMarker=aspectPreview.MapPixel(new Point2(10,10),new Size(200,200));
+                Check(previewEdge.X>=11 && previewEdge.Y>=11 && Math.Abs(aspectMarker.X-29.69)<1e-9 && Math.Abs(aspectMarker.Y-79.352)<1e-9,
+                    "Photo measurement preview leaves marker margin and respects the original photo aspect",checks);
+                Render(checkWindow,Path.ChangeExtension(reportPath,".photo-check-selected.png"),460,420);
                 Check(checkWindow.ResultForVerification.Text.Contains("141.421356") && checkWindow.ResultForVerification.Text.Contains("150 mm") &&
                     DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom),
                     "Photo measurement compares an independent segment without changing the draft or project",checks);

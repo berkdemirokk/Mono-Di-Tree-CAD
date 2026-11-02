@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
 using TekstilCAD.Core;
 
 namespace TekstilCAD.Desktop;
@@ -17,13 +18,15 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal TextBox KnownForVerification { get; } = new() { MinWidth=120,MaxLength=32,Margin=new Thickness(0,3,0,6) };
     internal TextBox ResultForVerification { get; } = new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,AcceptsReturn=true,MinHeight=75,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     internal PhotoTraceMeasurementResult? LastResultForVerification { get; private set; }
+    internal PhotoMeasurementPreview PreviewForVerification { get; }
 
-    internal PhotoTraceCheckWindow(Window owner,int previewWidth,int previewHeight,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null)
+    internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null)
     {
-        ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(snapshot);ArgumentNullException.ThrowIfNull(image);
         if(snapshot.Count<3 || snapshot.Count>PhotoTraceCanvas.MaximumPoints)throw new ArgumentOutOfRangeException(nameof(snapshot));
-        this.previewWidth=previewWidth;this.previewHeight=previewHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();
+        previewWidth=image.PixelWidth;previewHeight=image.PixelHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();
         points=snapshot.Select(p=>new Point2(p.X,p.Y)).ToArray();
+        PreviewForVerification=new PhotoMeasurementPreview(image,points,sourceWidth,sourceHeight);
         Owner=owner;Title="Fotoğrafta ölçü karşılaştır";Width=610;Height=580;MinWidth=460;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
@@ -32,8 +35,10 @@ internal sealed class PhotoTraceCheckWindow : Window
         var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };root.Children.Add(scroll);
         var body=new StackPanel();scroll.Content=body;
         body.Children.Add(new TextBlock { Text="Fotoğraf taslağının bu pencere açıldığındaki noktaları kullanılır. İki referans köşesini birlikte seçmeyin. Başka bir gerçek mesafeyi bağımsız olarak ölçüp girin; karşılaştırma yalnız iki nokta arasındaki düz mesafeyi değerlendirir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
-        body.Children.Add(new Label { Content="Kontrol başlangıcı",Target=FirstForVerification,Foreground=StudioTheme.Text });body.Children.Add(FirstForVerification);
-        body.Children.Add(new Label { Content="Kontrol bitişi",Target=SecondForVerification,Foreground=StudioTheme.Text });body.Children.Add(SecondForVerification);
+        var selection=new Grid();selection.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });selection.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
+        var selectors=new StackPanel();selectors.Children.Add(new Label { Content="1 · Kontrol başlangıcı",Target=FirstForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(FirstForVerification);
+        selectors.Children.Add(new Label { Content="2 · Kontrol bitişi",Target=SecondForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(SecondForVerification);selection.Children.Add(selectors);
+        PreviewForVerification.Margin=new Thickness(10,0,0,0);Grid.SetColumn(PreviewForVerification,1);selection.Children.Add(PreviewForVerification);body.Children.Add(selection);
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
         body.Children.Add(ResultForVerification);
@@ -42,7 +47,8 @@ internal sealed class PhotoTraceCheckWindow : Window
         FirstForVerification.ItemsSource=options;SecondForVerification.ItemsSource=options;
         AutomationProperties.SetName(FirstForVerification,"Kontrol başlangıç noktası");AutomationProperties.SetName(SecondForVerification,"Kontrol bitiş noktası");
         AutomationProperties.SetName(KnownForVerification,"Bağımsız bilinen kontrol mesafesi milimetre");AutomationProperties.SetName(ResultForVerification,"Ölçü karşılaştırması sonucu");AutomationProperties.SetLiveSetting(ResultForVerification,AutomationLiveSetting.Polite);
-        FirstForVerification.SelectionChanged+=(_,_)=>ClearResult();SecondForVerification.SelectionChanged+=(_,_)=>ClearResult();KnownForVerification.TextChanged+=(_,_)=>ClearResult();
+        void SelectionChanged() { ClearResult();PreviewForVerification.Select((FirstForVerification.SelectedItem as Choice)?.Index,(SecondForVerification.SelectedItem as Choice)?.Index); }
+        FirstForVerification.SelectionChanged+=(_,_)=>SelectionChanged();SecondForVerification.SelectionChanged+=(_,_)=>SelectionChanged();KnownForVerification.TextChanged+=(_,_)=>ClearResult();
         calculate.Click+=(_,_)=> { Calculate();ResultForVerification.BringIntoView(); };close.Click+=(_,_)=>Close();
     }
     private void ClearResult() { LastResultForVerification=null;ResultForVerification.Text=""; }

@@ -139,7 +139,7 @@ internal sealed class PhotoTraceWindow : Window
                 _=PhotoPlaneRectification.Convert(image.PixelWidth,image.PixelHeight,plane.Corners,plane.WidthMm,plane.HeightMm,[a,b]);
             }
             else _=PhotoTraceCalibration.Convert(image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,a,b,mm,[a,b]);
-            return new PhotoTraceCheckWindow(this,image.PixelWidth,image.PixelHeight,sourceWidth,sourceHeight,mm,points,plane);
+            return new PhotoTraceCheckWindow(this,image,sourceWidth,sourceHeight,mm,points,plane);
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { StatusForVerification.Text="Ölçü karşılaştırması açılamadı: "+ex.Message;return null; }
