@@ -993,6 +993,26 @@ internal static class DesktopVerification
             studio.ChooseLegacyMigrationTargetForVerification=()=>target;studio.ConfirmLegacyDestinationForVerification=_=>true;
             save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(!prompted && status.Text.Contains("tahsis edilmedi") && !File.Exists(target) && original.SequenceEqual(File.ReadAllBytes(source)),kind+" is blocked while version allocation is unconfirmed",checks);
+            var recoveryDir=Path.Combine(work,kind+"-recovery");Directory.CreateDirectory(recoveryDir);
+            using(var recoveryStore=new RecoveryStore(recoveryDir))
+            {
+                File.WriteAllText(recoveryStore.DraftRecoveryPath,"synthetic existing recovery");
+                var recoveryFiles=Directory.GetFiles(recoveryDir).OrderBy(x=>x,StringComparer.Ordinal).ToArray();
+                var coordinator=new RecoveryWriteCoordinator(recoveryStore);
+                WaitRecovery(studio.SetRecoveryForVerificationAsync(recoveryStore,coordinator));
+                studio.Commit("Synthetic unsaved change",()=>studio.Document.Name+=" changed");
+                WaitRecovery(studio.TriggerRecoveryForVerificationAsync());
+                var notice=(TextBlock)typeof(MainWindow).GetField("recoveryNotice",PrivateInstance)!.GetValue(studio)!;
+                var saveState=(TextBlock)typeof(MainWindow).GetField("saveState",PrivateInstance)!.GetValue(studio)!;
+                Check(notice.Text.Contains("Kayıt ve otomatik kurtarma kapalı") && !notice.Text.Contains("Kaydet ile") &&
+                      (saveState.ToolTip?.ToString() ?? "").Contains("yalnız açık oturumda") && File.ReadAllText(recoveryStore.DraftRecoveryPath)=="synthetic existing recovery" &&
+                      recoveryFiles.SequenceEqual(Directory.GetFiles(recoveryDir).OrderBy(x=>x,StringComparer.Ordinal)) &&
+                      !(bool)typeof(MainWindow).GetField("recoveryMayExist",PrivateInstance)!.GetValue(studio)! && original.SequenceEqual(File.ReadAllBytes(source)),
+                      kind+" recovery warning explains the blocked writer without deleting or writing recovery data",checks);
+                WaitRecovery(studio.SetRecoveryForVerificationAsync(null,null));
+                Check(File.ReadAllText(recoveryStore.DraftRecoveryPath)=="synthetic existing recovery",kind+" recovery shutdown retains the existing recovery bytes",checks);
+            }
+            studio.OpenProjectFile(source);
             using(ProjectStorage.EnableVersion10ForVerification())
             {
                 studio.ConfirmLegacyMigrationForVerification=()=>false;save.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

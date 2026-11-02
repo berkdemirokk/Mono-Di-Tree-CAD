@@ -496,10 +496,10 @@ public class MainWindow : Window
                     recoveryWriter=null; recoveryStore=null;
                     try { recoveryStore=new RecoveryStore(AppPaths.RecoveryDirectory); recoveryWriter=new RecoveryWriteCoordinator(recoveryStore); }
                     catch(Exception restart) when(restart is IOException or UnauthorizedAccessException or InvalidOperationException)
-                    { recoveryRescan.IsEnabled=false; ShowRecoveryWarning("Kurtarma oturumu kapatılamadı ve yeniden başlatılamadı; pencere açık. Çalışmanızı Kaydet ile koruyun.",ex.Message+"\n"+restart.Message); return; }
+                    { recoveryRescan.IsEnabled=false; ShowRecoveryWarning("Kurtarma oturumu kapatılamadı ve yeniden başlatılamadı; pencere açık. "+RecoverySaveAdvice(),ex.Message+"\n"+restart.Message); return; }
                     ShowRecoveryWarning("Kurtarma oturumu kapatılırken hata oluştu; yeni oturum açıldı ve pencere açık tutuldu.",ex.Message);
                 }
-                else ShowRecoveryWarning("Kurtarma kaydı temizlenemedi; pencere açık tutuldu. Çalışmanızı Kaydet ile koruyun.",ex.Message);
+                else ShowRecoveryWarning("Kurtarma kaydı temizlenemedi; pencere açık tutuldu. "+RecoverySaveAdvice(),ex.Message);
             }
         };
         Closed += (_, _) => { recoveryScanCancellation.Cancel(); if(!recoveryScanRunning) { recoveryCursor?.Dispose(); recoveryCursor=null; } };
@@ -1014,6 +1014,15 @@ public class MainWindow : Window
         root.Children.Add(mappings);
         return window;
     }
+    private bool Version10StorageBlocked => RequiresVersion10(Document) && !ProjectStorage.Version10WriteAvailable;
+    private string RecoverySaveAdvice() => Version10StorageBlocked
+        ? (HasUnsavedWork ? "Kayıt ve otomatik kurtarma kapalı; değişiklikler yalnız açık oturumda. Pencereyi açık tutun ve sürüm tahsisi doğrulandığında yeni dosyaya kaydedin."
+            : "Kayıt ve otomatik kurtarma kapalı; yeni değişiklikler yalnız açık oturumda kalır. Sürüm tahsisi doğrulandığında yeni dosyaya kaydedin.")
+        : "Çalışmanızı Kaydet ile koruyun.";
+    private string RecoverySaveFailureMessage() => Version10StorageBlocked
+        ? "Otomatik kurtarma güncellenemedi. "+RecoverySaveAdvice()
+        : HasUnsavedWork ? "Otomatik kurtarma güncellenemedi. Son değişikliklerinizi Kaydet ile koruyun."
+        : "Otomatik kurtarma güncellenemedi. Şu anda kaydedilmemiş değişiklik yok; yeni değişiklikler otomatik kurtarılamayabilir.";
     private void UpdateSaveState()
     {
         // Once all edits have been undone or the last unapplied draft discarded,
@@ -1023,9 +1032,7 @@ public class MainWindow : Window
         if (!HasUnsavedWork && (lastRecoveryAt is not null || recoveryMayExist)) ClearRecovery();
         if(recoverySaveWarning)
         {
-            var warning=HasUnsavedWork
-                ? "Otomatik kurtarma güncellenemedi. Son değişikliklerinizi Kaydet ile koruyun."
-                : "Otomatik kurtarma güncellenemedi. Şu anda kaydedilmemiş değişiklik yok; yeni değişiklikler otomatik kurtarılamayabilir.";
+            var warning=RecoverySaveFailureMessage();
             if(recoveryWarnings.UpdateMessage(RecoveryWarningState.Kind.Save,warning))RefreshRecoveryWarnings();
         }
         var safeTitle=SafePieceName(Document.Name);
@@ -1039,7 +1046,7 @@ public class MainWindow : Window
         var recoveryTime=lastRecoveryAt is { } at ? $" · Son kurtarma: {at.ToString("g",CultureInfo.CurrentCulture)}" : "";
         saveState.Text = (canvas?.HasPendingDrawing ?? false) ? "● Tamamlanmamış çizim"+recoveryTime : propertyDrafts.Count > 0 ? $"● Alan taslağı: {propertyDrafts.Count} parça{recoveryTime}" : dirty ? "● Kaydedilmemiş değişiklikler"+recoveryTime : filePath is null ? "Yeni proje · Henüz dosyaya kaydedilmedi" : "✓ Kaydedildi · " + Path.GetFileName(filePath);
         saveState.Foreground = HasUnsavedWork ? StudioTheme.Warning : StudioTheme.Muted;
-        saveState.ToolTip = recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
+        saveState.ToolTip = Version10StorageBlocked ? RecoverySaveAdvice() : recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
     }
     internal void PendingDrawingChanged() { UpdateSaveState();UpdateFitCommand(); }
     private void UpdateFitCommand()
@@ -3715,6 +3722,12 @@ public class MainWindow : Window
         var capturedAt=DateTime.Now;
         try
         {
+            if(Version10StorageBlocked)
+            {
+                recoveryReported=request;
+                ShowRecoveryWarning(RecoverySaveFailureMessage(),"Proje biçimi sürüm tahsisi henüz doğrulanmadı.",RecoveryWarningState.Kind.Save);
+                UpdateSaveState();return;
+            }
             var drafts=propertyDrafts.Select(pair => new RecoveryPropertyDraft(pair.Key,pair.Value.Name,pair.Value.X,pair.Value.Y,pair.Value.BaseName,pair.Value.BaseX,pair.Value.BaseY)).ToArray();
             recoveryMayExist=true;
             var written=await recoveryWriter.SaveAsync(Document,drafts,canvas.CapturePendingDrawing());
@@ -3728,7 +3741,7 @@ public class MainWindow : Window
         {
             if(generation!=recoveryGeneration || request<recoveryReported || windowClosed)return;
             recoveryReported=request;
-            ShowRecoveryWarning("Otomatik kurtarma güncellenemedi. Son değişikliklerinizi Kaydet ile koruyun.",ex.Message,RecoveryWarningState.Kind.Save);
+            ShowRecoveryWarning(RecoverySaveFailureMessage(),ex.Message,RecoveryWarningState.Kind.Save);
         }
     }
     internal async Task SetRecoveryForVerificationAsync(RecoveryStore? store, RecoveryWriteCoordinator? coordinator)
@@ -3959,7 +3972,7 @@ public class MainWindow : Window
             recoveryRestoreIncomplete=false;
             canvas.IsEnabled=true;
             Refresh();canvas.Fit();
-            SetStatus("Kurtarma kaydı açıldı. Kaydet ile kalıcı bir proje dosyası oluşturun.");
+            SetStatus(Version10StorageBlocked ? "Kurtarma kaydı açıldı. "+RecoverySaveAdvice() : "Kurtarma kaydı açıldı. Kaydet ile kalıcı bir proje dosyası oluşturun.");
         }
         catch(Exception ex)
         {
