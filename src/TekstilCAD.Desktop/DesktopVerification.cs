@@ -10143,6 +10143,12 @@ internal static class DesktopVerification
             Check(window.StatusForVerification.Text.Contains("Açıklama veya referans görseli gereklidir") &&
                 FullyVisible(window.StatusViewportForVerification,blankRoot),
                 "Empty request save reports its validation error at minimum size",checks);
+            Render(window,Path.ChangeExtension(reportPath,".atelier-compact-models.png"),480,420);
+            var firstModel=Descendants<Button>(blankRoot).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
+            var firstCaption=((StackPanel)firstModel.Content).Children.OfType<TextBlock>().Single(t=>t.Text=="Seç");
+            Check(FullyVisible(firstModel,blankRoot) && FullyVisible(firstCaption,blankRoot) && firstModel.Focusable &&
+                FullyVisible(window.StatusViewportForVerification,blankRoot),
+                "Compact startup shows the first complete model and selection action while retaining visible feedback",checks);
             typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
             var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
             window.LoadForVerification(new DesignRequest("göğüs çevresi 96,5 cm; bel çevresi 70 cm", "bel çevresi 720 mm; kalça çevresi 100 cm; elbise boyu 110 cm",null));
@@ -10750,7 +10756,7 @@ internal static class DesktopVerification
                     "Design request presents editable description and measurements before optional conversation at "+size,checks);
             }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
-            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==95),
+            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==45),
                 "Compact atelier keeps every model illustration within the short viewport",checks);
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
             Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==150),

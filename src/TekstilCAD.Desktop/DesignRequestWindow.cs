@@ -68,11 +68,11 @@ internal sealed class DesignRequestWindow : Window
         statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);
         var header=new StackPanel { Margin=new Thickness(0,0,0,10) };
         header.Children.Add(new TextBlock { Text="MONO Dİ TREE CAD",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=18,FontWeight=FontWeights.SemiBold });
-        header.Children.Add(new TextBlock { Text="Yeni Tasarım İsteği",Foreground=Muted,FontSize=11 });DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
+        var headerSubtitle=new TextBlock { Text="Yeni Tasarım İsteği",Foreground=Muted,FontSize=11 };header.Children.Add(headerSubtitle);DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
-        body.Children.Add(new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ATÖLYE PROJESİ · YENİ ÇALIŞMA",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } });
-        body.Children.Add(new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
-        body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
+        var badge=new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ATÖLYE PROJESİ · YENİ ÇALIŞMA",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } };body.Children.Add(badge);
+        var modelHeading=new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal };body.Children.Add(modelHeading);
+        var intro=new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) };body.Children.Add(intro);
         var shortcuts=new WrapPanel { Margin=new Thickness(0,0,0,4) };body.Children.Add(shortcuts);
         var drawingNotes=new Button { Content="Kaydedilmiş notlarla çizime geç",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };
         AutomationProperties.SetHelpText(drawingNotes,"Kaydedilmiş isteğin salt okunur notlarını ana çizim penceresiyle birlikte açar. Kalıp oluşturmaz.");
@@ -80,12 +80,21 @@ internal sealed class DesignRequestWindow : Window
         var chatShortcut=new Button { Content="Ölçülerle konuş",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,4) };
         AutomationProperties.SetHelpText(chatShortcut,"Mevcut mesajı koruyarak ölçü yazışma alanına gider; otomatik kalıp oluşturmaz.");
         chatShortcut.Click+=(_,_)=> { chatInput.BringIntoView();chatInput.Focus(); };shortcuts.Children.Add(chatShortcut);
-        body.Children.Add(new TextBlock { Text="01  ·  TEMEL SİLUET FİKİRLERİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
-        body.Children.Add(new TextBlock { Text="Kartlar bir model fikri seçer; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        var galleryHeading=new TextBlock { Text="01  ·  TEMEL SİLUET FİKİRLERİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) };body.Children.Add(galleryHeading);
+        var galleryHelp=new TextBlock { Text="Kartlar bir model fikri seçer; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) };body.Children.Add(galleryHelp);
         var models=new StackPanel { Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,6) };modelScroller.Content=models;body.Children.Add(modelScroller);
         AutomationProperties.SetName(modelScroller,"Model fikirleri galerisi");AutomationProperties.SetHelpText(modelScroller,"Diğer model fikirlerini görmek için yatay kaydırın veya kartlar arasında klavyeyle ilerleyin.");
-        var modelImages=new List<Viewbox>();
-        root.SizeChanged+=(_,_)=> { var height=root.ActualHeight>520 ? 150d : 95d;foreach(var item in modelImages)item.Height=height; };
+        var modelImages=new List<Viewbox>();var modelTitles=new List<TextBlock>();var modelDescriptions=new List<TextBlock>();
+        root.SizeChanged+=(_,_)=>
+        {
+            var compact=root.ActualHeight<=520;var visible=compact ? Visibility.Collapsed : Visibility.Visible;
+            badge.Visibility=intro.Visibility=galleryHeading.Visibility=galleryHelp.Visibility=headerSubtitle.Visibility=visible;
+            header.Margin=compact ? new Thickness(0,0,0,4) : new Thickness(0,0,0,10);
+            modelHeading.Text=compact ? "Model fikri seç" : "Modelini seç";modelHeading.FontSize=compact ? 20 : 27;
+            foreach(var item in modelImages)item.Height=compact ? 45 : 150;
+            foreach(var item in modelTitles)item.MinHeight=compact ? 20 : 34;
+            foreach(var item in modelDescriptions)item.Visibility=visible;
+        };
         void ModelChoice(string label,string description,string template,string silhouette,string? detail,string? code=null)
         {
             var art=new Canvas { Width=code is null ? 80 : 120,Height=code is null ? 80 : 160,IsHitTestVisible=false };
@@ -96,8 +105,8 @@ internal sealed class DesignRequestWindow : Window
             var content=new StackPanel { Width=166,IsHitTestVisible=false };
             content.Children.Add(new Border { Background=Raised,CornerRadius=new CornerRadius(6),Child=image,Margin=new Thickness(0,0,0,5) });
             if(code is not null)content.Children.Add(new TextBlock { Text="KOD: "+code,FontSize=10,Foreground=Muted,Margin=new Thickness(0,0,0,3) });
-            content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontFamily=new FontFamily("Georgia"),FontSize=14,Foreground=Accent,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
-            content.Children.Add(new TextBlock { Text=description,TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted,TextWrapping=TextWrapping.Wrap,MinHeight=32 });
+            var title=new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontFamily=new FontFamily("Georgia"),FontSize=14,Foreground=Accent,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 };modelTitles.Add(title);content.Children.Add(title);
+            var modelDescription=new TextBlock { Text=description,TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted,TextWrapping=TextWrapping.Wrap,MinHeight=32 };modelDescriptions.Add(modelDescription);content.Children.Add(modelDescription);
             var caption=new TextBlock { Text="Seç",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted };content.Children.Add(caption);
             var button=new Button { Content=content,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Model fikrini seç; hazır kalıp değildir." };
             AutomationProperties.SetName(button,label);
