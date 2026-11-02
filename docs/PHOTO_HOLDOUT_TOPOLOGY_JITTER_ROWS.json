@@ -1,0 +1,562 @@
+[
+  {
+    "Ordinal": 0,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 1,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 2,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 3,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 4,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 5,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 6,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 7,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 8,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 9,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 10,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 11,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 12,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 13,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 14,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 15,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 16,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 17,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 18,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 19,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 20,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 21,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 22,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 23,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 24,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 25,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 26,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 27,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 28,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 29,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 30,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 31,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 32,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 33,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 34,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 35,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 36,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 37,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 38,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 39,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 40,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 41,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 42,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 43,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 44,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 45,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 46,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 47,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 48,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 49,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 50,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 51,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 52,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 53,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 54,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 55,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 56,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 57,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 58,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 59,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 60,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 61,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 62,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 63,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 64,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 65,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 66,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 67,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 68,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 69,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 70,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 71,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 72,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 73,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 74,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 75,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 76,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": false,
+    "CrossingPairFound": true
+  },
+  {
+    "Ordinal": 77,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 78,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  },
+  {
+    "Ordinal": 79,
+    "PointsAccepted": true,
+    "ProposalAccepted": true,
+    "PixelGeometryValid": true,
+    "CrossingPairFound": false
+  }
+]

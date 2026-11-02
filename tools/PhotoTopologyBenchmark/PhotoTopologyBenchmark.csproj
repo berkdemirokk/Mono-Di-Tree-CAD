@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TekstilCAD.Core/TekstilCAD.Core.csproj" />
+    <Compile Include="../../src/TekstilCAD.Desktop/PhotoTraceCanvas.cs" Link="PhotoTraceCanvas.cs" />
+    <Compile Include="../../src/TekstilCAD.Desktop/PhotoEdgeSuggestion.cs" Link="PhotoEdgeSuggestion.cs" />
+    <Compile Include="../../src/TekstilCAD.Desktop/PhotoPathCrossingDiagnostic.cs" Link="PhotoPathCrossingDiagnostic.cs" />
+  </ItemGroup>
+</Project>

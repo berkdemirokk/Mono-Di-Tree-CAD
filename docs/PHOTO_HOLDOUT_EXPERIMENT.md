@@ -17,6 +17,8 @@ Anotasyon uçları koşulunda aynı uçlar arasındaki düz kenarlı temel çizi
 
 Piksel uzaklığı yaklaşık bir piksel aralıkla örneklenmiş en yakın kenar uzaklığıdır; gerçek en büyük sapmayı garanti etmez. Kesişim sayacı yalnız kenarların iç kısımlarındaki sıkı çapraz geçişleri sayar, temasları ve çakışmaları saymaz. Üründeki nokta sınırı ve sadeleştirme deney aracında taklit edildi; masaüstü arayüzü ile tüm geometri doğrulayıcıları bu deneyde çalıştırılmadı. Anotasyon uçları iyimserdir; anotasyon kusursuz fiziksel kalıp referansı değildir. Bu deney gerçek ölçüler, kumaş dökümü, gizlenen bölgeler, perspektif veya üretim uygunluğunu ölçmez. Sonuç otomatik kabulü haklı çıkarmaz.
 
+Bu sonuçlar daha sonra [gerçek masaüstü tuvalinin ve piksel geometri doğrulayıcılarının çalıştırıldığı ayrı deneyde](PHOTO_HOLDOUT_TOPOLOGY.md) yeniden incelendi.
+
 [Referans özeti](PHOTO_HOLDOUT_REFERENCE.json), [kaydırma özeti](PHOTO_HOLDOUT_JITTER.json) ve [eşli karşılaştırma](PHOTO_HOLDOUT_COMPARISON.json) yöntem ve görüntü kimliklerini içerir. Kontur başına sayısal sonuçlar [referans](PHOTO_HOLDOUT_REFERENCE_ROWS.json) ve [kaydırma](PHOTO_HOLDOUT_JITTER_ROWS.json) dosyalarındadır. Görüntüler ve anotasyonlar depoya eklenmedi. Referans koşulu iki kez çalıştırıldığında özet ve satır dosyaları bayt düzeyinde aynıydı.
 
 Tekrarlamak için veri arşivi, .NET 10, Python 3.12.14 ve iki yeni boş çalışma klasörü gerekir:
