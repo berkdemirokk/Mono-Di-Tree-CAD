@@ -1,0 +1,20 @@
+[
+  {
+    "file": "package.json",
+    "sourceSha256": "cd39c305a22a3b9aa0c51f0be9a9cebb935d59e0748da04fc9c4b68c05d5bccc",
+    "installedSha256": "cd39c305a22a3b9aa0c51f0be9a9cebb935d59e0748da04fc9c4b68c05d5bccc",
+    "match": true
+  },
+  {
+    "file": "README.md",
+    "sourceSha256": "9d6d2e4a789ea79858ca450c92830b62b1b45dbe6586918f2ead7ec3e4da5e2f",
+    "installedSha256": "9d6d2e4a789ea79858ca450c92830b62b1b45dbe6586918f2ead7ec3e4da5e2f",
+    "match": true
+  },
+  {
+    "file": "hooks.js",
+    "sourceSha256": "e3028d846e91ef37e98d492925b36e9794ee111ddb3d767bb78e6e87b168c458",
+    "installedSha256": "e3028d846e91ef37e98d492925b36e9794ee111ddb3d767bb78e6e87b168c458",
+    "match": true
+  }
+]

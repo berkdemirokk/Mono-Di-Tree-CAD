@@ -1,0 +1,114 @@
+[
+  {
+    "name": "@freesewing/breanna",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-c3jUbk0zaJIsiyU88HTSoaQqdSCLv4X753onzRors8VwYmNcKebZSwRpxkWS/RtZGCbaOt7fs7DKMOzHwCAG2g==",
+    "tarball": "https://registry.npmjs.org/@freesewing/breanna/-/breanna-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/brian",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-X2Q4Q2faxjeRpniU/dfVCgKWgzkyYL0s/8kHYgEX2BiFYezQBlLcl39orAzcrxejILUQjd5j5PG8x4yfBOpGrQ==",
+    "tarball": "https://registry.npmjs.org/@freesewing/brian/-/brian-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/config",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-pjJQzRNQPHaUr2I/0bLJeW8MbODe66GZ7mf7YRxTsK+rOuK6veSWrkg8OWVDBUlD4EZyj14P3+tIb3xRcrpxvw==",
+    "tarball": "https://registry.npmjs.org/@freesewing/config/-/config-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/core-plugins",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-iZe6v/JV4JlH4+aifMuGFDhH5PV/Ou1KO5SXfq5fD90WqjtCZhmQWrwjEe9AU9PCSAcCswEZsltuKkl1edT4cQ==",
+    "tarball": "https://registry.npmjs.org/@freesewing/core-plugins/-/core-plugins-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/core",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-sq1uNV7jAx0ox3YHvlhPQvYviWq9SToF88ckSNBDBHoPRO+a2xRo5lgkIAatNzu6zk5j3D0lMZr35trUgJ8ajw==",
+    "tarball": "https://registry.npmjs.org/@freesewing/core/-/core-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/library",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-8NG6l6YP8HTrltGHXuSE4MoY2x9ICPgTT56CHh4Gs01K/HFRnecQLZpuZbU29UGLVnRUlcxRER8EBEIGxL3FDA==",
+    "tarball": "https://registry.npmjs.org/@freesewing/library/-/library-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-annotations",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-VURDT//f5EvGA9F2ABhyQMyCDzHLJCfot/dJhYkDHljYDLm1QZWqlHyVgCWPI8gwAW2AIDSnwVeGUpRwfvxxJg==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-annotations/-/plugin-annotations-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-bin-pack",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-Xmul4wK4hcmhFht9BVWfrnzKEOjnaXgPuLuAuAHzJwy+5xGcPPAMfZRrSAmSZFNOFsFSglutc/3fz7un+RjvHA==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-bin-pack/-/plugin-bin-pack-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-bust",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-IdH2Uab8IjgrLdywe71SeL8wMZrOGOrmCBpd4Qb30YbObQPAa4smDopJAD8UVVrb18mIa0uwMIA4vjY7I5xSdg==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-bust/-/plugin-bust-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-measurements",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-0aPYQ4/zIZ+jA1frABSafeK/a7oODupJCUu954qphqbrn9XD2y657lZEdX29DgbS+vlZjLPcqeW9Zr5qVcG/cQ==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-measurements/-/plugin-measurements-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-mirror",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-KxPezYV7ms4wFLWZktxcq5T8C8C/pUYxpIRBsCcADPUt9LjOZsJ/DzD5/syQtKLgMUl0B7Md8pbIO/hEhPET3Q==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-mirror/-/plugin-mirror-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-round",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-AmJuAWMr2pqmpQy/wUd8I7dVJluU74eLcN8fIysqSc1p4ll0ecARJMp2uVe+xzPBtv8tqnmtPG6mJDuTS8C3NA==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-round/-/plugin-round-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-sprinkle",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-eZhlZjbtIftW6Wh8yfaiEu1/ZEIfx5t4Q67W+Wno5AHtPXV4d8m3QZqW3uCPuNseKBfko7MS2eZ2zZuYzwFEpQ==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-sprinkle/-/plugin-sprinkle-4.10.2.tgz"
+  },
+  {
+    "name": "@freesewing/plugin-transform",
+    "version": "4.10.2",
+    "gitHead": "3d290d25d0b6a65852dd31aec125c97bc8ca6e2c",
+    "license": "MIT",
+    "integrity": "sha512-yRLp7iYDNkb1WdSJWhLltfNFUrj4F90YgnKpGrosz808CsVOh+ye+PpC8dnFG+j5BM5aXH3rJHAnChS9jVZOuA==",
+    "tarball": "https://registry.npmjs.org/@freesewing/plugin-transform/-/plugin-transform-4.10.2.tgz"
+  }
+]

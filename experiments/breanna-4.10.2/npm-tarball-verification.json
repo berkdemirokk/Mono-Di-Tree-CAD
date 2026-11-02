@@ -1,0 +1,58 @@
+[
+  {
+    "name": "@freesewing/breanna",
+    "match": true
+  },
+  {
+    "name": "@freesewing/brian",
+    "match": true
+  },
+  {
+    "name": "@freesewing/config",
+    "match": true
+  },
+  {
+    "name": "@freesewing/core-plugins",
+    "match": true
+  },
+  {
+    "name": "@freesewing/core",
+    "match": true
+  },
+  {
+    "name": "@freesewing/library",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-annotations",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-bin-pack",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-bust",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-measurements",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-mirror",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-round",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-sprinkle",
+    "match": true
+  },
+  {
+    "name": "@freesewing/plugin-transform",
+    "match": true
+  }
+]
