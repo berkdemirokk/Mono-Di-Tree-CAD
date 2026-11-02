@@ -77,6 +77,15 @@ public sealed class OffsetClipperJoinTraceTests(ITestOutputHelper output)
             output.WriteLine($"reverse={reverse}; preserve_grid={preserveGrid}; forward_down_vertices={down.Count}; forward_down_short={CountShort(down,1_000_000)}; recovered_paths={back.Count}; current_local_guard_8={both}");
             if(preserveGrid && scale>=10_000_000)
             {
+                var method=typeof(PatternTools).Assembly.GetType("TekstilCAD.Patterns.OffsetForwardBoundaryProof",true)!
+                    .GetMethod("TryVerify",BindingFlags.Static|BindingFlags.NonPublic)!;
+                object?[] proof=[sourceGrid.Select(p=>new GridPoint(p.X,p.Y)).ToArray(),1_000_000L,
+                    down.Select(p=>new GridPoint(p.X,p.Y)).ToArray(),null,CancellationToken.None];
+                bool exact=(bool)method.Invoke(null,proof)!;
+                output.WriteLine($"reverse={reverse}; exact_indexed_boundary_match={exact}; reason={proof[3]}");
+            }
+            if(preserveGrid && scale>=10_000_000)
+            {
                 Assert.Equal(512,down.Count);
                 Assert.Equal(0,CountShort(down,1_000_000));
                 Assert.True(both,"The existing 8-grid local comparison must pass without increasing tolerance.");
