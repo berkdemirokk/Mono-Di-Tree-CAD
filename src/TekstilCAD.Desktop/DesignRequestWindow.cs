@@ -26,6 +26,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Foreground=Ink,Margin=new Thickness(8,4,8,4) };
     private readonly ScrollViewer statusViewport=new() { MaxHeight=72,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Visibility=Visibility.Collapsed,Focusable=true };
     private readonly ScrollViewer bodyScroller=new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
+    private readonly ScrollViewer modelScroller=new() { HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
     private DesignReference? reference;
     private bool dirty,loading,preservingLastModel,hasSavedRequest;
     private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
@@ -40,6 +41,7 @@ internal sealed class DesignRequestWindow : Window
     internal TextBlock StatusForVerification=>status;
     internal ScrollViewer StatusViewportForVerification=>statusViewport;
     internal ScrollViewer BodyScrollerForVerification=>bodyScroller;
+    internal ScrollViewer ModelScrollerForVerification=>modelScroller;
     internal void ReviewMeasurementsForVerification()=>ReviewMeasurements();
     internal DesignRequestWindow(Window owner)
     {
@@ -61,17 +63,19 @@ internal sealed class DesignRequestWindow : Window
         drawingNotes.Click+=(_,_)=>OpenDrawingNotes();body.Children.Add(drawingNotes);
         body.Children.Add(new TextBlock { Text="01  ·  MODEL FİKRİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         body.Children.Add(new TextBlock { Text="Kartlar tarife fikir ekler; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
-        var models=new WrapPanel { Margin=new Thickness(0,0,0,6) };body.Children.Add(models);
-        void ModelChoice(string label,string template,string silhouette,string? detail)
+        var models=new StackPanel { Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,6) };modelScroller.Content=models;body.Children.Add(modelScroller);
+        AutomationProperties.SetName(modelScroller,"Model fikirleri galerisi");AutomationProperties.SetHelpText(modelScroller,"Diğer model fikirlerini görmek için yatay kaydırın veya kartlar arasında klavyeyle ilerleyin.");
+        void ModelChoice(string label,string description,string template,string silhouette,string? detail)
         {
             var art=new Canvas { Width=80,Height=80,IsHitTestVisible=false };
             var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=Brushes.Transparent,Stroke=Accent,StrokeThickness=1.2 };
             art.Children.Add(dress);
             if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=Accent,StrokeThickness=1.2,StrokeLineJoin=PenLineJoin.Round });
             var image=new Viewbox { Width=112,Height=112,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };
-            var content=new StackPanel { Width=146,IsHitTestVisible=false };
+            var content=new StackPanel { Width=166,IsHitTestVisible=false };
             content.Children.Add(new Border { Background=Raised,CornerRadius=new CornerRadius(6),Child=image,Margin=new Thickness(0,0,0,5) });
             content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontFamily=new FontFamily("Georgia"),FontSize=14,Foreground=Accent,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
+            content.Children.Add(new TextBlock { Text=description,TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted,TextWrapping=TextWrapping.Wrap,MinHeight=32 });
             var caption=new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted };content.Children.Add(caption);
             var button=new Button { Content=content,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
             AutomationProperties.SetName(button,label);
@@ -84,10 +88,12 @@ internal sealed class DesignRequestWindow : Window
             };
             modelCards.Add((button,caption));models.Children.Add(button);
         }
-        ModelChoice("Düz elbise", "Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
-        ModelChoice("A kesim elbise", "A kesim elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,38 14,73 66,73 50,38 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
-        ModelChoice("Anvelop elbise", "Anvelop elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,40 17,73 63,73 50,40 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z","M 34,5 L 49,39 M 46,5 L 31,39 M 30,40 L 50,40 M 49,40 L 58,73");
-        ModelChoice("Gömlek elbise", "Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
+        ModelChoice("Anvelop elbise","Çapraz ön · Bel hattı","Anvelop elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,40 17,73 63,73 50,40 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z","M 34,5 L 49,39 M 46,5 L 31,39 M 30,40 L 50,40 M 49,40 L 58,73");
+        ModelChoice("A kesim elbise","Genişleyen etek","A kesim elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 30,38 14,73 66,73 50,38 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
+        ModelChoice("Balenli korpus","Yapısal gövde · Bel hattı","Balenli korpus; detaylar: ","M 26,14 Q 33,17 40,13 Q 47,17 54,14 L 53,34 51,40 57,73 23,73 29,40 27,34 Z","M 32,15 L 34,40 M 48,15 L 46,40 M 40,13 L 40,40 M 29,40 Q 40,44 51,40 M 40,42 L 40,73");
+        ModelChoice("Minimal kılıf","Düz form · Kolsuz hat","Minimal kılıf elbise; detaylar: ","M 34,7 Q 40,10 46,7 L 51,10 53,22 48,22 48,35 51,73 29,73 32,35 32,22 27,22 29,10 Z","M 35,24 L 35,38 M 45,24 L 45,38 M 40,9 L 40,73");
+        ModelChoice("Düz elbise","Düz siluet","Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
+        ModelChoice("Gömlek elbise","Yakalı ön · Bel hattı","Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
         body.Children.Add(new TextBlock { Text="Nasıl bir elbise istiyorsun?",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
         body.Children.Add(new TextBlock { Text="Kumaşı, yakayı, boyu ve diğer model ayrıntılarını tarif edin.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         var editBody=new StackPanel();body.Children.Add(editBody);

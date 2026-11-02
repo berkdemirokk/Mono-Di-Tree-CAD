@@ -9961,9 +9961,11 @@ internal static class DesktopVerification
             var aline=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="A kesim elbise");
             var wrap=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
             var shirt=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Gömlek elbise");
-            Check(new[] { straight,aline,wrap,shirt }.All(b=>b.Focusable && KeyboardNavigation.GetIsTabStop(b) && b.Content is StackPanel &&
+            var corset=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Balenli korpus");
+            var sheath=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Minimal kılıf");
+            Check(new[] { straight,aline,wrap,shirt,corset,sheath }.All(b=>b.Focusable && KeyboardNavigation.GetIsTabStop(b) && b.Content is StackPanel &&
                 AutomationProperties.GetHelpText(b).Contains("kalıp oluşturulmaz")),
-                "All four visual model cards remain keyboard accessible and clearly describe their non-pattern scope",checks);
+                "All six visual model cards remain keyboard accessible and clearly describe their non-pattern scope",checks);
             root.Measure(new Size(480,420));root.Arrange(new Rect(0,0,480,420));root.UpdateLayout();
             var modelScroller=window.BodyScrollerForVerification;
             window.ChatInputForVerification.Text="gönderilmemiş";
@@ -9984,10 +9986,14 @@ internal static class DesktopVerification
                 AutomationProperties.GetName(window.StatusViewportForVerification)=="İşlem durumu" && FullyVisible(window.StatusViewportForVerification,root),
                 "Long request feedback is preserved in a bounded visible scroll area",checks);
             typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
-            foreach(var card in new[] { straight,aline,wrap,shirt })
+            var gallery=window.ModelScrollerForVerification;
+            Check(gallery.Focusable && gallery.ScrollableWidth>0 && AutomationProperties.GetHelpText(gallery).Contains("yatay"),
+                "Model gallery exposes a keyboard-accessible horizontal scroll area",checks);
+            foreach(var card in new[] { straight,aline,wrap,shirt,corset,sheath })
             {
                 var y=card.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;
-                modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
+                var x=card.TransformToAncestor(gallery).Transform(new Point(0,0)).X+gallery.HorizontalOffset;
+                gallery.ScrollToHorizontalOffset(Math.Max(0,x-8));modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
                 Check(FullyVisible(card,root),"Every visual model card can be scrolled fully into view at minimum size: "+AutomationProperties.GetName(card),checks);
             }
             var minimumSend=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
@@ -10025,9 +10031,14 @@ internal static class DesktopVerification
             Check(fourResult.Prompt.Replace("\r\n","\n")==alineResult.Prompt.Replace("\r\n","\n")+"\nAnvelop elbise; detaylar: \nGömlek elbise; detaylar: " &&
                 fourResult.Measurements==input.Measurements && fourResult.Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "Wrap and shirt model cards append suggestions without changing measurements or reference",checks);
+            corset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));sheath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var sixResult=window.CaptureForVerification();
+            Check(sixResult.Prompt.Replace("\r\n","\n")==fourResult.Prompt.Replace("\r\n","\n")+"\nBalenli korpus; detaylar: \nMinimal kılıf elbise; detaylar: " &&
+                sixResult.Measurements==input.Measurements && sixResult.Reference!.Data.SequenceEqual(input.Reference!.Data),
+                "New model ideas append text without replacing measurements or reference",checks);
             window.PromptForVerification.Text="Göğüs çevresi 96 cm;"+new string('x',DesignRequestStorage.MaximumTextLength-"Göğüs çevresi 96 cm;".Length-1);
             var longPrompt=window.PromptForVerification.Text;window.ReviewMeasurementsForVerification();var priorReview=window.ReviewForVerification.Text;
-            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));corset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));sheath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.PromptForVerification.Text==longPrompt && window.ReviewForVerification.Text==priorReview &&
                 Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Örnek eklenemedi") && t.Text.Contains("Mevcut metin korundu")) &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && window.MeasurementsForVerification.Text==input.Measurements,
