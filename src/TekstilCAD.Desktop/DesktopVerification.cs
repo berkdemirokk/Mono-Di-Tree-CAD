@@ -10027,6 +10027,30 @@ internal static class DesktopVerification
                     "Measurement entry refuses overflow without losing existing or entered text",checks); }
             finally { fullEntry.Close(); }
             window.LoadForVerification(input);
+            var experimentalEntry=new ExperimentalBodyMeasurementsWindow(window);
+            try
+            {
+                Render(experimentalEntry,Path.ChangeExtension(reportPath,".experimental-body-entry.png"),440,420);
+                Check(experimentalEntry.InputsForVerification.Count==15 && experimentalEntry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable) &&
+                    !experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
+                    "Experimental body intake starts empty and does not modify the request",checks);
+                experimentalEntry.InputsForVerification["üst kol çevresi"].Text="31,5";
+                experimentalEntry.InputsForVerification["omuz eğimi"].Text="90";
+                Check(!experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
+                    "Experimental intake rejects a bad angle atomically",checks);
+                experimentalEntry.InputsForVerification["omuz eğimi"].Text="-12,5";
+                Check(experimentalEntry.TryApply() && window.MeasurementsForVerification.Text.StartsWith(input.Measurements,StringComparison.Ordinal) &&
+                    window.MeasurementsForVerification.Text.Contains("üst kol çevresi 31,5 cm") && window.MeasurementsForVerification.Text.Contains("omuz eğimi -12,5 derece") &&
+                    window.PromptForVerification.Text==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Experimental intake appends explicit notes while preserving prompt and exact reference bytes",checks);
+            }
+            finally { experimentalEntry.Close(); }
+            var staleExperimental=new ExperimentalBodyMeasurementsWindow(window);
+            try { staleExperimental.InputsForVerification["boyun çevresi"].Text="35";window.MeasurementsForVerification.Text+=" değişti";var expected=window.MeasurementsForVerification.Text;
+                Check(!staleExperimental.TryApply() && window.MeasurementsForVerification.Text==expected && staleExperimental.InputsForVerification["boyun çevresi"].Text=="35",
+                    "Experimental intake rejects stale request changes without losing entered text",checks); }
+            finally { staleExperimental.Close(); }
+            window.LoadForVerification(input);
             var overviewScroll=window.BodyScrollerForVerification;var tileY=tiles["göğüs çevresi"].TransformToAncestor(overviewScroll).Transform(new Point(0,0)).Y+overviewScroll.VerticalOffset;
             overviewScroll.ScrollToVerticalOffset(Math.Max(0,tileY-80));Render(window,Path.ChangeExtension(reportPath,".atelier-measurements.png"),900,700);overviewScroll.ScrollToVerticalOffset(0);
             Check(!window.DirtyForVerification && window.CaptureForVerification().Prompt==input.Prompt && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),

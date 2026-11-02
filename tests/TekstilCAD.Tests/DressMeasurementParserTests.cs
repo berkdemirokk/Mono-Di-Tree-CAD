@@ -4,6 +4,19 @@ namespace TekstilCAD.Tests;
 
 public class DressMeasurementParserTests
 {
+    [Theory]
+    [InlineData("ön göğüs 42 cm")]
+    [InlineData("göğüs noktaları arası 20 cm")]
+    [InlineData("üst göğüs çevresi 90 cm")]
+    [InlineData("ön üst göğüs 40 cm")]
+    public void DistinctExperimentalMeasurementsDoNotObscureChestCircumference(string note)
+    {
+        var result=DressMeasurementParser.Review("göğüs çevresi 96 cm",note);
+        Assert.Equal(960m,Assert.Single(result.Measurements).Millimeters);
+        Assert.Contains(note,result.Unrecognized);
+        var ambiguous=DressMeasurementParser.Review("göğüs çevresi 96 cm",note+" veya göğüs çevresi 100 cm");
+        Assert.DoesNotContain(ambiguous.Measurements,x=>x.Label=="göğüs çevresi");
+    }
     [Fact]
     public void TurkishUppercaseMeasurementsRetainOriginalEvidenceAndSplitAtCommas()
     {

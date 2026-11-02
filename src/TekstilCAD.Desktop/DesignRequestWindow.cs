@@ -120,6 +120,9 @@ internal sealed class DesignRequestWindow : Window
         enterMeasurements.Click+=(_,_)=>new AtelierMeasurementEntryWindow(this).ShowDialog();DockPanel.SetDock(enterMeasurements,Dock.Right);measurementHeading.Children.Add(enterMeasurements);
         measurementHeading.Children.Add(new TextBlock { Text="Ölçülerini ekle",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,VerticalAlignment=VerticalAlignment.Center });editBody.Children.Add(measurementHeading);
         editBody.Children.Add(new TextBlock { Text="Yalnız açıkça yazılan değerler gösterilir; beden veya eksik ölçü varsayılmaz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        var experimentalMeasurements=new Button { Content="Deneysel beden ölçüleri…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,8) };
+        AutomationProperties.SetHelpText(experimentalMeasurements,"On beş deneysel ölçü alanını açar. Girilenler isteğin ölçü notlarına eklenebilir; beden önizlemesi veya kalıp oluşturulmaz.");
+        experimentalMeasurements.Click+=(_,_)=>new ExperimentalBodyMeasurementsWindow(this).ShowDialog();editBody.Children.Add(experimentalMeasurements);
         var measurementCards=new WrapPanel();editBody.Children.Add(measurementCards);
         void MeasurementCard(string key,string title)
         {

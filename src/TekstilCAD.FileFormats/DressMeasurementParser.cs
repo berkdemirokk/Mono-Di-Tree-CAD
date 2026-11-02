@@ -15,6 +15,10 @@ public static partial class DressMeasurementParser
     private static readonly Regex SegmentSplit=new(@"[;\r\n]+|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!?]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // These distinct experimental measurements mention "göğüs" but are not
+    // chest circumference. Only an entire, explicit field is excluded from
+    // ambiguity detection; mixed or qualified statements remain conservative.
+    private static readonly Regex OtherChestMeasurement=new(@"^\s*(?:ön göğüs|göğüs noktaları arası|üst göğüs çevresi|ön üst göğüs)\s+[0-9]{1,5}(?:[.,][0-9]{1,8})?\s+cm\s*$",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Invariant regex case folding does not match Turkish capital dotted İ. Keep
     // this transformation length-preserving so match offsets still index the
     // original text, which is retained as evidence.
@@ -39,6 +43,7 @@ public static partial class DressMeasurementParser
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
             var search=FoldCase(segment);
+            if(OtherChestMeasurement.IsMatch(search)) { other.Add(segment);continue; }
             var labels=LabelPattern.Matches(search);var match=Exact.Match(search);
             if(!match.Success)
             {
