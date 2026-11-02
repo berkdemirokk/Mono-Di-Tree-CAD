@@ -9532,6 +9532,27 @@ internal static class DesktopVerification
                     finally { trace.CancelPathSuggestion();trace.BeforeTopologyReviewForVerification=null; }
                 }
                 canvas.UndoPoint();Check(canvas.Points.SequenceEqual(beforeZoom),"Manual trace review does not alter existing reference or trace points",checks);
+                canvas.ClearPoints();foreach(var p in new[] { new Point(1,1),new Point(10,1),new Point(10,10),new Point(20,10),new Point(15,10) })canvas.TryAddPixelPoint(p);
+                var reversalCheck=trace.StartTraceTopologyReviewAsync();PumpUntil(()=>reversalCheck.IsCompleted);reversalCheck.GetAwaiter().GetResult();
+                Check(canvas.HasTopologyWarning && canvas.TopologyWarningEdgesForVerification is null && trace.StatusForVerification.Text.Contains("piksel geometrisi uyarısı"),
+                    "A backtracking trace retains a generic geometry warning when no edge pair is available",checks);
+                Descendants<Button>(root).Single(b=>Equals(b.Content,"Yakınlaştır")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(canvas.HasTopologyWarning && trace.StatusForVerification.Text.Contains("piksel geometrisi uyarısı"),
+                    "Zooming does not erase a generic photo geometry warning",checks);
+                Check(canvas.TryMoveTracePoint(4,new Point(20,15)) && !canvas.HasTopologyWarning && !trace.StatusForVerification.Text.Contains("piksel geometrisi uyarısı"),
+                    "Editing the photo trace invalidates the old generic warning",checks);
+                canvas.ClearPoints();foreach(var p in new[] { new Point(1,1),new Point(10,1),new Point(10,10),new Point(15,10) })canvas.TryAddPixelPoint(p);
+                trace.ComputePathForVerification=(_,start,end,_)=>new[] { start,new Point(20,10),end };
+                var reversalProposal=trace.StartPathSuggestionAsync();PumpUntil(()=>reversalProposal.IsCompleted);reversalProposal.GetAwaiter().GetResult();
+                Check(canvas.PathSuggestion is not null && canvas.HasTopologyWarning && canvas.TopologyWarningEdgesForVerification is null,
+                    "A backtracking photo proposal receives a generic warning",checks);
+                Descendants<Button>(root).Single(b=>Equals(b.Content,"Yakınlaştır")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(trace.StatusForVerification.Text.Contains("Yol önerisi: piksel geometrisi uyarısı"),
+                    "Zooming retains the warning on the unaccepted proposal",checks);
+                Descendants<Button>(root).Single(b=>Equals(b.Content,"Yolu uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(canvas.PathSuggestion is null && canvas.HasTopologyWarning && trace.StatusForVerification.Text.Contains("Çizgi: piksel geometrisi uyarısı"),
+                    "Applying a proposal retains its generic warning on the resulting trace",checks);
+                Check(canvas.UndoPath() && !canvas.HasTopologyWarning,"Undo clears the no-longer-applicable generic warning",checks);
                 canvas.ClearPoints();foreach(var p in new[] { new Point(10,10),new Point(20,10),new Point(10,10),new Point(20,10),new Point(10,20),new Point(20,20) })canvas.TryAddPixelPoint(p);
                 trace.ReviewClosureForVerification.IsChecked=true;
                 trace.ComputePathForVerification=(_,start,end,_)=>start==new Point(10,10) && end==new Point(20,10)

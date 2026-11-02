@@ -27,6 +27,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private int pathOriginalTotalCount;
     private Point? pathClosingTarget;
     private Point[]? topologyWarningEdges;
+    private bool topologyWarning;
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
 
@@ -55,7 +56,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
                 image=snapshot;
             }
             sourceWidth=image?.PixelWidth ?? 0;sourceHeight=image?.PixelHeight ?? 0;
-            points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
+            points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;cursor=image is null ? default : new Point((image.PixelWidth-1)/2d,(image.PixelHeight-1)/2d);
             zoom=1;zoomCenter=new Point(0.5,0.5);
             InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
         }
@@ -76,7 +77,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal void SetReferencePointCount(int count)
     {
         if(count is not (2 or 4) || points.Count!=0)throw new InvalidOperationException("Referans türü yalnız noktalar temizken değiştirilebilir.");
-        ReferencePointCount=count;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;InvalidateVisual();
+        ReferencePointCount=count;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();
     }
 
     // View-only state: never change selected pixel coordinates or draft revision.
@@ -96,17 +97,17 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(zoom>1)zoomCenter=new Point((pixel.X+0.5)/image.PixelWidth,(pixel.Y+0.5)/image.PixelHeight);
         InvalidateVisual();return true;
     }
-    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;InvalidateVisual(); }
+    internal void ClearPathSuggestion() { pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;InvalidateVisual(); }
     internal bool SuggestLastEdge()
     {
-        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;
+        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;
         if(image is not null && points.Count>ReferencePointCount && PhotoEdgeSuggestion.TryFind(image,points[^1],out var found))edgeSuggestion=found;
         InvalidateVisual();return edgeSuggestion.HasValue;
     }
     internal bool ApplyEdgeSuggestion()
     {
         if(edgeSuggestion is not Point proposed || points.Count<=ReferencePointCount || proposed==points[^1] || (points.Count>ReferencePointCount+1 && proposed==points[^2]))return false;
-        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points[^1]=proposed;cursor=proposed;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool SetPathSuggestion(Point start,Point end,IReadOnlyList<Point> candidate)
@@ -117,7 +118,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
 
     private bool SetPathSegments(int startIndex,IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
     {
-        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;edgeSuggestion=null;InvalidateVisual();
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;edgeSuggestion=null;InvalidateVisual();
         if(image is null || startIndex<ReferencePointCount || anchors.Count<(includeClosing ? 3 : 2) || anchors.Count>17 || candidates.Count!=anchors.Count-1+(includeClosing ? 1 : 0) ||
            points.Count!=startIndex+anchors.Count || !points.Skip(startIndex).SequenceEqual(anchors))return false;
         Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
@@ -141,7 +142,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     }
     internal bool SetReplacementPath(int first,int last,IReadOnlyList<Point> candidate)
     {
-        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;edgeSuggestion=null;InvalidateVisual();
+        pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;edgeSuggestion=null;InvalidateVisual();
         if(image is null || candidate is null || first<ReferencePointCount || first>=points.Count || last<=first || last>=points.Count ||
             candidate.Count<2 || candidate.Count>4096 || points[first]==points[last])return false;
         Point Rounded(Point p)=>new(Math.Round(p.X,MidpointRounding.AwayFromZero),Math.Round(p.Y,MidpointRounding.AwayFromZero));
@@ -174,21 +175,22 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         return snapshot.Skip(ReferencePointCount).ToArray();
     }
     internal Point[]? TopologyWarningEdgesForVerification=>topologyWarningEdges?.ToArray();
-    internal bool HasTopologyWarning=>topologyWarningEdges is not null;
-    internal bool SetTopologyWarning(Point[] expected,Point[]? edges)
+    internal bool HasTopologyWarning=>topologyWarning;
+    internal bool HasTopologyWarningEdges=>topologyWarningEdges is not null;
+    internal bool SetTopologyWarning(Point[] expected,Point[]? edges,bool invalid)
     {
-        var current=ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(expected) || (edges is not null && edges.Length!=4))return false;
-        topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
+        var current=ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(expected) || (edges is not null && (edges.Length!=4 || !invalid)))return false;
+        topologyWarning=invalid;topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
     }
-    internal bool SetCurrentTopologyWarning(Point[] expected,Point[]? edges)
+    internal bool SetCurrentTopologyWarning(Point[] expected,Point[]? edges,bool invalid)
     {
-        if(pathSuggestion is not null || !points.Skip(ReferencePointCount).SequenceEqual(expected) || (edges is not null && edges.Length!=4))return false;
-        topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
+        if(pathSuggestion is not null || !points.Skip(ReferencePointCount).SequenceEqual(expected) || (edges is not null && (edges.Length!=4 || !invalid)))return false;
+        topologyWarning=invalid;topologyWarningEdges=edges?.ToArray();InvalidateVisual();return true;
     }
     internal bool UndoPath()
     {
         if(pathUndo is null)return false;
-        points.Clear();points.AddRange(pathUndo);pathUndo=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;edgeSuggestion=null;cursor=points[^1];
+        points.Clear();points.AddRange(pathUndo);pathUndo=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;edgeSuggestion=null;cursor=points[^1];
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
@@ -197,7 +199,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || points.Count>=MaximumPoints || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
             point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 ||
             (points.Count>0 && points.Count!=ReferencePointCount && points[^1]==point))return false;
-        points.Add(point);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.Add(point);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;cursor=point;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool TryMoveTracePoint(int index,Point point)
@@ -205,7 +207,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || index<ReferencePointCount || index>=points.Count || !double.IsFinite(point.X) || !double.IsFinite(point.Y) ||
             point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 || point==points[index] ||
             (index>ReferencePointCount && point==points[index-1]) || (index+1<points.Count && point==points[index+1]))return false;
-        pathUndo=points.ToList();points[index]=point;cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;
+        pathUndo=points.ToList();points[index]=point;cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
@@ -214,32 +216,32 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         if(image is null || points.Count>=MaximumPoints || index<ReferencePointCount || index>=points.Count ||
             !double.IsFinite(point.X) || !double.IsFinite(point.Y) || point.X<0 || point.Y<0 || point.X>image.PixelWidth-1 || point.Y>image.PixelHeight-1 ||
             point==points[index] || (index+1<points.Count && point==points[index+1]))return false;
-        pathUndo=points.ToList();points.Insert(index+1,point);cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;
+        pathUndo=points.ToList();points.Insert(index+1,point);cursor=point;edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal bool TryRemoveTracePoint(int index)
     {
         if(index<ReferencePointCount || index>=points.Count || points.Count-ReferencePointCount<=2 ||
             (index>ReferencePointCount && index+1<points.Count && points[index-1]==points[index+1]))return false;
-        pathUndo=points.ToList();points.RemoveAt(index);cursor=points[Math.Min(index,points.Count-1)];edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;
+        pathUndo=points.ToList();points.RemoveAt(index);cursor=points[Math.Min(index,points.Count-1)];edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;
         InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal bool TryFlattenTraceRange(int first,int last)
     {
         if(first<ReferencePointCount || first>=points.Count || last<0 || last>=points.Count || last<=first+1 || points[first]==points[last])return false;
         pathUndo=points.ToList();points.RemoveRange(first+1,last-first-1);cursor=points[first+1];
-        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
 
     internal bool UndoPoint()
     {
         if(points.Count==0)return false;
-        points.RemoveAt(points.Count-1);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
+        points.RemoveAt(points.Count-1);edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);return true;
     }
     internal void ClearPoints()
     {
         if(points.Count==0)return;
-        points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
+        points.Clear();edgeSuggestion=null;pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;pathUndo=null;InvalidateVisual();PointsChanged?.Invoke(this,EventArgs.Empty);
     }
 
     // Rectangle is the actual uniform-fit image, excluding letterbox regions.

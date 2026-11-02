@@ -162,7 +162,7 @@ internal sealed class PhotoTraceWindow : Window
         var result=await AnalyzePixelTopologyAsync(snapshot,closure,token);
         token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
         var current=CanvasForVerification.ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(snapshot))return;
-        CanvasForVerification.SetTopologyWarning(snapshot,result.Edges);
+        CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);
         StatusForVerification.Text+=result.Valid
             ? " Piksel geometrisi kontrolünde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
             : result.Edges is not null ? " Piksel geometrisi uyarısı: turuncu kenarlar kesişiyor veya temas ediyor; inceleyin."
@@ -183,7 +183,7 @@ internal sealed class PhotoTraceWindow : Window
             cts.Token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
             var currentProposal=CanvasForVerification.ProposedTraceSnapshot();
             if((currentProposal is not null)!=usesProposal || !(currentProposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray()).SequenceEqual(snapshot))return;
-            if(usesProposal)CanvasForVerification.SetTopologyWarning(snapshot,result.Edges);else CanvasForVerification.SetCurrentTopologyWarning(snapshot,result.Edges);
+            if(usesProposal)CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);else CanvasForVerification.SetCurrentTopologyWarning(snapshot,result.Edges,!result.Valid);
             var prefix=usesProposal ? "Yol önerisi" : "Çizgi";
             StatusForVerification.Text=result.Valid ? $"{prefix}: piksel geometrisinde sorun bulunmadı; bu ölçü veya üretim onayı değildir."
                 : result.Edges is not null ? $"{prefix}: piksel geometrisi uyarısı; turuncu kenarlar kesişiyor veya temas ediyor."
@@ -267,8 +267,14 @@ internal sealed class PhotoTraceWindow : Window
         var n=CanvasForVerification.Points.Count;
         var references=CanvasForVerification.ReferencePointCount;
         StatusForVerification.Text=$"Önizleme: {image.PixelWidth} × {image.PixelHeight} piksel; yakınlaştırma {MeasurementInput.Format(CanvasForVerification.Zoom)}×. "+(n<references ? $"{(references==4 ? "Düzlem köşesi" : "Referans ucu")} seçin: {n}/{references}." : $"Referans hazır; çizgi noktası: {n-references}. İlk referans CAD'de 0,0 olur; Y aşağı artar.");
-        if(CanvasForVerification.HasTopologyWarning && CanvasForVerification.PathSuggestion is null)
-            StatusForVerification.Text+=" Turuncu kenarlar kesişiyor veya temas ediyor; düzeltin."+(ReviewClosureForVerification.IsChecked==true ? " Kapanış kenarı önizlemedir; taslak açık kalır." : "");
+        if(CanvasForVerification.HasTopologyWarning)
+        {
+            var target=CanvasForVerification.PathSuggestion is null ? "Çizgi" : "Yol önerisi";
+            StatusForVerification.Text+=CanvasForVerification.HasTopologyWarningEdges
+                ? $" {target}: Turuncu kenarlar kesişiyor veya temas ediyor; düzeltin."
+                : $" {target}: piksel geometrisi uyarısı; çakışma, sıfır kenar veya kapanış sorunu olabilir.";
+            if(ReviewClosureForVerification.IsChecked==true)StatusForVerification.Text+=" Kapanış kenarı önizlemedir; taslak açık kalır.";
+        }
     }
     internal void TryApply()
     {
