@@ -10158,8 +10158,23 @@ internal static class DesktopVerification
             Check(tiles["göğüs çevresi"].Text=="96 cm" && tiles["bel çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
                 "Opening a request updates measurement cards without inferring an ambiguous length",checks);
             var requestRoot=(FrameworkElement)window.Content;
+            window.ChatInputForVerification.Text="henüz gönderilmedi";
+            var chatShortcut=Descendants<Button>(requestRoot).Single(b=>Equals(b.Content,"Ölçülerle konuş"));
+            window.BodyScrollerForVerification.ScrollToTop();requestRoot.UpdateLayout();
+            Check(FullyVisible(chatShortcut,requestRoot) && chatShortcut.Focusable && KeyboardNavigation.GetIsTabStop(chatShortcut),
+                "Conversation shortcut is visible and keyboard reachable at minimum size",checks);
+            chatShortcut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));requestRoot.UpdateLayout();
+            Check(window.ChatInputForVerification.Text=="henüz gönderilmedi" && window.PromptForVerification.Text==input.Prompt &&
+                window.MeasurementsForVerification.Text==input.Measurements && window.BodyScrollerForVerification.VerticalOffset>0 &&
+                AutomationProperties.GetHelpText(chatShortcut).Contains("koruyarak"),
+                "Measurement conversation shortcut navigates without altering a pending message or request",checks);
+            Render(window,Path.ChangeExtension(reportPath,".atelier-chat-shortcut.png"),900,700);
+            window.ChatInputForVerification.Clear();window.BodyScrollerForVerification.ScrollToTop();
             var detailChip=Descendants<Button>(requestRoot).Single(b=>AutomationProperties.GetName(b)=="Tarife ekle: Midi boy");
             detailChip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var afterChip=window.PromptForVerification.Text;detailChip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text==afterChip && window.StatusForVerification.Text.Contains("zaten var"),
+                "Repeated quick-add keeps the original note once",checks);
             Check(window.PromptForVerification.Text.Contains("Kadın elbise, uzun kollu") && window.PromptForVerification.Text.Contains("Midi boy") &&
                 window.MeasurementsForVerification.Text==input.Measurements && window.MeasurementTilesForVerification["göğüs çevresi"].Text=="96 cm",
                 "Design note chip appends to existing text without changing measurements",checks);
@@ -10735,7 +10750,11 @@ internal static class DesktopVerification
                     "Design request presents editable description and measurements before optional conversation at "+size,checks);
             }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
+            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==95),
+                "Compact atelier keeps every model illustration within the short viewport",checks);
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
+            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==150),
+                "Wide atelier enlarges model illustrations toward the reference design",checks);
             var root=(FrameworkElement)window.Content;root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             var straight=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Düz elbise");
             var aline=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="A kesim elbise");
@@ -10787,40 +10806,64 @@ internal static class DesktopVerification
             Check(straight.Focusable && aline.Focusable && AutomationProperties.GetHelpText(straight).Contains("mevcut metin korunur") &&
                 AutomationProperties.GetHelpText(aline).Contains("kalıp oluşturulmaz"),"Dress model choices expose keyboard and honest help text",checks);
             straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(ReferenceEquals(straight.BorderBrush,DesignRequestWindow.Accent) && ((StackPanel)straight.Content).Children.OfType<TextBlock>().Any(t=>t.Text=="Son eklenen") &&
-                AutomationProperties.GetHelpText(straight).Contains("Son eklenen") && !ReferenceEquals(aline.BorderBrush,DesignRequestWindow.Accent),
-                "The last-added model card has a visible and accessible state",checks);
+            Check(ReferenceEquals(straight.BorderBrush,DesignRequestWindow.Accent) && ((StackPanel)straight.Content).Children.OfType<TextBlock>().Any(t=>t.Text=="Seçili") &&
+                AutomationProperties.GetItemStatus(straight)=="Seçili" && !ReferenceEquals(aline.BorderBrush,DesignRequestWindow.Accent),
+                "Selected model card has a visible and accessible state",checks);
             modelScroller.ScrollToVerticalOffset(0);root.UpdateLayout();
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-selected.png"),900,700);
             root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             var straightResult=window.CaptureForVerification();
             Check(straightResult.Prompt.Replace("\r\n","\n")==input.Prompt+"\nDüz elbise; detaylar: " && straightResult.Measurements==input.Measurements &&
                 straightResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
-                "Straight model appends while preserving prompt, measurements and image and clears stale review",checks);
+                "Selecting a model preserves the prior prompt, measurements and image",checks);
+            straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().Prompt==straightResult.Prompt,"Selecting the same model twice does not duplicate text",checks);
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm"),"Review can be recalculated after model choice",checks);
             aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(ReferenceEquals(aline.BorderBrush,DesignRequestWindow.Accent) && !ReferenceEquals(straight.BorderBrush,DesignRequestWindow.Accent),
-                "Adding another model moves the last-added indication without deleting the request",checks);
             var alineResult=window.CaptureForVerification();
-            Check(alineResult.Prompt.Replace("\r\n","\n")==straightResult.Prompt.Replace("\r\n","\n")+"\nA kesim elbise; detaylar: " && alineResult.Measurements==input.Measurements &&
+            Check(ReferenceEquals(aline.BorderBrush,DesignRequestWindow.Accent) && !ReferenceEquals(straight.BorderBrush,DesignRequestWindow.Accent) &&
+                alineResult.Prompt.Replace("\r\n","\n")==input.Prompt+"\nA kesim elbise; detaylar: " && alineResult.Measurements==input.Measurements &&
                 alineResult.Reference!.Data.SequenceEqual(input.Reference!.Data) && window.ReviewForVerification.Text.Length==0,
-                "A-line model appends without replacing existing data and clears stale review",checks);
-            wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            var fourResult=window.CaptureForVerification();
-            Check(fourResult.Prompt.Replace("\r\n","\n")==alineResult.Prompt.Replace("\r\n","\n")+"\nAnvelop elbise; detaylar: \nGömlek elbise; detaylar: " &&
-                fourResult.Measurements==input.Measurements && fourResult.Reference!.Data.SequenceEqual(input.Reference!.Data),
-                "Wrap and shirt model cards append suggestions without changing measurements or reference",checks);
-            corset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));sheath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                "Changing model replaces only the tracked model and preserves other request data",checks);
+            window.PromptForVerification.AppendText("kullanıcı detayı");
+            window.PromptForVerification.Text="Ön not · "+window.PromptForVerification.Text;
+            wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text.Replace("\r\n","\n")=="Ön not · "+input.Prompt+"\nAnvelop elbise; detaylar: kullanıcı detayı" &&
+                window.MeasurementsForVerification.Text==input.Measurements,
+                "Model replacement preserves user edits before and after the selected model",checks);
+            shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));corset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));sheath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var sixResult=window.CaptureForVerification();
-            Check(sixResult.Prompt.Replace("\r\n","\n")==fourResult.Prompt.Replace("\r\n","\n")+"\nBalenli korpus; detaylar: \nMinimal kılıf elbise; detaylar: " &&
+            Check(sixResult.Prompt.Replace("\r\n","\n")=="Ön not · "+input.Prompt+"\nMinimal kılıf elbise; detaylar: kullanıcı detayı" &&
                 sixResult.Measurements==input.Measurements && sixResult.Reference!.Data.SequenceEqual(input.Reference!.Data),
-                "New model ideas append text without replacing measurements or reference",checks);
+                "Successive model selections retain one tracked model and preserve request data",checks);
+            var reloaded=DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(sixResult));
+            window.LoadForVerification(reloaded);var loadedText=window.PromptForVerification.Text;var warnings=new List<string>();
+            window.ConfirmModelChangeForVerification=message=> { warnings.Add(message);return false; };
+            aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text==loadedText && warnings.Single().Contains("değiştirilecek") &&
+                AutomationProperties.GetItemStatus(sheath)=="Tarifte bulundu",
+                "Reopened model candidate requires confirmation before replacing saved text",checks);
+            window.ConfirmModelChangeForVerification=message=> { warnings.Add(message);return true; };
+            aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!window.PromptForVerification.Text.Contains("Minimal kılıf elbise; detaylar:") &&
+                window.PromptForVerification.Text.Contains("A kesim elbise; detaylar: kullanıcı detayı") &&
+                window.MeasurementsForVerification.Text==input.Measurements,
+                "Confirmed model change after storage roundtrip preserves user text and replaces only the candidate",checks);
+            window.PromptForVerification.Text=window.PromptForVerification.Text.Replace("A kesim elbise; detaylar:","A kesim özel model;");
+            var editedModel=window.PromptForVerification.Text;window.ConfirmModelChangeForVerification=message=> { warnings.Add(message);return false; };
+            wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text==editedModel && warnings[^1].Contains("çelişebilir"),
+                "Editing inside a tracked model makes the next selection explicit and preserves the edited text when declined",checks);
+            window.ConfirmModelChangeForVerification=message=>true;wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text.Contains("A kesim özel model;") && window.PromptForVerification.Text.Contains("Anvelop elbise; detaylar:"),
+                "Explicitly accepting an ambiguous model selection retains the user's edited text",checks);
+            window.ConfirmModelChangeForVerification=null;window.LoadForVerification(input);
             window.PromptForVerification.Text="Göğüs çevresi 96 cm;"+new string('x',DesignRequestStorage.MaximumTextLength-"Göğüs çevresi 96 cm;".Length-1);
             var longPrompt=window.PromptForVerification.Text;window.ReviewMeasurementsForVerification();var priorReview=window.ReviewForVerification.Text;
             straight.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));aline.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));wrap.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));shirt.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));corset.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));sheath.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.PromptForVerification.Text==longPrompt && window.ReviewForVerification.Text==priorReview &&
-                Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Örnek eklenemedi") && t.Text.Contains("Mevcut metin korundu")) &&
+                Descendants<TextBlock>(root).Any(t=>t.Text.Contains("Model seçilemedi") && t.Text.Contains("Mevcut metin korundu")) &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) && window.MeasurementsForVerification.Text==input.Measurements,
                 "All model cards refuse over-limit additions without changing text, image, measurements or review",checks);
             window.LoadForVerification(new DesignRequest("Düz elbise", "",input.Reference));

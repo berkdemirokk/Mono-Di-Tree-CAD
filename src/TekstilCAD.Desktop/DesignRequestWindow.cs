@@ -32,8 +32,11 @@ internal sealed class DesignRequestWindow : Window
     private bool referenceLoadRunning,closed,referenceDecoded;
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     internal Func<byte[],ReferencePhotoPreview>? ExistingReferenceDecoderForVerification { get; set; }
-    private bool dirty,loading,preservingLastModel,hasSavedRequest;
-    private readonly List<(Button Button,TextBlock Caption)> modelCards=[];
+    private bool dirty,loading,changingModel,hasSavedRequest;
+    private string? selectedModelText;private string modelSnapshot="";private int selectedModelStart;
+    private bool modelAmbiguous,selectedModelFromLoaded;
+    internal Func<string,bool>? ConfirmModelChangeForVerification { get; set; }
+    private readonly List<(Button Button,TextBlock Caption,string Label,string Template)> modelCards=[];
     private readonly Dictionary<string,TextBlock> measurementTiles=new(StringComparer.Ordinal);
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
@@ -65,41 +68,67 @@ internal sealed class DesignRequestWindow : Window
         statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);
         var header=new StackPanel { Margin=new Thickness(0,0,0,10) };
         header.Children.Add(new TextBlock { Text="MONO Dİ TREE CAD",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=18,FontWeight=FontWeights.SemiBold });
-        header.Children.Add(new TextBlock { Text="Yeni Kalıp Oluştur",Foreground=Muted,FontSize=11 });DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
+        header.Children.Add(new TextBlock { Text="Yeni Tasarım İsteği",Foreground=Muted,FontSize=11 });DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
         body.Children.Add(new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ATÖLYE PROJESİ · YENİ ÇALIŞMA",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } });
         body.Children.Add(new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
         body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
-        var drawingNotes=new Button { Content="Kaydedilmiş notlarla çizime geç",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,8) };
+        var shortcuts=new WrapPanel { Margin=new Thickness(0,0,0,4) };body.Children.Add(shortcuts);
+        var drawingNotes=new Button { Content="Kaydedilmiş notlarla çizime geç",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };
         AutomationProperties.SetHelpText(drawingNotes,"Kaydedilmiş isteğin salt okunur notlarını ana çizim penceresiyle birlikte açar. Kalıp oluşturmaz.");
-        drawingNotes.Click+=(_,_)=>OpenDrawingNotes();body.Children.Add(drawingNotes);
+        drawingNotes.Click+=(_,_)=>OpenDrawingNotes();shortcuts.Children.Add(drawingNotes);
+        var chatShortcut=new Button { Content="Ölçülerle konuş",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,0,4) };
+        AutomationProperties.SetHelpText(chatShortcut,"Mevcut mesajı koruyarak ölçü yazışma alanına gider; otomatik kalıp oluşturmaz.");
+        chatShortcut.Click+=(_,_)=> { chatInput.BringIntoView();chatInput.Focus(); };shortcuts.Children.Add(chatShortcut);
         body.Children.Add(new TextBlock { Text="01  ·  TEMEL SİLUET FİKİRLERİ",FontWeight=FontWeights.SemiBold,Foreground=Ink,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
-        body.Children.Add(new TextBlock { Text="Kartlar tarife fikir ekler; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        body.Children.Add(new TextBlock { Text="Kartlar bir model fikri seçer; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         var models=new StackPanel { Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,6) };modelScroller.Content=models;body.Children.Add(modelScroller);
         AutomationProperties.SetName(modelScroller,"Model fikirleri galerisi");AutomationProperties.SetHelpText(modelScroller,"Diğer model fikirlerini görmek için yatay kaydırın veya kartlar arasında klavyeyle ilerleyin.");
+        var modelImages=new List<Viewbox>();
+        root.SizeChanged+=(_,_)=> { var height=root.ActualHeight>520 ? 150d : 95d;foreach(var item in modelImages)item.Height=height; };
         void ModelChoice(string label,string description,string template,string silhouette,string? detail,string? code=null)
         {
             var art=new Canvas { Width=code is null ? 80 : 120,Height=code is null ? 80 : 160,IsHitTestVisible=false };
             var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=Brushes.Transparent,Stroke=Accent,StrokeThickness=1.2 };
             art.Children.Add(dress);
             if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=Accent,StrokeThickness=1.2,StrokeLineJoin=PenLineJoin.Round });
-            var image=new Viewbox { Width=112,Height=95,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };
+            var image=new Viewbox { Width=112,Height=95,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };modelImages.Add(image);
             var content=new StackPanel { Width=166,IsHitTestVisible=false };
             content.Children.Add(new Border { Background=Raised,CornerRadius=new CornerRadius(6),Child=image,Margin=new Thickness(0,0,0,5) });
             if(code is not null)content.Children.Add(new TextBlock { Text="KOD: "+code,FontSize=10,Foreground=Muted,Margin=new Thickness(0,0,0,3) });
             content.Children.Add(new TextBlock { Text=label,TextAlignment=TextAlignment.Center,FontFamily=new FontFamily("Georgia"),FontSize=14,Foreground=Accent,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap,MinHeight=34 });
             content.Children.Add(new TextBlock { Text=description,TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted,TextWrapping=TextWrapping.Wrap,MinHeight=32 });
-            var caption=new TextBlock { Text="Tarife ekle",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted };content.Children.Add(caption);
-            var button=new Button { Content=content,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Tarife model fikri ekle; hazır kalıp değildir." };
+            var caption=new TextBlock { Text="Seç",TextAlignment=TextAlignment.Center,FontSize=11,Foreground=Muted };content.Children.Add(caption);
+            var button=new Button { Content=content,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(2),Margin=new Thickness(0,0,8,8),Padding=new Thickness(6),HorizontalContentAlignment=HorizontalAlignment.Center,ToolTip="Model fikrini seç; hazır kalıp değildir." };
             AutomationProperties.SetName(button,label);
-            AutomationProperties.SetHelpText(button,"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
+            AutomationProperties.SetHelpText(button,"Model fikrini seçer veya değiştirir; mevcut metin korunur ve kalıp oluşturulmaz.");
             button.Click+=(_,_)=>
             {
+                if(selectedModelText==template) { SetStatus("Bu model zaten seçili; mevcut tarif korundu.");return; }
+                if(modelAmbiguous || selectedModelFromLoaded)
+                {
+                    var warning=modelAmbiguous ? "Önceki model metni elle değiştirilmiş veya belirsiz. Yeni model fikri mevcut metne eklenir; önceki metin korunur ve çelişebilir. Devam edilsin mi?" :
+                        "Kaydedilmiş tarifte bulunan model metni yeni seçimle değiştirilecek; diğer metinler korunacak. Devam edilsin mi?";
+                    var before=prompt.Text;var previousModel=selectedModelText;var previousStart=selectedModelStart;var wasAmbiguous=modelAmbiguous;var wasLoaded=selectedModelFromLoaded;
+                    var confirmed=ConfirmModelChangeForVerification?.Invoke(warning) ?? (MessageBox.Show(this,warning,"Model fikri",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes);
+                    if(!confirmed || prompt.Text!=before || previousModel!=selectedModelText || previousStart!=selectedModelStart || wasAmbiguous!=modelAmbiguous || wasLoaded!=selectedModelFromLoaded)
+                    { SetStatus("Model seçimi uygulanmadı; mevcut tarif korundu.");return; }
+                }
+                var replacing=selectedModelText is not null;
                 var addition=(prompt.Text.Length==0 ? "" : "\n")+template;
-                if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Örnek eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; }
-                prompt.AppendText(addition);SetLastModel(button);prompt.Focus();SetStatus("Model açıklaması eklendi. Özellikleri düzenleyebilir, bilinen ölçüleri girebilirsiniz; kalıp oluşturulmadı.");
+                var newLength=replacing ? (long)prompt.Text.Length-selectedModelText!.Length+template.Length : (long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n');
+                if(newLength>prompt.MaxLength) { SetStatus("Model seçilemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; }
+                changingModel=true;
+                try
+                {
+                    if(replacing) { prompt.Select(selectedModelStart,selectedModelText!.Length);prompt.SelectedText=template; }
+                    else { prompt.AppendText(addition);selectedModelStart=prompt.Text.Length-template.Length; }
+                    selectedModelText=template;modelSnapshot=prompt.Text;modelAmbiguous=false;selectedModelFromLoaded=false;SetLastModel(button);
+                }
+                finally { changingModel=false; }
+                prompt.CaretIndex=selectedModelStart+template.Length;prompt.Focus();SetStatus("Model fikri seçildi. Tarifi ve ölçüleri düzenleyebilirsiniz; kalıp oluşturulmadı.");
             };
-            modelCards.Add((button,caption));models.Children.Add(button);
+            modelCards.Add((button,caption,label,template));models.Children.Add(button);
         }
         ModelChoice("Anvelop elbise","Akıcı drape · Kemerli bel","Anvelop elbise; detaylar: ","M48,20 C54,28 66,28 72,20 M48,20 L32,26 26,40 34,44 38,32 40,58 32,82 20,148 100,148 88,82 80,58 82,32 86,44 94,40 88,26 72,20","M48,20 Q56,46 76,68 M72,20 Q60,48 42,70 M38,72 Q60,76 82,72 M40,73 C42,98 32,125 24,146 M78,73 C72,100 84,130 96,146 M60,74 C58,95 62,124 60,148","K-01");
         ModelChoice("A kesim elbise","Geniş etek · Doğal döküm","A kesim elbise; detaylar: ","M46,22 Q60,28 74,22 M46,22 L34,26 30,38 38,41 41,32 44,56 42,70 14,148 106,148 78,70 76,56 79,32 82,41 90,38 86,26 74,22","M48,56 L48,70 M72,56 L72,70 M42,70 Q60,74 78,70 M32,95 Q60,102 88,95 M60,28 L60,148","A-04");
@@ -129,7 +158,7 @@ internal sealed class DesignRequestWindow : Window
         {
             var chip=new Button { Content=detail,Padding=new Thickness(9,4,9,4),Margin=new Thickness(0,0,6,6),Background=Raised,Foreground=Accent,BorderBrush=BorderColor };
             AutomationProperties.SetName(chip,"Tarife ekle: "+detail);AutomationProperties.SetHelpText(chip,"Mevcut açıklamaya bu tasarım notunu ekler; kalıp oluşturmaz.");
-            chip.Click+=(_,_)=> { var addition=(prompt.Text.Length==0 ? "" : "\n")+detail; if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Not eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; } prompt.AppendText(addition);prompt.Focus();SetStatus("Tasarım notu eklendi; kalıp oluşturulmadı."); };details.Children.Add(chip);
+            chip.Click+=(_,_)=> { if(prompt.Text.Split(['\r','\n'],StringSplitOptions.RemoveEmptyEntries).Any(line=>string.Equals(line.Trim(),detail,StringComparison.OrdinalIgnoreCase))) { SetStatus("Bu tasarım notu zaten var; mevcut metin korundu.");return; } var addition=(prompt.Text.Length==0 ? "" : "\n")+detail; if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Not eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; } prompt.AppendText(addition);prompt.Focus();SetStatus("Tasarım notu eklendi; kalıp oluşturulmadı."); };details.Children.Add(chip);
         }
         editBody.Children.Add(new Border { Child=notesCard,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(10),Padding=new Thickness(14),Margin=new Thickness(0,8,0,0) });
         var measurementHeading=new DockPanel { Margin=new Thickness(0,14,0,4) };
@@ -167,7 +196,7 @@ internal sealed class DesignRequestWindow : Window
         verifyAndSave.Click+=async (_,_)=>await ValidateAndSaveAsync();refActions.Children.Add(verifyAndSave);
         body.Children.Add(new TextBlock { Text="PNG/JPEG görsel seçilirken çizim için çözümlenebilirliği kontrol edilir; en fazla 8 MiB, 12.000 piksel ve 24 milyon piksel desteklenir. Bu sınırları aşan görsel otomatik küçültülmez. Tüm kaynak baytları ve metadata isteğe eklenir; görsel içeriği, ölçüler ve üretime uygunluk doğrulanmaz. Eski isteklerdeki görseller açılmadan doğrulanmamış olabilir.",TextWrapping=TextWrapping.Wrap,Foreground=Muted,Margin=new Thickness(0,10,0,0) });
 
-        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!preservingLastModel)SetLastModel(null);if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
+        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!changingModel)UpdateModelTracking();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
     }
     private void SetStatus(string message)
     {
@@ -204,16 +233,45 @@ internal sealed class DesignRequestWindow : Window
         // Opening after the modal dialog unwinds lets the owner receive input.
         _=owner.Dispatcher.BeginInvoke(new Action(()=> { if(owner.IsLoaded)notes.Show(); }));
     }
+    private void ClearModelTracking() { selectedModelText=null;modelSnapshot="";selectedModelStart=0;modelAmbiguous=false;selectedModelFromLoaded=false;SetLastModel(null); }
+    private void UpdateModelTracking()
+    {
+        if(selectedModelText is null)return;
+        var current=prompt.Text;var before=modelSnapshot;var prefix=0;
+        while(prefix<before.Length && prefix<current.Length && before[prefix]==current[prefix])prefix++;
+        var suffix=0;while(suffix<before.Length-prefix && suffix<current.Length-prefix && before[before.Length-1-suffix]==current[current.Length-1-suffix])suffix++;
+        var oldEnd=before.Length-suffix;
+        if(oldEnd<=selectedModelStart)selectedModelStart+=current.Length-before.Length;
+        else if(prefix<selectedModelStart+selectedModelText.Length) { ClearModelTracking();modelAmbiguous=true;return; }
+        if(selectedModelStart<0 || selectedModelStart+selectedModelText.Length>current.Length ||
+            !current.AsSpan(selectedModelStart,selectedModelText.Length).SequenceEqual(selectedModelText.AsSpan())) { ClearModelTracking();modelAmbiguous=true;return; }
+        modelSnapshot=current;
+    }
+    private void RecoverLoadedModelCandidate()
+    {
+        var matches=new List<(Button Button,string Template,int Start)>();
+        foreach(var (button,_,_,template) in modelCards)
+        {
+            var at=0;while((at=prompt.Text.IndexOf(template,at,StringComparison.Ordinal))>=0)
+            { matches.Add((button,template,at));at+=template.Length; }
+        }
+        if(matches.Count==1)
+        {
+            var match=matches[0];selectedModelText=match.Template;selectedModelStart=match.Start;modelSnapshot=prompt.Text;
+            selectedModelFromLoaded=true;SetLastModel(match.Button);
+        }
+        else if(matches.Count>1 || modelCards.Any(card=>prompt.Text.Contains(card.Label,StringComparison.OrdinalIgnoreCase)))modelAmbiguous=true;
+    }
     private void SetLastModel(Button? selected)
     {
-        foreach(var (button,caption) in modelCards)
+        foreach(var (button,caption,_,_) in modelCards)
         {
             var active=ReferenceEquals(button,selected);
             button.Background=active ? Raised : Surface;
             button.BorderBrush=active ? Accent : BorderColor;
-            caption.Text=active ? "Son eklenen" : "Tarife ekle";
-            caption.Foreground=active ? Accent : Muted;
-            AutomationProperties.SetHelpText(button,(active ? "Son eklenen model fikri. " : "")+"Açıklamaya örnek model metni ekler; mevcut metin korunur ve kalıp oluşturulmaz.");
+            caption.Text=active ? (selectedModelFromLoaded ? "Tarifte bulundu" : "Seçili") : "Seç";
+            caption.Foreground=active ? Accent : Muted;AutomationProperties.SetItemStatus(button,active ? (selectedModelFromLoaded ? "Tarifte bulundu" : "Seçili") : "Seçili değil");
+            AutomationProperties.SetHelpText(button,(active ? (selectedModelFromLoaded ? "Tarifte bulunan model metni; değiştirme için onay gerekir. " : "Seçili model fikri. ") : "")+"Model fikrini seçer veya değiştirir; mevcut metin korunur ve kalıp oluşturulmaz.");
         }
     }
     private void SendMessage()
@@ -225,9 +283,7 @@ internal sealed class DesignRequestWindow : Window
         var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
-        preservingLastModel=true;
-        try { prompt.AppendText(addition); }
-        finally { preservingLastModel=false; }
+        prompt.AppendText(addition);
         chatInput.Clear();chatInput.Focus();SetStatus(answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.");
     }
     private void InsertMeasurementLabel()
@@ -311,7 +367,7 @@ internal sealed class DesignRequestWindow : Window
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { SetLastModel(null);prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=false;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RefreshConversation(); }
+        try { ClearModelTracking();prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=false;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RecoverLoadedModelCandidate();RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
