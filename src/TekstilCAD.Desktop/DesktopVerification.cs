@@ -9558,15 +9558,50 @@ internal static class DesktopVerification
                 Check(checkWindow.AddComparison() && checkWindow.ComparisonsForVerification.Count==2 && checkWindow.ComparisonsForVerification[1].Contains("ölçülen 125 mm") &&
                     checkWindow.ComparisonsForVerification[0].Contains("ölçülen 150 mm") && DocumentSession.ContentEquals(initial,workspace.Document),
                     "Additional photo comparisons preserve prior entries and leave the project unchanged",checks);
+                var reviewPath=Path.ChangeExtension(reportPath,".photo-measurement-review.json");
+                var resultBeforeReport=checkWindow.ResultForVerification.Text;
+                Check(checkWindow.TrySaveReport(reviewPath) && DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom) &&
+                    checkWindow.ResultForVerification.Text==resultBeforeReport && checkWindow.ComparisonsForVerification.Count==2,
+                    "Photo measurement report saves an independent snapshot without changing the draft or comparison list",checks);
+                var reportBytes=File.ReadAllBytes(reviewPath);using(var saved=JsonDocument.Parse(reportBytes))
+                {
+                    var data=saved.RootElement;var entries=data.GetProperty("comparisons");
+                    Check(data.GetProperty("format").GetString()=="tekstilcad.photo-measurement-review" && data.GetProperty("version").GetInt32()==1 &&
+                        data.GetProperty("coordinateUnit").GetString()=="preview-pixel" && data.GetProperty("lengthUnit").GetString()=="mm" &&
+                        data.GetProperty("points")[0].GetProperty("kind").GetString()=="reference" &&
+                        data.GetProperty("points")[2].GetProperty("kind").GetString()=="draft" &&
+                        !data.GetProperty("source").TryGetProperty("imageData",out _) &&
+                        data.GetProperty("source").GetProperty("sha256").GetString()==photoHash &&
+                        data.GetProperty("source").GetProperty("byteLength").GetInt32()==encodedPhoto.Length &&
+                        data.GetProperty("notice").GetString()!.Contains("üretim uygunluğu doğrulanmamıştır") && entries.GetArrayLength()==2 &&
+                        entries[0].GetProperty("knownMm").GetDouble()==150 && entries[1].GetProperty("knownMm").GetDouble()==125 &&
+                        entries[0].GetProperty("firstIndex").GetInt32()>0 && entries[0].GetProperty("secondIndex").GetInt32()>0,
+                        "Photo measurement report retains exact inputs, source digest and clear non-approval scope",checks);
+                }
+                Check(!checkWindow.TrySaveReport(reviewPath) && File.ReadAllBytes(reviewPath).SequenceEqual(reportBytes) &&
+                    checkWindow.ComparisonsForVerification.Count==2 && checkWindow.ReportStatusForVerification.Text.Contains("farklı bir dosya adı"),
+                    "Existing photo report is never overwritten and failed save retains all comparisons",checks);
                 var comparisonScroll=Descendants<ScrollViewer>(checkRoot).First();comparisonScroll.ScrollToBottom();
                 Render(checkWindow,Path.ChangeExtension(reportPath,".photo-comparison-list.png"),460,420);
                 Check(FullyVisible(checkWindow.ComparisonListForVerification,checkRoot) && checkWindow.ComparisonListForVerification.Focusable &&
                     AutomationProperties.GetName(checkWindow.ComparisonListForVerification)=="Fotoğraf ölçü karşılaştırmaları",
                     "Photo comparison list is visible and keyboard focusable in the compact scrolled view",checks);
+                var reportButton=Descendants<Button>(checkRoot).Single(b=>Equals(b.Content,"İnceleme raporu kaydet…"));
+                Check(FullyVisible(reportButton,checkRoot) && reportButton.Focusable &&
+                    checkWindow.ReportDisclosureForVerification.Text.Contains("SHA-256") && checkWindow.ReportDisclosureForVerification.Text.Contains("koordinatları") &&
+                    checkWindow.ReportDisclosureForVerification.Text.Contains("ölçüleri") && checkWindow.ReportDisclosureForVerification.Text.Contains("Fotoğrafın kendisi eklenmez"),
+                    "Compact report action exposes the saved identifiers, coordinates and measurements before saving",checks);
                 comparisonScroll.ScrollToTop();Render(checkWindow,Path.ChangeExtension(reportPath,".photo-check-restored.png"),460,420);
                 checkWindow.ComparisonListForVerification.SelectedIndex=0;
                 Check(checkWindow.RemoveComparison() && checkWindow.ComparisonsForVerification.Count==1 && checkWindow.ComparisonsForVerification[0].Contains("ölçülen 125 mm"),
                     "Removing one photo comparison leaves the other intact",checks);
+                var reducedReport=Path.ChangeExtension(reportPath,".photo-measurement-reduced.json");
+                Check(checkWindow.TrySaveReport(reducedReport),"An edited measurement list can be saved as a new report",checks);
+                using(var reduced=JsonDocument.Parse(File.ReadAllBytes(reducedReport)))
+                    Check(reduced.RootElement.GetProperty("comparisons").GetArrayLength()==1 &&
+                        reduced.RootElement.GetProperty("comparisons")[0].GetProperty("knownMm").GetDouble()==125 &&
+                        File.ReadAllBytes(reviewPath).SequenceEqual(reportBytes),
+                        "Removing a comparison affects only later reports and leaves the earlier report intact",checks);
                 checkWindow.KnownForVerification.Text="150";checkWindow.Calculate();
                 var resultBeforePreviewZoom=checkWindow.ResultForVerification.Text;
                 checkWindow.PreviewForVerification.ZoomSelected(2);
@@ -10046,6 +10081,18 @@ internal static class DesktopVerification
                     "Plane photo comparison reports a positive relative difference against the entered measurement",checks);
                 Check(measurement.AddComparison() && measurement.ComparisonsForVerification.Single().Contains("ölçülen 125 mm") && DocumentSession.ContentEquals(original,workspace.Document),
                     "Plane photo comparison can be retained without editing the project",checks);
+                var planeReportPath=Path.ChangeExtension(reportPath,".photo-plane-measurement-review.json");
+                Check(measurement.TrySaveReport(planeReportPath),"Plane measurement comparison can be saved independently",checks);
+                using(var savedPlane=JsonDocument.Parse(File.ReadAllBytes(planeReportPath)))
+                {
+                    var data=savedPlane.RootElement;var reference=data.GetProperty("reference");
+                    Check(reference.GetProperty("mode").GetString()=="four-corner-plane" && reference.GetProperty("points").GetArrayLength()==4 &&
+                        data.GetProperty("points")[3].GetProperty("kind").GetString()=="reference" && data.GetProperty("points")[4].GetProperty("kind").GetString()=="draft" &&
+                        reference.GetProperty("planeWidthMm").GetDouble()==200 && reference.GetProperty("planeHeightMm").GetDouble()==100 &&
+                        data.GetProperty("comparisons")[0].GetProperty("assumedPixelError").ValueKind==JsonValueKind.Null &&
+                        DocumentSession.ContentEquals(original,workspace.Document),
+                        "Saved plane comparison includes calibration and never invents a single-distance sensitivity",checks);
+                }
                 Check(measurement.AddControlPoint(new Point2(30,30)) && measurement.AddControlPoint(new Point2(70,30)),"Planar measurement accepts two detached control points",checks);
                 measurement.FirstForVerification.SelectedIndex=7;measurement.SecondForVerification.SelectedIndex=8;measurement.KnownForVerification.Text="100";measurement.Calculate();
                 Check(measurement.LastResultForVerification is { } extraPlane && Math.Abs(extraPlane.EstimatedMm-100)<1e-8 && DocumentSession.ContentEquals(original,workspace.Document),

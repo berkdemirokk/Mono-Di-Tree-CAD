@@ -1,0 +1,7 @@
+# Fotoğraf ölçü inceleme raporu
+
+Fotoğraf taslağındaki ölçü karşılaştırması penceresinde kullanıcı, bir veya daha çok sonucu listeye ekleyip **İnceleme raporu kaydet** ile ayrı bir JSON dosyası oluşturabilir. Rapor yeni bir dosya adı ister; mevcut hedefin üzerine yazılmaz. İşlem açık CAD projesini, çizgi noktalarını veya karşılaştırma listesini değiştirmez. Kaydedilmeyen liste pencere kapandığında silinir.
+
+Rapor, fotoğrafın SHA-256 özetini, bayt sayısını, yönünü ve kaynak/önizleme boyutlarını; referans türünü ve ölçüsünü; tüm taslak ve geçici kontrol noktalarının önizleme piksel koordinatlarını; listelenmiş nokta çiftlerini, kullanıcı ölçülerini, tahminleri ve farkları içerir. Seçilmişse tek mesafe yöntemi için kullanıcının varsaydığı piksel hatası ve yaklaşık aralık açıklaması da eklenir. Dört köşeli yöntemde dikdörtgen boyutları ve köşeleri saklanır. Bu bilgiler paylaşıldığında kaynak görselle ilişkilendirilebilir ve ölçü/geometri bilgisi ifşa edebilir; **fotoğraf baytları rapora eklenmez**.
+
+Dosya `tekstilcad.photo-measurement-review`, sürüm 1 olarak etiketlenir; `coordinateUnit` önizleme pikselini, `lengthUnit` milimetreyi açıkça belirtir. Ayrı bir inceleme çıktısıdır; `.tcad` proje biçimi değildir, uygulamaya yeniden yükleme veya imzalı doğrulama mekanizması yoktur. Sonuçlar kullanıcının seçimine ve girdiği değerlere dayanır. Bağımsız ölçümün doğruluğu, perspektif/lens etkileri, görünmeyen kontur, gerçek giysi veya üretim uygunluğu raporla doğrulanmaz. Fotoğraf özeti dosyanın kendisi değildir ve tek başına kullanım haklarını kanıtlamaz.

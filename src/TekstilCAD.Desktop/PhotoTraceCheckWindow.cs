@@ -4,6 +4,10 @@ using System.Windows.Controls;
 using System.Windows.Media.Imaging;
 using System.Collections.ObjectModel;
 using System.Windows.Data;
+using System.IO;
+using System.Text.Json;
+using Microsoft.Win32;
+using TekstilCAD.FileFormats;
 using TekstilCAD.Core;
 
 namespace TekstilCAD.Desktop;
@@ -17,6 +21,8 @@ internal sealed class PhotoTraceCheckWindow : Window
     private readonly int previewWidth,previewHeight,sourceWidth,sourceHeight;
     private readonly double referenceLength;
     private readonly PhotoPlaneCalibration? plane;
+    private readonly string? sourceSha256;private readonly int sourceByteLength,sourceOrientation;
+    private double? assumedPixelError;
     internal ComboBox FirstForVerification { get; } = new() { MinWidth=220,Margin=new Thickness(0,3,0,6) };
     internal ComboBox SecondForVerification { get; } = new() { MinWidth=220,Margin=new Thickness(0,3,0,6) };
     internal TextBox KnownForVerification { get; } = new() { MinWidth=120,MaxLength=32,Margin=new Thickness(0,3,0,6) };
@@ -24,7 +30,12 @@ internal sealed class PhotoTraceCheckWindow : Window
     private string sensitivitySummary="";
     internal TextBox ResultForVerification { get; } = new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,AcceptsReturn=true,MinHeight=75,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     internal PhotoTraceMeasurementResult? LastResultForVerification { get; private set; }
-    internal ObservableCollection<string> ComparisonsForVerification { get; } = [];
+    private sealed record Comparison(int First,int Second,PhotoTraceMeasurementResult Result,double? AssumedPixelError,string Sensitivity,string Display)
+    { public override string ToString()=>Display; }
+    private readonly ObservableCollection<Comparison> comparisons=[];
+    internal IReadOnlyList<string> ComparisonsForVerification=>comparisons.Select(c=>c.Display).ToArray();
+    internal TextBlock ReportStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4) };
+    internal TextBlock ReportDisclosureForVerification { get; } = new() { Text="Rapor; fotoğrafın SHA-256 özeti ve boyutları, tüm taslak ve geçici kontrol noktalarının koordinatları, kalibrasyon ile girilen ölçüleri içerir. Fotoğrafın kendisi eklenmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,6) };
     internal ListBox ComparisonListForVerification { get; } = new() { MinHeight=75,MaxHeight=160,Margin=new Thickness(0,4,0,4) };
     internal PhotoMeasurementPreview PreviewForVerification { get; }
     internal TextBlock PickStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4),Text="Fotoğrafta sol tık: 1; sağ tık: 2. Yakın noktalar için listeyi kullanın." };
@@ -32,11 +43,11 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal TextBox ControlYForVerification { get; } = new() { Width=90,MaxLength=24,Margin=new Thickness(0,2,8,2) };
     internal CheckBox AddControlModeForVerification { get; } = new() { Content="Fotoğrafa tıklayarak kontrol noktası ekle",Foreground=StudioTheme.Text,Margin=new Thickness(0,4,0,4) };
 
-    internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null)
+    internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(snapshot);ArgumentNullException.ThrowIfNull(image);
         if(snapshot.Count<3 || snapshot.Count>PhotoTraceCanvas.MaximumPoints)throw new ArgumentOutOfRangeException(nameof(snapshot));
-        previewWidth=image.PixelWidth;previewHeight=image.PixelHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();
+        previewWidth=image.PixelWidth;previewHeight=image.PixelHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;
         points=snapshot.Select(p=>new Point2(p.X,p.Y)).ToList();originalPointCount=points.Count;
         PreviewForVerification=new PhotoMeasurementPreview(image,points,sourceWidth,sourceHeight);
         Owner=owner;Title="Fotoğrafta ölçü karşılaştır";Width=610;Height=580;MinWidth=460;MinHeight=420;WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
@@ -73,21 +84,28 @@ internal sealed class PhotoTraceCheckWindow : Window
             AutomationProperties.SetName(PixelUncertaintyForVerification,"Her uç ve eksen için kabul edilen en çok piksel sapması");body.Children.Add(PixelUncertaintyForVerification);
             body.Children.Add(new TextBlock { Text="Boş bırakılabilir. Değer girilirse dört ucun her birinin X ve Y seçiminde en çok bu kadar önizleme pikseli sapma olduğu varsayılır; referansın mm değeri kesin kabul edilir. Yaklaşık senaryo aralığı perspektif, lens, kumaş, fiziksel ölçüm veya diğer hataları kapsamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         }
-        body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
+        body.Children.Add(new TextBlock { Text="Sonuç çizimi veya projeyi değiştirmez. İsterseniz listeyi ayrı inceleme raporu olarak kaydedebilirsiniz. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
         body.Children.Add(ResultForVerification);
         body.Children.Add(new TextBlock { Text="Bu penceredeki kontrol listesi",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,12,0,0) });
-        body.Children.Add(new TextBlock { Text="Farklı nokta çiftlerini ve bağımsız ölçüleri karşılaştırıp listeye ekleyin. Liste geçicidir; pencere kapanınca silinir. Eşleşmeler diğer bölgeleri veya üretime uygunluğu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) });
-        ComparisonListForVerification.ItemsSource=ComparisonsForVerification;ComparisonListForVerification.HorizontalContentAlignment=HorizontalAlignment.Stretch;
+        body.Children.Add(new TextBlock { Text="Farklı nokta çiftlerini ve bağımsız ölçüleri karşılaştırıp listeye ekleyin. Kaydedilmezse liste pencere kapanınca silinir. Eşleşmeler diğer bölgeleri veya üretime uygunluğu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) });
+        ComparisonListForVerification.ItemsSource=comparisons;ComparisonListForVerification.HorizontalContentAlignment=HorizontalAlignment.Stretch;
         ScrollViewer.SetHorizontalScrollBarVisibility(ComparisonListForVerification,ScrollBarVisibility.Disabled);
-        var comparisonText=new FrameworkElementFactory(typeof(TextBlock));comparisonText.SetBinding(TextBlock.TextProperty,new Binding());comparisonText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);
+        var comparisonText=new FrameworkElementFactory(typeof(TextBlock));comparisonText.SetBinding(TextBlock.TextProperty,new Binding(nameof(Comparison.Display)));comparisonText.SetValue(TextBlock.TextWrappingProperty,TextWrapping.Wrap);
         ComparisonListForVerification.ItemTemplate=new DataTemplate { VisualTree=comparisonText };
         AutomationProperties.SetName(ComparisonListForVerification,"Fotoğraf ölçü karşılaştırmaları");body.Children.Add(ComparisonListForVerification);
+        AutomationProperties.SetName(ReportDisclosureForVerification,"Raporun içerdiği bilgiler");body.Children.Add(ReportDisclosureForVerification);
         var listActions=new WrapPanel();
         var addComparison=new Button { Content="Bu karşılaştırmayı listeye ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
         var removeComparison=new Button { Content="Seçileni kaldır",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
         var clearComparisons=new Button { Content="Listeyi temizle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
-        addComparison.Click+=(_,_)=> { if(!AddComparison())ResultForVerification.BringIntoView(); };removeComparison.Click+=(_,_)=>RemoveComparison();clearComparisons.Click+=(_,_)=>ComparisonsForVerification.Clear();
-        listActions.Children.Add(addComparison);listActions.Children.Add(removeComparison);listActions.Children.Add(clearComparisons);body.Children.Add(listActions);
+        var saveReport=new Button { Content="İnceleme raporu kaydet…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
+        AutomationProperties.SetHelpText(saveReport,"Kaynak özeti, tüm nokta koordinatları, kalibrasyon ve ölçüleri yeni JSON dosyasına kaydeder; fotoğrafı içermez ve üretim onayı değildir.");
+        saveReport.Click+=(_,_)=> { if(comparisons.Count==0) { ReportStatusForVerification.Text="Rapor için önce bir karşılaştırmayı listeye ekleyin.";return; }
+            var dialog=new SaveFileDialog { Filter="Fotoğraf ölçü incelemesi (*.json)|*.json",DefaultExt=".json",AddExtension=true,OverwritePrompt=false };
+            if(dialog.ShowDialog(this)==true)TrySaveReport(dialog.FileName); };
+        addComparison.Click+=(_,_)=> { if(!AddComparison())ResultForVerification.BringIntoView(); };removeComparison.Click+=(_,_)=>RemoveComparison();clearComparisons.Click+=(_,_)=>comparisons.Clear();
+        listActions.Children.Add(addComparison);listActions.Children.Add(removeComparison);listActions.Children.Add(clearComparisons);listActions.Children.Add(saveReport);body.Children.Add(listActions);
+        AutomationProperties.SetName(ReportStatusForVerification,"Fotoğraf inceleme raporu durumu");AutomationProperties.SetLiveSetting(ReportStatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(ReportStatusForVerification);
         var referenceCount=plane is null ? 2 : 4;
         var options=points.Select((p,i)=>new Choice(i,$"{i+1} · {(i<referenceCount ? "referans" : "çizgi")} · X {MeasurementInput.Format(p.X)}, Y {MeasurementInput.Format(p.Y)}")).ToArray();
         FirstForVerification.ItemsSource=options;SecondForVerification.ItemsSource=options;
@@ -113,25 +131,26 @@ internal sealed class PhotoTraceCheckWindow : Window
         FirstForVerification.SelectedIndex=first;SecondForVerification.SelectedIndex=second;
         PickStatusForVerification.Text=$"{index+1}. geçici kontrol noktası eklendi; çizim ve proje değişmedi. Ölçüm için uç listesinden seçin.";return true;
     }
-    private void ClearResult() { LastResultForVerification=null;sensitivitySummary="";ResultForVerification.Text=""; }
+    private void ClearResult() { LastResultForVerification=null;assumedPixelError=null;sensitivitySummary="";ResultForVerification.Text=""; }
     internal bool AddComparison()
     {
-        if(ComparisonsForVerification.Count>=100) { ResultForVerification.Text="Liste 100 karşılaştırmayla sınırlıdır; yeni eklemeden önce bir satırı kaldırın.";LastResultForVerification=null;return false; }
+        if(comparisons.Count>=100) { ResultForVerification.Text="Liste 100 karşılaştırmayla sınırlıdır; yeni eklemeden önce bir satırı kaldırın.";LastResultForVerification=null;return false; }
         Calculate();
         if(LastResultForVerification is not { } result || FirstForVerification.SelectedItem is not Choice first || SecondForVerification.SelectedItem is not Choice second)return false;
         var relative=result.DifferenceMm/result.KnownMm*100;
         var percent=double.IsFinite(relative) ? relative.ToString("G6",System.Globalization.CultureInfo.CurrentCulture)+" %" : "gösterilemiyor";
-        ComparisonsForVerification.Add($"{first.Label} → {second.Label} | tahmin {MeasurementInput.Format(result.EstimatedMm)} mm | ölçülen {MeasurementInput.Format(result.KnownMm)} mm | fark {MeasurementInput.Format(result.DifferenceMm)} mm ({percent})"+(sensitivitySummary.Length>0 ? " | "+sensitivitySummary : ""));
+        var display=$"{first.Label} → {second.Label} | tahmin {MeasurementInput.Format(result.EstimatedMm)} mm | ölçülen {MeasurementInput.Format(result.KnownMm)} mm | fark {MeasurementInput.Format(result.DifferenceMm)} mm ({percent})"+(sensitivitySummary.Length>0 ? " | "+sensitivitySummary : "");
+        comparisons.Add(new(first.Index,second.Index,result,assumedPixelError,sensitivitySummary,display));
         return true;
     }
     internal bool RemoveComparison()
     {
         if(ComparisonListForVerification.SelectedIndex<0)return false;
-        ComparisonsForVerification.RemoveAt(ComparisonListForVerification.SelectedIndex);return true;
+        comparisons.RemoveAt(ComparisonListForVerification.SelectedIndex);return true;
     }
     internal void Calculate()
     {
-        LastResultForVerification=null;sensitivitySummary="";
+        LastResultForVerification=null;assumedPixelError=null;sensitivitySummary="";
         try
         {
             if(FirstForVerification.SelectedItem is not Choice first || SecondForVerification.SelectedItem is not Choice second)
@@ -152,6 +171,7 @@ internal sealed class PhotoTraceCheckWindow : Window
             {
                 if(!MeasurementInput.TryParseMillimeters(PixelUncertaintyForVerification.Text,out var assumedPixels) || assumedPixels<0 || assumedPixels>1000)
                     throw new ArgumentException("Piksel sapmasını 0–1000 arasında girin veya alanı boş bırakın.");
+                assumedPixelError=assumedPixels;
                 var sensitivity=PhotoSelectionSensitivity.Estimate(previewWidth,previewHeight,sourceWidth,sourceHeight,points[0],points[1],referenceLength,points[first.Index],points[second.Index],assumedPixels);
                 static string Short(double value)=>value.ToString("G6",System.Globalization.CultureInfo.CurrentCulture);
                 var upper=sensitivity.UpperMm is double max ? Short(max)+" mm" : "sonlu üst sınır yok";
@@ -166,6 +186,33 @@ internal sealed class PhotoTraceCheckWindow : Window
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { ResultForVerification.Text="Karşılaştırma yapılamadı: "+ex.Message; }
+    }
+    // A separate, user-requested snapshot; this is not a project or approval.
+    internal bool TrySaveReport(string path)
+    {
+        try
+        {
+            if(comparisons.Count==0)throw new InvalidOperationException("Önce karşılaştırmaları listeye ekleyin.");
+            if(string.IsNullOrEmpty(sourceSha256) || sourceByteLength<=0)throw new InvalidOperationException("Fotoğraf kaynak özeti bulunamadı; rapor kaydedilmedi.");
+            var report=new {
+                format="tekstilcad.photo-measurement-review",version=1,coordinateUnit="preview-pixel",lengthUnit="mm",
+                notice="Yalnız seçilen nokta çiftleri karşılaştırılmıştır. Ölçüm bağımsızlığı, fotoğraf, kalıp ve üretim uygunluğu doğrulanmamıştır.",
+                source=new { sha256=sourceSha256,byteLength=sourceByteLength,orientation=sourceOrientation,sourceWidth,sourceHeight,previewWidth,previewHeight },
+                reference=new { mode=plane is null ? "single-distance" : "four-corner-plane",lengthMm=referenceLength,
+                    planeWidthMm=plane?.WidthMm,planeHeightMm=plane?.HeightMm,
+                    points=points.Take(plane is null ? 2 : 4).Select(p=>new { x=p.X,y=p.Y }).ToArray() },
+                points=points.Select((p,i)=>new { index=i+1,kind=i<(plane is null ? 2 : 4) ? "reference" : i<originalPointCount ? "draft" : "temporary-control",x=p.X,y=p.Y }).ToArray(),
+                comparisons=comparisons.Select(c=>new { firstIndex=c.First+1,secondIndex=c.Second+1,
+                    estimatedMm=c.Result.EstimatedMm,knownMm=c.Result.KnownMm,differenceMm=c.Result.DifferenceMm,
+                    assumedPixelError=c.AssumedPixelError,sensitivity=c.Sensitivity }).ToArray() };
+            var text=JsonSerializer.Serialize(report,new JsonSerializerOptions { WriteIndented=true });
+            var full=Path.GetFullPath(path);ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null));
+            ReportStatusForVerification.Text="İnceleme raporu yeni dosyaya kaydedildi. Bu rapor üretim onayı değildir.";return true;
+        }
+        catch(ProjectConflictException)
+        { ReportStatusForVerification.Text="Rapor kaydedilmedi: Bu ad zaten var; farklı bir dosya adı seçin. Mevcut dosya ve liste korundu.";return false; }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException or NotSupportedException)
+        { ReportStatusForVerification.Text="Rapor kaydedilmedi: "+ex.Message;return false; }
     }
     private sealed record Choice(int Index,string Label) { public override string ToString()=>Label; }
 }
