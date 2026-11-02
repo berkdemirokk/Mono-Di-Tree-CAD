@@ -1,0 +1,239 @@
+{
+  "baseline": {
+    "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+    "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "categories": {
+      "shorts": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.087626589784688,
+        "mean_proposed_complete": 1.3660926818837438,
+        "improved_gt_half_pixel": 22,
+        "worsened_gt_half_pixel": 0,
+        "max_contour_mean_error": 3.5493074903032333,
+        "max_sampled_local_error": 19.04524108119576,
+        "local_error_over_5_pixels": 33,
+        "strict_self_crossing": 0
+      },
+      "tshirt": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.7009166617164793,
+        "mean_proposed_complete": 1.4793241449129222,
+        "improved_gt_half_pixel": 32,
+        "worsened_gt_half_pixel": 0,
+        "max_contour_mean_error": 2.7235191860420045,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 32,
+        "strict_self_crossing": 0
+      },
+      "all": {
+        "contours": 80,
+        "all_segments_found": 80,
+        "proposal_accepted_by_simulated_point_checks": 80,
+        "mean_straight_complete": 2.394271625750583,
+        "mean_proposed_complete": 1.422708413398333,
+        "improved_gt_half_pixel": 54,
+        "worsened_gt_half_pixel": 0,
+        "max_contour_mean_error": 3.5493074903032333,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 65,
+        "strict_self_crossing": 0
+      }
+    }
+  },
+  "kernel_3": {
+    "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+    "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent binomial-blur 3 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "categories": {
+      "shorts": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.087626589784688,
+        "mean_proposed_complete": 1.4161042377585997,
+        "improved_gt_half_pixel": 20,
+        "worsened_gt_half_pixel": 0,
+        "max_contour_mean_error": 3.1834771551612455,
+        "max_sampled_local_error": 19.0,
+        "local_error_over_5_pixels": 35,
+        "strict_self_crossing": 0
+      },
+      "tshirt": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.7009166617164793,
+        "mean_proposed_complete": 1.5563183917281678,
+        "improved_gt_half_pixel": 33,
+        "worsened_gt_half_pixel": 1,
+        "max_contour_mean_error": 2.999064379766054,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 31,
+        "strict_self_crossing": 0
+      },
+      "all": {
+        "contours": 80,
+        "all_segments_found": 80,
+        "proposal_accepted_by_simulated_point_checks": 80,
+        "mean_straight_complete": 2.394271625750583,
+        "mean_proposed_complete": 1.4862113147433837,
+        "improved_gt_half_pixel": 53,
+        "worsened_gt_half_pixel": 1,
+        "max_contour_mean_error": 3.1834771551612455,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 66,
+        "strict_self_crossing": 0
+      }
+    }
+  },
+  "kernel_5": {
+    "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+    "method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent binomial-blur 5 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "categories": {
+      "shorts": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.087626589784688,
+        "mean_proposed_complete": 1.4913772718768998,
+        "improved_gt_half_pixel": 20,
+        "worsened_gt_half_pixel": 0,
+        "max_contour_mean_error": 3.0305482922815936,
+        "max_sampled_local_error": 18.973665961010276,
+        "local_error_over_5_pixels": 36,
+        "strict_self_crossing": 1
+      },
+      "tshirt": {
+        "contours": 40,
+        "all_segments_found": 40,
+        "proposal_accepted_by_simulated_point_checks": 40,
+        "mean_straight_complete": 2.7009166617164793,
+        "mean_proposed_complete": 1.6320366587639756,
+        "improved_gt_half_pixel": 32,
+        "worsened_gt_half_pixel": 1,
+        "max_contour_mean_error": 3.081063396489446,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 31,
+        "strict_self_crossing": 0
+      },
+      "all": {
+        "contours": 80,
+        "all_segments_found": 80,
+        "proposal_accepted_by_simulated_point_checks": 80,
+        "mean_straight_complete": 2.394271625750583,
+        "mean_proposed_complete": 1.5617069653204378,
+        "improved_gt_half_pixel": 52,
+        "worsened_gt_half_pixel": 1,
+        "max_contour_mean_error": 3.081063396489446,
+        "max_sampled_local_error": 24.340264647648844,
+        "local_error_over_5_pixels": 67,
+        "strict_self_crossing": 1
+      }
+    }
+  },
+  "paired_3": {
+    "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+    "first_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "second_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent binomial-blur 3 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "total_first": 80,
+    "total_second": 80,
+    "categories": {
+      "shorts": {
+        "paired": 40,
+        "mean_error_change": 0.05001155587485573,
+        "mean_improved_gt_half": 0,
+        "mean_worsened_gt_half": 0,
+        "worst_mean_increase": 0.431800786214414,
+        "local_max_improved_gt_one": 4,
+        "local_max_worsened_gt_one": 8,
+        "both_local_over_5": 31,
+        "only_first_local_over_5": 2,
+        "only_second_local_over_5": 4,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 0
+      },
+      "tshirt": {
+        "paired": 40,
+        "mean_error_change": 0.07699424681524573,
+        "mean_improved_gt_half": 0,
+        "mean_worsened_gt_half": 1,
+        "worst_mean_increase": 0.526942493761887,
+        "local_max_improved_gt_one": 3,
+        "local_max_worsened_gt_one": 6,
+        "both_local_over_5": 31,
+        "only_first_local_over_5": 1,
+        "only_second_local_over_5": 0,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 0
+      },
+      "all": {
+        "paired": 80,
+        "mean_error_change": 0.06350290134505074,
+        "mean_improved_gt_half": 0,
+        "mean_worsened_gt_half": 1,
+        "worst_mean_increase": 0.526942493761887,
+        "local_max_improved_gt_one": 7,
+        "local_max_worsened_gt_one": 14,
+        "both_local_over_5": 62,
+        "only_first_local_over_5": 3,
+        "only_second_local_over_5": 4,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 0
+      }
+    }
+  },
+  "paired_5": {
+    "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+    "first_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent product path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "second_method": "Same 80 selected test annotations as earlier experiments; 12 equally spaced perimeter anchors from ground truth; 12 independent binomial-blur 5 experimental path searches including closing interval; symmetric mean and maximum sampled nearest-segment distance on complete contours only; strict crossings only, no full topology or garment-pattern validation",
+    "total_first": 80,
+    "total_second": 80,
+    "categories": {
+      "shorts": {
+        "paired": 40,
+        "mean_error_change": 0.1252845899931559,
+        "mean_improved_gt_half": 1,
+        "mean_worsened_gt_half": 0,
+        "worst_mean_increase": 0.4815413059881162,
+        "local_max_improved_gt_one": 4,
+        "local_max_worsened_gt_one": 16,
+        "both_local_over_5": 31,
+        "only_first_local_over_5": 2,
+        "only_second_local_over_5": 5,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 1
+      },
+      "tshirt": {
+        "paired": 40,
+        "mean_error_change": 0.15271251385105383,
+        "mean_improved_gt_half": 1,
+        "mean_worsened_gt_half": 3,
+        "worst_mean_increase": 0.8336772122743179,
+        "local_max_improved_gt_one": 7,
+        "local_max_worsened_gt_one": 10,
+        "both_local_over_5": 31,
+        "only_first_local_over_5": 1,
+        "only_second_local_over_5": 0,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 0
+      },
+      "all": {
+        "paired": 80,
+        "mean_error_change": 0.13899855192210486,
+        "mean_improved_gt_half": 2,
+        "mean_worsened_gt_half": 3,
+        "worst_mean_increase": 0.8336772122743179,
+        "local_max_improved_gt_one": 11,
+        "local_max_worsened_gt_one": 26,
+        "both_local_over_5": 62,
+        "only_first_local_over_5": 3,
+        "only_second_local_over_5": 5,
+        "strict_crossing_first": 0,
+        "strict_crossing_second": 1
+      }
+    }
+  }
+}
