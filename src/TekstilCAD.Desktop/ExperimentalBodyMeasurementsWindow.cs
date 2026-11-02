@@ -15,6 +15,8 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
     private readonly string originalPrompt,originalMeasurements;
     private bool accepted;
     internal Func<bool>? ConfirmDiscardForVerification { get; set; }
+    internal MeasurementRecoveryControls RecoveryForVerification { get; private set; } = null!;
+    internal ScrollViewer BodyForVerification { get; } = new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     internal Dictionary<string,TextBox> InputsForVerification { get; } = new(StringComparer.Ordinal);
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,8,0,0) };
     private static readonly (string Label,string Key,bool Angle)[] Fields = [
@@ -33,14 +35,14 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
         var apply=new Button { Content="Girilenleri notlara ekle",Padding=new Thickness(12,6,12,6),Background=DesignRequestWindow.Accent,Foreground=DesignRequestWindow.Surface };
-        apply.Click+=(_,_)=> { if(TryApply()) { accepted=true;DialogResult=true; } };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        apply.Click+=(_,_)=> { if(RecoveryForVerification.ReadyToClose() && TryApply()) { accepted=true;DialogResult=true; } };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         AutomationProperties.SetName(StatusForVerification,"Deneysel ölçü girişi durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         var statusScroll=new ScrollViewer { Content=StatusForVerification,MaxHeight=70,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
         AutomationProperties.SetName(statusScroll,"Deneysel ölçü durumu");DockPanel.SetDock(statusScroll,Dock.Bottom);root.Children.Add(statusScroll);
-        var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };AutomationProperties.SetName(scroll,"Deneysel ölçü alanları");root.Children.Add(scroll);
-        var body=new StackPanel();scroll.Content=body;
+        AutomationProperties.SetName(BodyForVerification,"Deneysel ölçü alanları");root.Children.Add(BodyForVerification);
+        var body=new StackPanel();BodyForVerification.Content=body;
         body.Children.Add(new TextBlock { Text="Deneysel beden ölçüleri",FontSize=20,FontWeight=FontWeights.SemiBold });
-        body.Children.Add(new TextBlock { Text="Henüz beden önizlemesi veya kalıp oluşturulmaz. Bildiğiniz değerleri girin; uzunluklar santimetre, omuz eğimi derecedir. Notlara ekleme kısmi girişe izin verir ve ölçüler arasındaki çelişkileri denetlemez. Yerel denetim yalnız bu formdaki 15 alanı ve bazı ilişkileri kontrol eder; önceki notları veya ölçüm doğruluğunu denetlemez. Önceki notlar silinmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
+        body.Children.Add(new TextBlock { Text="Henüz beden önizlemesi veya kalıp oluşturulmaz. Bildiğiniz değerleri girin; uzunluklar santimetre, omuz eğimi derecedir. Notlara ekleme kısmi girişe izin verir ve ölçüler arasındaki çelişkileri denetlemez. Yerel denetim yalnız bu formdaki 15 alanı ve bazı ilişkileri kontrol eder; önceki notları veya ölçüm doğruluğunu denetlemez. Önceki notlar silinmez. Yerel kurtarma seçenekleri formun sonundadır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
         AutomationProperties.SetHelpText(apply,"Girilen geçerli sayıları notlara ekler; kısmi giriş mümkündür ve ölçüler arası çelişkiler bu işlemde denetlenmez.");
         var review=new Button { Content="15 ölçüyü yerel denetle…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetHelpText(review,"Tüm alanları yerel olarak denetler ve geçici ölçü özetini açar; kalıp hesaplamaz veya veri göndermez.");
@@ -54,14 +56,15 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
             input.ToolTip=instructions;AutomationProperties.SetName(input,label+" "+unit);AutomationProperties.SetHelpText(input,instructions+" "+(angle ? "Bilinmiyorsa boş bırakın." : "Santimetre cinsinden; bilinmiyorsa boş bırakın."));
             body.Children.Add(input);InputsForVerification.Add(label,input);
         }
+        RecoveryForVerification=new MeasurementRecoveryControls(this,"experimental",Fields.Select(f=>InputsForVerification[f.Label]));body.Children.Add(RecoveryForVerification.Panel);
         Closing+=OnFormClosing;
     }
     internal bool CanCloseWithoutLosingInput()
     {
         if(accepted || InputsForVerification.Values.All(input=>input.Text.Length==0))return true;
-        return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencereyi kapatıp bu girişleri silmek istiyor musunuz?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+        return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencere kapanınca formdan silinir; varsa yerel kurtarma kopyaları ayrıca silinene kadar kalır. Kapatılsın mı?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     }
-    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
+    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!RecoveryForVerification.ReadyToClose() || !CanCloseWithoutLosingInput())e.Cancel=true; }
     internal bool TryApply()
     {
         if(!TryRead(out var lines,out _))return false;

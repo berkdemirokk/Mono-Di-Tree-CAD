@@ -950,6 +950,7 @@ internal static class DesktopVerification
             var work = Path.Combine(RepositoryRoot(reportPath), "work", "desktop-verification", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
             AppPaths.UseVerificationDirectory(Path.Combine(work, "application-data"));
+            VerifyMeasurementRecoveryStore(work,checks);
             studio = new MainWindow();
             studio.ConfirmHpglReviewForVerification=(_,_)=>true;
             StopTimer(studio);
@@ -1832,6 +1833,80 @@ internal static class DesktopVerification
                 if(File.Exists(Path.Combine(directory.FullName,"AGENTS.md")) && File.Exists(Path.Combine(directory.FullName,"TekstilCAD.slnx")))return directory.FullName;
         }
         throw new InvalidOperationException("Verification requires the TekstilCAD checkout so its data remains inside the authorized work directory.");
+    }
+    private static void VerifyMeasurementRecoveryStore(string work,List<string> checks)
+    {
+        var directory=Path.Combine(work,"measurement-recovery-tests");
+        var values=new[] { "özel 72,5", "", " ", new string('\ud800',1) };
+        var first=new MeasurementFormRecoveryStore(directory,"basic");var second=new MeasurementFormRecoveryStore(directory,"basic");
+        var firstPath=first.PathForVerification;var secondPath=second.PathForVerification;byte[] original=[];
+        try
+        {
+            first.Save(values);second.Save(["99","","",""]);original=File.ReadAllBytes(firstPath);
+            Check(firstPath!=secondPath && File.Exists(firstPath) && File.Exists(secondPath) && !File.ReadAllText(firstPath).Contains("özel 72,5"),
+                "Concurrent form recovery sessions use distinct encrypted files",checks);
+            var liveRead=false;try { MeasurementFormRecoveryStore.Load(directory,firstPath,"basic"); } catch(IOException) { liveRead=true; }
+            var liveDelete=false;try { MeasurementFormRecoveryStore.Delete(directory,firstPath,"basic"); } catch(IOException) { liveDelete=true; }
+            Check(liveRead && liveDelete && File.ReadAllBytes(firstPath).SequenceEqual(original),"A live form recovery lease rejects restore and deletion",checks);
+            first.BeforeCommitForVerification=()=>throw new IOException("synthetic interruption");
+            try { first.Save(["changed","","",""]);throw new InvalidOperationException("Interrupted form save unexpectedly succeeded."); }
+            catch(IOException ex) when(ex.Message.Contains("synthetic interruption")) { }
+            Check(File.ReadAllBytes(firstPath).SequenceEqual(original),"Interrupted recovery write leaves the previous complete snapshot unchanged",checks);
+            File.WriteAllText(secondPath,"external synthetic change");var replacement=File.ReadAllBytes(secondPath);
+            try { second.Save(["new","","",""]);throw new InvalidOperationException("Changed recovery was overwritten."); }
+            catch(IOException) { }
+            Check(File.ReadAllBytes(secondPath).SequenceEqual(replacement) && File.ReadAllBytes(firstPath).SequenceEqual(original),
+                "Externally changed recovery file is not silently replaced and other sessions remain intact",checks);
+        }
+        finally { first.Dispose();second.Dispose(); }
+        var restored=MeasurementFormRecoveryStore.Load(directory,firstPath,"basic");
+        Check(restored.SequenceEqual(values) && File.ReadAllBytes(firstPath).SequenceEqual(original),
+            "Protected recovery restores exact UTF-16 form fields without modifying its source",checks);
+        using(var empty=new MeasurementFormRecoveryStore(directory,"basic"))
+        {
+            empty.Save(["72","","",""]);empty.Save(["","","",""]);var path=empty.PathForVerification;empty.Dispose();
+            Check(MeasurementFormRecoveryStore.Load(directory,path,"basic").All(string.IsNullOrEmpty),"An explicitly saved empty form replaces the earlier owned draft",checks);
+        }
+        using(var experimental=new MeasurementFormRecoveryStore(directory,"experimental"))
+        {
+            var fields=Enumerable.Range(0,15).Select(i=>i.ToString(CultureInfo.InvariantCulture)).ToArray();
+            experimental.Save(fields);var path=experimental.PathForVerification;experimental.Dispose();
+            Check(MeasurementFormRecoveryStore.Load(directory,path,"experimental").SequenceEqual(fields),"Experimental recovery retains all fifteen fields in order",checks);
+        }
+        var corrupted=new MeasurementFormRecoveryStore(directory,"basic");var corruptedPath=corrupted.PathForVerification;corrupted.Save(values);corrupted.Dispose();
+        File.WriteAllText(corruptedPath,"TekstilCAD.MeasurementRecovery.v1\nAAAAAAAA");var damaged=File.ReadAllBytes(corruptedPath);
+        try { MeasurementFormRecoveryStore.Load(directory,corruptedPath,"basic");throw new InvalidOperationException("Corrupt protected data unexpectedly loaded."); }
+        catch(InvalidDataException) { }
+        Check(File.ReadAllBytes(corruptedPath).SequenceEqual(damaged) && File.Exists(firstPath),"Corrupt or undecryptable recovery is rejected and preserved",checks);
+        try { MeasurementFormRecoveryStore.Load(directory,firstPath,"experimental");throw new InvalidOperationException("Wrong form kind accepted."); }
+        catch(InvalidOperationException ex) when(ex.Message.Contains("yönetilen klasöründe değil")) { }
+        MeasurementFormRecoveryStore.Delete(directory,firstPath,"basic");
+        Check(!File.Exists(firstPath) && File.Exists(secondPath) && File.Exists(corruptedPath),"Explicit recovery deletion affects only the selected inactive file",checks);
+        VerifyMeasurementRecoveryProcess(work,checks);
+    }
+    private static void VerifyMeasurementRecoveryProcess(string work,List<string> checks)
+    {
+        var root=Path.Combine(work,"measurement-crash-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(root);
+        var executable=Environment.ProcessPath ?? throw new InvalidOperationException("Verification executable unavailable.");
+        var launch=new System.Diagnostics.ProcessStartInfo(executable) { UseShellExecute=false,CreateNoWindow=true,WindowStyle=System.Diagnostics.ProcessWindowStyle.Hidden };
+        if(string.Equals(Path.GetFileNameWithoutExtension(executable),"dotnet",StringComparison.OrdinalIgnoreCase))launch.ArgumentList.Add(Assembly.GetExecutingAssembly().Location);
+        launch.ArgumentList.Add("--verify-measurement-recovery-child");launch.ArgumentList.Add(root);
+        using var child=System.Diagnostics.Process.Start(launch) ?? throw new InvalidOperationException("Synthetic recovery child could not start.");
+        try
+        {
+            var marker=Path.Combine(root,"before-commit.txt");var deadline=DateTime.UtcNow.AddSeconds(20);
+            while(!File.Exists(marker) && !child.HasExited && DateTime.UtcNow<deadline)Thread.Sleep(25);
+            if(!File.Exists(marker))throw new InvalidOperationException("Synthetic recovery child did not reach the pre-commit barrier.");
+            var records=Path.Combine(root,"records");var childPath=File.ReadAllText(Path.Combine(root,"ready.txt"));
+            var liveRejected=false;try { MeasurementFormRecoveryStore.Load(records,childPath,"basic"); } catch(IOException) { liveRejected=true; }
+            using var concurrent=new MeasurementFormRecoveryStore(records,"basic");concurrent.Save(["93","","",""]);var otherPath=concurrent.PathForVerification;
+            Check(liveRejected && !string.Equals(childPath,otherPath,StringComparison.OrdinalIgnoreCase) && File.Exists(childPath) && File.Exists(otherPath),
+                "Separate live process holds its recovery lease while another session writes an independent file",checks);
+            child.Kill(entireProcessTree:true);if(!child.WaitForExit(10_000))throw new TimeoutException("Synthetic recovery child did not terminate.");
+            Check(MeasurementFormRecoveryStore.Load(records,childPath,"basic")[0]=="81" && File.Exists(otherPath),
+                "Terminating the synthetic process before replacement retains its earlier complete protected snapshot",checks);
+        }
+        finally { if(!child.HasExited) { child.Kill(entireProcessTree:true);child.WaitForExit(10_000); } }
     }
     private static void VerifyKeyboardCommands(MainWindow studio,CadCanvas canvas,List<string> checks)
     {
@@ -10074,6 +10149,11 @@ internal static class DesktopVerification
                 Check(entry.InputsForVerification.Count==4 && entry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable && FullyVisible(t,entryRoot)) &&
                     !entry.TryApply() && entry.StatusForVerification.Text.Contains("en az bir"),
                     "Measurement entry starts blank and preserves the request when no value is entered",checks);
+                entry.BodyForVerification.ScrollToBottom();Render(entry,Path.ChangeExtension(reportPath,".basic-measurement-recovery.png"),440,390);
+                Check(entry.RecoveryForVerification.EnabledForVerification.IsChecked==false && FullyVisible(entry.RecoveryForVerification.EnabledForVerification,entryRoot) &&
+                    Descendants<Button>(entry.RecoveryForVerification.Panel).All(b=>FullyVisible(b,entryRoot) && b.Focusable) && !Directory.Exists(MeasurementFormRecoveryStore.DirectoryPath),
+                    "Basic form recovery is opt-in and controls remain reachable in the compact scrolled view",checks);
+                entry.BodyForVerification.ScrollToTop();Render(entry,Path.ChangeExtension(reportPath,".basic-measurement-restored.png"),440,390);
                 entry.ConfirmDiscardForVerification=()=>throw new InvalidOperationException("Empty entry requested discard confirmation.");
                 Check(entry.CanCloseWithoutLosingInput(),"An empty basic measurement form can close without a discard prompt",checks);
                 var chest=entry.InputsForVerification["göğüs çevresi"];var waist=entry.InputsForVerification["bel çevresi"];
@@ -10114,6 +10194,11 @@ internal static class DesktopVerification
                 Check(experimentalEntry.InputsForVerification.Count==15 && experimentalEntry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable) &&
                     !experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
                     "Experimental body intake starts empty and does not modify the request",checks);
+                experimentalEntry.BodyForVerification.ScrollToBottom();Render(experimentalEntry,Path.ChangeExtension(reportPath,".experimental-measurement-recovery.png"),440,420);
+                Check(experimentalEntry.RecoveryForVerification.EnabledForVerification.IsChecked==false && FullyVisible(experimentalEntry.RecoveryForVerification.EnabledForVerification,(FrameworkElement)experimentalEntry.Content) &&
+                    Descendants<Button>(experimentalEntry.RecoveryForVerification.Panel).All(b=>FullyVisible(b,(FrameworkElement)experimentalEntry.Content) && b.Focusable),
+                    "Experimental form recovery remains opt-in and keyboard reachable at compact size",checks);
+                experimentalEntry.BodyForVerification.ScrollToTop();
                 var experimentalDiscardAsked=false;experimentalEntry.ConfirmDiscardForVerification=()=> { experimentalDiscardAsked=true;return false; };
                 experimentalEntry.InputsForVerification["bel çevresi"].Text="72";
                 var cancelExperimental=new System.ComponentModel.CancelEventArgs();typeof(ExperimentalBodyMeasurementsWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(experimentalEntry,[experimentalEntry,cancelExperimental]);
@@ -10167,6 +10252,98 @@ internal static class DesktopVerification
                     window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                     "Conflicting partial notes can be retained as unvalidated notes while full experimental review is refused",checks); }
             finally { partialExperimental.Close(); }
+            window.LoadForVerification(input);
+            var recoveryEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
+            var recoveryContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            using(var writeEntered=new ManualResetEventSlim())using(var writeRelease=new ManualResetEventSlim())
+            try
+            {
+                var controls=recoveryEntry.RecoveryForVerification;controls.EnabledForVerification.IsChecked=true;
+                PumpUntil(()=>controls.StoreForVerification is not null);var activeStore=controls.StoreForVerification!;var calls=0;
+                activeStore.BeforeCommitForVerification=()=> { if(Interlocked.Increment(ref calls)==1) { writeEntered.Set();writeRelease.Wait(); } };
+                recoveryEntry.InputsForVerification["bel çevresi"].Text="72";controls.QueueCurrent();PumpUntil(()=>writeEntered.IsSet);
+                recoveryEntry.InputsForVerification["bel çevresi"].Clear();controls.QueueCurrent();controls.EnabledForVerification.IsChecked=false;
+                writeRelease.Set();PumpUntil(()=>controls.PendingForVerification.IsCompleted);controls.FinishForVerification();PumpUntil(()=>controls.ReleaseForVerification.IsCompleted);
+                Check(MeasurementFormRecoveryStore.Load(MeasurementFormRecoveryStore.DirectoryPath,activeStore.PathForVerification,"basic").All(string.IsNullOrEmpty) &&
+                    window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "A cleared form queued behind a slow write replaces that session snapshot without changing the request",checks);
+            }
+            finally { writeRelease.Set();recoveryEntry.RecoveryForVerification.FinishForVerification();PumpUntil(()=>recoveryEntry.RecoveryForVerification.ReleaseForVerification.IsCompleted);recoveryEntry.Close();SynchronizationContext.SetSynchronizationContext(recoveryContext); }
+            var startupContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            var slowEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>throw new InvalidOperationException("Pending recovery reached discard confirmation.") };
+            using(var startupEntered=new ManualResetEventSlim())using(var startupRelease=new ManualResetEventSlim())
+            try
+            {
+                var controls=slowEntry.RecoveryForVerification;
+                controls.StoreFactoryForVerification=(directory,kind)=> { startupEntered.Set();startupRelease.Wait();return new MeasurementFormRecoveryStore(directory,kind); };
+                controls.EnabledForVerification.IsChecked=true;PumpUntil(()=>startupEntered.IsSet);slowEntry.InputsForVerification["bel çevresi"].Text="73";
+                var closeArgs=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(slowEntry,[slowEntry,closeArgs]);
+                Descendants<Button>((FrameworkElement)slowEntry.Content).Single(b=>Equals(b.Content,"Ölçüleri ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(closeArgs.Cancel && controls.StatusForVerification.Text.Contains("hazırlanıyor") && slowEntry.InputsForVerification["bel çevresi"].Text=="73" &&
+                    window.MeasurementsForVerification.Text==input.Measurements,
+                    "A pending recovery startup blocks both closing and applying while preserving the entered value",checks);
+                startupRelease.Set();PumpUntil(()=>!controls.StartingForVerification && controls.StoreForVerification is not null);PumpUntil(()=>controls.PendingForVerification.IsCompleted);
+                Check(controls.ReadyToClose(),"Closing becomes available only after startup and latest snapshot complete",checks);
+                var stored=controls.StoreForVerification!;controls.FinishForVerification();PumpUntil(()=>controls.ReleaseForVerification.IsCompleted);
+                Check(MeasurementFormRecoveryStore.Load(MeasurementFormRecoveryStore.DirectoryPath,stored.PathForVerification,"basic")[1]=="73",
+                    "A value entered during slow recovery startup reaches its protected snapshot",checks);
+            }
+            finally { startupRelease.Set();slowEntry.RecoveryForVerification.FinishForVerification();PumpUntil(()=>slowEntry.RecoveryForVerification.ReleaseForVerification.IsCompleted);slowEntry.ConfirmDiscardForVerification=()=>true;slowEntry.Close();SynchronizationContext.SetSynchronizationContext(startupContext); }
+            var failureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            var failedEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
+            try
+            {
+                var controls=failedEntry.RecoveryForVerification;controls.StoreFactoryForVerification=(_,_)=>throw new IOException("synthetic startup failure");
+                failedEntry.InputsForVerification["bel çevresi"].Text="74";controls.EnabledForVerification.IsChecked=true;PumpUntil(()=>!controls.StartingForVerification);
+                Check(controls.EnabledForVerification.IsChecked==false && controls.StatusForVerification.Text.Contains("açılamadı") &&
+                    failedEntry.InputsForVerification["bel çevresi"].Text=="74" && window.MeasurementsForVerification.Text==input.Measurements,
+                    "Recovery startup failure is reported and keeps the form and request unchanged",checks);
+            }
+            finally { failedEntry.RecoveryForVerification.FinishForVerification();failedEntry.Close();SynchronizationContext.SetSynchronizationContext(failureContext); }
+            var writeFailureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            var writeFailureEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
+            try
+            {
+                var controls=writeFailureEntry.RecoveryForVerification;controls.EnabledForVerification.IsChecked=true;PumpUntil(()=>!controls.StartingForVerification && controls.StoreForVerification is not null);
+                controls.StoreForVerification!.BeforeCommitForVerification=()=>throw new IOException("synthetic write failure");
+                writeFailureEntry.InputsForVerification["bel çevresi"].Text="75";controls.QueueCurrent();PumpUntil(()=>controls.PendingForVerification.IsCompleted);
+                var closeArgs=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(writeFailureEntry,[writeFailureEntry,closeArgs]);
+                Descendants<Button>((FrameworkElement)writeFailureEntry.Content).Single(b=>Equals(b.Content,"Ölçüleri ekle")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(closeArgs.Cancel && controls.StatusForVerification.Text.Contains("yazılamadı") && writeFailureEntry.InputsForVerification["bel çevresi"].Text=="75" &&
+                    window.MeasurementsForVerification.Text==input.Measurements,
+                    "A failed recovery write prevents closing or applying until the user changes the recovery choice",checks);
+                controls.StoreForVerification.BeforeCommitForVerification=null;
+                Descendants<Button>(controls.Panel).Single(b=>Equals(b.Content,"Kaydı yeniden dene")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));PumpUntil(()=>controls.PendingForVerification.IsCompleted);
+                Check(controls.ReadyToClose() && writeFailureEntry.InputsForVerification["bel çevresi"].Text=="75",
+                    "A successful retry of the same recovery revision clears the failure without losing input",checks);
+                controls.EnabledForVerification.IsChecked=false;
+            }
+            finally { writeFailureEntry.RecoveryForVerification.FinishForVerification();PumpUntil(()=>writeFailureEntry.RecoveryForVerification.ReleaseForVerification.IsCompleted);writeFailureEntry.Close();SynchronizationContext.SetSynchronizationContext(writeFailureContext); }
+            var restoreContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+            var restoreEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
+            var recoveryFixture=new MeasurementFormRecoveryStore(MeasurementFormRecoveryStore.DirectoryPath,"basic");
+            var fixturePath=recoveryFixture.PathForVerification;recoveryFixture.Save(["96","72","100","110"]);recoveryFixture.Dispose();var fixtureBytes=File.ReadAllBytes(fixturePath);
+            using(var readEntered=new ManualResetEventSlim())using(var readRelease=new ManualResetEventSlim())
+            try
+            {
+                var controls=restoreEntry.RecoveryForVerification;
+                var load=controls.RestoreFromPathAsync(fixturePath,["","","",""]);PumpUntil(()=>load.IsCompleted);
+                Check(load.GetAwaiter().GetResult() && restoreEntry.InputsForVerification["bel çevresi"].Text=="72" &&
+                    controls.StatusForVerification.Text.Contains("notlara henüz eklenmedi") && File.ReadAllBytes(fixturePath).SequenceEqual(fixtureBytes) &&
+                    window.MeasurementsForVerification.Text==input.Measurements && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Explicit recovery restores only form values while preserving source file, request and photo",checks);
+                foreach(var field in restoreEntry.InputsForVerification.Values)field.Clear();
+                controls.LoadForVerification=(path,kind)=> { readEntered.Set();readRelease.Wait();return MeasurementFormRecoveryStore.Load(MeasurementFormRecoveryStore.DirectoryPath,path,kind); };
+                var stale=controls.RestoreFromPathAsync(fixturePath,["","","",""]);PumpUntil(()=>readEntered.IsSet);
+                var pendingClose=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnFormClosing",PrivateInstance)!.Invoke(restoreEntry,[restoreEntry,pendingClose]);
+                Check(pendingClose.Cancel && controls.StatusForVerification.Text.Contains("işlemi sürüyor"),
+                    "Pending recovery read prevents closing before its outcome can be reported",checks);
+                restoreEntry.InputsForVerification["bel çevresi"].Text="75";readRelease.Set();PumpUntil(()=>stale.IsCompleted);
+                Check(!stale.GetAwaiter().GetResult() && restoreEntry.InputsForVerification["bel çevresi"].Text=="75" &&
+                    controls.StatusForVerification.Text.Contains("değişti") && File.ReadAllBytes(fixturePath).SequenceEqual(fixtureBytes),
+                    "Editing the form during recovery prevents stale replacement and retains the source file",checks);
+            }
+            finally { readRelease.Set();restoreEntry.RecoveryForVerification.FinishForVerification();restoreEntry.Close();SynchronizationContext.SetSynchronizationContext(restoreContext); }
             window.LoadForVerification(input);
             Check(window.ReferenceLabelForVerification.Text.Contains("telefonda açılamayabilir") && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
                 "A legacy truncated PNG is retained with an explicit phone compatibility warning",checks);
@@ -10633,7 +10810,7 @@ internal static class DesktopVerification
             Check(!ReferenceEquals(straight.BorderBrush,DesignRequestWindow.Accent),"Manual request replacement clears the model indication",checks);
             window.LoadForVerification(input);
         }
-        finally { window.Close(); }
+        finally { window.ChatInputForVerification.Clear();typeof(DesignRequestWindow).GetField("dirty",PrivateInstance)!.SetValue(window,false);window.Close(); }
     }
     private static void VerifyCoordinateDrawing(MainWindow studio,List<string> checks)
     {

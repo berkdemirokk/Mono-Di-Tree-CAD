@@ -13,6 +13,8 @@ internal sealed class AtelierMeasurementEntryWindow : Window
     private readonly string originalPrompt,originalMeasurements;
     private bool accepted;
     internal Func<bool>? ConfirmDiscardForVerification { get; set; }
+    internal MeasurementRecoveryControls RecoveryForVerification { get; private set; } = null!;
+    internal ScrollViewer BodyForVerification { get; } = new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     internal Dictionary<string,TextBox> InputsForVerification { get; } = new(StringComparer.Ordinal);
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0),Foreground=DesignRequestWindow.Ink };
     internal AtelierMeasurementEntryWindow(DesignRequestWindow request)
@@ -24,27 +26,28 @@ internal sealed class AtelierMeasurementEntryWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
         var apply=new Button { Content="Ölçüleri ekle",Padding=new Thickness(12,6,12,6),Background=DesignRequestWindow.Accent,Foreground=DesignRequestWindow.Surface };
-        apply.Click+=(_,_)=> { if(TryApply()) { accepted=true;DialogResult=true; } };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
-        var body=new StackPanel();root.Children.Add(body);
-        body.Children.Add(new TextBlock { Text="Bildiğiniz ölçüleri santimetre olarak girin. Boş alanlar eklenmez; mevcut notlar korunur. Farklı değerler çelişki olarak gösterilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,10) });
+        apply.Click+=(_,_)=> { if(RecoveryForVerification.ReadyToClose() && TryApply()) { accepted=true;DialogResult=true; } };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        var body=new StackPanel();BodyForVerification.Content=body;root.Children.Add(BodyForVerification);
+        body.Children.Add(new TextBlock { Text="Bildiğiniz ölçüleri santimetre olarak girin. Boş alanlar eklenmez; mevcut notlar korunur. Farklı değerler çelişki olarak gösterilir. Yerel kurtarma seçenekleri formun sonundadır.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,10) });
         var fields=new WrapPanel();body.Children.Add(fields);
         void Field(string key,string title)
         {
-            var panel=new StackPanel { Width=190,Margin=new Thickness(0,0,12,8) };
+            var panel=new StackPanel { Width=180,Margin=new Thickness(0,0,8,8) };
             var input=new TextBox { MaxLength=24,MinHeight=34 };var label=new Label { Content=title+" (cm)",Target=input,Foreground=DesignRequestWindow.Ink,Padding=new Thickness(0,2,0,2) };
             AutomationProperties.SetName(input,title+" santimetre");AutomationProperties.SetHelpText(input,"Yalnız sayı girin; birim santimetredir. Bilinmiyorsa boş bırakın.");
             panel.Children.Add(label);panel.Children.Add(input);fields.Children.Add(panel);InputsForVerification.Add(key,input);
         }
         Field("göğüs çevresi","Göğüs çevresi");Field("bel çevresi","Bel çevresi");Field("kalça çevresi","Kalça çevresi");Field("elbise boyu","Elbise boyu");
         AutomationProperties.SetName(StatusForVerification,"Ölçü girişi durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(StatusForVerification);
+        RecoveryForVerification=new MeasurementRecoveryControls(this,"basic",new[] { InputsForVerification["göğüs çevresi"],InputsForVerification["bel çevresi"],InputsForVerification["kalça çevresi"],InputsForVerification["elbise boyu"] });body.Children.Add(RecoveryForVerification.Panel);
         Closing+=OnFormClosing;
     }
     internal bool CanCloseWithoutLosingInput()
     {
         if(accepted || InputsForVerification.Values.All(input=>input.Text.Length==0))return true;
-        return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencereyi kapatıp bu girişleri silmek istiyor musunuz?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+        return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencere kapanınca formdan silinir; varsa yerel kurtarma kopyaları ayrıca silinene kadar kalır. Kapatılsın mı?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
     }
-    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
+    private void OnFormClosing(object? sender,CancelEventArgs e) { if(!RecoveryForVerification.ReadyToClose() || !CanCloseWithoutLosingInput())e.Cancel=true; }
     internal bool TryApply()
     {
         if(request.PromptForVerification.Text!=originalPrompt || request.MeasurementsForVerification.Text!=originalMeasurements)
