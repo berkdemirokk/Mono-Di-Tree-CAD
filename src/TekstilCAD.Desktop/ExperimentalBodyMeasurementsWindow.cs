@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.ComponentModel;
 using TekstilCAD.Patterns;
 
 namespace TekstilCAD.Desktop;
@@ -12,6 +13,8 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
 {
     private readonly DesignRequestWindow request;
     private readonly string originalPrompt,originalMeasurements;
+    private bool accepted;
+    internal Func<bool>? ConfirmDiscardForVerification { get; set; }
     internal Dictionary<string,TextBox> InputsForVerification { get; } = new(StringComparer.Ordinal);
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,8,0,0) };
     private static readonly (string Label,string Key,bool Angle)[] Fields = [
@@ -30,7 +33,7 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
         var cancel=new Button { Content="Vazgeç",IsCancel=true,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,0,8,0) };
         var apply=new Button { Content="Girilenleri notlara ekle",Padding=new Thickness(12,6,12,6),Background=DesignRequestWindow.Accent,Foreground=DesignRequestWindow.Surface };
-        apply.Click+=(_,_)=> { if(TryApply())DialogResult=true; };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        apply.Click+=(_,_)=> { if(TryApply()) { accepted=true;DialogResult=true; } };actions.Children.Add(cancel);actions.Children.Add(apply);DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         AutomationProperties.SetName(StatusForVerification,"Deneysel ölçü girişi durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         var statusScroll=new ScrollViewer { Content=StatusForVerification,MaxHeight=70,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
         AutomationProperties.SetName(statusScroll,"Deneysel ölçü durumu");DockPanel.SetDock(statusScroll,Dock.Bottom);root.Children.Add(statusScroll);
@@ -51,7 +54,14 @@ internal sealed class ExperimentalBodyMeasurementsWindow : Window
             input.ToolTip=instructions;AutomationProperties.SetName(input,label+" "+unit);AutomationProperties.SetHelpText(input,instructions+" "+(angle ? "Bilinmiyorsa boş bırakın." : "Santimetre cinsinden; bilinmiyorsa boş bırakın."));
             body.Children.Add(input);InputsForVerification.Add(label,input);
         }
+        Closing+=OnClosing;
     }
+    internal bool CanCloseWithoutLosingInput()
+    {
+        if(accepted || InputsForVerification.Values.All(input=>input.Text.Length==0))return true;
+        return ConfirmDiscardForVerification?.Invoke() ?? MessageBox.Show(this,"Formdaki değerler henüz notlara eklenmedi. Pencereyi kapatıp bu girişleri silmek istiyor musunuz?","Eklenmemiş ölçüler",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+    }
+    private void OnClosing(object? sender,CancelEventArgs e) { if(!CanCloseWithoutLosingInput())e.Cancel=true; }
     internal bool TryApply()
     {
         if(!TryRead(out var lines,out _))return false;

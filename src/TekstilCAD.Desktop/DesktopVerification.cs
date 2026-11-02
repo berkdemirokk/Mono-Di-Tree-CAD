@@ -10066,7 +10066,7 @@ internal static class DesktopVerification
             window.LoadForVerification(input);
             Check(tiles["göğüs çevresi"].Text=="96 cm" && tiles["bel çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
                 "Opening a request updates measurement cards without inferring an ambiguous length",checks);
-            _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window);
+            _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try
             {
                 Render(entry,Path.ChangeExtension(reportPath,".atelier-measurement-entry.png"),440,390);
@@ -10074,7 +10074,14 @@ internal static class DesktopVerification
                 Check(entry.InputsForVerification.Count==4 && entry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable && FullyVisible(t,entryRoot)) &&
                     !entry.TryApply() && entry.StatusForVerification.Text.Contains("en az bir"),
                     "Measurement entry starts blank and preserves the request when no value is entered",checks);
+                entry.ConfirmDiscardForVerification=()=>throw new InvalidOperationException("Empty entry requested discard confirmation.");
+                Check(entry.CanCloseWithoutLosingInput(),"An empty basic measurement form can close without a discard prompt",checks);
                 var chest=entry.InputsForVerification["göğüs çevresi"];var waist=entry.InputsForVerification["bel çevresi"];
+                var discardAsked=false;entry.ConfirmDiscardForVerification=()=> { discardAsked=true;return false; };chest.Text=" ";
+                var cancelClosing=new System.ComponentModel.CancelEventArgs();typeof(AtelierMeasurementEntryWindow).GetMethod("OnClosing",PrivateInstance)!.Invoke(entry,[entry,cancelClosing]);
+                Check(discardAsked && cancelClosing.Cancel && chest.Text==" " && window.MeasurementsForVerification.Text==input.Measurements,
+                    "Closing the basic measurement form requires confirmation even for whitespace and preserves rejected input",checks);
+                entry.ConfirmDiscardForVerification=()=>true;Check(entry.CanCloseWithoutLosingInput(),"A user-approved discard can close the measurement form",checks);chest.Clear();
                 chest.Text="90 cm; göğüs çevresi 90";
                 Check(!entry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,"Measurement entry refuses injected labels and units",checks);
                 chest.Text="97";waist.Text="0";
@@ -10087,26 +10094,33 @@ internal static class DesktopVerification
                     "Measurement entry appends values, retains originals and surfaces conflicting measurements",checks);
             }
             finally { entry.Close(); }
-            var staleEntry=new AtelierMeasurementEntryWindow(window);
+            var staleEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try { staleEntry.InputsForVerification["kalça çevresi"].Text="100";window.PromptForVerification.Text+=" değişti";
                 var expected=window.MeasurementsForVerification.Text;
                 Check(!staleEntry.TryApply() && staleEntry.StatusForVerification.Text.Contains("İstek değişti") && window.MeasurementsForVerification.Text==expected,
                     "A stale measurement entry cannot overwrite a changed request",checks); }
             finally { staleEntry.Close(); }
             window.LoadForVerification(input);window.MeasurementsForVerification.Text=new string('x',DesignRequestStorage.MaximumTextLength-2);
-            var fullEntry=new AtelierMeasurementEntryWindow(window);
+            var fullEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try { fullEntry.InputsForVerification["elbise boyu"].Text="110";var expected=window.MeasurementsForVerification.Text;
                 Check(!fullEntry.TryApply() && fullEntry.StatusForVerification.Text.Contains("sınırına") && window.MeasurementsForVerification.Text==expected && fullEntry.InputsForVerification["elbise boyu"].Text=="110",
                     "Measurement entry refuses overflow without losing existing or entered text",checks); }
             finally { fullEntry.Close(); }
             window.LoadForVerification(input);
-            var experimentalEntry=new ExperimentalBodyMeasurementsWindow(window);
+            var experimentalEntry=new ExperimentalBodyMeasurementsWindow(window) { ConfirmDiscardForVerification=()=>true };
             try
             {
                 Render(experimentalEntry,Path.ChangeExtension(reportPath,".experimental-body-entry.png"),440,420);
                 Check(experimentalEntry.InputsForVerification.Count==15 && experimentalEntry.InputsForVerification.Values.All(t=>t.Text=="" && t.Focusable) &&
                     !experimentalEntry.TryApply() && window.MeasurementsForVerification.Text==input.Measurements,
                     "Experimental body intake starts empty and does not modify the request",checks);
+                var experimentalDiscardAsked=false;experimentalEntry.ConfirmDiscardForVerification=()=> { experimentalDiscardAsked=true;return false; };
+                experimentalEntry.InputsForVerification["bel çevresi"].Text="72";
+                var cancelExperimental=new System.ComponentModel.CancelEventArgs();typeof(ExperimentalBodyMeasurementsWindow).GetMethod("OnClosing",PrivateInstance)!.Invoke(experimentalEntry,[experimentalEntry,cancelExperimental]);
+                Check(experimentalDiscardAsked && cancelExperimental.Cancel && experimentalEntry.InputsForVerification["bel çevresi"].Text=="72" &&
+                    window.MeasurementsForVerification.Text==input.Measurements && window.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data),
+                    "Closing experimental form cannot silently discard an unapproved measurement",checks);
+                experimentalEntry.ConfirmDiscardForVerification=()=>true;experimentalEntry.InputsForVerification["bel çevresi"].Clear();
                 Check(!experimentalEntry.TryPrepare(out var missingDraft) && missingDraft is null && experimentalEntry.StatusForVerification.Text.Contains("gerekli"),
                     "Experimental request requires all fifteen explicit fields before review",checks);
                 foreach(var field in experimentalEntry.InputsForVerification.Values)field.Text="100";
@@ -10140,13 +10154,13 @@ internal static class DesktopVerification
                     "Experimental intake appends explicit notes while preserving prompt and exact reference bytes",checks);
             }
             finally { experimentalEntry.Close(); }
-            var staleExperimental=new ExperimentalBodyMeasurementsWindow(window);
+            var staleExperimental=new ExperimentalBodyMeasurementsWindow(window) { ConfirmDiscardForVerification=()=>true };
             try { staleExperimental.InputsForVerification["boyun çevresi"].Text="35";window.MeasurementsForVerification.Text+=" değişti";var expected=window.MeasurementsForVerification.Text;
                 Check(!staleExperimental.TryApply() && window.MeasurementsForVerification.Text==expected && staleExperimental.InputsForVerification["boyun çevresi"].Text=="35",
                     "Experimental intake rejects stale request changes without losing entered text",checks); }
             finally { staleExperimental.Close(); }
             window.LoadForVerification(input);
-            var partialExperimental=new ExperimentalBodyMeasurementsWindow(window);
+            var partialExperimental=new ExperimentalBodyMeasurementsWindow(window) { ConfirmDiscardForVerification=()=>true };
             try { partialExperimental.InputsForVerification["üst göğüs çevresi"].Text="90";partialExperimental.InputsForVerification["ön üst göğüs"].Text="100";
                 Check(!partialExperimental.TryPrepare(out _) && partialExperimental.TryApply() && window.MeasurementsForVerification.Text.Contains("üst göğüs çevresi 90 cm") &&
                     window.MeasurementsForVerification.Text.Contains("ön üst göğüs 100 cm") && window.StatusForVerification.Text.Contains("Çelişkileri") &&
