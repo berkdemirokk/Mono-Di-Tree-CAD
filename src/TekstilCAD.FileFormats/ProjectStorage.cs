@@ -57,6 +57,7 @@ public static class ProjectStorage
                 if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
+                RejectUnsupportedPhysicalFeatures(root[1],cancellationToken);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException("Sürümlü projede serileme listesi eksik veya geçersiz; dosya açılmadı.");
                 if (version == 1 && HasSerializedMetadata(root[1])) throw new InvalidDataException("Parça bilgileri için sürüm 2 gereklidir.");
@@ -89,6 +90,7 @@ public static class ProjectStorage
             else if (root.ValueKind == JsonValueKind.Object)
             {
                 ValidateSerializedIdentityAndPoints(root);
+                RejectUnsupportedPhysicalFeatures(root,cancellationToken);
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
                 ValidateSerializedImportProvenance(root, 0);
@@ -128,6 +130,19 @@ public static class ProjectStorage
         { throw new InvalidDataException("Proje dosyasının metin kodlaması bozuk; dosya açılmadı.", ex); }
     }
     private static bool HasSerializedMetadata(JsonElement project) => project.TryGetProperty("Pieces", out var pieces) && pieces.ValueKind == JsonValueKind.Array && pieces.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Metadata", out _));
+    // Another experimental branch used version 8 for a different physical
+    // contour schema. Never deserialize or discard it as photo provenance.
+    // Presence alone is sufficient to reject, including null or malformed data.
+    private static void RejectUnsupportedPhysicalFeatures(JsonElement project,CancellationToken cancellationToken)
+    {
+        if(!project.TryGetProperty("Pieces",out var pieces) || pieces.ValueKind!=JsonValueKind.Array)return;
+        foreach(var piece in pieces.EnumerateArray())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if(piece.ValueKind==JsonValueKind.Object && piece.TryGetProperty("PhysicalFeatures",out _))
+                throw new InvalidDataException("Bu proje desteklenmeyen fiziksel kontur bilgisi içeriyor. Veri kaybını önlemek için dosya açılmadı ve değiştirilmedi; dosyanın oluşturulduğu sürümü kullanın.");
+        }
+    }
     private static void ValidateSerializedPhotoTraceHistory(JsonElement project,int version,CancellationToken cancellationToken)
     {
         var present=project.TryGetProperty("PhotoTraceHistory",out var history);

@@ -2984,6 +2984,16 @@ internal static class DesktopVerification
             Exception? failure=null;studio.ProjectOpenErrorForVerification=ex=>failure=ex;
             pending=studio.OpenProjectFileAsync(Path.Combine(work,"missing-open.tcad"));PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             Check(failure is not null && studio.Document.Name=="Opened","Failed project read preserves current document",checks);
+            var foreignPath=Path.Combine(work,"foreign-physical-v8.tcad");
+            ProjectStorage.Save(new ProjectDocument { Name="Foreign",Pieces=[new PatternPiece { Name="Parça",Points=[new(0,0),new(10,0),new(0,10)] }] },foreignPath);
+            var foreignProject=System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(foreignPath))!;
+            foreignProject["Pieces"]![0]!["PhysicalFeatures"]=new System.Text.Json.Nodes.JsonObject();
+            var foreign=new System.Text.Json.Nodes.JsonArray(System.Text.Json.Nodes.JsonValue.Create(8),foreignProject);
+            File.WriteAllText(foreignPath,foreign.ToJsonString());var foreignBytes=File.ReadAllBytes(foreignPath);var beforeForeign=studio.Document.Clone();failure=null;
+            pending=studio.OpenProjectFileAsync(foreignPath);PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(failure is InvalidDataException && failure.Message.Contains("fiziksel kontur") &&
+                DocumentSession.ContentEquals(beforeForeign,studio.Document) && File.ReadAllBytes(foreignPath).SequenceEqual(foreignBytes),
+                "Conflicting physical-contour version is explained without changing the current document or input file",checks);
         }
         finally
         {
@@ -10756,7 +10766,7 @@ internal static class DesktopVerification
                     "Design request presents editable description and measurements before optional conversation at "+size,checks);
             }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
-            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==45),
+            Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==70),
                 "Compact atelier keeps every model illustration within the short viewport",checks);
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-wide.png"),900,700);
             Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==150),

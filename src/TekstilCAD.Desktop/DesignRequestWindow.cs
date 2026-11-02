@@ -91,7 +91,7 @@ internal sealed class DesignRequestWindow : Window
             badge.Visibility=intro.Visibility=galleryHeading.Visibility=galleryHelp.Visibility=headerSubtitle.Visibility=visible;
             header.Margin=compact ? new Thickness(0,0,0,4) : new Thickness(0,0,0,10);
             modelHeading.Text=compact ? "Model fikri seç" : "Modelini seç";modelHeading.FontSize=compact ? 20 : 27;
-            foreach(var item in modelImages)item.Height=compact ? 45 : 150;
+            foreach(var item in modelImages)item.Height=compact ? 70 : 150;
             foreach(var item in modelTitles)item.MinHeight=compact ? 20 : 34;
             foreach(var item in modelDescriptions)item.Visibility=visible;
         };

@@ -106,4 +106,40 @@ public sealed class PhotoTraceProvenanceTests
         var json=ProjectStorage.SerializeProject(layout);Assert.Equal(8,JsonNode.Parse(json)![0]!.GetValue<int>());
         Assert.True(DocumentSession.ContentEquals(layout,ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(json))));
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConflictingVersionEightPhysicalFeaturesAreRejectedWithoutChangingFile(bool withPhotoHistory)
+    {
+        // The other experimental schema stores PhysicalFeatures on a piece in
+        // version 8. Keep the fixture independent of that live worktree.
+        var root=JsonNode.Parse(ProjectStorage.SerializeProject(Fixture()))!;
+        var piece=root[1]!["Pieces"]![0]!;
+        piece["PhysicalFeatures"]=new JsonObject {
+            ["OwnerPieceId"]=piece["Id"]!.GetValue<string>(),
+            ["SourcePoints"]=piece["Points"]!.DeepClone(),
+            ["EdgeIds"]=new JsonArray(Guid.NewGuid().ToString(),Guid.NewGuid().ToString()),
+            ["Notches"]=new JsonArray() };
+        if(!withPhotoHistory)root[1]!.AsObject().Remove("PhotoTraceHistory");
+        var path=Path.Combine(AppContext.BaseDirectory,"foreign-v8-"+Guid.NewGuid().ToString("N")+".tcad");
+        try
+        {
+            var bytes=Encoding.UTF8.GetBytes(root.ToJsonString());File.WriteAllBytes(path,bytes);
+            var error=Assert.Throws<InvalidDataException>(()=>ProjectStorage.LoadWithVersion(path));
+            Assert.Contains("fiziksel kontur",error.Message,StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(bytes,File.ReadAllBytes(path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
+    }
+    [Fact]
+    public void UnsupportedPhysicalFeaturePresenceIsRejectedEvenWhenNullOrUnversioned()
+    {
+        var root=JsonNode.Parse(ProjectStorage.SerializeProject(Fixture()))!;
+        root[1]!["Pieces"]![0]!["PhysicalFeatures"]=null;
+        var error=Assert.Throws<InvalidDataException>(()=>Parse(root));
+        Assert.Contains("fiziksel kontur",error.Message,StringComparison.OrdinalIgnoreCase);
+        var unversioned=root[1]!.DeepClone();unversioned.AsObject().Remove("PhotoTraceHistory");
+        error=Assert.Throws<InvalidDataException>(()=>Parse(unversioned));
+        Assert.Contains("fiziksel kontur",error.Message,StringComparison.OrdinalIgnoreCase);
+    }
 }
