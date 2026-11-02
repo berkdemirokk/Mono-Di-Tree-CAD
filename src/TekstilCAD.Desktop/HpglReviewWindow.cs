@@ -281,11 +281,12 @@ internal sealed class HpglReviewWindow : Window
     private static string GeometryDescription(HpglPieceGeometryPreview geometry,HpglLengthReview.Result lengths,IReadOnlyList<HpglTurnReview.Sample> samples)
     {
         var text=new StringBuilder("Koordinatlar ve farklar mm cinsindedir. Kaynak, simülasyonda seçilen ölçeğin uygulanmış halidir; HPGL dosya ızgarasındaki değerdir. Çizimdeki işaretler semboliktir; boyutları fiziksel ölçü değildir. Önizleme makine uygunluğu onayı değildir.");
-        text.Append("\nKenar uzunlukları (yaklaşık): ").Append(lengths.EdgeCount).Append(" kenar; kaynak toplam ").Append(MeasurementInput.Format(lengths.SourceLengthMm))
-            .Append(" mm; HPGL toplam ").Append(MeasurementInput.Format(lengths.EncodedLengthMm)).Append(" mm; toplam fark ")
-            .Append(MeasurementInput.Format(lengths.EncodedLengthMm-lengths.SourceLengthMm)).Append(" mm.")
+        static string LengthValue(double value)=>value.ToString("G8",CultureInfo.CurrentCulture);
+        text.Append("\nKenar uzunlukları (yaklaşık, gösterim yuvarlanır): ").Append(lengths.EdgeCount).Append(" kenar; kaynak toplam ").Append(LengthValue(lengths.SourceLengthMm))
+            .Append(" mm; HPGL toplam ").Append(LengthValue(lengths.EncodedLengthMm)).Append(" mm; toplam fark ")
+            .Append(LengthValue(lengths.EncodedLengthMm-lengths.SourceLengthMm)).Append(" mm.")
             .Append(" En büyük mutlak kenar farkı: nokta ").Append(lengths.WorstStartIndex+1).Append(" → ").Append(lengths.WorstEndIndex+1)
-            .Append("; HPGL − kaynak ").Append(MeasurementInput.Format(lengths.WorstSignedDifferenceMm)).Append(" mm.")
+            .Append("; HPGL − kaynak ").Append(LengthValue(lengths.WorstSignedDifferenceMm)).Append(" mm.")
             .Append(" Toplam fark kenar değişikliklerini gizleyebilir; fiziksel çıktı veya ayrıntı korunumu doğrulanmaz.");
         if(samples.Count==0)return text.Append("\nBu sayfada işaretli örnek yok.").ToString();
         var points=geometry.Points;var indices=new List<int>(points.Count);
