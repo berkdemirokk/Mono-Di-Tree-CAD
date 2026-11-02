@@ -10,6 +10,6 @@ Fotoğraf çiziminde kullanıcı noktalar temizken düzlem modunu seçip en ve b
 
 Bağımsız iki noktalı ölçü karşılaştırması, milimetre farkının yanında `(tahmin − girilen) / girilen × 100` göreli farkını gösterir. Bu sayı yalnız seçilen mesafe ve kullanıcının girdiği değer için geçerlidir; tolerans, hata sınırı veya kabul kararı değildir. Çok küçük girilen değerlerde yüzde sayısal olarak gösterilemeyebilir; milimetre sonucu ayrı kalır.
 
-Karşılaştırma penceresi seçilen iki ucu fotoğraf üzerinde numaralı işaretlerle gösterir; liste ve görüntü pencerenin açıldığı andaki taslak kopyasına aittir. Bu görünüm noktaları değiştirmez veya fotoğraf kenarıyla uyumu ölçmez. Gerçek fare, klavye ve ekran okuyucu kullanıcı kabulü yapılmadı.
+Karşılaştırma penceresi seçilen iki ucu fotoğraf üzerinde numaralı işaretlerle gösterir; liste ve görüntü pencerenin açıldığı andaki taslak kopyasına aittir. Fotoğrafta sol tık birinci, sağ tık ikinci ucu seçer; yakın noktalar ayırt edilemiyorsa seçim yapılmaz ve liste kullanılır. Listeler klavyeyle de kullanılabilir. Seçim eski karşılaştırma sonucunu kaldırır, çizim noktalarını değiştirmez veya fotoğraf kenarıyla uyumu ölçmez. Gerçek fare, klavye ve ekran okuyucu kullanıcı kabulü yapılmadı.
 
 Geçmiş doğrulaması yeniden hesaplanan koordinatların bit düzeyinde eşleşmesini ister. Bu turdaki kayıt/açma doğrulaması aynı Windows/.NET ortamında yapıldı; farklı işlemci ve çalışma zamanı kombinasyonları arasında bit düzeyinde tekrarlanabilirlik henüz kanıtlanmadı.

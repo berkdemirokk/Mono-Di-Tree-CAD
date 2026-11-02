@@ -19,6 +19,7 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal TextBox ResultForVerification { get; } = new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,AcceptsReturn=true,MinHeight=75,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     internal PhotoTraceMeasurementResult? LastResultForVerification { get; private set; }
     internal PhotoMeasurementPreview PreviewForVerification { get; }
+    internal TextBlock PickStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4),Text="Fotoğrafta sol tık: 1; sağ tık: 2. Yakın noktalar için listeyi kullanın." };
 
     internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null)
     {
@@ -39,6 +40,7 @@ internal sealed class PhotoTraceCheckWindow : Window
         var selectors=new StackPanel();selectors.Children.Add(new Label { Content="1 · Kontrol başlangıcı",Target=FirstForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(FirstForVerification);
         selectors.Children.Add(new Label { Content="2 · Kontrol bitişi",Target=SecondForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(SecondForVerification);selection.Children.Add(selectors);
         PreviewForVerification.Margin=new Thickness(10,0,0,0);Grid.SetColumn(PreviewForVerification,1);selection.Children.Add(PreviewForVerification);body.Children.Add(selection);
+        AutomationProperties.SetLiveSetting(PickStatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(PickStatusForVerification);
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
         body.Children.Add(ResultForVerification);
@@ -49,6 +51,8 @@ internal sealed class PhotoTraceCheckWindow : Window
         AutomationProperties.SetName(KnownForVerification,"Bağımsız bilinen kontrol mesafesi milimetre");AutomationProperties.SetName(ResultForVerification,"Ölçü karşılaştırması sonucu");AutomationProperties.SetLiveSetting(ResultForVerification,AutomationLiveSetting.Polite);
         void SelectionChanged() { ClearResult();PreviewForVerification.Select((FirstForVerification.SelectedItem as Choice)?.Index,(SecondForVerification.SelectedItem as Choice)?.Index); }
         FirstForVerification.SelectionChanged+=(_,_)=>SelectionChanged();SecondForVerification.SelectionChanged+=(_,_)=>SelectionChanged();KnownForVerification.TextChanged+=(_,_)=>ClearResult();
+        PreviewForVerification.PointChosen+=(index,second)=> { if(second)SecondForVerification.SelectedIndex=index;else FirstForVerification.SelectedIndex=index; };
+        PreviewForVerification.PickMessage+=message=>PickStatusForVerification.Text=message;
         calculate.Click+=(_,_)=> { Calculate();ResultForVerification.BringIntoView(); };close.Click+=(_,_)=>Close();
     }
     private void ClearResult() { LastResultForVerification=null;ResultForVerification.Text=""; }

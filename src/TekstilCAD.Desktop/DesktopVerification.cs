@@ -9331,6 +9331,20 @@ internal static class DesktopVerification
                 Check(checkWindow.ResultForVerification.Text.Contains("Göreli fark (fark / girilen)") && checkWindow.ResultForVerification.Text.Contains(expectedPercent+" %") &&
                     checkWindow.ResultForVerification.Text.Contains("üretim onayı verilmedi"),
                     "Photo comparison reports the signed relative difference without an acceptance claim",checks);
+                var previewSize=checkWindow.PreviewForVerification.RenderSize;
+                var uniquePick=checkWindow.PreviewForVerification.MapPixel(new Point2(20,20),previewSize);
+                Check(checkWindow.PreviewForVerification.PickAt(uniquePick,previewSize,false) && checkWindow.FirstForVerification.SelectedIndex==4 &&
+                    checkWindow.ResultForVerification.Text=="" && DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom),
+                    "Picking a unique photo point selects the first endpoint and clears the old comparison without editing the draft",checks);
+                var ambiguousPick=checkWindow.PreviewForVerification.MapPixel(new Point2(10,10),previewSize);
+                Check(!checkWindow.PreviewForVerification.PickAt(ambiguousPick,previewSize,false) && checkWindow.FirstForVerification.SelectedIndex==4 &&
+                    checkWindow.PickStatusForVerification.Text.Contains("ayırt edilemiyor"),
+                    "Coincident photo points are not silently selected by the preview",checks);
+                checkWindow.SecondForVerification.SelectedIndex=0;
+                Check(checkWindow.PreviewForVerification.PickAt(uniquePick,previewSize,true) && checkWindow.SecondForVerification.SelectedIndex==4 &&
+                    !checkWindow.PreviewForVerification.PickAt(new Point(-1,0),previewSize,true),
+                    "Photo preview selects the second endpoint and ignores clicks outside the viewport",checks);
+                checkWindow.FirstForVerification.SelectedIndex=0;
                 checkWindow.KnownForVerification.Text="1e-320";checkWindow.Calculate();
                 Check(checkWindow.LastResultForVerification is not null && checkWindow.ResultForVerification.Text.Contains("sayısal aralıkta gösterilemiyor") &&
                     !checkWindow.ResultForVerification.Text.Contains("Infinity"),
