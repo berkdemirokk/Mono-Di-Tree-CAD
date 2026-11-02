@@ -1043,7 +1043,7 @@ internal static class DesktopVerification
             VerifyGradingGeometryNotice(studio,reportPath,checks);
             VerifyOffsetSourceHint(studio,checks);
             VerifyOffsetSourceContext(studio,checks);
-            VerifyOffsetUnverifiedDetailGuidance(studio,checks);
+            VerifyOffsetUnverifiedDetailGuidance(studio,reportPath,checks);
             VerifySelectedNotchComparison(studio,checks);
             VerifyGradeInputFeedback(studio,checks);
             VerifyGradeBatchDraft(studio,checks);
@@ -14193,7 +14193,7 @@ internal static class DesktopVerification
         }
         finally { tools.Close();SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
-    private static void VerifyOffsetUnverifiedDetailGuidance(MainWindow studio,List<string> checks)
+    private static void VerifyOffsetUnverifiedDetailGuidance(MainWindow studio,string reportPath,List<string> checks)
     {
         var previousContext=SynchronizationContext.Current;
         SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
@@ -14226,6 +14226,24 @@ internal static class DesktopVerification
                 AutomationProperties.GetHelpText(previewButton).Contains("dışa aktarılmaz",StringComparison.Ordinal),
                 "Unverified offset offers an accessible display-only preview",checks);
             new System.Windows.Interop.WindowInteropHelper(tools).EnsureHandle();
+            var markedPreview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points,lobed.Points[0],0,TekstilCAD.Patterns.OffsetLocalSample.Vertex);
+            try
+            {
+                Render(markedPreview,Path.ChangeExtension(reportPath,".offset-unverified-sample.png"),450,350);
+                var markedRoot=(FrameworkElement)markedPreview.Content;
+                var focus=markedPreview.FocusSampleForVerification ?? throw new InvalidOperationException("Offset sample focus missing.");
+                var markedDrawing=Descendants<FrameworkElement>(markedRoot).Single(c=>AutomationProperties.GetName(c)=="Doğrulanmamış kaynak ve aday kontur görseli");
+                Check(FullyVisible(focus,markedRoot) && focus.Focusable && markedPreview.MarkedSampleForVerification==lobed.Points[0] &&
+                    AutomationProperties.GetHelpText(focus).Contains("onayı vermez") && Descendants<TextBlock>(markedRoot).Any(t=>t.Text.Contains("Mor halka") && t.Text.Contains("kusur kanıtı değildir")),
+                    "Unverified offset preview identifies and exposes its first source sample at compact size",checks);
+                focus.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                var drawingType=markedDrawing.GetType();double Field(string key)=>(double)drawingType.GetField(key,PrivateInstance)!.GetValue(markedDrawing)!;
+                var scale=Math.Max(1,Math.Min(markedDrawing.ActualWidth,markedDrawing.ActualHeight)-30)/Field("span")*Field("zoom");
+                var centered=OffsetUnverifiedPreviewWindow.MapPoint(lobed.Points[0],Field("cx"),Field("cy"),scale,markedDrawing.ActualWidth,markedDrawing.ActualHeight,Field("panX"),Field("panY"));
+                Check(Math.Abs(centered.X-markedDrawing.ActualWidth/2)<1e-7 && Math.Abs(centered.Y-markedDrawing.ActualHeight/2)<1e-7 && Field("zoom")>=80 &&
+                    DocumentSession.ContentEquals(before,studio.Document),"Focusing an unverified sample changes only the view",checks);
+            }
+            finally { markedPreview.Close(); }
             var preview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points);
             try
             {

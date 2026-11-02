@@ -29,6 +29,7 @@ public sealed class OffsetLocalDetailErrorTests
 
         Assert.IsAssignableFrom<ArgumentException>(error);
         Assert.Equal(error.SourceIndex.HasValue,error.Sample.HasValue);
+        Assert.Equal(error.SourceIndex.HasValue,error.SamplePoint.HasValue);
         if(error.SourceIndex is int index)Assert.InRange(index,0,source.Points.Count-1);
         Assert.True(DocumentSession.ContentEquals(before, current));
     }

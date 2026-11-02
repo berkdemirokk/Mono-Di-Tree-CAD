@@ -1326,7 +1326,7 @@ public sealed class TextileToolsWindow : Window
                                 result.Text="Proje, seçim veya dikiş payı değişti; eski önizleme gösterilmedi. Güncel konturla yeniden hesaplayın.";
                                 return;
                             }
-                            new OffsetUnverifiedPreviewWindow(this,snapshot.Points,preview).ShowDialog();
+                            new OffsetUnverifiedPreviewWindow(this,snapshot.Points,preview,unverified.SamplePoint,unverified.SourceIndex,unverified.Sample).ShowDialog();
                         };
                         unverifiedOffsetPreview.Visibility=Visibility.Visible;
                     }                }

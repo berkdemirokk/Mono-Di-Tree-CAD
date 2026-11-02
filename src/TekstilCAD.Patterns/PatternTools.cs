@@ -116,7 +116,8 @@ public static class PatternTools
                 preview.Add(new Point2(p.X / scale, p.Y / scale));
             }
             cancellationToken.ThrowIfCancellationRequested();
-            throw new OffsetLocalDetailUnverifiedException(preview,sourceMatches ? null : failingIndex,sourceMatches ? null : failingSample);
+            var samplePoint=sourceMatches ? (Point2?)null : SourceGridSample(path,failingIndex,failingSample);
+            throw new OffsetLocalDetailUnverifiedException(preview,sourceMatches ? null : failingIndex,sourceMatches ? null : failingSample,samplePoint);
         }
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
@@ -192,6 +193,14 @@ public static class PatternTools
     // Subtract integer coordinates before conversion to retain precision at large origins.
     private static bool LocallyMatches(Path64 source, Path64 target, double tolerance)
         => LocallyMatchesWithCancellation(source, target, tolerance, CancellationToken.None);
+
+    private static Point2 SourceGridSample(Path64 source,int index,OffsetLocalSample kind)
+    {
+        var a=source[index];var b=source[(index+1)%source.Count];
+        var x=(double)a.X;var y=(double)a.Y;
+        if(kind==OffsetLocalSample.EdgeMidpoint) { x+=(b.X-a.X)/2d;y+=(b.Y-a.Y)/2d; }
+        return new Point2(x/OffsetGridScale,y/OffsetGridScale);
+    }
 
     private static bool LocallyMatchesWithCancellation(Path64 source, Path64 target, double tolerance, CancellationToken cancellationToken)
         => LocallyMatchesWithDiagnostic(source,target,tolerance,cancellationToken,out _,out _);
