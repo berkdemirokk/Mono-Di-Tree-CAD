@@ -105,4 +105,55 @@ public sealed class ExperimentalSourceMiterIntervalBoundTests(ITestOutputHelper 
         Assert.True(ExperimentalSourceMiterIntervalBound.TryVerify(s,c,5_000_000,.000001,out var bound,out var reason),reason);
         Assert.InRange(bound,0,.000001);
     }
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void RequestedHalfGridAllowanceIsNotConfusedWithEffectiveGridAllowance(bool reverse)
+    {
+        const double requested=1.0000005;
+        Point2[] s=[new(0,0),new(100,0),new(100,100),new(0,100)];
+        Point2[] c=[new(-1.000001,-1.000001),new(101.000001,-1.000001),
+            new(101.000001,101.000001),new(-1.000001,101.000001)];
+        if(reverse){Array.Reverse(s);Array.Reverse(c);}
+        Assert.True(ExperimentalSourceMiterIntervalBound.TryVerify(s,c,1_000_001,.000000001,out var effective,out var effectiveReason),effectiveReason);
+        Assert.False(ExperimentalSourceMiterIntervalBound.TryVerifyRequested(s,c,requested,.0000007,out _,out _));
+        Assert.True(ExperimentalSourceMiterIntervalBound.TryVerifyRequested(s,c,requested,.00000072,out var requestedBound,out var reason),reason);
+        Assert.True(requestedBound>effective);Assert.InRange(requestedBound,.0000007,.00000072);
+        log.WriteLine($"reverse={reverse} effective bound={effective:G17} mm, requested bound={requestedBound:G17} mm");
+    }
+    [Theory]
+    [InlineData(false,0d)]
+    [InlineData(true,0d)]
+    [InlineData(false,50000000d)]
+    [InlineData(true,50000000d)]
+    public void ActualLobedCandidateIsBoundedAgainstRequestedBinary64Allowance(bool reverse,double origin)
+    {
+        var m=typeof(SmoothAllowanceRegressionTests).GetMethod("Radial",BindingFlags.NonPublic|BindingFlags.Static)!;
+        var p=(PatternPiece)m.Invoke(null,[512,true])!;
+        p.Points=p.Points.Select(q=>new Point2(q.X+origin,q.Y+origin)).ToList();if(reverse)p.Points.Reverse();
+        const double requested=1.0000005;
+        var result=ExperimentalExactGridRoundingTests.Evaluate(p,requested);Assert.True(result.Ok,result.Reason);
+        var c=result.Candidate.Select(q=>new Point2(q.X/1_000_000d,q.Y/1_000_000d)).ToArray();
+        Assert.True(ExperimentalSourceMiterIntervalBound.TryVerifyRequested(p.Points,c,requested,.00001,out var bound,out var reason),reason);
+        log.WriteLine($"origin={origin}; reverse={reverse}; requested={requested:G17}; upper={bound:G17} mm");
+        Assert.InRange(bound,0,.00001);
+    }
+    [Fact]
+    public void AcuteCornerAmplifiesRequestedAllowanceRounding()
+    {
+        const double requested=1.0000005,effective=1.000001;
+        Point2[] s=[new(0,0),new(100,0),new(0,10)];
+        var c=new Point2[s.Length];
+        for(int i=0;i<s.Length;i++)
+        {
+            var a=s[(i+s.Length-1)%s.Length];var b=s[i];var d=s[(i+1)%s.Length];
+            var u=b-a;var v=d-b;double lu=Geometry.Distance(a,b),lv=Geometry.Distance(b,d);
+            var n1=new Point2(u.Y/lu,-u.X/lu);var n2=new Point2(v.Y/lv,-v.X/lv);
+            double scale=effective/(1+n1.X*n2.X+n1.Y*n2.Y);
+            c[i]=b+(n1+n2)*scale;
+        }
+        Assert.False(ExperimentalSourceMiterIntervalBound.TryVerifyRequested(s,c,requested,.000002,out _,out _));
+        Assert.True(ExperimentalSourceMiterIntervalBound.TryVerifyRequested(s,c,requested,.0001,out var bound,out var reason),reason);
+        Assert.InRange(bound,.000009,.00002);
+    }
 }

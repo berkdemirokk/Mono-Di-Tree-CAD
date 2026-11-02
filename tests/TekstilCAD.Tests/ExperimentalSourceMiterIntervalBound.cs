@@ -5,7 +5,7 @@ namespace TekstilCAD.Tests;
 
 // Test-only directed interval arithmetic on exact binary64 inputs. Bound is
 // for corresponding indexed finite segments to the ideal miter of the source
-// binary64 polygon and caller-supplied INTEGER GRID delta. No feature,
+// binary64 polygon and either integer-grid or binary64 requested delta. No feature,
 // topology, machine, original-measurement, or production approval is implied.
 internal static class ExperimentalSourceMiterIntervalBound
 {
@@ -63,9 +63,25 @@ internal static class ExperimentalSourceMiterIntervalBound
     internal static bool TryVerify(IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate,long deltaGrid,double toleranceMm,
         out double upperBoundMm,out string reason,CancellationToken token=default)
     {
+        if(deltaGrid<=0){upperBoundMm=double.NaN;reason="Invalid grid allowance.";return false;}
+        var delta=new I((BigInteger)deltaGrid*S,(BigInteger)deltaGrid*S);
+        return Verify(source,candidate,delta,toleranceMm,out upperBoundMm,out reason,token);
+    }
+    internal static bool TryVerifyRequested(IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate,double requestedMm,double toleranceMm,
+        out double upperBoundMm,out string reason,CancellationToken token=default)
+    {
+        token.ThrowIfCancellationRequested();
+        if(!double.IsFinite(requestedMm) || requestedMm<.000001 || requestedMm>100_000)
+        {upperBoundMm=double.NaN;reason="Invalid requested binary64 allowance.";return false;}
+        var delta=Coordinate(requestedMm);
+        return Verify(source,candidate,delta,toleranceMm,out upperBoundMm,out reason,token);
+    }
+    private static bool Verify(IReadOnlyList<Point2> source,IReadOnlyList<Point2> candidate,I delta,double toleranceMm,
+        out double upperBoundMm,out string reason,CancellationToken token)
+    {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(candidate);token.ThrowIfCancellationRequested();
         upperBoundMm=double.NaN;reason="Invalid size, coordinate, delta, or explicit tolerance.";
-        int n=source.Count;if(n<3 || n>707 || candidate.Count!=n || deltaGrid<=0 || !double.IsFinite(toleranceMm) || toleranceMm<=0)return false;
+        int n=source.Count;if(n<3 || n>707 || candidate.Count!=n || delta.Lo<=0 || !double.IsFinite(toleranceMm) || toleranceMm<=0)return false;
         var s=new Point2[n];var c=new Point2[n];var xs=new I[n];var ys=new I[n];BigInteger area=0;
         for(int i=0;i<n;i++)
         {
@@ -89,7 +105,7 @@ internal static class ExperimentalSourceMiterIntervalBound
                !Divide(d,vl,out var n2x) || !Divide(e,vl,out var n2y))
             {reason=$"Normal at {i} is numerically ambiguous.";return false;}
             var denominator=Add(new I(S,S),Add(Mul(n1x,n2x),Mul(n1y,n2y)));
-            if(!Divide(new I((BigInteger)deltaGrid*S,(BigInteger)deltaGrid*S),denominator,out var factor))
+            if(!Divide(delta,denominator,out var factor))
             {reason=$"Miter denominator at {i} is nonpositive or ambiguous.";return false;}
             var mx=Add(xs[i],Mul(factor,Add(n1x,n2x)));var my=Add(ys[i],Mul(factor,Add(n1y,n2y)));
             var cx=Coordinate(c[i].X);var cy=Coordinate(c[i].Y);
