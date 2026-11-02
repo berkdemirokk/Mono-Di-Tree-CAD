@@ -1,0 +1,352 @@
+[
+  7,
+  {
+    "Name": "Sentetik d\u00FCzenlenmi\u015F pastal",
+    "Pieces": [
+      {
+        "Id": "8758d159-0911-af97-f0fa-167d48023cd8",
+        "Name": "Deneme \u00F6n",
+        "Points": [
+          {
+            "X": 40,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 40,
+            "Y": 60,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 60,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Notches": [
+          {
+            "VertexIndex": 1,
+            "Position": {
+              "X": 40,
+              "Y": 60,
+              "IsFinite": true
+            }
+          }
+        ]
+      },
+      {
+        "Id": "dda7b1ec-2ca4-00a3-09c8-c74f94132f95",
+        "Name": "Deneme \u00F6n",
+        "Points": [
+          {
+            "X": 41,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 101,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 101,
+            "Y": 40,
+            "IsFinite": true
+          },
+          {
+            "X": 41,
+            "Y": 40,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": null,
+          "Material": "Pamuk",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 51,
+            "Y": 10,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 51,
+            "Y": 20,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        },
+        "Notches": [
+          {
+            "VertexIndex": 1,
+            "Position": {
+              "X": 101,
+              "Y": 0,
+              "IsFinite": true
+            }
+          }
+        ]
+      },
+      {
+        "Id": "8da64003-be04-4aaa-a88c-2044a6c4578d",
+        "Name": "Yeni par\u00E7a",
+        "Points": [
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 3,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 3,
+            "Y": 3,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 3,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true
+      }
+    ],
+    "GradingRules": [],
+    "NestingSnapshot": {
+      "FabricWidth": 1000,
+      "UsedLength": 60,
+      "Gap": 1,
+      "EdgeMargin": 0,
+      "Algorithm": "deterministic-shelf-v1",
+      "LayoutFingerprint": "E0D0CB05E8A388320888916A148E606AF17D3236917995CABFE4F284CBC12BC0",
+      "Placements": [
+        {
+          "SourcePieceId": "f51f661b-c247-48e0-afeb-4adbc66856a9",
+          "CopyNumber": 1,
+          "PlacedPieceId": "dda7b1ec-2ca4-00a3-09c8-c74f94132f95"
+        },
+        {
+          "SourcePieceId": "f51f661b-c247-48e0-afeb-4adbc66856a9",
+          "CopyNumber": 2,
+          "PlacedPieceId": "8758d159-0911-af97-f0fa-167d48023cd8"
+        }
+      ],
+      "RotationTrace": {
+        "Schema": "per-copy-orthogonal-trace-v1",
+        "Algorithm": "explicit-per-copy-shelf-v1",
+        "TransformConvention": "origin-quarter-turn-then-translate-v1",
+        "SourceFingerprint": "0FA9FD73118DF87B289E9E4BEB96C5670C3DA316D6897C55ECA70DB37A0AAD04",
+        "LayoutFingerprint": "E0D0CB05E8A388320888916A148E606AF17D3236917995CABFE4F284CBC12BC0",
+        "SourcePieces": [
+          {
+            "Id": "f51f661b-c247-48e0-afeb-4adbc66856a9",
+            "Name": "Deneme \u00F6n",
+            "Points": [
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 60,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 60,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 40,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Pamuk",
+              "Quantity": 2
+            },
+            "Grainline": {
+              "Start": {
+                "X": 10,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 10,
+                "Y": 20,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 1,
+                "Position": {
+                  "X": 60,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              }
+            ]
+          }
+        ],
+        "LayoutPieces": [
+          {
+            "Id": "8758d159-0911-af97-f0fa-167d48023cd8",
+            "Name": "Deneme \u00F6n",
+            "Points": [
+              {
+                "X": 40,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 40,
+                "Y": 60,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 60,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 30,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 20,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 1,
+                "Position": {
+                  "X": 40,
+                  "Y": 60,
+                  "IsFinite": true
+                }
+              }
+            ]
+          },
+          {
+            "Id": "dda7b1ec-2ca4-00a3-09c8-c74f94132f95",
+            "Name": "Deneme \u00F6n",
+            "Points": [
+              {
+                "X": 41,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 101,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 101,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 41,
+                "Y": 40,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 51,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 51,
+                "Y": 20,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 1,
+                "Position": {
+                  "X": 101,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              }
+            ]
+          }
+        ],
+        "Selections": [
+          "f51f661b-c247-48e0-afeb-4adbc66856a9"
+        ],
+        "Copies": [
+          {
+            "SourcePieceId": "f51f661b-c247-48e0-afeb-4adbc66856a9",
+            "CopyNumber": 1,
+            "PlacedPieceId": "dda7b1ec-2ca4-00a3-09c8-c74f94132f95",
+            "Degrees": 0
+          },
+          {
+            "SourcePieceId": "f51f661b-c247-48e0-afeb-4adbc66856a9",
+            "CopyNumber": 2,
+            "PlacedPieceId": "8758d159-0911-af97-f0fa-167d48023cd8",
+            "Degrees": 90
+          }
+        ],
+        "FabricWidth": 1000,
+        "Gap": 1,
+        "EdgeMargin": 0,
+        "UsedLength": 60,
+        "MaxLength": 1000,
+        "GrainDirection": "TwoWay",
+        "ToleranceDegrees": 90
+      }
+    }
+  }
+]

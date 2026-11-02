@@ -1,0 +1,662 @@
+[
+  7,
+  {
+    "Name": "D\u00F6rt y\u00F6nl\u00FC sentetik",
+    "Pieces": [
+      {
+        "Id": "dda2554d-397d-2626-da5b-f29ec4aef255",
+        "Name": "\u00D6n \u00E7entikli",
+        "Points": [
+          {
+            "X": 40,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 40,
+            "Y": 60,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 60,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "M",
+          "Material": "Pamuk",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 30,
+            "Y": 10,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 20,
+            "Y": 10,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        },
+        "Notches": [
+          {
+            "VertexIndex": 0,
+            "Position": {
+              "X": 40,
+              "Y": -0,
+              "IsFinite": true
+            }
+          },
+          {
+            "VertexIndex": 2,
+            "Position": {
+              "X": 0,
+              "Y": 60,
+              "IsFinite": true
+            }
+          }
+        ]
+      },
+      {
+        "Id": "bf963e37-4193-6e75-510d-883defd5b9bc",
+        "Name": "\u00D6n \u00E7entikli",
+        "Points": [
+          {
+            "X": 41,
+            "Y": 60,
+            "IsFinite": true
+          },
+          {
+            "X": 41,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 81,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 81,
+            "Y": 60,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "M",
+          "Material": "Pamuk",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 51,
+            "Y": 50,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 61,
+            "Y": 50,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        },
+        "Notches": [
+          {
+            "VertexIndex": 0,
+            "Position": {
+              "X": 41,
+              "Y": 60,
+              "IsFinite": true
+            }
+          },
+          {
+            "VertexIndex": 2,
+            "Position": {
+              "X": 81,
+              "Y": 0,
+              "IsFinite": true
+            }
+          }
+        ]
+      },
+      {
+        "Id": "0d92b92b-41bb-9520-4f73-d5d8bef4bac6",
+        "Name": "\u00D6n \u00E7entikli",
+        "Points": [
+          {
+            "X": 82,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 142,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 142,
+            "Y": 40,
+            "IsFinite": true
+          },
+          {
+            "X": 82,
+            "Y": 40,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "M",
+          "Material": "Pamuk",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 92,
+            "Y": 10,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 92,
+            "Y": 20,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        },
+        "Notches": [
+          {
+            "VertexIndex": 0,
+            "Position": {
+              "X": 82,
+              "Y": 0,
+              "IsFinite": true
+            }
+          },
+          {
+            "VertexIndex": 2,
+            "Position": {
+              "X": 142,
+              "Y": 40,
+              "IsFinite": true
+            }
+          }
+        ]
+      },
+      {
+        "Id": "1907154a-a6de-e7e5-5cb0-ea5258f7358d",
+        "Name": "\u00D6n \u00E7entikli",
+        "Points": [
+          {
+            "X": 203,
+            "Y": 40,
+            "IsFinite": true
+          },
+          {
+            "X": 143,
+            "Y": 40,
+            "IsFinite": true
+          },
+          {
+            "X": 143,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 203,
+            "Y": 0,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": "M",
+          "Material": "Pamuk",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 193,
+            "Y": 30,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 193,
+            "Y": 20,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        },
+        "Notches": [
+          {
+            "VertexIndex": 0,
+            "Position": {
+              "X": 203,
+              "Y": 40,
+              "IsFinite": true
+            }
+          },
+          {
+            "VertexIndex": 2,
+            "Position": {
+              "X": 143,
+              "Y": 0,
+              "IsFinite": true
+            }
+          }
+        ]
+      }
+    ],
+    "GradingRules": [],
+    "NestingSnapshot": {
+      "FabricWidth": 1000,
+      "UsedLength": 60,
+      "Gap": 1,
+      "EdgeMargin": 0,
+      "Algorithm": "deterministic-shelf-v1",
+      "LayoutFingerprint": "CFAFFCC59E88437BAB7BE500F1F9379685D5DD1EC5DF0B667C7227C2FAE25EFE",
+      "Placements": [
+        {
+          "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+          "CopyNumber": 1,
+          "PlacedPieceId": "0d92b92b-41bb-9520-4f73-d5d8bef4bac6"
+        },
+        {
+          "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+          "CopyNumber": 2,
+          "PlacedPieceId": "dda2554d-397d-2626-da5b-f29ec4aef255"
+        },
+        {
+          "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+          "CopyNumber": 3,
+          "PlacedPieceId": "1907154a-a6de-e7e5-5cb0-ea5258f7358d"
+        },
+        {
+          "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+          "CopyNumber": 4,
+          "PlacedPieceId": "bf963e37-4193-6e75-510d-883defd5b9bc"
+        }
+      ],
+      "RotationTrace": {
+        "Schema": "per-copy-orthogonal-trace-v1",
+        "Algorithm": "explicit-per-copy-shelf-v1",
+        "TransformConvention": "origin-quarter-turn-then-translate-v1",
+        "SourceFingerprint": "1C3D68F654E9F483A586864C6F2BE08B1F9084D99D988721B36FF3728F7E2F06",
+        "LayoutFingerprint": "CFAFFCC59E88437BAB7BE500F1F9379685D5DD1EC5DF0B667C7227C2FAE25EFE",
+        "SourcePieces": [
+          {
+            "Id": "2995195d-3423-4e7d-945f-c4c44d027162",
+            "Name": "\u00D6n \u00E7entikli",
+            "Points": [
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 60,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 60,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 40,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": "M",
+              "Material": "Pamuk",
+              "Quantity": 4
+            },
+            "Grainline": {
+              "Start": {
+                "X": 10,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 10,
+                "Y": 20,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 0,
+                "Position": {
+                  "X": -0,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              },
+              {
+                "VertexIndex": 2,
+                "Position": {
+                  "X": 60,
+                  "Y": 40,
+                  "IsFinite": true
+                }
+              }
+            ]
+          }
+        ],
+        "LayoutPieces": [
+          {
+            "Id": "dda2554d-397d-2626-da5b-f29ec4aef255",
+            "Name": "\u00D6n \u00E7entikli",
+            "Points": [
+              {
+                "X": 40,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 40,
+                "Y": 60,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 60,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": "M",
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 30,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 20,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 0,
+                "Position": {
+                  "X": 40,
+                  "Y": -0,
+                  "IsFinite": true
+                }
+              },
+              {
+                "VertexIndex": 2,
+                "Position": {
+                  "X": 0,
+                  "Y": 60,
+                  "IsFinite": true
+                }
+              }
+            ]
+          },
+          {
+            "Id": "bf963e37-4193-6e75-510d-883defd5b9bc",
+            "Name": "\u00D6n \u00E7entikli",
+            "Points": [
+              {
+                "X": 41,
+                "Y": 60,
+                "IsFinite": true
+              },
+              {
+                "X": 41,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 81,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 81,
+                "Y": 60,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": "M",
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 51,
+                "Y": 50,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 61,
+                "Y": 50,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 0,
+                "Position": {
+                  "X": 41,
+                  "Y": 60,
+                  "IsFinite": true
+                }
+              },
+              {
+                "VertexIndex": 2,
+                "Position": {
+                  "X": 81,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              }
+            ]
+          },
+          {
+            "Id": "0d92b92b-41bb-9520-4f73-d5d8bef4bac6",
+            "Name": "\u00D6n \u00E7entikli",
+            "Points": [
+              {
+                "X": 82,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 142,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 142,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 82,
+                "Y": 40,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": "M",
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 92,
+                "Y": 10,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 92,
+                "Y": 20,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 0,
+                "Position": {
+                  "X": 82,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              },
+              {
+                "VertexIndex": 2,
+                "Position": {
+                  "X": 142,
+                  "Y": 40,
+                  "IsFinite": true
+                }
+              }
+            ]
+          },
+          {
+            "Id": "1907154a-a6de-e7e5-5cb0-ea5258f7358d",
+            "Name": "\u00D6n \u00E7entikli",
+            "Points": [
+              {
+                "X": 203,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 143,
+                "Y": 40,
+                "IsFinite": true
+              },
+              {
+                "X": 143,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 203,
+                "Y": 0,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": "M",
+              "Material": "Pamuk",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 193,
+                "Y": 30,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 193,
+                "Y": 20,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "Notches": [
+              {
+                "VertexIndex": 0,
+                "Position": {
+                  "X": 203,
+                  "Y": 40,
+                  "IsFinite": true
+                }
+              },
+              {
+                "VertexIndex": 2,
+                "Position": {
+                  "X": 143,
+                  "Y": 0,
+                  "IsFinite": true
+                }
+              }
+            ]
+          }
+        ],
+        "Selections": [
+          "2995195d-3423-4e7d-945f-c4c44d027162"
+        ],
+        "Copies": [
+          {
+            "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+            "CopyNumber": 1,
+            "PlacedPieceId": "0d92b92b-41bb-9520-4f73-d5d8bef4bac6",
+            "Degrees": 0
+          },
+          {
+            "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+            "CopyNumber": 2,
+            "PlacedPieceId": "dda2554d-397d-2626-da5b-f29ec4aef255",
+            "Degrees": 90
+          },
+          {
+            "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+            "CopyNumber": 3,
+            "PlacedPieceId": "1907154a-a6de-e7e5-5cb0-ea5258f7358d",
+            "Degrees": 180
+          },
+          {
+            "SourcePieceId": "2995195d-3423-4e7d-945f-c4c44d027162",
+            "CopyNumber": 4,
+            "PlacedPieceId": "bf963e37-4193-6e75-510d-883defd5b9bc",
+            "Degrees": 270
+          }
+        ],
+        "FabricWidth": 1000,
+        "Gap": 1,
+        "EdgeMargin": 0,
+        "UsedLength": 60,
+        "MaxLength": 1000,
+        "GrainDirection": "TwoWay",
+        "ToleranceDegrees": 90
+      }
+    }
+  }
+]

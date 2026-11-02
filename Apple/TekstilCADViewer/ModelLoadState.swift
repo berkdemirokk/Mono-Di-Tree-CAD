@@ -1,0 +1,111 @@
+import Foundation
+
+// A read may run off the main thread while a newer selection supersedes it.
+final class ModelReadCancellation {
+    private let lock = NSLock()
+    private var cancelled = false
+    func cancel() { lock.lock(); cancelled = true; lock.unlock() }
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+}
+
+// Tracks the most recent explicit model choice. A rejected selection still
+// supersedes an earlier asynchronous read; cancelling the picker does not.
+struct ModelLoadState {
+    private(set) var request = UUID()
+    private(set) var isLoading = false
+
+    mutating func begin() -> UUID {
+        request = UUID()
+        isLoading = true
+        return request
+    }
+
+    mutating func invalidate() {
+        request = UUID()
+        isLoading = false
+    }
+
+    // A picker failure supersedes an older pending read; cancelling does not.
+    mutating func rejectPickerFailure(_ error: Error) -> Bool {
+        guard !isFilePickerCancellation(error) else { return false }
+        invalidate()
+        return true
+    }
+
+    mutating func finish(_ completedRequest: UUID) -> Bool {
+        guard request == completedRequest, isLoading else { return false }
+        isLoading = false
+        return true
+    }
+}
+
+// View state is installed as one value, so the drawing, its original bytes and
+// revision cannot temporarily describe different successfully opened models.
+struct LoadedModelState<Model> {
+    private(set) var model: Model?
+    private(set) var sourceData: Data?
+    private(set) var revision = UUID()
+    var load = ModelLoadState() {
+        didSet {
+            #if DEBUG
+            if load.request != oldValue.request { pointEditSnapshot = nil }
+            #endif
+        }
+    }
+    var selectedPiece: Int? {
+        didSet {
+            if selectedPiece != oldValue {
+                selectionRevision = UUID(); selectedNotch = nil
+                #if DEBUG
+                pointEditSnapshot = nil
+                #endif
+            }
+        }
+    }
+    var selectedNotch: (piece: Int, point: Int)?
+    private var selectionRevision = UUID()
+
+    #if DEBUG
+    var pointEditSnapshot: PointEditSnapshot?
+    /// A delayed dismissal from an older sheet must not clear a newer session.
+    mutating func closePointEditSession(_ id: UUID) {
+        guard pointEditSnapshot?.id == id else { return }
+        pointEditSnapshot = nil
+    }
+    struct EditIdentity {
+        let revision: UUID
+        let loadRequest: UUID
+        let selectedPiece: Int
+        let selectionRevision: UUID
+    }
+
+    /// The identity must be captured from the same value that supplies the
+    /// original bytes. Starting or cancelling a load changes its request token.
+    func editIdentity() -> EditIdentity? {
+        guard !load.isLoading, model != nil, sourceData != nil, let selectedPiece else { return nil }
+        return EditIdentity(revision: revision, loadRequest: load.request, selectedPiece: selectedPiece, selectionRevision: selectionRevision)
+    }
+
+    func isCurrent(_ identity: EditIdentity, data: Data) -> Bool {
+        !load.isLoading && model != nil && sourceData == data && revision == identity.revision &&
+            load.request == identity.loadRequest && selectedPiece == identity.selectedPiece &&
+            selectionRevision == identity.selectionRevision
+    }
+    #endif
+    /// A successful asynchronous preview can install only while its load is current.
+    mutating func completePreview(_ request: UUID, model: Model, data: Data, selectedPiece: Int?) -> Bool {
+        guard load.finish(request) else { return false }
+        install(model, data: data, selectedPiece: selectedPiece)
+        return true
+    }
+    mutating func install(_ model: Model, data: Data, selectedPiece: Int? = nil) {
+        self.model = model
+        self.sourceData = data
+        self.selectedPiece = selectedPiece
+        self.selectedNotch = nil
+        #if DEBUG
+        pointEditSnapshot = nil
+        #endif
+        revision = UUID()
+    }
+}

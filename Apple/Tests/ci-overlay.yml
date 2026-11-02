@@ -1,3 +1,55 @@
+  TekstilCADViewerTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/LosslessProjectNameTests.swift
+      - path: Tests/ModelFilePublisherTests.swift
+      - path: Tests/ModelLoadStateTests.swift
+      - path: Tests/DesignDraftStoreTests.swift
+      - path: Tests/Fixtures/portable-desktop-and-v1.json
+        buildPhase: resources
+      - path: Tests/Fixtures/ios-unicode-photo.tcad-request.json
+        buildPhase: resources
+      - path: Tests/Fixtures/ios-message-ve.tcad-request.json
+        buildPhase: resources
+      - path: Tests/Fixtures/ios-whitespace-notes.tcad-request.json
+        buildPhase: resources
+      - path: Tests/Fixtures/ios-invalid-duplicate.tcad-request.json
+        buildPhase: resources
+      - path: Tests/Fixtures/ios-unsupported-version.tcad-request.json
+        buildPhase: resources
+      - path: Tests/Fixtures/portable-design-request-v1.json
+        buildPhase: resources
+      - path: Tests/Fixtures/dress-draft-v1.json
+        buildPhase: resources
+      - path: Tests/ExperimentalPieceRenameTests.swift
+      - path: Tests/ContourMeasureTests.swift
+      - path: Tests/ContourViewportTests.swift
+      - path: Tests/ExperimentalContourValidationTests.swift
+      - path: Tests/ExperimentalPointMoveJSONTests.swift
+      - path: Tests/Fixtures/desktop-synthetic-point.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-notch.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-rotated-v7.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-rotated-v7-stale.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/desktop-synthetic-rotated-v7-four-angle.tcad
+        buildPhase: resources
+      - path: Tests/MeasurementDisplayTests.swift
+      - path: Tests/NotchSearchTests.swift
+      - path: Tests/ExperimentalJSONStreamTests.swift
+      - path: Tests/ExperimentalV7PieceReaderTests.swift
+      - path: Tests/ExperimentalV7FingerprintTests.swift
+      - path: Tests/ExperimentalJSONDoubleBitsTests.swift
+    dependencies:
+      - target: TekstilCADViewer_iOS
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.berkdemirokk.monoditreecad.tests
+        SWIFT_VERSION: '5.0'
   TekstilCADViewerUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -18,7 +70,9 @@ schemes:
     build:
       targets:
         TekstilCADViewer_iOS: all
+        TekstilCADViewerTests: [test]
         TekstilCADViewerUITests: [test]
     test:
       targets:
+        - TekstilCADViewerTests
         - TekstilCADViewerUITests
