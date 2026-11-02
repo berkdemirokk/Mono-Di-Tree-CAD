@@ -1582,6 +1582,24 @@ internal static class DesktopVerification
             var textiles = new TextileToolsWindow(studio);
             var verificationQueue = new SimulationQueue(Path.Combine(work, "spool"));
             var machine = new MachineCenterWindow(studio, verificationQueue);
+            var machineRoot=(FrameworkElement)machine.Content;
+            machineRoot.Measure(new Size(machine.Width,machine.Height));machineRoot.Arrange(new Rect(0,0,machine.Width,machine.Height));machineRoot.UpdateLayout();
+            var xMeasured=Descendants<TextBox>(machineRoot).Single(t=>AutomationProperties.GetName(t)=="Ölçülen X · mm");
+            var yMeasured=Descendants<TextBox>(machineRoot).Single(t=>AutomationProperties.GetName(t)=="Ölçülen Y · mm");
+            var scaleReport=Descendants<TextBlock>(machineRoot).Single(t=>AutomationProperties.GetName(t)=="Ölçek kontrolü sonucu");
+            var calibrationButton=(Button)typeof(MachineCenterWindow).GetField("calibrationSquare",PrivateInstance)!.GetValue(machine)!;
+            var fileFormat=(ComboBox)typeof(MachineCenterWindow).GetField("format",PrivateInstance)!.GetValue(machine)!;
+            Check(!calibrationButton.IsEnabled && xMeasured.MaxLength==32 && yMeasured.MaxLength==32 && scaleReport.Text.Contains("cihaz doğrulaması değildir"),
+                "Plotter reference requires HPGL and exposes bounded manual measurement fields",checks);
+            fileFormat.SelectedIndex=1;xMeasured.Text="99,5";yMeasured.Text="100.25";
+            Check(calibrationButton.IsEnabled && scaleReport.Text.Contains("X -0.5 mm") && scaleReport.Text.Contains("Y +0.25 mm") &&
+                scaleReport.Text.Contains("ayarlar otomatik değiştirilmez"),
+                "Plotter scale comparison accepts localized inputs without changing device settings",checks);
+            xMeasured.Text="100.0000001";yMeasured.Text="100";
+            var tinyDeviation=(100.0000001-100).ToString("G9",CultureInfo.InvariantCulture);
+            Check(scaleReport.Text.Contains("X +"+tinyDeviation+" mm"),"Small nonzero plotter deviations are not displayed as zero",checks);
+            xMeasured.Text="0";Check(scaleReport.Text.Contains("0'dan büyük"),"Invalid measured scale is not reported as a comparison",checks);
+            fileFormat.SelectedIndex=0;
             foreach (var window in new Window[] { textiles, machine })
             {
                 var root = (FrameworkElement)window.Content;

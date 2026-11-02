@@ -128,7 +128,7 @@ public sealed class MachineCenterWindow : Window
         scaleCheck.Children.Add(new TextBlock { Text="HPGL biçimini seçerek işaretsiz 100 × 100 mm referans dosyası oluşturabilirsiniz; ölçek 1 olmalı ve birim/mm değeri cihaz belgelerine göre seçilmelidir. Dosya makineye gönderilmez. Basılmış referansın X ve Y kenarlarını elle ölçüp aşağıya girin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,8) });
         StyleButton(calibrationSquare);AutomationProperties.SetName(calibrationSquare,"100 mm referans HPGL dosyası oluştur");
         calibrationSquare.Click+=(_,_)=>Execute(CreateCalibrationSquare);scaleCheck.Children.Add(calibrationSquare);
-        var measuredX=new TextBox();var measuredY=new TextBox();var measuredFields=new WrapPanel();
+        var measuredX=new TextBox { MaxLength=32 };var measuredY=new TextBox { MaxLength=32 };var measuredFields=new WrapPanel();
         Field(measuredFields,"Ölçülen X · mm",measuredX,150);Field(measuredFields,"Ölçülen Y · mm",measuredY,150);scaleCheck.Children.Add(measuredFields);
         var scaleCheckResult=new TextBlock { Text="İki ölçüyü de girin. Bu hesap cihaz doğrulaması değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
         AutomationProperties.SetName(scaleCheckResult,"Ölçek kontrolü sonucu");AutomationProperties.SetLiveSetting(scaleCheckResult,AutomationLiveSetting.Polite);AnnounceTextChanges(scaleCheckResult,"Ölçek kontrolü sonucu");
@@ -137,7 +137,8 @@ public sealed class MachineCenterWindow : Window
             if(!TryNumber(measuredX,out var x)||!TryNumber(measuredY,out var y)||x<=0||x>1000||y<=0||y>1000)
             { scaleCheckResult.Text="X ve Y için 0'dan büyük, en fazla 1000 mm ölçü girin. Bu hesap cihaz doğrulaması değildir.";return; }
             var comparison=PlotterScaleCheck.Compare(x,y);
-            scaleCheckResult.Text=$"100 mm referansa göre yaklaşık sapma: X {comparison.XDeviationMillimeters:+0.######;-0.######;0} mm, Y {comparison.YDeviationMillimeters:+0.######;-0.######;0} mm. Toleransı ve kalibrasyonu cihaz sorumlusu doğrulamalıdır; ayarlar otomatik değiştirilmez.";
+            static string Deviation(double value)=>(value>0 ? "+" : "")+value.ToString("G9",CultureInfo.InvariantCulture);
+            scaleCheckResult.Text=$"100 mm referansa göre yaklaşık sapma: X {Deviation(comparison.XDeviationMillimeters)} mm, Y {Deviation(comparison.YDeviationMillimeters)} mm. Toleransı ve kalibrasyonu cihaz sorumlusu doğrulamalıdır; ayarlar otomatik değiştirilmez.";
         }
         measuredX.TextChanged+=(_,_)=>UpdateScaleCheck();measuredY.TextChanged+=(_,_)=>UpdateScaleCheck();scaleCheck.Children.Add(scaleCheckResult);settings.Children.Add(scaleCheck);
         settings.Children.Add(new TextBlock { Text="Üretilecek parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
