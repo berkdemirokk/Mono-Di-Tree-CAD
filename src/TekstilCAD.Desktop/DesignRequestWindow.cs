@@ -57,12 +57,16 @@ internal sealed class DesignRequestWindow : Window
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string text,Action action) { var b=new Button { Content=text,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };b.Click+=(_,_)=>action();actions.Children.Add(b);return b; }
-        Action("İstek aç…",Open);var save=Action("Yeni istek dosyası kaydet…",Save);save.Background=Accent;save.Foreground=Surface;save.BorderBrush=Accent;save.FontWeight=FontWeights.SemiBold;Action("Çizim araçlarına geç",Close);
+        Action("İstek aç…",Open);Action("Yeni istek dosyası kaydet…",Save);Action("Çizim araçlarına geç",Close);
+        var reviewAction=Action("Ölçüleri incele",()=> { ReviewMeasurements();measurementReview.BringIntoView();SetStatus(string.IsNullOrWhiteSpace(chatInput.Text) ? "Açık ölçüler incelendi; kalıp oluşturulmadı." : "Gönderilmemiş mesaj ölçü incelemesine dahil edilmedi; mesaj korundu."); });
+        reviewAction.Background=Accent;reviewAction.Foreground=Surface;reviewAction.BorderBrush=Accent;reviewAction.FontWeight=FontWeights.SemiBold;AutomationProperties.SetHelpText(reviewAction,"Açıkça yazılmış ölçüleri inceler ve sonuca gider; kalıp oluşturmaz.");
         AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         AutomationProperties.SetName(statusViewport,"İşlem durumu");
         statusViewport.Content=status;DockPanel.SetDock(statusViewport,Dock.Bottom);root.Children.Add(statusViewport);
+        var header=new StackPanel { Margin=new Thickness(0,0,0,10) };
+        header.Children.Add(new TextBlock { Text="MONO Dİ TREE CAD",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=18,FontWeight=FontWeights.SemiBold });
+        header.Children.Add(new TextBlock { Text="Yeni Kalıp Oluştur",Foreground=Muted,FontSize=11 });DockPanel.SetDock(header,Dock.Top);root.Children.Add(header);
         var body=new StackPanel();bodyScroller.Content=body;root.Children.Add(bodyScroller);
-        body.Children.Add(new TextBlock { Text="MONO Dİ TREE CAD  ·  KALIP STÜDYOSU",Foreground=Muted,FontSize=11,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,8) });
         body.Children.Add(new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ATÖLYE PROJESİ · YENİ ÇALIŞMA",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } });
         body.Children.Add(new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal });
         body.Children.Add(new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) });
@@ -79,7 +83,7 @@ internal sealed class DesignRequestWindow : Window
             var dress=new System.Windows.Shapes.Path { Data=Geometry.Parse(silhouette),Fill=Brushes.Transparent,Stroke=Accent,StrokeThickness=1.2 };
             art.Children.Add(dress);
             if(detail is not null)art.Children.Add(new System.Windows.Shapes.Path { Data=Geometry.Parse(detail),Stroke=Accent,StrokeThickness=1.2,StrokeLineJoin=PenLineJoin.Round });
-            var image=new Viewbox { Width=112,Height=150,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };
+            var image=new Viewbox { Width=112,Height=95,Child=art,IsHitTestVisible=false,Margin=new Thickness(0,4,0,4) };
             var content=new StackPanel { Width=166,IsHitTestVisible=false };
             content.Children.Add(new Border { Background=Raised,CornerRadius=new CornerRadius(6),Child=image,Margin=new Thickness(0,0,0,5) });
             if(code is not null)content.Children.Add(new TextBlock { Text="KOD: "+code,FontSize=10,Foreground=Muted,Margin=new Thickness(0,0,0,3) });
@@ -117,7 +121,17 @@ internal sealed class DesignRequestWindow : Window
         send.Background=Accent;send.Foreground=Surface;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Her ölçüyü ayrı satırla veya noktalı virgülle ayırın. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
-        editBody.Children.Add(new Label { Foreground=Ink,Content="Tasarımcı notları",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");editBody.Children.Add(prompt);
+        var notesCard=new StackPanel();
+        notesCard.Children.Add(new TextBlock { Text="Tasarımcı Notları & Drapaj Detayları",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=19,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        notesCard.Children.Add(new Label { Foreground=Ink,Content="Tasarımcı notları",Target=prompt });AutomationProperties.SetName(prompt,"Kadın elbise modeli ve özellikleri");notesCard.Children.Add(prompt);
+        var details=new WrapPanel { Margin=new Thickness(0,8,0,0) };notesCard.Children.Add(details);
+        foreach(var detail in new[] { "Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil" })
+        {
+            var chip=new Button { Content=detail,Padding=new Thickness(9,4,9,4),Margin=new Thickness(0,0,6,6),Background=Raised,Foreground=Accent,BorderBrush=BorderColor };
+            AutomationProperties.SetName(chip,"Tarife ekle: "+detail);AutomationProperties.SetHelpText(chip,"Mevcut açıklamaya bu tasarım notunu ekler; kalıp oluşturmaz.");
+            chip.Click+=(_,_)=> { var addition=(prompt.Text.Length==0 ? "" : "\n")+detail; if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength) { SetStatus("Not eklenemedi: açıklama uzunluk sınırına ulaşır. Mevcut metin korundu.");return; } prompt.AppendText(addition);prompt.Focus();SetStatus("Tasarım notu eklendi; kalıp oluşturulmadı."); };details.Children.Add(chip);
+        }
+        editBody.Children.Add(new Border { Child=notesCard,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(10),Padding=new Thickness(14),Margin=new Thickness(0,8,0,0) });
         var measurementHeading=new DockPanel { Margin=new Thickness(0,14,0,4) };
         var enterMeasurements=new Button { Content="Ölçüleri gir…",Padding=new Thickness(10,4,10,4),Margin=new Thickness(8,0,0,0) };
         AutomationProperties.SetHelpText(enterMeasurements,"Bilinen ölçüleri santimetre cinsinden ayrı alanlara girip mevcut notlara ekler; farklı değerler çelişki olarak gösterilir.");
@@ -127,7 +141,10 @@ internal sealed class DesignRequestWindow : Window
         var experimentalMeasurements=new Button { Content="Deneysel beden ölçüleri…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,8) };
         AutomationProperties.SetHelpText(experimentalMeasurements,"On beş deneysel ölçü alanını açar. Girilenler isteğin ölçü notlarına eklenebilir; beden önizlemesi veya kalıp oluşturulmaz.");
         experimentalMeasurements.Click+=(_,_)=>new ExperimentalBodyMeasurementsWindow(this).ShowDialog();editBody.Children.Add(experimentalMeasurements);
-        var measurementCards=new WrapPanel();editBody.Children.Add(measurementCards);
+        var measurementOverview=new StackPanel();
+        measurementOverview.Children.Add(new TextBlock { Text="İSTEK ÖLÇÜLERİ  ·  Metrik (cm)",Foreground=Accent,FontSize=11,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,0,0,8) });
+        var measurementCards=new WrapPanel();measurementOverview.Children.Add(measurementCards);
+        editBody.Children.Add(new Border { Child=measurementOverview,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(10),Padding=new Thickness(14,12,6,4),Margin=new Thickness(0,0,0,8) });
         void MeasurementCard(string key,string title)
         {
             var content=new StackPanel();content.Children.Add(new TextBlock { Text=title,FontSize=11,Foreground=Muted,FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap });
@@ -376,3 +393,4 @@ internal sealed class DesignRequestWindow : Window
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
 }
+

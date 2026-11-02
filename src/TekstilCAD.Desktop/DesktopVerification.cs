@@ -10141,6 +10141,19 @@ internal static class DesktopVerification
             window.LoadForVerification(input);
             Check(tiles["göğüs çevresi"].Text=="96 cm" && tiles["bel çevresi"].Text=="Belirtilmedi" && tiles["elbise boyu"].Text=="Belirtilmedi",
                 "Opening a request updates measurement cards without inferring an ambiguous length",checks);
+            var requestRoot=(FrameworkElement)window.Content;
+            var detailChip=Descendants<Button>(requestRoot).Single(b=>AutomationProperties.GetName(b)=="Tarife ekle: Midi boy");
+            detailChip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.PromptForVerification.Text.Contains("Kadın elbise, uzun kollu") && window.PromptForVerification.Text.Contains("Midi boy") &&
+                window.MeasurementsForVerification.Text==input.Measurements && window.MeasurementTilesForVerification["göğüs çevresi"].Text=="96 cm",
+                "Design note chip appends to existing text without changing measurements",checks);
+            window.ChatInputForVerification.Text="göğüs çevresi 140 cm";
+            var reviewAction=Descendants<Button>(requestRoot).Single(b=>Equals(b.Content,"Ölçüleri incele"));
+            reviewAction.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.ChatInputForVerification.Text=="göğüs çevresi 140 cm" && window.StatusForVerification.Text.Contains("Gönderilmemiş") &&
+                window.ReviewForVerification.Text.Length>0 && !window.ReviewForVerification.Text.Contains("140"),
+                "Primary review action preserves unsent messages and reviews only submitted measurements",checks);
+            window.ChatInputForVerification.Clear();window.LoadForVerification(input);
             _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try
             {
@@ -10679,8 +10692,8 @@ internal static class DesktopVerification
             {
                 themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
                 var requestBody=(StackPanel)window.BodyScrollerForVerification.Content;
-                var advanced=requestBody.Children.OfType<StackPanel>().Single(p=>p.Children.Contains(window.PromptForVerification));
-                var labels=requestBody.Children.OfType<Label>().Concat(advanced.Children.OfType<Label>()).ToArray();
+                var advanced=requestBody.Children.OfType<StackPanel>().Single(p=>Descendants<TextBox>(p).Contains(window.PromptForVerification));
+                var labels=requestBody.Children.OfType<Label>().Concat(Descendants<Label>(advanced)).ToArray();
                 Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,DesignRequestWindow.Ink)),
                     "All design request labels use the readable theme text brush at "+size,checks);
                 Check(advanced.Children.Contains(window.MeasurementsForVerification) && !requestBody.Children.OfType<Expander>().Any() &&
