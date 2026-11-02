@@ -12,4 +12,6 @@ Bağımsız iki noktalı ölçü karşılaştırması, milimetre farkının yan�
 
 Karşılaştırma penceresi seçilen iki ucu fotoğraf üzerinde numaralı işaretlerle gösterir; liste ve görüntü pencerenin açıldığı andaki taslak kopyasına aittir. Fotoğrafta sol tık birinci, sağ tık ikinci ucu seçer; yakın noktalar ayırt edilemiyorsa seçim yapılmaz ve liste kullanılır. Listeler klavyeyle de kullanılabilir. Seçim eski karşılaştırma sonucunu kaldırır, çizim noktalarını değiştirmez veya fotoğraf kenarıyla uyumu ölçmez. Gerçek fare, klavye ve ekran okuyucu kullanıcı kabulü yapılmadı.
 
+Önizleme fare tekerleğiyle işaret edilen bölgeye veya `+` ve `−` düğmeleriyle seçili birinci uca, yoksa ikinci uca odaklanarak 8 kata kadar büyütülebilir. `Sığdır` tüm fotoğrafa döner. Görünüm değişikliği seçimleri ve önceki ölçü sonucunu değiştirmez; büyütme, fotoğrafın kendisine yeni ayrıntı eklemez ve çakışan noktalar için liste yine gereklidir.
+
 Geçmiş doğrulaması yeniden hesaplanan koordinatların bit düzeyinde eşleşmesini ister. Bu turdaki kayıt/açma doğrulaması aynı Windows/.NET ortamında yapıldı; farklı işlemci ve çalışma zamanı kombinasyonları arasında bit düzeyinde tekrarlanabilirlik henüz kanıtlanmadı.

@@ -14,6 +14,8 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
     private readonly BitmapSource image;
     private readonly Point2[] points;
     private readonly int sourceWidth,sourceHeight;
+    private double zoom=1,centerX=.5,centerY=.5;
+    internal double Zoom=>zoom;
     internal int? FirstIndex { get; private set; }
     internal int? SecondIndex { get; private set; }
     internal event Action<int,bool>? PointChosen;
@@ -27,9 +29,9 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
         if(!snapshot.CanFreeze)throw new ArgumentException("Fotoğraf önizlemesi sabitlenemedi.",nameof(image));
         if(!snapshot.IsFrozen)snapshot.Freeze();
         this.image=snapshot;this.points=points.ToArray();this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;
-        Height=150;MinWidth=100;ClipToBounds=true;
+        Height=120;MinWidth=100;ClipToBounds=true;
         AutomationProperties.SetName(this,"Seçilen ölçü noktalarının fotoğraf üzerindeki görünümü");
-        AutomationProperties.SetHelpText(this,"Sol tık birinci, sağ tık ikinci ucu seçer. Yakın noktalar ayırt edilemiyorsa listeleri kullanın. Görünüm noktaları değiştirmez.");
+        AutomationProperties.SetHelpText(this,"Sol tık birinci, sağ tık ikinci ucu seçer; fare tekerleği yakınlaştırır. Yakın noktalar ayırt edilemiyorsa listeleri kullanın. Görünüm noktaları değiştirmez.");
     }
     internal void Select(int? first,int? second)
     {
@@ -40,8 +42,8 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
     {
         var margin=Math.Min(11,Math.Min(viewport.Width,viewport.Height)/4);
         var scale=Math.Min((viewport.Width-2*margin)/sourceWidth,(viewport.Height-2*margin)/sourceHeight);
-        var width=sourceWidth*scale;var height=sourceHeight*scale;
-        return new Rect((viewport.Width-width)/2,(viewport.Height-height)/2,width,height);
+        var width=sourceWidth*scale*zoom;var height=sourceHeight*scale*zoom;
+        return new Rect(viewport.Width/2-centerX*width,viewport.Height/2-centerY*height,width,height);
     }
     internal Point MapPixel(Point2 p,Size viewport)
     {
@@ -58,7 +60,9 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
         var nearest=double.PositiveInfinity;var next=double.PositiveInfinity;var index=-1;
         for(int i=0;i<points.Length;i++)
         {
-            var point=MapPixel(points[i],viewport);var dx=point.X-position.X;var dy=point.Y-position.Y;
+            var point=MapPixel(points[i],viewport);
+            if(point.X<0 || point.Y<0 || point.X>=viewport.Width || point.Y>=viewport.Height)continue;
+            var dx=point.X-position.X;var dy=point.Y-position.Y;
             var distance=Math.Sqrt(dx*dx+dy*dy);
             if(distance<nearest) { next=nearest;nearest=distance;index=i; }
             else if(distance<next)next=distance;
@@ -67,10 +71,34 @@ internal sealed class PhotoMeasurementPreview : FrameworkElement
         if(next-nearest<3) { PickMessage?.Invoke("Yakın noktalar ayırt edilemiyor; ilgili ucu listeden seçin.");return false; }
         PointChosen?.Invoke(index,second);PickMessage?.Invoke($"{(second ? "2" : "1")}. uç seçildi; çizim değişmedi.");return true;
     }
+    internal bool ZoomAt(Point position,Size viewport,double factor)
+    {
+        if(!double.IsFinite(position.X) || !double.IsFinite(position.Y) || !double.IsFinite(viewport.Width) ||
+            !double.IsFinite(viewport.Height) || viewport.Width<=0 || viewport.Height<=0 ||
+            position.X<0 || position.Y<0 || position.X>=viewport.Width || position.Y>=viewport.Height ||
+            !double.IsFinite(factor) || factor<=0)return false;
+        var bounds=ImageBounds(viewport);var next=Math.Clamp(zoom*factor,1,8);
+        if(next==1) { centerX=.5;centerY=.5; }
+        else { centerX=Math.Clamp((position.X-bounds.Left)/bounds.Width,0,1);centerY=Math.Clamp((position.Y-bounds.Top)/bounds.Height,0,1); }
+        zoom=next;InvalidateVisual();PickMessage?.Invoke($"Fotoğraf görünümü {zoom:G}×; ölçü ve çizim değişmedi.");return true;
+    }
+    internal void ZoomSelected(double factor)
+    {
+        if(RenderSize.Width<=0 || RenderSize.Height<=0 || !double.IsFinite(factor) || factor<=0)return;
+        var index=FirstIndex ?? SecondIndex;
+        if(index is not int i) { ZoomAt(new Point(RenderSize.Width/2,RenderSize.Height/2),RenderSize,factor);return; }
+        zoom=Math.Clamp(zoom*factor,1,8);
+        if(zoom==1) { centerX=.5;centerY=.5; }
+        else { centerX=Math.Clamp((points[i].X+.5)/image.PixelWidth,0,1);centerY=Math.Clamp((points[i].Y+.5)/image.PixelHeight,0,1); }
+        InvalidateVisual();PickMessage?.Invoke($"Fotoğraf görünümü {zoom:G}×; ölçü ve çizim değişmedi.");
+    }
+    internal void ResetZoom() { zoom=1;centerX=.5;centerY=.5;InvalidateVisual();PickMessage?.Invoke("Fotoğrafın tamamı gösteriliyor; ölçü ve çizim değişmedi."); }
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
     { base.OnMouseLeftButtonDown(e);PickAt(e.GetPosition(this),RenderSize,false);e.Handled=true; }
     protected override void OnMouseRightButtonDown(MouseButtonEventArgs e)
     { base.OnMouseRightButtonDown(e);PickAt(e.GetPosition(this),RenderSize,true);e.Handled=true; }
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    { base.OnMouseWheel(e);if(e.Delta!=0)ZoomAt(e.GetPosition(this),RenderSize,e.Delta>0 ? 2 : .5);e.Handled=true; }
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);dc.DrawRectangle(Brushes.WhiteSmoke,new Pen(Brushes.Gray,1),new Rect(RenderSize));

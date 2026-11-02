@@ -9323,6 +9323,14 @@ internal static class DesktopVerification
                 var aspectMarker=aspectPreview.MapPixel(new Point2(10,10),new Size(200,200));
                 Check(previewEdge.X>=11 && previewEdge.Y>=11 && Math.Abs(aspectMarker.X-29.69)<1e-9 && Math.Abs(aspectMarker.Y-79.352)<1e-9,
                     "Photo measurement preview leaves marker margin and respects the original photo aspect",checks);
+                var densePreview=new PhotoMeasurementPreview(bitmap,[new Point2(10,10),new Point2(11,10)],100,50);
+                int picked=-1;densePreview.PointChosen+=(index,_)=>picked=index;
+                var denseSize=new Size(200,200);var closePoint=densePreview.MapPixel(new Point2(10,10),denseSize);
+                Check(!densePreview.PickAt(closePoint,denseSize,false) && densePreview.ZoomAt(closePoint,denseSize,8) && densePreview.Zoom==8 &&
+                    densePreview.PickAt(densePreview.MapPixel(new Point2(10,10),denseSize),denseSize,false) && picked==0,
+                    "Photo measurement zoom separates nearby selectable points without guessing at fit scale",checks);
+                densePreview.ResetZoom();Check(densePreview.Zoom==1 && densePreview.MapPixel(new Point2(10,10),denseSize)==closePoint,
+                    "Photo measurement fit restores the original mapping",checks);
                 Render(checkWindow,Path.ChangeExtension(reportPath,".photo-check-selected.png"),460,420);
                 Check(checkWindow.ResultForVerification.Text.Contains("141.421356") && checkWindow.ResultForVerification.Text.Contains("150 mm") &&
                     DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom),
@@ -9331,6 +9339,12 @@ internal static class DesktopVerification
                 Check(checkWindow.ResultForVerification.Text.Contains("Göreli fark (fark / girilen)") && checkWindow.ResultForVerification.Text.Contains(expectedPercent+" %") &&
                     checkWindow.ResultForVerification.Text.Contains("üretim onayı verilmedi"),
                     "Photo comparison reports the signed relative difference without an acceptance claim",checks);
+                var resultBeforePreviewZoom=checkWindow.ResultForVerification.Text;
+                checkWindow.PreviewForVerification.ZoomSelected(2);
+                Check(checkWindow.PreviewForVerification.Zoom==2 && checkWindow.ResultForVerification.Text==resultBeforePreviewZoom &&
+                    canvas.Points.SequenceEqual(beforeZoom) && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Zooming the measurement preview preserves the result and draft",checks);
+                checkWindow.PreviewForVerification.ResetZoom();
                 var previewSize=checkWindow.PreviewForVerification.RenderSize;
                 var uniquePick=checkWindow.PreviewForVerification.MapPixel(new Point2(20,20),previewSize);
                 Check(checkWindow.PreviewForVerification.PickAt(uniquePick,previewSize,false) && checkWindow.FirstForVerification.SelectedIndex==4 &&

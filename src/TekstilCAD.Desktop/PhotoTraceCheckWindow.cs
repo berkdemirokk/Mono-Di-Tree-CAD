@@ -39,7 +39,13 @@ internal sealed class PhotoTraceCheckWindow : Window
         var selection=new Grid();selection.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });selection.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(1,GridUnitType.Star) });
         var selectors=new StackPanel();selectors.Children.Add(new Label { Content="1 · Kontrol başlangıcı",Target=FirstForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(FirstForVerification);
         selectors.Children.Add(new Label { Content="2 · Kontrol bitişi",Target=SecondForVerification,Foreground=StudioTheme.Text });selectors.Children.Add(SecondForVerification);selection.Children.Add(selectors);
-        PreviewForVerification.Margin=new Thickness(10,0,0,0);Grid.SetColumn(PreviewForVerification,1);selection.Children.Add(PreviewForVerification);body.Children.Add(selection);
+        var previewColumn=new StackPanel { Margin=new Thickness(10,0,0,0) };previewColumn.Children.Add(PreviewForVerification);
+        var zoomActions=new WrapPanel();
+        void ZoomButton(string label,string name,Action action) { var button=new Button { Content=label,MinWidth=34,Padding=new Thickness(4,2,4,2),Margin=new Thickness(0,2,4,0) };AutomationProperties.SetName(button,name);if(label!="Sığdır") { button.ToolTip="Seçili ilk uca, yoksa ikinci uca odaklanır.";AutomationProperties.SetHelpText(button,(string)button.ToolTip); } button.Click+=(_,_)=>action();zoomActions.Children.Add(button); }
+        ZoomButton("+","Fotoğrafı yakınlaştır",()=>PreviewForVerification.ZoomSelected(2));
+        ZoomButton("−","Fotoğrafı uzaklaştır",()=>PreviewForVerification.ZoomSelected(.5));
+        ZoomButton("Sığdır","Fotoğrafın tamamını göster",PreviewForVerification.ResetZoom);
+        previewColumn.Children.Add(zoomActions);Grid.SetColumn(previewColumn,1);selection.Children.Add(previewColumn);body.Children.Add(selection);
         AutomationProperties.SetLiveSetting(PickStatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(PickStatusForVerification);
         body.Children.Add(new Label { Content="Bağımsız bilinen mesafe (mm)",Target=KnownForVerification,Foreground=StudioTheme.Text });body.Children.Add(KnownForVerification);
         body.Children.Add(new TextBlock { Text="Sonuç, çizimi veya projeyi değiştirmez ve kaydedilmez. Uyum tek başına perspektifi, diğer ölçüleri veya üretim uygunluğunu doğrulamaz.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,4,0,8) });
