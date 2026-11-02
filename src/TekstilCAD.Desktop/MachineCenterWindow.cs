@@ -122,6 +122,21 @@ public sealed class MachineCenterWindow : Window
         var fields=new WrapPanel();settings.Children.Add(fields);
         Field(fields,"Profil adı",profileName,230);Field(fields,"Dosya biçimi",format,165);Field(fields,"Ölçek çarpanı",scale,115);Field(fields,"HPGL birim/mm",units,125);
         units.ToolTip="40 yalnızca örnek değerdir; fiziksel cihaz kalibrasyonu doğrulanmadı. Nokta veya virgül ondalıktır.";
+        var scaleCheck=new StackPanel { Margin=new Thickness(0,4,0,12) };
+        scaleCheck.Children.Add(new TextBlock { Text="Ölçek kontrolü · isteğe bağlı",FontWeight=FontWeights.SemiBold });
+        scaleCheck.Children.Add(new TextBlock { Text="Ayrı hazırlanmış 100 × 100 mm referansın çıktısını ölçtüyseniz X ve Y uzunluklarını girin. Bu ekran referans çizmez veya makineye göndermez.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Muted,Margin=new Thickness(0,4,0,8) });
+        var measuredX=new TextBox();var measuredY=new TextBox();var measuredFields=new WrapPanel();
+        Field(measuredFields,"Ölçülen X · mm",measuredX,150);Field(measuredFields,"Ölçülen Y · mm",measuredY,150);scaleCheck.Children.Add(measuredFields);
+        var scaleCheckResult=new TextBlock { Text="İki ölçüyü de girin. Bu hesap cihaz doğrulaması değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
+        AutomationProperties.SetName(scaleCheckResult,"Ölçek kontrolü sonucu");AutomationProperties.SetLiveSetting(scaleCheckResult,AutomationLiveSetting.Polite);AnnounceTextChanges(scaleCheckResult,"Ölçek kontrolü sonucu");
+        void UpdateScaleCheck()
+        {
+            if(!TryNumber(measuredX,out var x)||!TryNumber(measuredY,out var y)||x<=0||x>1000||y<=0||y>1000)
+            { scaleCheckResult.Text="X ve Y için 0'dan büyük, en fazla 1000 mm ölçü girin. Bu hesap cihaz doğrulaması değildir.";return; }
+            var comparison=PlotterScaleCheck.Compare(x,y);
+            scaleCheckResult.Text=$"100 mm referansa göre yaklaşık sapma: X {comparison.XDeviationMillimeters:+0.######;-0.######;0} mm, Y {comparison.YDeviationMillimeters:+0.######;-0.######;0} mm. Toleransı ve kalibrasyonu cihaz sorumlusu doğrulamalıdır; ayarlar otomatik değiştirilmez.";
+        }
+        measuredX.TextChanged+=(_,_)=>UpdateScaleCheck();measuredY.TextChanged+=(_,_)=>UpdateScaleCheck();scaleCheck.Children.Add(scaleCheckResult);settings.Children.Add(scaleCheck);
         settings.Children.Add(new TextBlock { Text="Üretilecek parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         settings.Children.Add(new TextBlock { Text="Yalnız işaretli parçalar dosyaya alınır. Kaynak kalıp ve türetilen bedenleri kontrol ederek seçin; adetler bu sürümde her seçili parça için 1'dir.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap });
         var searchRow=new WrapPanel { Margin=new Thickness(0,4,0,2) };
