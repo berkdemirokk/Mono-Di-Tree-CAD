@@ -9231,6 +9231,16 @@ internal static class DesktopVerification
             "Photo path acceptance can be undone once as a single action",checks);
         pathCanvas.SetPathSuggestion(pathBefore[^2],pathBefore[^1],candidate);pathCanvas.TryAddPixelPoint(new Point(12,12));
         Check(pathCanvas.PathSuggestion is null && !pathCanvas.ApplyPathSuggestion(),"Changing a photo point invalidates a path preview",checks);
+        var batchCanvas=new PhotoTraceCanvas { Image=edgeBitmap };
+        foreach(var p in new[] { new Point(1,1),new Point(2,1),new Point(2.2,3.1),new Point(8.2,6.2),new Point(15.2,12.1) })batchCanvas.TryAddPixelPoint(p);
+        var batchBefore=batchCanvas.Points.ToArray();var anchors=batchBefore.Skip(2).ToArray();
+        IReadOnlyList<Point>[] segments=[new[] { new Point(2,3),new Point(3,3),new Point(4,4),new Point(5,4),new Point(6,5),new Point(7,5),new Point(8,6) },
+            new[] { new Point(8,6),new Point(9,6),new Point(10,7),new Point(11,8),new Point(12,9),new Point(13,10),new Point(14,11),new Point(15,12) }];
+        Check(!batchCanvas.SetAllPathSuggestions(anchors,segments.Take(1).ToArray()) && batchCanvas.Points.SequenceEqual(batchBefore),"Incomplete batch photo path cannot change the trace",checks);
+        Check(batchCanvas.SetAllPathSuggestions(anchors,segments) && batchCanvas.Points.SequenceEqual(batchBefore),"Batch photo paths remain a preview until accepted",checks);
+        Check(batchCanvas.ApplyPathSuggestion() && batchCanvas.Points.Count>batchBefore.Length && anchors.All(a=>batchCanvas.Points.Contains(a)) &&
+            batchCanvas.Points[0]==batchBefore[0] && batchCanvas.Points[1]==batchBefore[1],"Accepted batch photo paths retain every exact user anchor and both references",checks);
+        Check(batchCanvas.UndoPath() && batchCanvas.Points.SequenceEqual(batchBefore),"Batch photo path is undone in one step",checks);
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
@@ -9287,6 +9297,40 @@ internal static class DesktopVerification
             var savedContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(trace.Dispatcher));
             try
             {
+                var calls=0;
+                trace.ComputePathForVerification=(_,start,end,_)=> { calls++;return start.Y==end.Y
+                    ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) }
+                    : new[] { new Point(20,10),new Point(21,15),new Point(20,20) }; };
+                var batch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>batch.IsCompleted);batch.GetAwaiter().GetResult();
+                Render(trace,Path.ChangeExtension(reportPath,".photo-batch-preview.png"),560,480);
+                Check(calls==2 && canvas.PathSuggestion is not null && canvas.Points.SequenceEqual(beforeZoom) && FullyVisible(canvas,root) && trace.StatusForVerification.Text.Contains("ilk ve son birleşmez"),
+                    "Batch search previews each trace interval without changing points and discloses the open end",checks);
+                Check(canvas.ApplyPathSuggestion() && canvas.Points.Count>beforeZoom.Length && canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom),
+                    "Batch proposal applies and undoes as one operation",checks);
+                calls=0;trace.ComputePathForVerification=(_,_,_,_)=> { calls++;return calls==1 ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) } : null; };
+                var failedBatch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>failedBatch.IsCompleted);failedBatch.GetAwaiter().GetResult();
+                Check(calls==2 && canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom),"One failed batch interval discards the entire proposal",checks);
+                for(var i=0;i<15;i++)canvas.TryAddPixelPoint(new Point(30+i,30));calls=0;
+                Check(canvas.SetPathSuggestion(new Point(43,30),new Point(44,30),[new Point(43,30),new Point(43,31),new Point(44,30)]),"A single-interval preview can exist before an excessive batch request",checks);
+                var excessiveBatch=trace.StartPathSuggestionAsync(allSegments:true);PumpUntil(()=>excessiveBatch.IsCompleted);excessiveBatch.GetAwaiter().GetResult();
+                Check(calls==0 && canvas.PathSuggestion is null && canvas.Points.Count==beforeZoom.Length+15 && trace.StatusForVerification.Text.Contains("17"),"Batch search refuses more than seventeen anchors, clears the old preview and preserves points",checks);
+                for(var i=0;i<15;i++)canvas.UndoPoint();
+                using(var batchReached=new ManualResetEventSlim())using(var batchRelease=new ManualResetEventSlim())
+                {
+                    trace.ComputePathForVerification=(_,start,_,token)=>
+                    {
+                        if(start.X==10)return new[] { new Point(10,10),new Point(15,11),new Point(20,10) };
+                        batchReached.Set();batchRelease.Wait(token);return new[] { new Point(20,10),new Point(21,15),new Point(20,20) };
+                    };
+                    var staleBatch=trace.StartPathSuggestionAsync(allSegments:true);
+                    try
+                    {
+                        PumpUntil(()=>batchReached.IsSet);canvas.TryAddPixelPoint(new Point(25,25));batchRelease.Set();PumpUntil(()=>staleBatch.IsCompleted);staleBatch.GetAwaiter().GetResult();
+                        Check(canvas.PathSuggestion is null && trace.StatusForVerification.Text.Contains("değişti"),"Editing during batch search discards every interval",checks);
+                        canvas.UndoPoint();
+                    }
+                    finally { batchRelease.Set(); }
+                }
                 using var reached=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
                 trace.ComputePathForVerification=(_,_,_,token)=> { reached.Set();release.Wait(token);return new[] { new Point(20,10),new Point(21,11),new Point(21,19),new Point(20,20) }; };
                 var pendingPath=trace.StartPathSuggestionAsync();PumpUntil(()=>reached.IsSet);

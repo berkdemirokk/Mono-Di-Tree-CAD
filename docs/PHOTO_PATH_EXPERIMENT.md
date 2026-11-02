@@ -16,6 +16,8 @@ Her görüntünün en uzun anotasyon çokgeninde beş başlangıç indisi seçil
 
 Arama, uçların çevresindeki sınırlı bir dikdörtgende kontrast ve yol uzunluğunu birlikte maliyetlendirir. En fazla 160.000 piksel inceler, 4.096 noktayı aşan sonucu reddeder ve iptali gözler. İç hesap uçları en yakın tamsayı önizleme pikseline yuvarlar; kullanıcıya sunulan öneri seçilen özgün uçları korur. Arayüzde yol asenkron hazırlanır, önizlenir ve yalnız açıkça kabul edilirse ara noktalar eklenir; son uygulama, başka nokta değişikliği öncesinde tek adımda geri alınabilir. Doku veya gölge izlenebilir; öneri tamamı için kalıp onayı değildir. Proje geçmişi kabul edilmiş noktaları saklar, öneri kökenini ayrı kaydetmez. Gerçek kullanıcılarla, diğer giysi türleriyle ve üretim verileriyle doğrulama eksiktir.
 
+Kullanıcı en fazla 17 çizgi noktası seçerek 16 ardışık aralığın tamamı için tek seferde öneri de isteyebilir; son nokta ilkine otomatik bağlanmaz. Bir aralık başarısızsa bütün öneri reddedilir; noktalar ve referanslar değişmez. Kullanıcı öneriyi inceleyip uygularsa tüm işlem tek adımda geri alınabilir. Bu sayfadaki fotoğraf deneyi tek aralıkları ölçmüştür; bütün giysi konturunun toplu öneriyle doğruluğunu ölçmemiştir. Otomatik giysi bölgesi için incelenen iki klasik yöntem [ayrı deneyde](PHOTO_REGION_EXPLORATION.md) yetersiz kalmıştır.
+
 ## Tekrarlama
 
 ZIP'i bağımsız olarak indirin; Windows, .NET 10 SDK ve Python 3.12.14 ile boş bir çalışma klasörü kullanın:
