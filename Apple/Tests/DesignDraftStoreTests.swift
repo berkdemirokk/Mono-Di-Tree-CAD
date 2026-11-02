@@ -455,6 +455,43 @@ final class DesignDraftStoreTests: XCTestCase {
         let entered = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "  ", hips: "", length: "", other: "bel çevresi yaklaşık 72 cm olsun; kalça çevresi 98 cm olmasın")
         XCTAssertEqual(entered, original.measurements)
     }
+    func testPortableV2ModelRoundTripAndRejectsAmbiguity() throws {
+        let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
+        let original = ExperimentalDesignBrief.Draft(style: .aline, description: "İpek 👗", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "bel çevresi 72 cm olmasın", image: image, imageName: "örnek.png")
+        let bytes = try ExperimentalDesignBrief.makeV2(original)
+        let reopened = try ExperimentalDesignBrief.portableDraft(bytes)
+        XCTAssertEqual(reopened.style, .aline)
+        XCTAssertEqual(reopened.description, original.description)
+        XCTAssertEqual(reopened.measurements, original.measurements)
+        XCTAssertEqual(reopened.image, image)
+        XCTAssertEqual(reopened.imageName, original.imageName)
+        let text = try XCTUnwrap(String(data: bytes, encoding: .utf8))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(text.replacingOccurrences(of: "\"aline\"", with: "\"unknown\"").utf8)))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(text.replacingOccurrences(of: "\"id\":\"aline\"", with: "\"id\":\"aline\",\"id\":\"wrap\"").utf8)))
+        let conflict = ExperimentalDesignBrief.Draft(style: .aline, description: "Model: düz", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(conflict))
+        let conflictingImport = #"{"format":"tekstilcad.design-request","version":2,"prompt":"Model: düz","measurements":"","reference":null,"model":{"id":"aline"}}"#
+        XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(conflictingImport.utf8)))
+        let unknownField = #"{"format":"tekstilcad.design-request","version":2,"prompt":"İpek","measurements":"","reference":null,"model":{"id":"aline","extra":true}}"#
+        XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(unknownField.utf8)))
+        let v1 = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: image, imageName: original.imageName)
+        let v1Reopened = try ExperimentalDesignBrief.portableDraft(v1)
+        XCTAssertEqual(v1Reopened.style, .describe)
+        XCTAssertEqual(v1Reopened.prompt, original.prompt)
+        XCTAssertEqual(v1Reopened.image, image)
+        let damaged = Data([137,80,78,71,13,10,26,10])
+        let damagedDraft = ExperimentalDesignBrief.Draft(style: .aline, description: "örnek", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: damaged, imageName: "broken.png")
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(damagedDraft))
+    }
+    func testV2ToV1RejectsOverLimitWithoutTruncatingEmoji() throws {
+        let text = String(repeating: "👗", count: 8192)
+        let original = ExperimentalDesignBrief.Draft(style: .aline, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let v2 = try ExperimentalDesignBrief.makeV2(original)
+        let reopened = try ExperimentalDesignBrief.portableDraft(v2)
+        XCTAssertEqual(reopened.description, text)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: reopened.prompt, measurements: reopened.measurements, image: nil, imageName: nil))
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(v2).description, text)
+    }
     func testMeasurementMessagePreservedAsUserAuthoredText() throws {
         let message = "Göğüs çevresi 92 cm, bel çevresi 72 cm.\nKol ölçüsünü bilmiyorum 👗"
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)

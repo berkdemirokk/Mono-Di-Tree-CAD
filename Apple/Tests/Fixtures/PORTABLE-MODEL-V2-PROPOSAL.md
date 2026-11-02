@@ -1,6 +1,6 @@
 # Taşınabilir istek: model kimliği için v2 önerisi
 
-Durum: Tasarım önerisidir; v2 okuyucu/yazıcı uygulanmamıştır. Proje dosyası sürümleriyle ilgisi yoktur. Bu dosyadaki veriler sentetiktir.
+Durum: iPhone dalında deneysel v2 okuyucu/yazıcı uygulanmıştır; Xcode ve cihaz testi yapılmamıştır. Windows v2 okuyucusu uygulanmamıştır. Proje dosyası sürümleriyle ilgisi yoktur. Bu dosyadaki veriler sentetiktir.
 
 ## Mevcut davranış ve kanıt
 
@@ -11,7 +11,7 @@ Durum: Tasarım önerisidir; v2 okuyucu/yazıcı uygulanmamıştır. Proje dosya
 
 ## Önerilen v2 sözleşmesi
 
-`format` aynı kalır; `version` 2 olur. `prompt`, `measurements` ve `reference` mevcut anlamlarını ve sınırlarını korur. Zorunlu `model` değeri ya `null` ya da yalnız sabit, sürümlü sözlükten bir `id` içeren nesnedir (örnek `{"id":"aline"}`). Önerilen tanımlar `wrap`, `aline`, `corset`, `sheath`, `straight`, `shirt`; kimlikler iki uygulama tarafından ortak kararlaştırılmadan yayınlanmaz. `null` model seçilmedi anlamına gelir. Kullanıcının açıklaması `prompt` içinde aynen saklanır; v2'de uygulama tarafından türetilen model satırı prompt'a otomatik eklenmez. Bilinmeyen kimlik, eksik/tekrarlı/bilinmeyen alan ve geçersiz değer güvenle reddedilir; mevcut açık içerik değiştirilmez. V2 bu öneri olarak uygulanmadığı sürece örnek dosya üretim formatı sayılmaz.
+`format` aynı kalır; `version` 2 olur. `prompt`, `measurements` ve `reference` mevcut anlamlarını ve sınırlarını korur. Zorunlu `model` değeri ya `null` ya da yalnız sabit, sürümlü sözlükten bir `id` içeren nesnedir (örnek `{"id":"aline"}`). Önerilen tanımlar `wrap`, `aline`, `corset`, `sheath`, `straight`, `shirt`; kimlikler iki uygulama tarafından ortak kararlaştırılmadan yayınlanmaz. `null` model seçilmedi anlamına gelir. Kullanıcının açıklaması `prompt` içinde aynen saklanır; v2'de uygulama tarafından türetilen model satırı prompt'a otomatik eklenmez. Bilinmeyen kimlik, eksik/tekrarlı/bilinmeyen alan ve geçersiz değer güvenle reddedilir; mevcut açık içerik değiştirilmez. Bu örnek Windows tarafından henüz desteklenmez; cihazlar arası uyumluluk doğrulanmamıştır.
 
 ## Geçiş ve uyuşmazlık
 

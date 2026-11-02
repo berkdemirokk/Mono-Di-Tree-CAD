@@ -322,20 +322,62 @@ enum ExperimentalDesignBrief {
         return encoded
     }
 
+    private static let portableStyleIDs: [String: DressStyle] = [
+        "wrap": .wrap, "aline": .aline, "corset": .corset,
+        "sheath": .sheath, "straight": .straight, "shirt": .shirt
+    ]
+    struct ModelIdentity: Codable { let id: String }
+    struct DocumentV2: Encodable {
+        let format = "tekstilcad.design-request"
+        let version = 2
+        let prompt: String
+        let measurements: String
+        let reference: Image?
+        let model: ModelIdentity?
+        enum CodingKeys: String, CodingKey { case format, version, prompt, measurements, reference, model }
+        func encode(to encoder: Encoder) throws {
+            var box = encoder.container(keyedBy: CodingKeys.self)
+            try box.encode(format, forKey: .format); try box.encode(version, forKey: .version)
+            try box.encode(prompt, forKey: .prompt); try box.encode(measurements, forKey: .measurements)
+            if let reference { try box.encode(reference, forKey: .reference) } else { try box.encodeNil(forKey: .reference) }
+            if let model { try box.encode(model, forKey: .model) } else { try box.encodeNil(forKey: .model) }
+        }
+    }
+    static func makeV2(_ draft: Draft) throws -> Data {
+        guard !hasConflictingModelLabels(style: draft.style, description: draft.description) else { throw Error.invalidText }
+        let id = portableStyleIDs.first(where: { $0.value == draft.style })?.key
+        guard draft.style == .describe || id != nil else { throw Error.invalidText }
+        let checkPrompt = draft.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && id != nil ? "model" : draft.description
+        let validated = try JSONDecoder().decode(Document.self, from: make(prompt: checkPrompt, measurements: draft.measurements, image: draft.image, imageName: draft.imageName))
+        guard draft.description.utf16.count <= maxTextUnits else { throw Error.invalidText }
+        let result = try JSONEncoder().encode(DocumentV2(prompt: draft.description, measurements: draft.measurements, reference: validated.reference, model: id.map { ModelIdentity(id: $0) }))
+        guard result.count <= 12 * 1024 * 1024 else { throw Error.invalidText }
+        return result
+    }
     /// Import a portable request without changing its text or reference bytes.
     static func portableDraft(_ bytes: Data) throws -> Draft {
         guard bytes.count <= 12 * 1024 * 1024 else { throw Error.invalidText }
         // Desktop rejects duplicates and unknown fields; never drop unrecognized data.
-        var stream = ExperimentalJSONStream(maximumBytes: 12 * 1024 * 1024, maximumTokenBytes: 12 * 1024 * 1024, maximumDepth: 8, maximumKeysPerObject: 5)
+        var stream = ExperimentalJSONStream(maximumBytes: 12 * 1024 * 1024, maximumTokenBytes: 12 * 1024 * 1024, maximumDepth: 8, maximumKeysPerObject: 6)
         try stream.feed(bytes); try stream.finish()
         guard let root = try JSONSerialization.jsonObject(with: bytes) as? [String: Any],
-              Set(root.keys) == Set(["format", "version", "prompt", "measurements", "reference"]),
               let rawReference = root["reference"] else { throw Error.invalidText }
         if !(rawReference is NSNull) {
             guard let ref = rawReference as? [String: Any], Set(ref.keys) == Set(["name", "mediaType", "dataBase64"]) else { throw Error.invalidText }
         }
         let doc = try JSONDecoder().decode(Document.self, from: bytes)
-        guard doc.format == "tekstilcad.design-request", doc.version == 1 else { throw Error.invalidText }
+        guard doc.format == "tekstilcad.design-request", doc.version == 1 || doc.version == 2 else { throw Error.invalidText }
+        let keys: Set<String> = doc.version == 1 ? ["format", "version", "prompt", "measurements", "reference"] : ["format", "version", "prompt", "measurements", "reference", "model"]
+        guard Set(root.keys) == keys else { throw Error.invalidText }
+        var style = DressStyle.describe
+        if doc.version == 2 {
+            guard let rawModel = root["model"] else { throw Error.invalidText }
+            if !(rawModel is NSNull) {
+                guard let object = rawModel as? [String: Any], Set(object.keys) == Set(["id"]), let id = object["id"] as? String, let resolved = portableStyleIDs[id] else { throw Error.invalidText }
+                style = resolved
+            }
+            guard !hasConflictingModelLabels(style: style, description: doc.prompt) else { throw Error.invalidText }
+        }
         let image: Data?
         if let reference = doc.reference {
             let encoded = reference.dataBase64
@@ -345,9 +387,11 @@ enum ExperimentalDesignBrief {
             image = decoded
         } else { image = nil }
         // Reject unsupported or inconsistent images before replacing any current draft.
-        let verified = try JSONDecoder().decode(Document.self, from: make(prompt: doc.prompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name))
+        let checkPrompt = doc.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && style != .describe ? "model" : doc.prompt
+        let verified = try JSONDecoder().decode(Document.self, from: make(prompt: checkPrompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name))
+        guard doc.prompt.utf16.count <= maxTextUnits else { throw Error.invalidText }
         guard verified.reference?.mediaType == doc.reference?.mediaType else { throw Error.invalidImage }
-        return Draft(style: .describe, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name)
+        return Draft(style: style, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name)
     }
     static func readPortable(_ url: URL) throws -> Draft {
         let grant = url.startAccessingSecurityScopedResource()

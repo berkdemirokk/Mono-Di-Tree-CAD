@@ -2555,6 +2555,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var showDesktopMeasurementWarning = false
     @State private var confirmingExportDestination = false
     @State private var pendingExportAttempt: ExperimentalDesignBrief.ExportAttempt?
+    @State private var choosingRequestVersion = false
+    @State private var requestExportVersion = 1
     @State private var image: Data?
     @State private var imageName: String?
     @State private var selectingImage = false
@@ -2812,11 +2814,13 @@ private struct ExperimentalDesignBriefView: View {
         }
         do {
             let candidate = draft
-            let data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName)
+            let data: Data
+            if requestExportVersion == 2 { data = try ExperimentalDesignBrief.makeV2(candidate) }
+            else { data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName) }
             pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
             confirmingExportDestination = true
         } catch {
-            message = "Tarif veya görsel gereklidir; metinlerin her biri en fazla 16.384 UTF-16 birimi, görsel en fazla 8 MiB olmalıdır."
+            message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
         }
     }
     var body: some View {
@@ -3096,7 +3100,7 @@ private struct ExperimentalDesignBriefView: View {
                             .buttonStyle(.borderedProminent).controlSize(.large)
                             .frame(maxWidth: .infinity, minHeight: 48)
                     } else {
-                        Button("İstek dosyasını kaydet…") { prepareExport() }
+                        Button("İstek dosyasını kaydet…") { choosingRequestVersion = true }
                             .buttonStyle(.borderedProminent).controlSize(.large)
                             .frame(maxWidth: .infinity, alignment: .trailing)
                     }
@@ -3130,7 +3134,7 @@ private struct ExperimentalDesignBriefView: View {
                         let isPortable = candidateIsPortable
                         draftWriter.pause {
                         draftTransition = false; backgroundLease.finish(); DraftPendingLedger.abandon(stoppedMarkers)
-                        importedPortable = isPortable; modelExplicitlySelected = !isPortable && candidate.style != .describe
+                        importedPortable = isPortable && candidate.style == .describe; modelExplicitlySelected = candidate.style != .describe
                         style = candidate.style; description = candidate.description; bust = candidate.bust; waist = candidate.waist
                         hips = candidate.hips; length = candidate.length; otherMeasurements = candidate.otherMeasurements
                         image = candidate.image; imageName = candidate.imageName; measurementForm = candidate.measurementForm
@@ -3185,6 +3189,13 @@ private struct ExperimentalDesignBriefView: View {
                 Button("İptal", role: .cancel) { pendingExportAttempt = nil }
             } message: {
                 Text("Yeni ve kullanılmamış bir dosya adı seçin. Aynı dosyanın farklı bir yolu veya sonradan oluşturulan bir hedef uygulama tarafından kesin olarak tespit edilmez; mevcut dosyanın üzerine yazılmasını engelleyemiyoruz. Emin değilseniz iptal edin.")
+            }
+            .confirmationDialog("İstek dosyası biçimi", isPresented: $choosingRequestVersion, titleVisibility: .visible) {
+                Button("V1: Windows ile uyumlu kopya") { requestExportVersion = 1; prepareExport() }
+                Button("V2: model kimliğini koru") { requestExportVersion = 2; prepareExport() }
+                Button("Vazgeç", role: .cancel) { }
+            } message: {
+                Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar ancak mevcut Windows sürümü ve eski iPhone sürümleri V2 dosyasını açamaz. Kaynak dosyayı korumak için farklı bir dosya adı seçin.")
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }
