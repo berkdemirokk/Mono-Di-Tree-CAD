@@ -6,13 +6,14 @@ function validateOptions(options) {
  if (!options || typeof options!=='object' || Array.isArray(options)) throw new TypeError('Tüm model ve bolluk seçenekleri açıkça gerekli.');
  const bad=[];
  for(const [key,d] of Object.entries(optionDefinitions)) {
+  if(!Object.hasOwn(options,key)) { bad.push(key); continue; }
   const v=options[key];
   if ('pct' in d) { if(typeof v!=='number'||!Number.isFinite(v)||v<d.min/100||v>d.max/100) bad.push(key); }
   else if ('bool' in d) { if(typeof v!=='boolean') bad.push(key); }
   else if ('list' in d) { if(!d.list.includes(v)) bad.push(key); }
   else bad.push(key);
  }
- const extras=Object.keys(options).filter(k=>!(k in optionDefinitions));
+ const extras=Object.keys(options).filter(k=>!Object.hasOwn(optionDefinitions,k));
  if(bad.length||extras.length) throw new RangeError(`Eksik/geçersiz seçenek: ${[...bad,...extras].join(', ')}`);
  return Object.fromEntries(Object.keys(optionDefinitions).map(k=>[k,options[k]]));
 }

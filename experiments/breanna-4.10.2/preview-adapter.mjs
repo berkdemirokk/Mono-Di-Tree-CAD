@@ -17,7 +17,8 @@ export function createPreview(input) {
 // Recreate instead of trusting stored geometry or authorization flags. No file IO.
 export function reopenPreview(text) {
  if(typeof text!=='string'||Buffer.byteLength(text,'utf8')>1024*1024)throw new Error('Geçersiz önizleme boyutu.');
- const stored=JSON.parse(text);if(stored?.schema!=='tekstilcad.experimental.bodice-request.v1')throw new Error('Bilinmeyen sürüm.');
+ const stored=JSON.parse(text);
+ if(!stored || typeof stored!=='object' || Array.isArray(stored) || Object.keys(stored).length!==4 || !['schema','warning','input','preview'].every(k=>Object.hasOwn(stored,k)) || stored.schema!=='tekstilcad.experimental.bodice-request.v1' || stored.warning!=='DENEYSEL ÖNİZLEME; üretim, kesim ve plotter için uygun değildir') throw new Error('Geçersiz kayıt şeması veya uyarı.');
  const recreated=createPreview(stored.input);const safe=JSON.parse(recreated);
  if(JSON.stringify(stored.preview)!==JSON.stringify(safe.preview))throw new Error('Kayıtlı geometri kaynağı ile uyuşmuyor.');return recreated;
 }
