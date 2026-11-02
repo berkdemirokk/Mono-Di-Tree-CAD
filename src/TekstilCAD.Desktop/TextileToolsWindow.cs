@@ -1307,9 +1307,9 @@ public sealed class TextileToolsWindow : Window
                         ? " Bu uyarı kaynak konturun kesin hatalı olduğu anlamına gelmez; bu sürüm ayrıntının korunduğunu doğrulayamadı. Ana çalışma alanında parçayı yakınlaştırıp dar girintileri ve konturu kaynak çizimle karşılaştırın; gerekirse üretim sorumlusuna danışın."
                         : " Ölçüyü ve konturu kontrol edin; seçilen payı doğrulatın.";
                     if(ex is OffsetLocalDetailUnverifiedException detail)
-                        nextStep += detail.SourceIndex is int sourceIndex && detail.Sample is OffsetLocalSample sample
-                            ? $" Karşılaştırmada ilk doğrulanamayan örnek, 0,000001 mm ızgarasına yuvarlanmış kaynak konturda {(sample==OffsetLocalSample.Vertex ? "köşe" : "kenar orta noktası; başlangıç köşesi")} {sourceIndex} (indeksler sıfırdan başlar). Bu tek başına kusur kanıtı değildir."
-                            : " Ters karşılaştırmadaki örnek kaynak konturda güvenle konumlandırılamadı.";
+                        nextStep += detail.ComparisonIndex is int comparisonIndex && detail.Sample is OffsetLocalSample sample
+                            ? $" Karşılaştırmada ilk doğrulanamayan örnek, {(detail.ComparisonSide==OffsetComparisonSide.Source ? "0,000001 mm ızgarasına yuvarlanmış kaynak konturda" : "ters hesapla elde edilen konturda")} {(sample==OffsetLocalSample.Vertex ? "köşe" : "kenar orta noktası; başlangıç köşesi")} {comparisonIndex} (indeksler o konturda sıfırdan başlar). Bu tek başına kusur kanıtı değildir."
+                            : " Karşılaştırma örneği konumlandırılamadı.";
                     result.Text=$"Dikiş payı uygulanmadı ({allowanceDescription}): "+ex.Message+
                         " Bu hesaplama kaynak parçayı değiştirmedi."+nextStep+" Üretim payını yalnız üretim şartları izin veriyorsa değiştirin. "+offsetSourceDescription+".";
                     if(ex is OffsetLocalDetailUnverifiedException { Preview.IsDefaultOrEmpty: false } unverified)
@@ -1326,7 +1326,7 @@ public sealed class TextileToolsWindow : Window
                                 result.Text="Proje, seçim veya dikiş payı değişti; eski önizleme gösterilmedi. Güncel konturla yeniden hesaplayın.";
                                 return;
                             }
-                            new OffsetUnverifiedPreviewWindow(this,snapshot.Points,preview,unverified.SamplePoint,unverified.SourceIndex,unverified.Sample).ShowDialog();
+                            new OffsetUnverifiedPreviewWindow(this,snapshot.Points,preview,unverified.SamplePoint,unverified.ComparisonIndex,unverified.Sample,unverified.ComparisonSide ?? OffsetComparisonSide.Source).ShowDialog();
                         };
                         unverifiedOffsetPreview.Visibility=Visibility.Visible;
                     }                }

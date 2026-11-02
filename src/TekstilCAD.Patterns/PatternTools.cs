@@ -103,8 +103,7 @@ public static class PatternTools
         // A global area budget can hide a small lost notch on a large perimeter.
         // Check local vertices and edge midpoints in both directions, in grid units.
         // This is a conservative sampling check, not a proof of Hausdorff distance.
-        var sourceMatches=LocallyMatchesWithDiagnostic(path,recovered[0],8.0,cancellationToken,out var failingIndex,out var failingSample);
-        if (!sourceMatches || !LocallyMatchesWithCancellation(recovered[0], path, 8.0, cancellationToken))
+        if (TryFindUnmatchedSample(path,recovered[0],8.0,cancellationToken,out var side,out var failingIndex,out var failingSample))
         {
             // The local check may return false just as cancellation is requested.
             // Do not replace that cancellation with a validation failure or copy
@@ -116,8 +115,8 @@ public static class PatternTools
                 preview.Add(new Point2(p.X / scale, p.Y / scale));
             }
             cancellationToken.ThrowIfCancellationRequested();
-            var samplePoint=sourceMatches ? (Point2?)null : SourceGridSample(path,failingIndex,failingSample);
-            throw new OffsetLocalDetailUnverifiedException(preview,sourceMatches ? null : failingIndex,sourceMatches ? null : failingSample,samplePoint);
+            var samplePoint=SourceGridSample(side==OffsetComparisonSide.Source ? path : recovered[0],failingIndex,failingSample);
+            throw new OffsetLocalDetailUnverifiedException(preview,failingIndex,failingSample,samplePoint,side);
         }
         cancellationToken.ThrowIfCancellationRequested();
         var difference = Clipper.Xor(new Paths64 { path }, recovered, FillRule.NonZero);
@@ -204,6 +203,15 @@ public static class PatternTools
 
     private static bool LocallyMatchesWithCancellation(Path64 source, Path64 target, double tolerance, CancellationToken cancellationToken)
         => LocallyMatchesWithDiagnostic(source,target,tolerance,cancellationToken,out _,out _);
+
+    private static bool TryFindUnmatchedSample(Path64 source,Path64 recovered,double tolerance,CancellationToken token,
+        out OffsetComparisonSide side,out int index,out OffsetLocalSample sample)
+    {
+        side=OffsetComparisonSide.Source;
+        if (!LocallyMatchesWithDiagnostic(source,recovered,tolerance,token,out index,out sample)) return true;
+        side=OffsetComparisonSide.Recovered;
+        return !LocallyMatchesWithDiagnostic(recovered,source,tolerance,token,out index,out sample);
+    }
 
     private static bool LocallyMatchesWithDiagnostic(Path64 source, Path64 target, double tolerance, CancellationToken cancellationToken,out int failingIndex,out OffsetLocalSample failingSample)
     {

@@ -16,7 +16,7 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
     internal static Point MapPoint(Point2 p,double cx,double cy,double scale,double width,double height,double panX,double panY)
         => new(width/2+panX+(p.X-cx)*scale,height/2+panY+(p.Y-cy)*scale);
 
-    internal OffsetUnverifiedPreviewWindow(Window owner, IReadOnlyList<Point2> source, IReadOnlyList<Point2> candidate,Point2? samplePoint=null,int? sampleIndex=null,OffsetLocalSample? sampleKind=null)
+    internal OffsetUnverifiedPreviewWindow(Window owner, IReadOnlyList<Point2> source, IReadOnlyList<Point2> candidate,Point2? samplePoint=null,int? sampleIndex=null,OffsetLocalSample? sampleKind=null,OffsetComparisonSide sampleSide=OffsetComparisonSide.Source)
     {
         Owner=owner; Title="Doğrulanmamış dikiş payı önizlemesi";
         Width=900; Height=700; MinWidth=450; MinHeight=350;
@@ -31,7 +31,8 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
         MarkedSampleForVerification=sample;
         if(sample is not null)
         {
-            warning.Text+=$" Mor halka, ızgaraya yuvarlanmış kaynakta ilk doğrulanamayan {(sampleKind==OffsetLocalSample.Vertex ? "köşeyi" : "kenar orta noktasını")} gösterir (başlangıç indeksi {sampleIndex}; sıfırdan başlar). Bu tek başına kusur kanıtı değildir.";
+            var origin=sampleSide==OffsetComparisonSide.Source ? "ızgaraya yuvarlanmış kaynakta" : "ters hesapla elde edilen, burada çizilmeyen konturda";
+            warning.Text+=$" Mor halka, {origin} ilk doğrulanamayan {(sampleKind==OffsetLocalSample.Vertex ? "köşeyi" : "kenar orta noktasını")} gösterir (o konturdaki başlangıç indeksi {sampleIndex}; sıfırdan başlar). Bu tek başına kusur kanıtı değildir.";
             AutomationProperties.SetName(warning,warning.Text);
         }
         var actions=new WrapPanel { HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,10,0,0) };
@@ -39,7 +40,7 @@ internal sealed class OffsetUnverifiedPreviewWindow : Window
         if(sample is not null)
         {
             var focus=new Button { Content="Örneğe odaklan",MinWidth=140,Margin=new Thickness(0,0,8,0) };
-            AutomationProperties.SetHelpText(focus,"Doğrulanamayan kaynak örneğini merkeze alır; sonuç veya üretim onayı vermez.");
+            AutomationProperties.SetHelpText(focus,"Doğrulanamayan karşılaştırma örneğini merkeze alır; sonuç veya üretim onayı vermez.");
             focus.Click+=(_,_)=>drawing.FocusSample();FocusSampleForVerification=focus;actions.Children.Add(focus);
         }
         var measure=new Button { Content="Seçili noktaları ölç…",MinWidth=160,Margin=new Thickness(0,0,8,0) };

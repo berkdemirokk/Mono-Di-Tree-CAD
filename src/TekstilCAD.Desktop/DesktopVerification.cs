@@ -14249,6 +14249,18 @@ internal static class DesktopVerification
                     DocumentSession.ContentEquals(before,studio.Document),"Focusing an unverified sample changes only the view",checks);
             }
             finally { markedPreview.Close(); }
+            var recoveredPreview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points,lobed.Points[1],12,
+                TekstilCAD.Patterns.OffsetLocalSample.EdgeMidpoint,TekstilCAD.Patterns.OffsetComparisonSide.Recovered);
+            try
+            {
+                var warning=Descendants<TextBlock>((FrameworkElement)recoveredPreview.Content).Single(t=>t.Text.Contains("Mor halka"));
+                Check(warning.Text.Contains("ters hesapla elde edilen, burada çizilmeyen konturda") &&
+                    warning.Text.Contains("o konturdaki başlangıç indeksi 12") &&
+                    AutomationProperties.GetName(warning)==warning.Text && recoveredPreview.MarkedSampleForVerification==lobed.Points[1] &&
+                    recoveredPreview.FocusSampleForVerification is not null,
+                    "Recovered-contour sample is marked and identified without calling it a source point",checks);
+            }
+            finally { recoveredPreview.Close(); }
             var preview=new OffsetUnverifiedPreviewWindow(tools,lobed.Points,lobed.Points);
             try
             {

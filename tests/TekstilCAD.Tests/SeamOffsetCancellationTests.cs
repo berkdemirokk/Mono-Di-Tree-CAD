@@ -59,11 +59,32 @@ public sealed class SeamOffsetCancellationTests
         using var cancellation = new CancellationTokenSource();
         var failure = Assert.Throws<OffsetLocalDetailUnverifiedException>(() => PatternTools.Offset(source, 1, cancellation.Token));
         Assert.False(failure.Preview.IsDefaultOrEmpty);
+        Assert.NotNull(failure.ComparisonSide);
+        Assert.NotNull(failure.ComparisonIndex);
+        Assert.NotNull(failure.SamplePoint);
+        Assert.Equal(failure.ComparisonSide == OffsetComparisonSide.Source ? failure.ComparisonIndex : null, failure.SourceIndex);
         var preview = failure.Preview.ToArray();
         Assert.All(preview, p => Assert.True(p.IsFinite));
         source.Points[0] = new Point2(0, 0);
         Assert.Equal(preview, failure.Preview.ToArray());
         Assert.Equal(before.Skip(1), source.Points.Skip(1));
+    }
+
+    [Fact]
+    public void LocalComparisonIdentifiesTheContourContainingAnUnmatchedSample()
+    {
+        Path64 source=[new(0,0),new(100,0),new(100,100),new(0,100)];
+        Path64 withSpike=[new(0,0),new(25,0),new(25,-20),new(30,0),new(100,0),new(100,100),new(0,100)];
+        var method=typeof(PatternTools).GetMethod("TryFindUnmatchedSample",BindingFlags.NonPublic|BindingFlags.Static)!;
+        object?[] reverse=[source,withSpike,1d,CancellationToken.None,null,null,null];
+        Assert.True((bool)method.Invoke(null,reverse)!);
+        Assert.Equal(OffsetComparisonSide.Recovered,reverse[4]);
+        Assert.InRange((int)reverse[5]!,0,withSpike.Count-1);
+        object?[] forward=[withSpike,source,1d,CancellationToken.None,null,null,null];
+        Assert.True((bool)method.Invoke(null,forward)!);
+        Assert.Equal(OffsetComparisonSide.Source,forward[4]);
+        object?[] same=[source,source,1d,CancellationToken.None,null,null,null];
+        Assert.False((bool)method.Invoke(null,same)!);
     }
 
     [Fact]
