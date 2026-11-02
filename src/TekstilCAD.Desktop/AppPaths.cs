@@ -6,7 +6,10 @@ namespace TekstilCAD.Desktop;
 internal static class AppPaths
 {
     private static string? verificationDirectory;
-#if TEKSTILCAD_ISOLATED_PREVIEW
+#if TEKSTILCAD_ATELIER_PREVIEW
+    internal const bool IsIsolatedPreview = true;
+    private const string DataFolderName = "Studio-Atelier-Preview-20261102-a9f28d61";
+#elif TEKSTILCAD_ISOLATED_PREVIEW
     internal const bool IsIsolatedPreview = true;
     private const string DataFolderName = "Studio-Preview-v4";
 #else

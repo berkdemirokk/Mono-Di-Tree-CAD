@@ -942,6 +942,11 @@ internal static class DesktopVerification
         try
         {
             reportPath = AllowedReportPath(reportPath);
+#if TEKSTILCAD_ATELIER_PREVIEW
+            Check(AppPaths.IsIsolatedPreview && AppPaths.DataDirectory == Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TekstilCAD", "Studio-Atelier-Preview-20261102-a9f28d61"),
+                "Atelier preview uses its own runtime data directory", checks);
+#endif
             var work = Path.Combine(RepositoryRoot(reportPath), "work", "desktop-verification", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(work);
             AppPaths.UseVerificationDirectory(Path.Combine(work, "application-data"));

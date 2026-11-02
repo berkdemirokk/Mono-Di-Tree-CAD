@@ -16,6 +16,9 @@
   <PropertyGroup Condition="'$(TekstilCADIsolatedPreview)' == 'true'">
     <DefineConstants>$(DefineConstants);TEKSTILCAD_ISOLATED_PREVIEW</DefineConstants>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(TekstilCADAtelierPreview)' == 'true'">
+    <DefineConstants>$(DefineConstants);TEKSTILCAD_ATELIER_PREVIEW</DefineConstants>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../TekstilCAD.Core/TekstilCAD.Core.csproj" />
     <ProjectReference Include="../TekstilCAD.FileFormats/TekstilCAD.FileFormats.csproj" />
