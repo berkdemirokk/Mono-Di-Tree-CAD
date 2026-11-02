@@ -24,7 +24,7 @@ try
     if (cancelAfterMs.HasValue) syntheticCancel.CancelAfter(cancelAfterMs.Value);
     using var combined = CancellationTokenSource.CreateLinkedTokenSource(deadline.Token, syntheticCancel.Token);
     byte[] request = await ReadBounded(Console.OpenStandardInput(), 32768, combined.Token);
-    if (request.Length == 0) throw new InvalidOperationException();
+    PreviewResponseValidator.ValidateRequest(request);
     byte[] response = await Run(args[0], args[1], invalidJob, request, combined.Token);
     PreviewResponseValidator.Validate(request,response);
     await Console.OpenStandardOutput().WriteAsync(response, combined.Token);

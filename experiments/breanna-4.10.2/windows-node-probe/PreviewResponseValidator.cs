@@ -28,6 +28,21 @@ internal static class PreviewResponseValidator
         _ => false
     };
     private static void Strings(JsonElement value,int max){if(value.ValueKind!=JsonValueKind.Array||value.GetArrayLength()>max)Fail();foreach(var item in value.EnumerateArray())if(item.ValueKind!=JsonValueKind.String||item.GetString()!.Length>1024)Fail();}
+    internal static void ValidateRequest(byte[] request)
+    {
+        if(request.Length is 0 or >32768)Fail();
+        try {
+            using var doc=JsonDocument.Parse(Utf8.GetString(request),new JsonDocumentOptions{MaxDepth=64});var job=doc.RootElement;NoDuplicates(job);
+            Exact(job,"schema","engine","measurementEnvelope","options","unit","angleUnit","toleranceMm","layout");Str(job.GetProperty("schema"),"tekstilcad.experimental.breanna-job.v1");Str(job.GetProperty("unit"),"mm");Str(job.GetProperty("angleUnit"),"degree");Str(job.GetProperty("layout"),"local-unplaced");
+            var engine=job.GetProperty("engine");Exact(engine,"model","version");Str(engine.GetProperty("model"),"breanna");Str(engine.GetProperty("version"),"4.10.2");
+            var tolerance=job.GetProperty("toleranceMm");if(tolerance.ValueKind!=JsonValueKind.Number||!tolerance.TryGetDouble(out var t)||!double.IsFinite(t)||t<=0||t>1)Fail();
+            Exact(job.GetProperty("options"),OptionKeys);BreannaOptionSchema4102.Validate(job.GetProperty("options"));
+            using var envelope=JsonDocument.Parse(job.GetProperty("measurementEnvelope").GetString()!,new JsonDocumentOptions{MaxDepth=16});var e=envelope.RootElement;NoDuplicates(e);Exact(e,"schema","unit","angleUnit","measurements");Str(e.GetProperty("schema"),"tekstilcad.experimental.breanna-measurements.v1");Str(e.GetProperty("unit"),"mm");Str(e.GetProperty("angleUnit"),"degree");var m=e.GetProperty("measurements");Exact(m,MeasurementKeys);
+            foreach(var key in MeasurementKeys){var value=m.GetProperty(key);if(value.ValueKind!=JsonValueKind.Number||!value.TryGetDecimal(out var d)||decimal.Round(d,3)!=d||(key=="shoulderSlope"?d<=-90||d>=90:d<=0||d>100000))Fail();}
+            if(m.GetProperty("highBustFront").GetDecimal()>=m.GetProperty("highBust").GetDecimal()||m.GetProperty("hpsToBust").GetDecimal()>=m.GetProperty("hpsToWaistFront").GetDecimal())Fail();
+        }catch(Exception ex) when(ex is JsonException or DecoderFallbackException or InvalidOperationException or KeyNotFoundException or ArgumentException or FormatException){throw new InvalidDataException("Geçersiz deneysel istek.");}
+    }
+
     internal static void Validate(byte[] request,byte[] response)
     {
         if(response.Length is 0 or >1024*1024)Fail();
