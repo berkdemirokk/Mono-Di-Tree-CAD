@@ -12,7 +12,7 @@ public static partial class DressMeasurementParser
     private static readonly string[] Required=["göğüs çevresi","bel çevresi","kalça çevresi","elbise boyu"];
     private const string Labels=@"(?:göğüs(?:\s+çevresi)?|bel(?:\s+çevresi)?|kalça(?:\s+çevresi)?|elbise\s+boyu|kol\s+boyu)";
     private const string ExactLabels=@"(?:göğüs\s+çevresi|bel\s+çevresi|kalça\s+çevresi|elbise\s+boyu|kol\s+boyu)";
-    private static readonly Regex SegmentSplit=new(@"[;\r\n]+|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex SegmentSplit=new(@";|(?:\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))*|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Conjunction=new(@"\s+ve\s+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!?]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
@@ -24,6 +24,22 @@ public static partial class DressMeasurementParser
     // this transformation length-preserving so match offsets still index the
     // original text, which is retained as evidence.
     private static string FoldCase(string text)=>text.Replace('İ','i').ToLowerInvariant();
+    // A newline next to a standalone conjunction is part of the same clause,
+    // not an independent measurement. Semicolons always remain boundaries.
+    private static bool JoinedLineBreak(string folded,Match separator)
+    {
+        for(int i=separator.Index;i<separator.Index+separator.Length;i++)
+            if(folded[i]!='\r' && folded[i]!='\n' && folded[i]!=' ' && folded[i]!='\t')return false;
+        var left=separator.Index-1;
+        while(left>=0 && (folded[left]==' ' || folded[left]=='\t'))left--;
+        bool endsWithVe=left>=1 && folded[left]=='e' && folded[left-1]=='v' &&
+            (left==1 || char.IsWhiteSpace(folded[left-2]));
+        var right=separator.Index+separator.Length;
+        while(right<folded.Length && (folded[right]==' ' || folded[right]=='\t'))right++;
+        bool startsWithVe=right+1<folded.Length && folded[right]=='v' && folded[right+1]=='e' &&
+            (right+2==folded.Length || char.IsWhiteSpace(folded[right+2]));
+        return endsWithVe || startsWithVe;
+    }
     private static string Canonical(string label)
     {
         label=Regex.Replace(FoldCase(label),@"\s+"," ");
@@ -41,6 +57,7 @@ public static partial class DressMeasurementParser
         var folded=FoldCase(text);var start=0;
         foreach(Match separator in SegmentSplit.Matches(folded).Cast<Match>().Append(Match.Empty))
         {
+            if(separator.Success && JoinedLineBreak(folded,separator))continue;
             var end=separator.Success ? separator.Index : text.Length;
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;

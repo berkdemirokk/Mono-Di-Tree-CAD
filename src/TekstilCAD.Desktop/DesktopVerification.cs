@@ -10160,6 +10160,13 @@ internal static class DesktopVerification
             Check(window.PromptForVerification.Text.Replace("\r\n","\n")=="A kesim\n"+phoneMessage && window.ChatInputForVerification.Text=="" &&
                 window.MeasurementTilesForVerification["göğüs çevresi"].Text=="92 cm" && window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm",
                 "Phone-style joined measurement message is preserved and updates both desktop tiles",checks);
+            window.LoadForVerification(new DesignRequest("A kesim", "göğüs çevresi 92 cm ve\r\nbel çevresi 72 cm", null));
+            Check(window.MeasurementTilesForVerification["göğüs çevresi"].Text=="92 cm" && window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm",
+                "Joined measurements across CRLF populate both desktop tiles",checks);
+            window.MeasurementsForVerification.Text="göğüs çevresi 92 cm ve\r\n\t\r\nbel çevresi 72";
+            Check(window.MeasurementTilesForVerification["göğüs çevresi"].Text=="Kontrol edin" && window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin" &&
+                window.MeasurementsForVerification.Text=="göğüs çevresi 92 cm ve\r\n\t\r\nbel çevresi 72",
+                "Invalid joined lines preserve source and never partially populate measurement tiles",checks);
             window.LoadForVerification(input);
             _=new WindowInteropHelper(window).EnsureHandle();var entry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             try
