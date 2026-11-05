@@ -4,6 +4,19 @@ namespace TekstilCAD.Tests;
 
 public sealed class ALineRequestMeasurementsTests
 {
+    [Theory]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim ama vazgeçtim")]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim; ölçüler geçersiz")]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim. Ölçüleri kullanmayın")]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim?")]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim eğer karar verirsem")]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim; bel çevresi 72 cm")]
+    [InlineData("Anvelop elbise istiyorum, ölçülerimi birazdan vereceğim")]
+    [InlineData("A kesim elbise istemiyorum, ölçülerimi birazdan vereceğim")]
+    public void FuturePhraseWithAdditionalOrContraryContentRemainsUnresolved(string prompt)
+    {
+        Assert.NotEmpty(ALineRequestMeasurements.Review(prompt,"Ön bel yayı: 36 cm").Issues);
+    }
     private static string AllFields=>string.Join(";",ALineRequestMeasurements.Labels.Zip(new[]{"36","36","50","50","2","2","2","2","20","70","160"},(label,value)=>label+" "+value+" cm"));
 
     [Fact] public void SeparateFieldsPreserveExplicitTotalsAndOriginalEvidence()

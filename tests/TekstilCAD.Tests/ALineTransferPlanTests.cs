@@ -5,6 +5,17 @@ namespace TekstilCAD.Tests;
 
 public sealed class ALineTransferPlanTests
 {
+    [Fact] public void FutureMeasurementRequestAllowsLaterExplicitPartialTransferWithoutInference()
+    {
+        const string prompt="A kesim elbise istiyorum, ölçülerimi birazdan vereceğim";
+        const string notes="Ön bel yayı: 36 cm\nÖn bel yayı bolluğu: 0 mm";
+        var source=ALineRequestMeasurements.Review(prompt,notes);
+        Assert.Empty(source.Issues);
+        var fields=ALineTransferPlan.Create(source.Millimeters,source.Issues,Empty(),ALineLengthUnit.Centimeter).ApplyTo(Empty(),ALineLengthUnit.Centimeter);
+        Assert.Equal("36",fields[0]);Assert.Equal("0",fields[4]);Assert.All(fields.Where((_,i)=>i!=0&&i!=4),value=>Assert.Empty(value));
+        Assert.Equal("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim",prompt);
+        Assert.Equal("Ön bel yayı: 36 cm\nÖn bel yayı bolluğu: 0 mm",notes);
+    }
     private static string[] Empty()=>Enumerable.Repeat("",11).ToArray();
     private static decimal?[] Partial()=>[360m,null,null,null,0m,null,null,null,null,null,null];
     [Fact] public void PartialPlanRequiresUnitAndSourceWithoutIssuesAndPreservesMissingEase()
