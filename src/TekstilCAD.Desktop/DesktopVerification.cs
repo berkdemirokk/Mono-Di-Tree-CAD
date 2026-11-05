@@ -11544,6 +11544,11 @@ internal static partial class DesktopVerification
                 gallery.ScrollToHorizontalOffset(Math.Max(0,x-8));modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
                 Check(FullyVisible(card,root),"Every visual model card can be scrolled fully into view at minimum size: "+AutomationProperties.GetName(card),checks);
             }
+            var observePhoto=Descendants<Button>(root).Single(b=>Equals(b.Content,"Fotoğrafa bakarak özellikleri belirt…"));
+            var observationY=observePhoto.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;
+            modelScroller.ScrollToVerticalOffset(Math.Max(0,observationY-8));root.UpdateLayout();
+            Check(FullyVisible(observePhoto,root) && AutomationProperties.GetHelpText(observePhoto).Contains("Otomatik analiz"),
+                "Photo observation action is reachable in the scrolling body at minimum size",checks);
             var minimumSend=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
             foreach(var control in new FrameworkElement[] { window.ChatInputForVerification,minimumSend })
             {

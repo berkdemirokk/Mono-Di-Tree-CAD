@@ -243,7 +243,7 @@ internal sealed class DesignRequestWindow : Window
         var referenceRow=new DockPanel { LastChildFill=true };DockPanel.SetDock(referenceShortcut,Dock.Left);referenceRow.Children.Add(referenceShortcut);referenceRow.Children.Add(referenceSummary);primaryChat.Children.Add(referenceRow);
         var observe=new Button { Content="Fotoğrafa bakarak özellikleri belirt…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
         AutomationProperties.SetHelpText(observe,"Fotoğrafı gösterir; yalnız elle seçip onayladığınız özellikler tarife eklenir. Otomatik analiz veya ölçüm yapılmaz.");
-        observe.Click+=async (_,_)=>await ObservePhotoAsync();primaryChat.Children.Add(observe);
+        observe.Click+=async (_,_)=>await ObservePhotoAsync();body.Children.Add(observe);
         AutomationProperties.SetHelpText(referenceSummary,"Yalnız referans görselidir; fotoğraftan model, ölçü veya kalıp çıkarılmaz.");
         AutomationProperties.SetHelpText(RetryModelForVerification,"Son gönderilen mesaj hâlâ tarifin sonunda duruyorsa güncel ölçü ve görselle yeniden inceler; metni tekrar eklemez. Seçim ayrıca onay ister.");
         RetryModelForVerification.Click+=(_,_)=>RetryLastModelMessage();body.Children.Add(RetryModelForVerification);
