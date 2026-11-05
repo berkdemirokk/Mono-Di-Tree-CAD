@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using System.Numerics;
 using System.Globalization;
 using System.Text;
+using FittedResearch;
 
 if(args.Length!=1 || args[0]!="--verify") return 2;
 try
@@ -33,7 +34,10 @@ try
     var wrongOrder=JsonNode.Parse(content)!; var ordered=wrongOrder["cases"]![0]!["stitches"]!.AsArray().First(r=>r!["a"]!["edges"]!.AsArray().Count>=2)!["a"]!["edges"]!.AsArray();
     var first=ordered[0]!.DeepClone(); var second=ordered[1]!.DeepClone(); ordered[0]=second; ordered[1]=first; RejectSeam(wrongOrder,"reversed stitch order");
     var wrongFlip=JsonNode.Parse(content)!; var flip=wrongFlip["cases"]![0]!["stitches"]![0]!["a"]!["edges"]![0]!; flip["flipped"]=!flip["flipped"]!.GetValue<bool>(); RejectSeam(wrongFlip,"wrong seam orientation");
-    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; production unresolved.");
+    try { PartialFittedEngine.Create("not-synthetic"); throw new Exception("Unknown case accepted"); } catch(ArgumentException) { }
+    var baseParts=PartialFittedEngine.Create("synthetic-base"); var distinctParts=PartialFittedEngine.Create("synthetic-distinct");
+    if(baseParts.Segments.Count!=18 || distinctParts.Segments.Count!=18 || baseParts.Segments[0].Start==distinctParts.Segments[0].Start) throw new Exception("Partial geometry input sensitivity");
+    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 28 reconstructed lines and 8 curve endpoint pairs; production unresolved.");
     return 0;
 }
 catch(Exception e) { Console.Error.WriteLine("FAIL: "+e.Message); return 1; }
@@ -116,7 +120,17 @@ internal static class Validator
             Need(derived.EnumerateObject().Count()==predicted.Count,"derived field count");
             foreach(var pair in predicted) Need(derived.TryGetProperty(pair.Key,out var value)&&Math.Abs(value.GetDouble()-pair.Value)<1e-10,"derived mismatch: "+pair.Key);
             VerifySeams(id,item.GetProperty("stitches"));
-            var panels=item.GetProperty("panels"); var indexed=new Dictionary<string,JsonElement[]>();
+            var generated=PartialFittedEngine.Create(id);
+            Need(generated.Status=="unresolved" && !generated.ProductionAllowed && !generated.ExportAllowed,"partial output gate");
+            var panels=item.GetProperty("panels");
+            foreach(var segment in generated.Segments)
+            {
+                var actual=panels.GetProperty(segment.Panel).GetProperty("edges")[segment.Edge];
+                string expectedKind=segment.SourceKind=="CurveEdgeEndpointsOnly"?"CurveEdge":segment.SourceKind;
+                Need(actual.GetProperty("kind").GetString()==expectedKind,"partial source kind");
+                P start=Point(actual.GetProperty("start")),end=Point(actual.GetProperty("end"));
+                Need((start-new P(segment.Start.X,segment.Start.Y)).Length()<1e-5 && (end-new P(segment.End.X,segment.End.Y)).Length()<1e-5,"partial regenerated segment mismatch: "+segment.Panel+":"+segment.Edge);
+            } var indexed=new Dictionary<string,JsonElement[]>();
             foreach(var panel in panels.EnumerateObject())
             {
                 panelCount++; var edges=panel.Value.GetProperty("edges").EnumerateArray().ToArray(); Need(edges.Length>2,"empty panel"); indexed.Add(panel.Name,edges);
@@ -152,6 +166,9 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
+
 
 
 
