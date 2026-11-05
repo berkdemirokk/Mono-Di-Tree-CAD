@@ -71,22 +71,29 @@ internal static class BackWaistCandidate
     {
         var body=SyntheticBodyCatalog.Create(id);
         var state=id=="synthetic-small-difference"?ReferenceState.KnownMismatch:ReferenceState.Unassessed;
-        return Calculate(id,body,ResearchDesign.PinnedFitted,state);
+        return Calculate(id,key=>(double)body[key],state);
     }
     // Explicit body/design input remains local, unverified and non-composable.
     // No fixture, process launch, networking, persistence or export occurs.
     internal static UnverifiedPath CreateFromBody(ResearchBody body,ResearchDesign design)
     {
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
-        return new UnverifiedPath(Calculate(body.Snapshot(design),body,design,ReferenceState.Unverified));
+        return new UnverifiedPath(Calculate(body.Snapshot(design),key=>(double)body[key],ReferenceState.Unverified));
     }
-    private static Path Calculate(string id,ResearchBody body,ResearchDesign design,ReferenceState state)
+    internal static UnverifiedPath CreateFromMeasurements(ResearchMeasurements measurements,ResearchDesign design)
     {
-        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
-        double shoulder=(double)body["shoulder_w"]/2,angle=(double)body["shoulder_incl"],bumPoints=(double)body["bum_points"];
-        double width=(double)body["back_width"]/2,waist=(double)body["waist_back_width"]/2,tan=Math.Tan(angle*Math.PI/180),h=tan*width/4;
+        ArgumentNullException.ThrowIfNull(measurements);ArgumentNullException.ThrowIfNull(design);
+        var operation=ResearchMeasurements.Operation.PrecutBackWaist;
+        if(!measurements.Check(operation).AllFieldsPresent)throw new ArgumentException("Missing back measurements.");
+        return new UnverifiedPath(Calculate(measurements.SnapshotFor(operation,design),measurements.Value,ReferenceState.Unverified));
+    }
+    private static Path Calculate(string id,Func<string,double> V,ReferenceState state)
+    {
+        if(V("shoulder_w")<=2 || V("shoulder_incl")>=45)throw new ArgumentException("Unsupported back research scope.");
+        double shoulder=V("shoulder_w")/2,angle=V("shoulder_incl"),bumPoints=V("bum_points");
+        double width=V("back_width")/2,waist=V("waist_back_width")/2,tan=Math.Tan(angle*Math.PI/180),h=tan*width/4;
         double diff=width-waist,side=diff<4?0:diff/6,dartWidth=(diff-side)/2;
-        double length=(double)body["waist_line"]-tan*(width-shoulder),bustLine=body.Derive().BustLine;
+        double length=V("waist_line")-tan*(width-shoulder),bustLine=((1-1d/3)*V("vert_bust_line")+V("bust_line")/3);
         if(dartWidth<=0 || length<=bustLine)throw new ArgumentException("Unsupported dart geometry");
         P start=new(0,h),end=new(-width,0);double len=Math.Sqrt(width*width+h*h);
         // One feasible exact tangent direction, initialized at half-unit norm.
@@ -130,7 +137,7 @@ internal static class BackWaistCandidate
         void L(int i,P a,P b)=>edges.Add(new(i,"L",a,b,null));
         QEdge(0,0,inner.lo);L(1,q.Eval(inner.lo),inner.tip);L(2,inner.tip,q.Eval(inner.hi));
         QEdge(3,inner.hi,outer.lo);L(4,q.Eval(outer.lo),outer.tip);L(5,outer.tip,q.Eval(outer.hi));QEdge(6,outer.hi,1,true);
-        P sideBottom=new(-width+side,0),sideMiddle=new(-width,(double)body["waist_line"]-bustLine),sideTop=new(-width,length),top=new(0,length+tan*width);
+        P sideBottom=new(-width+side,0),sideMiddle=new(-width,V("waist_line")-bustLine),sideTop=new(-width,length),top=new(0,length+tan*width);
         L(7,sideBottom,sideMiddle);L(8,sideMiddle,sideTop);L(9,sideTop,top);L(10,top,start);
         var seams=new[]{new GeneratedGraph.Seam(id,"precut_back",4,false,"precut_back",5,false),new GeneratedGraph.Seam(id,"precut_back",1,false,"precut_back",2,false)};
         return new(id,edges.AsReadOnly(),Array.AsReadOnly(seams),new(start,end,rel,dartWidth,outerOffset,innerOffset,.9*(length-bustLine),length-bustLine),state);

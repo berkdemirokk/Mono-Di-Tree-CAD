@@ -187,8 +187,31 @@ try
     var partial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)),"cm","degree");
     var backNeeds=partial.Check(ResearchMeasurements.Operation.PrecutBackWaist);
     var frontNeeds=partial.Check(ResearchMeasurements.Operation.PrecutFrontBodice);
-    if(!backNeeds.AllFieldsPresent || backNeeds.CalculationEnabled || frontNeeds.AllFieldsPresent || !frontNeeds.Missing.Contains("bust") || partial.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent)throw new Exception("Partial presence contract");
+    if(!backNeeds.AllFieldsPresent || !backNeeds.CanAttemptPartialCalculation || frontNeeds.AllFieldsPresent || !frontNeeds.Missing.Contains("bust") || partial.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent)throw new Exception("Partial presence contract");
     try { partial.BuildComplete();throw new Exception("Incomplete body accepted"); } catch(ArgumentException) { }
+    var partialBack=BackWaistCandidate.CreateFromMeasurements(partial,ResearchDesign.PinnedFitted);
+    if(partialBack.ReferenceAssessment!=BackWaistCandidate.ReferenceState.Unverified || partialBack.ExportAllowed || partialBack.ProductionAllowed)throw new Exception("Partial back gate");
+    try { partialBack.RequireResearchComposition();throw new Exception("Partial back composed"); } catch(InvalidOperationException) { }
+    foreach(string key in partialKeys) {
+        var missing=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key) && p.Key!=key),"cm","degree");
+        if(!missing.Check(ResearchMeasurements.Operation.PrecutBackWaist).Missing.Contains(key))throw new Exception("Missing back field not reported");
+        try { BackWaistCandidate.CreateFromMeasurements(missing,ResearchDesign.PinnedFitted);throw new Exception("Missing back field accepted"); } catch(ArgumentException) { }
+    }
+    var frontKeys=new[]{"bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line"};
+    var frontPartial=ResearchMeasurements.Create(bodyPairs.Where(p=>frontKeys.Contains(p.Key)),"cm","degree");
+    var partialFront=PrecutFrontBodice.CreateFromMeasurements(frontPartial,ResearchDesign.PinnedFitted);
+    if(partialFront.ReferenceAssessment!=BackWaistCandidate.ReferenceState.Unverified || partialFront.ExportAllowed || partialFront.ProductionAllowed)throw new Exception("Partial front gate");
+    try { partialFront.RequireResearchComposition();throw new Exception("Partial front composed"); } catch(InvalidOperationException) { }
+    foreach(string key in frontKeys) {
+        var missing=ResearchMeasurements.Create(bodyPairs.Where(p=>frontKeys.Contains(p.Key) && p.Key!=key),"cm","degree");
+        if(!missing.Check(ResearchMeasurements.Operation.PrecutFrontBodice).Missing.Contains(key))throw new Exception("Missing front field not reported");
+        try { PrecutFrontBodice.CreateFromMeasurements(missing,ResearchDesign.PinnedFitted);throw new Exception("Missing front field accepted"); } catch(ArgumentException) { }
+    }
+    var reorderPartial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)).Reverse(),"cm","degree");
+    if(BackWaistCandidate.CreateFromMeasurements(reorderPartial,ResearchDesign.PinnedFitted).Snapshot!=partialBack.Snapshot)throw new Exception("Partial input order changed identity");
+    var unsupportedPartial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)).Select(p=>p.Key=="shoulder_incl"?new KeyValuePair<string,decimal>(p.Key,45):p),"cm","degree");
+    try { BackWaistCandidate.CreateFromMeasurements(unsupportedPartial,ResearchDesign.PinnedFitted);throw new Exception("Unsupported partial back accepted"); } catch(ArgumentException) { }
+
     var complete=ResearchMeasurements.Create(bodyPairs,"cm","degree");
     if(!complete.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent || complete.BuildComplete().Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted))throw new Exception("Complete presence contract");
     try { ResearchMeasurements.Create(bodyPairs.Append(new("_leg_length",1)),"cm","degree");throw new Exception("Derived input accepted"); } catch(ArgumentException) { }
@@ -328,6 +351,10 @@ internal static class Validator
             var calculated=explicitBody.Derive();var derivedSource=item.GetProperty("derived");
             foreach(var v in new[]{("_waist_level",calculated.WaistLevel),("_leg_length",calculated.LegLength),("_base_sleeve_balance",calculated.BaseSleeveBalance),("_bust_line",calculated.BustLine),("_hip_inclination",calculated.HipInclination),("_shoulder_incl",calculated.ShoulderInclination),("_armscye_depth",calculated.ArmscyeDepth)}) Need(Math.Abs(derivedSource.GetProperty(v.Item1).GetDouble()-v.Item2)<1e-10,"derived body mismatch: "+v.Item1);
             var generic=BackWaistCandidate.CreateFromBody(explicitBody,ResearchDesign.PinnedFitted);
+            string[] usedBack=["back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"];
+            var partialInput=ResearchMeasurements.Create(rawInputs.Where(p=>usedBack.Contains(p.Key)),"cm","degree");
+            var partialCandidate=BackWaistCandidate.CreateFromMeasurements(partialInput,ResearchDesign.PinnedFitted);
+            Need(partialCandidate.Edges.SequenceEqual(generic.Edges) && partialCandidate.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !partialCandidate.ExportAllowed && !partialCandidate.ProductionAllowed,"partial back differs from full body");
             Need(!typeof(BackWaistCandidate.Path).IsAssignableFrom(generic.GetType()),"typed back can enter fixture consumer");
             Need(generic.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && generic.Status=="unresolved" && !generic.ExportAllowed && !generic.ProductionAllowed && generic.Snapshot==explicitBody.Snapshot(ResearchDesign.PinnedFitted),"explicit body gate");
             Need(generic.Edges.Count==path.Edges.Count,"explicit body edge count");
@@ -402,6 +429,11 @@ internal static class Validator
             string id=item.GetProperty("id").GetString()!; var path=PrecutFrontBodice.Create(id);
             var edges=item.GetProperty("edges").EnumerateArray().ToArray();Need(path.Vertices.Count==10 && edges.Length==10,"precut contour count");
             var typed=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            string[] usedFront=["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line"];
+            var synthetic= SyntheticBodyCatalog.Create(id);
+            var partialInput=ResearchMeasurements.Create(usedFront.Select(k=>new KeyValuePair<string,decimal>(k,synthetic[k])),"cm","degree");
+            var partialCandidate=PrecutFrontBodice.CreateFromMeasurements(partialInput,ResearchDesign.PinnedFitted);
+            Need(partialCandidate.Vertices.SequenceEqual(typed.Vertices) && partialCandidate.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !partialCandidate.ExportAllowed && !partialCandidate.ProductionAllowed,"partial front differs from full body");
             Need(!typeof(PrecutFrontBodice.Path).IsAssignableFrom(typed.GetType()),"typed front can enter fixture consumer");
             try { typed.RequireResearchComposition();throw new InvalidDataException("Unverified front composed"); } catch(InvalidOperationException) { }
             Need(typed.Status=="unresolved" && !typed.ExportAllowed && !typed.ProductionAllowed && typed.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified,"typed front gate");

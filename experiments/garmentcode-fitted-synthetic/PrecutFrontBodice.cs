@@ -39,10 +39,21 @@ internal static class PrecutFrontBodice
     internal static UnverifiedPath CreateFromBody(ResearchBody body, ResearchDesign design)
     {
         ArgumentNullException.ThrowIfNull(body); ArgumentNullException.ThrowIfNull(design);
-        double V(string key)=>(double)body[key];
+        return Calculate(body.Snapshot(design),key=>(double)body[key]);
+    }
+    internal static UnverifiedPath CreateFromMeasurements(ResearchMeasurements measurements,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(measurements);ArgumentNullException.ThrowIfNull(design);
+        var operation=ResearchMeasurements.Operation.PrecutFrontBodice;
+        if(!measurements.Check(operation).AllFieldsPresent)throw new ArgumentException("Missing front measurements.");
+        return Calculate(measurements.SnapshotFor(operation,design),measurements.Value);
+    }
+    static UnverifiedPath Calculate(string snapshot,Func<string,double> V)
+    {
+        if(V("shoulder_w")<=2 || V("shoulder_incl")>=45 || V("back_width")>=V("bust") || V("waist_back_width")>=V("waist"))throw new ArgumentException("Unsupported front research scope.");
         double width=(V("bust")-V("back_width"))/2, waist=(V("waist")-V("waist_back_width"))/2;
         double bustPoint=V("bust_points")/2, shoulder=V("shoulder_w")/2;
-        double tan=Math.Tan(V("shoulder_incl")*Math.PI/180), sideY=V("waist_line")-body.Derive().BustLine;
+        double tan=Math.Tan(V("shoulder_incl")*Math.PI/180), sideY=V("waist_line")-((1-1d/3)*V("vert_bust_line")+V("bust_line")/3);
         double bottomWidth=(width-waist)*2/3;
         double maxLen=V("waist_over_bust_line")-tan*(width-shoulder);
         double fraction=width/V("bust"), backAdjustment=tan*(V("back_width")/2-shoulder);
@@ -62,7 +73,7 @@ internal static class PrecutFrontBodice
         if(!DartCut.SimpleClosed(points.Select(p=>new DartCut.P(p.X,p.Y)).ToArray()))
             throw new ArgumentException("Unsupported front contour.");
         // No seam rules are authorized for unverified user-shaped candidates.
-        return new(body.Snapshot(design),Array.AsReadOnly(points));
+        return new(snapshot,Array.AsReadOnly(points));
     }
 
 }

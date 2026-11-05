@@ -1,15 +1,18 @@
 using System.Collections.Immutable;
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 namespace FittedResearch;
 
 // Research-only presence model. Missing values remain missing, never estimated.
-// Presence does not imply anatomical validity or that a calculation is enabled.
+// Presence does not imply anatomical validity or production authorization.
 internal sealed class ResearchMeasurements
 {
     internal enum Operation { PrecutBackWaist,PrecutFrontBodice,CompleteCurrentBody }
     internal sealed record Requirements(Operation For,ImmutableArray<string> Missing)
     {
         public bool AllFieldsPresent=>Missing.Length==0;
-        public bool CalculationEnabled=>false;
+        public bool CanAttemptPartialCalculation=>AllFieldsPresent && (For is Operation.PrecutBackWaist or Operation.PrecutFrontBodice);
         public string Status=>"unresolved";
     }
     private readonly ImmutableDictionary<string,decimal> values;
@@ -26,15 +29,20 @@ internal sealed class ResearchMeasurements
         }
         return new(builder.ToImmutable());
     }
-    internal Requirements Check(Operation operation)
-    {
-        ImmutableArray<string> needed=operation switch {
+    static ImmutableArray<string> FieldsFor(Operation operation) => operation switch {
             Operation.PrecutBackWaist=>["back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"],
             Operation.PrecutFrontBodice=>["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line"],
             Operation.CompleteCurrentBody=>ResearchBody.Fields,
             _=>throw new ArgumentException("Unsupported operation.")
         };
-        return new(operation,needed.Where(k=>!values.ContainsKey(k)).ToImmutableArray());
+    internal Requirements Check(Operation operation) => new(operation,FieldsFor(operation).Where(k=>!values.ContainsKey(k)).ToImmutableArray());
+    internal double Value(string field) => values.TryGetValue(field,out var value) ? (double)value : throw new ArgumentException("Missing measurement: "+field);
+    internal string SnapshotFor(Operation operation,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(design);if(!Check(operation).AllFieldsPresent)throw new ArgumentException("Missing operation measurements.");
+        var text=new StringBuilder("partial-research-v1|").Append(operation).Append('|').Append(design.ModelId).Append('|').Append(design.SourceCommit);
+        foreach(var field in FieldsFor(operation))text.Append('|').Append(field).Append('=').Append(values[field].ToString("G29",CultureInfo.InvariantCulture));
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
     }
     internal ResearchBody BuildComplete()
     {
