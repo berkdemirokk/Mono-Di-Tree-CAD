@@ -138,5 +138,45 @@
   {
     "text": "ön  bel yayı 36 cm ve arka\tbel yayı 36 cm değil",
     "valid": false
+  },
+  {
+    "text": "ön bel yayı 36 cm",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayı 36 cm",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayı 36 cm",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayı 36 cm ve arka bel yayı 360 mm",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayı bolluğu 0 mm",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel yayı 36 cm?",
+    "valid": false
+  },
+  {
+    "text": "ön bel yayi 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel yayı 36 cm ve arka bel yayı 36 cm değil",
+    "valid": false
   }
 ]

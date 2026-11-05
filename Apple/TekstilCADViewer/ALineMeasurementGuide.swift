@@ -68,7 +68,7 @@ enum ALineMeasurementGuide {
             for segment in source.components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ";"))) {
                 let normalized = fold(segment)
                 let patterns = labels.map { label in
-                    fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
+                    fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[\t\p{Zs}]+"#)
                 }
                 let mentions = patterns.contains { pattern in
                     normalized.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
@@ -78,20 +78,20 @@ enum ALineMeasurementGuide {
                     let approximate = normalized.folding(options: .diacriticInsensitive, locale: Locale(identifier: "tr_TR")).replacingOccurrences(of: "ı", with: "i")
                     let closeMention = labels.contains { label in
                         let approximateLabel = fold(label).folding(options: .diacriticInsensitive, locale: Locale(identifier: "tr_TR")).replacingOccurrences(of: "ı", with: "i")
-                        let pattern = approximateLabel.split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
+                        let pattern = approximateLabel.split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[\t\p{Zs}]+"#)
                         return approximate.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
                     }
                     if closeMention { throw Failure.existing }
                     continue
                 }
                 guard !normalized.contains("\u{1F}") else { throw Failure.existing }
-                let parts = normalized.replacingOccurrences(of: #"[ \t]+ve[ \t]+"#, with: "\u{1F}", options: .regularExpression).components(separatedBy: "\u{1F}")
+                let parts = normalized.replacingOccurrences(of: #"[\t\p{Zs}]+ve[\t\p{Zs}]+"#, with: "\u{1F}", options: .regularExpression).components(separatedBy: "\u{1F}")
                 guard (1...8).contains(parts.count) else { throw Failure.existing }
                 var parsed: [(Int, Decimal)] = []
                 for part in parts {
                     var found: (Int, Decimal)?
                     for index in labels.indices.reversed() {
-                        let exact = #"\A[ \t]*"# + patterns[index] + #"[ \t]*(?::|=|[ \t])[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)[ \t]*[.!]?[ \t]*\z"#
+                        let exact = #"\A[\t\p{Zs}]*"# + patterns[index] + #"[\t\p{Zs}]*(?::|=|[\t\p{Zs}])[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z"#
                         guard let regex = try? NSRegularExpression(pattern: exact),
                               let match = regex.firstMatch(in: part, range: NSRange(part.startIndex..., in: part)),
                               let valueRange = Range(match.range(at: 1), in: part), let unitRange = Range(match.range(at: 2), in: part),
