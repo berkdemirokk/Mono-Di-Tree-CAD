@@ -3480,7 +3480,7 @@ private struct ExperimentalDesignBriefView: View {
                         Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
                             .font(.caption).foregroundStyle(plum)
                     }
-                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçü formu var.").font(.caption) }
+                    if overview.hasPendingMeasurements { Text("Onaylanmamış ölçü girişleri var; isteğe henüz dahil değil.").font(.caption) }
                     Button("Ölçüleri gir veya düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
                     Text("Örnek görsel").font(.headline).accessibilityAddTraits(.isHeader)
                     if let name = overview.referenceName { Text("Eklendi: \(ModelStore.safeLabel(name))") }
@@ -3516,6 +3516,10 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     if aLineInputPending {
                         Text("A kesim rehberinde notlara eklenmemiş girişler var. Bunlar onaylanana kadar yerel taslağa kaydedilir; ayrı kurtarma kopyasına da dahil edilir. Kayıt durumunu kontrol edin.").font(.caption)
+                        if style != .aline || !modelExplicitlySelected {
+                            Text("Girişleri incelemek için önce model ekranında A kesimi seçin. İsterseniz aşağıdan girişleri temizleyebilirsiniz.").font(.caption).foregroundStyle(plum)
+                            Button("Model seçimine dön") { focusedInput = nil; step = 0 }.frame(minHeight: 44)
+                        }
                         Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
                     }
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
@@ -3657,8 +3661,14 @@ private struct ExperimentalDesignBriefView: View {
                         Text("Tarifte incelenebilecek açık ölçüler bulundu; alanlara eklenmeleri için onay gerekir.").font(.caption)
                         Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
                     }
+                    if summary.hasPendingMeasurementForm {
+                        Text("Ölçü formunda henüz onaylanmamış giriş var; bu girişler yukarıdaki ölçülere dahil değil ve dosya kaydedilmeden önce ele alınmalı.").foregroundStyle(.secondary)
+                    }
+                    if summary.hasPendingALineGuide {
+                        Text("A kesim rehberinde onaylanmamış giriş var; bu girişler yukarıdaki ölçülere dahil değil ve dosya kaydedilmeden önce ele alınmalı.").foregroundStyle(.secondary)
+                    }
                     if summary.hasPendingMeasurements {
-                        Text("Ölçü formunda henüz onaylanmamış giriş var; bu girişler yukarıdaki ölçülere dahil değil.").foregroundStyle(.secondary)
+                        Button("Bekleyen ölçüleri incele") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
                     }
                     Button("Tarif ve ölçüleri gözden geçir") { step = measurementReviewStartStep }.frame(minHeight: 44)
                     Text("Referans görseli").font(.headline).accessibilityAddTraits(.isHeader)

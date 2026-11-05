@@ -264,7 +264,9 @@ enum ExperimentalDesignBrief {
         let v2ModelID: String?
         let measurements: String
         let referenceName: String?
-        let hasPendingMeasurements: Bool
+        let hasPendingMeasurementForm: Bool
+        let hasPendingALineGuide: Bool
+        var hasPendingMeasurements: Bool { hasPendingMeasurementForm || hasPendingALineGuide }
         let descriptionIsWhitespace: Bool
         let whitespaceMeasurementLabels: [String]
         static func isOnlyWhitespace(_ value: String) -> Bool {
@@ -278,7 +280,8 @@ enum ExperimentalDesignBrief {
             v2ModelID = ExperimentalDesignBrief.portableModelID(for: draft.style)
             measurements = draft.measurements
             referenceName = draft.image == nil ? nil : draft.imageName
-            hasPendingMeasurements = draft.measurementForm?.hasValues == true
+            hasPendingMeasurementForm = draft.measurementForm?.hasValues == true
+            hasPendingALineGuide = draft.aLineGuideInput != nil
             descriptionIsWhitespace = Self.isOnlyWhitespace(draft.description)
             whitespaceMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length), ("Ek ölçüler veya notlar", draft.otherMeasurements)].compactMap { label, value in Self.isOnlyWhitespace(value) ? label : nil }
         }
@@ -299,7 +302,7 @@ enum ExperimentalDesignBrief {
             bust = Self.display(draft.bust); waist = Self.display(draft.waist); hips = Self.display(draft.hips)
             length = Self.display(draft.length)
             hasOtherMeasurements = !draft.otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            hasPendingMeasurements = draft.measurementForm?.hasValues == true
+            hasPendingMeasurements = draft.measurementForm?.hasValues == true || draft.aLineGuideInput != nil
             referenceName = draft.image == nil ? nil : draft.imageName
         }
     }

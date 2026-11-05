@@ -1450,6 +1450,21 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(summary.v2Prompt, description)
         }
     }
+    func testPendingALineGuideIsReportedSeparatelyInReviewAndOverview() {
+        var draft = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertFalse(ExperimentalDesignBrief.RequestSummary(draft).hasPendingMeasurements)
+        draft.aLineGuideInput = .init(values: Array(repeating: "", count: 11), unit: "cm")
+        let summary = ExperimentalDesignBrief.RequestSummary(draft)
+        XCTAssertTrue(summary.hasPendingALineGuide)
+        XCTAssertFalse(summary.hasPendingMeasurementForm)
+        XCTAssertTrue(summary.hasPendingMeasurements)
+        XCTAssertTrue(ExperimentalDesignBrief.AtelierOverview(draft).hasPendingMeasurements)
+        XCTAssertTrue(summary.measurements.isEmpty)
+        draft.measurementForm = .init(values: ["72"] + Array(repeating: "", count: 14), unit: "cm")
+        let both = ExperimentalDesignBrief.RequestSummary(draft)
+        XCTAssertTrue(both.hasPendingALineGuide)
+        XCTAssertTrue(both.hasPendingMeasurementForm)
+    }
     func testAtelierOverviewReflectsOnlyEnteredMeasurementsAndReference() {
         let empty = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: " ", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyView = ExperimentalDesignBrief.AtelierOverview(empty)
