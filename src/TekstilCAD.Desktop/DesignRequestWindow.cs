@@ -456,12 +456,12 @@ internal sealed class DesignRequestWindow : Window
     {
         if(requestVersion==2) { SetStatus("İstek zaten V2 biçiminde.");return; }
         if(referenceLoadRunning) { SetStatus("Önce görsel denetimini tamamlayın.");return; }
-        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var oldDirty=dirty;var question=questionRevision;var chatVersion=chatRevision;
+        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var oldDirty=dirty;var question=questionRevision;var chatVersion=chatRevision;var modelVersion=modelRevision;
         var selected=selectedModelText;var fromLoaded=selectedModelFromLoaded;var ambiguous=modelAmbiguous;var start=selectedModelStart;var snapshot=modelSnapshot;
         var message="V2, model kimliğini ayrı saklar. Tarif, ölçüler ve görsel değiştirilmez. Önceki V1 model satırı tarifte kalabilir; kimlik ile tarifin uyumunu kontrol edin. Eski sürümler V2 dosyasını açamayabilir. Devam edilsin mi?";
         var confirmed=ConfirmV2ConversionForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"V2 istek",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes);
         if(!confirmed)return;
-        if(closed || referenceLoadRunning || referenceSelectionPending || revision!=referenceRevision || question!=questionRevision || chatVersion!=chatRevision || oldDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()) || selected!=selectedModelText || fromLoaded!=selectedModelFromLoaded || ambiguous!=modelAmbiguous || start!=selectedModelStart || snapshot!=modelSnapshot)
+        if(closed || referenceLoadRunning || referenceSelectionPending || revision!=referenceRevision || question!=questionRevision || chatVersion!=chatRevision || modelVersion!=modelRevision || oldDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()) || selected!=selectedModelText || fromLoaded!=selectedModelFromLoaded || ambiguous!=modelAmbiguous || start!=selectedModelStart || snapshot!=modelSnapshot)
         { SetStatus("İstek değişti; V2 dönüşümü uygulanmadı.");return; }
         // Only an explicit current-session choice is carried forward. A V1 text
         // match loaded from disk is a suggestion, not a portable identity.
@@ -497,11 +497,11 @@ internal sealed class DesignRequestWindow : Window
             var match=matches[0];selectedModelText=match.Template;selectedModelStart=match.Start;modelSnapshot=prompt.Text;
             selectedModelFromLoaded=true;SetLastModel(match.Button);
         }
-        else if(matches.Count>1 || modelCards.Any(card=>prompt.Text.Contains(card.Label,StringComparison.OrdinalIgnoreCase)))modelAmbiguous=true;
+        else if(matches.Count>1 || modelCards.Any(card=>prompt.Text.Contains(card.Label,StringComparison.OrdinalIgnoreCase))) { modelAmbiguous=true;modelRevision++; }
     }
     private void SetLastModel(Button? selected)
     {
-        questionRevision++;
+        modelRevision++;questionRevision++;
         var selectedCard=modelCards.FirstOrDefault(card=>ReferenceEquals(card.Button,selected));
         gallerySelection.Text=selectedCard.Button is null ? "6 model fikri · Galeride seçim yok" :
             (selectedModelFromLoaded ? "Tarifte bulunan fikir: " : "Seçili model fikri: ")+selectedCard.Label;

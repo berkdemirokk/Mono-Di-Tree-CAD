@@ -141,6 +141,25 @@ internal static partial class DesktopVerification
                 Check(captured.Reference!.Data.SequenceEqual(imageBytes) && captured.Measurements=="bel çevresi 72 cm" &&
                     captured.Prompt.Split(imageMessage,StringSplitOptions.None).Length==2,name,checks);
             }
+            // Isolate model ABA from every other revision in a real V2 approval callback.
+            window.LoadForVerification(ImageRequest() with { Version=2,ModelId="wrap" });
+            var questionField=typeof(DesignRequestWindow).GetField("questionRevision",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+            var modelField=typeof(DesignRequestWindow).GetField("modelRevision",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+            long modelBefore=0,modelAfter=0;string? beforeModelPrompt=null;
+            window.ConfirmChatModelForVerification=_=> {
+                var question=(long)questionField.GetValue(window)!;
+                modelBefore=(long)modelField.GetValue(window)!;beforeModelPrompt=window.PromptForVerification.Text;
+                window.ModelCardForVerification(1).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.ModelCardForVerification(0).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                modelAfter=(long)modelField.GetValue(window)!;
+                // Undo the unrelated question counter to prove the model counter itself rejects ABA.
+                questionField.SetValue(window,question);
+                return true;
+            };
+            window.ChatInputForVerification.Text=imageMessage;window.SendMessageForVerification();
+            Check(modelAfter>=modelBefore+2 && window.CaptureForVerification().ModelId=="wrap" &&
+                window.PromptForVerification.Text==beforeModelPrompt && window.StatusForVerification.Text.Contains("onay sırasında değişti"),
+                "V2 model-only ABA invalidates approval independently of other revisions",checks);
             // Exercise the real WPF flow while a synchronous validator is deliberately held.
             using(var entered=new ManualResetEventSlim())
             using(var release=new ManualResetEventSlim())
