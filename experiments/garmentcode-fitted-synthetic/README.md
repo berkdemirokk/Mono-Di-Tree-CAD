@@ -310,3 +310,7 @@ Yan uç deneyinde uzunluk ve topoloji yollarının aynı önerilen eğriyi kulla
 ## Bel ve yan uzunluğunun ortak sentetik deneyi
 
 [İki değişkenli araştırma](JOINT_SIDE_EXPERIMENT_TR.md), önce arka bel yan ucunu, ardından arka yanın iki düz kenarı arasındaki ara noktayı sınırlı aralıkta değiştirir. Dört sabit sentetik örnekte hem yarım bel hedefi hem sağ ön/arka yan uzunlukları temsil edilen geometri için sayısal araştırma bandına girer; önce/sonra sağ arka kontur denetlenir ve pensler korunur. Ara noktanın 12,8–15,8 cm hareket etmesi önemli bir şekil değişikliğidir; fiziksel uygunluk veya tam giysi çözümü değildir. Bilinen optimizer karşı örneği, desteklenmeyen geometri ve çözümlenemeyen durumlar reddedilir. Kompozisyon/üretim/plotter kapalıdır.
+
+## İki yanda küçük uç hareketinin sınırı
+
+[İki taraflı uç sınırı çalışması](TWO_SIDED_BOUND_TR.md), ön ve arka bel-yan uçlarına ayrı ayrı ±5 mm yatay değişim tanıyan, diğer yan noktaları sabit tutan aileyi exact dyadic uzunluk aralıklarıyla inceler. Bu 5 mm fiziksel standart değil, araştırma varsayımıdır. Dört C# sentetik örneğinde ve iki kaynak fixture’ında ön/arka yan aralıkları ayrık kaldı; bu ailede bel ve yan tam eşitliğini birlikte sağlayan sonuç yoktur. Yan eşitliği için azami hareketin kanıtlı alt sınırı C# örneklerde yaklaşık 21,48–27,99 mm’dir; bu gerçek minimum veya farklı geometrilerin imkânsızlığı değildir. Sonrası için aday üretilmedi; üretim/plotter kapalıdır.

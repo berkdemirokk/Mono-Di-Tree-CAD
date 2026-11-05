@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -444,6 +444,77 @@ internal static class Validator
             Console.WriteLine($"{id} fixed ends/translated darts: source before={sourceBefore:G10} cm, candidate before≈[{current.ApproximateLowerCm:G10},{current.ApproximateUpperCm:G10}] cm, source vector lower≈{sourceProof.ApproximateVectorLowerBoundCm:G10} cm, candidate vector lower≈{candidate.ApproximateVectorLowerBoundCm:G10} cm, target={target:G10} cm; no corrected candidate.");
         }
     }
+    internal static void CheckTwoSidedEndpointStudy()
+    {
+        var variable=new TwoSidedEndpointStudy.Segment(new(0,0),new(1,0));
+        var frontFixed=new TwoSidedEndpointStudy.Segment(new(0,0),new(0,5));
+        var backFixed=new TwoSidedEndpointStudy.Segment(new(0,0),new(0,4));
+        var separated=TwoSidedEndpointStudy.AssessSegments(frontFixed,variable,backFixed,variable,.49);
+        var touching=TwoSidedEndpointStudy.AssessSegments(frontFixed,variable,backFixed,variable,.5);
+        Need(separated.front.Disjoint(separated.back) && !touching.front.Disjoint(touching.back),"two-sided exact boundary");
+        try { TwoSidedEndpointStudy.AssessSegments(frontFixed,variable,backFixed,variable,double.NaN);throw new InvalidDataException("Non-finite side bound accepted"); } catch(ArgumentException) { }
+        try { TwoSidedEndpointStudy.AssessSegments(frontFixed,variable,backFixed,variable,-.1);throw new InvalidDataException("Negative side bound accepted"); } catch(ArgumentException) { }
+        try { TwoSidedEndpointStudy.AssessSegments(frontFixed,new(new(0,0),new(0,0)),backFixed,variable,.5);throw new InvalidDataException("Degenerate endpoint edge accepted"); } catch(ArgumentException) { }
+        try { TwoSidedEndpointStudy.AssessSegments(frontFixed,new(new(double.NaN,0),new(1,0)),backFixed,variable,.5);throw new InvalidDataException("Non-finite endpoint accepted"); } catch(ArgumentException) { }
+        try { TwoSidedEndpointStudy.AssessSegments(frontFixed,variable,backFixed,variable,1001);throw new InvalidDataException("Oversized side bound accepted"); } catch(ArgumentException) { }
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct","synthetic-third","synthetic-fifth"}) {
+            var study=TwoSidedEndpointStudy.Create(id,.5); // 5 mm exploratory cap, not a fitting standard
+            Need(study.SideEqualityImpossibleWithinLimit && study.ProvenMaxDisplacementLowerBoundCm>.5 && study.Status=="unresolved" && !study.ExportAllowed && !study.ProductionAllowed,"bounded two-sided side result");
+            try { TwoSidedEndpointStudy.AttemptWithinLimit(id,.5);throw new InvalidDataException("Impossible bounded correction returned"); } catch(InvalidOperationException ex) { Need(ex.Message.Contains("impossible"),"wrong bounded correction error"); }
+            try { study.RequireResearchComposition();throw new InvalidDataException("Endpoint study composed"); } catch(InvalidOperationException) { }
+            var front=FrontBodiceCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            var right=BackBodiceCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted,false);
+            var frontEdges=front.Edges.Select(e=>new BodyCurveStudy.Edge("right_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY)).ToArray();
+            var backEdges=right.Edges.Select(e=>new BodyCurveStudy.Edge("right_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY)).ToArray();
+            var tf=BodyCurveStudy.Inspect("right_ftorso",frontEdges,12);var tb=BodyCurveStudy.Inspect("right_btorso",backEdges,13);
+            Need(tf.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && tb.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && tf.Unresolved==0 && tb.Unresolved==0 && tf.NonMonotone==0 && tb.NonMonotone==0,"two-sided baseline contour");
+            var waist=BackWaistConstraintStudy.Inspect(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            var before=waist.CurrentLength ?? throw new InvalidDataException("Missing initial waist interval");
+            Console.WriteLine($"{id} two-sided endpoint cap=5 mm: front side≈[{study.Front.ApproximateLowerCm:G10},{study.Front.ApproximateUpperCm:G10}] cm, back side≈[{study.Back.ApproximateLowerCm:G10},{study.Back.ApproximateUpperCm:G10}] cm, lower bound on maximum/total horizontal shift >{study.ProvenMaxDisplacementLowerBoundCm:G8} cm; half-back waist before≈[{before.ApproximateLowerCm:G10},{before.ApproximateUpperCm:G10}] cm, target={waist.TargetCm:G8} cm; no after candidate.");
+        }
+        var wide=TwoSidedEndpointStudy.Create("synthetic-base",20);
+        Need(!wide.SideEqualityImpossibleWithinLimit,"wide endpoint bound should remain unresolved");
+        try { TwoSidedEndpointStudy.AttemptWithinLimit("synthetic-base",20);throw new InvalidDataException("Unresolved endpoint optimizer returned"); }
+        catch(InvalidOperationException ex) { Need(ex.Message.Contains("No certified optimizer"),"wrong unresolved endpoint error"); }
+        foreach(string? id in new string?[]{"synthetic-small-difference","unknown",null})
+            try { TwoSidedEndpointStudy.Create(id!,.5);throw new InvalidDataException("Unsupported endpoint study accepted"); } catch(ArgumentException) { }
+    }
+    static void RequireUnitSourceSide(JsonElement side)
+    {
+        Need(side.ValueKind==JsonValueKind.Object && side.TryGetProperty("edges",out var e) && e.ValueKind==JsonValueKind.Array && e.GetArrayLength()>0,"source side edges missing");
+        int expected=side.GetProperty("edges").GetArrayLength();
+        Need(side.TryGetProperty("ruffle",out var ruffles) && ruffles.ValueKind==JsonValueKind.Array && ruffles.GetArrayLength()>0,"source side ruffle missing");
+        int covered=0;
+        foreach(var r in ruffles.EnumerateArray()) {
+            Need(r.ValueKind==JsonValueKind.Object && r.TryGetProperty("coeff",out var c) && c.TryGetDouble(out var factor) && factor==1,"source side nonunit ruffle");
+            Need(r.TryGetProperty("sec",out var section) && section.ValueKind==JsonValueKind.Array && section.GetArrayLength()==2,"source side ruffle section");
+            Need(section[0].TryGetInt32(out var start) && section[1].TryGetInt32(out var end) && start==covered && end>start && end<=expected,"source side ruffle coverage");
+            covered=section[1].GetInt32();
+        }
+        Need(covered==expected,"source side ruffle incomplete");
+    }
+    static void CheckSourceTwoSidedBound(JsonElement reference)
+    {
+        var panels=reference.GetProperty("panels");
+        TwoSidedEndpointStudy.Segment Segment(string panel,int index) {
+            var edge=panels.GetProperty(panel).GetProperty("edges")[index];Need(edge.GetProperty("kind").GetString()=="Edge","source side not a line");
+            var a=Point(edge.GetProperty("start"));var b=Point(edge.GetProperty("end"));return new(new(a.X,a.Y),new(b.X,b.Y));
+        }
+        var result=TwoSidedEndpointStudy.AssessSegments(Segment("right_ftorso",4),Segment("right_ftorso",7),Segment("right_btorso",8),Segment("right_btorso",7),.5);
+        Need(result.front.Disjoint(result.back),"source endpoint-only family not separated");
+        var side=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()=="right" && r.GetProperty("owner_type").GetString()=="BodiceHalf" && r.GetProperty("index").GetInt32()==1);
+        foreach(string key in new[]{"a","b"})RequireUnitSourceSide(side.GetProperty(key));
+        void RejectSourceSide(Action<JsonObject> mutate) {
+            var sideNode=JsonNode.Parse(side.GetProperty("a").GetRawText())!.AsObject();mutate(sideNode);
+            using var bad=JsonDocument.Parse(sideNode.ToJsonString());
+            try { RequireUnitSourceSide(bad.RootElement);throw new Exception("Malformed source side accepted"); } catch(InvalidDataException) { }
+        }
+        RejectSourceSide(x=>x["ruffle"]=new JsonArray());
+        RejectSourceSide(x=>x.Remove("ruffle"));
+        RejectSourceSide(x=>x["ruffle"]![0]!["sec"]![1]=1);
+        RejectSourceSide(x=>x["ruffle"]![0]!["coeff"]=1.05);
+        Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
     internal static void CheckJointSideExperiment()
     {
         double junction=BackWaistJointSideExperiment.SolveJunction(0,0,1,10,10.4);
@@ -783,6 +854,7 @@ internal static class Validator
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
             CheckSyntheticSourceSeamLengths(reference);
+            CheckSourceTwoSidedBound(reference);
             CheckGeneralControls(reference,SyntheticBodyCatalog.Create(id));
             string[] excluded=["arm_length","arm_pose_angle","crotch_hip_diff","leg_circ","underbust","wrist"];
             var fullBody=SyntheticBodyCatalog.Create(id);
