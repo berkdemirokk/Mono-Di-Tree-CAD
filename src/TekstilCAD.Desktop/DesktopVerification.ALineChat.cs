@@ -197,6 +197,15 @@ internal static partial class DesktopVerification
             Check(window.CaptureForVerification().Prompt.EndsWith("Ön bel yayı: "+alineOriginal,StringComparison.Ordinal) &&
                 ALineRequestMeasurements.Review(window.CaptureForVerification().Prompt,window.CaptureForVerification().Measurements).Millimeters[0]==360,
                 "A-line answer recognizes a trailing line break",checks);
+            foreach(var answer in new[]{"36 cm\r\n "," \r\n36 cm", "\t\r\n36 cm!\r\n\u00a0"})
+            {
+                window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;
+                var original=window.ChatInputForVerification.Text;window.SendMessageForVerification();
+                var captured=window.CaptureForVerification();
+                Check(captured.Prompt.Contains(original.Replace("36", "Ön bel yayı: 36"),StringComparison.Ordinal) &&
+                    ALineRequestMeasurements.Review(captured.Prompt,captured.Measurements).Millimeters[0]==360 && window.ChatInputForVerification.Text.Length==0,
+                    "A-line answer recognizes whitespace on surrounding lines and preserves message: "+answer,checks);
+            }
             foreach(var model in new[]{"wrap","aline"})
             {
                 var modelSource=source with { ModelId=model };
