@@ -223,6 +223,7 @@ internal static partial class DesktopVerification
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
             VerifyALineWorkDraft(owner,reportPath,checks);
             VerifyALineEarlyTotals(owner,checks);
+            VerifyALineEntry(owner,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
         finally { request?.Close();conflict?.Close();window?.Close();owner.Close(); }

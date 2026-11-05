@@ -47,7 +47,8 @@ internal sealed class DesignRequestWindow : Window
     private bool dirty,loading,changingModel,hasSavedRequest;
     private int requestVersion=1;
     private string? portableModelId;
-    internal bool CanPreviewALineForVerification => requestVersion==2 ? portableModelId=="aline" : selectedModelText=="A kesim elbise; detaylar: " && !modelAmbiguous;
+    internal bool CanPreviewALineForVerification => requestVersion==2 ? portableModelId=="aline" : selectedModelText=="A kesim elbise; detaylar: " && !modelAmbiguous && !selectedModelFromLoaded;
+    internal Button ALinePreviewEntryForVerification { get; } = new() { Visibility=Visibility.Collapsed,Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,0,6),HorizontalContentAlignment=HorizontalAlignment.Left };
     private static readonly string[] PortableModelIds=["wrap","aline","corset","sheath","straight","shirt"];
     private string? selectedModelText;private string modelSnapshot="";private int selectedModelStart;
     private bool modelAmbiguous,selectedModelFromLoaded;
@@ -197,16 +198,20 @@ internal sealed class DesignRequestWindow : Window
         ModelChoice("A kesim elbise","Geniş etek · Doğal döküm","A kesim elbise; detaylar: ","M46,22 Q60,28 74,22 M46,22 L34,26 30,38 38,41 41,32 44,56 42,70 14,148 106,148 78,70 76,56 79,32 82,41 90,38 86,26 74,22","M48,56 L48,70 M72,56 L72,70 M42,70 Q60,74 78,70 M32,95 Q60,102 88,95 M60,28 L60,148","A-04");
         ModelChoice("Balenli korpus","Yapısal gövde · Vurgulu bel","Balenli korpus; detaylar: ","M40,32 Q50,36 60,30 Q70,36 80,32 M40,32 L42,54 44,74 32,148 88,148 76,74 78,54 80,32","M50,34 L52,74 M70,34 L68,74 M60,30 L60,74 M44,74 Q60,80 76,74 M42,54 Q60,58 78,54 M60,74 L60,148","B-02");
         ModelChoice("Minimal kılıf","Düz form · Kolsuz hat","Minimal kılıf elbise; detaylar: ","M46,18 Q60,22 74,18 M46,18 L38,22 36,36 42,36 43,62 40,148 80,148 77,62 78,36 84,36 82,22 74,18","M50,48 L50,72 M70,48 L70,72 M60,20 L60,148 M40,140 L40,148","S-07");
-        var lowerPanelPreview=new Button { Content="A kesim bel-altı kesitini incele…",Margin=new Thickness(0,6,0,6),Padding=new Thickness(8) };
+        var lowerPanelPreview=ALinePreviewEntryForVerification;
+        var previewLabel=new StackPanel();
+        previewLabel.Children.Add(new TextBlock { Text="Deneysel A kesim bel-altı kesitini incele…",TextWrapping=TextWrapping.Wrap });
+        previewLabel.Children.Add(new TextBlock { Text="Tam elbise kalıbı değildir; çıktı oluşturmaz.",FontSize=11,TextWrapping=TextWrapping.Wrap });
+        lowerPanelPreview.Content=previewLabel;
+        AutomationProperties.SetName(lowerPanelPreview,"Deneysel A kesim bel-altı kesitini incele; tam elbise kalıbı değildir");
         AutomationProperties.SetHelpText(lowerPanelPreview,"A kesim fikri için açık ön/arka ölçülerle deneysel kesit gösterir; tam elbise kalıbı, projeye ekleme veya çıktı oluşturmaz.");
         lowerPanelPreview.Click+=(_,_)=>
         {
-            if(!CanPreviewALineForVerification)
-            { SetStatus("Önce A kesim model fikrini açıkça seçin; mevcut tarif korunur.");return; }
-            if(!string.IsNullOrWhiteSpace(chatInput.Text)) { SetStatus("Önce bekleyen mesajı gönderin; ölçü notları önizlemeye anlık kopyalanacak.");return; }
-            new ALinePanelPreviewWindow(this,prompt.Text,measurements.Text).ShowDialog();
+            CreateALinePreview()?.ShowDialog();
         };
-        technicalBody.Children.Add(lowerPanelPreview);
+        // First item in the body directly below the fixed composer. Keeping it
+        // scrollable preserves message entry space on compact windows.
+        body.Children.Insert(0,lowerPanelPreview);
         ModelChoice("Düz elbise","Düz siluet","Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Gömlek elbise","Yakalı ön · Bel hattı","Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
         var convertV2=new Button { Content="V2 model kimliğiyle çalış…",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8) };
@@ -420,6 +425,16 @@ internal sealed class DesignRequestWindow : Window
             caption.Foreground=active ? Accent : Muted;AutomationProperties.SetItemStatus(button,active ? (selectedModelFromLoaded ? "Tarifte bulundu" : "Seçili") : "Seçili değil");
             AutomationProperties.SetHelpText(button,(active ? (selectedModelFromLoaded ? "Tarifte bulunan model metni; değiştirme için onay gerekir. " : "Seçili model fikri. ") : "")+"Model fikrini seçer veya değiştirir; mevcut metin korunur ve kalıp oluşturulmaz.");
         }
+        RefreshALinePreviewEntry();
+        if(CanPreviewALineForVerification)bodyScroller.ScrollToTop();
+    }
+    private void RefreshALinePreviewEntry()=>ALinePreviewEntryForVerification.Visibility=CanPreviewALineForVerification ? Visibility.Visible : Visibility.Collapsed;
+    internal ALinePanelPreviewWindow? CreateALinePreview()
+    {
+        if(!CanPreviewALineForVerification)
+        { SetStatus("Önce A kesim model fikrini açıkça seçin; kayıtlı V1 tarifinde bulunan metin tek başına seçim onayı değildir. Mevcut tarif korundu.");return null; }
+        if(!string.IsNullOrWhiteSpace(chatInput.Text)) { SetStatus("Önce bekleyen mesajı gönderin; ölçü notları önizlemeye anlık kopyalanacak.");return null; }
+        return new ALinePanelPreviewWindow(this,prompt.Text,measurements.Text);
     }
     private void SendMessage()
     {
@@ -513,6 +528,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void RefreshConversation()
     {
+        RefreshALinePreviewEntry();
         DressMeasurementReview review;
         try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
         catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;foreach(var (key,tile) in measurementTiles) { tile.Text="Denetlenemedi";AutomationProperties.SetName(tile,key+": denetlenemedi"); } conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
