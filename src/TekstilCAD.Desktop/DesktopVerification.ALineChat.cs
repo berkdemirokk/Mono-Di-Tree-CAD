@@ -164,10 +164,26 @@ internal static partial class DesktopVerification
                 "Unconfirmed loaded V1 candidate retains general guidance without inferring experimental model choice",checks);
             window.LoadForVerification(source with { ModelId="wrap" });
             Check(!window.ConversationForVerification.Text.Contains("Sıradaki alan ("),"Other models retain the existing general questions",checks);
-            window.ChatInputForVerification.Text="96 cm.";window.SendMessageForVerification();
-            var genericPrompt=window.CaptureForVerification().Prompt;
-            Check(genericPrompt==source.Prompt+"\n96 cm." || genericPrompt==source.Prompt+"\r\n96 cm.",
-                "Punctuation extension does not alter general model answer labeling",checks);
+            foreach(var answer in new[]{"96 cm.","960 mm!","96,5 cm."})
+            {
+                window.LoadForVerification(source with { ModelId="wrap" });
+                window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+                var captured=window.CaptureForVerification();
+                var review=DressMeasurementParser.Review(captured.Prompt,captured.Measurements);
+                Check(captured.Prompt.EndsWith("göğüs çevresi: "+answer,StringComparison.Ordinal) &&
+                    review.Measurements.Any(m=>m.Label=="göğüs çevresi") && window.ChatInputForVerification.Text.Length==0,
+                    "General measurement answer retains terminal punctuation and receives the question label: "+answer,checks);
+            }
+            foreach(var answer in new[]{"0 cm!","1.000 cm.","96 cm?"})
+            {
+                window.LoadForVerification(source with { ModelId="wrap" });window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+                Check(!window.CaptureForVerification().Prompt.Contains("göğüs çevresi: "+answer,StringComparison.Ordinal),
+                    "General answer does not label invalid or questioning values: "+answer,checks);
+            }
+            window.LoadForVerification(source with { ModelId="wrap" });window.ChatInputForVerification.Text="96 cm.";
+            window.MeasurementsForVerification.Text+="; not";var genericStale=window.CaptureForVerification();window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==genericStale && window.ChatInputForVerification.Text=="96 cm." && window.StatusForVerification.Text.Contains("Soru veya kaynak"),
+                "General punctuated answer retains stale-context protection",checks);
             Check(!window.IsVisible && !owner.IsVisible,"A-line question checks never show windows",checks);
         }
         finally { window.LoadForVerification(new DesignRequest("Temiz kapanış","",null));window.Close(); }

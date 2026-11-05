@@ -545,11 +545,7 @@ internal sealed class DesignRequestWindow : Window
             SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return;
         }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
-        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-        // A-line also accepts Unicode horizontal spacing and at most one affirmative terminal punctuation mark.
-        // Retain the original question context here so a model change cannot bypass stale checks.
-        if(!shortAnswer && (CanPreviewALineForVerification || answerContext?.ALine==true))
-            shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         var answerLabel=shortAnswer ? suggestedMeasurement : null;
         if(shortAnswer && (CanPreviewALineForVerification || answerContext?.ALine==true))
         {
