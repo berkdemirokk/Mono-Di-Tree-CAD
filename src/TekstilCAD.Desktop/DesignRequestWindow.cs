@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel;
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Automation.Peers;
@@ -22,6 +23,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly Button measurementShortcut=new() { Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
     private string? suggestedMeasurement;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
+    private readonly TextBlock referenceSummary=new() { TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,FlowDirection=FlowDirection.LeftToRight,Margin=new Thickness(6,0,0,6) };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly TextBlock status=new() { TextWrapping=TextWrapping.Wrap,Foreground=Ink,Margin=new Thickness(8,4,8,4) };
     private readonly ScrollViewer statusViewport=new() { MaxHeight=72,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Visibility=Visibility.Collapsed,Focusable=true };
@@ -62,6 +64,7 @@ internal sealed class DesignRequestWindow : Window
     internal TextBox ConversationForVerification=>conversation;
     internal TextBlock StatusForVerification=>status;
     internal TextBlock ReferenceLabelForVerification=>referenceLabel;
+    internal TextBlock ReferenceSummaryForVerification=>referenceSummary;
     internal ScrollViewer StatusViewportForVerification=>statusViewport;
     internal ScrollViewer BodyScrollerForVerification=>bodyScroller;
     internal ScrollViewer ModelScrollerForVerification=>modelScroller;
@@ -214,7 +217,9 @@ internal sealed class DesignRequestWindow : Window
         var referenceShortcut=new Button { Content="Referans görseli ekle…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
         ReferenceShortcutForVerification=referenceShortcut;AutomationProperties.SetName(referenceShortcut,"Referans görseli ekle");
         AutomationProperties.SetHelpText(referenceShortcut,"PNG/JPEG referansı mevcut görsel seçme ve doğrulama akışıyla ekler. Görselden ölçü veya kalıp çıkarmaz; özgün baytlar isteğe eklenir.");
-        referenceShortcut.Click+=(_,_)=>ChooseReference();primaryChat.Children.Add(referenceShortcut);
+        referenceShortcut.Click+=(_,_)=>ChooseReference();
+        var referenceRow=new DockPanel { LastChildFill=true };DockPanel.SetDock(referenceShortcut,Dock.Left);referenceRow.Children.Add(referenceShortcut);referenceRow.Children.Add(referenceSummary);primaryChat.Children.Add(referenceRow);
+        AutomationProperties.SetHelpText(referenceSummary,"Yalnız referans görselidir; fotoğraftan model, ölçü veya kalıp çıkarılmaz.");
         AutomationProperties.SetHelpText(RetryModelForVerification,"Son gönderilen mesaj hâlâ tarifin sonunda duruyorsa güncel ölçü ve görselle yeniden inceler; metni tekrar eklemez. Seçim ayrıca onay ister.");
         RetryModelForVerification.Click+=(_,_)=>RetryLastModelMessage();body.Children.Add(RetryModelForVerification);
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Ölçüleri ayrı satır veya noktalı virgülle ayırabilir, açık etiketli ve birimli iki ölçüyü “ve” ile birleştirebilirsiniz. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
@@ -511,8 +516,28 @@ internal sealed class DesignRequestWindow : Window
         }
         catch(ArgumentException ex) { measurementReview.Text="Ölçü denetlenemedi: "+ex.Message; }
     }
-    private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt"+
-        (referenceDecoded ? "\nWindows görsel denetiminden geçti; telefon uyumluluğu ayrıca doğrulanmalıdır." : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
+    private static string SafeReferenceName(string name)
+    {
+        var result=new System.Text.StringBuilder();int count=0;
+        foreach(var rune in name.EnumerateRunes())
+        {
+            if(count++==36) { result.Append('…');break; }
+            var category=Rune.GetUnicodeCategory(rune);
+            if(category is System.Globalization.UnicodeCategory.Control or System.Globalization.UnicodeCategory.Format or System.Globalization.UnicodeCategory.LineSeparator or System.Globalization.UnicodeCategory.ParagraphSeparator or System.Globalization.UnicodeCategory.Surrogate)
+                result.Append(rune.Value<=0xffff ? $"\\u{rune.Value:X4}" : $"\\U{rune.Value:X8}");
+            else result.Append(rune.ToString());
+        }
+        return result.ToString();
+    }
+    private void UpdateReference()
+    {
+        var name=reference is null ? null : SafeReferenceName(reference.Name);
+        referenceSummary.Text=reference is null ? "Görsel seçilmedi" : $"Yalnız referans: {name}";
+        AutomationProperties.SetName(referenceSummary,referenceSummary.Text+". Fotoğraftan model, ölçü veya kalıp çıkarılmaz.");
+        referenceSummary.ToolTip=referenceSummary.Text+". Fotoğraftan model, ölçü veya kalıp çıkarılmaz.";
+        referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{name} · {reference.MediaType} · {reference.Data.Length} bayt"+
+            (referenceDecoded ? "\nWindows görsel denetiminden geçti; telefon uyumluluğu ayrıca doğrulanmalıdır." : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
+    }
     private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() },portableModelId,requestVersion);
     private void Apply(DesignRequest value)
     {
@@ -571,14 +596,14 @@ internal sealed class DesignRequestWindow : Window
     internal async Task<bool> ChooseReferenceFileAsync(string path)
     {
         if(closed || referenceLoadRunning)return false;
-        var revision=referenceRevision;referenceLoadRunning=true;SetStatus("Görsel çizim için denetleniyor; önceki seçim korunuyor.");
+        var revision=referenceRevision;referenceLoadRunning=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
         try
         {
             var loader=ReferenceLoaderForVerification;
             var candidate=await Task.Run(()=>loader is null ? ReferencePhotoFileLoader.LoadRequestReference(path) : loader(path));
             if(closed)return false;
             if(referenceRevision!=revision) { SetStatus("Referans değişti; bekleyen görsel eklenmedi.");return false; }
-            reference=candidate;referenceDecoded=loader is null;referenceRevision++;dirty=true;UpdateReference();SetStatus("Görsel çizim için açılabilir; orijinal baytlar isteğe eklendi ve kaynak dosya değiştirilmedi.");return true;
+            reference=candidate;referenceDecoded=loader is null;referenceRevision++;dirty=true;UpdateReference();SetStatus("Görsel dosyasının açılabilirliği denetlendi; orijinal baytlar isteğe eklendi. Fotoğraftan model, ölçü veya kalıp çıkarılmadı.");return true;
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         { if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; bekleyen görsel eklenmedi." : "Görsel açılamadı. PNG/JPEG için 8 MiB, 12.000 piksel ve 24 milyon piksel sınırlarını kontrol edin; bu sınırları aşan görsel otomatik küçültülmez. Önceki görsel korundu.");return false; }

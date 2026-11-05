@@ -10546,7 +10546,7 @@ internal static partial class DesktopVerification
             var firstCaption=((StackPanel)firstModel.Content).Children.OfType<TextBlock>().Single(t=>t.Text=="Seç");
             var saveError=window.StatusForVerification.Text;
             Check(FullyVisible(window.ChatInputForVerification,blankRoot) && FullyVisible(window.SendActionForVerification!,blankRoot) &&
-                FullyVisible(window.ReferenceShortcutForVerification!,blankRoot) && FullyVisible(window.StatusViewportForVerification,blankRoot),
+                FullyVisible(window.ReferenceShortcutForVerification!,blankRoot) && FullyVisible(window.ReferenceSummaryForVerification,blankRoot) && FullyVisible(window.StatusViewportForVerification,blankRoot),
                 "Compact save-error state keeps chat, Send, reference action and error viewport visible",checks);
             Check(firstModel.Focusable && KeyboardNavigation.GetIsTabStop(firstModel) && window.ModelScrollerForVerification.Focusable &&
                 window.BodyScrollerForVerification.ViewportHeight>0 && window.BodyScrollerForVerification.ScrollableHeight>0,
@@ -11070,6 +11070,7 @@ internal static partial class DesktopVerification
                 {
                     selectionWindow.LoadForVerification(input);var task=selectionWindow.ChooseReferenceFileAsync(path);PumpUntil(()=>task.IsCompleted);
                     Check(task.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(expectedBytes) &&
+                        selectionWindow.ReferenceSummaryForVerification.Text.Contains(Path.GetFileName(path)) && selectionWindow.StatusForVerification.Text.Contains("kalıp çıkarılmadı") &&
                         File.ReadAllBytes(path).SequenceEqual(expectedBytes) && selectionWindow.DirtyForVerification && DocumentSession.ContentEquals(before,studio.Document),
                         "Reference selection validates "+label+" and preserves original source bytes",checks);
                 }
@@ -11077,6 +11078,7 @@ internal static partial class DesktopVerification
                 {
                     selectionWindow.LoadForVerification(input);var task=selectionWindow.ChooseReferenceFileAsync(path);PumpUntil(()=>task.IsCompleted);
                     Check(!task.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference!.Data) &&
+                        selectionWindow.ReferenceSummaryForVerification.Text.Contains(input.Reference.Name) &&
                         !selectionWindow.DirtyForVerification && selectionWindow.StatusForVerification.Text.Contains("24 milyon") &&
                         selectionWindow.StatusForVerification.Text.Contains("otomatik küçültülmez") && DocumentSession.ContentEquals(before,studio.Document),
                         "Unreadable or oversized reference selection explains limits and preserves the previous request",checks);
@@ -11107,7 +11109,7 @@ internal static partial class DesktopVerification
                     var pending=selectionWindow.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>removalEntered.IsSet);
                     typeof(DesignRequestWindow).GetMethod("RemoveReference",PrivateInstance)!.Invoke(selectionWindow,null);
                     removalRelease.Set();PumpUntil(()=>pending.IsCompleted);
-                    Check(!pending.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference is null && selectionWindow.DirtyForVerification,
+                    Check(!pending.GetAwaiter().GetResult() && selectionWindow.CaptureForVerification().Reference is null && selectionWindow.DirtyForVerification && selectionWindow.ReferenceSummaryForVerification.Text=="Görsel seçilmedi",
                         "Removing the reference while validation runs prevents its later replacement",checks);
                 }
                 finally { removalRelease.Set();selectionWindow.ReferenceLoaderForVerification=null; }
