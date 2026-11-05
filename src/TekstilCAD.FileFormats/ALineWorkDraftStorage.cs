@@ -4,19 +4,22 @@ using System.Text.Json;
 namespace TekstilCAD.FileFormats;
 
 /// <summary>Unconfirmed, possibly incomplete form text; never geometry or measurement approval.</summary>
-public sealed record ALineWorkDraft(string? Unit, IReadOnlyList<string> Fields);
+public sealed record ALineWorkDraft(string? Unit, IReadOnlyList<string> Fields, string? SourceHash=null);
 
 public static class ALineWorkDraftStorage
 {
     public const string Extension=".tcad-aline-work.json";
     public const string ModelVersion="A-04.lower-section.experimental.v1";
     public const int MaximumFileBytes=16*1024;
+    public const string SourceAlgorithm="design-request-json-sha256-v1";
+    public static string SourceIdentity(DesignRequest request)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request))));
     private const string Format="tekstilcad-aline-work";
 
     public static string Serialize(ALineWorkDraft draft)
     {
         Validate(draft);
-        return JsonSerializer.Serialize(new { format=Format,version=1,modelVersion=ModelVersion,unit=draft.Unit,fields=draft.Fields });
+        return draft.SourceHash is null ? JsonSerializer.Serialize(new { format=Format,version=1,modelVersion=ModelVersion,unit=draft.Unit,fields=draft.Fields }) :
+            JsonSerializer.Serialize(new { format=Format,version=2,modelVersion=ModelVersion,sourceAlgorithm=SourceAlgorithm,sourceHash=draft.SourceHash,unit=draft.Unit,fields=draft.Fields });
     }
     private static void Validate(ALineWorkDraft draft)
     {
@@ -24,6 +27,8 @@ public static class ALineWorkDraftStorage
         if(draft.Unit is not (null or "cm" or "mm") || draft.Fields is null || draft.Fields.Count!=11 ||
             draft.Fields.Any(f=>f is null || f.Length>24 || f.Any(char.IsControl)))
             throw new InvalidDataException("A kesim çalışma taslağının birimi veya 11 alanı geçersiz. Alanlar en fazla 24 karakter olabilir.");
+        if(draft.SourceHash is not null && (draft.SourceHash.Length!=64 || draft.SourceHash.Any(c=>!(c is >= '0' and <= '9' or >= 'A' and <= 'F'))))
+            throw new InvalidDataException("İstek özeti geçersiz.");
         // Preserve unfinished input exactly, but reject malformed Unicode rather
         // than silently replacing it during JSON serialization.
         try { foreach(var field in draft.Fields)new UTF8Encoding(false,true).GetByteCount(field); }
@@ -37,15 +42,16 @@ public static class ALineWorkDraftStorage
             using var doc=JsonDocument.Parse(json,new JsonDocumentOptions { MaxDepth=4 });var root=doc.RootElement;
             var names=new HashSet<string>(StringComparer.Ordinal);
             foreach(var property in root.EnumerateObject())
-                if(!names.Add(property.Name) || property.Name is not ("format" or "version" or "modelVersion" or "unit" or "fields"))
+                if(!names.Add(property.Name) || property.Name is not ("format" or "version" or "modelVersion" or "unit" or "fields" or "sourceAlgorithm" or "sourceHash"))
                     throw new InvalidDataException("Çalışma taslağında bilinmeyen veya yinelenen alan var.");
-            if(names.Count!=5 || root.GetProperty("format").GetString()!=Format || root.GetProperty("version").GetInt32()!=1 ||
+            var version=root.GetProperty("version").GetInt32();
+            if((version==1 ? names.Count!=5 : version==2 ? names.Count!=7 || root.GetProperty("sourceAlgorithm").GetString()!=SourceAlgorithm : true) || root.GetProperty("format").GetString()!=Format ||
                 root.GetProperty("modelVersion").GetString()!=ModelVersion)
                 throw new InvalidDataException("Çalışma taslağı biçimi veya model sürümü desteklenmiyor.");
             var values=root.GetProperty("fields");
             if(values.GetArrayLength()!=11)throw new InvalidDataException("Çalışma taslağında tam 11 alan bulunmalı.");
             var fields=values.EnumerateArray().Select(e=>e.GetString()!).ToArray();
-            var draft=new ALineWorkDraft(root.GetProperty("unit").GetString(),Array.AsReadOnly(fields));Validate(draft);return draft;
+            var draft=new ALineWorkDraft(root.GetProperty("unit").GetString(),Array.AsReadOnly(fields),version==2 ? root.GetProperty("sourceHash").GetString() ?? throw new InvalidDataException("İstek özeti eksik.") : null);Validate(draft);return draft;
         }
         catch(Exception ex) when(ex is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
         { throw new InvalidDataException("A kesim çalışma taslağı okunamadı.",ex); }

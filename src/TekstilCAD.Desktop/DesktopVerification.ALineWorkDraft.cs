@@ -28,6 +28,21 @@ internal static partial class DesktopVerification
             Check(window.CanvasForVerification.Children.Count>0,"Draft fixture initially produces only explicitly confirmed preview",checks);
             VerifyALineStorageErrorBoundary(window,folder,checks);
             window.SaveWorkForVerification(path);
+            var stored=ALineWorkDraftStorage.Load(path);
+            var expectedId=ALineWorkDraftStorage.SourceIdentity(new DesignRequest("A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm",null));
+            Check(stored.SourceHash==expectedId && stored.Fields.SequenceEqual(values) && stored.Unit=="cm" && File.ReadAllText(path).Contains(ALineWorkDraftStorage.SourceAlgorithm),
+                "Version 2 work records the snapshot identity and preserves all raw fields and unit",checks);
+            var differentId=ALineWorkDraftStorage.SourceIdentity(new DesignRequest("Başka sipariş","",null));
+            var differentPath=Path.Combine(folder,"different"+ALineWorkDraftStorage.Extension);
+            ALineWorkDraftStorage.SaveNew(differentPath,new("cm",values,differentId));
+            window.ConfirmSourceMismatchForVerification=warning=> { Check(warning.Contains(differentId) && warning.Contains(expectedId),"Mismatch confirmation displays both source identities",checks);return false; };
+            Check(!window.LoadWorkForVerification(differentPath,()=>throw new InvalidOperationException("Replacement should not be asked")) && window.FieldsForVerification[0].Text=="36",
+                "Declining a different source preserves the form",checks);
+            window.ConfirmSourceMismatchForVerification=_=>true;
+            Check(window.LoadWorkForVerification(differentPath,()=>true) && window.StatusForVerification.Text.Contains(differentId),"Explicit approval opens the different source with identity visible",checks);
+            var retainedPath=Path.Combine(folder,"retained"+ALineWorkDraftStorage.Extension);window.SaveWorkForVerification(retainedPath);
+            Check(ALineWorkDraftStorage.Load(retainedPath).SourceHash==differentId,"Resaving an approved different source retains its original identity",checks);
+            window.LoadWorkForVerification(path,()=>true);
             Check(window.CanCloseWorkForVerification(),"Successfully saved raw fields and unit establish the clean checkpoint",checks);
             window.FieldsForVerification[0].Text="37";
             var closed=false;window.Closed+=(_,_)=>closed=true;
@@ -77,13 +92,38 @@ internal static partial class DesktopVerification
             var incompatible=new ALineWorkDraft("mm",["360","360","500","500","0","0","0","0","200","700","1600"]);
             var mm=Path.Combine(folder,"mm"+ALineWorkDraftStorage.Extension);ALineWorkDraftStorage.SaveNew(mm,incompatible);
             window.LoadWorkForVerification(mm,()=>true);
-            Check(window.UnitForVerification.SelectedIndex==1 && window.FieldsForVerification[0].Text=="360","Draft unit is restored with unchanged raw values, without implicit conversion",checks);
+            Check(window.UnitForVerification.SelectedIndex==1 && window.FieldsForVerification[0].Text=="360" && window.StatusForVerification.Text.Contains("kaynak kimliği yok"),"Legacy draft preserves raw values and warns that source identity is absent",checks);
             var conflict=Path.Combine(folder,"conflict"+ALineWorkDraftStorage.Extension);
             var changed=incompatible.Fields.ToArray();changed[0]="400";ALineWorkDraftStorage.SaveNew(conflict,new("mm",changed));
             window.LoadWorkForVerification(conflict,()=>true);window.AgreementForVerification.IsChecked=true;Click(window.ReviewForVerification);
             window.ConfirmationForVerification.IsChecked=true;Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count==0 && window.StatusForVerification.Text.Contains("farklı"),
                 "Loaded measurements still face current request circumference conflict guard before drawing",checks);
+            var request=new DesignRequestWindow(owner) { ConfirmDiscardForVerification=_=>true };var requestData=new DesignRequest("A kesim elbise","ön bel yayı 36 cm",null,"aline",2);request.LoadForVerification(requestData);_=new System.Windows.Interop.WindowInteropHelper(request).EnsureHandle();
+            var sourceWindow=new ALinePanelPreviewWindow(request,requestData.Prompt,requestData.Measurements) { ConfirmDiscardWorkForVerification=()=>true };
+            try {
+                var sourceFile=Path.Combine(folder,"source"+ALineWorkDraftStorage.Extension);sourceWindow.SaveWorkForVerification(sourceFile);
+                sourceWindow.FieldsForVerification[0].Text="41";
+                bool sourceRejected=false;
+                try { sourceWindow.LoadWorkForVerification(sourceFile,()=> { request.PromptForVerification.Text="başka";request.PromptForVerification.Text=requestData.Prompt;return true; }); }
+                catch(InvalidOperationException) { sourceRejected=true; }
+                Check(sourceRejected && sourceWindow.FieldsForVerification[0].Text=="41","Source A-B-A during approval invalidates opening and preserves the form",checks);
+                sourceRejected=false;
+                try { sourceWindow.SaveSelectedWorkForVerification(()=> { request.PromptForVerification.Text="başka";request.PromptForVerification.Text=requestData.Prompt;return Path.Combine(folder,"stale-source"+ALineWorkDraftStorage.Extension); }); }
+                catch(InvalidOperationException) { sourceRejected=true; }
+                Check(sourceRejected && !File.Exists(Path.Combine(folder,"stale-source"+ALineWorkDraftStorage.Extension)),"Source A-B-A during save selection writes no file",checks);
+                sourceWindow.UnitForVerification.SelectedIndex=0;sourceWindow.ConfirmSourceCorrectionForVerification=()=>true;
+                sourceWindow.CorrectionFieldsForVerification.SelectedIndex=0;Click(sourceWindow.CorrectSourceForVerification);
+                Check(request.CaptureForVerification().Measurements.Contains("41") && sourceWindow.FieldsForVerification[0].Text=="41", "Approved source correction updates the request and preserves form",checks);
+                var correctedFile=Path.Combine(folder,"corrected-source"+ALineWorkDraftStorage.Extension);sourceWindow.SaveWorkForVerification(correctedFile);
+                Check(ALineWorkDraftStorage.Load(correctedFile).SourceHash==ALineWorkDraftStorage.SourceIdentity(request.CaptureForVerification()) && sourceWindow.LoadWorkForVerification(correctedFile,()=>true),
+                      "Corrected source work saves and reopens with the updated request identity",checks);
+                sourceWindow.FieldsForVerification[1].Text="31";sourceWindow.ConfirmFormToRequestForVerification=()=>true;Click(sourceWindow.FormToRequestForVerification);
+                Check(request.CaptureForVerification().Measurements.Contains("31"),"Approved form transfer updates source notes",checks);
+                var transferredFile=Path.Combine(folder,"transferred-source"+ALineWorkDraftStorage.Extension);sourceWindow.SaveWorkForVerification(transferredFile);
+                Check(ALineWorkDraftStorage.Load(transferredFile).SourceHash==ALineWorkDraftStorage.SourceIdentity(request.CaptureForVerification()) && sourceWindow.LoadWorkForVerification(transferredFile,()=>true),
+                      "Transferred form work saves and reopens with the updated request identity",checks);
+            } finally { sourceWindow.Close();request.Close(); }
             Check(!window.IsVisible && !owner.IsVisible,"Draft verification never shows windows",checks);
         }
         finally { window.ConfirmDiscardWorkForVerification=()=>true;window.Close();Directory.Delete(folder,true); }

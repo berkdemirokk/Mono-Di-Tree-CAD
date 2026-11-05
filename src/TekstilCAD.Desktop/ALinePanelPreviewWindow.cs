@@ -34,6 +34,11 @@ internal sealed class ALinePanelPreviewWindow : Window
     private Action<string> saveWork = null!;
     private Func<string,Func<bool>,bool> loadWork = null!;
     private Func<Func<string?>,bool> saveSelectedWork = null!;
+    private Func<Func<string?>,Func<bool>,bool> loadSelectedWork = null!;
+    internal Func<string,bool>? ConfirmSourceMismatchForVerification { get; set; }
+    internal Func<bool>? ConfirmSourceCorrectionForVerification { get; set; }
+    internal ComboBox CorrectionFieldsForVerification { get; private set; }=null!;
+    internal Button CorrectSourceForVerification { get; private set; }=null!;
     private Func<bool> canCloseWork = null!;
     internal Func<bool>? ConfirmDiscardWorkForVerification { get; set; }
     internal Func<bool>? ConfirmUnitConversionForVerification { get; set; }
@@ -72,7 +77,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     {
         try
         {
-            var path=selectPath();return path is not null && loadWork(path,approve);
+            return loadSelectedWork(selectPath,approve);
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
         { StatusForVerification.Text="Çalışma açılamadı; mevcut form korundu. "+ex.Message;return false; }
@@ -80,6 +85,14 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false,unitConfirmation=false;int committedUnit=-1;
+        string CurrentSource()=>ALineWorkDraftStorage.SourceIdentity(owner is DesignRequestWindow requestOwner ? requestOwner.CaptureForVerification() : new DesignRequest(promptSnapshot,measurementSnapshot,null));
+        (long,long) SourceRevision()=>owner is DesignRequestWindow requestOwner ? requestOwner.ALineSourceRevision : (0,0);
+        bool SourceAvailable()=>owner is not DesignRequestWindow requestOwner || requestOwner.ALineSourceAvailable;
+        var sourceIdentity=CurrentSource();string? workOrigin=sourceIdentity;
+        var sourceLabel=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };
+        void RefreshSourceLabel()=>sourceLabel.Text="Kaynak istek özeti: "+sourceIdentity+" ("+ALineWorkDraftStorage.SourceAlgorithm+"). Bu özet şifreleme değildir; kaynak metni ve görseli dosyaya eklenmez.";
+        void AdoptAuthorizedSourceChange() { var previous=sourceIdentity;sourceIdentity=CurrentSource();if(workOrigin==previous)workOrigin=sourceIdentity;RefreshSourceLabel(); }
+        RefreshSourceLabel();
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
         StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(16) };
@@ -206,22 +219,23 @@ internal sealed class ALinePanelPreviewWindow : Window
         void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         void RefreshWaistComparison()=>WaistComparisonForVerification.Text=ALineWaistSourceComparison.Describe(promptSnapshot,measurementSnapshot,fields[0].Text,fields[1].Text,CurrentUnit());
         var correctionFields=new ComboBox { ItemsSource=labels,SelectedIndex=-1,Margin=new Thickness(0,4,0,4) };
-        body.Children.Add(new Label { Content="Düzeltilecek açık istek ölçüsü",Target=correctionFields });body.Children.Add(correctionFields);
+        CorrectionFieldsForVerification=correctionFields;body.Children.Add(new Label { Content="Düzeltilecek açık istek ölçüsü",Target=correctionFields });body.Children.Add(correctionFields);
         var correctSource=new Button { Content="Kaynak ölçüyü düzelt…",Padding=new Thickness(8),HorizontalAlignment=HorizontalAlignment.Left };
-        body.Children.Add(correctSource);
+        CorrectSourceForVerification=correctSource;body.Children.Add(correctSource);
         correctSource.Click+=(_,_)=>
         {
             try
             {
                 if(owner is not DesignRequestWindow request)throw new InvalidOperationException("Kaynak istek penceresi bulunamadı.");
+                if(!SourceAvailable() || CurrentSource()!=sourceIdentity)throw new InvalidOperationException("Kaynak istek değişti; pencereyi yeniden açın.");
                 int index=correctionFields.SelectedIndex;if(index<0)throw new ArgumentException("Düzeltilecek alanı seçin.");
                 var form=fields.Select(f=>f.Text).ToArray();var chosenUnit=CurrentUnit();var version=editVersion;
                 var plan=ALineSourceCorrection.Create(promptSnapshot,measurementSnapshot,index,form[index],chosenUnit);
                 bool approved=request.CorrectALineSource(promptSnapshot,measurementSnapshot,plan,
-                    ()=>MessageBox.Show(this,$"Kaynak: {plan.Place}\nAlan: {plan.Label}\nEski: {plan.OldText}\nYeni: {plan.NewText}\n\nYalnız bu açık değer güncellenecek. Form korunur; ölçü ve simetri onayları sıfırlanır.","Kaynak ölçüyü düzelt",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes,
+                    ()=>ConfirmSourceCorrectionForVerification?.Invoke() ?? MessageBox.Show(this,$"Kaynak: {plan.Place}\nAlan: {plan.Label}\nEski: {plan.OldText}\nYeni: {plan.NewText}\n\nYalnız bu açık değer güncellenecek. Form korunur; ölçü ve simetri onayları sıfırlanır.","Kaynak ölçüyü düzelt",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes,
                     ()=>!closed && editVersion==version && correctionFields.SelectedIndex==index && CurrentUnit()==chosenUnit && form.SequenceEqual(fields.Select(f=>f.Text)));
                 if(!approved) { status.Text="Düzeltme iptal edildi veya istek/form değişti; değerler korundu.";return; }
-                promptSnapshot=plan.Prompt;measurementSnapshot=plan.Notes;
+                promptSnapshot=plan.Prompt;measurementSnapshot=plan.Notes;AdoptAuthorizedSourceChange();
                 requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
                 agreement.IsChecked=false;Clear();RefreshProposal();RefreshWaistComparison();
                 status.Text="Kaynak ölçü güncellendi; form korundu. Simetri ve ölçüleri yeniden inceleyip onaylayın.";
@@ -236,6 +250,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(owner is not DesignRequestWindow request)throw new InvalidOperationException("Kaynak istek penceresi bulunamadı.");
+                if(!SourceAvailable() || CurrentSource()!=sourceIdentity)throw new InvalidOperationException("Kaynak istek değişti; pencereyi yeniden açın.");
                 var form=fields.Select(f=>f.Text).ToArray();var selectedUnit=CurrentUnit();var version=editVersion;
                 var plan=ALineFormToRequest.Create(promptSnapshot,measurementSnapshot,form,selectedUnit);
                 if(plan.Added.Count==0) { status.Text="Eklenecek yeni açık değer yok; kaynak ve form değiştirilmedi.";return; }
@@ -244,7 +259,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                     ()=>ConfirmFormToRequestForVerification?.Invoke() ?? MessageBox.Show(this,$"Eklenecek:\n{List(plan.Added)}\n\nKaynakta korunacak:\n{List(plan.Preserved)}\n\nEksik kalacak:\n{List(plan.Missing)}\n\nÖlçüler isteğe eklenir; dosyaya kaydetmek ayrıca gerekir. Ölçü ve simetri onayları sıfırlanır.","Açık form ölçülerini isteğe ekle",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes,
                     ()=>!closed && editVersion==version && CurrentUnit()==selectedUnit && form.SequenceEqual(fields.Select(f=>f.Text)));
                 if(!applied) { status.Text="Aktarım iptal edildi veya istek/form değişti; değerler korundu.";return; }
-                measurementSnapshot=plan.Notes;requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
+                measurementSnapshot=plan.Notes;AdoptAuthorizedSourceChange();requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
                 agreement.IsChecked=false;Clear();RefreshProposal();RefreshWaistComparison();
                 status.Text="Açık değerler istek notlarına eklendi; istek henüz kaydedilmedi. Form korundu, ölçüleri yeniden onaylayın.";
             }
@@ -327,8 +342,8 @@ internal sealed class ALinePanelPreviewWindow : Window
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { status.Text=ex.Message; }
         };
-        ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray());
-        static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)=>a.Unit==b.Unit && a.Fields.SequenceEqual(b.Fields);
+        ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray(),workOrigin);
+        static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)=>a.Unit==b.Unit && a.SourceHash==b.SourceHash && a.Fields.SequenceEqual(b.Fields);
         var durableWork=CaptureWork();bool closingPrompt=false;
         canCloseWork=()=>
         {
@@ -350,10 +365,11 @@ internal sealed class ALinePanelPreviewWindow : Window
         Closing+=(_,e)=> { if(!canCloseWork())e.Cancel=true; };
         saveSelectedWork=selectPath=>
         {
-            var before=CaptureWork();var version=editVersion;
+            var before=CaptureWork();var version=editVersion;var sourceRevision=SourceRevision();
             var path=selectPath();if(path is null)return false;
             if(closed || editVersion!=version || !SameWork(before,CaptureWork()))
                 throw new InvalidOperationException("Dosya seçilirken çalışma değişti; hiçbir dosya yazılmadı. Güncel çalışmayı yeniden kaydedin.");
+            if(!SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceIdentity)throw new InvalidOperationException("Kaynak istek değişti; ölçü çalışması kaydedilmedi. Pencereyi güncel istekten yeniden açın.");
             ALineWorkDraftStorage.SaveNew(path,before);
             durableWork=before;return true;
         };
@@ -362,10 +378,17 @@ internal sealed class ALinePanelPreviewWindow : Window
         {
             // Parse and validate everything before asking to replace the form.
             // A changed form during the modal confirmation must not be overwritten.
-            var draft=ALineWorkDraftStorage.Load(path);var before=CaptureWork();var version=editVersion;
+            var draft=ALineWorkDraftStorage.Load(path);var before=CaptureWork();var version=editVersion;var sourceRevision=SourceRevision();
+            if(!SourceAvailable() || CurrentSource()!=sourceIdentity)throw new InvalidOperationException("Kaynak istek değişti; form korunuyor.");
+            if(draft.SourceHash is { } id && id!=sourceIdentity)
+            {
+                var warning="Dosya başka bir istek anlık görüntüsüne ait. Dosya kimliği: "+id+"; mevcut istek kimliği: "+sourceIdentity+". Bu farklılığı inceleyip yine de açılsın mı?";
+                if(!(ConfirmSourceMismatchForVerification?.Invoke(warning) ?? (MessageBox.Show(this,warning,"Farklı kaynak istek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes)))return false;
+                if(closed || version!=editVersion || !SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceIdentity || !SameWork(before,CaptureWork()))throw new InvalidOperationException("Farklı kaynak onayı sırasında çalışma değişti; form korundu.");
+            }
             if(!approve())return false;
             var current=CaptureWork();
-            if(closed || version!=editVersion || current.Unit!=before.Unit || !current.Fields.SequenceEqual(before.Fields))
+            if(closed || !SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceIdentity || version!=editVersion || current.Unit!=before.Unit || !current.Fields.SequenceEqual(before.Fields))
                 throw new InvalidOperationException("Form onay sırasında değişti; dosya uygulanmadı. Güncel çalışmayı koruyarak yeniden açın.");
             Clear();agreement.IsChecked=false;
             loadingWork=true;
@@ -373,15 +396,24 @@ internal sealed class ALinePanelPreviewWindow : Window
                 for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i]; }
             finally { loadingWork=false; }
             Clear();RefreshProposal();
-            durableWork=CaptureWork();
-            status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı.";
+            workOrigin=draft.SourceHash;durableWork=CaptureWork();
+            status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı."+(draft.SourceHash is null ? " Eski dosyada kaynak kimliği yok; hangi isteğe ait olduğu doğrulanamaz." : " Dosya kaynak kimliği: "+draft.SourceHash+"; mevcut istek kimliği: "+sourceIdentity+".");
             return true;
+        };
+        loadSelectedWork=(selectPath,approve)=>
+        {
+            var before=CaptureWork();var version=editVersion;var source=CurrentSource();var sourceRevision=SourceRevision();
+            var path=selectPath();if(path is null)return false;
+            if(closed || version!=editVersion || !SourceAvailable() || sourceRevision!=SourceRevision() || source!=CurrentSource() || source!=sourceIdentity || !SameWork(before,CaptureWork()))
+                throw new InvalidOperationException("Dosya seçilirken form veya kaynak istek değişti; form korundu.");
+            return loadWork(path,approve);
         };
         var draftTools=new WrapPanel { Margin=new Thickness(0,0,0,6) };
         var saveDraft=new Button { Content="Ölçü çalışmasını kaydet…",Padding=new Thickness(8),Margin=new Thickness(0,0,8,0) };
         var openDraft=new Button { Content="Ölçü çalışmasını aç…",Padding=new Thickness(8) };
         draftTools.Children.Add(saveDraft);draftTools.Children.Add(openDraft);body.Children.Insert(0,draftTools);
-        body.Children.Insert(1,new TextBlock { Text="Çalışma dosyası 11 alanı ve birimi açık metin olarak içerir; kişisel ölçüler şifrelenmez. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        body.Children.Insert(1,sourceLabel);
+        body.Children.Insert(2,new TextBlock { Text="Çalışma dosyası 11 alanı ve birimi açık metin olarak içerir; kişisel ölçüler şifrelenmez. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         saveDraft.Click+=(_,_)=>TrySaveWork(()=>
         {
             var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,

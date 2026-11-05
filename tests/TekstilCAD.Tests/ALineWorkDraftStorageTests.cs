@@ -29,6 +29,21 @@ public class ALineWorkDraftStorageTests
         Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Deserialize(json));
     }
     [Fact]
+    public void SourceIdentityRoundTripsAndIncludesModelPhotoAndRequest()
+    {
+        var request=new DesignRequest("tasarım","bel 72 cm",new DesignReference("photo.png","image/png",[1,2,3]),"aline",2);
+        var id=ALineWorkDraftStorage.SourceIdentity(request);var json=ALineWorkDraftStorage.Serialize(Draft() with { SourceHash=id });
+        var loaded=ALineWorkDraftStorage.Deserialize(json);
+        Assert.Equal(id,loaded.SourceHash);Assert.Equal(Draft().Fields,loaded.Fields);
+        Assert.DoesNotContain("tasarım",json);Assert.DoesNotContain("photo.png",json);
+        Assert.NotEqual(id,ALineWorkDraftStorage.SourceIdentity(request with { Prompt="başka" }));
+        Assert.NotEqual(id,ALineWorkDraftStorage.SourceIdentity(request with { ModelId="wrap" }));
+        Assert.NotEqual(id,ALineWorkDraftStorage.SourceIdentity(request with { Reference=request.Reference! with { Data=[1,2,4] } }));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Deserialize(json.Replace(ALineWorkDraftStorage.SourceAlgorithm,"unknown")));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Serialize(Draft() with { SourceHash="bad" }));
+        Assert.Null(ALineWorkDraftStorage.Deserialize(ALineWorkDraftStorage.Serialize(Draft())).SourceHash);
+    }
+    [Fact]
     public void LimitsAndNewFileAtomicPolicyPreserveExistingFile()
     {
         var path=Path.Combine(Path.GetTempPath(),"aline-draft-"+Guid.NewGuid().ToString("N")+ALineWorkDraftStorage.Extension);
