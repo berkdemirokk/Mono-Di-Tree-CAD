@@ -467,7 +467,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("", notes: "anvelop elbise")), .wrap)
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, uzun kollu", notes: "göğüs çevresi 92 cm")), .aline)
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Uzun kollu, GÖMLEK ELBİSE istiyorum")), .shirt)
-        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("İpek", notes: "Anvelop elbise olsun; bel 72 cm")), .wrap)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("İpek", notes: "Anvelop elbise olsun; bel çevresi 72 cm")), .wrap)
         for text in ["anvelop elbise değil", "düz elbise mi?", "düz elbise mi", "‘anvelop elbise’", "anvelop elbise veya düz elbise", "anvelop elbise düz elbise", "anvelop elbise anvelop elbise", "anvelop elbiseli", "düz", "anvelop elbise istemiyorum", "anvelop elbise istemem", "belki anvelop elbise", "eğer anvelop elbise olursa", "anvelop elbise. düz olmasın", "anvelop elbise yerine gömlek", "anvelop elbiseden vazgeçtim", "anvelop elbise yasak"] {
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
         }
@@ -512,7 +512,11 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, ipek; keten")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, bel çevresi 72 cm; bel çevresi 90 cm")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel çevresi 72 cm", waist: "90 cm")))
-        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel 72 cm; bel çevresi 720 mm", waist: "72,0 cm")), .wrap)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel çevresi 72 cm; bel çevresi 720 mm", waist: "72,0 cm")), .wrap)
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel 72 cm")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "göğüs 92 cm")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "kalça 98 cm")))
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel çevresi 72 cm; göğüs çevresi 92 cm; kalça çevresi 98 cm; elbise boyu 110 cm")), .wrap)
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, uzun kollu", notes: "göğüs çevresi 92 cm")), .aline)
         for notes in ["bel çevresi 0 cm", "bel çevresi 1001 cm", "bel çevresi 72", "bel çevresi 72 in", "bel çevresi 72 cm bel çevresi 72 cm", "bel çevresi 72,123456789 cm", "uzun kolluluk"] {
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: notes)), notes)

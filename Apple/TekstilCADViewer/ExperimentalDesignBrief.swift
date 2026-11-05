@@ -124,7 +124,7 @@ enum ExperimentalDesignBrief {
             "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok")
         ]
         guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[ \t]+kollu|kısa[ \t]+kollu|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız)"#),
-              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu|bel)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)"#) else { return false }
+              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)"#) else { return false }
         let source = text as NSString
         var cursor = 0, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
         let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;."))
@@ -133,8 +133,7 @@ enum ExperimentalDesignBrief {
             if cursor == source.length { break }
             let region = NSRange(location: cursor, length: source.length - cursor)
             if let match = measurePattern.firstMatch(in: text, options: .anchored, range: region) {
-                let rawLabel = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-                let label = rawLabel == "bel" ? "bel çevresi" : rawLabel
+                let label = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
                 let number = source.substring(with: match.range(at: 2)).replacingOccurrences(of: ",", with: ".")
                 let unit = source.substring(with: match.range(at: 3))
                 guard let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= (unit == "cm" ? 1000 : 10000) else { return false }
