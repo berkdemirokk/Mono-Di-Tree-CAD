@@ -2550,6 +2550,10 @@ private struct ExperimentalDesignBriefView: View {
     @State private var length = ""
     @State private var otherMeasurements = ""
     @State private var measurementProposal: MeasurementMessageParser.Proposal?
+    @State private var modelSuggestion: ExperimentalDesignBrief.ModelSuggestion?
+    @State private var showModelSuggestion = false
+    @State private var modelSuggestionRevision = UUID()
+    @State private var modelSuggestionStatus = ""
     @State private var showMeasurementProposal = false
     @State private var measurementMessageStatus = ""
     @State private var showDesktopMeasurementWarning = false
@@ -2761,6 +2765,27 @@ private struct ExperimentalDesignBriefView: View {
             }
         }
     }
+    private func proposeModelSuggestion() {
+        guard !draftTransition, !referenceDecisionPending else { modelSuggestionStatus = "Önce devam eden işlemi tamamlayın."; return }
+        let current = draft
+        guard let suggestion = ExperimentalDesignBrief.suggestedModel(current) else {
+            modelSuggestionStatus = "Model önerilemedi. Tek bir kısa model adı yazabilir veya kartlardan seçebilirsiniz; metniniz korundu."
+            return
+        }
+        modelSuggestion = .init(draft: current, suggested: suggestion, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable, revision: modelSuggestionRevision)
+        modelSuggestionStatus = ""; showModelSuggestion = true
+    }
+    private func applyModelSuggestion() {
+        guard let proposal = modelSuggestion else { return }
+        modelSuggestion = nil
+        guard !draftTransition, !referenceDecisionPending,
+              proposal.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable, revision: modelSuggestionRevision) else {
+            modelSuggestionStatus = "Taslak veya model seçimi değişti; öneriyi yeniden inceleyin."
+            return
+        }
+        style = proposal.suggested; modelExplicitlySelected = true; importedPortable = false
+        modelSuggestionStatus = "Model seçildi; özgün metin ve görsel korundu. Tarif ve modelin uyumunu kontrol edin."
+    }
     private func parseMeasurementMessage() throws -> MeasurementMessageParser.Proposal {
         try MeasurementMessageParser.parse(otherMeasurements, existing: [
             "göğüs çevresi": bust, "bel çevresi": waist, "kalça çevresi": hips, "elbise boyu": length
@@ -2910,6 +2935,9 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: $description).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
+                    Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
+                    Text("Tarif veya mesaj alanlarından yalnız birinde tek ve açık bir model adı varsa önerilir; öneriyi siz onaylarsınız.").font(.caption)
+                    if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
                     ScrollView(.horizontal) {
                         HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in
                             Button("+ " + tag) {
@@ -2960,6 +2988,8 @@ private struct ExperimentalDesignBriefView: View {
                         Text("İsterseniz açık etiketli göğüs, bel, kalça çevresi ve elbise boyunu cm veya mm ile denetleyin. İfadeleri virgül, nokta, noktalı virgül, satır veya “ve” ile ayırın; diğer ifadeler reddedilir. Metin korunur.")
                             .font(.caption).foregroundStyle(.secondary)
                         Button("Mesajdaki ölçüleri incele") { proposeMeasurementMessage() }.frame(minHeight: 44)
+                        Button("Mesajdaki model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
+                        if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
                         if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
                     }
                     Button("15 beden ölçüsünü gir…") { if measurementForm?.hasValues == true { offerMeasurementForm = true } else { showingBodyMeasurements = true } }.frame(minHeight: 44)
@@ -3160,6 +3190,12 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif olarak koru") { style = .describe; modelExplicitlySelected = true }
                 Button("Açıklamayı gözden geçir", role: .cancel) { }
             } message: { Text("Dosyadaki önceki model açıklaması silinmez. Yeni bir model seçmek için önce açıklamadaki model satırını kendiniz düzenleyin; aksi halde tarif olarak koruyun.") }
+            .confirmationDialog("Model önerisini inceleyin", isPresented: $showModelSuggestion, titleVisibility: .visible) {
+                Button("Önerilen modeli seç") { applyModelSuggestion() }
+                Button("Vazgeç", role: .cancel) { modelSuggestion = nil }
+            } message: {
+                Text("Öneri: \(modelSuggestion?.suggested.rawValue ?? ""). Mevcut model seçiminiz değişebilir. Özgün metin ve görsel korunur; bu seçim kalıp oluşturmaz.")
+            }
             .confirmationDialog("Kaydedilmiş ölçü formu var", isPresented: $offerMeasurementForm, titleVisibility: .visible) {
                 Button("Formu geri yükle") { showingBodyMeasurements = true }
                 Button("Şimdilik açma", role: .cancel) { }
@@ -3204,7 +3240,9 @@ private struct ExperimentalDesignBriefView: View {
             } message: { Text("Masaüstü tarif veya ölçü notlarında ve bağlacı ya da cümle noktasıyla birleştirilmiş ölçüleri belirsiz değerlendirebilir. Metin değiştirilmez. Dilerseniz ayrı satırlar kullanın ve masaüstünde doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
-            .onChange(of: draft) { value in if !draftTransition { saveLocalDraft(value) } }
+            .onChange(of: draft) { value in modelSuggestionRevision = UUID(); if !draftTransition { saveLocalDraft(value) } }
+            .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
+            .onChange(of: importedPortable) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: scenePhase) { phase in if phase != .active && !draftTransition { saveLocalDraft(draft, immediately: true) } }
             .confirmationDialog("Önceki taslak bulundu", isPresented: $offerRestore, titleVisibility: .visible) {
                 Button("Taslağı geri yükle") { if let previous = restoreCandidate { restore(previous) } }

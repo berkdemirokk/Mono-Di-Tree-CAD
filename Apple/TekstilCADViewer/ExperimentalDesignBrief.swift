@@ -69,6 +69,32 @@ enum ExperimentalDesignBrief {
             ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
         }
     }
+    /// Deliberately accepts only a complete, unambiguous short phrase.
+    /// It is a suggestion for review, not a natural-language interpreter.
+    static func suggestedModel(_ draft: Draft) -> DressStyle? {
+        let description = draft.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = draft.otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard description.isEmpty != notes.isEmpty else { return nil }
+        let source = description.isEmpty ? notes : description
+        guard source.utf16.count <= 128 else { return nil }
+        let text = source.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR"))
+        let names: [String: DressStyle] = ["düz elbise": .straight, "a kesim elbise": .aline,
+            "anvelop elbise": .wrap, "gömlek elbise": .shirt, "balenli korpus": .corset, "minimal kılıf": .sheath]
+        for (name, style) in names {
+            if text == name || text == name + " istiyorum" || text == name + " olsun" { return style }
+        }
+        return nil
+    }
+    struct ModelSuggestion: Equatable {
+        let draft: Draft
+        let suggested: DressStyle
+        let explicitSelection: Bool
+        let importedPortable: Bool
+        let revision: UUID
+        func matches(_ current: Draft, explicitSelection: Bool, importedPortable: Bool, revision: UUID) -> Bool {
+            draft == current && self.explicitSelection == explicitSelection && self.importedPortable == importedPortable && self.revision == revision
+        }
+    }
     /// Values shown for review are derived directly from the snapshot being exported.
     struct RequestSummary {
         let model: String?

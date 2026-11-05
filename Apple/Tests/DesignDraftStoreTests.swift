@@ -455,6 +455,42 @@ final class DesignDraftStoreTests: XCTestCase {
         let entered = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "  ", hips: "", length: "", other: "bel çevresi yaklaşık 72 cm olsun; kalça çevresi 98 cm olmasın")
         XCTAssertEqual(entered, original.measurements)
     }
+    func testModelSuggestionAcceptsOnlyExplicitCompletePhrases() {
+        func draft(_ text: String, notes: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        let examples: [(String, ExperimentalDesignBrief.DressStyle)] = [
+            ("DÜZ ELBİSE", .straight), ("A kesim elbise istiyorum", .aline), ("Anvelop elbise olsun", .wrap),
+            ("GÖMLEK ELBİSE", .shirt), ("Balenli korpus", .corset), ("Minimal kılıf", .sheath)
+        ]
+        for (text, expected) in examples { XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft(text)), expected) }
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("", notes: "anvelop elbise")), .wrap)
+        for text in ["anvelop elbise değil", "düz elbise mi?", "‘anvelop elbise’", "anvelop elbise veya düz elbise", "anvelop elbiseli", "düz", "anvelop elbise istemiyorum", "belki anvelop elbise", "anvelop elbise. düz olmasın"] {
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
+        }
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("anvelop elbise", notes: "düz elbise değil")))
+    }
+    func testModelSuggestionSnapshotAndPortableExports() throws {
+        let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
+        let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: "örnek.png")
+        let revision = UUID()
+        let proposal = ExperimentalDesignBrief.ModelSuggestion(draft: draft, suggested: .wrap, explicitSelection: false, importedPortable: true, revision: revision)
+        XCTAssertTrue(proposal.matches(draft, explicitSelection: false, importedPortable: true, revision: revision))
+        XCTAssertFalse(proposal.matches(draft, explicitSelection: true, importedPortable: true, revision: revision))
+        XCTAssertFalse(proposal.matches(draft, explicitSelection: false, importedPortable: false, revision: revision))
+        XCTAssertFalse(proposal.matches(draft, explicitSelection: false, importedPortable: true, revision: UUID()))
+        let changed = ExperimentalDesignBrief.Draft(style: .describe, description: draft.description, bust: "93 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: "örnek.png")
+        XCTAssertFalse(proposal.matches(changed, explicitSelection: false, importedPortable: true, revision: revision))
+        let changedPhoto = ExperimentalDesignBrief.Draft(style: .describe, description: draft.description, bust: draft.bust, waist: "", hips: "", length: "", otherMeasurements: "", image: Data([1]), imageName: "örnek.png")
+        XCTAssertFalse(proposal.matches(changedPhoto, explicitSelection: false, importedPortable: true, revision: revision))
+        let changedStyle = ExperimentalDesignBrief.Draft(style: .aline, description: draft.description, bust: draft.bust, waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: "örnek.png")
+        XCTAssertFalse(proposal.matches(changedStyle, explicitSelection: false, importedPortable: true, revision: revision))
+        let selected = ExperimentalDesignBrief.Draft(style: proposal.suggested, description: draft.description, bust: draft.bust, waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: draft.imageName)
+        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: selected.prompt, measurements: selected.measurements, image: selected.image, imageName: selected.imageName))
+        XCTAssertEqual(v1.style, .describe); XCTAssertEqual(v1.description, selected.prompt); XCTAssertEqual(v1.image, image)
+        let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(selected))
+        XCTAssertEqual(v2.style, .wrap); XCTAssertEqual(v2.description, draft.description); XCTAssertEqual(v2.measurements, selected.measurements); XCTAssertEqual(v2.image, image)
+    }
     func testPortableV2ModelRoundTripAndRejectsAmbiguity() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
         let original = ExperimentalDesignBrief.Draft(style: .aline, description: "İpek 👗", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "bel çevresi 72 cm olmasın", image: image, imageName: "örnek.png")

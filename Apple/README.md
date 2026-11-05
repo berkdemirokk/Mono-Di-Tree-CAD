@@ -1,5 +1,7 @@
 # Mono Di Tree CAD Apple kontur görüntüleyici — başlangıç
 
+Model adı önerisi yalnız tek bir alandaki sınırlı ve açık Türkçe ifadeleri tanır; kullanıcı onayı olmadan model seçmez. Metni anlamaya veya kalıp üretmeye çalışmaz. Bu yeni akış Xcode, simülatör ve gerçek cihazda henüz doğrulanmadı.
+
 Tasarım isteği V2 deneysel olarak seçilebilir; V1 kaydetme seçeneği korunur. V2 ayrı model kimliği saklar, ancak bu iPhone değişiklikleri Xcode, simülatör veya gerçek cihazda henüz denenmedi. Windows ile iki yönlü dosya ve görsel uyumluluğu doğrulanmış değildir; eski uygulama sürümleri V2 açamayabilir. V1'e aktarım model kimliğini ayrı korumaz. Dosya seçici mevcut hedefin üzerine yazmayı uygulama düzeyinde engellemez; yeni bir ad seçin.
 
 Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını gösterir. Eski JSON nesnesi ile 1–5 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını okur. Modeli telefonun kütüphanesine veya adı değiştirilmiş bir kopya olarak kaydedebilir. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
