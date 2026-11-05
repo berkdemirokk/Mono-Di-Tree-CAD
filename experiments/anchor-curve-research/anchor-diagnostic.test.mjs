@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import {inspectAnchor} from './anchor-diagnostic.mjs';
 const limits={thresholdMm:0.001,parameterWidth:1/4096,maxDepth:16,maxNodes:20000};
 const line=(id,a,b)=>({id,type:'line',from:a,to:b});
@@ -50,12 +51,29 @@ test('bounded edge count, coordinates, IDs and entire input are validated',()=>{
  assert.throws(()=>inspectAnchor({x:0,y:0},[one],{...limits,thresholdMm:1e13}));
 });
 test('optional existing synthetic seam fixture retains source identities', {skip:!process.env.ANCHOR_SYNTHETIC_FIXTURE},()=>{
- const fixture=JSON.parse(readFileSync(process.env.ANCHOR_SYNTHETIC_FIXTURE,'utf8'));
- const parts=Array.isArray(fixture.parts)?fixture.parts:[];
- assert.ok(parts.length>0);
+ const bytes=readFileSync(process.env.ANCHOR_SYNTHETIC_FIXTURE);
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),'8567578d27a0ed76d3518f86ad06e1c673a096739d23799e81ab4db069fa94f8');
+ const fixture=JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/,''));
+ const parts=fixture.parts;
+ assert.equal(parts.length,2);assert.equal(parts.reduce((n,p)=>n+p.edges.length,0),25);
+ assert.equal(parts.reduce((n,p)=>n+p.anchors.length,0),3);
+ assert.deepEqual(parts.map(p=>p.part),['breanna.front','breanna.back']);
+ const front=parts[0],back=parts[1];
+ const expected=[['breanna.front','bustNotch',[]],['breanna.front','armholePitch',['breanna.front/seam/op-10:to','breanna.front/seam/op-11:from']],['breanna.back','armholePitch',['breanna.back/seam/op-7:to','breanna.back/seam/op-8:from']]];
+ for(const [partId,name,ids] of expected) {
+   const part=parts.find(p=>p.part===partId),anchor=part.anchors.find(a=>a.name===name);
+   assert.ok(anchor);assert.deepEqual(anchor.endpointCandidates.map(x=>x.edgeId+':'+x.endpoint),ids);
+   for(const id of ids) {
+     const [edgeId,side]=id.split(':'),edge=part.edges.find(e=>e.id===edgeId);
+     assert.deepEqual(edge[side],anchor.anchor);
+   }
+ }
  for(const part of parts) for(const anchor of part.anchors??[]) {
    const r=inspectAnchor(anchor.anchor,part.edges,limits);
-   assert.equal(r.status,'unresolved');
+   assert.equal(r.status,'unresolved');assert.equal(r.maxDepth,limits.maxDepth);assert.equal(r.maxNodes,limits.maxNodes);
    assert.ok(r.candidates.every(c=>part.edges.some(e=>e.id===c.edgeId)));
+   for(const endpoint of anchor.endpointCandidates) {
+     assert.ok(r.candidates.some(c=>c.edgeId===endpoint.edgeId && (endpoint.endpoint==='from'?c.parameter[0]===0:c.parameter[1]===1)) || r.unresolved.some(u=>u.edgeId===endpoint.edgeId));
+   }
  }
 });

@@ -45,5 +45,5 @@ export function inspectAnchor(anchor, edges, {thresholdMm, parameterWidth, maxDe
     }
     if(edgeLimit)unresolved.push({edgeId:edge.id,reason:'budget_or_precision_limit'});
   }
-  return {status:'unresolved',purpose:'synthetic diagnostic candidates only; not certified, not a sewing or production decision',thresholdMm,parameterWidth,nodes,candidates,unresolved};
+  return {status:'unresolved',purpose:'synthetic diagnostic candidates only; not certified, not a sewing or production decision',thresholdMm,parameterWidth,maxDepth,maxNodes,nodes,candidates,unresolved};
 }

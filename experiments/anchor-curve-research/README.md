@@ -25,3 +25,7 @@ fixture integration. An optional test reads the existing synthetic edge evidence
 path from `ANCHOR_SYNTHETIC_FIXTURE`; it does not write the fixture. Future work
 should independently enclose binary64 arithmetic and separately
 review multiple minima, tangencies and sewing semantics before any CAD path.
+The optional check requires the known SHA-256 fixture, exactly two panels,
+25 edges and three anchors, and checks the recorded endpoint coordinates and
+candidate IDs; a different fixture fails rather than inheriting those claims.
+Each diagnostic result records the explicit depth and total node limits.
