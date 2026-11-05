@@ -125,7 +125,16 @@ internal sealed class DesignRequestWindow : Window
                     portableModelId=PortableModelIds[index];dirty=true;SetLastModel(button);
                     SetStatus("Model kimliği seçildi; tarif korunuyor. Model ile tarifin uyumunu kontrol edin.");return;
                 }
-                if(selectedModelText==template) { SetStatus("Bu model zaten seçili; mevcut tarif korundu.");return; }
+                if(selectedModelText==template)
+                {
+                    if(selectedModelFromLoaded)
+                    {
+                        selectedModelFromLoaded=false;dirty=true;SetLastModel(button);
+                        SetStatus("Model seçimi onaylandı; mevcut tarif korundu.");
+                    }
+                    else SetStatus("Bu model zaten seçili; mevcut tarif korundu.");
+                    return;
+                }
                 if(modelAmbiguous || selectedModelFromLoaded)
                 {
                     var warning=modelAmbiguous ? "Önceki model metni elle değiştirilmiş veya belirsiz. Yeni model fikri mevcut metne eklenir; önceki metin korunur ve çelişebilir. Devam edilsin mi?" :

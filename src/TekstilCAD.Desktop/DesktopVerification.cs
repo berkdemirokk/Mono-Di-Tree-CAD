@@ -10308,6 +10308,13 @@ internal static class DesktopVerification
             convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.CaptureForVerification().Version==2 && window.CaptureForVerification().ModelId is null,
                 "A V1 model template found in loaded text does not become an inferred V2 identity",checks);
+            window.LoadForVerification(new DesignRequest("Anvelop elbise; detaylar: ","",null));
+            card.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var confirmedChoice=window.CaptureForVerification();
+            convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var explicitConversion=window.CaptureForVerification();
+            Check(explicitConversion.Version==2 && explicitConversion.ModelId=="wrap" && explicitConversion.Prompt==confirmedChoice.Prompt,
+                "Explicitly choosing the V1 text-matched card carries its identity into V2 without rewriting text",checks);
             window.LoadForVerification(new DesignRequest("önce", "",null));
             window.ConfirmV2ConversionForVerification=_=> { window.PromptForVerification.Text="sonra";return true; };
             convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
