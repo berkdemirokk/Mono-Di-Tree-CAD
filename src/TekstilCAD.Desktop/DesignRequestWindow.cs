@@ -812,7 +812,8 @@ internal sealed class DesignRequestWindow : Window
         var modelName=modelIndex>=0 && modelIndex<modelCards.Count ? modelCards[modelIndex].Label :
             portableModelId is not null ? "Tanınmayan model: "+CadCanvas.CanvasPieceLabel(portableModelId) :
             modelCards.FirstOrDefault(c=>c.Template==selectedModelText).Label ?? "Seçilmedi";
-        var window=new PhotoObservationWindow(this,decoded.Bitmap,modelName,before.Prompt);
+        var window=new PhotoObservationWindow(this,decoded.Bitmap,modelName,before.Prompt,prompt.MaxLength,
+            ()=>!closed && !referenceLoadRunning && ModelUnchanged() && PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending));
         if(window.ShowDialog()!=true || window.Approved is not { } observations)return;
         if(closed || referenceLoadRunning || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; gözlem eklenmedi.");return; }
         try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi. Mevcut tarif ve seçili modelle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı. Model ve ölçü çıkarılmadı."); }
@@ -821,13 +822,18 @@ internal sealed class DesignRequestWindow : Window
     internal static string AppendPhotoObservations(string original,IReadOnlyList<string> observations,int maxLength)
     {
         if(observations.Count==0)throw new ArgumentException("Seçili gözlem yok.");
+        var additions=new List<string>();
         foreach(var line in observations)
         {
             int separator=line.IndexOf(':');if(separator<0)throw new ArgumentException("Gözlem geçersiz.");
             string prefix=line[..(separator+1)];
-            if(original.Split(['\r','\n'],StringSplitOptions.RemoveEmptyEntries).Any(x=>x.Trim().StartsWith(prefix,StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Bu özellik için önceki fotoğraf gözlemi var; çelişki veya tekrar eklenmedi.");
+            var existing=original.Split(['\r','\n'],StringSplitOptions.RemoveEmptyEntries).Concat(additions)
+                .Select(x=>x.Trim()).Where(x=>x.StartsWith(prefix,StringComparison.OrdinalIgnoreCase)).ToArray();
+            if(existing.Any(x=>!string.Equals(x,line,StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Bu özellik için farklı bir fotoğraf gözlemi var; mevcut tarif değiştirilmedi. Seçiminizi veya önceki gözlemi kontrol edin.");
+            if(existing.Length==0)additions.Add(line);
         }
-        var result=original+(original.Length==0 || original.EndsWith('\n') ? "" : "\n")+string.Join("\n",observations);
+        if(additions.Count==0)return original;
+        var result=original+(original.Length==0 || original.EndsWith('\n') ? "" : "\n")+string.Join("\n",additions);
         if(result.Length>maxLength)throw new ArgumentException("Tarif sınırı aşılır; gözlemler eklenmedi.");return result;
     }
     internal static bool PhotoObservationSnapshotMatches(DesignRequest before,DesignRequest current,long expectedRevision,long currentRevision,string expectedChat,string currentChat,bool originalDirty,bool currentDirty,bool pending) =>

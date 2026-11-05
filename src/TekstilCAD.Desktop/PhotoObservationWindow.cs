@@ -18,8 +18,12 @@ internal sealed class PhotoObservationWindow : Window
     internal ScrollViewer ControlsForVerification { get; private set; }=null!;
     internal Image PhotoForVerification { get; private set; }=null!;
     internal IReadOnlyList<string>? Approved { get; private set; }
-    internal PhotoObservationWindow(Window owner,BitmapSource image,string model,string descriptionText)
+    private readonly string originalDescription;
+    private readonly int maximumDescriptionLength;
+    private readonly Func<bool>? sourceCurrent;
+    internal PhotoObservationWindow(Window owner,BitmapSource image,string model,string descriptionText,int maxLength=TekstilCAD.FileFormats.DesignRequestStorage.MaximumTextLength,Func<bool>? isSourceCurrent=null)
     {
+        originalDescription=descriptionText;maximumDescriptionLength=maxLength;sourceCurrent=isSourceCurrent;
         Owner=owner;Title="Fotoğrafa bakarak özellikleri belirt";Width=850;Height=650;MinWidth=500;MinHeight=450;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Gözlemleri mevcut tarif ve seçili modelle kendiniz karşılaştırın; serbest tarifle çelişkiler otomatik bulunmaz. Bunlar kullanıcı gözlemidir; otomatik analiz, ölçü veya kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
@@ -30,8 +34,23 @@ internal sealed class PhotoObservationWindow : Window
         void Field(string label,ComboBox box) { panel.Children.Add(new TextBlock { Text=label,Margin=new Thickness(0,6,0,3) });AutomationProperties.SetName(box,label);panel.Children.Add(box); }
         Field("Siluet",Silhouette);Field("Kol",Sleeve);Field("Yaka",Neck);panel.Children.Add(Confirm);
         var apply=new Button { Content="Seçilen gözlemleri tarife ekle",Padding=new Thickness(8) };panel.Children.Add(apply);panel.Children.Add(Status);
-        apply.Click+=(_,_)=> { var observations=Build(Silhouette.SelectedIndex,Sleeve.SelectedIndex,Neck.SelectedIndex);if(observations.Count==0) { Status.Text="En az bir görünür özellik seçin.";return; }if(Confirm.IsChecked!=true) { Status.Text="Gözlemlerin size ait olduğunu onaylayın.";return; }Approved=observations;DialogResult=true; };
+        apply.Click+=(_,_)=> { if(TryApprove())DialogResult=true; };
         var photo=new Image { Source=image,Stretch=Stretch.Uniform };PhotoForVerification=photo;AutomationProperties.SetName(photo,"Referans fotoğrafı; otomatik yorumlanmaz");root.Children.Add(photo);
+    }
+    internal bool TryApprove()
+    {
+        Approved=null;
+        var observations=Build(Silhouette.SelectedIndex,Sleeve.SelectedIndex,Neck.SelectedIndex);
+        if(observations.Count==0) { Status.Text="En az bir görünür özellik seçin.";return false; }
+        if(Confirm.IsChecked!=true) { Status.Text="Gözlemlerin size ait olduğunu onaylayın.";return false; }
+        if(sourceCurrent?.Invoke()==false) { Status.Text="İstek veya görsel değişti; seçimleriniz korunuyor. Güncel isteği kontrol etmek için bu pencereyi kapatıp yeniden açın.";return false; }
+        try
+        {
+            var result=DesignRequestWindow.AppendPhotoObservations(originalDescription,observations,maximumDescriptionLength);
+            if(result==originalDescription) { Status.Text="Seçilen gözlemlerin tamamı tarifte zaten var; tekrar eklenmedi. Yeni bir özellik seçebilir veya pencereyi kapatabilirsiniz.";return false; }
+        }
+        catch(ArgumentException ex) { Status.Text=ex.Message;return false; }
+        Approved=observations;return true;
     }
     internal static IReadOnlyList<string> Build(int silhouette,int sleeve,int neck)
     {

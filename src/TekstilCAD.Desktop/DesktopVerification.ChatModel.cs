@@ -24,7 +24,7 @@ internal static partial class DesktopVerification
             var observationText=DesignRequestWindow.AppendPhotoObservations("Önceki tarif",manualObservations,1000);
             Check(observationText.StartsWith("Önceki tarif\n",StringComparison.Ordinal) && observationText.Contains("Fotoğraf gözlemi · Kol: Uzun kollu"),"Photo observations append without replacing existing prose",checks);
             bool conflictRejected=false;try { _=DesignRequestWindow.AppendPhotoObservations(observationText,PhotoObservationWindow.Build(0,1,0),1000); } catch(ArgumentException) { conflictRejected=true; }
-            Check(conflictRejected,"Repeated or conflicting labeled photo observation is rejected",checks);
+            Check(conflictRejected,"Conflicting labeled photo observation is rejected",checks);
             var contradiction=DesignRequestWindow.AppendPhotoObservations("Uzun kollu elbise",PhotoObservationWindow.Build(0,1,0),1000);
             Check(contradiction.StartsWith("Uzun kollu elbise",StringComparison.Ordinal) && contradiction.Contains("Kol: Kolsuz"),"Free-form prose is preserved when a manual observation may contradict it",checks);
             var photoSnapshot=new DesignRequest("tarif","bel 72 cm",new DesignReference("a.png","image/png",[1,2]),"aline",2);
@@ -35,6 +35,7 @@ internal static partial class DesktopVerification
                 "Photo observation snapshot rejects changed bytes, revision or pending selection",checks);
             var observationBitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);observationBitmap.Freeze();
             _=new WindowInteropHelper(window).EnsureHandle();
+            VerifyRepeatedPhotoObservations(window,observationBitmap,checks);
             var observationWindow=new PhotoObservationWindow(window,observationBitmap,"aline","Uzun kollu elbise\n"+new string('x',1500));
             try
             {
