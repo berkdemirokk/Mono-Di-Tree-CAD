@@ -73,6 +73,43 @@ final class ViewerUITests: XCTestCase {
         guard reveal(first) else { return XCTFail("İlk ölçüye dönüş görünmedi") }
         XCTAssertTrue((first.value as? String ?? "").contains("12"))
     }
+    func testMeasurementErrorReturnsToRelevantGroupWithoutChangingEntry() {
+        let app = XCUIApplication(); app.launch()
+        func reveal(_ element: XCUIElement) -> Bool {
+            guard element.waitForExistence(timeout: 5) else { return false }
+            for _ in 0..<8 { if element.isHittable { return true }; app.swipeUp() }
+            for _ in 0..<8 { if element.isHittable { return true }; app.swipeDown() }
+            return element.isHittable
+        }
+        let open = app.buttons["Elbise isteği oluştur"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15)); open.tap()
+        let restore = app.buttons["Taslağı geri yükle"]
+        if restore.waitForExistence(timeout: 2) { restore.tap() }
+        let measurements = app.buttons["Ölçülere geç"]
+        guard reveal(measurements) else { return XCTFail("Ölçü adımı görünmedi") }; measurements.tap()
+        let form = app.buttons["15 beden ölçüsünü gir…"]
+        guard reveal(form) else { return XCTFail("Ölçü formu görünmedi") }; form.tap()
+        let resume = app.buttons["Formu geri yükle"]
+        if resume.waitForExistence(timeout: 2) { resume.tap() }
+        let field = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", "üst kol çevresi,")).firstMatch
+        guard reveal(field) else { return XCTFail("İlk alan görünmedi") }; field.tap()
+        if let old = field.value as? String, old != "Bilinmiyorsa boş bırakın", !old.isEmpty {
+            field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+        }
+        field.typeText("0")
+        let hide = app.buttons["Klavyeyi kapat"]; if hide.waitForExistence(timeout: 3) { hide.tap() }
+        let next = app.buttons["Sonraki ölçüler"]
+        guard reveal(next) else { return XCTFail("İkinci adım görünmedi") }; next.tap()
+        guard reveal(next) else { return XCTFail("Üçüncü adım görünmedi") }; next.tap()
+        let review = app.buttons["Girilenleri gözden geçir ve ekle"]
+        guard reveal(review) else { return XCTFail("Ölçü onayı görünmedi") }; review.tap()
+        let add = app.buttons["Ölçüleri ekle"]
+        XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
+        let jump = app.buttons["İlgili ölçü adımına git"]
+        XCTAssertTrue(jump.waitForExistence(timeout: 5)); jump.tap()
+        guard reveal(field) else { return XCTFail("Hatalı alan adımı açılmadı") }
+        XCTAssertEqual(field.value as? String, "0")
+    }
     func testDressBriefModelAndMeasurementNavigation() {
         let app = XCUIApplication()
         app.launch()

@@ -270,6 +270,13 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(BodyMeasurementNotes.fields[index].angle, item.2, "Birim türü \(index)")
         }
     }
+    func testMeasurementFieldGroupLookupCoversEachFieldWithoutGuessing() {
+        for (groupIndex, group) in BodyMeasurementNotes.groups.enumerated() {
+            for field in group.indices { XCTAssertEqual(BodyMeasurementNotes.groupIndex(forField: field), groupIndex) }
+        }
+        XCTAssertNil(BodyMeasurementNotes.groupIndex(forField: -1))
+        XCTAssertNil(BodyMeasurementNotes.groupIndex(forField: BodyMeasurementNotes.fields.count))
+    }
     func testMeasurementGroupsCoverFieldsAndReportUnfinishedValues() throws {
         let indices = BodyMeasurementNotes.groups.flatMap { Array($0.indices) }
         XCTAssertEqual(indices, Array(BodyMeasurementNotes.fields.indices))

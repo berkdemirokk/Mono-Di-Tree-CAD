@@ -59,6 +59,9 @@ enum BodyMeasurementNotes {
         .init(title: "Gövde ve bel", indices: 5..<10),
         .init(title: "Boyun, omuz ve kol", indices: 10..<15)
     ]
+    static func groupIndex(forField index: Int) -> Int? {
+        groups.firstIndex { $0.indices.contains(index) }
+    }
     static func missingIndices(_ values: [String]) -> [Int] {
         fields.indices.filter { $0 >= values.count || values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
@@ -190,7 +193,12 @@ struct BodyMeasurementNotesView: View {
     @State private var revision = UUID()
     @State private var unitChange: BodyMeasurementNotes.UnitChange?
     @State private var confirmUnit = false
-    @State private var status = ""
+    @State private var statusText = ""
+    @State private var statusFieldIndex: Int?
+    private var status: String {
+        get { statusText }
+        nonmutating set { statusText = newValue; statusFieldIndex = nil }
+    }
     @State private var confirm = false
     @State private var pendingAddition: BodyMeasurementNotes.AdditionReview?
     @State private var discard = false
@@ -230,9 +238,10 @@ struct BodyMeasurementNotesView: View {
                         let field = BodyMeasurementNotes.fields[index]
                         VStack(alignment: .leading) {
                             Text("\(field.label) (\(field.angle ? "derece" : unit))")
+                            if statusFieldIndex == index { Text("Bu alanı kontrol edin").font(.caption.weight(.semibold)).foregroundStyle(.red) }
                             Text(BodyMeasurementNotes.instructions[index]).font(.caption).foregroundStyle(.secondary)
                             TextField("Bilinmiyorsa boş bırakın", text: Binding(get: { values[index] }, set: { value in
-                                if values[index] != value { values[index] = value; revision = UUID() }
+                                if values[index] != value { values[index] = value; revision = UUID(); if statusFieldIndex == index { status = "" } }
                             }))
                                 .measurementKeyboard(isAngle: field.angle)
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
@@ -270,7 +279,18 @@ struct BodyMeasurementNotesView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 6) {
-                    if !status.isEmpty { Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status) }
+                    if !status.isEmpty {
+                        Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status)
+                        if let index = statusFieldIndex, let group = BodyMeasurementNotes.groupIndex(forField: index) {
+                            Button("İlgili ölçü adımına git") {
+                                focusedIndex = nil
+                                if groupIndex == group { proxy.scrollTo("measurement-group-heading", anchor: .top) }
+                                else { groupIndex = group }
+                            }
+                            .frame(minHeight: 44)
+                            .accessibilityHint(BodyMeasurementNotes.fields[index].label + " alanının bulunduğu adımı açar.")
+                        }
+                    }
                     ViewThatFits(in: .horizontal) {
                         HStack(spacing: 16) { groupActions }.fixedSize(horizontal: true, vertical: false)
                         VStack(spacing: 4) { groupActions }
@@ -348,6 +368,13 @@ struct BodyMeasurementNotesView: View {
             }
         }
     }
+    private func showFieldIssue(_ label: String, _ text: String) {
+        status = text
+        statusFieldIndex = BodyMeasurementNotes.fields.firstIndex { $0.label == label }
+        #if os(iOS)
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #endif
+    }
     private func requestUnit(_ target: String) {
         guard target != unit else { return }
         focusedIndex = nil
@@ -358,7 +385,7 @@ struct BodyMeasurementNotesView: View {
             unitChange = .init(before: before, after: after, revision: revision, notes: notes, existingNotes: measurementsWithNotes(notes))
             confirmUnit = true
         } catch BodyMeasurementNotes.ValidationError.invalid(let label) {
-            status = "\(label) belirsiz veya geçersiz; birim değiştirilmedi. Alanı kontrol edin."
+            showFieldIssue(label, "\(label) belirsiz veya geçersiz; birim değiştirilmedi. Alanı kontrol edin.")
         } catch { status = "Birim dönüştürülemedi; girişler korundu." }
     }
     private func rememberForm() {
@@ -380,10 +407,10 @@ struct BodyMeasurementNotesView: View {
             }
             readyToSaveForm = false; pendingAddition = nil; notes = updated; savedForm = nil; dismiss()
         } catch BodyMeasurementNotes.ValidationError.empty { status = "En az bir ölçü girin." }
-        catch BodyMeasurementNotes.ValidationError.whitespace(let label) { status = "\(label) yalnız boşluk içeriyor. Alanı inceleyin veya onayla temizleyin." }
-        catch BodyMeasurementNotes.ValidationError.invalid(let label) { status = "\(label): Pozitif uzunluk veya -90 ile 90 arasında (uçlar hariç) omuz açısı girin." }
+        catch BodyMeasurementNotes.ValidationError.whitespace(let label) { showFieldIssue(label, "\(label) yalnız boşluk içeriyor. Alanı inceleyin veya onayla temizleyin.") }
+        catch BodyMeasurementNotes.ValidationError.invalid(let label) { showFieldIssue(label, "\(label): Pozitif uzunluk veya -90 ile 90 arasında (uçlar hariç) omuz açısı girin.") }
         catch BodyMeasurementNotes.ValidationError.ambiguous(let label) { ambiguousLabel = label; ambiguousConfirm = true }
-        catch BodyMeasurementNotes.ValidationError.duplicate(let label) { status = "\(label) önceki notlarda olabilir. Çelişkiyi çözmek için mevcut notları kontrol edin." }
+        catch BodyMeasurementNotes.ValidationError.duplicate(let label) { showFieldIssue(label, "\(label) önceki notlarda olabilir. Çelişkiyi çözmek için mevcut notları kontrol edin.") }
         catch { status = "Ölçüler eklenemedi; metin sınırını kontrol edin. Önceki notlar korundu." }
     }
 }
