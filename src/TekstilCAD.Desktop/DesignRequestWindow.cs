@@ -45,6 +45,7 @@ internal sealed class DesignRequestWindow : Window
     internal TextBox MeasurementsForVerification=>measurements;
     internal DesignRequest CaptureForVerification()=>Capture();
     internal void LoadForVerification(DesignRequest value)=>Apply(value);
+    internal void OpenPathForVerification(string path)=>OpenPath(path);
     internal bool DirtyForVerification=>dirty;
     internal TextBox ReviewForVerification=>measurementReview;
     internal TextBox ChatInputForVerification=>chatInput;
@@ -458,8 +459,13 @@ internal sealed class DesignRequestWindow : Window
         var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || beforeDirty!=dirty || closed) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
-        try { var loaded=DesignRequestStorage.Load(dialog.FileName,ReferencePhotoDecoder.ValidateV2);Apply(loaded);SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."+(loaded.Version==2 && loaded.ModelId is not null ? " Model kimliği ile serbest tarifin uyumunu kontrol edin." : "")); }
+        try { OpenPath(dialog.FileName); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
+    }
+    private void OpenPath(string path)
+    {
+        var loaded=DesignRequestStorage.Load(path,ReferencePhotoDecoder.ValidateV2);Apply(loaded);
+        SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."+(loaded.Version==2 && loaded.ModelId is not null ? " Model kimliği ile serbest tarifin uyumunu kontrol edin." : ""));
     }
     private void Save()
     {

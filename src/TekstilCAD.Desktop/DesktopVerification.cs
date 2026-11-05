@@ -10277,6 +10277,60 @@ internal static class DesktopVerification
 
     private static T AssertSingle<T>(IReadOnlyList<T> items) => items.Count==1 ? items[0] : throw new InvalidOperationException("Expected exactly one item.");
 
+    private static void VerifyPortableRequestV2(DesignRequestWindow window,List<string> checks)
+    {
+        var directory=Path.Combine(Path.GetTempPath(),"TekstilCAD-v2-verification-"+Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var bitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[] { 0,0,255,255, 0,255,0,255, 255,0,0,255, 255,255,255,255 },8);
+            var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var stream=new MemoryStream();encoder.Save(stream);var png=stream.ToArray();
+            var reference=new DesignReference("örnek.png","image/png",png);
+            var request=new DesignRequest("Özgün tarif", "bel 72 cm",reference,"aline",2);
+            var path=Path.Combine(directory,"roundtrip.tcad-request.json");
+            DesignRequestStorage.SaveNewV2(path,request,ReferencePhotoDecoder.ValidateV2);
+            window.OpenPathForVerification(path);
+            var opened=window.CaptureForVerification();
+            Check(opened.Version==2 && opened.ModelId=="aline" && opened.Prompt==request.Prompt && opened.Measurements==request.Measurements && opened.Reference!.Data.SequenceEqual(png),
+                "V2 file open retains model identity, text and original validated PNG bytes",checks);
+            var root=(FrameworkElement)window.Content;
+            var card=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
+            card.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var changed=window.CaptureForVerification();
+            Check(changed.ModelId=="wrap" && changed.Version==2 && changed.Prompt==request.Prompt,
+                "V2 model card changes identity without rewriting free text",checks);
+            var saved=Path.Combine(directory,"edited.tcad-request.json");
+            DesignRequestStorage.SaveNewV2(saved,changed,ReferencePhotoDecoder.ValidateV2);
+            window.OpenPathForVerification(saved);var reopened=window.CaptureForVerification();
+            Check(reopened.ModelId=="wrap" && reopened.Version==2 && reopened.Prompt==changed.Prompt && reopened.Reference!.Data.SequenceEqual(png),
+                "V2 edited request saves and opens with identity and PNG bytes",checks);
+
+            string UnsafeV2(byte[] data,string type)=>JsonSerializer.Serialize(new { format=DesignRequestStorage.Format,version=2,prompt="geçersiz görsel",measurements="",reference=new { name="x",mediaType=type,dataBase64=Convert.ToBase64String(data) },model=new { id="shirt" } });
+            // Syntactically bounded acTL chunk; the validator must reject it before relying on WIC frame count.
+            byte[] animationChunk=[0,0,0,8,97,99,84,76,0,0,0,1,0,0,0,0,0,0,0,0];
+            var apng=png[..8].Concat(animationChunk).Concat(png[8..]).ToArray();
+            var cases=new[] { (Name:"truncated PNG",Bytes:new byte[] {137,80,78,71,13,10,26,10},Type:"image/png"),
+                (Name:"truncated JPEG",Bytes:new byte[] {255,216,255},Type:"image/jpeg"), (Name:"PNG with acTL",Bytes:apng,Type:"image/png") };
+            foreach(var item in cases)
+            {
+                var invalidPath=Path.Combine(directory,Guid.NewGuid().ToString("N")+".tcad-request.json");
+                File.WriteAllText(invalidPath,UnsafeV2(item.Bytes,item.Type),new UTF8Encoding(false));
+                var rejected=false;
+                try { window.OpenPathForVerification(invalidPath); } catch(InvalidDataException) { rejected=true; }
+                var retained=window.CaptureForVerification();
+                Check(rejected && retained.Version==reopened.Version && retained.ModelId==reopened.ModelId && retained.Prompt==reopened.Prompt && retained.Reference!.Data.SequenceEqual(png),
+                    item.Name+" is rejected before replacing the open V2 request",checks);
+            }
+            var v1Path=Path.Combine(directory,"v1.tcad-request.json");
+            var v1=new DesignRequest("V1 özgün tarif","ölçü",null);
+            DesignRequestStorage.SaveNew(v1Path,v1);window.OpenPathForVerification(v1Path);var legacy=window.CaptureForVerification();
+            Check(legacy.Version==1 && legacy.ModelId is null && legacy.Prompt==v1.Prompt && legacy.Measurements==v1.Measurements,
+                "V1 request still opens without inventing a V2 identity",checks);
+        }
+        finally { Directory.Delete(directory,true); }
+    }
+
     private static void VerifyDesignRequest(MainWindow studio,string reportPath,List<string> checks)
     {
         var startupProbe=new Window();var startupLaunches=0;
@@ -10315,6 +10369,7 @@ internal static class DesktopVerification
                 FullyVisible(window.StatusViewportForVerification,blankRoot),
                 "Compact startup shows the first complete model and selection action while retaining visible feedback",checks);
             typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
+            VerifyPortableRequestV2(window,checks);
             var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
             window.LoadForVerification(new DesignRequest("göğüs çevresi 96,5 cm; bel çevresi 70 cm", "bel çevresi 720 mm; kalça çevresi 100 cm; elbise boyu 110 cm",null));
             var tiles=window.MeasurementTilesForVerification;
@@ -10727,6 +10782,7 @@ internal static class DesktopVerification
                         "JPEG fixture contains EXIF orientation "+orientation,checks);
                 }
                 var decoded=Task.Run(()=>ReferencePhotoDecoder.DecodeWithGeometry(jpegBytes)).GetAwaiter().GetResult();var result=decoded.Bitmap;
+                ReferencePhotoDecoder.ValidateV2(new DesignReference("fixture.jpg","image/jpeg",jpegBytes));
                 var expected=orientation==0 ? 1 : orientation;bool swap=expected>=5;
                 Check(result.IsFrozen && result.PixelWidth==(swap ? 48 : 64) && result.PixelHeight==(swap ? 64 : 48) &&
                     decoded.OrientedSourceWidth==(swap ? 48 : 64) && decoded.OrientedSourceHeight==(swap ? 64 : 48) &&
@@ -10741,6 +10797,10 @@ internal static class DesktopVerification
                 catch(InvalidDataException) { rejected=true; }
                 Check(rejected && invalidJpeg.SequenceEqual(savedBytes),
                     "Out-of-range JPEG EXIF orientation "+invalidOrientation+" is rejected without changing source bytes",checks);
+                rejected=false;
+                try { ReferencePhotoDecoder.ValidateV2(new DesignReference("x.jpg","image/jpeg",invalidJpeg)); }
+                catch(InvalidDataException) { rejected=true; }
+                Check(rejected && invalidJpeg.SequenceEqual(savedBytes),"V2 rejects out-of-range JPEG EXIF orientation "+invalidOrientation,checks);
             }
             var widePhoto=EncodePhoto(2000,10,false);var scaledPreview=Task.Run(()=>ReferencePhotoDecoder.Decode(widePhoto)).GetAwaiter().GetResult();
             Check(scaledPreview.PixelWidth==1024 && scaledPreview.PixelHeight>0 && scaledPreview.PixelHeight<=1024,
@@ -10753,6 +10813,9 @@ internal static class DesktopVerification
             var largePhoto=EncodePhoto(12001,1,false);var refused=false;
             try { _=Task.Run(()=>ReferencePhotoDecoder.Decode(largePhoto)).GetAwaiter().GetResult(); } catch(InvalidDataException) { refused=true; }
             Check(refused,"Oversized photo dimensions are rejected before preview",checks);
+            refused=false;
+            try { ReferencePhotoDecoder.ValidateV2(new DesignReference("large.png","image/png",largePhoto)); } catch(InvalidDataException) { refused=true; }
+            Check(refused,"V2 rejects a PNG wider than the 12000 pixel limit",checks);
             byte[] PngWithDeclaredDimensions(uint width,uint height)
             {
                 var png=EncodePhoto(1,1,false);
