@@ -3192,10 +3192,10 @@ private struct ExperimentalDesignBriefView: View {
             }
             .confirmationDialog("İstek dosyası biçimi", isPresented: $choosingRequestVersion, titleVisibility: .visible) {
                 Button("V1: Windows ile uyumlu kopya") { requestExportVersion = 1; prepareExport() }
-                Button("V2: model kimliğini koru") { requestExportVersion = 2; prepareExport() }
+                Button("V2: model kimliğini koru (deneysel)") { requestExportVersion = 2; prepareExport() }
                 Button("Vazgeç", role: .cancel) { }
             } message: {
-                Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar ancak mevcut Windows sürümü ve eski iPhone sürümleri V2 dosyasını açamaz. Model ile serbest tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Kaynak ve mevcut dosyaları korumak için yeni bir ad seçin. Bu ekranda mevcut hedefin üzerine yazılması uygulama tarafından engellenmez.")
+                Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar; eski sürümler açamayabilir. Windows ve iPhone arasında V2 uyumluluğu henüz doğrulanmadı. Model ile tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Mevcut dosyanın üzerine yazılması uygulama tarafından engellenmez.")
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }

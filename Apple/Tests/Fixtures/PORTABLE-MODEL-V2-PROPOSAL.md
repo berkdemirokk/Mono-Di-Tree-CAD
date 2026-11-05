@@ -1,17 +1,17 @@
 # Taşınabilir istek: model kimliği için v2 önerisi
 
-Durum: iPhone dalında deneysel v2 okuyucu/yazıcı uygulanmıştır; Xcode ve cihaz testi yapılmamıştır. Windows v2 okuyucusu uygulanmamıştır. Proje dosyası sürümleriyle ilgisi yoktur. Bu dosyadaki veriler sentetiktir.
+Durum: iPhone ve Windows kaynaklarında deneysel V2 okuyucu/yazıcı vardır. iPhone V2 için Xcode, simülatör ve cihaz testi ve iki yönlü uyumluluk doğrulaması yapılmamıştır. Aşağıdaki eski sürümlere ilişkin bulgular tarihsel kanıttır. Proje dosyası sürümleriyle ilgisi yoktur. Veriler sentetiktir.
 
 ## Mevcut davranış ve kanıt
 
 - iPhone v1 `prompt(style:description:)` seçili modeli `Seçilen elbise modeli: …` satırı olarak metne ekler. `portableDraft` v1 dosyasını açarken tüm prompt'u aynen açıklamaya alır, `.describe` kullanır; bu yüzden model kartı kimliği geri kazanılmaz. Yerel taslak biçimi ise model tercihini ayrı saklar.
-- iPhone v1 `portableDraft` üst düzey anahtarları tam eşleştirir. Windows `DesignRequestStorage` da `Fields` ile bilinmeyen veya tekrarlı anahtarları reddeder ve yalnız sürüm 1'i kabul eder. v1'e sessizce `model` eklemek eski okuyucuları kırar.
+- iPhone v1 `portableDraft` üst düzey anahtarları tam eşleştirir. Eski Windows `DesignRequestStorage` da `Fields` ile bilinmeyen veya tekrarlı anahtarları reddeder ve yalnız sürüm 1'i kabul eder. v1'e sessizce `model` eklemek eski okuyucuları kırar.
 - Windows `DesignRequestWindow.RecoverLoadedModelCandidate` yalnız kendi şablon metnini arar; eşleşme veya belirsizlik durumunda izlenen kart bilgisi değişir. İki uygulamanın şablonları özdeş olduğu varsayılmamalı; serbest metin seçimin güvenilir kimliği değildir. iPhone bilinen gömülü model satırlarında ayrı seçimle çakışmayı engeller; genel serbest metindeki her çelişki otomatik belirlenemez.
 - `proposal-v1-extra-model.json` ve `proposal-v2-model.json` sentetik örnekleri Windows kaynak commit `3f6a4e40cca709bd3a1bfb5e495a698f500d5e86` okuyucu koduyla .NET üzerinde denendi: ikisi de `InvalidDataException`, bilinmeyen alan nedeniyle reddedildi. Testte kullanılmayan dosya yazma bağımlılıkları stub'landı; Windows arayüzü ve iPhone çalıştırılmadı. `ios-complete-request.tcad-request.json` mevcut v1 için metin ve fotoğraf baytı örneğidir.
 
 ## Önerilen v2 sözleşmesi
 
-`format` aynı kalır; `version` 2 olur. `prompt`, `measurements` ve `reference` mevcut anlamlarını ve sınırlarını korur. Zorunlu `model` değeri ya `null` ya da yalnız sabit, sürümlü sözlükten bir `id` içeren nesnedir (örnek `{"id":"aline"}`). Önerilen tanımlar `wrap`, `aline`, `corset`, `sheath`, `straight`, `shirt`; kimlikler iki uygulama tarafından ortak kararlaştırılmadan yayınlanmaz. `null` model seçilmedi anlamına gelir. Model seçimi tek başına boş tarif ve görselsiz isteği geçerli kılmaz. Kullanıcının açıklaması `prompt` içinde aynen saklanır; v2'de uygulama tarafından türetilen model satırı prompt'a otomatik eklenmez. Bilinmeyen kimlik, eksik/tekrarlı/bilinmeyen alan ve geçersiz değer güvenle reddedilir; mevcut açık içerik değiştirilmez. Bu örnek Windows tarafından henüz desteklenmez; cihazlar arası uyumluluk doğrulanmamıştır.
+`format` aynı kalır; `version` 2 olur. `prompt`, `measurements` ve `reference` mevcut anlamlarını ve sınırlarını korur. Zorunlu `model` değeri ya `null` ya da yalnız sabit, sürümlü sözlükten bir `id` içeren nesnedir (örnek `{"id":"aline"}`). Önerilen tanımlar `wrap`, `aline`, `corset`, `sheath`, `straight`, `shirt`; kimlikler iki uygulama tarafından ortak kararlaştırılmadan yayınlanmaz. `null` model seçilmedi anlamına gelir. Model seçimi tek başına boş tarif ve görselsiz isteği geçerli kılmaz. Kullanıcının açıklaması `prompt` içinde aynen saklanır; v2'de uygulama tarafından türetilen model satırı prompt'a otomatik eklenmez. Bilinmeyen kimlik, eksik/tekrarlı/bilinmeyen alan ve geçersiz değer güvenle reddedilir; mevcut açık içerik değiştirilmez. Cihazlar arası uyumluluk doğrulanmamıştır.
 
 ## Geçiş ve uyuşmazlık
 

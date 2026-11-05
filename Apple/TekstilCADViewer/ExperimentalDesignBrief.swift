@@ -365,7 +365,10 @@ enum ExperimentalDesignBrief {
             guard length <= bytes.count - offset - 12 else { throw Error.invalidImage }
             let type = Array(bytes[(offset + 4)..<(offset + 8)])
             if type == [97, 99, 84, 76] { return true } // acTL
-            if type == [73, 69, 78, 68] { return false } // IEND
+            if type == [73, 69, 78, 68] {
+                guard length == 0, offset + 12 == bytes.count else { throw Error.invalidImage }
+                return false
+            } // IEND must end the file, matching the Windows V2 boundary.
             offset += length + 12
         }
         throw Error.invalidImage

@@ -512,6 +512,9 @@ final class DesignDraftStoreTests: XCTestCase {
         let plain = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
         XCTAssertFalse(try ExperimentalDesignBrief.v2PNGHasAnimationControl(plain))
         XCTAssertThrowsError(try ExperimentalDesignBrief.v2PNGHasAnimationControl(Data(plain.prefix(15))))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.v2PNGHasAnimationControl(plain + Data([0])))
+        let animationAfterEnd = Data([0,0,0,8,97,99,84,76,0,0,0,1,0,0,0,0,0,0,0,0])
+        XCTAssertThrowsError(try ExperimentalDesignBrief.v2PNGHasAnimationControl(plain + animationAfterEnd))
     }
     func testV2PhotoGeometryBoundaries() {
         XCTAssertTrue(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6000, height: 4000, frames: 1))
@@ -573,6 +576,9 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(presentation.isPresented(for: first.id))
         XCTAssertEqual(first.bytes, v1)
         XCTAssertEqual(first.draft, draft)
+        XCTAssertTrue(first.matchesCurrentDraft(draft))
+        let changed = ExperimentalDesignBrief.Draft(style: .aline, description: "Değişen tarif", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertFalse(first.matchesCurrentDraft(changed))
         presentation.begin(second.id)
         presentation.setPresented(false, for: first.id) // late callback cannot dismiss v2
         XCTAssertTrue(presentation.isPresented(for: second.id))
