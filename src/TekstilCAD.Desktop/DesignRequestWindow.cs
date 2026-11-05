@@ -22,6 +22,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=48,MaxHeight=100,Background=BackgroundColor,Foreground=Ink,Padding=new Thickness(10),MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly Button measurementShortcut=new() { Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
     private string? suggestedMeasurement;
+    internal TextBlock NextStepForVerification { get; }=new() { Foreground=Ink,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center };
     internal StackPanel ALineSourceRecoveryForVerification { get; }=new() { Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,8) };
     internal Button EditALinePromptForVerification { get; }=new() { Content="Tarifteki ölçü ifadelerini düzenle",Margin=new Thickness(0,2,6,2) };
     internal Button EditALineNotesForVerification { get; }=new() { Content="Ölçü notlarını düzenle",Margin=new Thickness(0,2,0,2) };
@@ -269,6 +270,10 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetHelpText(measurementShortcut,"Sorulan ölçünün etiketini mesajın sonuna ekler; sayı veya birim seçmez. Mevcut metin korunur.");
         body.Children.Add(measurementShortcut);measurementShortcut.Click+=(_,_)=>InsertMeasurementLabel();
         AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");
+        var nextStepRow=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,4) };
+        var nextStepLabel=new TextBlock { Text="Sıradaki adım: ",Foreground=Accent,FontWeight=FontWeights.SemiBold,VerticalAlignment=VerticalAlignment.Center };
+        DockPanel.SetDock(nextStepLabel,Dock.Left);nextStepRow.Children.Add(nextStepLabel);nextStepRow.Children.Add(NextStepForVerification);primaryChat.Children.Add(nextStepRow);
+        AutomationProperties.SetName(NextStepForVerification,"Sıradaki adım");AutomationProperties.SetLiveSetting(NextStepForVerification,AutomationLiveSetting.Polite);
         var compose=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,6) };primaryChat.Children.Add(compose);
         var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
         SendActionForVerification=send;
@@ -651,7 +656,7 @@ internal sealed class DesignRequestWindow : Window
         RefreshALinePreviewEntry();
         DressMeasurementReview review;
         try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
-        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;foreach(var (key,tile) in measurementTiles) { tile.Text="Denetlenemedi";AutomationProperties.SetName(tile,key+": denetlenemedi"); } conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";return; }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { suggestedMeasurement=null;measurementShortcut.Visibility=Visibility.Collapsed;foreach(var (key,tile) in measurementTiles) { tile.Text="Denetlenemedi";AutomationProperties.SetName(tile,key+": denetlenemedi"); } conversation.Text="Ölçü denetimi zaman aşımına uğradı; istek korundu. İfadeleri kısaltıp tekrar deneyin.";SetNextStep(conversation.Text);return; }
         foreach(var (key,tile) in measurementTiles)
         {
             var found=review.Measurements.FirstOrDefault(m=>m.Label==key);
@@ -665,10 +670,14 @@ internal sealed class DesignRequestWindow : Window
         lines.Add("Yardımcı:");
         lines.Add("Model seçmek için ayrı mesaj yazabilirsiniz: A kesim elbise istiyorum. Desteklenenler: anvelop, A kesim, balenli korpus, kılıf elbise, düz elbise, gömlek elbise. Seçim için ayrıca onay sorulur; bu bir model fikridir, kalıp üretilmez.");
         if(review.Measurements.Count>0)lines.Add("Açıkça bulunanlar: "+string.Join(", ",review.Measurements.Select(m=>$"{m.Label}: {m.Millimeters.ToString(System.Globalization.CultureInfo.InvariantCulture)} mm"))+".");
-        if(CanPreviewALineForVerification)AppendALineQuestions(lines);
+        if(CanPreviewALineForVerification)
+        {
+            var aLineLines=new List<string>();AppendALineQuestions(aLineLines);lines.AddRange(aLineLines);
+            SetNextStep(aLineLines.Count>2 && ALineSourceRecoveryForVerification.Visibility==Visibility.Visible ? aLineLines[2] : aLineLines.Count>1 ? aLineLines[1] : aLineLines[0]);
+        }
         else if(review.Questions.Count>0)
         {
-            var question=review.Questions[0];
+            var question=review.Questions[0];SetNextStep(question);
             var example=question.StartsWith("göğüs çevresi",StringComparison.Ordinal) ? "göğüs çevresi 96 cm" :
                 question.StartsWith("bel çevresi",StringComparison.Ordinal) ? "bel çevresi 72 cm" :
                 question.StartsWith("kalça çevresi",StringComparison.Ordinal) ? "kalça çevresi 100 cm" :
@@ -676,11 +685,12 @@ internal sealed class DesignRequestWindow : Window
             lines.Add(question+" Örnek: "+example+".");
             if(question.Contains("çelişiyor",StringComparison.Ordinal))lines.Add("Çelişen önceki ifadeyi yukarıdaki tarif veya ölçü alanında düzeltin.");
         }
-        else lines.Add("Temel ölçüler açıkça yazıldı. Ölçülerin niteliğini ve model ayrıntılarını kontrol edin.");
+        else { const string complete="Temel ölçüler açıkça yazıldı. Ölçülerin niteliğini ve model ayrıntılarını kontrol edin.";lines.Add(complete);SetNextStep(complete); }
         if(review.Unrecognized.Count>0)lines.Add("Diğer ifadeler ölçü olarak yorumlanmadı; açıklamanız aynen korundu.");
         lines.Add("Bu aşamada kalıp veya plotter çıktısı oluşturulmaz.");
         conversation.Text=string.Join(Environment.NewLine,lines);conversation.ScrollToEnd();
     }
+    private void SetNextStep(string text) { NextStepForVerification.Text=text;NextStepForVerification.ToolTip=text;AutomationProperties.SetHelpText(NextStepForVerification,text); }
     private void AppendALineQuestions(List<string> lines)
     {
         suggestedMeasurement=null;

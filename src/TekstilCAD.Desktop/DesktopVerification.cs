@@ -11723,6 +11723,8 @@ internal static partial class DesktopVerification
                     AutomationProperties.GetName(window.ChatInputForVerification)=="Elbise isteği veya ölçü mesajı" && window.SendActionForVerification!.Focusable,
                     "Collapsible request editor and primary composer retain accessible names and keyboard action at "+size,checks);
                 window.BodyScrollerForVerification.ScrollToTop();themeRoot.UpdateLayout();
+                Check(FullyVisible(window.NextStepForVerification,themeRoot) && window.ConversationForVerification.Text.Contains(window.NextStepForVerification.Text) && AutomationProperties.GetHelpText(window.NextStepForVerification)==window.NextStepForVerification.Text,
+                    "Fixed next step is visible and matches the current conversation at "+size,checks);
                 Check(FullyVisible(window.ChatInputForVerification,themeRoot) && FullyVisible(window.SendActionForVerification!,themeRoot) && FullyVisible(window.ReferenceShortcutForVerification!,themeRoot),
                     "Chat, Send and reference action are fully visible without BringIntoView with details closed at "+size,checks);
                 details.IsExpanded=true;themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
