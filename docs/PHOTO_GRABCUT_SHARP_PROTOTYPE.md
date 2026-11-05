@@ -91,3 +91,5 @@ Aynı deneyde her maskenin en çok noktalı dış konturu, hem ham hem azaltılm
 
 
 Aynı dikdörtgen için yeniden bölge arama, mevcut bölge ve uygulanmış düzeltmelerin başarılı sonuçta değişeceğini bildirir. Onaydan sonra hesap çalışırken eski maske, seçim ve geri alma durumu korunur; hesap başarısız olursa kullanılabilir kalır. Yeni dikdörtgenin kullanıcı tarafından onaylanması ise eski bölgeyi geçersizleştirir. Bu koruma bölgenin fotoğraftaki giysiye veya üretim kalıbına doğruluğunu kanıtlamaz.
+
+Başarılı yeniden aramadan sonra önceki maske ve uygulanmış işaretler, Düzeltmeyi geri al ile bir kez geri yüklenebilir. Bu işlem daha eski tek adımlık geri alma kaydının yerini alır; bölge yeniden seçilir.

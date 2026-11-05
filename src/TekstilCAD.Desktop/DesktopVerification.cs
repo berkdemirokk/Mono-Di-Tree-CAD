@@ -9821,6 +9821,17 @@ internal static partial class DesktopVerification
                 Check(regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(maskBeforeCorrection) &&
                       regionDialog.Regions.SelectedIndex==-1 && regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.AppliedMarkForVerification(40,30)==0 &&
                       !regionDialog.UndoRefinement(),"Region refinement undo restores exact previous mask and applied marks once",checks);
+                regionDialog.MarkMode.SelectedIndex=1;
+                Check(regionDialog.TryAddMark(3,3),"A photo mark can be added before recomputation",checks);
+                var correctionForRecompute=regionDialog.RefineAsync();PumpUntil(()=>correctionForRecompute.IsCompleted);correctionForRecompute.GetAwaiter().GetResult();
+                var savedBeforeRecompute=regionDialog.CopyMaskForVerification()!;
+                Check(regionDialog.AppliedMarkForVerification(3,3)==1,"Recomputation test starts with an applied correction",checks);
+                var successfulRecompute=regionDialog.ComputeAsync();PumpUntil(()=>successfulRecompute.IsCompleted);successfulRecompute.GetAwaiter().GetResult();
+                Check(regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.Status.Text.Contains("geri yüklenebilir"),
+                      "Successful recomputation replaces corrections while retaining an undo",checks);
+                Check(regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(savedBeforeRecompute) &&
+                      regionDialog.AppliedMarkForVerification(3,3)==1 && !regionDialog.UndoRefinement(),
+                      "Undo after recomputation restores exact mask and applied marks once",checks);
                 Check(regionDialog.TryAddMark(5,5),"Region mark can follow refinement undo",checks);
                 using(var enteredCompletion=new ManualResetEventSlim())using(var releaseCompletion=new ManualResetEventSlim())
                 {

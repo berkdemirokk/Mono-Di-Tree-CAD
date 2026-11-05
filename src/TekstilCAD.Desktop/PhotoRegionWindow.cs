@@ -96,7 +96,7 @@ internal sealed class PhotoRegionWindow : Window
         AutomationProperties.SetName(MarkX,"Seçim veya düzeltme X piksel");AutomationProperties.SetName(MarkY,"Seçim veya düzeltme Y piksel");AutomationProperties.SetName(MarkMode,"Dikdörtgen, düzeltme veya bölge seçimi");AutomationProperties.SetName(BrushSize,"Düzeltme fırçası çapı piksel");
         var options=new WrapPanel();options.Children.Add(OmitHoles);
         var undoRefinement=new Button { Content="Düzeltmeyi geri al",Padding=new Thickness(8,3,8,3),Margin=new Thickness(8,0,0,2) };
-        AutomationProperties.SetHelpText(undoRefinement,"Son uygulanmış bölge düzeltmesini geri alır; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
+        AutomationProperties.SetHelpText(undoRefinement,"Son başarılı düzeltme veya yeniden aramadan önceki bölgeyi bir kez geri yükler; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
         undoRefinement.Click+=(_,_)=>UndoRefinement();options.Children.Add(undoRefinement);options.Children.Add(ShowAppliedMarks);controls.Children.Add(options);controls.Children.Add(Status);
         AutomationProperties.SetHelpText(ShowAppliedMarks,"Önceki düzeltmelerde uygulanan işaretleri soluk, bekleyen işaretleri parlak gösterir; maskeyi değiştirmez.");
         ShowAppliedMarks.Checked+=(_,_)=>UpdateMarksOverlay();ShowAppliedMarks.Unchecked+=(_,_)=>UpdateMarksOverlay();
@@ -213,7 +213,7 @@ internal sealed class PhotoRegionWindow : Window
         if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) || !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
            !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) || !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h))
         { Status.Text="Dikdörtgen için tam sayı piksel değerleri girin.";return; }
-        if(snapshot is not null && !ConfirmDiscard(ConfirmRectangleChangeForVerification,"Yeni arama başarılı olursa mevcut bölge ve uygulanmış düzeltmeler değiştirilir. Devam edilsin mi?","Bölgeyi yeniden ara")) { Status.Text="Yeniden arama iptal edildi; mevcut bölge korundu.";return; }
+        if(snapshot is not null && !ConfirmDiscard(ConfirmRectangleChangeForVerification,"Yeni arama başarılı olursa mevcut bölge ve uygulanmış düzeltmeler değiştirilir. Önceki bölge bir kez geri alınabilir; eski geri alma adımı yenilenir. Devam edilsin mi?","Bölgeyi yeniden ara")) { Status.Text="Yeniden arama iptal edildi; mevcut bölge korundu.";return; }
         var revision=regionRevision;var cts=new CancellationTokenSource();running=cts;Status.Text="Bölge aranıyor; önceki bölge işlem bitene kadar korunur.";
         try
         {
@@ -226,8 +226,9 @@ internal sealed class PhotoRegionWindow : Window
             },cts.Token);
             cts.Token.ThrowIfCancellationRequested();if(closed || revision!=regionRevision)return;
             if(result.Components.Components.Count>512) { Status.Text=$"{result.Components.Components.Count} bölge bulundu; seçim listesi sınırı aşıldı. Önceki bölge korundu.";return; }
-            undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;appliedMarks=null;pendingUndo=null;marksOverlay.Source=null;
+            undoSnapshot=snapshot;undoComponents=components;undoAppliedMarks=appliedMarks;appliedMarks=null;pendingUndo=null;marksOverlay.Source=null;
             sourceBgr=result.Bgr;snapshot=result.Snapshot;ShowComponents(result.Components);
+            if(undoSnapshot is not null)Status.Text+=" Önceki bölge Düzeltmeyi geri al ile geri yüklenebilir.";
         }
         catch(OperationCanceledException) { if(!closed && revision==regionRevision)Status.Text="Arama iptal edildi; önceki bölge korundu."; }
         catch(TypeInitializationException ex) when(ex.GetBaseException() is DllNotFoundException or BadImageFormatException)
@@ -376,7 +377,7 @@ internal sealed class PhotoRegionWindow : Window
         if(undoSnapshot is null || undoComponents is null)
         { Status.Text="Geri alınacak uygulanmış düzeltme yok.";return false; }
         snapshot=undoSnapshot;var restored=undoComponents;appliedMarks=undoAppliedMarks;undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;
-        UpdateMarksOverlay();ShowComponents(restored);Status.Text="Son düzeltme geri alındı; önceki bölgeyi yeniden seçin.";return true;
+        UpdateMarksOverlay();ShowComponents(restored);Status.Text="Önceki bölge geri yüklendi; bölgeyi yeniden seçin.";return true;
     }
     private void ShowSelection()
     {
