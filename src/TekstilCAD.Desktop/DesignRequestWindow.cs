@@ -22,6 +22,10 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=48,MaxHeight=100,Background=BackgroundColor,Foreground=Ink,Padding=new Thickness(10),MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly Button measurementShortcut=new() { Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
     private string? suggestedMeasurement;
+    private sealed record AnswerContext(string Prompt,string Measurements,string? Label,bool ALine,long ReferenceRevision,long QuestionRevision);
+    private long questionRevision;
+    private AnswerContext? answerContext;
+    private bool chatHadText;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
     private readonly TextBlock referenceSummary=new() { TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,FlowDirection=FlowDirection.LeftToRight,Margin=new Thickness(6,0,0,6) };
     private readonly TextBox measurementReview=new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
@@ -289,7 +293,14 @@ internal sealed class DesignRequestWindow : Window
         editBody.Children.Add(new TextBlock { Text="PNG/JPEG görsel seçilirken çizim için çözümlenebilirliği kontrol edilir; en fazla 8 MiB, 12.000 piksel ve 24 milyon piksel desteklenir. Bu sınırları aşan görsel otomatik küçültülmez. Tüm kaynak baytları ve metadata isteğe eklenir; görsel içeriği, ölçüler ve üretime uygunluk doğrulanmaz. Eski isteklerdeki görseller açılmadan doğrulanmamış olabilir.",TextWrapping=TextWrapping.Wrap,Foreground=Muted,Margin=new Thickness(0,10,0,0) });
         editBody.Children.Add(new TextBlock { Text="Model ve deneysel araçlar",Foreground=Ink,FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,14,0,4) });editBody.Children.Add(technicalBody);
 
-        prompt.TextChanged+=(_,_)=> { measurementReview.Clear();if(!changingModel)UpdateModelTracking();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
+        chatInput.TextChanged+=(_,_)=>
+        {
+            var hasText=chatInput.Text.Length>0;
+            if(hasText && !chatHadText)answerContext=new(prompt.Text,measurements.Text,suggestedMeasurement,CanPreviewALineForVerification,referenceRevision,questionRevision);
+            if(!hasText)answerContext=null;
+            chatHadText=hasText;
+        };
+        prompt.TextChanged+=(_,_)=> { questionRevision++;measurementReview.Clear();if(!changingModel)UpdateModelTracking();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { questionRevision++;measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=>closed=true;
     }
     private void FocusRequestEditor(TextBox editor)
     {
@@ -416,6 +427,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void SetLastModel(Button? selected)
     {
+        questionRevision++;
         foreach(var (button,caption,_,_) in modelCards)
         {
             var active=ReferenceEquals(button,selected);
@@ -427,6 +439,7 @@ internal sealed class DesignRequestWindow : Window
         }
         RefreshALinePreviewEntry();
         if(CanPreviewALineForVerification)bodyScroller.ScrollToTop();
+        RefreshConversation();
     }
     private void RefreshALinePreviewEntry()=>ALinePreviewEntryForVerification.Visibility=CanPreviewALineForVerification ? Visibility.Visible : Visibility.Collapsed;
     internal ALinePanelPreviewWindow? CreateALinePreview()
@@ -441,7 +454,26 @@ internal sealed class DesignRequestWindow : Window
         var message=chatInput.Text;
         if(string.IsNullOrWhiteSpace(message)) { SetStatus("Göndermek için bir mesaj yazın.");return; }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
-        var answerLabel=suggestedMeasurement is not null && System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)) ? suggestedMeasurement : null;
+        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var answerLabel=shortAnswer ? suggestedMeasurement : null;
+        if(shortAnswer && (CanPreviewALineForVerification || answerContext?.ALine==true))
+        {
+            try
+            {
+                var context=answerContext;
+                if(context is null || !context.ALine || !CanPreviewALineForVerification || context.Label is null || context.Label!=suggestedMeasurement ||
+                    context.Prompt!=prompt.Text || context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision || context.QuestionRevision!=questionRevision || referenceLoadRunning || referenceSelectionPending ||
+                    ALineRequestMeasurements.Review(prompt.Text,measurements.Text).Issues.Count>0)
+                    throw new ArgumentException("Soru veya kaynak değişti/belirsiz. Mesaj korunuyor; ölçüyü tam etiketi ve cm/mm birimiyle yazın.");
+                var candidate=ALineRequestMeasurements.Review(context.Label+": "+message,"");
+                var index=ALineRequestMeasurements.Labels.ToList().IndexOf(context.Label);
+                if(index<0 || candidate.Issues.Count>0 || candidate.Millimeters[index] is null)
+                    throw new ArgumentException("Bu alan için değer/birim açık değil veya sınır dışında. Sıfır yalnız bolluk alanlarında kabul edilir; mesaj korundu.");
+                answerLabel=context.Label;
+            }
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+            { SetStatus(ex.Message);return; }
+        }
         var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
@@ -519,6 +551,10 @@ internal sealed class DesignRequestWindow : Window
             var label=question[..question.IndexOf(':')];
             if(label is "göğüs çevresi" or "bel çevresi" or "kalça çevresi" or "elbise boyu" or "kol boyu")suggestedMeasurement=label;
         }
+        ShowMeasurementShortcut();
+    }
+    private void ShowMeasurementShortcut()
+    {
         measurementShortcut.Visibility=suggestedMeasurement is null ? Visibility.Collapsed : Visibility.Visible;
         if(suggestedMeasurement is not null)
         {
@@ -545,7 +581,8 @@ internal sealed class DesignRequestWindow : Window
         lines.Add("Yardımcı:");
         lines.Add("Model seçmek için ayrı mesaj yazabilirsiniz: A kesim elbise istiyorum. Desteklenenler: anvelop, A kesim, balenli korpus, kılıf elbise, düz elbise, gömlek elbise. Seçim için ayrıca onay sorulur; bu bir model fikridir, kalıp üretilmez.");
         if(review.Measurements.Count>0)lines.Add("Açıkça bulunanlar: "+string.Join(", ",review.Measurements.Select(m=>$"{m.Label}: {m.Millimeters.ToString(System.Globalization.CultureInfo.InvariantCulture)} mm"))+".");
-        if(review.Questions.Count>0)
+        if(CanPreviewALineForVerification)AppendALineQuestions(lines);
+        else if(review.Questions.Count>0)
         {
             var question=review.Questions[0];
             var example=question.StartsWith("göğüs çevresi",StringComparison.Ordinal) ? "göğüs çevresi 96 cm" :
@@ -559,6 +596,35 @@ internal sealed class DesignRequestWindow : Window
         if(review.Unrecognized.Count>0)lines.Add("Diğer ifadeler ölçü olarak yorumlanmadı; açıklamanız aynen korundu.");
         lines.Add("Bu aşamada kalıp veya plotter çıktısı oluşturulmaz.");
         conversation.Text=string.Join(Environment.NewLine,lines);conversation.ScrollToEnd();
+    }
+    private void AppendALineQuestions(List<string> lines)
+    {
+        suggestedMeasurement=null;
+        lines.Add("Deneysel A kesim bel-altı kesiti için 11 ayrı alan gerekir; tam elbise kalıbı değildir. Toplam çevreler ön/arka yaylara bölünmez; bolluk veya eksik ölçü türetilmez.");
+        try
+        {
+            var source=ALineRequestMeasurements.Review(prompt.Text,measurements.Text);
+            if(source.Issues.Count>0)
+            {
+                lines.Add("Önce kaynak ifadelerini düzeltin; belirsizlik/çelişki varken sıradaki alana geçilmiyor:");
+                lines.AddRange(source.Issues);return;
+            }
+            var missing=Enumerable.Range(0,source.Millimeters.Count).FirstOrDefault(i=>!source.Millimeters[i].HasValue,-1);
+            if(missing<0)
+            {
+                lines.Add("11 alan açıkça yazılmış. Bu, ölçü veya geometri onayı değildir. ‘Deneysel A kesim bel-altı kesitini incele…’ kısayolunda aktarım özetini, birimi ve simetri varsayımını ayrıca inceleyip onaylayın.");return;
+            }
+            suggestedMeasurement=ALineRequestMeasurements.Labels[missing];
+            lines.Add($"Sıradaki alan ({missing+1}/11): {suggestedMeasurement}. Kendi ölçünüzü cm veya mm ile yazın; örnekteki bir değeri varsaymayın.");
+            lines.Add(missing<4 ? "Yayı beden üzerinde amaçlanan yan dikiş konumları arasında ölçün; toplam çevre veya bolluk dahil giysi ölçüsü değildir."
+                : missing<8 ? "Bu alan yalnız ilgili yayın eklenecek bolluğudur. Sıfır istiyorsanız açıkça 0 cm veya 0 mm yazın; boş alan sıfır sayılmaz."
+                : missing==8 ? "Belden kalça hattına düşey mesafeyi yazın."
+                : missing==9 ? "Belden etek ucuna uzunluğu yazın; toplam elbise boyu yerine kullanılamaz."
+                : "Bitmiş giysinin tüm etek çevresini, bolluk dahil olarak yazın; kalça çevresinden türetilmez.");
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+        { suggestedMeasurement=null;lines.Add("A kesim sorusu hazırlanamadı; kaynak metin korundu. "+ex.Message); }
+        finally { ShowMeasurementShortcut(); }
     }
     private void ReviewMeasurements()
     {
@@ -669,7 +735,7 @@ internal sealed class DesignRequestWindow : Window
     internal async Task<bool> ChooseReferenceFileAsync(string path)
     {
         if(closed || referenceLoadRunning)return false;
-        var revision=referenceRevision;referenceLoadRunning=true;referenceSelectionPending=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
+        var revision=referenceRevision;questionRevision++;referenceLoadRunning=true;referenceSelectionPending=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
         try
         {
             var loader=ReferenceLoaderForVerification;

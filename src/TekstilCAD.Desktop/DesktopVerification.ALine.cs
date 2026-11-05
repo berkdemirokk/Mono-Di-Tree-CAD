@@ -224,6 +224,7 @@ internal static partial class DesktopVerification
             VerifyALineWorkDraft(owner,reportPath,checks);
             VerifyALineEarlyTotals(owner,checks);
             VerifyALineEntry(owner,checks);
+            VerifyALineChat(owner,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
         finally { request?.Close();conflict?.Close();window?.Close();owner.Close(); }
