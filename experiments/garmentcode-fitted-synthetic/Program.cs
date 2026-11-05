@@ -1,5 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
+using System.Numerics;
+using System.Globalization;
+using System.Text;
 
 if(args.Length!=1 || args[0]!="--verify") return 2;
 try
@@ -14,6 +18,21 @@ try
     using(var invalidLink=JsonDocument.Parse(badLink.ToJsonString())) { try { Validator.Check(invalidLink.RootElement); throw new Exception("Dangling stitch accepted"); } catch(InvalidDataException) { } }
     var badBody=JsonNode.Parse(content)!; badBody["cases"]![0]!["body_input_cm_degree"]!["waist"]=81;
     using(var invalidBody=JsonDocument.Parse(badBody.ToJsonString())) { try { Validator.Check(invalidBody.RootElement); throw new Exception("Changed body accepted"); } catch(InvalidDataException) { } }
+    var decimalCollision=JsonNode.Parse(content)!; decimalCollision["cases"]![0]!["body_input_cm_degree"]!["bust"]=100.0000000000000001m;
+    if((double)100.0000000000000001m!=100d) throw new Exception("collision fixture invalid");
+    using(var invalidDecimal=JsonDocument.Parse(decimalCollision.ToJsonString())) { try { Validator.Check(invalidDecimal.RootElement); throw new Exception("Rounded decimal body accepted"); } catch(InvalidDataException) { } }
+    // This JSON decimal is beyond System.Decimal precision and must not round to 100.
+    string tooPrecise=content.Replace("\"bust\": 100", "\"bust\": 1000000000000000000000000000001");
+    if(tooPrecise==content) throw new Exception("high precision fixture missing");
+    using(var invalidPrecision=JsonDocument.Parse(tooPrecise)) { try { Validator.Check(invalidPrecision.RootElement); throw new Exception("Overprecision body accepted"); } catch(InvalidDataException) { } }
+    void RejectSeam(JsonNode changed,string label) { using var invalid=JsonDocument.Parse(changed.ToJsonString()); try { Validator.Check(invalid.RootElement); throw new Exception(label+" accepted"); } catch(InvalidDataException) { } }
+    var wrongEdge=JsonNode.Parse(content)!; var edgeNode=wrongEdge["cases"]![0]!["stitches"]![0]!["a"]!["edges"]![0]!;
+    int original=edgeNode["edge"]!.GetValue<int>(); edgeNode["edge"]=original==0?1:0; RejectSeam(wrongEdge,"valid wrong edge");
+    var wrongPanel=JsonNode.Parse(content)!; var panelNode=wrongPanel["cases"]![0]!["stitches"]![0]!["a"]!["edges"]![0]!;
+    string panel=panelNode["panel"]!.GetValue<string>(); panelNode["panel"]=panel=="skirt_front"?"skirt_back":"skirt_front"; panelNode["edge"]=0; RejectSeam(wrongPanel,"valid wrong panel");
+    var wrongOrder=JsonNode.Parse(content)!; var ordered=wrongOrder["cases"]![0]!["stitches"]!.AsArray().First(r=>r!["a"]!["edges"]!.AsArray().Count>=2)!["a"]!["edges"]!.AsArray();
+    var first=ordered[0]!.DeepClone(); var second=ordered[1]!.DeepClone(); ordered[0]=second; ordered[1]=first; RejectSeam(wrongOrder,"reversed stitch order");
+    var wrongFlip=JsonNode.Parse(content)!; var flip=wrongFlip["cases"]![0]!["stitches"]![0]!["a"]!["edges"]![0]!; flip["flipped"]=!flip["flipped"]!.GetValue<bool>(); RejectSeam(wrongFlip,"wrong seam orientation");
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; production unresolved.");
     return 0;
 }
@@ -21,6 +40,31 @@ catch(Exception e) { Console.Error.WriteLine("FAIL: "+e.Message); return 1; }
 
 internal static class Validator
 {
+    // Compare the mathematical JSON number before any decimal or binary64 rounding.
+    // Expected values for this fixed fixture are integers; equivalent exponent
+    // and trailing-zero representations remain acceptable.
+    static bool ExactDecimalEqual(JsonElement value,decimal expected)
+    {
+        if(value.ValueKind!=JsonValueKind.Number || expected!=decimal.Truncate(expected)) return false;
+        string raw=value.GetRawText(); if(raw.Length>256) return false;
+        int expPos=raw.IndexOfAny(['e','E']); string mantissa=expPos<0?raw:raw[..expPos];
+        int exponent=0;
+        if(expPos>=0 && (!int.TryParse(raw[(expPos+1)..],NumberStyles.AllowLeadingSign,CultureInfo.InvariantCulture,out exponent) || Math.Abs((long)exponent)>256)) return false;
+        int dot=mantissa.IndexOf('.'); int fractional=dot<0?0:mantissa.Length-dot-1;
+        string digits=dot<0?mantissa:mantissa.Remove(dot,1);
+        if(!BigInteger.TryParse(digits,NumberStyles.AllowLeadingSign,CultureInfo.InvariantCulture,out var integer)) return false;
+        int power=exponent-fractional; var target=new BigInteger(expected);
+        return power>=0 ? integer*BigInteger.Pow(10,power)==target : integer==target*BigInteger.Pow(10,-power);
+    }
+    static void VerifySeams(string id,JsonElement actual)
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.expected-seams.json") ?? throw new InvalidDataException("Missing seam contract");
+        using var reader=new StreamReader(stream,Encoding.UTF8,true); string text=reader.ReadToEnd().Trim();
+        string hash=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)));
+        Need(hash=="2C415A46FB25441142BCC7F0EF078CE227F9B9075F86ACD262D436CFC1F25976","seam contract hash mismatch");
+        var expected=JsonNode.Parse(text)?[id] ?? throw new InvalidDataException("Missing seam contract case");
+        Need(JsonNode.DeepEquals(expected,JsonNode.Parse(actual.GetRawText())),"source seam identity mismatch");
+    }
     readonly record struct P(double X,double Y)
     {
         public static P operator +(P a,P b)=>new(a.X+b.X,a.Y+b.Y);
@@ -62,14 +106,16 @@ internal static class Validator
         foreach(var item in root.GetProperty("cases").EnumerateArray())
         {
             count++; string id=item.GetProperty("id").GetString()!; Need((id=="synthetic-base"||id=="synthetic-distinct")&&names.Add(id),"fixture id");
-            var expected=new Dictionary<string,double> { ["arm_length"]=54,["arm_pose_angle"]=45,["armscye_depth"]=13,["back_width"]=48,["bum_points"]=18,["bust"]=100,["bust_line"]=26,["bust_points"]=17,["crotch_hip_diff"]=9,["head_l"]=26,["height"]=172,["hip_back_width"]=55,["hip_inclination"]=10,["hips"]=104,["hips_line"]=23,["leg_circ"]=60,["neck_w"]=19,["shoulder_incl"]=22,["shoulder_w"]=36,["underbust"]=86,["vert_bust_line"]=21,["waist"]=80,["waist_back_width"]=36,["waist_line"]=37,["waist_over_bust_line"]=41,["wrist"]=17 };
+            var expected=new Dictionary<string,decimal> { ["arm_length"]=54,["arm_pose_angle"]=45,["armscye_depth"]=13,["back_width"]=48,["bum_points"]=18,["bust"]=100,["bust_line"]=26,["bust_points"]=17,["crotch_hip_diff"]=9,["head_l"]=26,["height"]=172,["hip_back_width"]=55,["hip_inclination"]=10,["hips"]=104,["hips_line"]=23,["leg_circ"]=60,["neck_w"]=19,["shoulder_incl"]=22,["shoulder_w"]=36,["underbust"]=86,["vert_bust_line"]=21,["waist"]=80,["waist_back_width"]=36,["waist_line"]=37,["waist_over_bust_line"]=41,["wrist"]=17 };
             if(id=="synthetic-distinct") { expected["bust"]=96; expected["back_width"]=43; expected["waist"]=74; expected["waist_back_width"]=34; expected["hips"]=102; expected["hip_back_width"]=54; expected["waist_line"]=39; expected["waist_over_bust_line"]=42; }
             var body=item.GetProperty("body_input_cm_degree"); Need(body.EnumerateObject().Count()==expected.Count,"body field count");
-            foreach(var pair in expected) Need(body.TryGetProperty(pair.Key,out var value)&&value.GetDouble()==pair.Value,"synthetic body mismatch: "+pair.Key);
+            foreach(var pair in expected) Need(body.TryGetProperty(pair.Key,out var value)&&ExactDecimalEqual(value,pair.Value),"synthetic body mismatch: "+pair.Key);
+            var expectedBinary=expected.ToDictionary(p=>p.Key,p=>(double)p.Value);
             var derived=item.GetProperty("derived");
-            var predicted=new Dictionary<string,double> { ["_waist_level"]=expected["height"]-expected["head_l"]-expected["waist_line"], ["_leg_length"]=expected["height"]-expected["head_l"]-expected["waist_line"]-expected["hips_line"], ["_base_sleeve_balance"]=expected["shoulder_w"]-2, ["_bust_line"]=expected["vert_bust_line"]*2/3+expected["bust_line"]/3, ["_hip_inclination"]=expected["hip_inclination"]/2, ["_shoulder_incl"]=expected["shoulder_incl"], ["_armscye_depth"]=expected["armscye_depth"]+2.5 };
+            var predicted=new Dictionary<string,double> { ["_waist_level"]=expectedBinary["height"]-expectedBinary["head_l"]-expectedBinary["waist_line"], ["_leg_length"]=expectedBinary["height"]-expectedBinary["head_l"]-expectedBinary["waist_line"]-expectedBinary["hips_line"], ["_base_sleeve_balance"]=expectedBinary["shoulder_w"]-2, ["_bust_line"]=expectedBinary["vert_bust_line"]*2/3+expectedBinary["bust_line"]/3, ["_hip_inclination"]=expectedBinary["hip_inclination"]/2, ["_shoulder_incl"]=expectedBinary["shoulder_incl"], ["_armscye_depth"]=expectedBinary["armscye_depth"]+2.5 };
             Need(derived.EnumerateObject().Count()==predicted.Count,"derived field count");
             foreach(var pair in predicted) Need(derived.TryGetProperty(pair.Key,out var value)&&Math.Abs(value.GetDouble()-pair.Value)<1e-10,"derived mismatch: "+pair.Key);
+            VerifySeams(id,item.GetProperty("stitches"));
             var panels=item.GetProperty("panels"); var indexed=new Dictionary<string,JsonElement[]>();
             foreach(var panel in panels.EnumerateObject())
             {
@@ -106,5 +152,8 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
+
 
 
