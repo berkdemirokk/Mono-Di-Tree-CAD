@@ -3293,7 +3293,7 @@ private struct ExperimentalDesignBriefView: View {
                 } else if let issue = error as? ExperimentalDesignBrief.Error {
                     switch issue {
                     case .missingContent:
-                        message = "Yalnız ölçü içeren istek kaydedilemiyor. Bir model seçin, elbiseyi tarif edin veya örnek görsel ekleyin; girdiğiniz ölçüler korundu."
+                        message = "Bir model seçin, elbiseyi tarif edin veya örnek görsel ekleyin; yalnız ölçüler yeterli değildir. Girilen bilgiler korundu."
                         step = 0
                     case .invalidImage:
                         message = snapshot.version == 2 && snapshot.draft.image != nil

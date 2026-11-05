@@ -1692,6 +1692,19 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(restored.style, .aline)
         }
     }
+    func testEmptyAndMeasurementOnlyRequestsReportMissingContentInBothFormats() {
+        for waist in ["", "72 cm"] {
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: waist, hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            for make in [ExperimentalDesignBrief.make, ExperimentalDesignBrief.makeV2] {
+                XCTAssertThrowsError(try make(draft)) { error in
+                    guard let issue = error as? ExperimentalDesignBrief.Error, case .missingContent = issue else {
+                        return XCTFail("Expected missingContent, got \(error)")
+                    }
+                }
+            }
+            XCTAssertEqual(draft.waist, waist)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))
