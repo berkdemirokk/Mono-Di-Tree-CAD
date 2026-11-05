@@ -1310,6 +1310,8 @@ public sealed class TextileToolsWindow : Window
                         nextStep += detail.ComparisonIndex is int comparisonIndex && detail.Sample is OffsetLocalSample sample
                             ? $" Karşılaştırmada ilk doğrulanamayan örnek, {(detail.ComparisonSide==OffsetComparisonSide.Source ? "0,000001 mm ızgarasına yuvarlanmış kaynak konturda" : "ters hesapla elde edilen konturda")} {(sample==OffsetLocalSample.Vertex ? "köşe" : "kenar orta noktası; başlangıç köşesi")} {comparisonIndex} (indeksler o konturda sıfırdan başlar). Bu tek başına kusur kanıtı değildir."
                             : " Karşılaştırma örneği konumlandırılamadı.";
+                    if(ex is OffsetLocalDetailUnverifiedException { SamplePoint: Point2 location })
+                        nextStep += $" Karşılaştırma örneği koordinatı: X {MeasurementInput.Format(location.X)}, Y {MeasurementInput.Format(location.Y)} mm.";
                     result.Text=$"Dikiş payı uygulanmadı ({allowanceDescription}): "+ex.Message+
                         " Bu hesaplama kaynak parçayı değiştirmedi."+nextStep+" Üretim payını yalnız üretim şartları izin veriyorsa değiştirin. "+offsetSourceDescription+".";
                     if(ex is OffsetLocalDetailUnverifiedException { Preview.IsDefaultOrEmpty: false } unverified)

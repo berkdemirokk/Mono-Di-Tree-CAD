@@ -16199,6 +16199,8 @@ internal static partial class DesktopVerification
                 && result.Text.Contains("kesin hatalı olduğu anlamına gelmez",StringComparison.Ordinal)
                 && result.Text.Contains("kaynak çizimle karşılaştırın",StringComparison.Ordinal)
                 && result.Text.Contains("üretim sorumlusuna danışın",StringComparison.Ordinal)
+                && result.Text.Contains("Karşılaştırma örneği koordinatı: X ",StringComparison.Ordinal)
+                && result.Text.Contains(", Y ",StringComparison.Ordinal)
                 && result.Text.Contains(lobed.Id.ToString("D"),StringComparison.Ordinal)
                 && result.Text.Contains("1 mm",StringComparison.Ordinal)
                 && DocumentSession.ContentEquals(before,studio.Document) && session.UndoCount==undo && session.RedoCount==redo,
