@@ -1,0 +1,135 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "numpy": "1.26.4",
+  "scipy": "1.17.1",
+  "cases": [
+    {
+      "angle_degrees": 5,
+      "success": true,
+      "status": 0,
+      "iterations": 2,
+      "evaluations": 12,
+      "objective": 9.471297677545563e-13,
+      "control": [
+        0.4999735577455197,
+        -0.010935991401376601
+      ],
+      "gradient": [
+        -8.508356331032071e-08,
+        -3.831613955572096e-06
+      ]
+    },
+    {
+      "angle_degrees": 10,
+      "success": true,
+      "status": 0,
+      "iterations": 3,
+      "evaluations": 15,
+      "objective": 9.865709860403693e-16,
+      "control": [
+        0.4996659568907071,
+        -0.022026131660467237
+      ],
+      "gradient": [
+        5.646861515039055e-09,
+        1.8493215782397125e-07
+      ]
+    },
+    {
+      "angle_degrees": 18,
+      "success": true,
+      "status": 0,
+      "iterations": 4,
+      "evaluations": 18,
+      "objective": 1.6709479142106426e-16,
+      "control": [
+        0.4982335404093178,
+        -0.04047147913362946
+      ],
+      "gradient": [
+        -3.796434177137341e-09,
+        7.694406052423218e-09
+      ]
+    },
+    {
+      "angle_degrees": 22,
+      "success": true,
+      "status": 0,
+      "iterations": 4,
+      "evaluations": 18,
+      "objective": 8.068881795398197e-17,
+      "control": [
+        0.49772462451397964,
+        -0.050273454903423345
+      ],
+      "gradient": [
+        -3.0076698528689115e-09,
+        2.3211528468033655e-08
+      ]
+    },
+    {
+      "angle_degrees": 26,
+      "success": true,
+      "status": 0,
+      "iterations": 4,
+      "evaluations": 18,
+      "objective": 1.0320296701279078e-16,
+      "control": [
+        0.498284575663173,
+        -0.06075741161993708
+      ],
+      "gradient": [
+        -4.03269719425286e-09,
+        1.8092098103573752e-08
+      ]
+    },
+    {
+      "angle_degrees": 30,
+      "success": true,
+      "status": 0,
+      "iterations": 3,
+      "evaluations": 15,
+      "objective": 1.5210579462315525e-12,
+      "control": [
+        0.5009872298178655,
+        -0.07231064725327399
+      ],
+      "gradient": [
+        6.973277246049783e-07,
+        4.880018910938117e-06
+      ]
+    },
+    {
+      "angle_degrees": 35,
+      "success": true,
+      "status": 0,
+      "iterations": 4,
+      "evaluations": 18,
+      "objective": 6.810160782124235e-13,
+      "control": [
+        0.5097258947416138,
+        -0.0892289120142965
+      ],
+      "gradient": [
+        -5.483071612975114e-07,
+        -3.087699413273045e-06
+      ]
+    },
+    {
+      "angle_degrees": 40,
+      "success": true,
+      "status": 0,
+      "iterations": 5,
+      "evaluations": 21,
+      "objective": 7.309271055342281e-16,
+      "control": [
+        0.5287413982751324,
+        -0.11091666314627799
+      ],
+      "gradient": [
+        2.2700192240380525e-08,
+        1.4685586467794732e-07
+      ]
+    }
+  ]
+}

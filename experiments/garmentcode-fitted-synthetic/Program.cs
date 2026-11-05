@@ -12,7 +12,7 @@ try
 {
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -128,6 +128,16 @@ try
     var cornerA=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,0)};
     var cornerB=new[]{new ExactBezierSeparation.Point(2,0),new ExactBezierSeparation.Point(2,2)};
     if(ExactBezierSeparation.Compare(cornerA,cornerB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Orthogonal endpoint proof");
+    var angledA=new[]{new ExactBezierSeparation.Point(2,3),new ExactBezierSeparation.Point(0,0)};
+    var angledB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(3,2)};
+    if(ExactBezierSeparation.Compare(angledA,angledB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Angled dart endpoint proof");
+    var oppositeA=new[]{new ExactBezierSeparation.Point(-2,-2),new ExactBezierSeparation.Point(0,0)};
+    var oppositeB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,2)};
+    if(ExactBezierSeparation.Compare(oppositeA,oppositeB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Opposite collinear endpoint proof");
+    var overlapB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(-1,-1)};
+    if(ExactBezierSeparation.Compare(oppositeA,overlapB,true)==ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Overlapping lines falsely cleared");
+    var zeroLine=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(0,0)};
+    if(ExactBezierSeparation.Compare(zeroLine,oppositeB,true)==ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Degenerate line falsely cleared");
     var loopA=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(-1,0),new ExactBezierSeparation.Point(0,1)};
     var loopB=new[]{new ExactBezierSeparation.Point(0,1),new ExactBezierSeparation.Point(1,0),new ExactBezierSeparation.Point(0,0)};
     if(ExactBezierSeparation.Compare(loopA,loopB,true)==ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Two shared endpoints falsely certified");
@@ -300,7 +310,7 @@ try
     NeedLocal(waistChanged.Snapshot!=waistBaseline.Snapshot && !waistChanged.Lower.SequenceEqual(waistBaseline.Lower),"waist match must depend on body values");
     NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
     var preview=ResearchViewSummary.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
-    NeedLocal(preview.Panels.Count==6 && preview.RuleCount==23 && preview.Panels.All(p=>p.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented) && preview.Panels.Any(p=>p.UnresolvedPairs>0) && preview.Status=="unresolved" && preview.ReferenceAssessment=="Unverified" && !preview.ExportAllowed && !preview.ProductionAllowed,"research preview gate");
+    NeedLocal(preview.Panels.Count==6 && preview.RuleCount==23 && preview.Panels.All(p=>p.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented) && preview.Panels.All(p=>p.UnresolvedPairs>=0) && preview.Status=="unresolved" && preview.ReferenceAssessment=="Unverified" && !preview.ExportAllowed && !preview.ProductionAllowed,"research preview gate");
     var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
     try { BodySeamStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid typed graph accepted"); } catch(ArgumentException) { }
@@ -331,6 +341,26 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckOptimizerTrace()
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.optimizer-trace.json") ?? throw new InvalidDataException("Missing optimizer trace");
+        using var reader=new StreamReader(stream,Encoding.UTF8,true);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="0AA55A9F5E654C6BCC5F7F7080F719712983CD4382D2DB084CBEE47904307C65","optimizer trace hash");
+        using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
+        Need(root.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31" && root.GetProperty("numpy").GetString()=="1.26.4" && root.GetProperty("scipy").GetString()=="1.17.1","optimizer trace provenance");
+        var angles=new HashSet<int>();double maxDiff=0;
+        foreach(var row in root.GetProperty("cases").EnumerateArray()) {
+            int degrees=row.GetProperty("angle_degrees").GetInt32();Need(angles.Add(degrees),"duplicate optimizer angle");
+            var ray=TangentRayStudy.Create("synthetic-angle-"+degrees);var c=Point(row.GetProperty("control"));double norm=c.Length();
+            Need(norm>0 && row.GetProperty("success").GetBoolean() && row.GetProperty("status").GetInt32()==0 && row.GetProperty("iterations").GetInt32()>0 && row.GetProperty("evaluations").GetInt32()>0,"source optimizer result");
+            double dx=c.X/norm-ray.Target.X,dy=c.Y/norm-ray.Target.Y,objective=dx*dx+dy*dy;
+            Need(Math.Abs(objective-row.GetProperty("objective").GetDouble())<1e-12 && objective<2e-12,"source tangent objective");
+            double diff=(c-new P(ray.Candidate.X,ray.Candidate.Y)).Length();maxDiff=Math.Max(maxDiff,diff);
+            Need(row.GetProperty("gradient").EnumerateArray().All(x=>double.IsFinite(x.GetDouble())),"source optimizer gradient");
+        }
+        Need(angles.SetEquals(new[]{5,10,18,22,26,30,35,40}) && maxDiff>.04,"source optimizer degeneracy evidence");
+        Console.WriteLine($"Synthetic source tangent optimizer: 8/8 success and small tangent objective, max control-ray difference={maxDiff:G7}; no equivalence guarantee.");
+    }
     internal static void CheckTangentSweep()
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.tangent-sweep.json") ?? throw new InvalidDataException("Missing tangent sweep");
@@ -495,6 +525,7 @@ internal static class Validator
             try { BackSkirtCandidate.Create(id,forged); throw new InvalidDataException("Changed back result accepted"); } catch(ArgumentException) { }
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
+            CheckSyntheticSourceSeamLengths(reference);
             CheckGeneralControls(reference,SyntheticBodyCatalog.Create(id));
             string[] excluded=["arm_length","arm_pose_angle","crotch_hip_diff","leg_circ","underbust","wrist"];
             var fullBody=SyntheticBodyCatalog.Create(id);
@@ -647,6 +678,7 @@ internal static class Validator
             var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
             var topology=BodyCurveStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(topology.Count==6 && topology.All(t=>t.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && t.UnresolvedEdges.Count==t.Unresolved && t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
+            Need(topology.All(t=>t.Unresolved==0 && t.NonMonotone==0),"synthetic represented contour classification regression");
             foreach(var t in topology)Console.WriteLine($"{id} {t.Panel} represented curve pairs: separated={t.Separated}, endpoint={t.EndpointOnly}, unresolved={t.Unresolved}, nonmonotone={t.NonMonotone}, unresolved edge IDs={string.Join(";",t.UnresolvedEdges.Select(p=>$"{p.A}-{p.B}"))}");
             var typedGraph=BodySeamStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(typedGraph.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedGraph.ExportAllowed && !typedGraph.ProductionAllowed && typedGraph.Rules.Count==23 && !typeof(SyntheticFullSeamGraph.Graph).IsAssignableFrom(typedGraph.GetType()),"typed seam graph gate");
@@ -707,6 +739,36 @@ internal static class Validator
             Need(status.Issues.Contains("incomplete-graph") && status.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")),"back graph must remain unresolved");
             Need(match.Status=="unresolved"&&!match.ExportAllowed,"matching gate");
         }
+    }
+    // Fixture-only diagnostic: the source numbers are recorded binary64
+    // lengths, not certified physical lengths and not general user input.
+    static void CheckSyntheticSourceSeamLengths(JsonElement reference)
+    {
+        double Side(JsonElement side) {
+            var edges=side.GetProperty("edges").EnumerateArray().ToArray();var coefficients=new double[edges.Length];int covered=0;
+            foreach(var part in side.GetProperty("ruffle").EnumerateArray()) {
+                int start=part.GetProperty("sec")[0].GetInt32(),end=part.GetProperty("sec")[1].GetInt32();double factor=part.GetProperty("coeff").GetDouble();
+                Need(start==covered && end>start && end<=edges.Length && double.IsFinite(factor) && factor>0,"source ruffle coverage");
+                for(int i=start;i<end;i++)coefficients[i]=factor;covered=end;
+            }
+            Need(covered==edges.Length && covered>0,"source ruffle incomplete");double total=0;
+            for(int i=0;i<edges.Length;i++) {
+                var e=edges[i];string panel=e.GetProperty("panel").GetString()!;int index=e.GetProperty("edge").GetInt32();
+                double length=reference.GetProperty("panels").GetProperty(panel).GetProperty("edges")[index].GetProperty("length").GetDouble();
+                Need(double.IsFinite(length) && length>0,"source seam length");
+                total+=Math.Abs(coefficients[i]-1)<.001?length:length/coefficients[i];
+            }
+            return total;
+        }
+        var rules=reference.GetProperty("stitches").EnumerateArray().ToArray();
+        var waist=rules.Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
+        double upper=Side(waist.GetProperty("a")),lower=Side(waist.GetProperty("b"));
+        string id=reference.GetProperty("id").GetString()!;
+        double expectedGap=id=="synthetic-base"?.357108754:.315570643;
+        Need(Math.Abs((upper-lower)-expectedGap)<.000001,"source waist projected difference");
+        var torso=rules.Where(r=>r.GetProperty("owner_type").GetString()=="BodiceHalf").Select(r=>(Owner:r.GetProperty("owner").GetString(),Index:r.GetProperty("index").GetInt32(),Gap:Side(r.GetProperty("a"))-Side(r.GetProperty("b")))).ToArray();
+        Need(torso.Length==4 && torso.All(r=>Math.Abs(r.Gap)>.1),"source shoulder/side differences");
+        Console.WriteLine($"{id} source projected differences: waist={upper-lower:G8} cm, left shoulder={torso.Single(r=>r.Owner=="left" && r.Index==0).Gap:G8} cm, left side={torso.Single(r=>r.Owner=="left" && r.Index==1).Gap:G8} cm (fixture only)");
     }
     static void CheckGeneralControls(JsonElement reference,IResearchPatternBody body)
     {

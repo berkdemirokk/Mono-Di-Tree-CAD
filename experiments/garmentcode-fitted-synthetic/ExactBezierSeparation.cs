@@ -60,6 +60,20 @@ internal static class ExactBezierSeparation
     static bool EndpointOnly(Curve a,Curve b)
     {
         var p=a.C[^1];if(p.X.CompareTo(b.C[0].X)!=0||p.Y.CompareTo(b.C[0].Y)!=0)return false;
+        // For two represented line segments, exact integer cross/dot products
+        // prove the common endpoint is their sole intersection. Build() uses
+        // one common dyadic scale; these predicates never convert to double.
+        if(a.C.Length==2 && b.C.Length==2)
+        {
+            var u=a.C[0];var v=b.C[1];
+            BigInteger ux=u.X.N-p.X.N,uy=u.Y.N-p.Y.N,vx=v.X.N-p.X.N,vy=v.Y.N-p.Y.N;
+            if((!ux.IsZero||!uy.IsZero) && (!vx.IsZero||!vy.IsZero))
+            {
+                BigInteger cross=ux*vy-uy*vx,dot=ux*vx+uy*vy;
+                if(!cross.IsZero || dot.Sign<0)return true;
+            }
+        }
+
         bool Away(Curve curve,bool sharedAtEnd,Func<V,Q> axis)
         {
             var controls=sharedAtEnd?curve.C[..^1]:curve.C[1..];var value=axis(p);
