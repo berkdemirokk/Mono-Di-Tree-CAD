@@ -14,15 +14,29 @@ try
     Near(exact.OutsideLength,5); Check(exact.ExactBinarySquaredLegsEqual, "exact squared distance");
     Check(exact.WithinNumericalThreshold && exact.SewingStatus == "unresolved" && !exact.ProductionAllowed && !exact.ExportAllowed, "status");
     var overlap = DartClosure.Analyze(new(0,5),new(0,10),new(0,0),new(10,0),new(0,0),0);
-    Check(overlap.ExactBinarySquaredLegsEqual && overlap.OutsideSegmentsIntersect, "counterexample: equal legs and overlapping outside pieces");
+    Check(overlap.ExactBinarySquaredLegsEqual && overlap.OutsideSegmentContact == SegmentContact.Kind.Overlap, "counterexample: equal legs and overlapping outside pieces");
+    Check(exact.OutsideSegmentContact == SegmentContact.Kind.AllowedEndpoint, "allowed dart endpoint");
+    Check(SegmentContact.Classify(new(0,0),new(1,0),new(1,0),new(2,0),true) == SegmentContact.Kind.AllowedEndpoint, "straight endpoint");
+    Check(SegmentContact.Classify(new(0,0),new(2,0),new(2,0),new(1,0),true) == SegmentContact.Kind.Overlap, "overlap category");
+    Check(SegmentContact.Classify(new(0,0),new(1,0),new(1.1,0),new(2,0),true) == SegmentContact.Kind.OpenEndpoint, "open endpoint category");
+    Check(SegmentContact.Classify(new(0,0),new(2,2),new(0,2),new(2,0),false) == SegmentContact.Kind.CrossingOrTouch, "crossing category");
     Point2[] contour = [new(-2,10),new(0,10),new(0,0),new(10,0),new(10,-3),new(-3,-3),new(-3,10)];
     bool[] partition = [true,true,false,false,false,false,true];
-    var diagnostic = ContourDiagnostic.Inspect(contour, ContourDiagnostic.Identity(contour),partition);
-    Check(diagnostic.Status == "blocked" && !diagnostic.ProductionAllowed && !diagnostic.ExportAllowed && diagnostic.Issues.Count > 0, "contour remains blocked");
-    Check(ContourDiagnostic.Inspect(contour, "wrong identity",partition).Status == "blocked", "identity mismatch");
-    Check(ContourDiagnostic.Inspect(contour, ContourDiagnostic.Identity(contour),new bool[2]).Status == "blocked", "incomplete partition");
-    Point2[] crossing = [new(0,5),new(0,10),new(0,0),new(10,0),new(0,0)];
-    Check(ContourDiagnostic.Inspect(crossing, ContourDiagnostic.Identity(crossing),[true,true,false,false,false]).Status == "blocked", "counterexample source contour rejected");
+    string[] roles = ["center","legA","tip","legB","side","other1","other2"];
+    var snapshot = ContourDiagnostic.Capture("front",contour,partition,roles);
+    string identity = snapshot.Identity();
+    var diagnostic = ContourDiagnostic.Inspect(snapshot,identity);
+    Check(diagnostic.Status == "blocked" && !diagnostic.ProductionAllowed && diagnostic.Issues.Any(x=>x.StartsWith("AllowedEndpoint:0:3")), "allowed dart join in contour");
+    Check(ContourDiagnostic.Inspect(snapshot,"wrong").Issues.Contains("identity-mismatch"), "identity mismatch");
+    partition[0]=false; roles[0]="wrong"; contour[0]=new(999,999);
+    Check(snapshot.Identity()==identity, "snapshot independent of later input mutation");
+    var changed = ContourDiagnostic.Capture("front",contour,partition,roles);
+    Check(changed.Identity()!=identity && ContourDiagnostic.Inspect(changed,identity).Issues.Contains("identity-mismatch"), "identity binds values roles and partition");
+    var otherPart = ContourDiagnostic.Capture("back",snapshotCopyPoints(),snapshotCopyPartition(),snapshotCopyRoles());
+    Check(otherPart.Identity()!=identity, "identity binds part");
+    Point2[] snapshotCopyPoints() => [new(-2,10),new(0,10),new(0,0),new(10,0),new(10,-3),new(-3,-3),new(-3,10)];
+    bool[] snapshotCopyPartition() => [true,true,false,false,false,false,true];
+    string[] snapshotCopyRoles() => ["center","legA","tip","legB","side","other1","other2"];
     var unequal = DartClosure.Analyze(center,a,tip,new(12,0),new(12,-3),1);
     Near(unequal.EndpointGap,2); Check(!unequal.ExactBinarySquaredLegsEqual && !unequal.WithinNumericalThreshold, "unequal legs");
     Check(DartClosure.Analyze(center,a,tip,new(12,0),new(12,-3),3).SewingStatus == "unresolved", "threshold is not approval");
@@ -67,4 +81,5 @@ try
     return 0;
 }
 catch (Exception ex) { Console.Error.WriteLine($"FAIL: {ex.Message}"); return 1; }
+
 
