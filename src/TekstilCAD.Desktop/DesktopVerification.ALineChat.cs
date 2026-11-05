@@ -37,6 +37,10 @@ internal static partial class DesktopVerification
             window.ChatInputForVerification.Text+=" cm";window.SendMessageForVerification();
             Check(window.CaptureForVerification().Prompt.EndsWith("Ön bel yayı: 36 cm",StringComparison.Ordinal) && window.ChatInputForVerification.Text.Length==0,
                 "Adding the requested unit sends the same answer to the current field",checks);
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="36 cm";
+            window.MeasurementsForVerification.Text+="; not";window.MeasurementsForVerification.Text=source.Measurements;window.InsertMeasurementLabel();
+            Check(window.ChatInputForVerification.Text=="36 cm" && window.StatusForVerification.Text.Contains("etiket eklenmedi"),
+                  "A-line A-B-A source changes invalidate the numeric label action",checks);
             foreach(var answer in new[]{"36\u00a0cm","36\u202fcm!","\u200736\u2009cm.\u00a0"})
             {
                 window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();

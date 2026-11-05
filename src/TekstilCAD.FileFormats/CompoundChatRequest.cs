@@ -32,7 +32,7 @@ internal static class CompoundChatRequest
             var match=Measurement.Match(folded,position);
             if(match.Success)
             {
-                if(!decimal.TryParse(match.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))return null;
+                if(DressMeasurementParser.IsAmbiguousMeasurementNumber(match.Groups["number"].Value) || !decimal.TryParse(match.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))return null;
                 if(match.Groups["unit"].Value=="cm")value*=10m;
                 var label=match.Groups["label"].Value;
                 if(value<=0 || value>10000m || (measurements.TryGetValue(label,out var prior) && prior!=value))return null;

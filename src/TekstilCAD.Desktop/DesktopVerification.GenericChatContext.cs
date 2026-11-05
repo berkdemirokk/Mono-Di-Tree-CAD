@@ -14,6 +14,25 @@ internal static partial class DesktopVerification
         Check(window.ChatInputForVerification.Text=="göğüs çevresi: 96", "Label action preserves a standalone unitless value for further editing",checks);
         window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm değil";window.InsertMeasurementLabel();
         Check(window.ChatInputForVerification.Text=="96 cm değil\ngöğüs çevresi: ", "Negated prose keeps its original order when adding a label",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm";
+        window.MeasurementsForVerification.Text="göğüs çevresi 90 cm";var labelChanged=window.CaptureForVerification();window.InsertMeasurementLabel();
+        Check(window.CaptureForVerification()==labelChanged && window.ChatInputForVerification.Text=="96 cm" && window.StatusForVerification.Text.Contains("etiket eklenmedi"),
+              "A stale numeric answer cannot be relabeled as the next generic question",checks);
+        window.ChatInputForVerification.Clear();window.ChatInputForVerification.Text="72 cm";window.InsertMeasurementLabel();
+        Check(window.ChatInputForVerification.Text=="bel çevresi: 72 cm", "An explicitly re-entered value can use the new question label",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm";
+        window.MeasurementsForVerification.Text="göğüs çevresi 90 cm";window.MeasurementsForVerification.Text="";window.InsertMeasurementLabel();
+        Check(window.ChatInputForVerification.Text=="96 cm" && window.StatusForVerification.Text.Contains("etiket eklenmedi"),
+              "A-B-A source changes invalidate the numeric label action",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm";
+        var root=(System.Windows.FrameworkElement)window.Content;root.Measure(new System.Windows.Size(900,700));root.Arrange(new System.Windows.Rect(0,0,900,700));root.UpdateLayout();
+        var wrap=Descendants<System.Windows.Controls.Button>(root).Single(b=>System.Windows.Automation.AutomationProperties.GetName(b)=="Anvelop elbise");
+        var straight=Descendants<System.Windows.Controls.Button>(root).Single(b=>System.Windows.Automation.AutomationProperties.GetName(b)=="Düz elbise");
+        wrap.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        straight.RaiseEvent(new System.Windows.RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        window.InsertMeasurementLabel();
+        Check(window.CaptureForVerification().ModelId=="straight" && window.ChatInputForVerification.Text=="96 cm" && window.StatusForVerification.Text.Contains("etiket eklenmedi"),
+              "Model A-B-A changes invalidate pending numeric label even when the original model returns",checks);
         foreach(var answer in new[]{"96","\u00a096,5\u202f"})
         {
             window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();

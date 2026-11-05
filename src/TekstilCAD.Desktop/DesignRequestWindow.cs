@@ -649,6 +649,11 @@ internal sealed class DesignRequestWindow : Window
         if(System.Text.RegularExpressions.Regex.IsMatch(chatInput.Text,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:(?:mm|cm)[\t\p{Zs}]*)?[.!]?[\t\p{Zs}]*\z",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
         {
+            var context=answerContext;
+            if(context is null || context.Label is null || context.Label!=label || context.ALine!=CanPreviewALineForVerification ||
+               context.Prompt!=prompt.Text || context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision ||
+               context.QuestionRevision!=questionRevision || referenceLoadRunning || referenceSelectionPending || closed)
+            { SetStatus("Soru veya kaynak değişti; etiket eklenmedi. Mesajı gözden geçirip güncel soruya yeniden yazın.");return; }
             if((long)chatInput.Text.Length+text.Length>chatInput.MaxLength)
             { SetStatus("Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.");return; }
             chatInput.Text=text+chatInput.Text;chatInput.CaretIndex=chatInput.Text.Length;chatInput.Focus();

@@ -2,6 +2,17 @@ using TekstilCAD.FileFormats;
 namespace TekstilCAD.Tests;
 public sealed class ChatModelChoiceTests
 {
+    [Theory]
+    [InlineData("A kesim elbise istiyorum bel çevresi 1.000 cm")]
+    [InlineData("A kesim elbise istiyorum bel çevresi 1,000 cm")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 1.000 cm")]
+    public void CombinedModelAndAmbiguousMeasurementDoesNotSuggestModel(string text)
+    {
+        Assert.Null(ChatModelChoice.Review(text).ModelId);
+        var measurements=DressMeasurementParser.Review(text,"");
+        Assert.DoesNotContain(measurements.Measurements,m=>m.Label=="bel çevresi");
+        Assert.Contains(measurements.Questions,q=>q.StartsWith("bel çevresi: ifade belirsiz"));
+    }
     [Fact] public void MultipleDetailsAndMeasurementsRetainSourceAndModelApproval()
     {
         const string text="A kesim elbise istiyorum uzun kollu bel çevresi 72 cm kalça çevresi 100 cm";

@@ -14,6 +14,7 @@ public static partial class DressMeasurementParser
     private const string ExactLabels=@"(?:göğüs\s+çevresi|bel\s+çevresi|kalça\s+çevresi|elbise\s+boyu|kol\s+boyu)";
     private static readonly Regex SegmentSplit=new(@";|(?:\r\n|[\r\n\v\f\u0085\u2028\u2029])(?:[^\S\r\n\v\f\u0085\u2028\u2029]*(?:\r\n|[\r\n\v\f\u0085\u2028\u2029]))*|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex AmbiguousNumber=new(@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    internal static bool IsAmbiguousMeasurementNumber(string value)=>AmbiguousNumber.IsMatch(value);
     private static readonly Regex Conjunction=new(@"\s+ve\s+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // A question is not an asserted measurement. It enters the existing unclear
@@ -30,7 +31,7 @@ public static partial class DressMeasurementParser
         if(!match.Success)return false;
         var offset=match.Groups["measurement"].Index;
         var measurement=Exact.Match(FoldCase(segment[offset..]));
-        if(!measurement.Success || !decimal.TryParse(measurement.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))return false;
+        if(!measurement.Success || IsAmbiguousMeasurementNumber(measurement.Groups["number"].Value) || !decimal.TryParse(measurement.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))return false;
         if(measurement.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))value*=10m;
         if(value<=0 || value>10_000m || ChatModelChoice.Review(segment[..match.Groups["model"].Length]).ModelId is null)return false;
         measurementOffset=offset;return true;
