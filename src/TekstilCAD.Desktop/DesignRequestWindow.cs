@@ -509,6 +509,11 @@ internal sealed class DesignRequestWindow : Window
     {
         var message=chatInput.Text;
         if(string.IsNullOrWhiteSpace(message)) { SetStatus("Göndermek için bir mesaj yazın.");return; }
+        // A bare number is likely an answer, but guessing cm/mm is unsafe and
+        // silently appending it as prose leaves the same question unanswered.
+        if((CanPreviewALineForVerification || answerContext?.ALine==true) &&
+           System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+        { SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return; }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
         var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         // A-line also accepts Unicode horizontal spacing and at most one affirmative terminal punctuation mark.

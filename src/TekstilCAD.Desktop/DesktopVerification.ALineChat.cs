@@ -25,6 +25,16 @@ internal static partial class DesktopVerification
             var combinedPlan=TekstilCAD.Patterns.ALineTransferPlan.Create(combinedSource.Millimeters,combinedSource.Issues,Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
             var combinedFields=combinedPlan.ApplyTo(Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
             Check(combinedFields[0]=="360" && combinedFields[1]=="360" && combinedFields[2]=="","Conjoined chat values transfer without deriving missing fields",checks);
+            foreach(var answer in new[]{"36"," 36,5 ","\u00a036\u202f!"})
+            {
+                window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+                Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text==answer && window.StatusForVerification.Text.Contains("cm veya mm"),
+                    "A unitless short measurement stays editable and requests an explicit unit",checks);
+            }
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="36";window.SendMessageForVerification();
+            window.ChatInputForVerification.Text+=" cm";window.SendMessageForVerification();
+            Check(window.CaptureForVerification().Prompt.EndsWith("Ön bel yayı: 36 cm",StringComparison.Ordinal) && window.ChatInputForVerification.Text.Length==0,
+                "Adding the requested unit sends the same answer to the current field",checks);
             foreach(var answer in new[]{"36\u00a0cm","36\u202fcm!","\u200736\u2009cm.\u00a0"})
             {
                 window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
