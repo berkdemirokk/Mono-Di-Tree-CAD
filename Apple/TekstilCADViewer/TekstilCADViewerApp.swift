@@ -2657,6 +2657,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var showingPortableRequestImport = false
     @State private var copyCandidate: ExperimentalDesignBrief.Draft?
     @State private var portableCandidate: ExperimentalDesignBrief.PortableSnapshot?
+    @State private var importReview: ExperimentalDesignBrief.ImportReview?
     @State private var confirmCopyRestore = false
     @State private var draftTransition = false
     @State private var localStatus = "Taslak kontrol ediliyor."
@@ -2768,6 +2769,18 @@ private struct ExperimentalDesignBriefView: View {
     private var currentReference: ExperimentalDesignBrief.ReferenceSelection? {
         guard let image, let imageName else { return nil }
         return .init(data: image, name: imageName)
+    }
+    private var canOpenImport: Bool {
+        ExperimentalDesignBrief.canReplaceWithImport(draft, referencePending: referenceBlocksClose, transition: draftTransition)
+    }
+    private func captureImportReview() -> ExperimentalDesignBrief.ImportReview {
+        .init(draft: draft, revision: modelSuggestionRevision, version: requestExportVersion,
+              explicitSelection: modelExplicitlySelected, imported: importedPortable)
+    }
+    private func importReviewIsCurrent(_ review: ExperimentalDesignBrief.ImportReview, transition: Bool = false) -> Bool {
+        review.matches(current: draft, revision: modelSuggestionRevision, version: requestExportVersion,
+                       explicitSelection: modelExplicitlySelected, imported: importedPortable,
+                       referencePending: referenceBlocksClose, transition: transition)
     }
     private var aLineInputPending: Bool { !aLineGuideInput.unit.isEmpty || aLineGuideInput.values.contains { !$0.isEmpty } }
     private func openALineGuide() {
@@ -3396,8 +3409,11 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     DisclosureGroup("İstek ve kurtarma dosyaları") {
                     Button("Bu taslağın ayrı kurtarma kopyasını kaydet…") { prepareRecoveryCopy() }.disabled(referenceDecisionPending)
-                    Button("Kurtarma kopyası aç…") { showingDraftCopyImport = true }.disabled(referenceDecisionPending || aLineInputPending)
-                    Button("İstek dosyası aç…") { showingPortableRequestImport = true }.disabled(referenceDecisionPending || aLineInputPending)
+                    Button("Kurtarma kopyası aç…") { if canOpenImport { showingDraftCopyImport = true } }.disabled(!canOpenImport)
+                    Button("İstek dosyası aç…") { if canOpenImport { showingPortableRequestImport = true } }.disabled(!canOpenImport)
+                    if measurementForm?.hasValues == true || aLineInputPending {
+                        Text("Başka bir dosya açmadan önce bekleyen ölçüleri onaylayın veya açıkça temizleyin. Bu taslağın ayrı kurtarma kopyasını kaydedebilirsiniz.").font(.caption)
+                    }
                     Text("İstek metni Unicode olarak korunur. PNG/JPEG görselinin iPhone tarafından okunabilir olması gerekir; uyumsuz dosya mevcut taslağı değiştirmez.").font(.caption)
                     Text("Kopya ölçüleri ve varsa görselin tümünü içerir. Alan başına 1.000.000 UTF-16 birimi, toplam 32 MiB ve görsel için 8 MiB sınırı vardır. Güvenli konum ve yeni dosya adı seçin. Yerel önceki taslak değiştirilmez.").font(.caption)
                     }
@@ -3591,18 +3607,30 @@ private struct ExperimentalDesignBriefView: View {
             }
             .fileImporter(isPresented: $showingPortableRequestImport, allowedContentTypes: [.json]) { result in
                 do {
+                    guard canOpenImport else { localStatus = "Bekleyen ölçüler veya görsel işlemi var; dosya açılmadı ve girişler korundu."; return }
                     let snapshot = try ExperimentalDesignBrief.readPortableSnapshot(result.get())
+                    guard canOpenImport else { localStatus = "İstek değişti; dosya açılmadı ve girişler korundu."; return }
+                    importReview = captureImportReview()
                     portableCandidate = snapshot; copyCandidate = snapshot.draft; candidateIsPortable = true; confirmCopyRestore = true
                 }
                 catch { if !isFilePickerCancellation(error) { localStatus = "İstek okunamadı veya desteklenmeyen görsel içeriyor; mevcut girişler ve yerel taslak korundu." } }
             }
             .fileImporter(isPresented: $showingDraftCopyImport, allowedContentTypes: [.json]) { result in
-                do { portableCandidate = nil; copyCandidate = try ExperimentalDesignBrief.DraftStore.readRecovery(result.get()); candidateIsPortable = false; confirmCopyRestore = true }
+                do {
+                    guard canOpenImport else { localStatus = "Bekleyen ölçüler veya görsel işlemi var; dosya açılmadı ve girişler korundu."; return }
+                    let candidate = try ExperimentalDesignBrief.DraftStore.readRecovery(result.get())
+                    guard canOpenImport else { localStatus = "İstek değişti; dosya açılmadı ve girişler korundu."; return }
+                    importReview = captureImportReview()
+                    portableCandidate = nil; copyCandidate = candidate; candidateIsPortable = false; confirmCopyRestore = true
+                }
                 catch { if !isFilePickerCancellation(error) { localStatus = "Kurtarma kopyası okunamadı; ekrandaki bilgiler ve önceki yerel kayıt korundu." } }
             }
             .confirmationDialog("İstek veya kurtarma kopyası açılsın mı?", isPresented: $confirmCopyRestore, titleVisibility: .visible) {
                 Button("Kopyayı aç", role: .destructive) {
-                    guard !aLineInputPending else { localStatus = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; return }
+                    guard let review = importReview, importReviewIsCurrent(review, transition: draftTransition) else {
+                        copyCandidate = nil; portableCandidate = nil; importReview = nil
+                        localStatus = "İstek değişti veya onaylanmamış ölçüler var; dosya açılmadı ve girişler korundu."; return
+                    }
                     if let candidate = copyCandidate {
                         cancelReferenceLoad()
                         draftTransition = true; saveRequest = UUID(); draftStorageReady = false
@@ -3611,6 +3639,10 @@ private struct ExperimentalDesignBriefView: View {
                         let portableSnapshot = isPortable ? portableCandidate : nil
                         draftWriter.pause {
                         draftTransition = false; backgroundLease.finish(); DraftPendingLedger.abandon(stoppedMarkers)
+                        guard importReviewIsCurrent(review) else {
+                            localStatus = "İstek değişti; dosya açılmadı. Girişler korundu, otomatik kayıt kapalı; ayrı kurtarma kopyası kaydedin."
+                            return
+                        }
                         importedPortable = isPortable && candidate.style == .describe; modelExplicitlySelected = candidate.style != .describe
                         style = candidate.style; description = candidate.description; bust = candidate.bust; waist = candidate.waist
                         hips = candidate.hips; length = candidate.length; otherMeasurements = candidate.otherMeasurements
@@ -3630,9 +3662,9 @@ private struct ExperimentalDesignBriefView: View {
                         localStatus = "Kopya açıldı. Önceki yazılar tamamlandı; otomatik kayıt kapalı. Değişiklikleri ayrı kopyaya kaydedin."
                         }
                     }
-                    copyCandidate = nil; portableCandidate = nil
+                    copyCandidate = nil; portableCandidate = nil; importReview = nil
                 }
-                Button("Vazgeç", role: .cancel) { copyCandidate = nil; portableCandidate = nil }
+                Button("Vazgeç", role: .cancel) { copyCandidate = nil; portableCandidate = nil; importReview = nil }
             } message: { Text("Ekrandaki mevcut girişler değiştirilecek. Önce onları ayrı kurtarma kopyasına kaydedin; yerel önceki taslak değiştirilmez.") }
             .confirmationDialog("Bozuk uyarı kaydı onarılsın mı?", isPresented: $confirmLedgerReset, titleVisibility: .visible) {
                 Button("Yedekle ve onar") {

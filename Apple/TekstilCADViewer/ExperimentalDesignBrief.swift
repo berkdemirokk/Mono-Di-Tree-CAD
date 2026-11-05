@@ -685,6 +685,22 @@ enum ExperimentalDesignBrief {
         guard verified?.mediaType == doc.reference?.mediaType else { throw Error.invalidImage }
         return (Draft(style: style, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name), doc.version)
     }
+    static func canReplaceWithImport(_ draft: Draft, referencePending: Bool, transition: Bool) -> Bool {
+        !referencePending && !transition && draft.aLineGuideInput == nil && draft.measurementForm?.hasValues != true
+    }
+    struct ImportReview {
+        let draft: Draft
+        let revision: UUID
+        let version: Int
+        let explicitSelection: Bool
+        let imported: Bool
+        func matches(current: Draft, revision: UUID, version: Int, explicitSelection: Bool, imported: Bool,
+                     referencePending: Bool, transition: Bool) -> Bool {
+            self.draft == current && self.revision == revision && self.version == version &&
+                self.explicitSelection == explicitSelection && self.imported == imported &&
+                ExperimentalDesignBrief.canReplaceWithImport(current, referencePending: referencePending, transition: transition)
+        }
+    }
     struct PortableSnapshot {
         let draft: Draft
         let bytes: Data

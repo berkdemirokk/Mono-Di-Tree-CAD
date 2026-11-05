@@ -256,6 +256,33 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(styles.count, Set(styles).count)
         XCTAssertEqual(Set(styles), Set(ExperimentalDesignBrief.DressStyle.allCases))
     }
+    func testImportGatePreservesPendingFormsAndRejectsStaleApproval() throws {
+        let base = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "korunan not", image: nil, imageName: nil)
+        XCTAssertTrue(ExperimentalDesignBrief.canReplaceWithImport(base, referencePending: false, transition: false))
+        XCTAssertFalse(ExperimentalDesignBrief.canReplaceWithImport(base, referencePending: true, transition: false))
+        XCTAssertFalse(ExperimentalDesignBrief.canReplaceWithImport(base, referencePending: false, transition: true))
+        for raw in ["72", " ", "\t"] {
+            var fields = Array(repeating: "", count: 15); fields[8] = raw
+            var pending = base; pending.measurementForm = .init(values: fields, unit: "cm")
+            XCTAssertFalse(ExperimentalDesignBrief.canReplaceWithImport(pending, referencePending: false, transition: false))
+            let recovered = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(pending))
+            XCTAssertEqual(recovered, pending); XCTAssertEqual(recovered.measurementForm?.values[8], raw)
+        }
+        var empty = base; empty.measurementForm = .init(values: Array(repeating: "", count: 15), unit: "cm")
+        XCTAssertTrue(ExperimentalDesignBrief.canReplaceWithImport(empty, referencePending: false, transition: false))
+        var aLine = base; aLine.aLineGuideInput = .init(values: ["36"] + Array(repeating: "", count: 10), unit: "cm")
+        XCTAssertFalse(ExperimentalDesignBrief.canReplaceWithImport(aLine, referencePending: false, transition: false))
+        let revision = UUID(), review = ExperimentalDesignBrief.ImportReview(draft: base, revision: revision, version: 1, explicitSelection: true, imported: false)
+        XCTAssertTrue(review.matches(current: base, revision: revision, version: 1, explicitSelection: true, imported: false, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(current: base, revision: UUID(), version: 1, explicitSelection: true, imported: false, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(current: base, revision: revision, version: 2, explicitSelection: true, imported: false, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(current: base, revision: revision, version: 1, explicitSelection: false, imported: false, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(current: base, revision: revision, version: 1, explicitSelection: true, imported: true, referencePending: false, transition: false))
+        XCTAssertFalse(review.matches(current: base, revision: revision, version: 1, explicitSelection: true, imported: false, referencePending: true, transition: false))
+        XCTAssertFalse(review.matches(current: aLine, revision: revision, version: 1, explicitSelection: true, imported: false, referencePending: false, transition: false))
+        var changedForm = base; changedForm.measurementForm = .init(values: [" "] + Array(repeating: "", count: 14), unit: "mm")
+        XCTAssertFalse(review.matches(current: changedForm, revision: revision, version: 1, explicitSelection: true, imported: false, referencePending: false, transition: false))
+    }
     func testPortableImportKeepsValidatedOriginalBytesForSharing() throws {
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
