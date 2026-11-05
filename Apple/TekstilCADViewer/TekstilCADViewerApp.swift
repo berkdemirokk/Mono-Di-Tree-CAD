@@ -17,14 +17,9 @@ struct PhotoLibraryReference: Transferable {
     static func read(_ url: URL) throws -> PhotoLibraryReference {
         let original = try ExperimentalDesignBrief.readImage(url)
         try Task.checkCancellation()
-        guard let source = CGImageSourceCreateWithData(original as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              let type = CGImageSourceGetType(source) as String? else { throw ExperimentalDesignBrief.Error.invalidImage }
-        let data = (type == "public.heic" || type == "public.heif") ? try HEICPhotoConversion.convert(original) : original
-        let png = data.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        let png = original.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
         let name = png ? "Fotoğraf.png" : "Fotoğraf.jpg"
-        _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: name))
-        try Task.checkCancellation()
-        return .init(selection: .init(data: data, name: name))
+        return .init(selection: try HEICPhotoConversion.prepareReference(original, name: name))
     }
     static var transferRepresentation: some TransferRepresentation {
         FileRepresentation(importedContentType: .image) { file in try read(file.file) }
@@ -2825,9 +2820,7 @@ private struct ExperimentalDesignBriefView: View {
         let worker = Task.detached(priority: .userInitiated) { () throws -> ExperimentalDesignBrief.ReferenceSelection in
             let data = try ExperimentalDesignBrief.readImage(url)
             try Task.checkCancellation()
-            _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: url.lastPathComponent))
-            try Task.checkCancellation()
-            return .init(data: data, name: url.lastPathComponent)
+            return try HEICPhotoConversion.prepareReference(data, name: url.lastPathComponent)
         }
         referenceTask = worker
         Task { @MainActor in
@@ -3295,7 +3288,7 @@ private struct ExperimentalDesignBriefView: View {
                         photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
                         selectingPhoto = true
                     }.disabled(draftTransition || referenceDecisionPending || selectingImage)
-                    Text("Fotoğraflar’dan seçilen tek kare HEIC yerelde PNG’ye dönüştürülür; Dosyalar’dan JPEG veya PNG seçin; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. Dönüşüm çok bellek kullanabilir; iptal işlem bitince tamamlanabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
+                    Text("Fotoğraflar veya Dosyalar’dan seçilen tek kare HEIC yerelde PNG’ye dönüştürülür; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. Dönüşüm çok bellek kullanabilir; iptal işlem bitince tamamlanabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
                     #endif
                     if referenceLoading {
                         ProgressView("Görsel yükleniyor…")
@@ -3309,7 +3302,7 @@ private struct ExperimentalDesignBriefView: View {
                             pendingReferenceChange = .init(original: currentReference, replacement: nil); confirmReferenceChange = true
                         }.disabled(referenceLoading)
                     }
-                    Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. Fotoğraflar’dan HEIC seçilirse dönüştürülür ve fotoğraf üst bilgileri aktarılmaz; Dosyalar HEIC desteklemez. En fazla 8 MiB.").font(.caption)
+                    Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. HEIC her iki seçim yolunda dönüştürülür ve fotoğraf üst bilgileri aktarılmaz. En fazla 8 MiB.").font(.caption)
                 }
                 }
                 if step == 3 {

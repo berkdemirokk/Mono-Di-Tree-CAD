@@ -13,6 +13,19 @@ enum HEICPhotoConversion {
             return count
         }
     }
+    /// Both selection paths use this after their bounded, read-only file read.
+    static func prepareReference(_ original: Data, name: String) throws -> ExperimentalDesignBrief.ReferenceSelection {
+        try Task.checkCancellation()
+        guard !original.isEmpty, original.count <= ExperimentalDesignBrief.maxImageBytes,
+              let source = CGImageSourceCreateWithData(original as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let type = CGImageSourceGetType(source) as String? else { throw ExperimentalDesignBrief.Error.invalidImage }
+        let isHEIC = type == "public.heic" || type == "public.heif"
+        let data = isHEIC ? try convert(original) : original
+        let safeName = isHEIC ? "Fotoğraf.png" : name
+        _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: safeName))
+        try Task.checkCancellation()
+        return .init(data: data, name: safeName)
+    }
     static func convert(_ data: Data) throws -> Data {
         try Task.checkCancellation()
         guard !data.isEmpty, data.count <= ExperimentalDesignBrief.maxImageBytes,

@@ -33,7 +33,17 @@ final class DesignDraftStoreTests: XCTestCase {
         CGImageDestinationAddImage(destination, image, metadata as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw XCTSkip("HEIC encoder unavailable") }
         let source = encoded as Data
-        let output = try HEICPhotoConversion.convert(source)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("kaynak.heic")
+        try source.write(to: url)
+        let filesSelection = try HEICPhotoConversion.prepareReference(ExperimentalDesignBrief.readImage(url), name: url.lastPathComponent)
+        let photosSelection = try PhotoLibraryReference.read(url).selection
+        XCTAssertEqual(filesSelection.name, "Fotoğraf.png"); XCTAssertEqual(photosSelection.name, "Fotoğraf.png")
+        XCTAssertEqual(filesSelection.data, photosSelection.data)
+        XCTAssertEqual(try Data(contentsOf: url), source)
+        let output = filesSelection.data
         XCTAssertLessThanOrEqual(output.count, ExperimentalDesignBrief.maxImageBytes)
         let decoded = try XCTUnwrap(CGImageSourceCreateWithData(output as CFData, nil))
         XCTAssertEqual(CGImageSourceGetType(decoded) as String?, "public.png")
@@ -132,6 +142,8 @@ final class DesignDraftStoreTests: XCTestCase {
         try png.write(to: url)
         let result = try PhotoLibraryReference.read(url)
         XCTAssertEqual(result.selection.data, png); XCTAssertEqual(result.selection.name, "Fotoğraf.png")
+        let files = try HEICPhotoConversion.prepareReference(ExperimentalDesignBrief.readImage(url), name: "kaynak.png")
+        XCTAssertEqual(files.data, png); XCTAssertEqual(files.name, "kaynak.png")
         try Data([0, 1]).write(to: url)
         XCTAssertThrowsError(try PhotoLibraryReference.read(url))
         try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
