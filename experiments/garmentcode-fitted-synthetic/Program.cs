@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -535,6 +535,17 @@ internal static class Validator
             RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
         }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
+    internal static void CheckCombinedWaistCurvature()
+    {
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct","synthetic-third","synthetic-fifth"}) {
+            var r=CombinedWaistCurvatureExperiment.Create(id,.3,1.5);
+            Need(r.Status=="unresolved"&&r.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified&&!r.ProductionAllowed&&!r.ExportAllowed,"combined research gate");
+            try {r.RequireResearchComposition();throw new Exception("Combined composition accepted");} catch(InvalidOperationException) { }
+            Console.WriteLine($"{id} combined waist/curvature: waist [{r.WaistBefore.ApproximateLowerCm:G10},{r.WaistBefore.ApproximateUpperCm:G10}] => [{r.WaistAfter.ApproximateLowerCm:G10},{r.WaistAfter.ApproximateUpperCm:G10}], target={r.WaistTarget:G10}; side front=[{r.FrontSide.ApproximateLowerCm:G10},{r.FrontSide.ApproximateUpperCm:G10}], back [{r.BackBefore.ApproximateLowerCm:G10},{r.BackBefore.ApproximateUpperCm:G10}] => [{r.BackAfter.ApproximateLowerCm:G10},{r.BackAfter.ApproximateUpperCm:G10}]; deviation waist/side7/side8≈{r.WaistShapeBound:G8}/{r.SideLowerShapeBound:G8}/{r.SideUpperShapeBound:G8} cm; topology front before/after={r.FrontBeforeTopology.Unresolved}/{r.FrontAfterTopology.Unresolved}, back before/after={r.BackBeforeTopology.Unresolved}/{r.BackAfterTopology.Unresolved}; research only.");
+        }
+        void Reject(string id,double waist,double side) {try {CombinedWaistCurvatureExperiment.Create(id,waist,side);throw new Exception("Invalid combined candidate accepted");}catch(ArgumentException) { }}
+        Reject("synthetic-base",0,1.5);Reject("synthetic-base",.3,0);Reject("synthetic-base",.3,.5);Reject("unknown",.3,1.5);Reject("synthetic-base",double.NaN,1.5);
     }
     internal static void CheckSideCurvature()
     {
