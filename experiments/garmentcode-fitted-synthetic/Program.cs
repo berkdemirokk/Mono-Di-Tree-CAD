@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -383,6 +383,51 @@ internal static class Validator
             covered=interval[1].GetInt32();
         }
         Need(covered==expected,"trace ruffle incomplete");
+    }
+    internal static void CheckWaistConstraints()
+    {
+        var paths=new[]{new BackWaistConstraintStudy.Segment(0,0,1,0),new BackWaistConstraintStudy.Segment(10,10,11,10),new BackWaistConstraintStudy.Segment(0,-5,1,-5)};
+        var exact=BackWaistConstraintStudy.AssessVectors(paths,3);
+        var below=BackWaistConstraintStudy.AssessVectors(paths,Math.BitDecrement(3));
+        var above=BackWaistConstraintStudy.AssessVectors(paths,Math.BitIncrement(3));
+        Need(exact.Assessment==BackWaistConstraintStudy.Finding.Unresolved && above.Assessment==BackWaistConstraintStudy.Finding.Unresolved && below.Assessment==BackWaistConstraintStudy.Finding.ImpossibleUnderConstraints,"exact vector threshold");
+        try { BackWaistConstraintStudy.RefuseCorrection(exact);throw new InvalidDataException("Unresolved correction returned"); }
+        catch(InvalidOperationException ex) { Need(ex.Message.Contains("No certified correction"),"wrong unresolved correction error"); }
+        try { BackWaistConstraintStudy.RefuseCorrection(below);throw new InvalidDataException("Impossible correction returned"); }
+        catch(InvalidOperationException ex) { Need(ex.Message.Contains("Target impossible"),"wrong impossible correction error"); }
+        var shifted=new[]{new BackWaistConstraintStudy.Segment(20,30,21,30),new BackWaistConstraintStudy.Segment(-10,8,-9,8),new BackWaistConstraintStudy.Segment(5,6,6,6)};
+        Need(BackWaistConstraintStudy.AssessVectors(shifted,Math.BitDecrement(3)).Assessment==below.Assessment,"translated displacement changed bound");
+        try { BackWaistConstraintStudy.AssessVectors(paths[..2],3);throw new InvalidDataException("Incomplete constraint accepted"); } catch(ArgumentException) { }
+        var invalid=paths.ToArray();invalid[0]=invalid[0] with { Ax=double.NaN };
+        try { BackWaistConstraintStudy.AssessVectors(invalid,3);throw new InvalidDataException("Invalid constraint accepted"); } catch(ArgumentException) { }
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back stages");
+        using var reader=new StreamReader(stream,Encoding.UTF8,true);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="6A8386924160425D49E48A88117419C3ECBD3CDA154413CD8EA2323579B1A856","constraint source hash");
+        using var doc=JsonDocument.Parse(text);var cases=doc.RootElement.GetProperty("cases").EnumerateArray().ToArray();Need(cases.Length==5,"constraint source cases");
+        foreach(var item in cases) {
+            string id=item.GetProperty("id").GetString()!;var edges=item.GetProperty("edges");
+            Need(edges.GetArrayLength()==11,"constraint source topology size");
+            for(int n=0;n<11;n++)Need(Point(edges[n].GetProperty("end"))==Point(edges[(n+1)%11].GetProperty("start")),"constraint source continuity");
+            foreach(int n in new[]{0,3,6})Need(edges[n].GetProperty("kind").GetString()=="CurveEdge","constraint source waist kind");
+            foreach(int n in new[]{1,2,4,5})Need(edges[n].GetProperty("kind").GetString()=="Edge","constraint source dart kind");
+            var source=new[]{0,3,6}.Select(n=>{ var a=Point(edges[n].GetProperty("start"));var b=Point(edges[n].GetProperty("end"));return new BackWaistConstraintStudy.Segment(a.X,a.Y,b.X,b.Y); }).ToArray();
+            double target=item.GetProperty("body_input_cm_degree").GetProperty("waist_back_width").GetDouble()/2;
+            var sourceProof=BackWaistConstraintStudy.AssessVectors(source,target);
+            var body=SyntheticBodyCatalog.Create(id);var candidate=BackWaistConstraintStudy.Inspect(body,ResearchDesign.PinnedFitted);
+            var beforeTopology=BackBezierAudit.Inspect(BackWaistCandidate.Create(id));
+            Need(beforeTopology.Separated==44 && beforeTopology.EndpointOnly==11 && beforeTopology.Unresolved==0 && beforeTopology.NonMonotone==0 && !beforeTopology.ExportAllowed,"constraint candidate baseline topology");
+            var sourceInput=item.GetProperty("body_input_cm_degree");var partialFields=ResearchMeasurements.FieldsFor(ResearchMeasurements.Operation.PinnedGarment);
+            var partial=ResearchMeasurements.Create(partialFields.Select(k=>new KeyValuePair<string,decimal>(k,sourceInput.GetProperty(k).GetDecimal())),"cm","degree").BuildPinnedGarment();
+            var partialProof=BackWaistConstraintStudy.Inspect(partial,ResearchDesign.PinnedFitted);
+            Need(partialProof.Assessment==candidate.Assessment && partialProof.TargetCm==candidate.TargetCm && partialProof.ApproximateVectorLowerBoundCm==candidate.ApproximateVectorLowerBoundCm,"partial constraint differs from full body");
+            Need(sourceProof.Assessment==BackWaistConstraintStudy.Finding.ImpossibleUnderConstraints && candidate.Assessment==BackWaistConstraintStudy.Finding.ImpossibleUnderConstraints,"waist constraint result: "+id);
+            Need(candidate.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !candidate.ProductionAllowed && !candidate.ExportAllowed && candidate.Status=="unresolved","constraint output gate");
+            try { BackWaistConstraintStudy.AttemptCorrection(body,ResearchDesign.PinnedFitted);throw new InvalidDataException("Infeasible waist correction returned"); } catch(InvalidOperationException) { }
+            try { candidate.RequireResearchComposition();throw new InvalidDataException("Constraint result composed"); } catch(InvalidOperationException) { }
+            var current=candidate.CurrentLength ?? throw new InvalidDataException("Missing candidate length bound");
+            double sourceBefore=new[]{0,3,6}.Sum(n=>edges[n].GetProperty("length_cm").GetDouble());
+            Console.WriteLine($"{id} fixed ends/translated darts: source before={sourceBefore:G10} cm, candidate before≈[{current.ApproximateLowerCm:G10},{current.ApproximateUpperCm:G10}] cm, source vector lower≈{sourceProof.ApproximateVectorLowerBoundCm:G10} cm, candidate vector lower≈{candidate.ApproximateVectorLowerBoundCm:G10} cm, target={target:G10} cm; no corrected candidate.");
+        }
     }
     internal static void CheckSeamCausality()
     {

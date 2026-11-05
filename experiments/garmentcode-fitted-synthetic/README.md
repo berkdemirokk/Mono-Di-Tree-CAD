@@ -296,3 +296,7 @@ Sentetik testler eksik/null alan, yanlış birim, türetilmiş alan, tekrar, tek
 [Kaynak aşama izi ve dikiş farkı analizi](SEAM_CAUSALITY_TR.md), üst–etek bel farkını kaynak arka bel eğrisi/pens sonrası arayüz fazlasıyla sayısal olarak ayrıştırır; kol evi ve yaka kesimlerinin omuz/yan arayüzlerine etkisini beş sentetik örnekte gösterir. Seçili arka etek yanındaki `1,05` kaynakta açık bölüm katsayısıdır; omuz, gövde yanı ve üst–etek bel farkları için kaydedilmiş katsayı `1` olup fiziksel rahatlık niyeti bu verilerden çıkarılamaz. Bunlar üretim talimatları değildir; ölçüye bağlı bir düzeltici henüz uygulanmamıştır.
 
 Büzgü katsayısı araştırma izi artık arayüz kenar sayısını ve bölümlerin boşluksuz, çakışmasız tam kapsamını da denetler; boş veya eksik bölüm `1` katsayılı kabul edilmez. Negatif fixture testleri [dikiş farkı analizinde](SEAM_CAUSALITY_TR.md) açıklanır. Üretim kapalıdır.
+
+## Arka bel düzeltme fizibilitesi
+
+[Sabit dış uçlar ve pens kısıtları çalışması](WAIST_CONSTRAINT_STUDY_TR.md), kaynak ve C# adaylarını beş sentetik bedende ayrı inceler. Tam eşitlik hedefinde ve iki pensin yalnız dönmeden/bozulmadan ötelenebilmesi koşulunda, üç bel parçasının toplam yer değiştirme vektörü kesin dyadic aritmetikle hedef uzunluktan büyüktür. Bu beş örnekte kısıtlar altında düzeltme geometrik olarak erişilemez; prototip sahte bir düzeltme üretmez. Kısıtların gevşetildiği başka problemler veya fiziksel toleranslar bu bulgudan çözülmez. Önceki topoloji yalnız temsil edilen geometri içindir, sonrasında aday yoktur. Üretim ve plotter kapalıdır.
