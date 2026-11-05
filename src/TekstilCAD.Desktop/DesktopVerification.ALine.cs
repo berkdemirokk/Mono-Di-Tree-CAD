@@ -110,6 +110,7 @@ internal static partial class DesktopVerification
             foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse",
                 sourceText+";bu ölçüler geçerli değil",sourceText+";önceki ölçüleri kullanmayın",
                 sourceText+";ölçüler doğru değilmiş",sourceText+";ölçüleri kullanmayacağım",
+                sourceText+";ölçüler yanlışmış",sourceText+";ölçüleri dikkate almayacağım",sourceText+";ölçüler değiştirilecek",
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1,000 mm"),
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1.000 mm")})
             {
@@ -132,6 +133,17 @@ internal static partial class DesktopVerification
                 designOnlyWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(designOnlyWindow);
             }
             finally { designOnlyWindow.Close(); }
+            foreach(var affirmative in new[]{"ölçüler geçerli","ölçüleri kullanmak istiyorum"})
+            {
+                var affirmativeWindow=new ALinePanelPreviewWindow(owner,affirmative,sourceText);
+                try
+                {
+                    Check(affirmativeWindow.ProposalAgreementForVerification.IsEnabled,"Documented whole-field affirmative phrase permits an explicit section proposal: "+affirmative,checks);
+                    affirmativeWindow.ProposalAgreementForVerification.IsChecked=true;Click(affirmativeWindow.ProposalApplyForVerification);
+                    affirmativeWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(affirmativeWindow);
+                }
+                finally { affirmativeWindow.Close(); }
+            }
             Fill(window,true);window.UnitForVerification.SelectedIndex=0;window.AgreementForVerification.IsChecked=true;
             window.FieldsForVerification[4].Text="1,000";Click(window.ReviewForVerification);Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count==0 && !window.ConfirmationForVerification.IsEnabled && window.StatusForVerification.Text.Contains("üç basamaklı ayırıcı belirsiz"),

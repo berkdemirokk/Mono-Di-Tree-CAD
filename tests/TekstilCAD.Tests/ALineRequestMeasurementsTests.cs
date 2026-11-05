@@ -73,12 +73,20 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("ölçüler kesin değillermiş")]
     [InlineData("BU ÖLÇÜLER DOĞRU DEĞİLMİŞ")]
     [InlineData("ölçüleri kullanmayacağız")]
+    [InlineData("ölçüler yanlışmış")]
+    [InlineData("ölçüleri dikkate almayacağım")]
+    [InlineData("bu ölçüler değiştirilecek")]
+    [InlineData("ölçüler hakkında emin değilim")]
+    [InlineData("ölçüleri başkullanmayacağım")]
+    [InlineData("ölçüleri kullanmakılavuzu")]
+    [InlineData("ölçüler geçerli; değil")]
+    [InlineData("ölçüleri kullanmak istiyorum\nama vazgeçtim")]
     public void WithdrawalInEitherFieldOrOrderBlocksAllProposals(string withdrawal)
     {
         foreach(var (prompt,notes) in new[]{(AllFields+";"+withdrawal,""),(withdrawal+";"+AllFields,""),(AllFields,withdrawal),(withdrawal,AllFields)})
         {
             var result=ALineRequestMeasurements.Review(prompt,notes);
-            Assert.False(result.Complete);Assert.Contains(result.Issues,s=>s.Contains("geri çekiliyor"));
+            Assert.False(result.Complete);Assert.Contains(result.Issues,s=>s.Contains("serbest ölçü ifadesi"));
         }
     }
     [Theory]
@@ -98,15 +106,23 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("uzun kollu değil")]
     [InlineData("önceki modeli kullanmayın")]
     [InlineData("ölçüler geçerli")]
+    [InlineData("bu ölçüler geçerli!")]
     [InlineData("elbise; kumaş düz olsun")]
     [InlineData("kumaş doğru değilmiş; modeli kullanmayacağım")]
     [InlineData("ölçüleri kullanmak istiyorum")]
+    [InlineData("Bu ölçüleri kullanmak istiyorum.")]
     [InlineData("önölçüleri kullanmayacağım")]
-    [InlineData("ölçüleri başkullanmayacağım")]
-    [InlineData("ölçüleri kullanmakılavuzu")]
     public void HarmlessDesignWordsAndExplicitZeroEaseRemainSupported(string description)
     {
         var result=ALineRequestMeasurements.Review(description,AllFields.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 0 mm"));
         Assert.True(result.Complete);Assert.Empty(result.Issues);Assert.Equal(0m,result.Millimeters[4]);
+    }
+    [Fact] public void AffirmativeExceptionRequiresAnEntireFieldAndCannotClearAnUnknownMeasurementStatement()
+    {
+        Assert.False(ALineRequestMeasurements.Review(AllFields+";ölçüler geçerli","").Complete);
+        Assert.False(ALineRequestMeasurements.Review("ölçüler geçerli",AllFields+";ölçüler yanlışmış").Complete);
+        Assert.False(ALineRequestMeasurements.Review("ölçüler geçerli?",AllFields).Complete);
+        Assert.True(ALineRequestMeasurements.Review("ölçüler geçerli",AllFields).Complete);
+        Assert.True(ALineRequestMeasurements.Review(AllFields,"ölçüleri kullanmak istiyorum").Complete);
     }
 }
