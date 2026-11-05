@@ -9758,6 +9758,13 @@ internal static partial class DesktopVerification
                                       "Cancelled pre-write checkpoint leaves no staging file",checks);
                             } finally { releaseSave.Set();garmentProbe.BeforeSessionSaveForVerification=null;File.Delete(cancelledPath); }
                         }
+                        var fixedSnapshot=new PhotoRegionSharpPrototype.RegionProposal.Snapshot(4,3,"6DB65FD59FD356F6729140571B5BCD6BB3B83492A16E1BF0A3884442FC3C8A0E",[0,0,0,0,1,0,0,0,0,0,0,0]);
+                        using(var fixedJson=JsonDocument.Parse(PhotoRegionSession.Encode(fixedSnapshot,null,0,0,2,3)))
+                            Check(fixedJson.RootElement.GetProperty("ContentHash").GetString()=="9A4F64D46840789002838C62884CFB5F178187FC06030CAF6724B3F21819DCAC",
+                                  "Garment checkpoint digest matches an independent fixed binary vector",checks);
+                        using(var checkpointJson=JsonDocument.Parse(File.ReadAllBytes(checkpoint)))
+                            Check(checkpointJson.RootElement.GetProperty("Version").GetInt32()==2 && checkpointJson.RootElement.GetProperty("ContentHash").GetString()!.Length==64,
+                                  "New garment checkpoints contain a versioned content digest",checks);
                         var savedBytes=File.ReadAllBytes(checkpoint);
                         Check(!SaveCheckpoint(garmentProbe,checkpoint) && File.ReadAllBytes(checkpoint).SequenceEqual(savedBytes),
                               "Garment checkpoint does not overwrite an existing file",checks);
@@ -9805,6 +9812,20 @@ internal static partial class DesktopVerification
                             invalidLabels["Labels"]=Convert.ToBase64String(labelsBytes);File.WriteAllText(corruptCheckpoint,invalidLabels.ToJsonString());
                             Check(!LoadCheckpoint(restoredRegion,corruptCheckpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
                                   "Invalid checkpoint mask labels preserve the existing garment region",checks);
+                            var validTamper=System.Text.Json.Nodes.JsonNode.Parse(System.Text.Encoding.UTF8.GetString(savedBytes))!;
+                            var changedLabels=Convert.FromBase64String(validTamper["Labels"]!.GetValue<string>());
+                            changedLabels[0]=changedLabels[0]==0 ? (byte)2 : (byte)0;validTamper["Labels"]=Convert.ToBase64String(changedLabels);
+                            File.WriteAllText(corruptCheckpoint,validTamper.ToJsonString());
+                            Check(!LoadCheckpoint(restoredRegion,corruptCheckpoint) && restoredRegion.Status.Text.Contains("içerik özeti") &&
+                                  restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
+                                  "Valid-looking mask corruption is rejected without losing current work",checks);
+                            var legacy=System.Text.Json.Nodes.JsonNode.Parse(System.Text.Encoding.UTF8.GetString(savedBytes))!;
+                            legacy["Version"]=1;legacy.AsObject().Remove("ContentHash");File.WriteAllText(corruptCheckpoint,legacy.ToJsonString());
+                            var legacyRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
+                            try { Check(LoadCheckpoint(legacyRegion,corruptCheckpoint) && legacyRegion.CopyMaskForVerification()!.SequenceEqual(corrected) &&
+                                        legacyRegion.Status.Text.Contains("içerik özeti yok"),
+                                        "Legacy checkpoint loads with an explicit missing-integrity warning",checks); }
+                            finally { legacyRegion.Close(); }
                             using(var oversized=new FileStream(corruptCheckpoint,FileMode.Create,FileAccess.Write,FileShare.None))oversized.SetLength(3_000_001);
                             Check(!LoadCheckpoint(restoredRegion,corruptCheckpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
                                   "Oversized garment checkpoint is rejected without losing current work",checks);

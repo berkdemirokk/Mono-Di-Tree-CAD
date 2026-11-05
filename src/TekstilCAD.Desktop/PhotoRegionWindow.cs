@@ -336,7 +336,7 @@ internal sealed class PhotoRegionWindow : Window
             var data=result.Data;var boxes=new[] { left,top,width,height };var values=new[] { data.X,data.Y,data.RectangleWidth,data.RectangleHeight };
             changingRectangle=true;try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=values[i].ToString(CultureInfo.InvariantCulture);boxes[i].Tag=boxes[i].Text; } } finally { changingRectangle=false; }
             regionRevision++;snapshot=result.Snapshot;sourceBgr=result.Bgr;appliedMarks=data.AppliedMarks;undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;pendingMarks.Clear();pendingUndo=null;
-            UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(result.Components);Status.Text="Bölge aynı fotoğraf pikselleriyle açıldı; bölgeyi yeniden seçin. Kalıp veya ölçü doğrulanmadı.";return true;
+            UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(result.Components);Status.Text="Bölge aynı fotoğraf pikselleriyle açıldı; bölgeyi yeniden seçin. Kalıp veya ölçü doğrulanmadı."+(data.Version==1 ? " Eski dosyada içerik özeti yok; dosya değişiklikleri doğrulanamadı." : " İçerik özeti eşleşti; bu dijital imza değildir.");return true;
         } catch(OperationCanceledException) { if(!closed && revision==regionRevision)Status.Text="Bölge açma iptal edildi; mevcut çalışma korundu.";return false; }
         catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
         { if(!closed && revision==regionRevision)Status.Text="Bölge açılamadı; mevcut çalışma korundu: "+ex.Message;return false; }
