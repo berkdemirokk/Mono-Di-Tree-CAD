@@ -19,11 +19,15 @@ public sealed class OffsetLocalDetailUnverifiedException : ArgumentException
 
     /// <summary>Unverified display-only geometry, not an approved pattern piece.</summary>
     public ImmutableArray<Point2> Preview { get; } = ImmutableArray<Point2>.Empty;
-    /// <summary>Zero-based original source vertex or edge-start index; null when the reverse comparison failed.</summary>
+    /// <summary>Source-only compatibility accessor. Null for a recovered-contour failure even when
+    /// Sample and SamplePoint are present. Use ComparisonIndex together with ComparisonSide for display.</summary>
     public int? SourceIndex => ComparisonSide == OffsetComparisonSide.Source ? ComparisonIndex : null;
     /// <summary>Zero-based vertex or edge-start index within the indicated comparison contour.</summary>
     public int? ComparisonIndex { get; }
+    /// <summary>Identifies the contour containing ComparisonIndex and SamplePoint; recovered indices
+    /// must never be interpreted as indices into the original source or the forward Preview.</summary>
     public OffsetComparisonSide? ComparisonSide { get; }
+    /// <summary>Sample kind on ComparisonSide, not necessarily on the source contour.</summary>
     public OffsetLocalSample? Sample { get; }
     /// <summary>Sample position in millimetres on the indicated grid contour.</summary>
     public Point2? SamplePoint { get; }
