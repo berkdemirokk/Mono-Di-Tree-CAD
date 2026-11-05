@@ -29,3 +29,20 @@ The optional check requires the known SHA-256 fixture, exactly two panels,
 25 edges and three anchors, and checks the recorded endpoint coordinates and
 candidate IDs; a different fixture fails rather than inheriting those claims.
 Each diagnostic result records the explicit depth and total node limits.
+
+`dyadic-box-oracle.mjs` is a separate exact-arithmetic research checker. It
+decodes each finite binary64 into an integer multiple of 2⁻¹⁰⁷⁴, subdivides
+control polygons with BigInt dyadic arithmetic, and excludes an entire edge
+only when every visited control box is strictly farther than the encoded
+threshold. Equality, zero-length edges and budget/depth exhaustion stay
+unresolved. An unresolved box does not prove contact. The exact claim concerns
+only supplied binary64 local coordinates and the mathematical polynomial or
+line they encode; it does not cover upstream rounding, source identity, notch
+semantics, physical tolerances or suitability for production.
+
+Work is limited to 1,024 edges, 50,000 total nodes, depth 32 and coordinates or
+thresholds within ±10¹² mm. BigInt operation cost grows with dyadic depth and
+binary64 exponent; these are resource limits, not a latency guarantee. It
+holds a bounded subdivision stack and output and returns untouched later edges
+as unexamined if the shared node budget ends. Optional fixture testing requires
+the same pinned synthetic hash described above. No matrix adapter is included.
