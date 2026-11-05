@@ -113,8 +113,7 @@ public sealed class ProjectWriteLeaseCancellationTests
         Assert.Throws<OperationCanceledException>(()=>ProjectStorage.AcquireWriteLease(path,cancellation.Token,
             afterAcquireForVerification:_=> { acquired=true;cancellation.Cancel(); }));
         Assert.True(acquired);
-        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
-        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+        AssertAnotherThreadCanAcquire(path);
     }
 
     [Fact]
@@ -127,9 +126,23 @@ public sealed class ProjectWriteLeaseCancellationTests
         bool wasAbandoned=false;
         using(ProjectStorage.AcquireWriteLease(path,afterAcquireForVerification:abandoned=>wasAbandoned=abandoned))
             Assert.True(wasAbandoned);
-        var following=Task.Run(()=> { using var lease=ProjectStorage.AcquireWriteLease(path);return true; });
-        Assert.True(following.Wait(TimeSpan.FromSeconds(5)) && following.Result);
+        AssertAnotherThreadCanAcquire(path);
         GC.KeepAlive(abandonedLease);
+    }
+
+    private static void AssertAnotherThreadCanAcquire(string path)
+    {
+        bool acquired=false;Exception? error=null;
+        // Mutex ownership is thread-affine. Use a dedicated thread for both
+        // acquisition and disposal, independent of the shared test pool.
+        var thread=new Thread(()=>
+        {
+            try { using var lease=ProjectStorage.AcquireWriteLease(path);acquired=true; }
+            catch(Exception ex) { error=ex; }
+        }) { IsBackground=true };
+        thread.Start();
+        Assert.True(thread.Join(TimeSpan.FromSeconds(5)),"Another writer did not finish acquiring and releasing the lease.");
+        Assert.Null(error);Assert.True(acquired);
     }
 
 }
