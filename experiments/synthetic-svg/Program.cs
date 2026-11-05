@@ -57,4 +57,3 @@ static string Render((string Name,E[] Edges)[] panels,string id)
     return s.Append("</svg>").ToString();
 }
 internal sealed record E(string Kind,double Ax,double Ay,double Bx,double By,(double X,double Y)[] Controls,double? ArcY);
-

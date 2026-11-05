@@ -7,5 +7,3 @@
     <ProjectReference Include="../../src/TekstilCAD.Core/TekstilCAD.Core.csproj" />
   </ItemGroup>
 </Project>
-
-

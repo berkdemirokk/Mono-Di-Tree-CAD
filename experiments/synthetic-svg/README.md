@@ -9,4 +9,3 @@ dotnet run --project experiments/synthetic-svg/SyntheticSvg.csproj -- synthetic-
 ```
 
 Diğer sabit seçenekler `synthetic-distinct` ve `synthetic-third`'tür. Program hiçbir ölçü veya çıktı yolu almaz. Her çağrı yalnız `experiments/synthetic-svg/test-output` altında yeni ve benzersiz SVG dosyası oluşturmaya çalışır; dosya adı konsolda yazılır. Dosya otomatik açılmaz. Dosyanın kendisinde de sentetik/doğrulanmamış uyarısı vardır. Buradaki hesapların kapsamı ve sınırlamaları için [araştırma notunu](../garmentcode-fitted-synthetic/README.md) inceleyin. Gelecekte ölçü bağlantısı ayrı tasarım, gizlilik ve doğrulama çalışması gerektirir; bu deney böyle bir yol açmaz.
-
