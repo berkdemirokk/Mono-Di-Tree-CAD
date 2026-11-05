@@ -12,7 +12,7 @@ internal static class Compare
 {
     const string MatrixHash="a68c9d9184ccbe40b0eaeb8e18c58ab75c4a16b5ef03fd9e26d2866837330c1b";
     const string SourceHash="2eb13d29c5549ef18cc8180ed751f4d50635a91e408526c9fbed3de3e5d9edb0";
-    internal static byte[] Source(){var a=Assembly.GetExecutingAssembly();var name=a.GetManifestResourceNames().Single(x=>x.EndsWith("source-cases.json",StringComparison.Ordinal));using var s=a.GetManifestResourceStream(name)??throw new InvalidDataException();using var m=new MemoryStream();s.CopyTo(m);return m.ToArray();}
+    internal static byte[] Source(){var a=Assembly.GetExecutingAssembly();var name=a.GetManifestResourceNames().Single(x=>x.EndsWith(".source-cases.json",StringComparison.Ordinal));using var s=a.GetManifestResourceStream(name)??throw new InvalidDataException();using var m=new MemoryStream();s.CopyTo(m);return m.ToArray();}
     static Point Pt(JsonElement x)=>new(x.GetProperty("x").GetDouble(),x.GetProperty("y").GetDouble());
     static bool Has(JsonElement e,string key,string value)=>e.GetProperty(key).EnumerateArray().Any(x=>x.GetString()==value);
     static bool Same(Point? p,JsonElement q)=>p is Point a && a==Pt(q);

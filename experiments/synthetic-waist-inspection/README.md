@@ -1,31 +1,37 @@
-# Sentetik arka yarım bel karşılaştırması
+# Sentetik ön ve arka bel zinciri incelemesi
 
-Bu bağımsız WPF araştırma projesi yalnız sabit uydurma senaryolar içindir. Kullanıcı önce senaryoyu, sonra tek mevcut ölçüm seçeneğini seçer: **arka yarım bel, üst kaynak adayı ↔ alt arka bel çizgisi**. Dört panel ayrı ve aynı ekran ölçeğinde gösterilir. Çıktı iki uzunluğu ve üst eksi alt farkını mm cinsinden yaklaşık olarak gösterir; eşik, pass/fail, dikiş eşleşmesi, üretim veya gerçek bedene uyum kararı vermez. Aynı senaryo ID iki farklı deney girdisini seçer; tek beden ve uyum kanıtı değildir.
+Bu bağımsız WPF araştırma projesi yalnız sabit uydurma senaryolar içindir. Seçili tek desteklenen model: Breanna 4.10.2 ön göğüs pensi **06:00**, ikincil pens yok, arka bel ve omuz pensleri kapalı. İki üst yol ile iki `ALinePanelPreview.Create` alt paneli aynı ekranda ayrı gösterilir. Senaryo kimliği, iki farklı kaynaktaki sabit sentetik girdileri seçer; ortak beden veya uygunluk kanıtı değildir. Ön ve arka her biri kendi alt hattıyla yalnız ölçü incelemesi amacıyla eşlenir; dikiş eşleşmesi varsayılmaz.
 
-## Kaynak dayanağı ve kapsam
+## Kaynak zinciri ve somut eksik
 
-- Üst: önceki worker'ın Breanna 4.10.2 `primary-only` sentetik seçeneği. Ön birincil göğüs pensi 06:00, ikincil pens yok; arka bel ve omuz pensleri **kapalıdır**. Kaynak `back.mjs` dikiş şablonunda arka `cbWaist → waist` çizgisidir (`breanna.back/seam/op-3`, kaynak işlem indeksi). Bu, ön pensli bel için bir sonuç değildir.
-- Alt: mevcut `ALinePanelPreview.Create`, arka kontur noktaları 0 → 1, merkezden yana düz bel çizgisi; ön/arka yaylar ve bolluklar ayrı girilmiş sabit sentetik değerlerdir. Form ekranı bu girdileri açıklar. Üst ve alt ölçüm/bolluk tanımları farklıdır.
-- Bu iki hat yalnız karşılaştırma amacıyla seçilir. Yön, pensin fiziksel davranışı, bel eğrisi, çentik, kumaş, dikiş yöntemi ve fiziksel eşleşme doğrulanmadı. Kaynak adayın geometrik uzunluğunun yakın olması bile dikilebilirlik veya beden uyumu ispatlamaz. Ön bel ve diğer kenar ilişkileri çözümlenmemiştir.
+`front-primary-only.mjs` 600 dalında ön dikiş yolu `cfWaist` sonrasına `primary` pensini ekler; `dart-utils.mjs` pens yolunu `primaryBustDart1 → primaryBustDartTip → primaryBustDart2` olarak tanımlar ve `front.mjs` bunu `insop` ile şablona ekler. Önceki sentetik matrisin bu konfigürasyonunda ön bel kaynak zinciri şu dört düz işlemdir:
 
-`source-cases.json`, daha önceki üç sabit `primary-only` sentetik matris örneğinin arka sınır işlemlerini ve nokta adı adaylarını taşır. Üreteç, eski matris dosyasının ve okunan Breanna `back.mjs` dosyasının SHA-256 değerlerini kaydeder; WPF deneyi beklenen hash metinlerini, seçimdeki dört pens seçeneğini, kaynak aday adlarını/indeksini ve tüm canlı arka yolun koordinat ve eğri kontrol noktalarını fixture ile birebir karşılaştırır. Yanlış üst senaryo, yanlış alt panel, değişmiş kaynak kenarı veya farklı pens seçeneği sonuç üretmez. İşlem kimliği `(senaryo, primary-only, breanna.back, seam/op-3)` bağlamında kullanılmalıdır; küresel veya kalıcı kimlik değildir.
+`cfWaist → dart1 → dartTip → dart2 → waist`.
 
-Kaydedilen hash metinleri ve şekil eşitliği kaynak/runtime kimliği için bağımsız imzalı kanıt değildir: çalışan Node modülü ve transitif bağımlılıkların tam kimliği, güvenilirliği, lisansları ve ağ yalıtımı hâlâ doğrulanmamıştır. Fixture içindeki isimler önceki kaynak araştırmasından gelen koordinat-adı adaylarıdır; kaynak nesnelerinin anlamsal kimliğinin tam korunduğu iddia edilmez. Hesaplanan Öklid uzunlukları binary64 yaklaşık değerleridir; belirsizlik veya uzman toleransı değildir. Node ağ bağlantısını kısıtlamaz; gerçek kişi verisi gönderilmez.
+Dıştaki iki çizgi, iki pens bacağından ayrılabilir. Bu, **kaynak yolunun yapısına ilişkin gözlemdir**. Kaynak uçlarında `origBustDart1/primaryBustDart1` ve `origBustDart2/primaryBustDart2` koordinat-adı çakışmaları vardır; bu isimler yalnız aday kaynağıdır. Pensin üç boyutlu katlanması, bacakların kumaşta oturması, bel eğrisinin düzeltilmesi, üst-alt yön/refakat noktaları ve dikiş toleransı hesaplanmış veya fiziksel doğrulanmış değildir. Dış çizgi toplamına *dikilebilir bel uzunluğu* sertifikası verilmez.
 
-## Sentetik sonuçlar ve test
+Somut uydurma `synthetic-base` örneğinde ön üstte iki dış çizginin toplamı yaklaşık **203,500 mm**, pens bacakları dahil açık kaynak yolunun dört çizgisi **512,011 mm**, merkez–yan uçları arasındaki düz mesafe ise **320,877 mm**'dir. Bunlar aynı şekil üzerindeki farklı ölçüm tanımlarıdır; bu fark tek başına doğru dikim hattını seçmeye, pensin kapatılmış geometrisini kurmaya veya alt panele uydurmaya yetmez. Alt ön bel çizgisi ayrıca **180,000 mm**'dir. Bu, bel hattının semantik olarak tanımlanması ve pens sonrası üst–alt ortak hat geometrisinin oluşturulmasının, dört görünür konturu tek bir elbiseye dönüştürmek için hâlâ kritik eksik olduğunu somut olarak gösterir.
 
-Bu makinedeki `--verify` iki farklı sabit senaryo için gerçek worker ön/arka çıktısını ve gerçek `ALinePanelPreview.Create` alt panellerini çalıştırdı:
+Arka üstte seçili penssiz kaynak adayı `cbWaist → waist`, kaynak `breanna.back/seam/op-3`; alt arka çizgi noktalar 0 → 1'dir. Bu çizgiler de yalnız araştırma karşılaştırmasıdır. Ekranda ön dış çizgiler ile ön alt ve arka aday ile arka alt ayrı raporlanır; otomatik tolerans, pass/fail veya uyum onayı üretilmez.
 
-| Senaryo | Üst arka yarım çizgi | Alt arka yarım çizgi | Üst − alt |
-|---|---:|---:|---:|
-| synthetic-base | yaklaşık 203,500 mm | 195,000 mm | +8,500 mm |
-| synthetic-scaled | yaklaşık 227,920 mm | 218,400 mm | +9,520 mm |
+| Sentetik senaryo | Ön üst dış çizgiler | Ön alt | Arka üst adayı | Arka alt |
+|---|---:|---:|---:|---:|
+| base | ≈203,500 mm | 180,000 mm | ≈203,500 mm | 195,000 mm |
+| scaled | ≈227,920 mm | 201,600 mm | ≈227,920 mm | 218,400 mm |
 
-Bu sayılar uydurma girdilerin hesap sonucudur; tolerans veya fiziksel uyum değerlendirmesi değildir. Test ayrıca farklı senaryodan üst veya alt parça geçirilmesini, arka pens seçeneği ve kaynak kenarı değişimini reddeder; seçim değişince eski ölçümün silinmesini ve geç gelen worker sonucunun bastırılmasını denetler. Başsız test 0 hata ve 0 derleme uyarısıyla geçti; görünür pencere, erişilebilirlik, gerçek kullanıcı ve fiziksel prova test edilmedi.
+Bu sayıların tamamı hesaplanmış uydurma örneklerdir; ölçüm doğruluğu veya dikim toleransı değildir.
+
+## İzlenebilirlik ve sınırlar
+
+`front-source-cases.json` ve `source-cases.json`, önceki sentetik matrisin `primary-only` senaryolarından üretilmiştir. Üreteçler matris ve kaynak dosyası SHA-256 değerlerini kaydeder; bu kod belirli kaynak/konfigürasyon hash metinlerini, bütün canlı ön/arka çizgi ve kübik işlemlerinin fixture ile tam geometrik eşitliğini, pens ve kenar adayı sırasını ve alt panelin aynı senaryo sonuçları olduğunu kontrol eder. Değişik kaynak kenarı, eksik isim adayı, farklı pens veya karışık üst/alt senaryo karşılaştırma üretmez. Kaydedilmiş hash metinleri, kaynak ve çalışan runtime'ın imzalı ve güvenilir olduğu anlamına gelmez; nokta isimleri önceki koordinat-adı eşleşmelerine dayalıdır.
+
+İki üst çıktının gerçek worker'ı yerel Node bağımlılıklarına dayanır. OS ağ izolasyonu, çalışan runtime/bağımlılık zinciri ve lisanslar doğrulanmadı; gerçek kişi ölçüsü verilmez. CAD, üretim, export, baskı ve cihaz yok. Formun kullanıcıya görünür düzeni, ekran okuyucu, dikiş ve fiziksel uygunluk test edilmedi; bağımsız kalıp uzmanı ve gerçek numune prova gerekir.
+
+## Başsız test
 
 ```powershell
 & 'C:\Projects\TekstilCAD\.tools\dotnet\dotnet.exe' build experiments/synthetic-waist-inspection/WaistInspection.csproj -v:q -m:1
 & 'C:\Projects\TekstilCAD\.tools\dotnet\dotnet.exe' experiments/synthetic-waist-inspection/bin/Debug/net10.0-windows/WaistInspection.dll --verify
 ```
 
-Kaynak worker ve paketler diğer yerel araştırma ağacındaki mutlak yollara bağlıdır; bu bir dağıtım paketi değildir. CAD, üretim, export, yazdırma ve cihaz kapıları kapalıdır. Ölçü alma yöntemi ve dikiş seçenekleri uzmanla belirlenmeden ve gerçek numune prova yapılmadan bu çalışma elbise kalıbı olarak sunulmamalıdır.
+İki farklı sentetik worker çıktısı ve gerçek alt panel hesapları; ön zincirin dört işlemi, pens bacaklarının açık hat/dış hat farkı, arka hat ölçümü, farklı pens/isim/koordinat/üst veya alt senaryo reddi ve eski sonucun temizlenmesi test edilir. Test görünür pencere açmaz. Yerel mutlak yollar, diğer araştırma ağacının paketleri ve imzasız manifest gereklidir; bağımsız dağıtım paketi değildir.
