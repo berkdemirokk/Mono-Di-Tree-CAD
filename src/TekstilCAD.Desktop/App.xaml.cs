@@ -6,7 +6,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        if(e.Args.Length==1 && e.Args[0]=="--verify-fitted-synthetic") { ShutdownMode=ShutdownMode.OnExplicitShutdown; Shutdown(FittedSyntheticVerification.Run()); return; }
+        if(e.Args.Length is 1 or 2 && e.Args[0]=="--verify-fitted-synthetic") { ShutdownMode=ShutdownMode.OnExplicitShutdown; Shutdown(FittedSyntheticVerification.Run(e.Args.Length==2 ? e.Args[1] : null)); return; }
         if(e.Args.Length==2 && e.Args[0]=="--render-design-request")
         {
             ShutdownMode=ShutdownMode.OnExplicitShutdown;Shutdown(DesktopVerification.RenderDesignRequest(e.Args[1]));return;

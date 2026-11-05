@@ -6,40 +6,54 @@ namespace TekstilCAD.Desktop;
 // Noninteractive verification entry point; does not open a window or write files.
 internal static class FittedSyntheticVerification
 {
-    internal static int Run()
+    internal static int Run(string? reportPath)
     {
+        string stage="başlangıç";
         try {
             foreach(var id in new[]{"synthetic-base","synthetic-distinct"}) {
-                var panels=FittedSyntheticAdapter.Create(id);
+                stage="katalog: "+id; var panels=FittedSyntheticAdapter.Create(id);
                 if(panels.Count!=6 || panels.Any(p=>p.Geometry.Bounds.IsEmpty || p.Geometry.Figures.Count!=1)) throw new InvalidOperationException("Six bounded panels required.");
             }
+            stage="bilinmeyen kimlik";
             try { FittedSyntheticAdapter.Create("personal"); throw new InvalidOperationException("Unknown catalogue entry accepted."); } catch(ArgumentException) { }
+            stage="yatay kuadratik";
             var edges=new FittedSyntheticAdapter.Edge[] {
                 new("Q",new(0,0),new(2,0),[new(.5,.5)],null),
                 new("L",new(2,0),new(0,0),[],null) };
             var q=(QuadraticBezierSegment)FittedSyntheticAdapter.Geometry(edges).Figures[0].Segments[0];
             if(q.Point1!=new Point(1,1) || q.Point2!=new Point(2,0)) throw new InvalidOperationException("Relative control conversion failed.");
             try { FittedSyntheticAdapter.Geometry([edges[0],edges[1] with { Start=new Point(3,0) }]); throw new InvalidOperationException("Disconnected contour accepted."); } catch(ArgumentException) { }
+            stage="yarım daire";
             var arc=new FittedSyntheticAdapter.Edge[] { new("A",new(0,0),new(2,0),[],.5),new("L",new(2,0),new(0,0),[],null) };
             var a=(ArcSegment)FittedSyntheticAdapter.Geometry(arc).Figures[0].Segments[0];
             if(a.Size!=new Size(1,1)||a.SweepDirection!=SweepDirection.Counterclockwise||a.IsLargeArc) throw new InvalidOperationException("Arc conversion failed.");
             // Skewed chords exercise both the rotation and translation of relative controls.
+            stage="eğik kübik";
             var cubic=new FittedSyntheticAdapter.Edge[] { new("C",new(1,2),new(5,5),[new(.25,.5),new(.75,-.25)],null),new("L",new(5,5),new(1,2),[],null) };
             var c=(BezierSegment)FittedSyntheticAdapter.Geometry(cubic).Figures[0].Segments[0];
             if(c.Point1!=new Point(.5,4.75)||c.Point2!=new Point(4.75,3.25)||c.Point3!=new Point(5,5)) throw new InvalidOperationException("Skewed cubic controls failed.");
+            stage="eğik kuadratik";
             var skewQ=new FittedSyntheticAdapter.Edge[] { new("Q",new(1,2),new(5,5),[new(.5,.25)],null),new("L",new(5,5),new(1,2),[],null) };
             var sq=(QuadraticBezierSegment)FittedSyntheticAdapter.Geometry(skewQ).Figures[0].Segments[0];
             if(sq.Point1!=new Point(2.25,4.5))throw new InvalidOperationException("Skewed quadratic control failed.");
             foreach(double y in new[]{-.75,-.25,.25,.75}) {
+                stage="eğik yay: "+y.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var skewArc=new FittedSyntheticAdapter.Edge[] { new("A",new(1,2),new(5,5),[],y),new("L",new(5,5),new(1,2),[],null) };
                 var geometry=FittedSyntheticAdapter.Geometry(skewArc);
                 var segment=(ArcSegment)geometry.Figures[0].Segments[0]; double radius=5*(.25+y*y)/(2*Math.Abs(y));
                 if(Math.Abs(segment.Size.Width-radius)>1e-12||segment.Point!=new Point(5,5)||segment.IsLargeArc!=(Math.Abs(y)>.5)||segment.SweepDirection!=(y>0?SweepDirection.Counterclockwise:SweepDirection.Clockwise)) throw new InvalidOperationException("Skewed arc flags failed.");
                 if(geometry.Transform.Value.M22!=-1 || geometry.GetFlattenedPathGeometry().Bounds.IsEmpty) throw new InvalidOperationException("Y reflection or rendered arc missing.");
             }
+            stage="arka plan";
             var threaded=Task.Run(()=>FittedSyntheticAdapter.Create("synthetic-base")).GetAwaiter().GetResult();
             if(threaded.Any(p=>!p.Geometry.IsFrozen || p.Geometry.Bounds.IsEmpty))throw new InvalidOperationException("Background geometry cannot cross the dispatcher.");
+            if(reportPath is not null) File.WriteAllText(reportPath,"Sentetik doğrulama başarılı.");
             return 0;
-        } catch { return 1; }
+        } catch(Exception ex) {
+            string detail="Sentetik doğrulama başarısız · "+stage+Environment.NewLine+ex;
+            Console.Error.WriteLine(detail);
+            if(reportPath is not null) { try { File.WriteAllText(reportPath,detail); } catch(Exception writeError) { Console.Error.WriteLine("Rapor yazılamadı: "+writeError.Message); } }
+            return 1;
+        }
     }
 }
