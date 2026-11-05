@@ -56,6 +56,7 @@ internal sealed class HpglReviewWindow : Window
     private Row? pageRow;
     internal Button CancelButton { get; } = new() { Content="Vazgeç",IsCancel=true,IsDefault=true,Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,0,8,0) };
     internal Button ExportButton { get; } = new() { Content="HPGL dosyasını oluştur",Padding=new Thickness(14,8,14,8) };
+    internal Button DeclaredProfileButtonForVerification { get; } = new() { Content="Cihaz alanı beyanını kontrol et…",Padding=new Thickness(8,6,8,6),Margin=new Thickness(0,0,8,0) };
     private sealed record Row(string Name,string FullName,string Identity,int Examined,int Changed,int Flattened,int Introduced,int Reversed,HpglTurnReview.Report Report);
 
     internal static string FormatOutputDimensions(HpglOutputBounds bounds,double unitsPerMillimeter)
@@ -119,9 +120,11 @@ internal sealed class HpglReviewWindow : Window
         AutomationProperties.SetName(BoundsSummary,"Hazırlanan HPGL çıktı koordinat sınırları");
         AutomationProperties.SetHelpText(BoundsSummary,"Yaklaşık en ve boy, dosyadaki tamsayı sınırlarının seçilen birim/mm değerine bölünmesiyle bulunur; fiziksel çıktı ölçüsü değildir.");
         Grid.SetRow(BoundsSummary,1);root.Children.Add(BoundsSummary);
-        var actions=new StackPanel { Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
+        var actions=new WrapPanel { Orientation=Orientation.Horizontal,HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,8,0,0) };
+        DeclaredProfileButtonForVerification.Click+=(_,_)=>new PlotterFileCheckWindow(this,preparedForReview).ShowDialog();
+        AutomationProperties.SetHelpText(DeclaredProfileButtonForVerification,"Yalnız girilen beyanlara göre dosyayı kontrol eder; cihaza bağlanmaz.");
         CancelButton.Click+=(_,_)=>DialogResult=false;ExportButton.Click+=(_,_)=>DialogResult=true;
-        actions.Children.Add(CancelButton);actions.Children.Add(ExportButton);Grid.SetRow(actions,4);root.Children.Add(actions);
+        actions.Children.Add(DeclaredProfileButtonForVerification);actions.Children.Add(CancelButton);actions.Children.Add(ExportButton);Grid.SetRow(actions,4);root.Children.Add(actions);
         SelectedDetails.IsReadOnly=true;SelectedDetails.AcceptsReturn=true;SelectedDetails.TextWrapping=TextWrapping.Wrap;
         SelectedDetails.MinHeight=48;SelectedDetails.MaxHeight=48;SelectedDetails.VerticalScrollBarVisibility=ScrollBarVisibility.Auto;
         SelectedDetails.Margin=new Thickness(0,8,0,0);

@@ -4089,6 +4089,27 @@ internal static partial class DesktopVerification
         var document=new ProjectDocument { Pieces=[Piece(0,true),Piece(20,false)] };var before=JsonSerializer.Serialize(document);
         var prepared=HpglFormat.Prepare(document,40);var review=new HpglReviewWindow(studio,prepared,document.Pieces);
         Render(review,Path.ChangeExtension(reportPath,".hpgl-review-compact.png"),580,420);
+        Check(review.DeclaredProfileButtonForVerification.IsEnabled && review.DeclaredProfileButtonForVerification.Focusable,
+            "HPGL review exposes an optional declared-profile file check",checks);
+        var fileCheck=new PlotterFileCheckWindow(review,prepared);
+        var priorContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            var pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(fileCheck.ResultForVerification.Text.Contains("eksik"),"Empty profile is explicitly incomplete",checks);
+            foreach(var item in new Dictionary<string,string> { ["manufacturer"]="Vendor",["model"]="Model",["firmware"]="1",["driver"]="1",["adapter"]="1",["reference"]="example",["protocol"]="HPGL",["units"]="40",["width"]="100",["height"]="100",["maxX"]="4000",["maxY"]="4000",["command"]="256",["job"]="100000" })fileCheck.InputsForVerification[item.Key].Text=item.Value;
+            fileCheck.TransportForVerification.SelectedIndex=0;fileCheck.CommandsForVerification.IsChecked=true;fileCheck.OriginForVerification.IsChecked=true;
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(fileCheck.ResultForVerification.Text.Contains("kontrolden geçti") && fileCheck.ResultForVerification.Text.Contains("doğrulanmadı"),
+                "Declared file limits can pass without claiming physical compatibility",checks);
+            fileCheck.InputsForVerification["units"].Text="20";
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(fileCheck.ResultForVerification.Text.Contains("birimi farklı"),"Declared unit mismatch remains visible",checks);
+            fileCheck.InputsForVerification["units"].Text="40";fileCheck.InputsForVerification["width"].Text="1";
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(fileCheck.ResultForVerification.Text.Contains("kabul edilmedi"),"Declared area overflow is reported",checks);
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(priorContext);fileCheck.Close(); }
         var root=(FrameworkElement)review.Content;var rows=review.ReportsGrid.Items.Cast<object>().ToArray();
         Check(review.InteractionTextForVerification.Contains("bulunmadı"),"HPGL review reports completed distinct-path check for separate pieces",checks);
         var overlapDocument=new ProjectDocument { Pieces=[Piece(0,false),Piece(5,false)] };
