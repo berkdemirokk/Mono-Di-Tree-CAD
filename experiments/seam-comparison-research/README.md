@@ -1,0 +1,7 @@
+# Explicit seam comparison research
+
+This isolated module compares only caller-declared ordered edges and length intervals. It does not obtain or infer edge roles, source semantics, dart closure, geometry, fit, sewing suitability or production approval. The source identity represents one explicitly assembled draft; cross-source assembly needs a separately evidenced identity adapter and is not inferred here. Inputs and outputs are snapshots; diagnostic output is recursively frozen. No CAD, export or device integration exists.
+
+All input lengths, including tolerance and both bounds, share the explicit `mm` or `cm` unit. Front/back arcs represent whole front/back body arcs; ease is explicitly separate and the reported half widths divide each augmented arc by two. A nonzero total discrepancy makes the result unresolved. No physical measurement tolerance is inferred. Comparison requires declared half-piece, source identity, edge identity and order, direction, dart status and tolerance for both sides; mismatched identities are rejected. Direction is recorded, not geometrically verified. Caller-declared intervals and floating-point additions/subtractions are not certified bounds; even a reported disjointness is a numerical diagnostic, not proof of physical incompatibility. Equality at the declared tolerance is not labelled disjoint. Output never approves production.
+
+Synthetic tests: `node --test experiments/seam-comparison-research/seam.test.mjs`. No real measurements are included.
