@@ -319,7 +319,8 @@ internal sealed class ALinePanelPreviewWindow : Window
                 }
                 Draw(preview.Front,20,"Ön yarım · merkez sol",Brushes.DarkBlue);Draw(preview.Back,320,"Arka yarım · merkez sol",Brushes.DarkRed);
                 var difference=preview.SideMismatchMm;
-                var differenceText=difference==0 ? "hesaplanan fark 0 mm" : difference.ToString("F3")==0d.ToString("F3") ? "hesaplanan fark sıfırdan büyük (üç ondalığa yuvarlanınca 0,000 mm)" : $"hesaplanan fark yaklaşık {difference:F3} mm";
+                var formattedZero=0d.ToString("F3");
+                var differenceText=difference==0 ? "hesaplanan fark 0 mm" : difference.ToString("F3")==formattedZero ? $"hesaplanan fark sıfırdan büyük (üç ondalığa yuvarlanınca {formattedZero} mm)" : $"hesaplanan fark yaklaşık {difference:F3} mm";
                 status.Text=$"Ön yan çizgi yaklaşık {preview.FrontSideLengthMm:F3} mm; arka yaklaşık {preview.BackSideLengthMm:F3} mm; {differenceText}. Uzunluklar ve fark gösterimde 0,001 mm'ye yuvarlanır. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
                 blockers.Text=string.Join(Environment.NewLine,preview.Unresolved);
             }

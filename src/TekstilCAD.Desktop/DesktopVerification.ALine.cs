@@ -146,6 +146,18 @@ internal static partial class DesktopVerification
                 Check(sideDisplay.StatusForVerification.Text.Contains("hesaplanan fark 0 mm") && sideDisplay.StatusForVerification.Text.Contains("yuvarlanır") && sideDisplay.StatusForVerification.Text.Contains("Dikiş eşleşmesi onaylanmadı"),"Equal side lengths report computed zero and rounding limits",checks);
                 sideDisplay.FieldsForVerification[3].Text="500.0010";ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük") && sideDisplay.StatusForVerification.Text.Contains("yuvarlanınca"),"Small nonzero side difference is not presented as equality",checks);
+                var originalCulture=System.Globalization.CultureInfo.CurrentCulture;
+                try
+                {
+                    foreach(var name in new[]{"tr-TR","en-US"})
+                    {
+                        System.Globalization.CultureInfo.CurrentCulture=System.Globalization.CultureInfo.GetCultureInfo(name);
+                        ReviewAndDraw(sideDisplay);
+                        string zero=0d.ToString("F3");
+                        Check(sideDisplay.StatusForVerification.Text.Contains($"yuvarlanınca {zero} mm") && sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Small difference uses formatted zero for "+name,checks);
+                    }
+                }
+                finally { System.Globalization.CultureInfo.CurrentCulture=originalCulture; }
                 sideDisplay.FieldsForVerification[3].Text="500.1";ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("fark yaklaşık") && !sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Difference above displayed rounding threshold is shown as approximate",checks);
             }
