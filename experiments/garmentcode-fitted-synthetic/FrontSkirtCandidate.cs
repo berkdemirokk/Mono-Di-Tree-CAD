@@ -44,4 +44,11 @@ internal static class FrontSkirtCandidate
         if(front.Length!=4 || !front[1].Flipped || !front[2].Flipped || (front[1].Start-front[2].End).Norm()>1e-8) throw new ArgumentException("Unsupported front interface topology");
         return CreateCore(id,front[1].Start.X);
     }
+    internal static Candidate CreateFromDerived(string id,InterfaceMatcher.Result matched)
+    {
+        InterfaceMatcher.ValidateDerived(id,matched);
+        var front=matched.Lower.Where(e=>e.Panel=="skirt_front").ToArray();
+        if(front.Length!=4 || !front[1].Flipped || !front[2].Flipped || (front[1].Start-front[2].End).Norm()>1e-8)throw new ArgumentException("Unsupported derived front interface topology");
+        return CreateCore(id,front[1].Start.X);
+    }
 }

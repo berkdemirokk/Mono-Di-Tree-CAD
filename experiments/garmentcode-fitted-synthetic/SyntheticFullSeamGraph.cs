@@ -2,24 +2,27 @@ using System.Text.Json;
 
 namespace FittedResearch;
 
-// Fixed-design hybrid graph for two synthetic snapshots. Waist splitting is
-// sourced from the pinned Python pre-seam fixture via InterfaceMatcher.
+// Fixed-design research graph. Origin marks whether waist input was
+// source-bound or recomputed from C# synthetic panel candidates.
 internal static class SyntheticFullSeamGraph
 {
     internal readonly record struct Ref(string Panel,int Edge,bool Flipped,bool RightWrong);
     internal readonly record struct Ruffle(int Start,int End,double Coefficient);
     internal sealed record Side(IReadOnlyList<Ref> Edges,IReadOnlyList<Ruffle> Ruffles);
     internal sealed record Rule(string Owner,string Kind,int Index,Side A,Side B);
-    internal sealed record Graph(string Snapshot,IReadOnlyList<Rule> Rules)
+    internal sealed record Graph(string Snapshot,string Origin,IReadOnlyList<Rule> Rules)
     {
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
-    internal static Graph Create(string id,InterfaceMatcher.Result matched)
+    internal static Graph Create(string id,InterfaceMatcher.Result matched) => CreateCore(id,matched,false);
+    internal static Graph CreateDerived(string id,InterfaceMatcher.Result matched) => CreateCore(id,matched,true);
+    private static Graph CreateCore(string id,InterfaceMatcher.Result matched,bool derived)
     {
-        InterfaceMatcher.ValidateBound(id,matched);
+        if(derived)InterfaceMatcher.ValidateDerived(id,matched);else InterfaceMatcher.ValidateBound(id,matched);
         var fr=FrontBodiceCandidate.Create(id,false);var fl=FrontBodiceCandidate.Create(id,true);
         var br=BackBodiceCandidate.Create(id,false);var bl=BackBodiceCandidate.Create(id,true);
-        var sf=FrontSkirtCandidate.CreateFromMatchedInterface(id,matched);var sb=BackSkirtCandidate.Create(id,matched);
+        var sf=derived?FrontSkirtCandidate.CreateFromDerived(id,matched):FrontSkirtCandidate.CreateFromMatchedInterface(id,matched);
+        var sb=derived?BackSkirtCandidate.CreateFromDerived(id,matched):BackSkirtCandidate.Create(id,matched);
         var points=new Dictionary<(string,int),(double ax,double ay,double bx,double by)>();
         void F(FrontBodiceCandidate.Path p) { foreach(var e in p.Edges)points.Add((p.Panel,e.Id),(e.Start.X,e.Start.Y,e.End.X,e.End.Y)); }
         void B(BackBodiceCandidate.Path p) { foreach(var e in p.Edges)points.Add((p.Panel,e.Id),(e.Start.X,e.Start.Y,e.End.X,e.End.Y)); }
@@ -64,7 +67,14 @@ internal static class SyntheticFullSeamGraph
         Bind(matched.Upper,top);Bind(matched.Lower,bottom);
         rules.Add(R(id,"MetaGarment",0,S(top,new Ruffle(0,2,1),new Ruffle(2,4,1),new Ruffle(4,7,1),new Ruffle(7,10,1)),S(bottom,new Ruffle(0,4,1),new Ruffle(4,10,1))));
         if(rules.Count!=23)throw new InvalidOperationException("Incomplete source-design rules");
-        return new(id,rules.AsReadOnly());
+        return new(id,derived?"CSharpDerived":"SourceFixture",rules.AsReadOnly());
+    }
+    internal static void ValidateDerived(Graph graph,InterfaceMatcher.Result matched)
+    {
+        if(graph is null || graph.Origin!="CSharpDerived" || graph.Snapshot!=matched.Snapshot)throw new ArgumentException("Derived graph identity mismatch");
+        var expected=CreateDerived(graph.Snapshot,matched);
+        bool SideEqual(Side a,Side b)=>a.Edges.SequenceEqual(b.Edges)&&a.Ruffles.SequenceEqual(b.Ruffles);
+        if(graph.Rules.Count!=expected.Rules.Count || !graph.Rules.Zip(expected.Rules).All(p=>p.First.Owner==p.Second.Owner && p.First.Kind==p.Second.Kind && p.First.Index==p.Second.Index && SideEqual(p.First.A,p.Second.A) && SideEqual(p.First.B,p.Second.B)))throw new ArgumentException("Derived graph changed");
     }
     internal static void Compare(Rule rule,JsonElement source)
     {

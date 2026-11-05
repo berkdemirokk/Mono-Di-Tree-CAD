@@ -11,11 +11,12 @@ internal static class BackSkirtCandidate
         public bool ProductionAllowed=>false;
         public bool ExportAllowed=>false;
     }
-    internal static Candidate Create(string id,InterfaceMatcher.Result matched)
+    internal static Candidate Create(string id,InterfaceMatcher.Result matched) { InterfaceMatcher.ValidateBound(id,matched);return CreateCore(id,matched); }
+    internal static Candidate CreateFromDerived(string id,InterfaceMatcher.Result matched) { InterfaceMatcher.ValidateDerived(id,matched);return CreateCore(id,matched); }
+    private static Candidate CreateCore(string id,InterfaceMatcher.Result matched)
     {
         var pieces=PartialFittedEngine.Create(id).Segments.Where(e=>e.Panel=="skirt_back").ToDictionary(e=>e.Edge);
         PartialFittedEngine.Segment Required(int n)=>pieces.TryGetValue(n,out var p)?p:throw new InvalidOperationException("Missing back edge");
-        InterfaceMatcher.ValidateBound(id,matched);
         var back=matched.Lower.Where(e=>e.Panel=="skirt_back").ToArray();
         if(back.Length!=6 || !back[2].Flipped || !back[3].Flipped || (back[2].Start-back[3].End).Norm()>1e-8) throw new ArgumentException("Unsupported back interface topology");
         double split=back[2].Start.X;

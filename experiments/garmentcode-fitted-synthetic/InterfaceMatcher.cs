@@ -107,6 +107,14 @@ internal static class InterfaceMatcher
         }
         return new(snapshot,a.ToImmutableArray(),b.ToImmutableArray());
     }
+    // A derived result is accepted only if re-generated from the same immutable
+    // synthetic ID; it is not interchangeable with a source-bound result.
+    internal static void ValidateDerived(string id,Result candidate)
+    {
+        if(candidate is null || id!=candidate.Snapshot || id is not ("synthetic-base" or "synthetic-distinct"))throw new ArgumentException("Derived snapshot mismatch");
+        var expected=MatchDerived(id);
+        if(!Same(candidate.Upper,expected.Upper)||!Same(candidate.Lower,expected.Lower))throw new ArgumentException("Derived interface changed");
+    }
     static string PinnedText(string resource,string expectedHash)
     {
         using var stream=typeof(InterfaceMatcher).Assembly.GetManifestResourceStream("FittedCheck."+resource) ?? throw new InvalidDataException("Missing pinned resource");

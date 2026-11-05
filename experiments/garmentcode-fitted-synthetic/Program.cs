@@ -130,6 +130,16 @@ try
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,-1),new(2,-1)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle tangent must remain unresolved");
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,0),new(2,0)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing must remain unresolved");
     try { CircleSeparation.Compare(arcA,arcB,0,[new(0,0),new(1,0)],false);throw new Exception("Degenerate circle accepted"); } catch(ArgumentException) { }
+    var projectionBase=BezierLengthBounds.Enclose([new(0,0),new(3,4)],0);
+    var projectionUnit=ProjectedLengthBounds.Project(projectionBase,1);
+    var projectionNonUnit=ProjectedLengthBounds.Project(projectionBase,1.25);
+    if(!projectionUnit.Contains(5) || !projectionNonUnit.Contains(4) || !projectionUnit.Disjoint(projectionNonUnit))throw new Exception("Non-unit ruffle projection");
+    if(!ProjectedLengthBounds.Project(projectionBase,1.0005).Contains(5))throw new Exception("Near-one source behavior");
+    if(!ProjectedLengthBounds.Project(projectionBase,.5).Contains(10))throw new Exception("Sub-unit ruffle projection");
+    try { ProjectedLengthBounds.Project(new BezierLengthBounds.Bounds(2,1,0),1);throw new Exception("Invalid bound accepted"); } catch(ArgumentException) { }
+    try { ProjectedLengthBounds.Interval.Add(new(0,1,0),ProjectedLengthBounds.Interval.Zero);throw new Exception("Zero denominator accepted"); } catch(ArgumentException) { }
+    try { ProjectedLengthBounds.Project(projectionBase,0);throw new Exception("Zero ruffle accepted"); } catch(ArgumentException) { }
+    try { ProjectedLengthBounds.Project(projectionBase,double.NaN);throw new Exception("NaN ruffle accepted"); } catch(ArgumentException) { }
     var exactLine=BezierLengthBounds.Enclose([new(0,0),new(3,4)],4);
     if(!exactLine.Contains(5) || exactLine.Contains(5.0001) || exactLine.Lower!=exactLine.Upper) throw new Exception("Exact line length enclosure");
     var straightQuadratic=BezierLengthBounds.Enclose([new(0,0),new(0,0),new(1,0)],5);
@@ -291,8 +301,27 @@ internal static class Validator
                 }
             }
             Side(match.Upper,waist.GetProperty("a"));Side(match.Lower,waist.GetProperty("b"));
+            var derivedGraph=SyntheticFullSeamGraph.CreateDerived(id,independent);
+            Need(derivedGraph.Rules.Count==23 && derivedGraph.Origin=="CSharpDerived" && derivedGraph.Status=="unresolved" && !derivedGraph.ProductionAllowed && !derivedGraph.ExportAllowed,"derived full graph gate");
+            foreach(var rule in derivedGraph.Rules)
+            {
+                var expectedRule=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("owner_type").GetString()==rule.Kind && r.GetProperty("index").GetInt32()==rule.Index);
+                SyntheticFullSeamGraph.Compare(rule,expectedRule);
+            }
+            try { SyntheticFullSeamGraph.CreateDerived(id,changed);throw new Exception("Altered derived graph accepted"); } catch(ArgumentException) { }
+            try { SyntheticFullSeamGraph.CreateDerived(id,match);throw new Exception("Source fixture passed as derived"); } catch(ArgumentException) { }
+            try { SyntheticFullSeamGraph.Create(id,independent);throw new Exception("Derived passed as source fixture"); } catch(ArgumentException) { }
             var fullGraph=SyntheticFullSeamGraph.Create(id,match);
             Need(fullGraph.Rules.Count==23 && fullGraph.Status=="unresolved" && !fullGraph.ExportAllowed && !fullGraph.ProductionAllowed,"full seam candidate gate");
+            var projections=DerivedGraphProjection.Calculate(derivedGraph,independent);
+            Need(projections.Count==23 && projections.All(p=>p.Status=="unresolved"&&!p.ExportAllowed),"projected graph gate");
+            var projectedSide=projections.Single(p=>p.Kind=="PencilSkirt"&&p.Index==0);
+            Console.WriteLine($"{id} skirt side projected bounds: front≈[{projectedSide.A.ApproximateLower:G10},{projectedSide.A.ApproximateUpper:G10}] cm, back≈[{projectedSide.B.ApproximateLower:G10},{projectedSide.B.ApproximateUpper:G10}] cm; disjoint={projectedSide.A.Disjoint(projectedSide.B)} (display rounded, no fit verdict).");
+            var alteredRule=derivedGraph.Rules.ToArray();int indexRule=Array.FindIndex(alteredRule,r=>r.Kind=="PencilSkirt"&&r.Index==0);
+            var alteredSide=alteredRule[indexRule].B with { Ruffles=Array.AsReadOnly(new[]{new SyntheticFullSeamGraph.Ruffle(0,1,1),new SyntheticFullSeamGraph.Ruffle(1,2,1.04)}) };
+            alteredRule[indexRule]=alteredRule[indexRule] with { B=alteredSide };
+            var alteredGraph=derivedGraph with { Rules=Array.AsReadOnly(alteredRule) };
+            try { DerivedGraphProjection.Calculate(alteredGraph,independent);throw new Exception("Altered derived ruffle graph accepted"); } catch(ArgumentException) { }
             var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
             foreach(var rule in fullGraph.Rules)
             {
