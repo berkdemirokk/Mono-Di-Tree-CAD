@@ -378,6 +378,23 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(first.matches(id: first.id, current: other))
         XCTAssertFalse(first.matches(id: first.id, current: nil))
     }
+    func testClosingWaitsForReferenceDecisionAndRejectsStaleDraft() {
+        func blocked(_ selecting: Bool = false, _ loading: Bool = false, _ confirmation: Bool = false, _ candidate: Bool = false) -> Bool {
+            ExperimentalDesignBrief.referenceBlocksClose(selecting: selecting, loading: loading, awaitingConfirmation: confirmation, hasCandidate: candidate)
+        }
+        XCTAssertTrue(blocked(true)); XCTAssertTrue(blocked(false, true))
+        XCTAssertTrue(blocked(false, false, true)); XCTAssertTrue(blocked(false, false, false, true))
+        XCTAssertFalse(blocked()) // Explicit cancellation, completion, or failure cleared the pending state.
+        let old = ExperimentalDesignBrief.ReferenceSelection(data: Data([1]), name: "eski.png")
+        let ticket = ExperimentalDesignBrief.ReferenceLoadTicket(original: old)
+        XCTAssertFalse(ticket.matches(id: nil, current: old)) // A cancelled load cannot install its late result.
+        XCTAssertEqual(old.data, Data([1]))
+        let saved = ExperimentalDesignBrief.Draft(style: .describe, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let changed = ExperimentalDesignBrief.Draft(style: .describe, description: "Elbise", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: Data([2]), imageName: "yeni.png")
+        XCTAssertTrue(ExperimentalDesignBrief.canFinishDraftClose(saved: saved, current: saved, referencePending: false))
+        XCTAssertFalse(ExperimentalDesignBrief.canFinishDraftClose(saved: saved, current: saved, referencePending: true))
+        XCTAssertFalse(ExperimentalDesignBrief.canFinishDraftClose(saved: saved, current: changed, referencePending: false))
+    }
     func testReferenceFlowBlocksNavigationAndExportUntilResolved() throws {
         let pending = ExperimentalDesignBrief.referenceDecisionPending
         XCTAssertTrue(pending(true, false, false)) // Loading or a slow provider.

@@ -2697,6 +2697,10 @@ private struct ExperimentalDesignBriefView: View {
     private var referenceDecisionPending: Bool {
         ExperimentalDesignBrief.referenceDecisionPending(loading: referenceLoading, awaitingConfirmation: confirmReferenceChange, hasCandidate: pendingReferenceChange != nil)
     }
+    private var referenceBlocksClose: Bool {
+        ExperimentalDesignBrief.referenceBlocksClose(selecting: selectingImage, loading: referenceLoading,
+            awaitingConfirmation: confirmReferenceChange, hasCandidate: pendingReferenceChange != nil)
+    }
     private var currentReference: ExperimentalDesignBrief.ReferenceSelection? {
         guard let image, let imageName else { return nil }
         return .init(data: image, name: imageName)
@@ -2705,6 +2709,9 @@ private struct ExperimentalDesignBriefView: View {
         referenceLoadID = nil; referenceTask?.cancel(); referenceTask = nil; referenceLoading = false
     }
     private func startReferenceLoad(_ url: URL) {
+        guard !draftTransition, !referenceDecisionPending else {
+            message = "Önce devam eden taslak veya görsel işlemini tamamlayın."; return
+        }
         cancelReferenceLoad()
         let ticket = ExperimentalDesignBrief.ReferenceLoadTicket(original: currentReference)
         referenceLoadID = ticket.id; referenceLoading = true; message = "Görsel yükleniyor; mevcut görsel korunuyor."
@@ -2748,7 +2755,10 @@ private struct ExperimentalDesignBriefView: View {
     private var requestPrompt: String { draft.prompt }
     private var requestMeasurements: String { draft.measurements }
     private func closeAfterSaving() {
-        cancelReferenceLoad()
+        guard !referenceBlocksClose else {
+            message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
+            return
+        }
         guard !draftTransition else { return }
         guard draftStorageReady else { confirmClose = true; return }
         draftTransition = true; saveRequest = UUID()
@@ -2757,10 +2767,17 @@ private struct ExperimentalDesignBriefView: View {
         let coveredMarkers = ownedPending
         if !beginDraftLease() { markerError = true }
         localStatus = "Son taslak kaydediliyor; lütfen bekleyin."
-        draftWriter.submit(draft, to: draftURL, immediately: true) { result in
+        let closingDraft = draft
+        draftWriter.submit(closingDraft, to: draftURL, immediately: true) { result in
             draftTransition = false; backgroundLease.finish()
             switch result {
-            case .success: DraftPendingLedger.complete(coveredMarkers); ownedPending.subtract(coveredMarkers); markerError = false; dismiss()
+            case .success:
+                DraftPendingLedger.complete(coveredMarkers); ownedPending.subtract(coveredMarkers); markerError = false
+                guard ExperimentalDesignBrief.canFinishDraftClose(saved: closingDraft, current: draft, referencePending: referenceBlocksClose) else {
+                    localStatus = "Kayıt sırasında taslak veya görsel seçimi değişti; ekran açık. Son içeriği kontrol edip yeniden kapatın."
+                    return
+                }
+                dismiss()
             case .failure(let error):
                 DraftPendingLedger.abandon(coveredMarkers)
                 if error is ExperimentalDesignBrief.DraftStore.Conflict { draftStorageReady = false }
@@ -3331,10 +3348,16 @@ private struct ExperimentalDesignBriefView: View {
             .navigationTitle(step == 1 ? "Ölçü düzenleme" : "Kalıp isteği")
             .interactiveDismissDisabled(true)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
-                Button("Kapat") { closeAfterSaving() }.disabled(draftTransition)
+                Button("Kapat") { closeAfterSaving() }.disabled(draftTransition || referenceBlocksClose)
             } }
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
-                Button("Kaydetmeden kapat", role: .destructive) { dismiss() }
+                Button("Kaydetmeden kapat", role: .destructive) {
+                    guard !referenceBlocksClose else {
+                        message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
+                        return
+                    }
+                    dismiss()
+                }
                 Button("Düzenlemeye devam et", role: .cancel) { }
             } message: { Text("Ekrandaki kaydedilmemiş değişiklikler kaybolabilir. Varsa cihazdaki önceki taslak korunur.") }
             .fileImporter(isPresented: $selectingImage, allowedContentTypes: [.image]) { result in

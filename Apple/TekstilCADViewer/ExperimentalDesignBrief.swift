@@ -645,6 +645,12 @@ enum ExperimentalDesignBrief {
     static func referenceDecisionPending(loading: Bool, awaitingConfirmation: Bool, hasCandidate: Bool) -> Bool {
         loading || awaitingConfirmation || hasCandidate
     }
+    static func referenceBlocksClose(selecting: Bool, loading: Bool, awaitingConfirmation: Bool, hasCandidate: Bool) -> Bool {
+        selecting || referenceDecisionPending(loading: loading, awaitingConfirmation: awaitingConfirmation, hasCandidate: hasCandidate)
+    }
+    static func canFinishDraftClose(saved: Draft, current: Draft, referencePending: Bool) -> Bool {
+        !referencePending && saved == current
+    }
     struct ReferenceLoadTicket {
         let id = UUID()
         let original: ReferenceSelection?
