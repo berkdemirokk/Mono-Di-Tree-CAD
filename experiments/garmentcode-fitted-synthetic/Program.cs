@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -443,6 +443,45 @@ internal static class Validator
             double sourceBefore=new[]{0,3,6}.Sum(n=>edges[n].GetProperty("length_cm").GetDouble());
             Console.WriteLine($"{id} fixed ends/translated darts: source before={sourceBefore:G10} cm, candidate before≈[{current.ApproximateLowerCm:G10},{current.ApproximateUpperCm:G10}] cm, source vector lower≈{sourceProof.ApproximateVectorLowerBoundCm:G10} cm, candidate vector lower≈{candidate.ApproximateVectorLowerBoundCm:G10} cm, target={target:G10} cm; no corrected candidate.");
         }
+    }
+    internal static void CheckJointSideExperiment()
+    {
+        double junction=BackWaistJointSideExperiment.SolveJunction(0,0,1,10,10.4);
+        Need(junction>0 && junction<10,"bounded junction solution");
+        void RejectJunction(double x0,double y0,double x1,double y1,double target) {
+            try { BackWaistJointSideExperiment.SolveJunction(x0,y0,x1,y1,target);throw new InvalidDataException("Impossible junction accepted"); } catch(ArgumentException) { }
+        }
+        RejectJunction(0,0,1,10,10);RejectJunction(0,0,1,10,11);RejectJunction(0,0,1,10,12);
+        RejectJunction(0,0,0,10,10.4);RejectJunction(0,0,1,10,double.NaN);RejectJunction(0,10,1,0,10.4);
+        var five=BezierLengthBounds.Enclose([new(0,0),new(3,4)],0);var six=BezierLengthBounds.Enclose([new(0,0),new(0,6)],0);
+        Need(BackWaistJointSideExperiment.WithinDiagnosticTolerance(five,five,1e-5) && !BackWaistJointSideExperiment.WithinDiagnosticTolerance(five,six,1e-5),"joint length tolerance check");
+        try { BackWaistJointSideExperiment.WithinDiagnosticTolerance(new BezierLengthBounds.Bounds(2,1,0),five,1e-5);throw new InvalidDataException("Invalid joint bounds accepted"); } catch(ArgumentException) { }
+        try { BackWaistJointSideExperiment.WithinDiagnosticTolerance(five,five,double.NaN);throw new InvalidDataException("Invalid joint tolerance accepted"); } catch(ArgumentException) { }
+        int accepted=0;
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct","synthetic-third","synthetic-fifth"}) {
+            BackWaistJointSideExperiment.Result candidate;
+            try { candidate=BackWaistJointSideExperiment.Create(id); }
+            catch(ArgumentException ex) { Console.WriteLine($"{id} joint side experiment rejected: {ex.Message}");continue; }
+            accepted++;
+            Need(candidate.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && candidate.Status=="unresolved" && !candidate.ExportAllowed && !candidate.ProductionAllowed,"joint experiment gate");
+            double waistTarget=(double)SyntheticBodyCatalog.Create(id)["waist_back_width"]/2;
+            Need(candidate.Waist.ApproximateLowerCm>=waistTarget-.000011 && candidate.Waist.ApproximateUpperCm<=waistTarget+.000011,"joint waist numerical gap");
+            Need(candidate.BeforeTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && candidate.AfterTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && candidate.BeforeTopology.Unresolved==0 && candidate.AfterTopology.Unresolved==0 && candidate.BeforeTopology.NonMonotone==0 && candidate.AfterTopology.NonMonotone==0,"joint experiment topology");
+            Need(Math.Abs(candidate.FrontSide.ApproximateLowerCm-candidate.BackSideAfter.ApproximateUpperCm)<.000011 && Math.Abs(candidate.FrontSide.ApproximateUpperCm-candidate.BackSideAfter.ApproximateLowerCm)<.000011,"joint side numerical gap");
+            var source=BackBodiceCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted,false);
+            foreach(int index in new[]{1,2,4,5}) { var a=source.Edges[index];var b=candidate.Contour[index];Need(a.Start.X==b.Ax && a.Start.Y==b.Ay && a.End.X==b.Bx && a.End.Y==b.By,"joint experiment changed dart"); }
+            foreach(int index in Enumerable.Range(0,source.Edges.Count).Where(i=>i is not (6 or 7 or 8))) {
+                var a=source.Edges[index];var b=candidate.Contour[index];
+                Need(a.Kind==b.Kind && a.Start.X==b.Ax && a.Start.Y==b.Ay && a.End.X==b.Bx && a.End.Y==b.By && a.ArcControlY==b.ArcY && a.Controls.Select(c=>(c.X,c.Y)).SequenceEqual(b.RelativeControls),"joint experiment changed unrelated geometry");
+            }
+            var waistEdge=BackWaistSideExperiment.Create(id).Edges[6];BackWaistSideExperiment.ValidateTopologyWaistEdge(waistEdge,candidate.Contour[6]);
+            Need(candidate.Contour[8].Bx==source.Edges[8].End.X && candidate.Contour[8].By==source.Edges[8].End.Y && candidate.Contour[0].Ax==source.Edges[0].Start.X && candidate.Contour[0].Ay==source.Edges[0].Start.Y,"joint experiment changed fixed landmarks");
+            try { candidate.RequireResearchComposition();throw new InvalidDataException("Joint experiment composed"); } catch(InvalidOperationException) { }
+            Console.WriteLine($"{id} joint experiment: waist≈[{candidate.Waist.ApproximateLowerCm:G10},{candidate.Waist.ApproximateUpperCm:G10}] cm, x shift={candidate.ShiftCm:G8} cm, side junction y={candidate.OriginalJunctionY:G8} -> {candidate.ProposedJunctionY:G8} cm, front side≈{candidate.FrontSide.ApproximateLowerCm:G10} cm, back before≈{candidate.BackSideBefore.ApproximateLowerCm:G10} cm, after≈{candidate.BackSideAfter.ApproximateLowerCm:G10} cm; topology pairs={candidate.BeforeTopology.Pairs}/{candidate.AfterTopology.Pairs}, unresolved={candidate.BeforeTopology.Unresolved}/{candidate.AfterTopology.Unresolved}; research only.");
+        }
+        Need(accepted==4,"synthetic joint experiment regression");
+        foreach(string? id in new string?[]{"synthetic-small-difference","unknown",null})
+            try { BackWaistJointSideExperiment.Create(id!);throw new InvalidDataException("Unsupported joint experiment accepted"); } catch(ArgumentException) { }
     }
     internal static void CheckSideExperiment()
     {
