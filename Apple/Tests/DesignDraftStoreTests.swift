@@ -460,6 +460,32 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(request.matches(draft, explicitSelection: true, importedPortable: false, version: 2, revision: request.revision, activeID: nil, referencePending: false, transition: false))
         XCTAssertEqual(draft.description, line); XCTAssertEqual(draft.waist, "72 cm"); XCTAssertEqual(draft.image, Data([1])); XCTAssertEqual(selection.sleeve, .long)
     }
+    func testPhotoEditReviewRejectsSelectionOrCategoryChangedAndRestored() throws {
+        var choices = PhotoObservation.ChoiceState()
+        var original = choices.selection; original.sleeve = .long
+        choices.select(original)
+        let note = "Fotoğraf gözlemi · Kol: Kolsuz"
+        let plan = try PhotoObservation.editPlan(.replace, category: .sleeve, selection: original, description: note, notes: "")
+        let revision = choices.revision
+        let review = PhotoObservation.EditReview(plan: plan, revision: revision)
+        XCTAssertTrue(review.matches(choices, action: .replace, confirmedSelection: original, confirmedRevision: revision))
+        XCTAssertFalse(review.matches(choices, action: .replace, confirmedSelection: nil, confirmedRevision: nil))
+        XCTAssertFalse(review.matches(choices, action: .replace, confirmedSelection: original, confirmedRevision: UUID()))
+        choices.select(original)
+        XCTAssertEqual(choices.revision, revision) // A repeated setter is not a change.
+        var other = original; other.sleeve = .short
+        choices.select(other); choices.select(original)
+        XCTAssertEqual(choices.selection, original)
+        XCTAssertNotEqual(choices.revision, revision)
+        XCTAssertFalse(review.matches(choices, action: .replace, confirmedSelection: original, confirmedRevision: revision))
+        let removalPlan = try PhotoObservation.editPlan(.remove, category: .sleeve, selection: original, description: note, notes: "")
+        let removalRevision = choices.revision
+        let removalReview = PhotoObservation.EditReview(plan: removalPlan, revision: removalRevision)
+        XCTAssertTrue(removalReview.matches(choices, action: .remove, confirmedSelection: nil, confirmedRevision: nil))
+        choices.selectCategory(.neck); choices.selectCategory(.sleeve)
+        XCTAssertFalse(removalReview.matches(choices, action: .remove, confirmedSelection: nil, confirmedRevision: nil))
+        XCTAssertEqual(choices.selection, original); XCTAssertEqual(note, "Fotoğraf gözlemi · Kol: Kolsuz")
+    }
     func testPhotoObservationSnapshotRejectsStaleInputsAndPendingWork() {
         func draft(_ text: String = "Tarif", bytes: Data = Data([1]), notes: String = "", waist: String = "72 cm", style: ExperimentalDesignBrief.DressStyle = .aline) -> ExperimentalDesignBrief.Draft {
             .init(style: style, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: bytes, imageName: "foto.png")

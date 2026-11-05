@@ -60,6 +60,29 @@ enum PhotoObservation {
         let after: String?
         let updatedDescription: String
     }
+    struct ChoiceState {
+        private(set) var selection = Selection()
+        private(set) var category = Category.sleeve
+        private(set) var revision = UUID()
+        init() { }
+        mutating func select(_ value: Selection) {
+            guard value != selection else { return }
+            selection = value; revision = UUID()
+        }
+        mutating func selectCategory(_ value: Category) {
+            guard value != category else { return }
+            category = value; revision = UUID()
+        }
+    }
+    struct EditReview {
+        let plan: EditPlan
+        let revision: UUID
+        func matches(_ current: ChoiceState, action: EditAction, confirmedSelection: Selection?, confirmedRevision: UUID?) -> Bool {
+            guard revision == current.revision, plan.action == action, plan.category == current.category,
+                  plan.selection == current.selection else { return false }
+            return action != .replace || (confirmedSelection == current.selection && confirmedRevision == current.revision)
+        }
+    }
     /// Only one exact, complete application-generated line in the description
     /// can be changed. Other bytes, including line separators, stay untouched.
     static func editPlan(_ action: EditAction, category: Category, selection: Selection, description: String, notes: String) throws -> EditPlan {
@@ -152,16 +175,28 @@ struct PhotoObservationView: View {
     let apply: (PhotoObservation.Request, PhotoObservation.Selection) -> String?
     let edit: (PhotoObservation.Request, PhotoObservation.EditPlan) -> String?
     @Environment(\.dismiss) private var dismiss
-    @State private var selection = PhotoObservation.Selection()
+    @State private var choices = PhotoObservation.ChoiceState()
     @State private var confirmedSelection: PhotoObservation.Selection?
+    @State private var confirmedRevision: UUID?
     @State private var status = ""
-    @State private var editCategory = PhotoObservation.Category.sleeve
-    @State private var pendingEdit: PhotoObservation.EditPlan?
+    @State private var pendingEdit: PhotoObservation.EditReview?
     @State private var confirmReplacement = false
     @State private var confirmRemoval = false
     @State private var image: CGImage?
     @State private var failed = false
     @State private var loading = true
+    private var selection: PhotoObservation.Selection { choices.selection }
+    private var editCategory: PhotoObservation.Category { choices.category }
+    private var isConfirmed: Bool { confirmedSelection == selection && confirmedRevision == choices.revision }
+    private var silhouetteBinding: Binding<PhotoObservation.Silhouette> {
+        Binding(get: { selection.silhouette }, set: { var next = selection; next.silhouette = $0; choices.select(next) })
+    }
+    private var sleeveBinding: Binding<PhotoObservation.Sleeve> {
+        Binding(get: { selection.sleeve }, set: { var next = selection; next.sleeve = $0; choices.select(next) })
+    }
+    private var neckBinding: Binding<PhotoObservation.Neck> {
+        Binding(get: { selection.neck }, set: { var next = selection; next.neck = $0; choices.select(next) })
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -182,26 +217,26 @@ struct PhotoObservationView: View {
                     if !request.draft.otherMeasurements.isEmpty { Text("Ek notlar"); Text(verbatim: request.draft.otherMeasurements).textSelection(.enabled) }
                 }
                 Section("Gördüğünüz özellikler") {
-                    Picker("Siluet", selection: $selection.silhouette) { ForEach(PhotoObservation.Silhouette.allCases) { Text($0.rawValue).tag($0) } }
-                    Picker("Kol", selection: $selection.sleeve) { ForEach(PhotoObservation.Sleeve.allCases) { Text($0.rawValue).tag($0) } }
-                    Picker("Yaka", selection: $selection.neck) { ForEach(PhotoObservation.Neck.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Siluet", selection: silhouetteBinding) { ForEach(PhotoObservation.Silhouette.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Kol", selection: sleeveBinding) { ForEach(PhotoObservation.Sleeve.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Yaka", selection: neckBinding) { ForEach(PhotoObservation.Neck.allCases) { Text($0.rawValue).tag($0) } }
                     Toggle("Bunlar kendi gözlemlerimdir; mevcut tarif ve modelle olası çelişkileri kendim karşılaştırdım.", isOn: Binding(
-                        get: { confirmedSelection == selection },
-                        set: { confirmedSelection = $0 ? selection : nil }))
+                        get: { isConfirmed },
+                        set: { confirmedSelection = $0 ? selection : nil; confirmedRevision = $0 ? choices.revision : nil }))
                     Text("Serbest metindeki çelişkiler otomatik saptanmaz. Bilinmeyen özellikleri seçmeyin.").font(.caption)
                     if !status.isEmpty { Text(status).foregroundStyle(.secondary) }
                     Button("Seçilen gözlemleri tarife ekle") {
-                        guard confirmedSelection == selection, !loading, !failed, image != nil, !selection.lines.isEmpty else { return }
+                        guard isConfirmed, !loading, !failed, image != nil, !selection.lines.isEmpty else { return }
                         if let problem = apply(request, selection) { status = problem }
                         else { dismiss() }
                     }
-                        .disabled(loading || failed || image == nil || confirmedSelection != selection || selection.lines.isEmpty)
+                        .disabled(loading || failed || image == nil || !isConfirmed || selection.lines.isEmpty)
                 }
                 Section("Önceki gözlemi düzelt veya kaldır") {
-                    Picker("Düzenlenecek özellik", selection: $editCategory) { ForEach(PhotoObservation.Category.allCases) { Text($0.rawValue).tag($0) } }
+                    Picker("Düzenlenecek özellik", selection: Binding(get: { editCategory }, set: { choices.selectCategory($0) })) { ForEach(PhotoObservation.Category.allCases) { Text($0.rawValue).tag($0) } }
                     Text("Yalnız tarifteki tek, tam bir uygulama gözlem satırı değiştirilebilir. Bilinmiyor seçimi hiçbir satırı silmez.").font(.caption)
                     Button("Seçili değere değiştirmeyi incele…") { prepareEdit(.replace) }
-                        .disabled(loading || failed || image == nil || confirmedSelection != selection || editCategory.selectedLine(selection) == nil)
+                        .disabled(loading || failed || image == nil || !isConfirmed || editCategory.selectedLine(selection) == nil)
                     Button("Önceki gözlemi kaldırmayı incele…") { prepareEdit(.remove) }
                         .disabled(loading || failed || image == nil)
                 }
@@ -212,14 +247,14 @@ struct PhotoObservationView: View {
                 Button("Gözlemi değiştir") { confirmEdit(.replace) }
                 Button("Vazgeç", role: .cancel) { pendingEdit = nil }
             } message: {
-                Text("Önceki: \(pendingEdit?.before ?? "")\nYeni: \(pendingEdit?.after ?? "")")
+                Text("Önceki: \(pendingEdit?.plan.before ?? "")\nYeni: \(pendingEdit?.plan.after ?? "")")
                 Text("Mevcut model, ölçüler ve fotoğraf değişmez. Diğer tarif metni korunur; çelişkileri kendiniz kontrol edin.")
             }
             .confirmationDialog("Önceki gözlem kaldırılsın mı?", isPresented: $confirmRemoval, titleVisibility: .visible) {
                 Button("Gözlemi kaldır", role: .destructive) { confirmEdit(.remove) }
                 Button("Vazgeç", role: .cancel) { pendingEdit = nil }
             } message: {
-                Text("Kaldırılacak: \(pendingEdit?.before ?? "")")
+                Text("Kaldırılacak: \(pendingEdit?.plan.before ?? "")")
                 Text("Yalnız belirtilen satırın içeriği kaldırılır; model, ölçüler, fotoğraf ve diğer metin korunur.")
             }
             .task(id: request.id) {
@@ -240,7 +275,7 @@ struct PhotoObservationView: View {
         do {
             let plan = try PhotoObservation.editPlan(action, category: editCategory, selection: selection,
                 description: request.draft.description, notes: request.draft.otherMeasurements)
-            pendingEdit = plan; status = ""
+            pendingEdit = .init(plan: plan, revision: choices.revision); status = ""
             if action == .replace { confirmReplacement = true } else { confirmRemoval = true }
         } catch PhotoObservation.Failure.empty { status = "Değiştirmek için bilinmeyen dışında bir değer seçin; bilinmiyor silmez." }
         catch PhotoObservation.Failure.missing { status = "Bu özellik için tam bir önceki gözlem bulunamadı; metin korunuyor." }
@@ -249,12 +284,12 @@ struct PhotoObservationView: View {
         catch { status = "Gözlem birden fazla, bozuk veya ek notlarda olabilir. Metni kontrol edin; hiçbir değişiklik yapılmadı." }
     }
     private func confirmEdit(_ action: PhotoObservation.EditAction) {
-        guard let plan = pendingEdit, plan.action == action, plan.category == editCategory, plan.selection == selection,
-              action != .replace || confirmedSelection == selection else {
+        guard let review = pendingEdit,
+              review.matches(choices, action: action, confirmedSelection: confirmedSelection, confirmedRevision: confirmedRevision) else {
             pendingEdit = nil; status = "Seçim değişti; gözlem değiştirilmedi. Yeniden inceleyin."; return
         }
         pendingEdit = nil
-        if let problem = edit(request, plan) { status = problem }
+        if let problem = edit(request, review.plan) { status = problem }
         else { dismiss() }
     }
 }
