@@ -34,9 +34,10 @@ internal sealed class FittedResearchWindow : Window
             if(id is null) { SetStatus("Bilinmeyen örnek."); return; }
             choice.IsEnabled=false;
             try {
-                var result=await Task.Run(()=>FittedSyntheticAdapter.Create(id));
+                var result=await Task.Run(()=> (Panels: FittedSyntheticAdapter.Create(id), Comparison: FittedSyntheticAdapter.Comparison(id)));
                 if(closed || run!=generation) return;
-                foreach(var panel in result) panels.Children.Add(CreatePanelView(panel));
+                panels.Children.Add(CreateComparisonView(result.Comparison));
+                foreach(var panel in result.Panels) panels.Children.Add(CreatePanelView(panel));
                 SetStatus("Altı panel adayı · sonuç unresolved / Unverified. Her panel kendi görünümüne sığdırılmıştır.");
             } catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException)) {
                 if(!closed && run==generation) { panels.Children.Clear(); SetStatus("Araştırma önizlemesi oluşturulamadı: "+ex.Message); }
@@ -49,6 +50,16 @@ internal sealed class FittedResearchWindow : Window
         status.Text=message;
         if(UIElementAutomationPeer.FromElement(status) is { } peer)
             peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    internal static GroupBox CreateComparisonView(ImageSource image)
+    {
+        var content=new DockPanel();
+        var description=new TextBlock { Text="Yalnız sağ arka gövde: mavi önce, kırmızı sonra (aynı ölçek). Ön ve diğer paneller değiştirilmez. Bu karşılaştırma tüm elbise, prova, çentik veya üretim sonucu değildir; eşleşme ve topoloji yalnız araştırma tanısıdır.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(8) };
+        DockPanel.SetDock(description,Dock.Top); content.Children.Add(description);
+        var view=new Image { Source=image, Stretch=Stretch.Uniform, Margin=new Thickness(15) };
+        AutomationProperties.SetName(view,"Sağ arka gövde araştırması: mavi önce, kırmızı sonra; ölçekli üretim çizimi değil");
+        content.Children.Add(view);
+        return new GroupBox { Header="Birleşik bel ve yan eğriliği · sentetik araştırma", Height=360, Content=content, Margin=new Thickness(4) };
     }
     internal static GroupBox CreatePanelView(FittedSyntheticAdapter.Panel panel)
     {
@@ -82,6 +93,17 @@ internal static class FittedSyntheticAdapter
             new Panel("Arka gövde · sol",Geometry(BackBodiceCandidate.CreateFromBody(body,d,true).Edges.Select(B).ToArray())),
             new Panel("Ön etek",Geometry(FrontSkirtCandidate.CreateFromMatchedBody(body,d).Edges.Select(S).ToArray())),
             new Panel("Arka etek",Geometry(BackSkirtCandidate.CreateFromBody(body,d).Edges.Select(T).ToArray())) });
+    }
+    internal static ImageSource Comparison(string id)
+    {
+        var result=CombinedWaistCurvatureExperiment.Create(id,0.3,1.5);
+        static PathGeometry Convert(IReadOnlyList<CombinedWaistCurvatureExperiment.SnapshotEdge> snapshot)=>Geometry(snapshot.Select(e=>new Edge(e.Kind,new Point(e.Ax,e.Ay),new Point(e.Bx,e.By),e.Controls.Select(c=>new Point(c.X,c.Y)).ToArray(),e.ArcY)).ToArray());
+        var before=Convert(result.Contour.Before); var after=Convert(result.Contour.After);
+        var drawing=new DrawingGroup();
+        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.SteelBlue,0.12),before));
+        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.Firebrick,0.12),after));
+        drawing.Freeze();
+        var image=new DrawingImage(drawing); image.Freeze(); return image;
     }
     internal static PathGeometry Geometry(IReadOnlyList<Edge> edges)
     {

@@ -48,8 +48,13 @@ internal static class ExactBezierSeparation
         var c=Build(controls);
         bool Axis(Func<V,Q> select)
         {
-            var p=c.C.Select(select).ToArray(); int sign=p[^1].CompareTo(p[0]);
-            return sign!=0 && Enumerable.Range(1,p.Length-1).All(i=>sign*p[i].CompareTo(p[i-1])>=0);
+            var p=c.C.Select(select).ToArray();int sign=p[^1].CompareTo(p[0]);
+            if(sign==0)return false;
+            // Include every consecutive pair, especially the last control
+            // point and the endpoint; a backwards step fails closed.
+            for(int i=1;i<p.Length;i++)
+                if(sign*p[i].CompareTo(p[i-1])<0)return false;
+            return true;
         }
         return Axis(p=>p.X)||Axis(p=>p.Y);
     }
@@ -60,6 +65,20 @@ internal static class ExactBezierSeparation
     static bool EndpointOnly(Curve a,Curve b)
     {
         var p=a.C[^1];if(p.X.CompareTo(b.C[0].X)!=0||p.Y.CompareTo(b.C[0].Y)!=0)return false;
+        // For two represented line segments, exact integer cross/dot products
+        // prove the common endpoint is their sole intersection. Build() uses
+        // one common dyadic scale; these predicates never convert to double.
+        if(a.C.Length==2 && b.C.Length==2)
+        {
+            var u=a.C[0];var v=b.C[1];
+            BigInteger ux=u.X.N-p.X.N,uy=u.Y.N-p.Y.N,vx=v.X.N-p.X.N,vy=v.Y.N-p.Y.N;
+            if((!ux.IsZero||!uy.IsZero) && (!vx.IsZero||!vy.IsZero))
+            {
+                BigInteger cross=ux*vy-uy*vx,dot=ux*vx+uy*vy;
+                if(!cross.IsZero || dot.Sign<0)return true;
+            }
+        }
+
         bool Away(Curve curve,bool sharedAtEnd,Func<V,Q> axis)
         {
             var controls=sharedAtEnd?curve.C[..^1]:curve.C[1..];var value=axis(p);
