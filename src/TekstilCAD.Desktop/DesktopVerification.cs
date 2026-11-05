@@ -9594,6 +9594,30 @@ internal static partial class DesktopVerification
         var denseCopy=denseCircle.ToArray();var reducedCircle=PhotoContourApproximation.Create(denseCircle,508,CancellationToken.None);
         Check(denseCircle.Length>508 && reducedCircle.Points.Length<=508 && reducedCircle.MaximumVertexDistance<=1 && denseCircle.SequenceEqual(denseCopy),
             "Opt-in contour approximation reduces a dense closed boundary within the measured pixel-vertex limit",checks);
+        OpenCvSharp.Point[] narrowU=[new(0,0),new(10,0),new(10,10),new(8,10),new(8,1),new(2,1),new(2,10),new(0,10)];
+        OpenCvSharp.Point[] shortcut=[new(0,0),new(10,0),new(10,10),new(0,10)];
+        Check(PhotoContourApproximation.MeasureCorresponding(narrowU,shortcut,CancellationToken.None)==9 &&
+            PhotoContourApproximation.MeasureCorresponding(narrowU,[shortcut[2],shortcut[3],shortcut[0],shortcut[1]],CancellationToken.None)==9 &&
+            PhotoContourApproximation.MeasureCorresponding(narrowU.Reverse().ToArray(),shortcut.Reverse().ToArray(),CancellationToken.None)==9,
+            "Contour correspondence detects a nine-pixel U-shaped shortcut in either winding even when vertices lie near another edge",checks);
+        try { PhotoContourApproximation.MeasureCorresponding(narrowU,[shortcut[0],shortcut[2],shortcut[1],shortcut[3]],CancellationToken.None);throw new InvalidOperationException("Reordered contour accepted."); }
+        catch(InvalidDataException) { Check(true,"Contour correspondence rejects reordered source vertices",checks); }
+        var longComb=new List<OpenCvSharp.Point> { new(0,0) };
+        for(var x=1;x<=1000;x++)longComb.Add(new OpenCvSharp.Point(x,x%2));
+        void WalkComb(int x,int y) { var current=longComb[^1];while(current.X!=x || current.Y!=y) { current=new OpenCvSharp.Point(current.X+Math.Sign(x-current.X),current.Y+Math.Sign(y-current.Y));longComb.Add(current); } }
+        WalkComb(1000,200);
+        for(var tooth=0;tooth<60;tooth++) { var x=1000-tooth*15;WalkComb(x-3,200);WalkComb(x-3,100);WalkComb(x-8,100);WalkComb(x-8,200);WalkComb(x-15,200); }
+        WalkComb(0,200);WalkComb(0,0);longComb.RemoveAt(longComb.Count-1);
+        var longPoints=longComb.ToArray();var longResult=PhotoContourApproximation.Create(longPoints,508,CancellationToken.None);
+        Check(longPoints.Length>10_000 && longResult.Points.Length<=508 && longResult.MaximumVertexDistance<=1 &&
+            PhotoContourApproximation.MeasureCorresponding(longPoints,longResult.Points,CancellationToken.None)<=1,
+            "Long pixel contour keeps every raw point in the correspondence check after lossless collinear validation",checks);
+        var duplicateLong=(OpenCvSharp.Point[])longPoints.Clone();duplicateLong[100]=duplicateLong[900];
+        try { PhotoContourApproximation.Create(duplicateLong,508,CancellationToken.None);throw new InvalidOperationException("Repeated long contour point accepted."); }
+        catch(InvalidDataException) { Check(true,"Long contour rejects repeated raw points before reduced topology validation",checks); }
+        var crossingLong=(OpenCvSharp.Point[])longPoints.Clone();crossingLong[^1]=new OpenCvSharp.Point(999,199);
+        try { PhotoContourApproximation.Create(crossingLong,508,CancellationToken.None);throw new InvalidOperationException("Crossing long contour accepted."); }
+        catch(ArgumentException) { Check(true,"Long contour preserves crossing detection after exact collinear reduction",checks); }
         try { PhotoContourApproximation.Create([new(0,0),new(10,10),new(0,10),new(10,0)],508,CancellationToken.None);throw new InvalidOperationException("Crossing contour accepted."); }
         catch(ArgumentException) { Check(true,"Contour approximation refuses an invalid source boundary",checks); }
         try { PhotoContourApproximation.Create(denseCircle,508,new CancellationToken(true));throw new InvalidOperationException("Cancelled contour approximation accepted."); }

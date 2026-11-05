@@ -262,7 +262,7 @@ internal sealed class PhotoTraceWindow : Window
         if(dialog.ShowDialog()!=true || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }
-        var approximationNote=dialog.SelectedContourMaximumDeviation is double deviation ? $" Sadeleştirilmiş: kaynak noktalarının en büyük uzaklığı {deviation:0.###} önizleme pikseli; ince ayrıntılar kaybolabilir, fiziksel hata ölçülmedi." : "";
+        var approximationNote=dialog.SelectedContourMaximumDeviation is double deviation ? $" Sadeleştirilmiş: kaynak noktalarının karşılık gelen kenara en büyük uzaklığı yaklaşık {deviation:0.###} önizleme pikseli; ince ayrıntılar kaybolabilir, fiziksel hata ölçülmedi." : "";
         StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır."+approximationNote;
         _=StartTraceTopologyReviewAsync(approximationNote);
     }
