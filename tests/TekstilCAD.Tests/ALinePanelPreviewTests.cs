@@ -6,6 +6,18 @@ public sealed class ALinePanelPreviewTests
 {
     private static ALinePanelInput Input => new(360,360,500,500,20,20,20,20,200,700,1600);
     private static string[] CmFields => ["36","36","50","50","2","2","2","2","20","70","160"];
+    [Theory]
+    [InlineData("1,000")]
+    [InlineData("1.000")]
+    [InlineData("36.125")]
+    public void AmbiguousThreeDigitSeparatorIsRejectedInManualFormToo(string value)
+    {
+        var fields=CmFields;fields[4]=value;
+        Assert.Contains("üç basamaklı ayırıcı belirsiz",Assert.Throws<ArgumentException>(()=>ALineMeasurementReview.Normalize(fields,ALineLengthUnit.Millimeter)).Message);
+        fields[4]="0";Assert.Equal(0,ALineMeasurementReview.Normalize(fields,ALineLengthUnit.Millimeter).FrontWaistEase);
+        fields[4]="1.25";Assert.Equal(1.25,ALineMeasurementReview.Normalize(fields,ALineLengthUnit.Millimeter).FrontWaistEase);
+        fields[4]="1000";Assert.Equal(1000,ALineMeasurementReview.Normalize(fields,ALineLengthUnit.Millimeter).FrontWaistEase);
+    }
     [Fact] public void MissingUnitCannotSilentlyInterpretCentimetersAsMillimeters()
     {
         Assert.Throws<ArgumentException>(()=>ALineMeasurementReview.Normalize(CmFields,null));

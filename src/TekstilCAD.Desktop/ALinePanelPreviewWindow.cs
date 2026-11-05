@@ -76,7 +76,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             {
                 var suggested=ALineMeasurementReview.Normalize(requestFields.Millimeters.Select(v=>v!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray(),ALineLengthUnit.Millimeter);
                 _=ALinePanelPreview.Create(suggested);
-                proposal.Text="İstekte açıkça belirtilen ölçü önerisi; hiçbir eksik ölçü veya bolluk türetilmedi:\n"+
+                proposal.Text="Açılış anındaki istekten açıkça belirtilen ölçü önerisi; hiçbir eksik ölçü veya bolluk türetilmedi. Ana isteği değiştirirseniz pencereyi yeniden açın:\n"+
                     string.Join(Environment.NewLine,ALineRequestMeasurements.Labels.Select((label,i)=>$"{label}: {requestFields.Millimeters[i]:G} mm = {requestFields.Millimeters[i]/10m:G} cm"));
                 proposalAgreement.IsEnabled=true;
             }

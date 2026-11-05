@@ -107,19 +107,27 @@ internal static partial class DesktopVerification
                     "Proposal verification remains unshown and leaves its request text unchanged",checks);
             }
             finally { proposalWindow.Close(); }
-            foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse"})
+            foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse",
+                sourceText+";bu ölçüler geçerli değil",sourceText+";önceki ölçüleri kullanmayın",
+                sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1,000 mm"),
+                sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1.000 mm")})
             {
                 var refusedWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise",unsafeNotes);
                 try
                 {
                     Check(!refusedWindow.ProposalAgreementForVerification.IsEnabled && !refusedWindow.ProposalApplyForVerification.IsEnabled,
-                        "Conflicting, questioned or conditional section source cannot offer a proposal",checks);
+                        "Conflicting, questioned, conditional, withdrawn or numeric-ambiguous section source cannot offer a proposal",checks);
                     Fill(refusedWindow,true);refusedWindow.UnitForVerification.SelectedIndex=0;refusedWindow.AgreementForVerification.IsChecked=true;
                     Click(refusedWindow.ReviewForVerification);refusedWindow.ConfirmationForVerification.IsChecked=true;Click(refusedWindow.DrawForVerification);
                     Check(refusedWindow.CanvasForVerification.Children.Count==0,"Manual fields cannot bypass an ambiguous section source",checks);
                 }
                 finally { refusedWindow.Close(); }
             }
+            Fill(window,true);window.UnitForVerification.SelectedIndex=0;window.AgreementForVerification.IsChecked=true;
+            window.FieldsForVerification[4].Text="1,000";Click(window.ReviewForVerification);Click(window.DrawForVerification);
+            Check(window.CanvasForVerification.Children.Count==0 && !window.ConfirmationForVerification.IsEnabled && window.StatusForVerification.Text.Contains("üç basamaklı ayırıcı belirsiz"),
+                "Manual ambiguous number cannot bypass source proposal rejection or enable drawing",checks);
+            window.FieldsForVerification[4].Text="0";ReviewAndDraw(window);
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

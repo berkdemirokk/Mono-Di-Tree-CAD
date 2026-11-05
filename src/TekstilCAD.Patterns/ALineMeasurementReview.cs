@@ -18,6 +18,10 @@ public sealed class ALineMeasurementReview
         var values=new double[11];
         for(int i=0;i<values.Length;i++)
         {
+            var raw=fields[i]?.Trim();
+            var separator=raw?.LastIndexOfAny(['.',',']) ?? -1;
+            if(raw is not null && separator>=0 && raw.Length-separator-1==3 && raw[(separator+1)..].All(char.IsAsciiDigit))
+                throw new ArgumentException($"{i+1}. alanda üç basamaklı ayırıcı belirsiz. Binlik ayırıcı kullanmayın; 1000 veya 1 gibi açık değer girin. Ondalık değeri gerekirse eşdeğer cm/mm biriminde gruplama olmadan yazın ve tüm alanların birimini kontrol edin.");
             if(fields[i] is null || !decimal.TryParse(fields[i].Trim().Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))
                 throw new ArgumentException($"{i+1}. alana seçilen birimde açık değer girin; bolluk için sıfır yazılabilir.");
             values[i]=(double)checked(value*(unit==ALineLengthUnit.Centimeter ? 10m : 1m));

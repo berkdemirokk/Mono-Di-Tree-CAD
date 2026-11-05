@@ -59,4 +59,42 @@ public sealed class ALineRequestMeasurementsTests
         Assert.Equal(new ALineBodyTotals(null,null),ALineBodyTotals.Review(AllFields,""));
         Assert.True(ALineRequestMeasurements.Review(AllFields,"").Complete);
     }
+    [Theory]
+    [InlineData("bu ölçüler geçerli değil")]
+    [InlineData("önceki ölçüleri kullanmayın")]
+    [InlineData("BU ÖLÇÜLER DOĞRU DEĞİLDİR")]
+    [InlineData("ölçüleri geri çekiyorum")]
+    [InlineData("ölçüler yanlış")]
+    [InlineData("ölçüleri dikkate almayın")]
+    public void WithdrawalInEitherFieldOrOrderBlocksAllProposals(string withdrawal)
+    {
+        foreach(var (prompt,notes) in new[]{(AllFields+";"+withdrawal,""),(withdrawal+";"+AllFields,""),(AllFields,withdrawal),(withdrawal,AllFields)})
+        {
+            var result=ALineRequestMeasurements.Review(prompt,notes);
+            Assert.False(result.Complete);Assert.Contains(result.Issues,s=>s.Contains("geri çekiliyor"));
+        }
+    }
+    [Theory]
+    [InlineData("1,000")]
+    [InlineData("1.000")]
+    [InlineData("36.125")]
+    [InlineData("0,000")]
+    public void ThreeDigitSeparatorNeverBecomesASectionValue(string value)
+    {
+        var source=AllFields.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu "+value+" mm");
+        var result=ALineRequestMeasurements.Review(source,"");
+        Assert.False(result.Complete);Assert.Null(result.Millimeters[4]);
+        Assert.Contains(result.Issues,s=>s.Contains("üç basamaklı ayırıcı belirsiz"));
+        Assert.False(ALineRequestMeasurements.Review(source+";Ön bel yayı bolluğu 2 cm","").Complete);
+    }
+    [Theory]
+    [InlineData("uzun kollu değil")]
+    [InlineData("önceki modeli kullanmayın")]
+    [InlineData("ölçüler geçerli")]
+    [InlineData("elbise; kumaş düz olsun")]
+    public void HarmlessDesignWordsAndExplicitZeroEaseRemainSupported(string description)
+    {
+        var result=ALineRequestMeasurements.Review(description,AllFields.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 0 mm"));
+        Assert.True(result.Complete);Assert.Empty(result.Issues);Assert.Equal(0m,result.Millimeters[4]);
+    }
 }
