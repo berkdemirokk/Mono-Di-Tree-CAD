@@ -30,6 +30,17 @@ internal static class BackWaistCandidate
         public void RequireResearchComposition() { if(ReferenceAssessment!=ReferenceState.Unassessed) throw new InvalidOperationException("Source mismatch or unverified input; composition blocked."); }
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
+    // Deliberately distinct from fixture Path: consumers of Path cannot accept it.
+    internal sealed class UnverifiedPath
+    {
+        internal UnverifiedPath(Path source) { Snapshot=source.Snapshot;Edges=source.Edges;SourceSteps=source.SourceSteps; }
+        public string Snapshot { get; }
+        public IReadOnlyList<Edge> Edges { get; }
+        public Trace SourceSteps { get; }
+        public ReferenceState ReferenceAssessment=>ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified input; composition blocked.");
+    }
     readonly record struct Quad(P A,P C,P B)
     {
         public P Eval(double t)=>A*((1-t)*(1-t))+C*(2*t*(1-t))+B*(t*t);
@@ -64,10 +75,10 @@ internal static class BackWaistCandidate
     }
     // Explicit body/design input remains local, unverified and non-composable.
     // No fixture, process launch, networking, persistence or export occurs.
-    internal static Path CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedPath CreateFromBody(ResearchBody body,ResearchDesign design)
     {
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
-        return Calculate(body.Snapshot(design),body,design,ReferenceState.Unverified);
+        return new UnverifiedPath(Calculate(body.Snapshot(design),body,design,ReferenceState.Unverified));
     }
     private static Path Calculate(string id,ResearchBody body,ResearchDesign design,ReferenceState state)
     {

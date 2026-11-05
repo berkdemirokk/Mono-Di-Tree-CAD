@@ -10,6 +10,15 @@ internal static class PrecutFrontBodice
         public bool ProductionAllowed=>false;
         public bool ExportAllowed=>false;
     }
+    internal sealed class UnverifiedPath
+    {
+        internal UnverifiedPath(string snapshot,IReadOnlyList<PartialFittedEngine.P> vertices) { Snapshot=snapshot;Vertices=vertices; }
+        public string Snapshot { get; }
+        public IReadOnlyList<PartialFittedEngine.P> Vertices { get; }
+        public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ProductionAllowed=>false; public bool ExportAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified input; composition blocked.");
+    }
     internal static Path Create(string id)
     {
         var generated=PartialFittedEngine.Create(id).Segments.Where(e=>e.Panel=="right_ftorso").ToDictionary(e=>e.Edge);
@@ -27,7 +36,7 @@ internal static class PrecutFrontBodice
     }
     // General local measurement path. No fixture or identifier is consulted.
     // The result remains diagnostic and cannot enter a stitched/production path.
-    internal static Path CreateFromBody(ResearchBody body, ResearchDesign design)
+    internal static UnverifiedPath CreateFromBody(ResearchBody body, ResearchDesign design)
     {
         ArgumentNullException.ThrowIfNull(body); ArgumentNullException.ThrowIfNull(design);
         double V(string key)=>(double)body[key];
@@ -53,7 +62,7 @@ internal static class PrecutFrontBodice
         if(!DartCut.SimpleClosed(points.Select(p=>new DartCut.P(p.X,p.Y)).ToArray()))
             throw new ArgumentException("Unsupported front contour.");
         // No seam rules are authorized for unverified user-shaped candidates.
-        return new(body.Snapshot(design),Array.AsReadOnly(points),Array.Empty<GeneratedGraph.Seam>());
+        return new(body.Snapshot(design),Array.AsReadOnly(points));
     }
 
 }

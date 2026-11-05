@@ -158,6 +158,8 @@ try
     foreach(decimal shoulder in new[]{1m,2m,2.0000000000000000000000000001m})
         RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_w"?new KeyValuePair<string,decimal>(p.Key,shoulder):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p));
+    var invalidNeck=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,40):p),"cm","degree");
+    try { FrontNeckCut.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid neck accepted"); } catch(ArgumentException) { }
     var invalidFront=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { PrecutFrontBodice.CreateFromBody(invalidFront,ResearchDesign.PinnedFitted);throw new Exception("Invalid front cut accepted"); } catch(ArgumentException) { }
     var unsupportedCut=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
@@ -166,6 +168,10 @@ try
     NeedLocal(changedBody.Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted),"changed body snapshot");
     var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
     var frontChanged=PrecutFrontBodice.CreateFromBody(changedBody,ResearchDesign.PinnedFitted);
+    var changedNeckBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,20):p),"cm","degree");
+    var neckBase=FrontNeckCut.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var neckChanged=FrontNeckCut.CreateFromBody(changedNeckBody,ResearchDesign.PinnedFitted);
+    NeedLocal(neckBase.Right!=neckChanged.Right && neckBase.Snapshot!=neckChanged.Snapshot,"neck must depend on body values");
     NeedLocal(frontChanged.Snapshot!=frontBase.Snapshot && !frontChanged.Vertices.SequenceEqual(frontBase.Vertices),"front must depend on body values");
     void NeedLocal(bool condition,string error) { if(!condition)throw new Exception(error); }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
@@ -218,6 +224,7 @@ internal static class Validator
             var calculated=explicitBody.Derive();var derivedSource=item.GetProperty("derived");
             foreach(var v in new[]{("_waist_level",calculated.WaistLevel),("_leg_length",calculated.LegLength),("_base_sleeve_balance",calculated.BaseSleeveBalance),("_bust_line",calculated.BustLine),("_hip_inclination",calculated.HipInclination),("_shoulder_incl",calculated.ShoulderInclination),("_armscye_depth",calculated.ArmscyeDepth)}) Need(Math.Abs(derivedSource.GetProperty(v.Item1).GetDouble()-v.Item2)<1e-10,"derived body mismatch: "+v.Item1);
             var generic=BackWaistCandidate.CreateFromBody(explicitBody,ResearchDesign.PinnedFitted);
+            Need(!typeof(BackWaistCandidate.Path).IsAssignableFrom(generic.GetType()),"typed back can enter fixture consumer");
             Need(generic.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && generic.Status=="unresolved" && !generic.ExportAllowed && !generic.ProductionAllowed && generic.Snapshot==explicitBody.Snapshot(ResearchDesign.PinnedFitted),"explicit body gate");
             Need(generic.Edges.Count==path.Edges.Count,"explicit body edge count");
             for(int i=0;i<path.Edges.Count;i++) Need(generic.Edges[i]==path.Edges[i],"explicit body differs from fixture calculation");
@@ -291,7 +298,9 @@ internal static class Validator
             string id=item.GetProperty("id").GetString()!; var path=PrecutFrontBodice.Create(id);
             var edges=item.GetProperty("edges").EnumerateArray().ToArray();Need(path.Vertices.Count==10 && edges.Length==10,"precut contour count");
             var typed=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
-            Need(typed.Status=="unresolved" && !typed.ExportAllowed && !typed.ProductionAllowed && typed.DartRules.Count==0,"typed front gate");
+            Need(!typeof(PrecutFrontBodice.Path).IsAssignableFrom(typed.GetType()),"typed front can enter fixture consumer");
+            try { typed.RequireResearchComposition();throw new InvalidDataException("Unverified front composed"); } catch(InvalidOperationException) { }
+            Need(typed.Status=="unresolved" && !typed.ExportAllowed && !typed.ProductionAllowed && typed.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified,"typed front gate");
             Need(typed.Vertices.Count==path.Vertices.Count && typed.Vertices.Zip(path.Vertices).All(pair=>Math.Abs(pair.First.X-pair.Second.X)<1e-10 && Math.Abs(pair.First.Y-pair.Second.Y)<1e-10),"typed front differs from fixture calculation");
             var graph=new List<GeneratedGraph.Edge>();
             for(int i=0;i<10;i++)
@@ -560,6 +569,10 @@ internal static class Validator
             Need((Point(backCenter.GetProperty("start"))-new P(backNeck.Right.End.X,backNeck.Right.End.Y)).Length()<1e-5 && (Point(backCenter.GetProperty("end"))-new P(backNeck.CenterWaist.X,backNeck.CenterWaist.Y)).Length()<1e-5,"back center line");
             Need(backNeck.Status=="unresolved"&&!backNeck.ProductionAllowed&&!backNeck.ExportAllowed,"back neck gate");
             var neck=FrontNeckCut.Create(id);
+            var typedNeck=FrontNeckCut.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(!typeof(FrontNeckCut.Result).IsAssignableFrom(typedNeck.GetType()) && typedNeck.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedNeck.ExportAllowed && !typedNeck.ProductionAllowed,"typed neck gate");
+            Need(typedNeck.Right==neck.Right && typedNeck.Left==neck.Left,"typed neck mismatch");
+            try { typedNeck.RequireResearchComposition();throw new InvalidDataException("Unverified neck composed"); } catch(InvalidOperationException) { }
             foreach(var pair in new[]{("right_ftorso",1,neck.Right),("left_ftorso",10,neck.Left)})
             {
                 var source=item.GetProperty("panels").GetProperty(pair.Item1).GetProperty("edges")[pair.Item2];

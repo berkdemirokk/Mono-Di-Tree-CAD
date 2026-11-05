@@ -14,16 +14,36 @@ internal static class FrontNeckCut
     }
     internal static Result Create(string id)
     {
-        double frontLength=id switch { "synthetic-base"=>41,"synthetic-distinct"=>42,_=>throw new ArgumentException("Unsupported synthetic fixture") };
-        const double shoulderWidth=36,neckWidth=19,vertBustLine=21,bustLine=26,shoulderAngle=22;
+        if(id is not ("synthetic-base" or "synthetic-distinct"))throw new ArgumentException("Unsupported synthetic fixture");
+        var body=SyntheticBodyCatalog.Create(id);
+        return Calculate(id,body);
+    }
+    internal sealed class UnverifiedResult
+    {
+        internal UnverifiedResult(Result result) { Snapshot=result.Snapshot;Right=result.Right;Left=result.Left;CenterBottom=result.CenterBottom; }
+        public string Snapshot { get; } public Arc Right { get; } public Arc Left { get; } public P CenterBottom { get; }
+        public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified input; composition blocked.");
+    }
+    internal static UnverifiedResult CreateFromBody(ResearchBody body,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
+        return new(Calculate(body.Snapshot(design),body));
+    }
+    private static Result Calculate(string id,ResearchBody body)
+    {
+        double frontLength=(double)body["waist_over_bust_line"],shoulderWidth=(double)body["shoulder_w"],neckWidth=(double)body["neck_w"],shoulderAngle=(double)body["shoulder_incl"];
+        if(neckWidth>=shoulderWidth-4)throw new ArgumentException("Unsupported neck and shoulder geometry");
         const double collarWidthFactor=.2,frontDepthFactor=.4;
         double maxWidth=shoulderWidth-4, collarWidth=neckWidth+(maxWidth-neckWidth)*collarWidthFactor;
         double half=collarWidth/2, tan=Math.Tan(shoulderAngle*Math.PI/180);
-        double weightedBust=vertBustLine*2/3+bustLine/3;
+        double weightedBust=body.Derive().BustLine;
         double depth=frontDepthFactor*weightedBust+tan*(shoulderWidth/2-half);
         if(!double.IsFinite(depth)||depth<=0||collarWidth<=0)throw new ArgumentException("Invalid neck geometry");
         double top=frontLength+tan*shoulderWidth/2;
         double shoulderY=top-tan*half, centerY=shoulderY-depth;
+        if(centerY<=0)throw new ArgumentException("Neck cut leaves front panel");
         // Full circle through (0,0), (width,0), (width/2,-depth).
         double centerYCircle=(half*half-depth*depth)/(2*depth);
         double radius=(half*half+depth*depth)/(2*depth);
