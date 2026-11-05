@@ -1,0 +1,27 @@
+body:
+  arm_length: 54
+  arm_pose_angle: 45
+  armscye_depth: 13
+  back_width: 48
+  bum_points: 18
+  bust: 100
+  bust_line: 26
+  bust_points: 17
+  crotch_hip_diff: 9
+  head_l: 26
+  height: 172
+  hip_back_width: 55
+  hip_inclination: 10
+  hips: 104
+  hips_line: 23
+  leg_circ: 60
+  neck_w: 19
+  shoulder_incl: 22
+  shoulder_w: 36
+  underbust: 86
+  vert_bust_line: 21
+  waist: 80
+  waist_back_width: 36
+  waist_line: 37
+  waist_over_bust_line: 41
+  wrist: 17
