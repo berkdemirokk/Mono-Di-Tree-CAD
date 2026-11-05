@@ -24,5 +24,3 @@ internal static class N {
  [DllImport("kernel32.dll",SetLastError=true)] [return:MarshalAs(UnmanagedType.Bool)]internal static extern bool GetExitCodeProcess(SafeFileHandle p,out uint code);
  [DllImport("kernel32.dll",SetLastError=true)]internal static extern uint WaitForSingleObject(SafeFileHandle a,uint b);
 }
-
-
