@@ -2590,6 +2590,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var imageName: String?
     @State private var v2ImageReview = ExperimentalDesignBrief.V2ImageReviewState()
     @State private var selectingImage = false
+    @State private var referenceRevision = ExperimentalDesignBrief.ReferenceRevision()
     @State private var filePickerTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
     @State private var pendingFileTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
     #if os(iOS)
@@ -2745,6 +2746,7 @@ private struct ExperimentalDesignBriefView: View {
     }
     private func restore(_ value: ExperimentalDesignBrief.Draft) {
         cancelReferenceLoad()
+        referenceRevision.changed()
         style = value.style; modelExplicitlySelected = value.style != .describe; importedPortable = false
         description = value.description; bust = value.bust; waist = value.waist
         hips = value.hips; length = value.length; otherMeasurements = value.otherMeasurements
@@ -2767,6 +2769,13 @@ private struct ExperimentalDesignBriefView: View {
     private var referenceBlocksClose: Bool {
         ExperimentalDesignBrief.referenceBlocksClose(selecting: selectingImage || isSelectingPhoto, loading: referenceLoading,
             awaitingConfirmation: confirmReferenceChange, hasCandidate: pendingReferenceChange != nil)
+    }
+    private func referenceTracked<Value: Equatable>(_ binding: Binding<Value>) -> Binding<Value> {
+        Binding(get: { binding.wrappedValue }, set: { value in
+            guard binding.wrappedValue != value else { return }
+            referenceRevision.changed()
+            binding.wrappedValue = value
+        })
     }
     private var currentReference: ExperimentalDesignBrief.ReferenceSelection? {
         guard let image, let imageName else { return nil }
@@ -2803,6 +2812,7 @@ private struct ExperimentalDesignBriefView: View {
             guard try ALineMeasurementGuide.prepare(input, draft: aLineSourceDraft) == notes else {
                 return "Ölçüler veya kaynak değişti; hiçbir değer eklenmedi."
             }
+            referenceRevision.changed()
             otherMeasurements = notes
             aLineGuideInput = .init()
             message = "Onaylanan A kesim değerleri notlara eklendi. Bu bir kalıp veya üretim onayı değildir."
@@ -2811,7 +2821,7 @@ private struct ExperimentalDesignBriefView: View {
     }
     #if os(iOS)
     private func startPhotoLoad(_ item: PhotosPickerItem) {
-        guard let ticket = photoTicket, ticket.matches(id: photoTicket?.id, draft: draft, revision: modelSuggestionRevision),
+        guard let ticket = photoTicket, ticket.matches(id: photoTicket?.id, draft: draft, revision: referenceRevision.token),
               !draftTransition, !referenceDecisionPending else {
             photoTicket = nil; message = "İstek değişti; fotoğraf uygulanmadı. Yeniden seçin."; return
         }
@@ -2830,7 +2840,7 @@ private struct ExperimentalDesignBriefView: View {
                 let candidate = try await worker.value
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil
-                guard ticket.matches(id: photoTicket?.id, draft: draft, revision: modelSuggestionRevision) else {
+                guard ticket.matches(id: photoTicket?.id, draft: draft, revision: referenceRevision.token) else {
                     photoTicket = nil; message = "İstek değişti; fotoğraf uygulanmadı."; return
                 }
                 photoTicket = nil; pendingPhotoTicket = ticket
@@ -2853,7 +2863,7 @@ private struct ExperimentalDesignBriefView: View {
     }
     private func startReferenceLoad(_ url: URL) {
         guard let ticket = filePickerTicket,
-              ticket.matches(id: filePickerTicket?.id, draft: draft, revision: modelSuggestionRevision),
+              ticket.matches(id: filePickerTicket?.id, draft: draft, revision: referenceRevision.token),
               !draftTransition, !referenceDecisionPending else {
             filePickerTicket = nil; message = "İstek değişti; görsel uygulanmadı. Yeniden seçin."; return
         }
@@ -2870,7 +2880,7 @@ private struct ExperimentalDesignBriefView: View {
                 let candidate = try await worker.value
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil
-                guard !draftTransition, ticket.matches(id: filePickerTicket?.id, draft: draft, revision: modelSuggestionRevision) else {
+                guard !draftTransition, ticket.matches(id: filePickerTicket?.id, draft: draft, revision: referenceRevision.token) else {
                     filePickerTicket = nil; message = "İstek değişti; görsel uygulanmadı. Mevcut görsel korundu."; return
                 }
                 filePickerTicket = nil; pendingFileTicket = ticket
@@ -2885,7 +2895,7 @@ private struct ExperimentalDesignBriefView: View {
     }
     private func applyReferenceChange() {
         if let ticket = pendingFileTicket {
-            guard !draftTransition, ticket.matches(id: ticket.id, draft: draft, revision: modelSuggestionRevision) else {
+            guard !draftTransition, ticket.matches(id: ticket.id, draft: draft, revision: referenceRevision.token) else {
                 pendingFileTicket = nil; pendingReferenceChange = nil
                 message = "İstek değişti; görsel uygulanmadı. Mevcut görsel korundu."; return
             }
@@ -2893,7 +2903,7 @@ private struct ExperimentalDesignBriefView: View {
         }
         #if os(iOS)
         if let ticket = pendingPhotoTicket {
-            guard ticket.matches(id: ticket.id, draft: draft, revision: modelSuggestionRevision) else {
+            guard ticket.matches(id: ticket.id, draft: draft, revision: referenceRevision.token) else {
                 pendingPhotoTicket = nil; pendingReferenceChange = nil
                 message = "İstek değişti; fotoğraf uygulanmadı. Mevcut görsel korundu."; return
             }
@@ -2904,6 +2914,7 @@ private struct ExperimentalDesignBriefView: View {
         defer { pendingReferenceChange = nil }
         do {
             let result = try change.apply(to: currentReference)
+            referenceRevision.changed()
             image = result?.data; imageName = result?.name
             message = result == nil ? "Görsel kaldırıldı." : "Görsel eklendi."
         } catch { message = "Seçili görsel değişti; işlem uygulanmadı. Tekrar deneyin." }
@@ -2927,6 +2938,7 @@ private struct ExperimentalDesignBriefView: View {
             guard updated != request.draft.description else {
                 return "Seçilen gözlemler zaten mevcut; hiçbir değişiklik yapılmadı."
             }
+            referenceRevision.changed()
             description = updated
             message = "Kendi fotoğraf gözlemleriniz tarife eklendi. Model ve tarifle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı."
             return nil
@@ -2946,6 +2958,7 @@ private struct ExperimentalDesignBriefView: View {
             let current = try PhotoObservation.editPlan(plan.action, category: plan.category, selection: plan.selection,
                 description: draft.description, notes: draft.otherMeasurements)
             guard current == plan else { return "Gözlem değişti; hiçbir işlem yapılmadı. Yeniden inceleyin." }
+            referenceRevision.changed()
             description = current.updatedDescription
             message = plan.action == .remove ? "Seçili fotoğraf gözlemi kaldırıldı; diğer metin ve görsel korundu." : "Fotoğraf gözlemi değiştirildi. Model ve tarifle olası çelişkileri kendiniz kontrol edin."
             return nil
@@ -3043,6 +3056,7 @@ private struct ExperimentalDesignBriefView: View {
             modelSuggestionStatus = "Taslak veya model seçimi değişti; öneriyi yeniden inceleyin."
             return
         }
+        referenceRevision.changed()
         style = proposal.suggested; modelExplicitlySelected = true; importedPortable = false
         modelSuggestionStatus = "Model seçildi; özgün metin ve görsel korundu. Tarif ve modelin uyumunu kontrol edin."
     }
@@ -3070,6 +3084,7 @@ private struct ExperimentalDesignBriefView: View {
             return
         }
         let values = suggestion.proposal.values
+        referenceRevision.changed()
         if let value = values["göğüs çevresi"] { bust = value }
         if let value = values["bel çevresi"] { waist = value }
         if let value = values["kalça çevresi"] { hips = value }
@@ -3108,6 +3123,7 @@ private struct ExperimentalDesignBriefView: View {
                   snapshot.proposal == proposal, proposal.isApplicable, try parseMeasurementMessage() == proposal else {
                 throw MeasurementMessageParser.Failure.unrecognized
             }
+            referenceRevision.changed()
             if let value = proposal.values["göğüs çevresi"] { bust = value }
             if let value = proposal.values["bel çevresi"] { waist = value }
             if let value = proposal.values["kalça çevresi"] { hips = value }
@@ -3276,7 +3292,7 @@ private struct ExperimentalDesignBriefView: View {
                             Button {
                                 if option != .describe && ExperimentalDesignBrief.hasEmbeddedModelLine(description) {
                                     conflictingModelNotice = true
-                                } else { style = option; modelExplicitlySelected = true; importedPortable = false }
+                                } else { referenceRevision.changed(); style = option; modelExplicitlySelected = true; importedPortable = false }
                             } label: {
                                 HStack(alignment: .center, spacing: 12) {
                                     Group {
@@ -3323,7 +3339,7 @@ private struct ExperimentalDesignBriefView: View {
                     if importedPortable { Text("İçe aktarılan açıklama aşağıdadır. Dosyada ayrı bir model kimliği bulunmuyor; model seçilmedi. İsterseniz bir kart seçin.").font(.caption) }
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
-                    TextEditor(text: $description).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
+                    TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                     Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
                     Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
@@ -3334,7 +3350,7 @@ private struct ExperimentalDesignBriefView: View {
                         HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in
                             Button("+ " + tag) {
                                 let addition = (description.isEmpty ? "" : "\n") + tag
-                                if description.utf16.count + addition.utf16.count <= ExperimentalDesignBrief.maxTextUnits { description += addition }
+                                if description.utf16.count + addition.utf16.count <= ExperimentalDesignBrief.maxTextUnits { referenceRevision.changed(); description += addition }
                                 else { message = "Tarif uzunluk sınırına ulaştı; önceki metin korundu." }
                             }.buttonStyle(.bordered).controlSize(.large)
                         } }
@@ -3373,7 +3389,7 @@ private struct ExperimentalDesignBriefView: View {
                             .font(.headline).accessibilityAddTraits(.isHeader)
                         Text("Örneğin: Göğüs çevresi 92 cm, bel çevresi 72 cm. Bildiklerinizi birimleriyle yazın; bilmediklerinizi boş bırakın.")
                             .font(.subheadline).foregroundStyle(.secondary)
-                        TextEditor(text: $otherMeasurements).frame(minHeight: 100)
+                        TextEditor(text: referenceTracked($otherMeasurements)).frame(minHeight: 100)
                             .accessibilityLabel("Ölçü mesajınız")
                             .accessibilityHint("Bildiğiniz ölçüleri ve birimlerini yazın; metin aynen not olarak saklanır.")
                             .focused($focusedInput, equals: .notes)
@@ -3394,10 +3410,10 @@ private struct ExperimentalDesignBriefView: View {
                         Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
                     }
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
-                    TextField("Göğüs çevresi · ör. 92 cm", text: $bust).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
-                    TextField("Bel çevresi · ör. 72 cm", text: $waist).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
-                    TextField("Kalça çevresi · ör. 98 cm", text: $hips).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
-                    TextField("Elbise boyu · ör. 110 cm", text: $length).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
+                    TextField("Göğüs çevresi · ör. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
+                    TextField("Bel çevresi · ör. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
+                    TextField("Kalça çevresi · ör. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
+                    TextField("Elbise boyu · ör. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
 
                 }
                 }
@@ -3442,13 +3458,13 @@ private struct ExperimentalDesignBriefView: View {
                 if step == 2 {
                 Section("Örnek görsel · isteğe bağlı") {
                     Button("Dosyalardan görsel seç") {
-                        filePickerTicket = .init(draft: draft, revision: modelSuggestionRevision)
+                        filePickerTicket = .init(draft: draft, revision: referenceRevision.token)
                         selectingImage = true
                     }.disabled(draftTransition || referenceDecisionPending || isSelectingPhoto)
                     #if os(iOS)
                     Button("Fotoğraflardan görsel seç") {
                         photoItem = nil
-                        photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
+                        photoTicket = .init(draft: draft, revision: referenceRevision.token)
                         selectingPhoto = true
                     }.disabled(draftTransition || referenceDecisionPending || selectingImage)
                     Text("Fotoğraflar veya Dosyalar’dan seçilen tek kare HEIC yerelde PNG’ye dönüştürülür; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. Dönüşüm çok bellek kullanabilir; iptal işlem bitince tamamlanabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
@@ -3616,9 +3632,9 @@ private struct ExperimentalDesignBriefView: View {
                     if !isFilePickerCancellation(error) { localStatus = "Kurtarma kopyası kaydedilemedi; ekrandaki bilgiler korundu." }
                 }
             }
-            .sheet(isPresented: $showingBodyMeasurements) { BodyMeasurementNotesView(notes: $otherMeasurements, savedForm: $measurementForm, measurementsWithNotes: { ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: $0) }, localSaveStatus: { localStatus }) }
+            .sheet(isPresented: $showingBodyMeasurements) { BodyMeasurementNotesView(notes: referenceTracked($otherMeasurements), savedForm: referenceTracked($measurementForm), measurementsWithNotes: { ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: $0) }, localSaveStatus: { localStatus }) }
             .sheet(item: $aLineGuideRequest) { request in
-                ALineMeasurementGuideView(request: request, input: $aLineGuideInput) { request, input, notes in applyALineGuide(request, input: input, notes: notes) }
+                ALineMeasurementGuideView(request: request, input: referenceTracked($aLineGuideInput)) { request, input, notes in applyALineGuide(request, input: input, notes: notes) }
             }
             .sheet(item: $photoObservationRequest) { request in
                 PhotoObservationView(request: request, apply: { request, selection in applyPhotoObservation(request, selection: selection) },
@@ -3662,6 +3678,7 @@ private struct ExperimentalDesignBriefView: View {
                             localStatus = "İstek değişti; dosya açılmadı. Girişler korundu, otomatik kayıt kapalı; ayrı kurtarma kopyası kaydedin."
                             return
                         }
+                        referenceRevision.changed()
                         importedPortable = isPortable && candidate.style == .describe; modelExplicitlySelected = candidate.style != .describe
                         style = candidate.style; description = candidate.description; bust = candidate.bust; waist = candidate.waist
                         hips = candidate.hips; length = candidate.length; otherMeasurements = candidate.otherMeasurements
@@ -3696,7 +3713,7 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Vazgeç", role: .cancel) { corruptLedgerSnapshot = nil }
             } message: { Text("Bu yalnız kayıt uyarısı verisini sıfırlar; mevcut taslağı silmez veya bir kaydın başarılı olduğunu kanıtlamaz. Yedek cihazda tutulur.") }
             .confirmationDialog("Açıklamada model satırı var", isPresented: $conflictingModelNotice, titleVisibility: .visible) {
-                Button("Tarif olarak koru") { style = .describe; modelExplicitlySelected = true }
+                Button("Tarif olarak koru") { referenceRevision.changed(); style = .describe; modelExplicitlySelected = true }
                 Button("Açıklamayı gözden geçir", role: .cancel) { }
             } message: { Text("Dosyadaki önceki model açıklaması silinmez. Yeni bir model seçmek için önce açıklamadaki model satırını kendiniz düzenleyin; aksi halde tarif olarak koruyun.") }
             .confirmationDialog("Model önerisini inceleyin", isPresented: $showModelSuggestion, titleVisibility: .visible) {
@@ -3714,7 +3731,7 @@ private struct ExperimentalDesignBriefView: View {
                     guard let snapshot = discardALineInputSnapshot, snapshot == aLineGuideInput else {
                         discardALineInputSnapshot = nil; message = "Girişler değişti; hiçbir değer temizlenmedi."; return
                     }
-                    aLineGuideInput = .init(); discardALineInputSnapshot = nil
+                    referenceRevision.changed(); aLineGuideInput = .init(); discardALineInputSnapshot = nil
                 }
                 Button("Koru", role: .cancel) { discardALineInputSnapshot = nil }
             } message: { Text("Yalnız rehbere girilen ve henüz notlara eklenmemiş değerler temizlenir; mevcut tarif ve ölçüler değişmez.") }
@@ -3782,6 +3799,7 @@ private struct ExperimentalDesignBriefView: View {
             }
             .onChange(of: image) { value in v2ImageReview.synchronize(current: value) }
             .onChange(of: draft) { value in
+                referenceRevision.changed()
                 #if os(iOS)
                 if savedShareAttempt?.matchesCurrentDraft(value) == false { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif
@@ -3789,18 +3807,19 @@ private struct ExperimentalDesignBriefView: View {
             }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: requestExportVersion) { value in
+                referenceRevision.changed()
                 #if os(iOS)
                 if savedShareVersion != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif
             }
             .onChange(of: modelExplicitlySelected) { value in
-                modelSuggestionRevision = UUID()
+                modelSuggestionRevision = UUID(); referenceRevision.changed()
                 #if os(iOS)
                 if savedShareAttempt != nil && savedShareSelected != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif
             }
             .onChange(of: importedPortable) { value in
-                modelSuggestionRevision = UUID()
+                modelSuggestionRevision = UUID(); referenceRevision.changed()
                 #if os(iOS)
                 if savedShareAttempt != nil && savedShareImported != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif

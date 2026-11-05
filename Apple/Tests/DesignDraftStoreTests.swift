@@ -133,6 +133,23 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6_000, height: 5_000, frames: 1))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 1, height: 1, frames: 2))
     }
+    func testReferenceRevisionRejectsChangedThenRestoredPendingInputs() {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([1]), imageName: "eski.png")
+        var aLine = draft; aLine.aLineGuideInput = .init(values: ["36"] + Array(repeating: "", count: 10), unit: "cm")
+        var form = draft; form.measurementForm = .init(values: ["72"] + Array(repeating: "", count: 14), unit: "cm")
+        let photo = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([2]), imageName: "yeni.png")
+        let model = ExperimentalDesignBrief.Draft(style: .wrap, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([1]), imageName: "eski.png")
+        for changed in [aLine, form, photo, model] {
+            var revision = ExperimentalDesignBrief.ReferenceRevision()
+            let originalToken = revision.token
+            let ticket = ExperimentalDesignBrief.PhotoSelectionTicket(draft: draft, revision: originalToken)
+            revision.changed() // A → B
+            XCTAssertFalse(ticket.matches(id: ticket.id, draft: changed, revision: revision.token))
+            revision.changed() // B → A; equal content must not revive the ticket.
+            XCTAssertFalse(ticket.matches(id: ticket.id, draft: draft, revision: revision.token))
+            XCTAssertNotEqual(originalToken, revision.token)
+        }
+    }
     func testFileReferenceTicketRejectsChangedModelMeasurementsAndStaleResult() throws {
         let oldImage = Data([1, 2, 3])
         let original = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: oldImage, imageName: "önceki.png")

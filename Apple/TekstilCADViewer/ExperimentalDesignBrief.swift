@@ -741,6 +741,11 @@ enum ExperimentalDesignBrief {
     static func canFinishDraftClose(saved: Draft, current: Draft, referencePending: Bool) -> Bool {
         !referencePending && saved == current
     }
+    /// A separate token for reference selection, advanced for every observed edit.
+    struct ReferenceRevision {
+        private(set) var token = UUID()
+        mutating func changed() { token = UUID() }
+    }
     struct PhotoSelectionTicket {
         let id = UUID()
         let draft: Draft
