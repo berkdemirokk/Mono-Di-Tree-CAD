@@ -280,6 +280,25 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(DesignRequestShareOutcome.cancelled.message.contains("korundu"))
         XCTAssertTrue(DesignRequestShareOutcome.failed.message.contains("korundu"))
     }
+    func testShareCloseKeepsFailedCleanupActionableAndIsolatesCopies() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let first = UUID(), second = UUID(), data = Data("{}".utf8)
+        let file = try DesignRequestShareFile.create(bytes: data, id: first, base: base)
+        let other = try DesignRequestShareFile.create(bytes: data, id: second, base: base)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: first, cleanup: first, acknowledged: nil), .cancelPreparation)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: nil), .reviewCleanup(first))
+        XCTAssertThrowsError(try DesignRequestShareFile.remove(other, id: first, base: base))
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: nil), .reviewCleanup(first))
+        XCTAssertEqual(try Data(contentsOf: file), data); XCTAssertEqual(try Data(contentsOf: other), data)
+        try DesignRequestShareFile.remove(file, id: first, base: base)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: nil, acknowledged: nil), .proceed)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: first), .proceed)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: second, acknowledged: first), .reviewCleanup(second))
+        XCTAssertEqual(try Data(contentsOf: other), data)
+        try DesignRequestShareFile.remove(other, id: second, base: base)
+    }
     func testShareTemporaryCopyIsBoundedAndCleanupCannotRemoveOtherFiles() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)

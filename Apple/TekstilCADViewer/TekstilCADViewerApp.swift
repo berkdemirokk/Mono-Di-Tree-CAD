@@ -2618,6 +2618,9 @@ private struct ExperimentalDesignBriefView: View {
     @State private var shareTask: Task<URL, Error>?
     @State private var shareItem: DesignRequestShareItem?
     @State private var shareCleanupItem: DesignRequestShareItem?
+    @State private var confirmCloseWithShareCopy = false
+    @State private var closeShareCopyID: UUID?
+    @State private var acknowledgedShareCopyID: UUID?
     #endif
     @State private var statusMessage = ""
     private var message: String {
@@ -2930,7 +2933,14 @@ private struct ExperimentalDesignBriefView: View {
     private var requestMeasurements: String { draft.measurements }
     private func closeAfterSaving() {
         #if os(iOS)
-        if shareWorkID != nil { cancelSavedShare(); message = "Paylaşım hazırlığı iptal edildi; kapatmayı yeniden seçin."; return }
+        switch DesignRequestShareClose.decide(work: shareWorkID, cleanup: shareCleanupItem?.id, acknowledged: acknowledgedShareCopyID) {
+        case .cancelPreparation: cancelSavedShare(); message = "Paylaşım hazırlığı iptal edildi; kapatmayı yeniden seçin."; return
+        case .reviewCleanup(let id):
+            closeShareCopyID = id; confirmCloseWithShareCopy = true
+            message = "Geçici paylaşım kopyası temizlenemedi. Yeniden temizleyin veya kopyayı bırakarak kapatmayı açıkça seçin."
+            return
+        case .proceed: break
+        }
         #endif
         guard !aLineInputPending else {
             message = "A kesim rehberinde notlara eklenmemiş girişler var. Rehberi tamamlayın veya girişleri açıkça temizleyin."
@@ -3703,7 +3713,11 @@ private struct ExperimentalDesignBriefView: View {
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
                 Button("Kaydetmeden kapat", role: .destructive) {
                     #if os(iOS)
-                    if shareWorkID != nil { cancelSavedShare(); return }
+                    switch DesignRequestShareClose.decide(work: shareWorkID, cleanup: shareCleanupItem?.id, acknowledged: acknowledgedShareCopyID) {
+                    case .cancelPreparation: cancelSavedShare(); return
+                    case .reviewCleanup(let id): closeShareCopyID = id; confirmCloseWithShareCopy = true; return
+                    case .proceed: break
+                    }
                     #endif
                     guard !aLineInputPending else {
                         message = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; step = 1
@@ -3717,6 +3731,25 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 Button("Düzenlemeye devam et", role: .cancel) { }
             } message: { Text("Ekrandaki kaydedilmemiş değişiklikler kaybolabilir. Varsa cihazdaki önceki taslak korunur.") }
+            #if os(iOS)
+            .confirmationDialog("Geçici paylaşım kopyası duruyor", isPresented: $confirmCloseWithShareCopy, titleVisibility: .visible) {
+                Button("Temizlemeyi yeniden dene") {
+                    guard closeShareCopyID == shareCleanupItem?.id else { closeShareCopyID = nil; message = "Geçici kopya değişti; yeniden kontrol edin."; return }
+                    closeShareCopyID = nil; cleanupSavedShare()
+                    if shareCleanupItem == nil { message = "Geçici kopya temizlendi; kapatmayı yeniden seçebilirsiniz." }
+                }
+                Button("Kopyayı bırakarak kapat", role: .destructive) {
+                    guard closeShareCopyID == shareCleanupItem?.id, shareWorkID == nil, shareItem == nil else {
+                        closeShareCopyID = nil; message = "Paylaşım durumu değişti; kapatma uygulanmadı."; return
+                    }
+                    acknowledgedShareCopyID = shareCleanupItem?.id; closeShareCopyID = nil
+                    closeAfterSaving()
+                }
+                Button("Düzenlemeye devam et", role: .cancel) { closeShareCopyID = nil }
+            } message: {
+                Text("Geçici kopya ölçüleri ve fotoğrafı içerebilir. Temizlemeyi yeniden deneyebilirsiniz. Kopyayı bırakırsanız sistemin geçici alanında kalır ve bu ekrandan tekrar temizlenemez. Kayıtlı orijinal silinmez.")
+            }
+            #endif
             .background {
                 #if os(iOS)
                 Color.clear.photosPicker(isPresented: $selectingPhoto, selection: $photoItem, matching: .images, preferredItemEncoding: .current)

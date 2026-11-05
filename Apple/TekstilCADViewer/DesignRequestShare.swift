@@ -31,6 +31,14 @@ enum DesignRequestShareFile {
     }
 }
 struct DesignRequestShareItem: Identifiable { let id: UUID; let url: URL }
+enum DesignRequestShareClose {
+    enum Decision: Equatable { case cancelPreparation, reviewCleanup(UUID), proceed }
+    static func decide(work: UUID?, cleanup: UUID?, acknowledged: UUID?) -> Decision {
+        if work != nil { return .cancelPreparation }
+        if let cleanup, cleanup != acknowledged { return .reviewCleanup(cleanup) }
+        return .proceed
+    }
+}
 enum DesignRequestShareOutcome: Equatable {
     case completed, cancelled, failed
     static func classify(completed: Bool, error: Error?) -> Self {
