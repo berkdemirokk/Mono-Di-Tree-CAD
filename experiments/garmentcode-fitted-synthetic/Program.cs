@@ -43,6 +43,9 @@ try
     if(DartCut.SimpleClosed(new[]{new DartCut.P(0,0),new DartCut.P(1,0),new DartCut.P(2,0)})) throw new Exception("Degenerate polygon accepted");
     var shape=new[]{new DartCut.P(0,0),new DartCut.P(4,0),new DartCut.P(4,4),new DartCut.P(0,4)};
     if(!DartCut.SimpleClosed(shape) || DartCut.SimpleClosed(new[]{shape[0],shape[2],shape[1],shape[3]})) throw new Exception("Cut topology test");
+    var crossingCurves=new[]{new BodyCurveStudy.Edge("L",0,0,2,2,[],null),new BodyCurveStudy.Edge("L",2,2,0,2,[],null),new BodyCurveStudy.Edge("L",0,2,2,0,[],null),new BodyCurveStudy.Edge("L",2,0,0,0,[],null)};
+    var crossingStudy=BodyCurveStudy.Inspect("crossing",crossingCurves);
+    if(crossingStudy.Unresolved==0 || crossingStudy.ExportAllowed || crossingStudy.Status!="unresolved")throw new Exception("Crossing curve contour incorrectly cleared");
     var graphEdges=new[]{new GeneratedGraph.Edge("s","a",0,"L",new(0,0),new(2,0)),new GeneratedGraph.Edge("s","a",1,"L",new(2,0),new(1,2)),new GeneratedGraph.Edge("s","a",2,"L",new(1,2),new(0,0))};
     var seam=new GeneratedGraph.Seam("s","a",0,false,"a",1,true);
     var ok=GeneratedGraph.Inspect("s",graphEdges,[seam],[seam]);
@@ -204,8 +207,12 @@ try
     var waistChanged=BodyWaistStudy.Calculate(skirtChangedBody,ResearchDesign.PinnedFitted);
     NeedLocal(waistChanged.Snapshot!=waistBaseline.Snapshot && !waistChanged.Lower.SequenceEqual(waistBaseline.Lower),"waist match must depend on body values");
     NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
+    var preview=ResearchViewSummary.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    NeedLocal(preview.Panels.Count==6 && preview.RuleCount==23 && preview.Panels.Any(p=>p.UnresolvedPairs>0) && preview.Status=="unresolved" && preview.ReferenceAssessment=="Unverified" && !preview.ExportAllowed && !preview.ProductionAllowed,"research preview gate");
     var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
+    try { BodySeamStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid typed graph accepted"); } catch(ArgumentException) { }
+    try { ResearchViewSummary.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid preview accepted"); } catch(ArgumentException) { }
     try { BackSkirtCandidate.CreateFromBody(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid back skirt accepted"); } catch(ArgumentException) { }
     var invalidSkirt=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { FrontSkirtCandidate.CreateFromBody(invalidSkirt,ResearchDesign.PinnedFitted);throw new Exception("Invalid skirt accepted"); } catch(ArgumentException) { }
@@ -386,6 +393,7 @@ internal static class Validator
             try { BackSkirtCandidate.Create(id,forged); throw new InvalidDataException("Changed back result accepted"); } catch(ArgumentException) { }
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
+            CheckGeneralControls(reference,SyntheticBodyCatalog.Create(id));
             var independent=InterfaceMatcher.MatchDerived(id);
             var typedMatch=BodyWaistStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(typedMatch.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedMatch.ExportAllowed && !typedMatch.ProductionAllowed && !typeof(InterfaceMatcher.Result).IsAssignableFrom(typedMatch.GetType()),"typed waist gate");
@@ -488,6 +496,23 @@ internal static class Validator
             var alteredGraph=derivedGraph with { Rules=Array.AsReadOnly(alteredRule) };
             try { DerivedGraphProjection.Calculate(alteredGraph,independent);throw new Exception("Altered derived ruffle graph accepted"); } catch(ArgumentException) { }
             var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
+            var topology=BodyCurveStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(topology.Count==6 && topology.All(t=>t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
+            foreach(var t in topology)Console.WriteLine($"{id} {t.Panel} represented curve pairs: separated={t.Separated}, endpoint={t.EndpointOnly}, unresolved={t.Unresolved}, nonmonotone={t.NonMonotone}");
+            var typedGraph=BodySeamStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(typedGraph.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedGraph.ExportAllowed && !typedGraph.ProductionAllowed && typedGraph.Rules.Count==23 && !typeof(SyntheticFullSeamGraph.Graph).IsAssignableFrom(typedGraph.GetType()),"typed seam graph gate");
+            foreach(var rule in typedGraph.Rules) {
+                var comparable=rule.Kind=="MetaGarment"?rule with { Owner=id }:rule;
+                var actual=sourceGraph.Single(r=>r.GetProperty("owner").GetString()==comparable.Owner && r.GetProperty("owner_type").GetString()==comparable.Kind && r.GetProperty("index").GetInt32()==comparable.Index);
+                SyntheticFullSeamGraph.Compare(comparable,actual);
+            }
+            try { typedGraph.RequireResearchComposition();throw new InvalidDataException("Unverified typed graph composed"); } catch(InvalidOperationException) { }
+            var typedSide=typedGraph.Rules.Single(r=>r.Kind=="PencilSkirt" && r.Index==0);
+            var sourceSideForTyped=sourceGraph.Single(r=>r.GetProperty("owner_type").GetString()=="PencilSkirt" && r.GetProperty("index").GetInt32()==0);
+            var alteredTypedSource=JsonNode.Parse(sourceSideForTyped.GetRawText())!;alteredTypedSource["b"]!["ruffle"]![1]!["coeff"]=1;
+            using(var invalidTypedSource=JsonDocument.Parse(alteredTypedSource.ToJsonString())) { try { SyntheticFullSeamGraph.Compare(typedSide,invalidTypedSource.RootElement);throw new Exception("Changed typed graph ruffle accepted"); } catch(InvalidDataException) { } }
+
+
             foreach(var rule in fullGraph.Rules)
             {
                 var actual=sourceGraph.Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("owner_type").GetString()==rule.Kind && r.GetProperty("index").GetInt32()==rule.Index);
@@ -533,6 +558,38 @@ internal static class Validator
             Need(status.Issues.Contains("incomplete-graph") && status.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")),"back graph must remain unresolved");
             Need(match.Status=="unresolved"&&!match.ExportAllowed,"matching gate");
         }
+    }
+    static void CheckGeneralControls(JsonElement reference,ResearchBody body)
+    {
+        var design=ResearchDesign.PinnedFitted;var panels=reference.GetProperty("panels");
+        int count=0;double maxRelative=0,maxAbsolute=0,maxArc=0;
+        void Curve(string panel,int index,string kind,double ax,double ay,double bx,double by,IReadOnlyList<P> controls,double? arc)
+        {
+            var source=panels.GetProperty(panel).GetProperty("edges")[index];string sourceKind=source.GetProperty("kind").GetString()!;
+            if(kind=="L") { Need(sourceKind=="Edge","typed source line kind");return; }
+            if(kind=="A") { Need(sourceKind=="CircleEdge" && arc.HasValue,"typed source arc kind");double d=Math.Abs(source.GetProperty("control_y").GetDouble()-arc.GetValueOrDefault());maxArc=Math.Max(maxArc,d);Need(d<1e-7,"typed source arc control");count++;return; }
+            Need(kind is "Q" or "C" && sourceKind=="CurveEdge","typed source Bezier kind");var refs=source.GetProperty("relative_controls");Need(refs.GetArrayLength()==controls.Count,"typed source control count");
+            var a=new P(ax,ay);var b=new P(bx,by);var delta=b-a;var sa=Point(source.GetProperty("start"));var sb=Point(source.GetProperty("end"));var sd=sb-sa;
+            for(int j=0;j<controls.Count;j++) { var actual=controls[j];var expected=Point(refs[j]);double relative=(actual-expected).Length();
+                var actualAbsolute=a+delta*actual.X+new P(-delta.Y,delta.X)*actual.Y;var sourceAbsolute=sa+sd*expected.X+new P(-sd.Y,sd.X)*expected.Y;
+                maxRelative=Math.Max(maxRelative,relative);maxAbsolute=Math.Max(maxAbsolute,(actualAbsolute-sourceAbsolute).Length());
+                Need(relative<.0002,"typed source Bezier control: "+panel+":"+index);count++;
+            }
+        }
+        void Front(IReadOnlyList<FrontBodiceCandidate.Edge> edges,string panel) { foreach(var e in edges)Curve(panel,e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>new P(c.X,c.Y)).ToArray(),e.ArcControlY); }
+        void Back(IReadOnlyList<BackBodiceCandidate.Edge> edges,string panel) { foreach(var e in edges)Curve(panel,e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>new P(c.X,c.Y)).ToArray(),e.ArcControlY); }
+        Front(FrontBodiceCandidate.CreateFromBody(body,design).Edges,"right_ftorso");Front(FrontBodiceCandidate.CreateLeftFromBody(body,design).Edges,"left_ftorso");
+        Back(BackBodiceCandidate.CreateFromBody(body,design,false).Edges,"right_btorso");Back(BackBodiceCandidate.CreateFromBody(body,design,true).Edges,"left_btorso");
+        var frontSkirt=FrontSkirtCandidate.CreateFromMatchedBody(body,design);
+        foreach(var e in frontSkirt.Edges)Curve("skirt_front",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? [new P(c.X,c.Y)] : [],null);
+        var backSkirt=BackSkirtCandidate.CreateFromBody(body,design);
+        foreach(var e in backSkirt.Edges)Curve("skirt_back",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? [new P(c.X,c.Y)] : [],null);
+        Need(count==22,"typed curve control coverage");
+        Console.WriteLine($"{reference.GetProperty("id").GetString()} general source controls: count={count}, relative max={maxRelative:G7}, absolute max={maxAbsolute:G7} cm, arc max={maxArc:G7}");
+        // Same endpoints with a changed control must be rejected, not treated as equivalent.
+        var changed=frontSkirt.Edges.First(e=>e.Kind=="Q");var ctrl=changed.Control!.Value;
+        try { Curve("skirt_front",changed.Id,changed.Kind,changed.Start.X,changed.Start.Y,changed.End.X,changed.End.Y,[new P(ctrl.X+.01,ctrl.Y)],null);throw new InvalidDataException("Changed typed control accepted"); }
+        catch(InvalidDataException e) when(e.Message.StartsWith("typed source Bezier control")) { }
     }
     static bool ExactDecimalEqual(JsonElement value,decimal expected)
     {
