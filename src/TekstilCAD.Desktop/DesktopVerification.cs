@@ -14867,6 +14867,9 @@ internal static partial class DesktopVerification
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("Kapalı kontur için yön seçin"),"Closed seam path requires explicit direction",checks);
             direction.SelectedIndex=0;
+            var selectedPreview=(ContourPath?)preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview);
+            Check(selectedPreview is { StartIndex:0,EndIndex:1,Direction:ContourDirection.Forward } && !result.Text.Contains("1. yol:"),
+                "Valid selected path previews before comparison and before target entry",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("Hedef fark için"),"Seam comparison requires an explicit target",checks);
             expectedEase.Text="0";compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -14882,8 +14885,8 @@ internal static partial class DesktopVerification
                 "Seam comparison reports both segment lengths and signed second-minus-first difference",checks);
             Check(AutomationProperties.GetName(result).Contains(result.Text),"Seam comparison announces its current result through automation",checks);
             expectedEase.Text="-2";
-            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Changing the target clears the previous comparison and preview",checks);
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath,
+                "Changing the target clears the comparison while retaining the selected path preview",checks);
             Check(AutomationProperties.GetName(result).Contains(result.Text) && !AutomationProperties.GetName(result).Contains("1. yol:"),
                 "Changing seam inputs also clears the previous accessible result",checks);
             tolerance.Text="1";
@@ -14891,8 +14894,8 @@ internal static partial class DesktopVerification
             Check(result.Text.Contains("Hedeften sapma: -1 mm") && result.Text.Contains("Tolerans: içinde (±1 mm)"),
                 "Negative target accepts a deviation exactly on the tolerance boundary",checks);
             tolerance.Text="0,5";
-            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Changing the tolerance clears the previous comparison and preview",checks);
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath,
+                "Changing the tolerance clears the comparison while retaining the selected path preview",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("Hedeften sapma: -1 mm") && result.Text.Contains("Tolerans: dışında (±0.5 mm)"),
                 "Deviation beyond the entered tolerance is reported outside",checks);
@@ -14902,12 +14905,12 @@ internal static partial class DesktopVerification
                 "Positive target retains second-minus-first sign and includes the boundary",checks);
             tolerance.Text="-1";
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(result.Text.Contains("Tolerans için sıfır veya pozitif") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Negative tolerance is rejected without displaying an old preview",checks);
+            Check(result.Text.Contains("Tolerans için sıfır veya pozitif") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath,
+                "Negative tolerance is rejected while the selected path remains visible",checks);
             expectedEase.Text="0";tolerance.Text="0";
             direction.SelectedIndex=1;
-            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Changing direction clears the old result and preview",checks);
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath { Direction:ContourDirection.Backward },
+                "Changing direction clears the result and previews the new path",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var path=(ContourPath)preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview)!;
             Check(result.Text.Contains("1. yol: 20 mm") && result.Text.Contains("(2 − 1): -13 mm")
@@ -14931,8 +14934,8 @@ internal static partial class DesktopVerification
             Check(RedNear(10,10+2.5*scale) && RedNear(10+5*scale,10+5*scale) && !RedNear(10+5*scale,10),
                 "Preview draws the actual backward path and uses the main canvas Y direction",checks);
             end.SelectedIndex=2;
-            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Changing an endpoint clears the old comparison",checks);
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath { EndIndex:2 },
+                "Changing an endpoint clears the old comparison and previews the new path",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             // Full-loop mode must never silently interpret distinct endpoints as a partial path.
             fullLoop.IsChecked=true;
@@ -14957,8 +14960,8 @@ internal static partial class DesktopVerification
             Check(result.Text.Contains("1. yol: 30 mm") && path.FullLoop && path.StartIndex==0 && path.EndIndex==4,
                 "Full loop accepts the repeated closing vertex as the starting vertex",checks);
             fullLoop.IsChecked=false;
-            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is null,
-                "Turning full-loop mode off clears the previous result and preview",checks);
+            Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath { FullLoop:false },
+                "Turning full-loop mode off clears the result and previews the new path",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("1. yol: 0 mm") && !otherFullLoop.IsEnabled,
                 "Repeated endpoints retain zero-length behavior outside full-loop mode and open paths cannot enable it",checks);

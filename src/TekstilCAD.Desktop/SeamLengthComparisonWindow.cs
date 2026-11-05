@@ -86,7 +86,16 @@ internal sealed class SeamLengthComparisonWindow : Window
     }
     private void ClearResult()
     {
-        if(stale)return;SetResult("Karşılaştırma için iki yolu seçip düğmeye basın.");first?.Preview.Clear();second?.Preview.Clear();
+        if(stale)return;
+        if(first is null || second is null)return;
+        if(!CheckCurrent())return;
+        SetResult("Karşılaştırma için iki yolu seçip düğmeye basın.");
+        RefreshPreview(first);RefreshPreview(second);
+    }
+    private static void RefreshPreview(Side side)
+    {
+        try { var path=Path(side);_ = ContourMeasurement.MeasurePath(path);side.Preview.Set(path); }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException) { side.Preview.Clear(); }
     }
     private bool CheckCurrent()
     {
@@ -116,7 +125,7 @@ internal sealed class SeamLengthComparisonWindow : Window
             SetResult($"1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nHedeften sapma: {MeasurementInput.Format(assessment.Deviation)} mm\nTolerans: {(assessment.WithinTolerance ? "içinde" : "dışında")} (±{MeasurementInput.Format(allowed)} mm)\nYol uzunlukları ve gösterilen sapma yaklaşık sayısal değerlerdir. Tolerans kararı, gösterilen sapmanın yuvarlanmasından önce bilgisayarda temsil edilen fark, hedef ve tolerans değerleriyle verilir; sınırda değerler aynı görünse de sonuç tolerans dışında olabilir. Geometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.");
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
-        { first.Preview.Clear();second.Preview.Clear();SetResult("Karşılaştırma yapılamadı: "+ex.Message); }
+        { RefreshPreview(first);RefreshPreview(second);SetResult("Karşılaştırma yapılamadı: "+ex.Message); }
     }
     private void SetResult(string text)
     {
