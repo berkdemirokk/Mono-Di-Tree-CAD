@@ -19,8 +19,8 @@ internal sealed class SeamLengthComparisonWindow : Window
     private readonly Side first,second;
     private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,10,0,0) };
     private readonly Button compare=new() { Content="Kenarları karşılaştır",Padding=new Thickness(14,8,14,8),Margin=new Thickness(0,10,0,0),HorizontalAlignment=HorizontalAlignment.Left };
-    private readonly TextBox expectedEase=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
-    private readonly TextBox tolerance=new() { Text="0",Width=120,HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBox expectedEase=new() { Width=120,HorizontalAlignment=HorizontalAlignment.Left };
+    private readonly TextBox tolerance=new() { Width=120,HorizontalAlignment=HorizontalAlignment.Left };
     private bool stale;
     private sealed record PieceChoice(PatternPiece Piece,string Label,string SearchLabel);
     private sealed record PointChoice(int Index,string Label);
@@ -29,8 +29,8 @@ internal sealed class SeamLengthComparisonWindow : Window
         internal readonly ComboBox Piece=new() { DisplayMemberPath=nameof(PieceChoice.Label),IsTextSearchEnabled=true,MinWidth=240,MaxWidth=270 };
         internal readonly TextBox Identity=new() { IsReadOnly=true,MinWidth=240,MaxWidth=270,Margin=new Thickness(0,4,0,0),HorizontalAlignment=HorizontalAlignment.Left };
         internal readonly ComboBox Start=Selector(),End=Selector();
-        internal readonly ComboBox Direction=new() { ItemsSource=new[]{"İleri (indeks artar)","Geri (indeks azalır)"},SelectedIndex=0 };
-        internal readonly CheckBox FullLoop=new() { Content="Tam çevre (başlangıç ve bitiş aynı)",Margin=new Thickness(0,6,0,0) };
+        internal readonly ComboBox Direction=new() { ItemsSource=new[]{"İleri (indeks artar)","Geri (indeks azalır)"},SelectedIndex=-1,IsEnabled=false };
+        internal readonly CheckBox FullLoop=new() { Content="Tam çevre (başlangıç ve bitiş aynı)",Margin=new Thickness(0,6,0,0),IsEnabled=false };
         internal readonly PathPreview Preview=new();
         private static ComboBox Selector()
         {
@@ -51,6 +51,7 @@ internal sealed class SeamLengthComparisonWindow : Window
         var body=new StackPanel();root.Children.Add(new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled });
         body.Children.Add(new TextBlock { Text="Dikiş kenarı uzunluklarını karşılaştır",FontSize=20,FontWeight=FontWeights.SemiBold });
         body.Children.Add(new TextBlock { Text="İki parçanın mevcut kontur noktaları arasındaki çoklu çizgi yolunu karşılaştırır. Kapalı konturda yönü seçin; açık konturda iki nokta arasındaki tek yol kullanılır. Kapanışın tekrarlanan son noktası ilk noktayla aynıdır; aynı nokta seçimi normalde sıfırdır; tam çevre için ilgili kutuyu işaretleyin. Parça başına en fazla 10.000 kayıtlı nokta desteklenir. Önizlemede kırmızı seçilen yolu, mavi başlangıcı, yeşil bitişi gösterir. Sonuç fiziksel ölçüm veya üretim kabulü değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,10) });
+        body.Children.Add(new TextBlock { Text="Ölçülen yol mevcut konturdur. Konturun dikiş veya kesim hattı olduğu, pens kapanışı ve çentik eşleşmesi doğrulanmaz. Her iki parçayı, yol uçlarını ve kapalı kontur yönünü; hedef farkı ve toleransı açıkça seçin.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,10) });
         var choices=snapshot.Pieces.Select(p=> {
             var safeName=CadCanvas.CanvasPieceLabel(p.Name);
             return new PieceChoice(p,$"{p.Id.ToString("D")[..8]} · {safeName}",safeName);
@@ -65,8 +66,6 @@ internal sealed class SeamLengthComparisonWindow : Window
         AutomationProperties.SetName(tolerance,"İzin verilen mutlak sapma, milimetre");body.Children.Add(tolerance);
         expectedEase.TextChanged+=(_,_)=>ClearResult();tolerance.TextChanged+=(_,_)=>ClearResult();
         compare.Click+=(_,_)=>Calculate();body.Children.Add(compare);body.Children.Add(result);
-        if(choices.Length>0)first.Piece.SelectedIndex=Math.Max(0,Array.FindIndex(choices,c=>c.Piece.Id==workshopSourceId));
-        if(choices.Length>0)second.Piece.SelectedIndex=choices.Length>1 ? (first.Piece.SelectedIndex+1)%choices.Length : 0;
         ClearResult();monitor.Tick+=(_,_)=>CheckCurrent();Loaded+=(_,_)=>monitor.Start();Closed+=(_,_)=>monitor.Stop();
     }
     private void AddSide(Grid grid,Side side,string title,PieceChoice[] choices,int column)
@@ -82,7 +81,7 @@ internal sealed class SeamLengthComparisonWindow : Window
         panel.Children.Add(new TextBlock { Text="Kapalı kontur yönü",Margin=new Thickness(0,6,0,2) });AutomationProperties.SetName(side.Direction,title+" kapalı kontur yönü");panel.Children.Add(side.Direction);
         AutomationProperties.SetName(side.FullLoop,title+" tam çevre");panel.Children.Add(side.FullLoop);
         side.Preview.Height=170;side.Preview.Margin=new Thickness(0,8,0,0);AutomationProperties.SetName(side.Preview,title+" seçilen kontur yolu önizlemesi");panel.Children.Add(side.Preview);
-        side.Piece.SelectionChanged+=(_,_)=> { var p=(side.Piece.SelectedItem as PieceChoice)?.Piece;side.Identity.Text=p?.Id.ToString("D") ?? "";side.Identity.ToolTip=side.Identity.Text;var list=p is { Points.Count: <= ContourMeasurement.MaxComparisonVertices } ? p.Points.Select((point,i)=>new PointChoice(i,$"{i} · X {MeasurementInput.Format(point.X)} · Y {MeasurementInput.Format(point.Y)} mm"+(p.Closed && i==p.Points.Count-1 && i>0 && point==p.Points[0]?" · ilk nokta ile aynı":""))).ToArray() : [];side.Start.ItemsSource=list;side.End.ItemsSource=list;side.Start.SelectedIndex=list.Length>0?0:-1;side.End.SelectedIndex=list.Length>1?1:-1;side.Direction.IsEnabled=p?.Closed==true;side.FullLoop.IsEnabled=p?.Closed==true;if(p?.Closed!=true)side.FullLoop.IsChecked=false;ClearResult(); };
+        side.Piece.SelectionChanged+=(_,_)=> { var p=(side.Piece.SelectedItem as PieceChoice)?.Piece;side.Identity.Text=p?.Id.ToString("D") ?? "";side.Identity.ToolTip=side.Identity.Text;var list=p is { Points.Count: <= ContourMeasurement.MaxComparisonVertices } ? p.Points.Select((point,i)=>new PointChoice(i,$"{i} · X {MeasurementInput.Format(point.X)} · Y {MeasurementInput.Format(point.Y)} mm"+(p.Closed && i==p.Points.Count-1 && i>0 && point==p.Points[0]?" · ilk nokta ile aynı":""))).ToArray() : [];side.Start.ItemsSource=list;side.End.ItemsSource=list;side.Start.SelectedIndex=-1;side.End.SelectedIndex=-1;side.Direction.SelectedIndex=-1;side.Direction.IsEnabled=p?.Closed==true;side.FullLoop.IsEnabled=p?.Closed==true;side.FullLoop.IsChecked=false;ClearResult(); };
         side.Start.SelectionChanged+=(_,_)=>ClearResult();side.End.SelectionChanged+=(_,_)=>ClearResult();side.Direction.SelectionChanged+=(_,_)=>ClearResult();side.FullLoop.Checked+=(_,_)=>ClearResult();side.FullLoop.Unchecked+=(_,_)=>ClearResult();
     }
     private void ClearResult()
@@ -101,6 +100,7 @@ internal sealed class SeamLengthComparisonWindow : Window
         var p=(side.Piece.SelectedItem as PieceChoice)?.Piece ?? throw new InvalidOperationException("Her iki parçayı seçin.");
         if(p.Points.Count>ContourMeasurement.MaxComparisonVertices)throw new InvalidOperationException("Parça 10.000 nokta ölçüm sınırını aşıyor.");
         if(side.Start.SelectedItem is not PointChoice a || side.End.SelectedItem is not PointChoice b)throw new InvalidOperationException("Her iki yolun başlangıç ve bitiş noktalarını seçin.");
+        if(p.Closed && side.Direction.SelectedIndex<0)throw new InvalidOperationException("Kapalı kontur için yön seçin.");
         return new ContourPath(p.Points,p.Closed,a.Index,b.Index,p.Closed?(side.Direction.SelectedIndex==0?ContourDirection.Forward:ContourDirection.Backward):null,side.FullLoop.IsChecked==true);
     }
     private void Calculate()

@@ -14855,6 +14855,23 @@ internal static partial class DesktopVerification
         var tolerance=(TextBox)typeof(SeamLengthComparisonWindow).GetField("tolerance",PrivateInstance)!.GetValue(window)!;
         try
         {
+            Check(Control<ComboBox>(first,"Piece").SelectedIndex==-1 && Control<ComboBox>(second,"Piece").SelectedIndex==-1 && expectedEase.Text=="" && tolerance.Text=="",
+                "Seam comparison starts with no implicit pieces, target or tolerance",checks);
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!result.Text.Contains("1. yol:") && result.Text.Contains("parçayı seçin"),"Seam comparison cannot run without explicit paths",checks);
+            Control<ComboBox>(first,"Piece").SelectedIndex=0;Control<ComboBox>(second,"Piece").SelectedIndex=1;
+            Check(start.SelectedIndex==-1 && end.SelectedIndex==-1 && Control<ComboBox>(second,"Start").SelectedIndex==-1 && Control<ComboBox>(second,"End").SelectedIndex==-1 && direction.SelectedIndex==-1,
+                "Selecting pieces does not silently select endpoints or closed direction",checks);
+            start.SelectedIndex=0;end.SelectedIndex=1;
+            Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Kapalı kontur için yön seçin"),"Closed seam path requires explicit direction",checks);
+            direction.SelectedIndex=0;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Hedef fark için"),"Seam comparison requires an explicit target",checks);
+            expectedEase.Text="0";compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Tolerans için"),"Seam comparison requires an explicit tolerance",checks);
+            tolerance.Text="0";
             Check(direction.IsEnabled && !otherDirection.IsEnabled && AutomationProperties.GetName(start).Contains("başlangıç")
                 && AutomationProperties.GetName(end).Contains("bitiş") && AutomationProperties.GetName(direction).Contains("yönü")
                 && AutomationProperties.GetName(preview).Contains("önizlemesi") && AutomationProperties.GetLiveSetting(result)==AutomationLiveSetting.Polite,
@@ -14992,6 +15009,11 @@ internal static partial class DesktopVerification
             var boundaryTolerance=(TextBox)typeof(SeamLengthComparisonWindow).GetField("tolerance",PrivateInstance)!.GetValue(boundaryWindow)!;
             var boundaryResult=(TextBlock)typeof(SeamLengthComparisonWindow).GetField("result",PrivateInstance)!.GetValue(boundaryWindow)!;
             var boundaryCompare=(Button)typeof(SeamLengthComparisonWindow).GetField("compare",PrivateInstance)!.GetValue(boundaryWindow)!;
+            foreach(var (field,index) in new[]{("first",0),("second",1)})
+            {
+                var side=typeof(SeamLengthComparisonWindow).GetField(field,PrivateInstance)!.GetValue(boundaryWindow)!;
+                Control<ComboBox>(side,"Piece").SelectedIndex=index;Control<ComboBox>(side,"Start").SelectedIndex=0;Control<ComboBox>(side,"End").SelectedIndex=1;
+            }
             boundaryTarget.Text=MeasurementInput.Format(-Math.ScaleB(1,-54));boundaryTolerance.Text="1";
             boundaryCompare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(boundaryResult.Text.Contains("Hedeften sapma: 1 mm") && boundaryResult.Text.Contains("Tolerans: dışında (±1 mm)") &&
@@ -15018,6 +15040,7 @@ internal static partial class DesktopVerification
             var searchLabel=(string)choice.GetType().GetProperty("SearchLabel")!.GetValue(choice)!;
             var otherSide=typeof(SeamLengthComparisonWindow).GetField("second",PrivateInstance)!.GetValue(window)!;
             var otherSelector=(ComboBox)otherSide.GetType().GetField("Piece",PrivateInstance)!.GetValue(otherSide)!;
+            selector.SelectedIndex=0;
             Check(selector.IsTextSearchEnabled && otherSelector.IsTextSearchEnabled && TextSearch.GetTextPath(selector)=="SearchLabel" &&
                 TextSearch.GetTextPath(otherSelector)=="SearchLabel" && searchLabel==CadCanvas.CanvasPieceLabel(first.Name) &&
                 searchLabel.StartsWith("Ön",StringComparison.Ordinal) && searchLabel.Contains("\\u202E") && !searchLabel.Contains('\u202E'),
