@@ -30,8 +30,9 @@ enum MeasurementMessageParser {
         let expression = #"(?i)(?:cm|mm)(?:[ \t]+olsun)?(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
         let ambiguousNumber = #"(?i)(?<![0-9.,])[0-9]{1,3}[.,][0-9]{3}[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
         let question = #"(?i)(?:cm|mm)(?:[ \t]+(?:olsun|mi|mı|mu|mü))?[ \t]*[?？]"#
-        let qualified = #"(?i)(?:cm|mm)[ \t]+(?:olma\p{L}*|değil\p{L}*|olursa|ise)(?![\p{L}\p{N}_])"#
-        return [expression, ambiguousNumber, question, qualified].contains { message.range(of: $0, options: .regularExpression) != nil }
+        let qualified = #"(?i)(?:cm|mm)(?:[ \t]+|[ \t]*,[ \t]*)(?:olma\p{L}*|değil\p{L}*|olursa|ise)(?![\p{L}\p{N}_])"#
+        let conditionalPrefix = #"(?i)(?<![\p{L}\p{N}_])eğer[ \t]+(?:göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        return [expression, ambiguousNumber, question, qualified, conditionalPrefix].contains { message.range(of: $0, options: .regularExpression) != nil }
     }
     static func parse(_ message: String, existing: [String: String]) throws -> Proposal {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }
