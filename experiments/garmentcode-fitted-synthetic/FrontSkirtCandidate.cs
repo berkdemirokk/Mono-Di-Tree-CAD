@@ -11,7 +11,8 @@ internal static class FrontSkirtCandidate
         public bool ProductionAllowed=>false;
         public bool ExportAllowed=>false;
     }
-    internal static Candidate Create(string id,double? splitX=null)
+    internal static Candidate Create(string id) => CreateCore(id,null);
+    private static Candidate CreateCore(string id,double? splitX)
     {
         var parts=PartialFittedEngine.Create(id).Segments.Where(e=>e.Panel=="skirt_front").ToDictionary(e=>e.Edge);
         PartialFittedEngine.Segment Required(int i)=>parts.TryGetValue(i,out var value)?value:throw new InvalidOperationException("Missing required edge.");
@@ -38,11 +39,13 @@ internal static class FrontSkirtCandidate
     // fixture, not from a complete C# bodice generator.
     internal static Candidate CreateFromMatchedInterface(string id,InterfaceMatcher.Result matched)
     {
-        if(id!=matched.Snapshot) throw new ArgumentException("Snapshot mismatch");
+        InterfaceMatcher.ValidateBound(id,matched);
         var front=matched.Lower.Where(e=>e.Panel=="skirt_front").ToArray();
         if(front.Length!=4 || !front[1].Flipped || !front[2].Flipped || (front[1].Start-front[2].End).Norm()>1e-8) throw new ArgumentException("Unsupported front interface topology");
-        return Create(id,front[1].Start.X);
+        return CreateCore(id,front[1].Start.X);
     }
 }
+
+
 
 

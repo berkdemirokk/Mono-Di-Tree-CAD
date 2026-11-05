@@ -66,7 +66,7 @@ try
     try { InterfaceMatcher.Match("test",[],[]); throw new Exception("Empty interface accepted"); } catch(ArgumentException) { }
     var line=new InterfaceMatcher.Edge("test","Edge",new(0,0),new(10,0),[],true,false,1);
     var matched=InterfaceMatcher.Match("test",[line],[line with { End=new(4,0), Flipped=false },line with { Start=new(4,0),Flipped=false }]);
-    if(matched.Upper.Count!=2 || Math.Abs(matched.Upper[0].Start.X-6)>1e-8 || !matched.Upper.All(e=>e.Flipped)) throw new Exception("Flipped split orientation");
+    if(matched.Upper.Length!=2 || Math.Abs(matched.Upper[0].Start.X-6)>1e-8 || !matched.Upper.All(e=>e.Flipped)) throw new Exception("Flipped split orientation");
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -85,7 +85,20 @@ internal static class Validator
         foreach(var c in pre.RootElement.GetProperty("cases").EnumerateArray())
         {
             string id=c.GetProperty("id").GetString()!;
-            var match=InterfaceMatcher.Match(id,c.GetProperty("upper").EnumerateArray().Select(InterfaceMatcher.Read).ToArray(),c.GetProperty("lower").EnumerateArray().Select(InterfaceMatcher.Read).ToArray());
+            var upperInput=c.GetProperty("upper").EnumerateArray().Select(InterfaceMatcher.Read).ToArray();
+            var lowerInput=c.GetProperty("lower").EnumerateArray().Select(InterfaceMatcher.Read).ToArray();
+            var alteredInput=upperInput.ToArray(); alteredInput[0]=alteredInput[0] with { Start=alteredInput[0].Start+new InterfaceMatcher.P(.001,0) };
+            try { InterfaceMatcher.Match(id,alteredInput,lowerInput); throw new InvalidDataException("Changed same-ID input accepted"); } catch(ArgumentException) { }
+            var alteredCurve=upperInput.ToArray(); int curveIndex=Array.FindIndex(alteredCurve,e=>e.Controls.Length>0);
+            Need(curveIndex>=0,"missing source curve fixture");
+            alteredCurve[curveIndex]=alteredCurve[curveIndex] with { Controls=alteredCurve[curveIndex].Controls.SetItem(0,alteredCurve[curveIndex].Controls[0]+new InterfaceMatcher.P(.001,0)) };
+            try { InterfaceMatcher.Match(id,alteredCurve,lowerInput); throw new InvalidDataException("Changed same-ID control accepted"); } catch(ArgumentException) { }
+            var alteredIdentity=lowerInput.ToArray(); alteredIdentity[0]=alteredIdentity[0] with { Panel="skirt_back" };
+            try { InterfaceMatcher.Match(id,upperInput,alteredIdentity); throw new InvalidDataException("Changed same-ID identity accepted"); } catch(ArgumentException) { }
+            var match=InterfaceMatcher.Match(id,upperInput,lowerInput);
+            var forged=match with { Lower=match.Lower.SetItem(0,match.Lower[0] with { End=match.Lower[0].End+new InterfaceMatcher.P(.001,0) }) };
+            try { FrontSkirtCandidate.CreateFromMatchedInterface(id,forged); throw new InvalidDataException("Changed result accepted"); } catch(ArgumentException) { }
+            try { BackSkirtCandidate.Create(id,forged); throw new InvalidDataException("Changed back result accepted"); } catch(ArgumentException) { }
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
             void Side(IReadOnlyList<InterfaceMatcher.Edge> actual,JsonElement expected)
@@ -203,6 +216,15 @@ internal static class Validator
             foreach(var pair in predicted) Need(derived.TryGetProperty(pair.Key,out var value)&&Math.Abs(value.GetDouble()-pair.Value)<1e-10,"derived mismatch: "+pair.Key);
             VerifySeams(id,item.GetProperty("stitches"));
             var generated=PartialFittedEngine.Create(id);
+            var dartRules=PartialDartRelations.Create(id);
+            var expectedDarts=item.GetProperty("stitches").EnumerateArray().Where(r=>r.GetProperty("owner_type").GetString() is "BodiceFrontHalf" or "FittedSkirtPanel").ToArray();
+            Need(dartRules.Count==10 && expectedDarts.Length==10,"partial dart rule count");
+            foreach(var rule in dartRules)
+            {
+                var source=expectedDarts.Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("index").GetInt32()==rule.SourceRule);
+                var a=source.GetProperty("a").GetProperty("edges")[0]; var b=source.GetProperty("b").GetProperty("edges")[0];
+                Need(rule.Snapshot==id && a.GetProperty("panel").GetString()==rule.Owner && b.GetProperty("panel").GetString()==rule.Owner && a.GetProperty("edge").GetInt32()==rule.EdgeA && b.GetProperty("edge").GetInt32()==rule.EdgeB && a.GetProperty("flipped").GetBoolean()==rule.FlipA && b.GetProperty("flipped").GetBoolean()==rule.FlipB,"source dart seam relation");
+            }
             Need(generated.Status=="unresolved" && !generated.ProductionAllowed && !generated.ExportAllowed,"partial output gate");
             var frontPath=FrontSkirtCandidate.Create(id);
             Need(frontPath.Edges.Count==13 && frontPath.Status=="unresolved" && !frontPath.ProductionAllowed && !frontPath.ExportAllowed,"front path gate");
@@ -277,6 +299,10 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
+
+
 
 
 
