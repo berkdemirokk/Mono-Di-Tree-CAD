@@ -315,12 +315,12 @@ final class DesignDraftStoreTests: XCTestCase {
         let valid = ALineMeasurementGuide.Input(values: values, unit: "cm")
         XCTAssertNoThrow(try ALineMeasurementGuide.prepare(valid, draft: draft()))
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: values, unit: ""), draft: draft()))
-        for (index, bad) in [(0, ""), (0, "0"), (1, "1,000"), (3, "1001"), (4, "-1")] {
+        for (index, bad) in [(0, "0"), (1, "1,000"), (3, "1001"), (4, "-1")] {
             var changed = values; changed[index] = bad
             XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: changed, unit: "cm"), draft: draft()))
         }
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(valid, draft: draft(waist: "73 cm")))
-        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(valid, draft: draft(notes: "ÖN BEL   YAYI: 36 cm")))
+        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(valid, draft: draft(notes: "ÖN BEL   YAYI: 37 cm")))
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(valid, draft: draft("eğer kumaş ipekse", notes: "Özgün not")))
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(valid, draft: draft(style: .wrap)))
         let original = draft(), revision = UUID()
@@ -332,6 +332,21 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(request.matches(original, explicitSelection: false, importedPortable: false, version: 2, revision: revision, activeID: request.id, pending: false))
         XCTAssertFalse(request.matches(original, explicitSelection: true, importedPortable: false, version: 1, revision: revision, activeID: request.id, pending: false))
         XCTAssertEqual(original.image, Data([1])); XCTAssertEqual(original.waist, "72 cm"); XCTAssertTrue(original.otherMeasurements.isEmpty)
+    }
+    func testALineGuidePartialValuesCanBeAddedInStages() throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "Özgün not", image: nil, imageName: nil)
+        var fields = Array(repeating: "", count: 11); fields[0] = "36"
+        let first = try ALineMeasurementGuide.prepare(.init(values: fields, unit: "cm"), draft: draft)
+        XCTAssertEqual(first, "Özgün not\nÖn bel yayı: 36 cm")
+        var updated = draft; updated = .init(style: .aline, description: draft.description, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: first, image: nil, imageName: nil)
+        fields[0] = ""; fields[1] = "360"; fields[4] = "0"
+        let second = try ALineMeasurementGuide.prepare(.init(values: fields, unit: "mm"), draft: updated)
+        XCTAssertEqual(second, first + "\nArka bel yayı: 360 mm\nÖn bel yayı bolluğu: 0 mm")
+        fields[1] = "370"
+        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: fields, unit: "mm"), draft: updated))
+        fields[1] = ""; fields[4] = " "
+        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: fields, unit: "mm"), draft: updated))
+        XCTAssertEqual(updated.otherMeasurements, first)
     }
     func testMeasurementUnknownNoteDoesNotImplyExistingValue() throws {
         var values = Array(repeating: "", count: 15); values[8] = "72"
