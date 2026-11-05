@@ -49,7 +49,7 @@ enum MeasurementMessageParser {
         if input.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .noMessage }
         guard let message = try? parse(input.message, existing: [:]) else { return .unrecognizedMessage }
         let labels = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
-        let fieldPattern = #"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)[ \t]*\z"#
+        let fieldPattern = #"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:cm|mm)[\t\p{Zs}]*\z"#
         var compared = 0, differences: [Difference] = [], unrecognized: [String] = []
         for label in labels {
             guard let messageValue = message.values[label], let field = input.fields[label], !field.isEmpty else { continue }

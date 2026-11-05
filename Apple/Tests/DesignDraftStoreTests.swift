@@ -1714,6 +1714,14 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(Parser.compare(unknown), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
         let ambiguous = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "1,000 mm"])
         XCTAssertEqual(Parser.compare(ambiguous), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
+        for space in ["\u{00A0}", "\u{202F}", "\t"] {
+            let unicode = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "\(space)72\(space)cm\(space)"])
+            XCTAssertEqual(Parser.compare(unicode), .reviewed(compared: 1, differences: [.init(label: "bel çevresi", fieldValue: "\(space)72\(space)cm\(space)", messageValue: "75 cm")], unrecognizedFields: []))
+            let ambiguousUnicode = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "1,000\(space)mm"])
+            XCTAssertEqual(Parser.compare(ambiguousUnicode), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
+        }
+        let multiline = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "72\ncm"])
+        XCTAssertEqual(Parser.compare(multiline), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
         let noOverlap = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["kalça çevresi": "98 cm"])
         XCTAssertEqual(Parser.compare(noOverlap), .reviewed(compared: 0, differences: [], unrecognizedFields: []))
         XCTAssertEqual(Parser.compare(.init(message: "  ", fields: [:])), .noMessage)
