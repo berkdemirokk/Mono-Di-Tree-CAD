@@ -176,3 +176,9 @@ Beden doğrulaması kaynak `_base_sleeve_balance = shoulder_w - 2`, `_waist_leve
 Genel beden girdisinden üretilen ön kontur ve arka bel sonuçları, sabit fixture sonuçlarıyla aynı tür değildir. Her iki tür değişmez `Unverified` değerlendirmesi taşır ve kompozisyon isteğini reddeder; mevcut fixture tüketicilerinin kabul ettiği tiplere atanamaz. Bu, henüz uygulanmamış gelecekteki kodun bu sınırı koruma ihtiyacını ortadan kaldırmaz.
 
 Ön yaka yayı da `ResearchBody` ve sabit tasarımdan fixture okumadan hesaplanabilir. Genel sonuç ayrı `UnverifiedResult` türündedir; kompozisyon ve üretim kapalıdır. Boyun/omuz geometrisi veya kesim panel dışına çıkıyorsa reddedilir. İki sabit sentetik durumda kaynakla karşılaştırılmış mevcut yaka adayıyla aynı sonuçlar, değişen boyun ölçüsüne duyarlılık ve geçersiz yerleşimin reddi sınanır. Bu, bütün bedenlerde kaynak eşitliği veya ölçü alma yöntemi doğrulaması değildir; genel ön konturla otomatik birleştirme ve diğer paneller henüz yapılmamıştır.
+
+## Ölçüden ön kol evi adayı
+
+`SyntheticArmholeCut.CreateFromBody`, sabit tasarım için ön konturun ölçüden hesaplanan omuz köşesi ve kaynak kol evi formüllerinden sağ/sol ön eğri adaylarını hesaplar. Genel sonuç fixture sonucundan ayrı türdür, `Unverified` kalır ve kompozisyon isteğini reddeder. İki sabit sentetik kaynak örneğinde uçlar ve kontrol değerleri karşılaştırılır; kol evi derinliği değiştiğinde sonuç değişir. Geçersiz derinlik, dejenere köşe ve köşe dışına çıkan kesim reddedilir.
+
+Bu çalışma parçaları birleştirilmiş ön panel değildir: yaka ve kol evi eğrilerinin karşılıklı kesişimi, uçların topolojisi ve kaynak optimizerinin genel hata sınırı kanıtlanmamıştır. Etek ve tam gövde için genel ölçüden dikiş grafiği de henüz yoktur. Gerçek bedenlerde ölçüm protokolü ve prova doğrulanmamıştır; üretim, dışa aktarma ve plotter kapalıdır.

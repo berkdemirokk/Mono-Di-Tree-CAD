@@ -18,9 +18,29 @@ internal static class SyntheticArmholeCut
     }
     internal static Result Create(string id)
     {
-        var body=id switch { "synthetic-base"=>(Back:48d,Waist:37d,Front:41d), "synthetic-distinct"=>(Back:43d,Waist:39d,Front:42d), _=>throw new ArgumentException("Unknown synthetic case") };
-        const double shoulderHalf=18, armscyeDepth=13,connectFactor=.2,shoulderAngle=22;
-        var precut=PrecutFrontBodice.Create(id).Vertices;
+        if(id is not ("synthetic-base" or "synthetic-distinct"))throw new ArgumentException("Unknown synthetic case");
+        var body=SyntheticBodyCatalog.Create(id);
+        return Calculate(id,body,PrecutFrontBodice.Create(id).Vertices);
+    }
+    internal sealed class UnverifiedFront
+    {
+        internal UnverifiedFront(string snapshot,IReadOnlyList<Curve> curves) { Snapshot=snapshot;Curves=curves; }
+        public string Snapshot { get; } public IReadOnlyList<Curve> Curves { get; }
+        public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified armhole; composition blocked.");
+    }
+    internal static UnverifiedFront CreateFromBody(ResearchBody body,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
+        var front=PrecutFrontBodice.CreateFromBody(body,design);
+        var result=Calculate(front.Snapshot,body,front.Vertices);
+        return new(front.Snapshot,Array.AsReadOnly(result.Curves.Where(c=>c.Panel.EndsWith("_ftorso",StringComparison.Ordinal)).ToArray()));
+    }
+    private static Result Calculate(string id,ResearchBody body,IReadOnlyList<PartialFittedEngine.P> precut)
+    {
+        double shoulderHalf=(double)body["shoulder_w"]/2, armscyeDepth=(double)body["armscye_depth"],shoulderAngle=(double)body["shoulder_incl"];
+        const double connectFactor=.2;
         P frontLow=new(precut[7].X,precut[7].Y),frontTop=new(precut[8].X,precut[8].Y),frontCenter=new(precut[9].X,precut[9].Y);
         P sideVector=frontTop-frontLow,shoulderVector=frontCenter-frontTop;
         double connect=Math.Min((armscyeDepth+2.5)*(1+connectFactor),sideVector.Norm()-1);
@@ -37,8 +57,8 @@ internal static class SyntheticArmholeCut
         double t=(sideVector.X*target.Y-target.X*sideVector.Y)/determinant;
         if(u<=0||u>=1||t<=0||t>=1)throw new ArgumentException("Armhole leaves source corner");
         P frontSide=frontLow+sideVector*u,frontShoulder=frontTop+shoulderVector*t;
-        double backWidth=body.Back/2,tan=Math.Tan(shoulderAngle*Math.PI/180);
-        double backTop=body.Waist-tan*(backWidth-shoulderHalf);
+        double backWidth=(double)body["back_width"]/2,tan=Math.Tan(shoulderAngle*Math.PI/180);
+        double backTop=(double)body["waist_line"]-tan*(backWidth-shoulderHalf);
         double backIncl=backWidth-sleeveBalance;
         P backShoulder=new(-backWidth+backIncl,backTop+tan*backIncl);
         P backSide=new(-backWidth,backShoulder.Y-connect);

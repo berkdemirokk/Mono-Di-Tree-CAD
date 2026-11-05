@@ -158,6 +158,7 @@ try
     foreach(decimal shoulder in new[]{1m,2m,2.0000000000000000000000000001m})
         RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_w"?new KeyValuePair<string,decimal>(p.Key,shoulder):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p));
+    RejectBody(bodyPairs.Select(p=>p.Key=="armscye_depth"?new KeyValuePair<string,decimal>(p.Key,0):p));
     var invalidNeck=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,40):p),"cm","degree");
     try { FrontNeckCut.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid neck accepted"); } catch(ArgumentException) { }
     var invalidFront=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
@@ -169,6 +170,10 @@ try
     var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
     var frontChanged=PrecutFrontBodice.CreateFromBody(changedBody,ResearchDesign.PinnedFitted);
     var changedNeckBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,20):p),"cm","degree");
+    var changedArmBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="armscye_depth"?new KeyValuePair<string,decimal>(p.Key,14):p),"cm","degree");
+    var armBase=SyntheticArmholeCut.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var armChanged=SyntheticArmholeCut.CreateFromBody(changedArmBody,ResearchDesign.PinnedFitted);
+    NeedLocal(!armBase.Curves.SequenceEqual(armChanged.Curves),"armhole must depend on body values");
     var neckBase=FrontNeckCut.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
     var neckChanged=FrontNeckCut.CreateFromBody(changedNeckBody,ResearchDesign.PinnedFitted);
     NeedLocal(neckBase.Right!=neckChanged.Right && neckBase.Snapshot!=neckChanged.Snapshot,"neck must depend on body values");
@@ -529,6 +534,11 @@ internal static class Validator
                 Need(actualDarts.Length==2 && diagnostic.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !diagnostic.Issues.Any(x=>x.StartsWith("open-contour:")) && !diagnostic.Issues.Contains("seam-identity-or-direction-mismatch") && !diagnostic.ExportAllowed,"front body topology remains unresolved");
             }
             var armholes=SyntheticArmholeCut.Create(id);
+            var typedArm=SyntheticArmholeCut.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(!typeof(SyntheticArmholeCut.Result).IsAssignableFrom(typedArm.GetType()) && typedArm.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && typedArm.Curves.Count==2 && !typedArm.ExportAllowed && !typedArm.ProductionAllowed,"typed armhole gate");
+            var fixedFront=armholes.Curves.Where(c=>c.Panel.EndsWith("_ftorso",StringComparison.Ordinal)).ToArray();
+            Need(typedArm.Curves.Zip(fixedFront).All(pair=>pair.First.Panel==pair.Second.Panel && pair.First.Index==pair.Second.Index && (pair.First.Start-pair.Second.Start).Norm()<1e-10 && (pair.First.End-pair.Second.End).Norm()<1e-10 && pair.First.Control1==pair.Second.Control1 && pair.First.Control2==pair.Second.Control2),"typed front armhole differs from source fixture calculation");
+            try { typedArm.RequireResearchComposition();throw new InvalidDataException("Unverified armhole composed"); } catch(InvalidOperationException) { }
             foreach(var curve in armholes.Curves)
             {
                 var source=item.GetProperty("panels").GetProperty(curve.Panel).GetProperty("edges")[curve.Index];
