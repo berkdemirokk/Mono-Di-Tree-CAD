@@ -137,6 +137,25 @@ internal static partial class DesktopVerification
                 w.ConfirmationForVerification.IsChecked=true;Click(w.DrawForVerification);
                 Check(Polygons(w).Length==2,"Confirmed fields create two preview polygons",checks);
             }
+            var geometryFeedback=new ALinePanelPreviewWindow(owner,"A kesim elbise","");
+            geometryFeedback.ConfirmDiscardWorkForVerification=()=>true;
+            try
+            {
+                geometryFeedback.UnitForVerification.SelectedIndex=1;geometryFeedback.AgreementForVerification.IsChecked=true;
+                void RejectGeometry(int field,string value,string expected)
+                {
+                    Fill(geometryFeedback,false);geometryFeedback.FieldsForVerification[field].Text=value;
+                    var before=geometryFeedback.FieldsForVerification.Select(f=>f.Text).ToArray();
+                    Click(geometryFeedback.ReviewForVerification);
+                    Check(!geometryFeedback.ConfirmationForVerification.IsEnabled && geometryFeedback.StatusForVerification.Text.Contains(expected) && before.SequenceEqual(geometryFeedback.FieldsForVerification.Select(f=>f.Text)),"Invalid geometry blocks review, identifies "+expected+" and preserves input",checks);
+                }
+                RejectGeometry(4,"200","Ön beden");RejectGeometry(5,"200","Arka beden");
+                RejectGeometry(10,"1040","Ön beden");RejectGeometry(8,"700","düşüklük");
+                Fill(geometryFeedback,false);geometryFeedback.FieldsForVerification[3].Text="600";geometryFeedback.FieldsForVerification[10].Text="1200";
+                Click(geometryFeedback.ReviewForVerification);
+                Check(!geometryFeedback.ConfirmationForVerification.IsEnabled && geometryFeedback.StatusForVerification.Text.Contains("Arka beden"),"Back hem failure identifies the back",checks);
+            }
+            finally { geometryFeedback.Close(); }
             var sideDisplay=new ALinePanelPreviewWindow(owner,"A kesim elbise","");
             sideDisplay.ConfirmDiscardWorkForVerification=()=>true;
             try

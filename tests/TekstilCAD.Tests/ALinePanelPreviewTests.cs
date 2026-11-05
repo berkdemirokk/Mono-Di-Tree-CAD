@@ -4,6 +4,17 @@ namespace TekstilCAD.Tests;
 
 public sealed class ALinePanelPreviewTests
 {
+    [Fact] public void InvalidGeometryReportsTheRelevantInputsAndKeepsTheSameRules()
+    {
+        var front=Assert.Throws<ArgumentException>(()=>ALinePanelPreview.Create(Input with { FrontWaistEase=200 }));
+        Assert.Contains("Ön beden",front.Message);Assert.Contains("bolluk",front.Message);
+        var back=Assert.Throws<ArgumentException>(()=>ALinePanelPreview.Create(Input with { BackWaistEase=200 }));
+        Assert.Contains("Arka beden",back.Message);
+        var depth=Assert.Throws<ArgumentException>(()=>ALinePanelPreview.Create(Input with { HipDepth=Input.WaistToHem }));
+        Assert.Contains("düşüklük",depth.Message);
+        var hem=Assert.Throws<ArgumentException>(()=>ALinePanelPreview.Create(Input with { FinishedHemCircumference=2*(Input.FrontHipArc+Input.FrontHipEase) }));
+        Assert.Contains("etek",hem.Message);Assert.Contains("Ön beden",hem.Message);
+    }
     private static ALinePanelInput Input => new(360,360,500,500,20,20,20,20,200,700,1600);
     private static string[] CmFields => ["36","36","50","50","2","2","2","2","20","70","160"];
     [Theory]

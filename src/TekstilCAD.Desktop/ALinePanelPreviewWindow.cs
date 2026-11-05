@@ -291,7 +291,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Önce simetri ve kesit varsayımlarını inceleyin.");
-                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);reviewGate.Stage(input);
+                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);_ = ALinePanelPreview.Create(input);reviewGate.Stage(input);
                 double[] normalized=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
                 string Both(double mm)=>$"{mm:G9} mm = {mm/10:G9} cm";
                 summary.Text=string.Join(Environment.NewLine,labels.Select((label,i)=>label+": "+Both(normalized[i])))+
