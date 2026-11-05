@@ -25,6 +25,20 @@ internal static partial class DesktopVerification
             var combinedPlan=TekstilCAD.Patterns.ALineTransferPlan.Create(combinedSource.Millimeters,combinedSource.Issues,Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
             var combinedFields=combinedPlan.ApplyTo(Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
             Check(combinedFields[0]=="360" && combinedFields[1]=="360" && combinedFields[2]=="","Conjoined chat values transfer without deriving missing fields",checks);
+            foreach(var answer in new[]{"36\u00a0cm","36\u202fcm!","\u200736\u2009cm.\u00a0"})
+            {
+                window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+                var captured=window.CaptureForVerification();var reviewed=ALineRequestMeasurements.Review(captured.Prompt,captured.Measurements);
+                Check(captured.Prompt.EndsWith("Ön bel yayı: "+answer,StringComparison.Ordinal) && reviewed.Millimeters[0]==360 && window.ChatInputForVerification.Text.Length==0,
+                    "A-line short answer accepts horizontal Unicode spaces without changing the user's text",checks);
+            }
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="36\u00a0cm";window.MeasurementsForVerification.Text+="; not";
+            var changedSource=window.CaptureForVerification();window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==changedSource && window.ChatInputForVerification.Text=="36\u00a0cm",
+                "Unicode-spaced answer with stale question is retained instead of attached to a changed source",checks);
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="0\u202fcm!";window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text=="0\u202fcm!",
+                "Unicode spacing does not bypass zero body-arc validation",checks);
             window.LoadForVerification(source);
             string[] answers=["36 cm.","360 mm!","50 cm","500 mm","0 cm.","0 mm!","2 cm","20 mm","20 cm.","70 cm!","160 cm"];
             for(var i=0;i<answers.Length;i++)
