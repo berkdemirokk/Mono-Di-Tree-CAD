@@ -228,7 +228,7 @@ internal sealed class PhotoTraceWindow : Window
             LengthForVerification.Text=data.Length;xInput.Text=data.XInput;yInput.Text=data.YInput;
             ReviewClosureForVerification.IsChecked=data.Closure;ColorPathForVerification.IsChecked=data.Color;WidePathForVerification.IsChecked=data.Wide;
             foreach(var point in data.Points)if(!CanvasForVerification.TryAddPixelPoint(new Point(point.X,point.Y)))throw new InvalidOperationException("Doğrulanmış nokta yüklenemedi.");
-            StatusForVerification.Text="Çizgi aynı fotoğrafa yüklendi; fotoğraf ve bölge maskesi dosyada yok. Taslak ve ölçüler doğrulanmadı.";return true;
+            StatusForVerification.Text="Çizgi aynı fotoğrafa yüklendi; fotoğraf ve bölge maskesi dosyada yok. Taslak ve ölçüler doğrulanmadı."+(data.Version==1 ? " Eski dosyanın içerik özeti yok." : " İçerik özeti eşleşti; dijital imza değildir.");return true;
         } catch(OperationCanceledException) { if(!closed)StatusForVerification.Text="Açma iptal edildi; mevcut taslak korundu.";return false; }
         catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
         { if(!closed)StatusForVerification.Text="Çizgi açılamadı: "+ex.Message;return false; }

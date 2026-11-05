@@ -10998,12 +10998,21 @@ internal static partial class DesktopVerification
                 canvas.ClearPoints();trace.SetPlaneSettings(null);trace.LengthForVerification.Text="7";
                 var load=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>load.IsCompleted);
                 Check(load.GetAwaiter().GetResult() && trace.PlaneSettings==(200d,100d) && canvas.Points.SequenceEqual(savedPoints),"Photo trace restores plane and reference points",checks);
-                var beforeInvalid=canvas.Points.ToArray();var originalJson=File.ReadAllText(traceFile);File.WriteAllText(traceFile,originalJson.Replace("\"Version\":1","\"Version\":1,\"Version\":1"));
+                var beforeInvalid=canvas.Points.ToArray();var originalJson=File.ReadAllText(traceFile);File.WriteAllText(traceFile,originalJson.Replace("\"Version\":2","\"Version\":2,\"Version\":2"));
                 var bad=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>bad.IsCompleted);
                 Check(!bad.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid),"Malformed photo trace leaves the current draft intact",checks);
-                File.WriteAllText(traceFile,originalJson.Replace(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),new string('A',64)));
+                var altered=originalJson.Replace("\"X\":20", "\"X\":21");
+                Check(altered!=originalJson,"Photo trace integrity test changes a point",checks);
+                File.WriteAllText(traceFile,altered);
+                var corrupt=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>corrupt.IsCompleted);
+                Check(!corrupt.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid) && trace.StatusForVerification.Text.Contains("içerik özeti"),"Photo trace rejects a valid-looking altered point without changing the draft",checks);
+                File.WriteAllText(traceFile,originalJson);var validData=PhotoTraceSession.Decode(traceFile,CancellationToken.None);
+                File.WriteAllText(traceFile,PhotoTraceSession.Encode(validData with { Sha256=new string('A',64) }));
                 var wrong=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>wrong.IsCompleted);
-                Check(!wrong.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid),"Photo trace rejects a different photo without changing the draft",checks);
+                Check(!wrong.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid) && trace.StatusForVerification.Text.Contains("fotoğrafa"),"Photo trace rejects a different photo even with a valid content hash",checks);
+                var legacy=System.Text.Json.Nodes.JsonNode.Parse(originalJson)!.AsObject();legacy["Version"]=1;legacy.Remove("ContentHash");File.WriteAllText(traceFile,legacy.ToJsonString());
+                var old=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>old.IsCompleted);
+                Check(old.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(savedPoints) && trace.StatusForVerification.Text.Contains("içerik özeti yok"),"Legacy photo trace opens with an explicit missing-checksum warning",checks);
             } finally { if(File.Exists(traceFile))File.Delete(traceFile); }
             canvas.UndoPoint();
             Check(!canvas.SuggestLastEdge(),"Plane reference corners cannot be changed by the trace edge suggestion",checks);

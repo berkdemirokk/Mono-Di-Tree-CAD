@@ -1,4 +1,6 @@
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using TekstilCAD.Core;
@@ -9,9 +11,25 @@ internal static class PhotoTraceSession
 {
     internal sealed record Pixel(double X,double Y);
     internal sealed record Data(int Version,string Sha256,int ByteLength,int Orientation,int SourceWidth,int SourceHeight,int PreviewWidth,int PreviewHeight,
-        double? PlaneWidth,double? PlaneHeight,string Length,string XInput,string YInput,bool Closure,bool Color,bool Wide,Pixel[] Points);
+        double? PlaneWidth,double? PlaneHeight,string Length,string XInput,string YInput,bool Closure,bool Color,bool Wide,Pixel[] Points,string? ContentHash=null);
     private static readonly JsonSerializerOptions Options=new() { UnmappedMemberHandling=JsonUnmappedMemberHandling.Disallow,MaxDepth=8 };
-    internal static string Encode(Data data) { Validate(data);return JsonSerializer.Serialize(data,Options); }
+    internal static string Encode(Data data)
+    {
+        data=data with { Version=2,ContentHash=null };Validate(data);
+        return JsonSerializer.Serialize(data with { ContentHash=ComputeHash(data) },Options);
+    }
+    // A content checksum detects accidental edits and corruption; it is not authentication.
+    private static string ComputeHash(Data data)
+    {
+        using var bytes=new MemoryStream();using(var writer=new BinaryWriter(bytes,Encoding.UTF8,true)) {
+            writer.Write(data.Version);writer.Write(data.Sha256);writer.Write(data.ByteLength);writer.Write(data.Orientation);
+            writer.Write(data.SourceWidth);writer.Write(data.SourceHeight);writer.Write(data.PreviewWidth);writer.Write(data.PreviewHeight);
+            writer.Write(data.PlaneWidth.HasValue);if(data.PlaneWidth is double width) { writer.Write(width);writer.Write(data.PlaneHeight!.Value); }
+            writer.Write(data.Length);writer.Write(data.XInput);writer.Write(data.YInput);writer.Write(data.Closure);writer.Write(data.Color);writer.Write(data.Wide);
+            writer.Write(data.Points.Length);foreach(var p in data.Points) { writer.Write(p.X);writer.Write(p.Y); }
+        }
+        return Convert.ToHexString(SHA256.HashData(bytes.ToArray()));
+    }
     internal static Data Decode(string path,CancellationToken token)
     {
         using var stream=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
@@ -21,13 +39,19 @@ internal static class PhotoTraceSession
         token.ThrowIfCancellationRequested();using var doc=JsonDocument.Parse(memory.ToArray(),new JsonDocumentOptions { MaxDepth=8 });
         static void Unique(JsonElement e) { if(e.ValueKind==JsonValueKind.Object) { var names=new HashSet<string>(StringComparer.Ordinal);foreach(var p in e.EnumerateObject()) { if(!names.Add(p.Name))throw new InvalidDataException("Tekrarlanan alan var.");Unique(p.Value); } } else if(e.ValueKind==JsonValueKind.Array)foreach(var x in e.EnumerateArray())Unique(x); }
         Unique(doc.RootElement);
-        if(doc.RootElement.ValueKind!=JsonValueKind.Object || doc.RootElement.EnumerateObject().Count()!=17)throw new InvalidDataException("Taslak alanları eksik veya fazla.");
+        if(doc.RootElement.ValueKind!=JsonValueKind.Object || !doc.RootElement.TryGetProperty("Version",out var versionElement) || !versionElement.TryGetInt32(out var version) ||
+           (version==1 ? doc.RootElement.EnumerateObject().Count()!=17 || doc.RootElement.TryGetProperty("ContentHash",out _) :
+            version==2 ? doc.RootElement.EnumerateObject().Count()!=18 || !doc.RootElement.TryGetProperty("ContentHash",out _) : true))
+            throw new InvalidDataException("Taslak sürümü veya alanları geçersiz.");
         if(doc.RootElement.TryGetProperty("Points",out var points) && points.ValueKind==JsonValueKind.Array)foreach(var point in points.EnumerateArray())if(point.ValueKind!=JsonValueKind.Object || point.EnumerateObject().Count()!=2 || !point.TryGetProperty("X",out _) || !point.TryGetProperty("Y",out _))throw new InvalidDataException("Nokta alanları eksik veya fazla.");
-        var data=doc.RootElement.Deserialize<Data>(Options) ?? throw new InvalidDataException("Taslak boş.");Validate(data);return data;
+        var data=doc.RootElement.Deserialize<Data>(Options) ?? throw new InvalidDataException("Taslak boş.");Validate(data);
+        if(data.Version==2 && (data.ContentHash is null || data.ContentHash.Length!=64 || !data.ContentHash.All(Uri.IsHexDigit) ||
+            !string.Equals(data.ContentHash,ComputeHash(data),StringComparison.OrdinalIgnoreCase)))throw new InvalidDataException("Taslak dosyasının içerik özeti uyuşmuyor.");
+        return data;
     }
     internal static void Validate(Data d)
     {
-        if(d.Version!=1 || d.Sha256 is null || d.Sha256.Length!=64 || d.Sha256.Any(c=>!Uri.IsHexDigit(c)) || d.ByteLength<=0 || d.Orientation is <1 or >8 || d.SourceWidth<=0 || d.SourceHeight<=0 || d.PreviewWidth<=0 || d.PreviewHeight<=0 ||
+        if(d.Version is not (1 or 2) || d.Sha256 is null || d.Sha256.Length!=64 || d.Sha256.Any(c=>!Uri.IsHexDigit(c)) || d.ByteLength<=0 || d.Orientation is <1 or >8 || d.SourceWidth<=0 || d.SourceHeight<=0 || d.PreviewWidth<=0 || d.PreviewHeight<=0 ||
            d.Length is null || d.Length.Length>32 || d.XInput is null || d.XInput.Length>24 || d.YInput is null || d.YInput.Length>24 || d.Points is null || d.Points.Length>PhotoTraceCanvas.MaximumPoints || d.PlaneWidth.HasValue!=d.PlaneHeight.HasValue)
             throw new InvalidDataException("Taslak alanları geçersiz.");
         if(d.PlaneWidth is double w && d.PlaneHeight is double h && (!double.IsFinite(w) || !double.IsFinite(h) || w<=0 || h<=0 || w>Geometry.MaxCoordinate || h>Geometry.MaxCoordinate || d.Length!=MeasurementInput.Format(w)))throw new InvalidDataException("Düzlem ölçüsü geçersiz.");
