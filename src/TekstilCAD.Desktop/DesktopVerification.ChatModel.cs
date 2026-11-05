@@ -160,6 +160,20 @@ internal static partial class DesktopVerification
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","Same-value assertion does not silently erase an unresolved question",checks);
             window.PromptForVerification.Text="göğüs çevresi 96 cm ve bel çevresi 72 cm.";
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&window.MeasurementTilesForVerification["göğüs çevresi"].Text=="96 cm","Explicit correction to affirmative punctuation restores definite joined measurements",checks);
+            window.LoadForVerification(new DesignRequest("bel çevresi 72 cm?","kalça çevresi 100 cm",null));
+            window.ChatInputForVerification.Text="bel çevresi 720 mm";window.SendMessageForVerification();
+            var clarified=window.CaptureForVerification();
+            Check(clarified.Prompt.StartsWith("bel çevresi 72 cm?",StringComparison.Ordinal)&&clarified.Prompt.EndsWith("bel çevresi 720 mm",StringComparison.Ordinal)&&window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm","Later exact equivalent chat reply resolves a single question without removing either message",checks);
+            Check(window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm"&&clarified.Measurements=="kalça çevresi 100 cm","Clarification preserves independent measurement notes",checks);
+            window.LoadForVerification(DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(clarified)));
+            Check(window.CaptureForVerification().Prompt==clarified.Prompt&&window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm","Clarification is deterministic after save/load with original text intact",checks);
+            foreach(var unsafeReply in new[]{"bel çevresi 73 cm","bel çevresi 72 cm olursa","bel çevresi 72 cm değil","bel çevresi 72 cm olsun","bel çevresi 72 cm ve göğüs çevresi 96 cm"})
+            {
+                window.LoadForVerification(new DesignRequest("bel çevresi 72 cm?","kalça çevresi 100 cm",null));window.ChatInputForVerification.Text=unsafeReply;window.SendMessageForVerification();
+                Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin"&&window.CaptureForVerification().Prompt.EndsWith(unsafeReply,StringComparison.Ordinal),"Unsafe clarification remains uncertain with exact reply retained: "+unsafeReply,checks);
+            }
+            window.LoadForVerification(new DesignRequest("bel çevresi 72 cm?","bel çevresi 72 cm",null));
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","No clarification chronology inferred across description and notes",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

@@ -18,6 +18,9 @@ public static partial class DressMeasurementParser
     // A question is not an asserted measurement. It enters the existing unclear
     // branch, including every member of a conjunction and related conflict groups.
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // Narrow clarification grammar: no "olsun", qualifier, negation or joined group.
+    private static readonly Regex Clarification=new(@"\A\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:(?<question>\?)|[.!])?\s*\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private sealed record ClauseEvidence(int Field,int Offset,int Order,decimal? Value,bool Question);
     // These distinct experimental measurements mention "göğüs" but are not
     // chest circumference. Only an entire, explicit field is excluded from
     // ambiguity detection; mixed or qualified statements remain conservative.
@@ -56,17 +59,34 @@ public static partial class DressMeasurementParser
         var values=new Dictionary<string,List<(decimal Value,string Source)>>(StringComparer.Ordinal);
         var unclear=new HashSet<string>(StringComparer.Ordinal);var other=new List<string>();
         var coupled=new List<HashSet<string>>();
-        foreach(var text in new[] { description,measurements })
+        var evidence=new Dictionary<string,List<ClauseEvidence>>(StringComparer.Ordinal);
+        var texts=new[]{description,measurements};
+        for(int field=0;field<texts.Length;field++)
         {
-        var folded=FoldCase(text);var start=0;
+        var text=texts[field];
+        var folded=FoldCase(text);var start=0;var order=0;
         foreach(Match separator in SegmentSplit.Matches(folded).Cast<Match>().Append(Match.Empty))
         {
             if(separator.Success && JoinedLineBreak(folded,separator))continue;
-            var end=separator.Success ? separator.Index : text.Length;
+            var end=separator.Success ? separator.Index : text.Length;var segmentOffset=start;
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
+            order++;
             var search=FoldCase(segment);
             if(OtherChestMeasurement.IsMatch(search)) { other.Add(segment);continue; }
+            var clarification=Clarification.Match(search);decimal? explicitValue=null;
+            if(clarification.Success&&decimal.TryParse(clarification.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var number))
+            {
+                if(clarification.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))number*=10m;
+                if(number>0&&number<=10_000m)explicitValue=number;
+            }
+            // Retain ALL occurrences, including unrecognized clauses, so a valid-looking
+            // final reply can never erase an earlier conflict or conditional statement.
+            foreach(var label in LabelPattern.Matches(search).Cast<Match>().Select(m=>Canonical(m.Value)).Distinct(StringComparer.Ordinal))
+            {
+                if(!evidence.TryGetValue(label,out var occurrences))evidence[label]=occurrences=[];
+                occurrences.Add(new(field,segmentOffset,order,explicitValue,clarification.Success&&clarification.Groups["question"].Success));
+            }
             // A conjunction is accepted only if every constituent is an exact,
             // valid measurement and repeated labels agree. Otherwise the whole
             // original segment remains unrecognized and all its labels are unclear.
@@ -97,6 +117,14 @@ public static partial class DressMeasurementParser
                 list.Add((item.Value,item.Source));
             }
         }
+        }
+        foreach(var (label,occurrences) in evidence)
+        {
+            if(occurrences.Count!=2)continue;
+            var question=occurrences[0];var answer=occurrences[1];
+            if(question.Question&&!answer.Question&&question.Value.HasValue&&question.Value==answer.Value&&
+                question.Field==answer.Field&&question.Offset<answer.Offset&&answer.Order==question.Order+1&&!coupled.Any(group=>group.Contains(label)))
+                unclear.Remove(label);
         }
         // A conflict elsewhere invalidates every measurement from a joined
         // expression, including chains of joined expressions.
