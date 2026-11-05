@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Automation;
-using System.Windows.Shapes;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
@@ -18,7 +18,8 @@ internal static class FittedSyntheticVerification
                 if(panels.Count!=6 || panels.Any(p=>p.Geometry.Bounds.IsEmpty || p.Geometry.Figures.Count!=1)) throw new InvalidOperationException("Six bounded panels required.");
                 foreach(var panel in panels) {
                     var view=FittedResearchWindow.CreatePanelView(panel);
-                    if(view.Content is not Path path || AutomationProperties.GetName(path)!=panel.Name+": sentetik, doğrulanmamış panel çizimi; ölçekli değil")
+                    if(view.Content is not DockPanel content || content.Children.Count!=2 || content.Children[0] is not TextBlock description ||
+                       content.Children[1] is not System.Windows.Shapes.Path path || description.Text!=panel.Name+": sentetik, doğrulanmamış panel çizimi; ölçekli değil" || AutomationProperties.GetName(path)!=description.Text)
                         throw new InvalidOperationException("Panel accessibility description missing or misleading.");
                 }
             }

@@ -55,7 +55,10 @@ internal sealed class FittedResearchWindow : Window
         var group=new GroupBox { Header=panel.Name, Margin=new Thickness(4), Height=300 };
         var path=new System.Windows.Shapes.Path { Data=panel.Geometry, Stroke=Brushes.SteelBlue, StrokeThickness=1, Stretch=Stretch.Uniform, Margin=new Thickness(15) };
         AutomationProperties.SetName(path,$"{panel.Name}: sentetik, doğrulanmamış panel çizimi; ölçekli değil");
-        group.Content=path;
+        var content=new DockPanel();
+        var description=new TextBlock { Text=$"{panel.Name}: sentetik, doğrulanmamış panel çizimi; ölçekli değil", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(8,4,8,4) };
+        DockPanel.SetDock(description,Dock.Top); content.Children.Add(description); content.Children.Add(path);
+        group.Content=content;
         return group;
     }
 }
