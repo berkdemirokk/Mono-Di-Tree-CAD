@@ -2764,11 +2764,14 @@ private struct ExperimentalDesignBriefView: View {
         }
         do {
             let updated = try PhotoObservation.append(selection, description: request.draft.description, notes: request.draft.otherMeasurements)
+            guard updated != request.draft.description else {
+                return "Seçilen gözlemler zaten mevcut; hiçbir değişiklik yapılmadı."
+            }
             description = updated
             message = "Kendi fotoğraf gözlemleriniz tarife eklendi. Model ve tarifle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı."
             return nil
         } catch PhotoObservation.Failure.duplicate {
-            return "Bu özellik için önceki bir fotoğraf gözlemi var. Çelişki veya tekrar eklenmedi; önceki metni kontrol edin."
+            return "Bu özellik için farklı bir fotoğraf gözlemi var. Hiçbir gözlem eklenmedi; seçiminizi veya önceki metni kontrol edin."
         } catch PhotoObservation.Failure.tooLong {
             return "Tarif sınırı aşılacağı için gözlemler eklenmedi; mevcut metin ve görsel korundu."
         } catch { return "Gözlem eklenemedi; mevcut istek ve görsel korundu." }

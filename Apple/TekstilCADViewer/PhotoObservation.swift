@@ -34,14 +34,21 @@ enum PhotoObservation {
         let lines = selection.lines
         guard !lines.isEmpty else { throw Failure.empty }
         let previous = (description + "\n" + notes).components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ";")))
+        let locale = Locale(identifier: "tr_TR")
+        var additions: [String] = []
         for line in lines {
             guard let colon = line.firstIndex(of: ":") else { throw Failure.duplicate }
             let prefix = String(line[...colon])
-            if previous.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).range(of: prefix, options: [.anchored, .caseInsensitive]) != nil }) {
+            let matches = previous.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter {
+                $0.range(of: prefix, options: [.anchored, .caseInsensitive], range: nil, locale: locale) != nil
+            }
+            if matches.contains(where: { $0.compare(line, options: [.caseInsensitive], range: nil, locale: locale) != .orderedSame }) {
                 throw Failure.duplicate
             }
+            if matches.isEmpty { additions.append(line) }
         }
-        let joined = description + (description.isEmpty || description.hasSuffix("\n") ? "" : "\n") + lines.joined(separator: "\n")
+        guard !additions.isEmpty else { return description }
+        let joined = description + (description.isEmpty || description.hasSuffix("\n") ? "" : "\n") + additions.joined(separator: "\n")
         guard joined.utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw Failure.tooLong }
         return joined
     }

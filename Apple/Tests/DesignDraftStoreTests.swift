@@ -408,9 +408,23 @@ final class DesignDraftStoreTests: XCTestCase {
         let result = try PhotoObservation.append(selected, description: original, notes: "Bel çevresi: 72 cm")
         XCTAssertEqual(result, original + "\n" + selected.lines.joined(separator: "\n"))
         XCTAssertEqual(original, "Kolsuz model 👗") // Contradictions remain visible for manual review.
-        XCTAssertThrowsError(try PhotoObservation.append(selected, description: result, notes: ""))
+        XCTAssertEqual(try PhotoObservation.append(selected, description: result, notes: ""), result)
         XCTAssertThrowsError(try PhotoObservation.append(selected, description: original, notes: "Fotoğraf gözlemi · Kol: Kolsuz"))
         XCTAssertThrowsError(try PhotoObservation.append(selected, description: "Not; Fotoğraf gözlemi · Kol: Kolsuz", notes: ""))
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: String(repeating: "x", count: ExperimentalDesignBrief.maxTextUnits), notes: ""))
+    }
+    func testPhotoObservationSkipsIdenticalChoicesButRejectsConflictsAtomically() throws {
+        let selected = PhotoObservation.Selection(silhouette: .aline, sleeve: .long, neck: .round)
+        let original = "Özgün tarif\nFotoğraf gözlemi · Kol: Uzun kollu"
+        let expected = original + "\nFotoğraf gözlemi · Siluet: A kesim\nFotoğraf gözlemi · Yaka: Yuvarlak yaka"
+        XCTAssertEqual(try PhotoObservation.append(selected, description: original, notes: ""), expected)
+        XCTAssertEqual(try PhotoObservation.append(selected, description: original, notes: "Fotoğraf gözlemi · Siluet: A kesim"), original + "\nFotoğraf gözlemi · Yaka: Yuvarlak yaka")
+        let onlyExisting = PhotoObservation.Selection(silhouette: .unknown, sleeve: .long, neck: .unknown)
+        XCTAssertEqual(try PhotoObservation.append(onlyExisting, description: original, notes: ""), original)
+        let conflicting = "Fotoğraf gözlemi · Kol: Kolsuz"
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: original, notes: conflicting))
+        XCTAssertEqual(original, "Özgün tarif\nFotoğraf gözlemi · Kol: Uzun kollu")
+        XCTAssertEqual(conflicting, "Fotoğraf gözlemi · Kol: Kolsuz")
         XCTAssertThrowsError(try PhotoObservation.append(selected, description: String(repeating: "x", count: ExperimentalDesignBrief.maxTextUnits), notes: ""))
     }
     func testPhotoObservationSnapshotRejectsStaleInputsAndPendingWork() {
