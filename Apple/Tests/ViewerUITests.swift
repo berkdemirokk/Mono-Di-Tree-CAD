@@ -26,6 +26,33 @@ final class ViewerUITests: XCTestCase {
         XCTAssertTrue(save.waitForExistence(timeout: 5)); XCTAssertTrue(save.isHittable)
         XCTAssertLessThan(back.frame.maxY, save.frame.minY)
     }
+    func testMeasurementGroupNavigationReturnsToFieldsAndKeepsInput() {
+        let app = XCUIApplication(); app.launch()
+        let open = app.buttons["Elbise isteği oluştur"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15)); open.tap()
+        let restore = app.buttons["Taslağı geri yükle"]
+        if restore.waitForExistence(timeout: 2) { restore.tap() }
+        let next = app.buttons["Ölçülere geç"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5)); next.tap()
+        let form = app.buttons["15 beden ölçüsünü gir…"]
+        for _ in 0..<8 where !form.isHittable { app.swipeUp() }
+        XCTAssertTrue(form.waitForExistence(timeout: 5)); form.tap()
+        let resume = app.buttons["Formu geri yükle"]
+        if resume.waitForExistence(timeout: 2) { resume.tap() }
+        let first = app.textFields["üst kol çevresi, cm"]
+        for _ in 0..<8 where !first.isHittable { app.swipeUp() }
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("12")
+        let hide = app.buttons["Klavyeyi kapat"]
+        if hide.waitForExistence(timeout: 3) { hide.tap() }
+        app.swipeUp()
+        let nextGroup = app.buttons["Sonraki ölçüler"]
+        XCTAssertTrue(nextGroup.isHittable); nextGroup.tap()
+        let nextField = app.textFields["omuz üst noktasından göğse, cm"]
+        XCTAssertTrue(nextField.waitForExistence(timeout: 5)); XCTAssertTrue(nextField.isHittable)
+        app.buttons["Önceki"].tap()
+        XCTAssertTrue(first.waitForExistence(timeout: 5)); XCTAssertTrue(first.isHittable)
+        XCTAssertTrue((first.value as? String ?? "").contains("12"))
+    }
     func testDressBriefModelAndMeasurementNavigation() {
         let app = XCUIApplication()
         app.launch()

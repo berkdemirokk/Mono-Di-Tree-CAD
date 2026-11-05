@@ -1,5 +1,18 @@
 import Foundation
 import SwiftUI
+#if os(iOS)
+import UIKit
+#endif
+
+private extension View {
+    @ViewBuilder func measurementKeyboard(isAngle: Bool) -> some View {
+        #if os(iOS)
+        self.keyboardType(isAngle ? .numbersAndPunctuation : .decimalPad)
+        #else
+        self
+        #endif
+    }
+}
 
 /// User-provided measurement notes only; no pattern or body model is generated.
 enum BodyMeasurementNotes {
@@ -196,6 +209,7 @@ struct BodyMeasurementNotesView: View {
     }
     var body: some View {
         NavigationStack {
+            ScrollViewReader { proxy in
             Form {
                 Section {
                     Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
@@ -209,7 +223,7 @@ struct BodyMeasurementNotesView: View {
                 }
                 Section {
                     Text("Adım \(groupIndex + 1) / \(BodyMeasurementNotes.groups.count): \(BodyMeasurementNotes.groups[groupIndex].title)")
-                        .font(.headline).accessibilityAddTraits(.isHeader)
+                        .font(.headline).accessibilityAddTraits(.isHeader).id("measurement-group-heading")
                     Text("\(BodyMeasurementNotes.fields.count - BodyMeasurementNotes.missingIndices(values).count) / \(BodyMeasurementNotes.fields.count) alan dolduruldu. Bilmediklerinizi boş bırakabilirsiniz.")
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(BodyMeasurementNotes.groups[groupIndex].indices, id: \.self) { index in
@@ -220,6 +234,7 @@ struct BodyMeasurementNotesView: View {
                             TextField("Bilinmiyorsa boş bırakın", text: Binding(get: { values[index] }, set: { value in
                                 if values[index] != value { values[index] = value; revision = UUID() }
                             }))
+                                .measurementKeyboard(isAngle: field.angle)
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
                                 .accessibilityHint(BodyMeasurementNotes.instructions[index] + " Bilinmiyorsa boş bırakın.")
                                 .focused($focusedIndex, equals: index).frame(minHeight: 44)
@@ -280,6 +295,12 @@ struct BodyMeasurementNotesView: View {
                 readyToSaveForm = true
             }
             .onDisappear { rememberForm() }
+            .onChange(of: groupIndex) { index in
+                proxy.scrollTo("measurement-group-heading", anchor: .top)
+                #if os(iOS)
+                UIAccessibility.post(notification: .announcement, argument: "Adım \(index + 1), \(BodyMeasurementNotes.groups[index].title)")
+                #endif
+            }
             .onChange(of: values) { _ in revision = UUID(); rememberForm() }
             .onChange(of: unit) { _ in revision = UUID(); rememberForm() }
             .confirmationDialog("Uzunluk birimi değiştirilsin mi?", isPresented: $confirmUnit, titleVisibility: .visible) {
@@ -323,6 +344,7 @@ struct BodyMeasurementNotesView: View {
                 Button("Formu taslakta tut ve çık") { rememberForm(); dismiss() }
                 Button("Formu sil ve çık", role: .destructive) { savedForm = nil; readyToSaveForm = false; dismiss() }
                 Button("Düzenlemeye devam et", role: .cancel) { }
+            }
             }
         }
     }
