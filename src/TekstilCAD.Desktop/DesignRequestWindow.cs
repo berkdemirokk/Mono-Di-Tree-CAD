@@ -22,6 +22,9 @@ internal sealed class DesignRequestWindow : Window
     private readonly TextBox chatInput=new() { AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MinHeight=48,MaxHeight=100,Background=BackgroundColor,Foreground=Ink,Padding=new Thickness(10),MaxLength=DesignRequestStorage.MaximumTextLength,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
     private readonly Button measurementShortcut=new() { Visibility=Visibility.Collapsed,HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
     private string? suggestedMeasurement;
+    internal StackPanel ALineSourceRecoveryForVerification { get; }=new() { Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,8) };
+    internal Button EditALinePromptForVerification { get; }=new() { Content="Tarifteki ölçü ifadelerini düzenle",Margin=new Thickness(0,2,6,2) };
+    internal Button EditALineNotesForVerification { get; }=new() { Content="Ölçü notlarını düzenle",Margin=new Thickness(0,2,0,2) };
     private sealed record AnswerContext(string Prompt,string Measurements,string? Label,bool ALine,long ReferenceRevision,long QuestionRevision);
     private long questionRevision;
     private AnswerContext? answerContext;
@@ -216,6 +219,18 @@ internal sealed class DesignRequestWindow : Window
         // First item in the body directly below the fixed composer. Keeping it
         // scrollable preserves message entry space on compact windows.
         body.Children.Insert(0,lowerPanelPreview);
+        var recovery=ALineSourceRecoveryForVerification;
+        recovery.Children.Add(new TextBlock { Text="Kaynak ölçü ifadelerini düzenle",FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap });
+        recovery.Children.Add(new TextBlock { Text="Çelişki veya belirsizlik var. Tarif ve ölçü notlarını birlikte kontrol edin; doğru değeri siz belirleyin. Düzenlemek mesajı göndermez, eski değeri otomatik silmez.",TextWrapping=TextWrapping.Wrap });
+        var sourceActions=new WrapPanel();sourceActions.Children.Add(EditALinePromptForVerification);sourceActions.Children.Add(EditALineNotesForVerification);recovery.Children.Add(sourceActions);
+        foreach(var action in new[]{EditALinePromptForVerification,EditALineNotesForVerification})
+        {
+            AutomationProperties.SetName(action,(string)action.Content);
+            AutomationProperties.SetHelpText(action,"İstek ayrıntılarını açar ve seçilen kaynak alanına odaklanır. Bekleyen sohbet mesajı ve tüm kaynak metinleri korunur; değer değiştirilmez.");
+        }
+        EditALinePromptForVerification.Click+=(_,_)=>EditALineSource(prompt);
+        EditALineNotesForVerification.Click+=(_,_)=>EditALineSource(measurements);
+        body.Children.Insert(0,recovery);
         ModelChoice("Düz elbise","Düz siluet","Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Gömlek elbise","Yakalı ön · Bel hattı","Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
         var convertV2=new Button { Content="V2 model kimliğiyle çalış…",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8) };
@@ -309,6 +324,19 @@ internal sealed class DesignRequestWindow : Window
     {
         requestDetails.IsExpanded=true;
         requestDetails.UpdateLayout();editor.BringIntoView();editor.Focus();
+    }
+    private void EditALineSource(TextBox editor)
+    {
+        if(!CanPreviewALineForVerification)return;
+        try
+        {
+            if(ALineRequestMeasurements.Review(prompt.Text,measurements.Text).Issues.Count==0)return;
+            FocusRequestEditor(editor);
+            System.Windows.Input.FocusManager.SetFocusedElement(this,editor);
+            SetStatus("Kaynak alanı açıldı. Doğru ifadeyi kendiniz düzenleyin; diğer kaynak alanını da kontrol edin. Bekleyen mesaj gönderilmedi ve metinler değiştirilmedi.");
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+        { SetStatus("Kaynak denetlenemedi; metinler korundu. "+ex.Message); }
     }
     private void FocusChatInput()
     {
@@ -571,6 +599,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void RefreshConversation()
     {
+        ALineSourceRecoveryForVerification.Visibility=Visibility.Collapsed;
         RefreshALinePreviewEntry();
         DressMeasurementReview review;
         try { review=DressMeasurementParser.Review(prompt.Text,measurements.Text); }
@@ -613,6 +642,7 @@ internal sealed class DesignRequestWindow : Window
             var source=ALineRequestMeasurements.Review(prompt.Text,measurements.Text);
             if(source.Issues.Count>0)
             {
+                ALineSourceRecoveryForVerification.Visibility=Visibility.Visible;
                 lines.Add("Önce kaynak ifadelerini düzeltin; belirsizlik/çelişki varken sıradaki alana geçilmiyor:");
                 lines.AddRange(source.Issues);return;
             }

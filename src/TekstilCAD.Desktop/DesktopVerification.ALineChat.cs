@@ -9,6 +9,7 @@ internal static partial class DesktopVerification
 {
     private static void VerifyALineChat(Window owner,List<string> checks)
     {
+        VerifyALineSourceRecovery(owner,checks);
         var window=new DesignRequestWindow(owner);
         var source=new DesignRequest("Özgün tasarım","bel çevresi 72 cm;kalça çevresi 100 cm;elbise boyu 110 cm",null,"aline",2);
         try
