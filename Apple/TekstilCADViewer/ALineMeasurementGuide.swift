@@ -66,20 +66,35 @@ enum ALineMeasurementGuide {
         var existing = Array<Decimal?>(repeating: nil, count: labels.count)
         for source in sources {
             for segment in source.components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ";"))) {
-            let normalized = fold(segment)
-            for (index, label) in labels.enumerated().reversed() {
-                let labelPattern = fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
-                let pattern = #"(?<![\p{L}\p{M}\p{N}_])"# + labelPattern + #"(?![\p{L}\p{M}\p{N}_])"#
-                guard normalized.range(of: pattern, options: .regularExpression) != nil else { continue }
-                let exact = #"\A[ \t]*"# + labelPattern + #"[ \t]*(?::|=|[ \t])[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)[ \t]*[.!]?[ \t]*\z"#
-                guard let regex = try? NSRegularExpression(pattern: exact),
-                      let match = regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)),
-                      let valueRange = Range(match.range(at: 1), in: normalized), let unitRange = Range(match.range(at: 2), in: normalized),
-                      let value = number(String(normalized[valueRange]), unit: String(normalized[unitRange]), zeroAllowed: (4...7).contains(index)),
-                      existing[index] == nil else { throw Failure.existing }
-                existing[index] = value
-                break
-            }
+                let normalized = fold(segment)
+                let patterns = labels.map { label in
+                    fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
+                }
+                let mentions = patterns.contains { pattern in
+                    normalized.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
+                }
+                if !mentions { continue }
+                guard !normalized.contains("\u{1F}") else { throw Failure.existing }
+                let parts = normalized.replacingOccurrences(of: #"[ \t]+ve[ \t]+"#, with: "\u{1F}", options: .regularExpression).components(separatedBy: "\u{1F}")
+                guard (1...8).contains(parts.count) else { throw Failure.existing }
+                var parsed: [(Int, Decimal)] = []
+                for part in parts {
+                    var found: (Int, Decimal)?
+                    for index in labels.indices.reversed() {
+                        let exact = #"\A[ \t]*"# + patterns[index] + #"[ \t]*(?::|=|[ \t])[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)[ \t]*[.!]?[ \t]*\z"#
+                        guard let regex = try? NSRegularExpression(pattern: exact),
+                              let match = regex.firstMatch(in: part, range: NSRange(part.startIndex..., in: part)),
+                              let valueRange = Range(match.range(at: 1), in: part), let unitRange = Range(match.range(at: 2), in: part),
+                              let value = number(String(part[valueRange]), unit: String(part[unitRange]), zeroAllowed: (4...7).contains(index)) else { continue }
+                        found = (index, value); break
+                    }
+                    guard let found else { throw Failure.existing }
+                    parsed.append(found)
+                }
+                for (index, value) in parsed {
+                    if let previous = existing[index], previous != value { throw Failure.fieldConflict(index) }
+                    existing[index] = value
+                }
             }
         }
         for index in labels.indices {

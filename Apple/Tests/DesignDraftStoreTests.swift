@@ -520,6 +520,29 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(draft.otherMeasurements, "Özgün not")
         }
     }
+    func testALineGuideSharedConjoinedSourceFixtures() throws {
+        struct Example: Decodable { let text: String; let valid: Bool }
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "aline-conjoined-sources", withExtension: "json"))
+        let examples = try JSONDecoder().decode([Example].self, from: Data(contentsOf: url))
+        var values = Array(repeating: "", count: 11); values[8] = "20"
+        let input = ALineMeasurementGuide.Input(values: values, unit: "cm")
+        for example in examples {
+            let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim elbise", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: example.text, image: nil, imageName: nil)
+            if example.valid {
+                let result = try ALineMeasurementGuide.prepare(input, draft: draft)
+                XCTAssertTrue(result.hasPrefix(example.text + "\n"), example.text)
+                XCTAssertTrue(result.hasSuffix("Belden kalçaya düşüklük: 20 cm"), example.text)
+            } else {
+                XCTAssertThrowsError(try ALineMeasurementGuide.prepare(input, draft: draft), example.text)
+            }
+            XCTAssertEqual(draft.otherMeasurements, example.text)
+        }
+        let source = "Ön bel yayı 36 cm ve arka bel yayı 36 cm"
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: source, image: nil, imageName: nil)
+        var conflict = input; conflict.values[0] = "37"
+        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(conflict, draft: draft))
+        XCTAssertEqual(draft.otherMeasurements, source)
+    }
     func testALineGuideSharedFixtureKeepsV2Values() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-aline-11.tcad-request", withExtension: "json"))
         let draft = try ExperimentalDesignBrief.portableDraft(Data(contentsOf: url))
