@@ -4,7 +4,28 @@ import Darwin
 import SwiftUI
 import UniformTypeIdentifiers
 #if os(iOS)
+import PhotosUI
+import CoreTransferable
 import UIKit
+#endif
+
+#if os(iOS)
+/// Read within the transfer closure: the picker-owned file is temporary.
+struct PhotoLibraryReference: Transferable {
+    let selection: ExperimentalDesignBrief.ReferenceSelection
+    static func read(_ url: URL) throws -> PhotoLibraryReference {
+        let data = try ExperimentalDesignBrief.readImage(url)
+        try Task.checkCancellation()
+        let png = data.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+        let name = png ? "Fotoğraf.png" : "Fotoğraf.jpg"
+        _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: name))
+        try Task.checkCancellation()
+        return .init(selection: .init(data: data, name: name))
+    }
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(importedContentType: .image) { file in try read(file.file) }
+    }
+}
 #endif
 
 func isFilePickerCancellation(_ error: Error) -> Bool {
@@ -2569,6 +2590,12 @@ private struct ExperimentalDesignBriefView: View {
     @State private var image: Data?
     @State private var imageName: String?
     @State private var selectingImage = false
+    #if os(iOS)
+    @State private var selectingPhoto = false
+    @State private var photoItem: PhotosPickerItem?
+    @State private var photoTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
+    @State private var pendingPhotoTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
+    #endif
     @State private var referenceTask: Task<ExperimentalDesignBrief.ReferenceSelection, Error>?
     @State private var referenceLoadID: UUID?
     @State private var referenceLoading = false
@@ -2700,11 +2727,18 @@ private struct ExperimentalDesignBriefView: View {
         draftStorageReady = true
         localStatus = "Önceki taslak geri yüklendi; değişiklikler bu cihazda saklanır."
     }
+    private var isSelectingPhoto: Bool {
+        #if os(iOS)
+        return selectingPhoto
+        #else
+        return false
+        #endif
+    }
     private var referenceDecisionPending: Bool {
         ExperimentalDesignBrief.referenceDecisionPending(loading: referenceLoading, awaitingConfirmation: confirmReferenceChange, hasCandidate: pendingReferenceChange != nil)
     }
     private var referenceBlocksClose: Bool {
-        ExperimentalDesignBrief.referenceBlocksClose(selecting: selectingImage, loading: referenceLoading,
+        ExperimentalDesignBrief.referenceBlocksClose(selecting: selectingImage || isSelectingPhoto, loading: referenceLoading,
             awaitingConfirmation: confirmReferenceChange, hasCandidate: pendingReferenceChange != nil)
     }
     private var currentReference: ExperimentalDesignBrief.ReferenceSelection? {
@@ -2736,8 +2770,46 @@ private struct ExperimentalDesignBriefView: View {
             return nil
         } catch { return "Mevcut ölçü, çelişki veya sınır nedeniyle değerler eklenmedi; girişler ve önceki notlar korundu." }
     }
+    #if os(iOS)
+    private func startPhotoLoad(_ item: PhotosPickerItem) {
+        guard let ticket = photoTicket, ticket.matches(id: photoTicket?.id, draft: draft, revision: modelSuggestionRevision),
+              !draftTransition, !referenceDecisionPending else {
+            photoTicket = nil; message = "İstek değişti; fotoğraf uygulanmadı. Yeniden seçin."; return
+        }
+        cancelReferenceLoad()
+        photoTicket = ticket
+        referenceLoadID = ticket.id; referenceLoading = true
+        message = "Fotoğraf yükleniyor; mevcut görsel korunuyor."
+        let worker = Task.detached(priority: .userInitiated) { () throws -> ExperimentalDesignBrief.ReferenceSelection in
+            guard let result = try await item.loadTransferable(type: PhotoLibraryReference.self) else { throw ExperimentalDesignBrief.Error.invalidImage }
+            try Task.checkCancellation()
+            return result.selection
+        }
+        referenceTask = worker
+        Task { @MainActor in
+            do {
+                let candidate = try await worker.value
+                guard ticket.id == referenceLoadID else { return }
+                referenceLoading = false; referenceTask = nil; referenceLoadID = nil
+                guard ticket.matches(id: photoTicket?.id, draft: draft, revision: modelSuggestionRevision) else {
+                    photoTicket = nil; message = "İstek değişti; fotoğraf uygulanmadı."; return
+                }
+                photoTicket = nil; pendingPhotoTicket = ticket
+                pendingReferenceChange = .init(original: currentReference, replacement: candidate)
+                if currentReference == nil { applyReferenceChange() } else { confirmReferenceChange = true }
+            } catch {
+                guard ticket.id == referenceLoadID else { return }
+                referenceLoading = false; referenceTask = nil; referenceLoadID = nil; photoTicket = nil
+                if !(error is CancellationError) { message = "Fotoğraf okunamadı veya PNG/JPEG değil ya da 8 MiB sınırını aşıyor; mevcut görsel korundu." }
+            }
+        }
+    }
+    #endif
     private func cancelReferenceLoad() {
         referenceLoadID = nil; referenceTask?.cancel(); referenceTask = nil; referenceLoading = false
+        #if os(iOS)
+        photoTicket = nil
+        #endif
     }
     private func startReferenceLoad(_ url: URL) {
         guard !draftTransition, !referenceDecisionPending else {
@@ -2770,6 +2842,15 @@ private struct ExperimentalDesignBriefView: View {
         }
     }
     private func applyReferenceChange() {
+        #if os(iOS)
+        if let ticket = pendingPhotoTicket {
+            guard ticket.matches(id: ticket.id, draft: draft, revision: modelSuggestionRevision) else {
+                pendingPhotoTicket = nil; pendingReferenceChange = nil
+                message = "İstek değişti; fotoğraf uygulanmadı. Mevcut görsel korundu."; return
+            }
+            pendingPhotoTicket = nil
+        }
+        #endif
         guard let change = pendingReferenceChange else { return }
         defer { pendingReferenceChange = nil }
         do {
@@ -3204,6 +3285,14 @@ private struct ExperimentalDesignBriefView: View {
                 if step == 2 {
                 Section("Örnek görsel · isteğe bağlı") {
                     Button("Dosyalardan görsel seç") { selectingImage = true }.disabled(referenceLoading)
+                    #if os(iOS)
+                    Button("Fotoğraflardan görsel seç") {
+                        photoItem = nil
+                        photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
+                        selectingPhoto = true
+                    }.disabled(draftTransition || referenceDecisionPending || selectingImage)
+                    Text("iCloud’daki fotoğrafların seçilmesi için cihazınızın indirme yapması gerekebilir. Yalnız PNG/JPEG desteklenir; özgün fotoğraf değiştirilmez.").font(.caption)
+                    #endif
                     if referenceLoading {
                         ProgressView("Görsel yükleniyor…")
                         Button("Görsel yüklemeyi iptal et") { cancelReferenceLoad(); message = "Yükleme iptal edildi; mevcut görsel korundu." }
@@ -3460,7 +3549,14 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
             } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
-            .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
+            .onChange(of: confirmReferenceChange) { shown in
+                if !shown {
+                    pendingReferenceChange = nil
+                    #if os(iOS)
+                    pendingPhotoTicket = nil
+                    #endif
+                }
+            }
             .onChange(of: draft) { value in if !draftTransition { saveLocalDraft(value) } }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
@@ -3491,6 +3587,14 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 Button("Düzenlemeye devam et", role: .cancel) { }
             } message: { Text("Ekrandaki kaydedilmemiş değişiklikler kaybolabilir. Varsa cihazdaki önceki taslak korunur.") }
+            .background {
+                #if os(iOS)
+                Color.clear.photosPicker(isPresented: $selectingPhoto, selection: $photoItem, matching: .images, preferredItemEncoding: .current)
+                    .onChange(of: photoItem) { item in
+                        if let item { startPhotoLoad(item); photoItem = nil }
+                    }
+                #endif
+            }
             .fileImporter(isPresented: $selectingImage, allowedContentTypes: [.image]) { result in
                 do { startReferenceLoad(try result.get()) }
                 catch { if !isFilePickerCancellation(error) { message = "Görsel seçilemedi; mevcut görsel korundu." } }

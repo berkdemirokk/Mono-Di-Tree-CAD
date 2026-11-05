@@ -9,6 +9,30 @@ private func makeTestRequest(prompt: String, measurements: String, image: Data?,
 #if DEBUG
 @MainActor
 final class DesignDraftStoreTests: XCTestCase {
+    func testPhotoSelectionSnapshotRejectsChangedSourceAndStaleSelection() {
+        let original = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
+        let revision = UUID(), ticket = ExperimentalDesignBrief.PhotoSelectionTicket(draft: original, revision: revision)
+        XCTAssertTrue(ticket.matches(id: ticket.id, draft: original, revision: revision))
+        XCTAssertFalse(ticket.matches(id: nil, draft: original, revision: revision))
+        XCTAssertFalse(ticket.matches(id: UUID(), draft: original, revision: revision))
+        XCTAssertFalse(ticket.matches(id: ticket.id, draft: original, revision: UUID()))
+        let changed = ExperimentalDesignBrief.Draft(style: .aline, description: "değişti", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
+        XCTAssertFalse(ticket.matches(id: ticket.id, draft: changed, revision: revision))
+    }
+    func testPhotoTransferPreservesBytesAndRejectsInvalidOrOversizedFiles() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let url = dir.appendingPathComponent("picker-file")
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX8AAAAASUVORK5CYII=")!
+        try png.write(to: url)
+        let result = try PhotoLibraryReference.read(url)
+        XCTAssertEqual(result.selection.data, png); XCTAssertEqual(result.selection.name, "Fotoğraf.png")
+        try Data([0, 1]).write(to: url)
+        XCTAssertThrowsError(try PhotoLibraryReference.read(url))
+        try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
+        XCTAssertThrowsError(try PhotoLibraryReference.read(url))
+    }
     func testRoundTripAndFailedWritePreservesPrevious() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

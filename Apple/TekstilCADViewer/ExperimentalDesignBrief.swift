@@ -676,6 +676,14 @@ enum ExperimentalDesignBrief {
     static func canFinishDraftClose(saved: Draft, current: Draft, referencePending: Bool) -> Bool {
         !referencePending && saved == current
     }
+    struct PhotoSelectionTicket {
+        let id = UUID()
+        let draft: Draft
+        let revision: UUID
+        func matches(id: UUID?, draft: Draft, revision: UUID) -> Bool {
+            self.id == id && self.draft == draft && self.revision == revision
+        }
+    }
     struct ReferenceLoadTicket {
         let id = UUID()
         let original: ReferenceSelection?
