@@ -40,8 +40,25 @@ internal static class SyntheticArmholeCut
     private static Result Calculate(string id,ResearchBody body,IReadOnlyList<PartialFittedEngine.P> precut)
     {
         double shoulderHalf=(double)body["shoulder_w"]/2, armscyeDepth=(double)body["armscye_depth"],shoulderAngle=(double)body["shoulder_incl"];
-        const double connectFactor=.2;
         P frontLow=new(precut[7].X,precut[7].Y),frontTop=new(precut[8].X,precut[8].Y),frontCenter=new(precut[9].X,precut[9].Y);
+        var (frontSide,frontShoulder,connect)=SolveCorner(frontLow,frontTop,frontCenter,armscyeDepth,shoulderHalf);
+        double sleeveBalance=(shoulderHalf*2-2)/2;
+        double backWidth=(double)body["back_width"]/2,tan=Math.Tan(shoulderAngle*Math.PI/180);
+        double backTop=(double)body["waist_line"]-tan*(backWidth-shoulderHalf);
+        double backIncl=backWidth-sleeveBalance;
+        P backShoulder=new(-backWidth+backIncl,backTop+tan*backIncl);
+        P backSide=new(-backWidth,backShoulder.Y-connect);
+        P Mirror(P p)=>new(-p.X,p.Y);
+        return new(id,Array.AsReadOnly(new[]{
+            new Curve("right_ftorso",3,frontShoulder,frontSide,new(.5,.2),new(.8,.35)),
+            new Curve("left_ftorso",8,Mirror(frontSide),Mirror(frontShoulder),new(.2,.35),new(.5,.2)),
+            new Curve("right_btorso",9,backSide,backShoulder,new(.2,-.35),new(.5,-.2)),
+            new Curve("left_btorso",3,Mirror(backShoulder),Mirror(backSide),new(.5,-.2),new(.8,-.35))
+        }));
+    }
+    internal static (P side,P shoulder,double connect) SolveCorner(P frontLow,P frontTop,P frontCenter,double armscyeDepth,double shoulderHalf)
+    {
+        const double connectFactor=.2;
         P sideVector=frontTop-frontLow,shoulderVector=frontCenter-frontTop;
         double connect=Math.Min((armscyeDepth+2.5)*(1+connectFactor),sideVector.Norm()-1);
         if(!double.IsFinite(connect)||connect<=0||Math.Abs(sideVector.Y)<1e-9)throw new ArgumentException("Unsupported armhole depth");
@@ -56,18 +73,7 @@ internal static class SyntheticArmholeCut
         double u=(target.X*(-shoulderVector.Y)-(-shoulderVector.X)*target.Y)/determinant;
         double t=(sideVector.X*target.Y-target.X*sideVector.Y)/determinant;
         if(u<=0||u>=1||t<=0||t>=1)throw new ArgumentException("Armhole leaves source corner");
-        P frontSide=frontLow+sideVector*u,frontShoulder=frontTop+shoulderVector*t;
-        double backWidth=(double)body["back_width"]/2,tan=Math.Tan(shoulderAngle*Math.PI/180);
-        double backTop=(double)body["waist_line"]-tan*(backWidth-shoulderHalf);
-        double backIncl=backWidth-sleeveBalance;
-        P backShoulder=new(-backWidth+backIncl,backTop+tan*backIncl);
-        P backSide=new(-backWidth,backShoulder.Y-connect);
-        P Mirror(P p)=>new(-p.X,p.Y);
-        return new(id,Array.AsReadOnly(new[]{
-            new Curve("right_ftorso",3,frontShoulder,frontSide,new(.5,.2),new(.8,.35)),
-            new Curve("left_ftorso",8,Mirror(frontSide),Mirror(frontShoulder),new(.2,.35),new(.5,.2)),
-            new Curve("right_btorso",9,backSide,backShoulder,new(.2,-.35),new(.5,-.2)),
-            new Curve("left_btorso",3,Mirror(backShoulder),Mirror(backSide),new(.5,-.2),new(.8,-.35))
-        }));
+        return (frontLow+sideVector*u,frontTop+shoulderVector*t,connect);
     }
+
 }

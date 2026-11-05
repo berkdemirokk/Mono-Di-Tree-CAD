@@ -182,3 +182,9 @@ Genel beden girdisinden üretilen ön kontur ve arka bel sonuçları, sabit fixt
 `SyntheticArmholeCut.CreateFromBody`, sabit tasarım için ön konturun ölçüden hesaplanan omuz köşesi ve kaynak kol evi formüllerinden sağ/sol ön eğri adaylarını hesaplar. Genel sonuç fixture sonucundan ayrı türdür, `Unverified` kalır ve kompozisyon isteğini reddeder. İki sabit sentetik kaynak örneğinde uçlar ve kontrol değerleri karşılaştırılır; kol evi derinliği değiştiğinde sonuç değişir. Geçersiz derinlik, dejenere köşe ve köşe dışına çıkan kesim reddedilir.
 
 Bu çalışma parçaları birleştirilmiş ön panel değildir: yaka ve kol evi eğrilerinin karşılıklı kesişimi, uçların topolojisi ve kaynak optimizerinin genel hata sınırı kanıtlanmamıştır. Etek ve tam gövde için genel ölçüden dikiş grafiği de henüz yoktur. Gerçek bedenlerde ölçüm protokolü ve prova doğrulanmamıştır; üretim, dışa aktarma ve plotter kapalıdır.
+
+## Kol evi koruma testleri ve ölçüden ön etek
+
+Kol evi testi, beden sözleşmesi ve ön kontur kontrolünü geçen sentetik verilerle negatif bağlantı uzunluğu ile köşe dışına çıkan kesimi ayrı ayrı tetikler ve beklenen hata yolunu doğrular. Sıfır determinant doğrudan `SolveCorner` geometrisiyle sınanır: denenmiş sıfır determinantlı beden, daha önce ön pens/yerleşim kontrolünde reddedildiği için bu testin geçerli bir beden üzerinden determinant kontrolüne ulaştığı iddia edilmez.
+
+`FrontSkirtCandidate.CreateFromBody` sabit etek tasarımı için ölçülerden 13 kenarlı ön etek adayı hesaplar; pens ve kontur kontrolleri başarısızsa reddeder. Bel arayüzü bölünmesi simetrik bir adaydır; yan eğriler kaynak optimizeriyle aynı olduğu kanıtlanmamış teğet adaylarıdır. İki sabit sentetik örnekteki C# aday uçlarıyla karşılaştırma, değişen ölçüye duyarlılık ve hatalı pens reddi test edilir. Genel adayın türü fixture türünden ayrıdır, `Unverified` taşır ve kompozisyonu reddeder. Arka etek, birleştirilmiş genel gövde ve fiziksel üretim doğrulanmış değildir.

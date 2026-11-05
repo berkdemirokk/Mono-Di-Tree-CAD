@@ -159,6 +159,18 @@ try
         RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_w"?new KeyValuePair<string,decimal>(p.Key,shoulder):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="armscye_depth"?new KeyValuePair<string,decimal>(p.Key,0):p));
+    void CheckArmGuard(string expected,Action<Dictionary<string,decimal>> modify)
+    {
+        var input=bodyPairs.ToDictionary(p=>p.Key,p=>p.Value);modify(input);
+        var body=ResearchBody.Create(input,"cm","degree");
+        _=PrecutFrontBodice.CreateFromBody(body,ResearchDesign.PinnedFitted);
+        try { _=SyntheticArmholeCut.CreateFromBody(body,ResearchDesign.PinnedFitted);throw new Exception("Armhole guard failed: "+expected); }
+        catch(ArgumentException e) { NeedLocal(e.Message==expected,"wrong armhole guard: "+e.Message); }
+    }
+    CheckArmGuard("Unsupported armhole depth",p=>{p["shoulder_w"]=52;p["shoulder_incl"]=0;p["bust_line"]=.5m;p["vert_bust_line"]=.5m;});
+    CheckArmGuard("Armhole leaves source corner",p=>{p["armscye_depth"]=91;p["back_width"]=25;p["bust_points"]=5;p["shoulder_incl"]=15;p["shoulder_w"]=8;p["waist_line"]=39;p["waist_over_bust_line"]=54;});
+    try { SyntheticArmholeCut.SolveCorner(new(0,0),new(1,1),new(2,2),1,1);throw new Exception("Singular corner accepted"); }
+    catch(ArgumentException e) { NeedLocal(e.Message=="Degenerate corner","wrong determinant guard"); }
     var invalidNeck=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,40):p),"cm","degree");
     try { FrontNeckCut.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid neck accepted"); } catch(ArgumentException) { }
     var invalidFront=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
@@ -167,6 +179,19 @@ try
     try { BackWaistCandidate.CreateFromBody(unsupportedCut,ResearchDesign.PinnedFitted);throw new Exception("Out-of-range cut accepted"); } catch(ArgumentException) { }
     var changedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,81):p),"cm","degree");
     NeedLocal(changedBody.Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted),"changed body snapshot");
+    foreach(string id in new[]{"synthetic-base","synthetic-distinct"}) {
+        var skirt=FrontSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+        var fixture=FrontSkirtCandidate.Create(id);
+        NeedLocal(skirt.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !skirt.ExportAllowed && !skirt.ProductionAllowed && !typeof(FrontSkirtCandidate.Candidate).IsAssignableFrom(skirt.GetType()),"typed skirt gate");
+        NeedLocal(skirt.Edges.Count==fixture.Edges.Count && skirt.Edges.Zip(fixture.Edges).All(p=>p.First.Id==p.Second.Id && p.First.Kind==p.Second.Kind && Math.Abs(p.First.Start.X-p.Second.Start.X)<1e-9 && Math.Abs(p.First.Start.Y-p.Second.Start.Y)<1e-9 && Math.Abs(p.First.End.X-p.Second.End.X)<1e-9 && Math.Abs(p.First.End.Y-p.Second.End.Y)<1e-9),"typed skirt differs from synthetic candidate");
+        try { skirt.RequireResearchComposition();throw new Exception("Unverified skirt composed"); } catch(InvalidOperationException) { }
+    }
+    var skirtBase=FrontSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var skirtChangedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="hips"?new KeyValuePair<string,decimal>(p.Key,105):p),"cm","degree");
+    var skirtChanged=FrontSkirtCandidate.CreateFromBody(skirtChangedBody,ResearchDesign.PinnedFitted);
+    NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
+    var invalidSkirt=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
+    try { FrontSkirtCandidate.CreateFromBody(invalidSkirt,ResearchDesign.PinnedFitted);throw new Exception("Invalid skirt accepted"); } catch(ArgumentException) { }
     var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
     var frontChanged=PrecutFrontBodice.CreateFromBody(changedBody,ResearchDesign.PinnedFitted);
     var changedNeckBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,20):p),"cm","degree");
