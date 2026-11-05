@@ -2800,7 +2800,7 @@ private struct ExperimentalDesignBriefView: View {
             } catch {
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil; photoTicket = nil
-                if !(error is CancellationError) { message = "Fotoğraf okunamadı veya PNG/JPEG değil ya da 8 MiB sınırını aşıyor; mevcut görsel korundu." }
+                if !(error is CancellationError) { message = "Fotoğraf okunamadı, HEIC veya başka bir desteklenmeyen biçimde ya da 8 MiB sınırından büyük olabilir. Mevcut görsel korundu. Fotoğraflar veya Dosyalar’dan en fazla 8 MiB boyutunda JPEG veya PNG seçin." }
             }
         }
     }
@@ -3291,7 +3291,7 @@ private struct ExperimentalDesignBriefView: View {
                         photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
                         selectingPhoto = true
                     }.disabled(draftTransition || referenceDecisionPending || selectingImage)
-                    Text("iCloud’daki fotoğrafların seçilmesi için cihazınızın indirme yapması gerekebilir. Yalnız PNG/JPEG desteklenir; özgün fotoğraf değiştirilmez.").font(.caption)
+                    Text("HEIC desteklenmez; Fotoğraflar veya Dosyalar’dan JPEG/PNG seçin. iCloud’daki fotoğraflar için cihazınızın indirme yapması gerekebilir. Özgün fotoğraf değiştirilmez.").font(.caption)
                     #endif
                     if referenceLoading {
                         ProgressView("Görsel yükleniyor…")
