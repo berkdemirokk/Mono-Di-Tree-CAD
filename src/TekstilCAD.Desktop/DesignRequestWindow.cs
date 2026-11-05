@@ -795,7 +795,7 @@ internal sealed class DesignRequestWindow : Window
         if(path is null)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || beforeDirty!=dirty || closed) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
         try { OpenPath(path); }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
     }
     private void OpenPath(string path)
     {

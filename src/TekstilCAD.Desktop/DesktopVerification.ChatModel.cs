@@ -18,6 +18,7 @@ internal static partial class DesktopVerification
         {
             VerifyPendingReferenceProtection(checks);
             _=new WindowInteropHelper(owner).EnsureHandle();window=new DesignRequestWindow(owner);
+            VerifyRequestOpenErrors(owner,reportPath,checks);
             var emptyObservations=PhotoObservationWindow.Build(0,0,0);
             var manualObservations=PhotoObservationWindow.Build(1,3,0);
             Check(emptyObservations.Count==0 && manualObservations.Count==2 && !manualObservations.Any(x=>x.Contains("Yaka")),"Photo observations default to unknown and include only explicit user choices",checks);
