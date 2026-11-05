@@ -74,4 +74,3 @@ public static class PlotterCalibrationRecordStorage
         if(value!=expected)throw new InvalidDataException("Kayıt içeriği veya hesaplanan sapmalar geçersiz.");
     }
 }
-
