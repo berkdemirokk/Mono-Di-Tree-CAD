@@ -16,6 +16,8 @@ internal static partial class DesktopVerification
         var folder=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"request-open-errors-"+Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
         var window=new DesignRequestWindow(owner);
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(owner.Dispatcher));
         try
         {
             var bitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);
