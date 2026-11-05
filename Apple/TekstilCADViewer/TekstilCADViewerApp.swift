@@ -3511,11 +3511,31 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 if step == 1 {
                 Section("Bildiğiniz ölçüler neler?") {
+                    Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Göğüs çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bel çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Kalça çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Elbise boyu").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
+                    }
+
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Ölçülerinizi mesaj gibi yazın", systemImage: "text.bubble")
                             .font(.headline).accessibilityAddTraits(.isHeader)
                         Text("Örneğin: Göğüs çevresi 92 cm, bel çevresi 72 cm. Bildiklerinizi birimleriyle yazın; bilmediklerinizi boş bırakın.")
                             .font(.subheadline).foregroundStyle(.secondary)
+                        Text("Mesaj ve yukarıdaki alanlar otomatik karşılaştırılmaz; varsa çelişkileri kontrol edin.")
+                            .font(.caption).foregroundStyle(.secondary)
                         TextEditor(text: referenceTracked($otherMeasurements)).frame(minHeight: 100)
                             .accessibilityLabel("Ölçü mesajınız")
                             .accessibilityHint("Bildiğiniz ölçüleri ve birimlerini yazın; metin aynen not olarak saklanır.")
@@ -3539,23 +3559,6 @@ private struct ExperimentalDesignBriefView: View {
                             Button("Model seçimine dön") { focusedInput = nil; step = 0 }.frame(minHeight: 44)
                         }
                         Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
-                    }
-                    Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Göğüs çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
-                        TextField("Örn. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Bel çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
-                        TextField("Örn. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Kalça çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
-                        TextField("Örn. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Elbise boyu").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
-                        TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
                     }
 
                 }
