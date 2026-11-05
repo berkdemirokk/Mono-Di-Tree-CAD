@@ -20,8 +20,9 @@ internal static class BackSkirtCandidate
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified skirt; composition blocked.");
     }
     // Chord topology and tangent controls are diagnostics, not a curve proof.
-    internal static UnverifiedCandidate CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedCandidate CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var match=BodyWaistStudy.Calculate(body,design);
         var lower=match.Lower.Where(e=>e.Panel=="skirt_back").ToArray();

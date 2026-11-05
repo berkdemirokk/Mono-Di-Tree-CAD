@@ -12,8 +12,9 @@ internal static class BodyWaistStudy
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified waist; composition blocked.");
     }
-    internal static UnverifiedMatch Calculate(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedMatch Calculate(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var f=PrecutFrontBodice.CreateFromBody(body,design);var b=BackWaistCandidate.CreateFromBody(body,design);
         var skirt=FrontSkirtCandidate.CreateFromBody(body,design);

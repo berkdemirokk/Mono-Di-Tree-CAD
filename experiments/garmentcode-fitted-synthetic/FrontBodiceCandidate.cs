@@ -19,8 +19,9 @@ internal static class FrontBodiceCandidate
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified front contour; composition blocked.");
     }
     // Diagnostic contour only; curved intersections and source optimization are unproven.
-    internal static UnverifiedRight CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedRight CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         var front=PrecutFrontBodice.CreateFromBody(body,design);var neck=FrontNeckCut.CreateFromBody(body,design);
         var arm=SyntheticArmholeCut.CreateFromBody(body,design);
         if(front.Snapshot!=neck.Snapshot || front.Snapshot!=arm.Snapshot)throw new ArgumentException("Body snapshot mismatch");
@@ -42,8 +43,9 @@ internal static class FrontBodiceCandidate
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified front contour; composition blocked.");
     }
-    internal static UnverifiedLeft CreateLeftFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedLeft CreateLeftFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         var right=CreateFromBody(body,design);P Mirror(P p)=>new(-p.X,p.Y);
         var reversed=new List<Edge>();
         for(int i=0;i<right.Edges.Count;i++) { var e=right.Edges[right.Edges.Count-1-i];var controls=e.Controls.Reverse().Select(c=>new P(1-c.X,c.Y)).ToArray();reversed.Add(new(i,e.Kind,Mirror(e.End),Mirror(e.Start),e.ArcControlY,Array.AsReadOnly(controls))); }

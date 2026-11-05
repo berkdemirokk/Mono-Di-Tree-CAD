@@ -11,8 +11,9 @@ internal static class BodySeamStudy
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified seam graph; composition blocked.");
     }
-    internal static UnverifiedGraph Calculate(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedGraph Calculate(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         var fr=FrontBodiceCandidate.CreateFromBody(body,design);var fl=FrontBodiceCandidate.CreateLeftFromBody(body,design);
         var br=BackBodiceCandidate.CreateFromBody(body,design,false);var bl=BackBodiceCandidate.CreateFromBody(body,design,true);
         var sf=FrontSkirtCandidate.CreateFromMatchedBody(body,design);var sb=BackSkirtCandidate.CreateFromBody(body,design);var match=BodyWaistStudy.Calculate(body,design);

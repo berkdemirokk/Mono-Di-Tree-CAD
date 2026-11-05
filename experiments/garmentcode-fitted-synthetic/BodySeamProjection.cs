@@ -17,8 +17,9 @@ internal static class BodySeamProjection
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified seam lengths; composition blocked.");
     }
-    internal static UnverifiedResult Calculate(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedResult Calculate(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var graph=BodySeamStudy.Calculate(body,design);
         var fr=FrontBodiceCandidate.CreateFromBody(body,design);var fl=FrontBodiceCandidate.CreateLeftFromBody(body,design);

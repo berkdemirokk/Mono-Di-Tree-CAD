@@ -21,13 +21,15 @@ internal static class BackNeckCut
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified neck; composition blocked.");
     }
-    internal static UnverifiedResult CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedResult CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         return new(Calculate(body.Snapshot(design),body));
     }
-    static Result Calculate(string id,ResearchBody b)
+    static Result Calculate(string id,IResearchPatternBody b)
     {
+        ResearchBody.RequireSupported(b);
         double shoulder=(double)b["shoulder_w"],neck=(double)b["neck_w"],angle=(double)b["shoulder_incl"],widthFactor=.2;
         if(neck>=shoulder-4)throw new ArgumentException("Unsupported neck and shoulder geometry");
         double back=(double)b["back_width"]/2,half=(neck+((shoulder-4)-neck)*widthFactor)/2;

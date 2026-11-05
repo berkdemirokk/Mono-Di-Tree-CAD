@@ -30,8 +30,9 @@ internal static class SyntheticArmholeCut
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified armhole; composition blocked.");
     }
-    internal static UnverifiedFront CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedFront CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var front=PrecutFrontBodice.CreateFromBody(body,design);
         var result=Calculate(front.Snapshot,body,front.Vertices);
@@ -45,8 +46,9 @@ internal static class SyntheticArmholeCut
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified armhole; composition blocked.");
     }
-    internal static UnverifiedBack CreateBackFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedBack CreateBackFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var front=PrecutFrontBodice.CreateFromBody(body,design);
         var back=BackWaistCandidate.CreateFromBody(body,design);
@@ -54,8 +56,9 @@ internal static class SyntheticArmholeCut
         var result=Calculate(front.Snapshot,body,front.Vertices);
         return new(front.Snapshot,Array.AsReadOnly(result.Curves.Where(c=>c.Panel.EndsWith("_btorso",StringComparison.Ordinal)).ToArray()));
     }
-    private static Result Calculate(string id,ResearchBody body,IReadOnlyList<PartialFittedEngine.P> precut)
+    private static Result Calculate(string id,IResearchPatternBody body,IReadOnlyList<PartialFittedEngine.P> precut)
     {
+        ResearchBody.RequireSupported(body);
         double shoulderHalf=(double)body["shoulder_w"]/2, armscyeDepth=(double)body["armscye_depth"],shoulderAngle=(double)body["shoulder_incl"];
         P frontLow=new(precut[7].X,precut[7].Y),frontTop=new(precut[8].X,precut[8].Y),frontCenter=new(precut[9].X,precut[9].Y);
         var (frontSide,frontShoulder,connect)=SolveCorner(frontLow,frontTop,frontCenter,armscyeDepth,shoulderHalf);

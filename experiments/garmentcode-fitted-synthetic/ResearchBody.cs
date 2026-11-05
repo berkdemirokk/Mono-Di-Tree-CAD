@@ -7,12 +7,22 @@ namespace FittedResearch;
 
 // Local-only input contract; decimal values are cm or degrees. This is not a
 // fitting protocol or an authorization to process or export personal data.
-internal sealed class ResearchBody
+internal interface IResearchPatternBody
+{
+    decimal this[string key] { get; }
+    ResearchBody.DerivedValues Derive();
+    string Snapshot(ResearchDesign design);
+}
+
+internal sealed class ResearchBody : IResearchPatternBody
 {
     internal static readonly ImmutableArray<string> Fields=["arm_length","arm_pose_angle","armscye_depth","back_width","bum_points","bust","bust_line","bust_points","crotch_hip_diff","head_l","height","hip_back_width","hip_inclination","hips","hips_line","leg_circ","neck_w","shoulder_incl","shoulder_w","underbust","vert_bust_line","waist","waist_back_width","waist_line","waist_over_bust_line","wrist"];
     readonly ImmutableDictionary<string,decimal> values;
     private ResearchBody(ImmutableDictionary<string,decimal> input)=>values=input;
     internal decimal this[string key]=>values[key];
+    decimal IResearchPatternBody.this[string key]=>this[key];
+    DerivedValues IResearchPatternBody.Derive()=>Derive();
+    string IResearchPatternBody.Snapshot(ResearchDesign design)=>Snapshot(design);
     internal static ResearchBody Create(IEnumerable<KeyValuePair<string,decimal>> input,string lengthUnit,string angleUnit)
     {
         ArgumentNullException.ThrowIfNull(input);
@@ -25,22 +35,35 @@ internal sealed class ResearchBody
             bool angle=pair.Key is "arm_pose_angle" or "shoulder_incl" or "hip_inclination";
             if(angle ? pair.Value<0 || pair.Value>180 : pair.Value<=0 || pair.Value>1000)throw new ArgumentException("Measurement outside numerical limits.");
         }
-        if(b["shoulder_incl"]>=45 || b["hip_inclination"]>=89 || b["back_width"]>=b["bust"] || b["waist_back_width"]>=b["waist"] || b["hip_back_width"]>=b["hips"])throw new ArgumentException("Unsupported or contradictory measurements.");
+        ValidatePatternScope(key=>b[key]);
+        return new(b.ToImmutable());
+    }
+    internal static void RequireSupported(IResearchPatternBody body)
+    {
+        ArgumentNullException.ThrowIfNull(body);
+        if(body is not ResearchBody && !ResearchMeasurements.IsPartialPatternBody(body))throw new ArgumentException("Unsupported body implementation.");
+    }
+    internal static void ValidatePatternScope(Func<string,decimal> get)
+    {
+        if(get("shoulder_incl")>=45 || get("hip_inclination")>=89 || get("back_width")>=get("bust") || get("waist_back_width")>=get("waist") || get("hip_back_width")>=get("hips"))throw new ArgumentException("Unsupported or contradictory measurements.");
         // Scope restriction for this model, not a proof of an invalid person:
         // waist_line is a surface length and this sum is not a physical law.
-        if(b["head_l"]+b["waist_line"]+b["hips_line"]>=b["height"])
+        if(get("head_l")+get("waist_line")+get("hips_line")>=get("height"))
             throw new ArgumentException("Unsupported research scope: source-derived leg length is not positive.");
         // These source-derived lengths must remain positive, including after
         // conversion to binary64, before any candidate geometry is calculated.
-        if(b["shoulder_w"]<=2 || (double)b["shoulder_w"]-2<=0 ||
-           (double)b["height"]-(double)b["head_l"]-(double)b["waist_line"]<=0 ||
-           (double)b["height"]-(double)b["head_l"]-(double)b["waist_line"]-(double)b["hips_line"]<=0)
+        if(get("shoulder_w")<=2 || (double)get("shoulder_w")-2<=0 ||
+           (double)get("height")-(double)get("head_l")-(double)get("waist_line")<=0 ||
+           (double)get("height")-(double)get("head_l")-(double)get("waist_line")-(double)get("hips_line")<=0)
             throw new ArgumentException("Unsupported research scope: nonpositive source-derived length.");
-        return new(b.ToImmutable());
     }
     internal DerivedValues Derive()
     {
-        double V(string key)=>(double)values[key];
+        return DeriveValues(key=>values[key]);
+    }
+    internal static DerivedValues DeriveValues(Func<string,decimal> get)
+    {
+        double V(string key)=>(double)get(key);
         return new(V("height")-V("head_l")-V("waist_line"),V("height")-V("head_l")-V("waist_line")-V("hips_line"),V("shoulder_w")-2,
             (1-1d/3)*V("vert_bust_line")+V("bust_line")/3,V("hip_inclination")/2,V("shoulder_incl"),V("armscye_depth")+2.5);
     }

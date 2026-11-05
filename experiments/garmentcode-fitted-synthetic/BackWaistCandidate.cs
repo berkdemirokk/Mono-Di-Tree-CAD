@@ -75,8 +75,9 @@ internal static class BackWaistCandidate
     }
     // Explicit body/design input remains local, unverified and non-composable.
     // No fixture, process launch, networking, persistence or export occurs.
-    internal static UnverifiedPath CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedPath CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         return new UnverifiedPath(Calculate(body.Snapshot(design),key=>(double)body[key],ReferenceState.Unverified));
     }

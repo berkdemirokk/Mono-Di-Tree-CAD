@@ -26,13 +26,15 @@ internal static class FrontNeckCut
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified input; composition blocked.");
     }
-    internal static UnverifiedResult CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedResult CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         return new(Calculate(body.Snapshot(design),body));
     }
-    private static Result Calculate(string id,ResearchBody body)
+    private static Result Calculate(string id,IResearchPatternBody body)
     {
+        ResearchBody.RequireSupported(body);
         double frontLength=(double)body["waist_over_bust_line"],shoulderWidth=(double)body["shoulder_w"],neckWidth=(double)body["neck_w"],shoulderAngle=(double)body["shoulder_incl"];
         if(neckWidth>=shoulderWidth-4)throw new ArgumentException("Unsupported neck and shoulder geometry");
         const double collarWidthFactor=.2,frontDepthFactor=.4;

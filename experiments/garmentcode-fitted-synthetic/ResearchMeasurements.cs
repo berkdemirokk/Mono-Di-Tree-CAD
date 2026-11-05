@@ -8,11 +8,11 @@ namespace FittedResearch;
 // Presence does not imply anatomical validity or production authorization.
 internal sealed class ResearchMeasurements
 {
-    internal enum Operation { PrecutBackWaist,PrecutFrontBodice,CompleteCurrentBody }
+    internal enum Operation { PrecutBackWaist,PrecutFrontBodice,PinnedGarment,CompleteCurrentBody }
     internal sealed record Requirements(Operation For,ImmutableArray<string> Missing)
     {
         public bool AllFieldsPresent=>Missing.Length==0;
-        public bool CanAttemptPartialCalculation=>AllFieldsPresent && (For is Operation.PrecutBackWaist or Operation.PrecutFrontBodice);
+        public bool CanAttemptPartialCalculation=>AllFieldsPresent && (For is Operation.PrecutBackWaist or Operation.PrecutFrontBodice or Operation.PinnedGarment);
         public string Status=>"unresolved";
     }
     private readonly ImmutableDictionary<string,decimal> values;
@@ -32,6 +32,7 @@ internal sealed class ResearchMeasurements
     static ImmutableArray<string> FieldsFor(Operation operation) => operation switch {
             Operation.PrecutBackWaist=>["back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"],
             Operation.PrecutFrontBodice=>["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line"],
+            Operation.PinnedGarment=>["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line","bum_points","neck_w","armscye_depth","hips","hip_back_width","hips_line","height","head_l","hip_inclination"],
             Operation.CompleteCurrentBody=>ResearchBody.Fields,
             _=>throw new ArgumentException("Unsupported operation.")
         };
@@ -43,6 +44,29 @@ internal sealed class ResearchMeasurements
         var text=new StringBuilder("partial-research-v1|").Append(operation).Append('|').Append(design.ModelId).Append('|').Append(design.SourceCommit);
         foreach(var field in FieldsFor(operation))text.Append('|').Append(field).Append('=').Append(values[field].ToString("G29",CultureInfo.InvariantCulture));
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+    }
+    internal IResearchPatternBody BuildPinnedGarment()
+    {
+        var fields=FieldsFor(Operation.PinnedGarment);
+        if(!Check(Operation.PinnedGarment).AllFieldsPresent)throw new ArgumentException("Missing garment measurements.");
+        var selected=fields.ToImmutableDictionary(k=>k,k=>values[k],StringComparer.Ordinal);
+        ResearchBody.ValidatePatternScope(k=>selected[k]);
+        return new PartialPatternBody(selected);
+    }
+    internal static bool IsPartialPatternBody(IResearchPatternBody value)=>value is PartialPatternBody;
+    private sealed class PartialPatternBody : IResearchPatternBody
+    {
+        readonly ImmutableDictionary<string,decimal> selected;
+        internal PartialPatternBody(ImmutableDictionary<string,decimal> input)=>selected=input;
+        public decimal this[string key]=>selected.TryGetValue(key,out var value)?value:throw new ArgumentException("Measurement not in garment operation: "+key);
+        public ResearchBody.DerivedValues Derive()=>ResearchBody.DeriveValues(key=>this[key]);
+        public string Snapshot(ResearchDesign design)
+        {
+            ArgumentNullException.ThrowIfNull(design);
+            var text=new StringBuilder("partial-garment-v1|").Append(design.ModelId).Append('|').Append(design.SourceCommit);
+            foreach(var key in FieldsFor(Operation.PinnedGarment))text.Append('|').Append(key).Append('=').Append(selected[key].ToString("G29",CultureInfo.InvariantCulture));
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text.ToString())));
+        }
     }
     internal ResearchBody BuildComplete()
     {

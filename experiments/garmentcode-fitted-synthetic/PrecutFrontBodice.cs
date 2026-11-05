@@ -36,8 +36,9 @@ internal static class PrecutFrontBodice
     }
     // General local measurement path. No fixture or identifier is consulted.
     // The result remains diagnostic and cannot enter a stitched/production path.
-    internal static UnverifiedPath CreateFromBody(ResearchBody body, ResearchDesign design)
+    internal static UnverifiedPath CreateFromBody(IResearchPatternBody body, ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body); ArgumentNullException.ThrowIfNull(design);
         return Calculate(body.Snapshot(design),key=>(double)body[key]);
     }

@@ -20,8 +20,9 @@ internal static class FrontSkirtCandidate
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified skirt; composition blocked.");
     }
     // Pinned pencil-skirt design, before any waist-interface matching.
-    internal static UnverifiedCandidate CreateFromBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedCandidate CreateFromBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         double V(string key)=>(double)body[key];
         double hips=(V("hips")-V("hip_back_width"))/2, waist=(V("waist")-V("waist_back_width"))/2;
@@ -46,8 +47,9 @@ internal static class FrontSkirtCandidate
         }
         return new(body.Snapshot(design),edges.AsReadOnly());
     }
-    internal static UnverifiedCandidate CreateFromMatchedBody(ResearchBody body,ResearchDesign design)
+    internal static UnverifiedCandidate CreateFromMatchedBody(IResearchPatternBody body,ResearchDesign design)
     {
+        ResearchBody.RequireSupported(body);
         var skirt=CreateFromBody(body,design);var match=BodyWaistStudy.Calculate(body,design);
         if(skirt.Snapshot!=match.Snapshot)throw new ArgumentException("Body snapshot mismatch");
         var front=match.Lower.Where(e=>e.Panel=="skirt_front").ToArray();

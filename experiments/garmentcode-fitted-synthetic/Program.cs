@@ -212,6 +212,26 @@ try
     var unsupportedPartial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)).Select(p=>p.Key=="shoulder_incl"?new KeyValuePair<string,decimal>(p.Key,45):p),"cm","degree");
     try { BackWaistCandidate.CreateFromMeasurements(unsupportedPartial,ResearchDesign.PinnedFitted);throw new Exception("Unsupported partial back accepted"); } catch(ArgumentException) { }
 
+    string[] unusedGarment=["arm_length","arm_pose_angle","crotch_hip_diff","leg_circ","underbust","wrist"];
+    var garmentPairs=bodyPairs.Where(p=>!unusedGarment.Contains(p.Key)).ToArray();
+    var garmentInput=ResearchMeasurements.Create(garmentPairs,"cm","degree");
+    var garmentRequirements=garmentInput.Check(ResearchMeasurements.Operation.PinnedGarment);
+    if(garmentPairs.Length!=20 || !garmentRequirements.AllFieldsPresent || !garmentRequirements.CanAttemptPartialCalculation || garmentInput.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent)throw new Exception("Partial garment requirements");
+    var garmentBody=garmentInput.BuildPinnedGarment();
+    foreach(var removed in garmentPairs) {
+        var missing=ResearchMeasurements.Create(garmentPairs.Where(p=>p.Key!=removed.Key),"cm","degree");
+        if(!missing.Check(ResearchMeasurements.Operation.PinnedGarment).Missing.Contains(removed.Key))throw new Exception("Missing garment field not reported");
+        try { missing.BuildPinnedGarment();throw new Exception("Missing garment field accepted"); } catch(ArgumentException) { }
+    }
+    var unsupportedGarment=ResearchMeasurements.Create(garmentPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p),"cm","degree");
+    try { unsupportedGarment.BuildPinnedGarment();throw new Exception("Unsupported partial garment accepted"); } catch(ArgumentException e) { if(!e.Message.Contains("Unsupported research scope"))throw; }
+    var reorderedGarment=ResearchMeasurements.Create(garmentPairs.Reverse(),"cm","degree").BuildPinnedGarment();
+    if(garmentBody.Snapshot(ResearchDesign.PinnedFitted)!=reorderedGarment.Snapshot(ResearchDesign.PinnedFitted))throw new Exception("Garment input order changed identity");
+    var allGarment=ResearchMeasurements.Create(bodyPairs,"cm","degree").BuildPinnedGarment();
+    if(garmentBody.Snapshot(ResearchDesign.PinnedFitted)!=allGarment.Snapshot(ResearchDesign.PinnedFitted))throw new Exception("Unused measurements changed partial identity");
+    try { _=garmentBody["arm_length"];throw new Exception("Missing measurement was fabricated"); } catch(ArgumentException) { }
+    try { PrecutFrontBodice.CreateFromBody(new ForgedPatternBody(),ResearchDesign.PinnedFitted);throw new Exception("Forged body accepted"); } catch(ArgumentException) { }
+    try { BodySeamStudy.Calculate(new ForgedPatternBody(),ResearchDesign.PinnedFitted);throw new Exception("Forged graph body accepted"); } catch(ArgumentException) { }
     var complete=ResearchMeasurements.Create(bodyPairs,"cm","degree");
     if(!complete.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent || complete.BuildComplete().Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted))throw new Exception("Complete presence contract");
     try { ResearchMeasurements.Create(bodyPairs.Append(new("_leg_length",1)),"cm","degree");throw new Exception("Derived input accepted"); } catch(ArgumentException) { }
@@ -476,6 +496,41 @@ internal static class Validator
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
             CheckGeneralControls(reference,SyntheticBodyCatalog.Create(id));
+            string[] excluded=["arm_length","arm_pose_angle","crotch_hip_diff","leg_circ","underbust","wrist"];
+            var fullBody=SyntheticBodyCatalog.Create(id);
+            var measurements=ResearchMeasurements.Create(ResearchBody.Fields.Where(k=>!excluded.Contains(k)).Select(k=>new KeyValuePair<string,decimal>(k,fullBody[k])),"cm","degree");
+            var limitedBody=measurements.BuildPinnedGarment();
+            CheckGeneralControls(reference,limitedBody);
+            var limitedFront=FrontBodiceCandidate.CreateFromBody(limitedBody,ResearchDesign.PinnedFitted);
+            var fullFront=FrontBodiceCandidate.CreateFromBody(fullBody,ResearchDesign.PinnedFitted);
+            Need(limitedFront.Edges.Zip(fullFront.Edges).All(p=>p.First.Kind==p.Second.Kind && p.First.Start==p.Second.Start && p.First.End==p.Second.End),"partial front differs from full");
+            foreach(bool left in new[]{false,true}) {
+                var limitedBack=BackBodiceCandidate.CreateFromBody(limitedBody,ResearchDesign.PinnedFitted,left);var fullBack=BackBodiceCandidate.CreateFromBody(fullBody,ResearchDesign.PinnedFitted,left);
+                Need(limitedBack.Edges.Zip(fullBack.Edges).All(p=>p.First.Kind==p.Second.Kind && p.First.Start==p.Second.Start && p.First.End==p.Second.End),"partial back differs from full");
+            }
+            var limitedLeft=FrontBodiceCandidate.CreateLeftFromBody(limitedBody,ResearchDesign.PinnedFitted);var fullLeft=FrontBodiceCandidate.CreateLeftFromBody(fullBody,ResearchDesign.PinnedFitted);
+            Need(limitedLeft.Edges.Zip(fullLeft.Edges).All(p=>p.First.Start==p.Second.Start && p.First.End==p.Second.End),"partial left differs from full");
+            var limitedSf=FrontSkirtCandidate.CreateFromMatchedBody(limitedBody,ResearchDesign.PinnedFitted);var fullSf=FrontSkirtCandidate.CreateFromMatchedBody(fullBody,ResearchDesign.PinnedFitted);
+            var limitedSb=BackSkirtCandidate.CreateFromBody(limitedBody,ResearchDesign.PinnedFitted);var fullSb=BackSkirtCandidate.CreateFromBody(fullBody,ResearchDesign.PinnedFitted);
+            Need(limitedSf.Edges.SequenceEqual(fullSf.Edges) && limitedSb.Edges.SequenceEqual(fullSb.Edges),"partial skirt differs from full");
+            var limitedGraph=BodySeamStudy.Calculate(limitedBody,ResearchDesign.PinnedFitted);
+            Need(limitedGraph.Rules.Count==23 && !limitedGraph.ExportAllowed && !limitedGraph.ProductionAllowed && limitedGraph.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified,"partial graph gate");
+            var partialSourceRules=reference.GetProperty("stitches").EnumerateArray().ToArray();
+            foreach(var candidateRule in limitedGraph.Rules) {
+                var comparable=candidateRule.Kind=="MetaGarment"?candidateRule with { Owner=id }:candidateRule;
+                var sourceRule=partialSourceRules.Single(r=>r.GetProperty("owner").GetString()==comparable.Owner && r.GetProperty("owner_type").GetString()==comparable.Kind && r.GetProperty("index").GetInt32()==comparable.Index);
+                SyntheticFullSeamGraph.Compare(comparable,sourceRule);
+            }
+
+            var limitedProjection=BodySeamProjection.Calculate(limitedBody,ResearchDesign.PinnedFitted);
+            Need(limitedProjection.Rules.Count==23 && limitedProjection.Status=="unresolved" && !limitedProjection.ExportAllowed,"partial seam projection gate");
+            var fullProjection=BodySeamProjection.Calculate(fullBody,ResearchDesign.PinnedFitted);
+            Need(limitedProjection.Rules.Zip(fullProjection.Rules).All(p=>p.First.Kind==p.Second.Kind && p.First.Index==p.Second.Index && p.First.A==p.Second.A && p.First.B==p.Second.B),"partial projected lengths differ from full");
+            var limitedTopology=BodyCurveStudy.Calculate(limitedBody,ResearchDesign.PinnedFitted);
+            Need(limitedTopology.Count==6 && limitedTopology.All(t=>t.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && t.Status=="unresolved" && !t.ExportAllowed),"partial topology gate");
+            var fullTopology=BodyCurveStudy.Calculate(fullBody,ResearchDesign.PinnedFitted);
+            Need(limitedTopology.Zip(fullTopology).All(p=>p.First.Panel==p.Second.Panel && p.First.Closure==p.Second.Closure && p.First.Pairs==p.Second.Pairs && p.First.Unresolved==p.Second.Unresolved && p.First.UnresolvedEdges.SequenceEqual(p.Second.UnresolvedEdges)),"partial topology differs from full");
+
             var independent=InterfaceMatcher.MatchDerived(id);
             var typedMatch=BodyWaistStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(typedMatch.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedMatch.ExportAllowed && !typedMatch.ProductionAllowed && !typeof(InterfaceMatcher.Result).IsAssignableFrom(typedMatch.GetType()),"typed waist gate");
@@ -653,7 +708,7 @@ internal static class Validator
             Need(match.Status=="unresolved"&&!match.ExportAllowed,"matching gate");
         }
     }
-    static void CheckGeneralControls(JsonElement reference,ResearchBody body)
+    static void CheckGeneralControls(JsonElement reference,IResearchPatternBody body)
     {
         var design=ResearchDesign.PinnedFitted;var panels=reference.GetProperty("panels");
         int count=0;double maxRelative=0,maxAbsolute=0,maxArc=0;
@@ -939,4 +994,12 @@ internal static class Validator
         }
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
+}
+
+// Adversarial test only: an arbitrary interface implementation must not bypass validation.
+internal sealed class ForgedPatternBody : IResearchPatternBody
+{
+    public decimal this[string key]=>1;
+    public ResearchBody.DerivedValues Derive()=>throw new InvalidOperationException();
+    public string Snapshot(ResearchDesign design)=>"forged";
 }

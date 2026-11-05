@@ -18,8 +18,9 @@ internal static class BackBodiceCandidate
         public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified back contour; composition blocked.");
     }
-    internal static UnverifiedPanel CreateFromBody(ResearchBody body,ResearchDesign design,bool left)
+    internal static UnverifiedPanel CreateFromBody(IResearchPatternBody body,ResearchDesign design,bool left)
     {
+        ResearchBody.RequireSupported(body);
         var waist=BackWaistCandidate.CreateFromBody(body,design);var neck=BackNeckCut.CreateFromBody(body,design);var arms=SyntheticArmholeCut.CreateBackFromBody(body,design);
         if(waist.Snapshot!=neck.Snapshot || waist.Snapshot!=arms.Snapshot)throw new ArgumentException("Body snapshot mismatch");
         var arm=arms.Curves.Single(c=>c.Panel=="right_btorso");
