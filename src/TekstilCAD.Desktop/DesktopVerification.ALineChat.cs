@@ -69,6 +69,13 @@ internal static partial class DesktopVerification
             window.ChatInputForVerification.Text="80 cm";window.SendMessageForVerification();
             Check(window.CaptureForVerification()==complete && window.ChatInputForVerification.Text=="80 cm", "After final field no unlabeled number is guessed",checks);
 
+            window.ChatInputForVerification.Clear();window.ChatInputForVerification.Text="12";window.SendMessageForVerification();
+            Check(window.CaptureForVerification().Prompt.EndsWith("\n12",StringComparison.Ordinal) && window.ChatInputForVerification.Text=="",
+                "With no remaining question a bare number remains ordinary user text, not a guessed measurement",checks);
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="36";window.MeasurementsForVerification.Text+="; not";
+            var staleBare=window.CaptureForVerification();window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==staleBare && window.ChatInputForVerification.Text=="36" && window.StatusForVerification.Text.Contains("Soru veya kaynak değişti"),
+                "A unitless answer to a stale question stays editable and reports the changed context",checks);
             window.LoadForVerification(source);window.ChatInputForVerification.Text="0 cm";window.SendMessageForVerification();
             Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text=="0 cm" && window.StatusForVerification.Text.Contains("Sıfır yalnız bolluk"),
                 "Zero is rejected for a body arc without losing the answer",checks);
