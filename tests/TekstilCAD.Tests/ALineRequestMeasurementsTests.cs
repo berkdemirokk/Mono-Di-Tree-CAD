@@ -4,6 +4,19 @@ namespace TekstilCAD.Tests;
 
 public sealed class ALineRequestMeasurementsTests
 {
+    [Theory]
+    [InlineData("ön bel yayi 36 cm")]
+    [InlineData("on bel yayi 36 cm")]
+    [InlineData("ÖN BEL YAYİ 36 CM")]
+    [InlineData("arka kalca yayi 50 cm")]
+    [InlineData("ön bel YAYİ BOLLUĞU 2 cm")]
+    public void SimilarAsciiLabelsAreReportedButNeverParsed(string text)
+    {
+        var review=ALineRequestMeasurements.Review(text, "");
+        Assert.NotEmpty(review.Issues);
+        Assert.All(review.Millimeters, value=>Assert.Null(value));
+    }
+
     [Fact] public void ExplicitConjoinedFieldsAreConsumedTogetherAndPreserveDistinctEase()
     {
         const string original="Ön bel yayı 36 cm ve arka bel yayı 360 mm ve ön bel yayı bolluğu 0 mm";

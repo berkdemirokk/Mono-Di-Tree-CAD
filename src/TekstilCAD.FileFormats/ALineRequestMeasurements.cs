@@ -18,6 +18,17 @@ public static class ALineRequestMeasurements
         "Belden kalçaya düşüklük","Belden etek boyu","Bitmiş etek çevresi (bolluk dahil)"
     });
     private static string Fold(string text)=>text.Normalize(NormalizationForm.FormC).ToLower(CultureInfo.GetCultureInfo("tr-TR"));
+    // Similar ASCII spellings are not valid labels, but must not disappear
+    // silently: they may refer to an existing measurement. Never parse them.
+    private static string Approximate(string text)
+    {
+        var decomposed=Fold(text).Normalize(NormalizationForm.FormD);
+        var plain=new string(decomposed.Where(c=>CharUnicodeInfo.GetUnicodeCategory(c)!=UnicodeCategory.NonSpacingMark).ToArray());
+        return plain.Replace('ı','i').Normalize(NormalizationForm.FormC);
+    }
+    private static readonly Regex ApproximateMention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+
+        string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Approximate(s))))+
+        ")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Fold(s))));
     private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new("\\A\\s*(?<label>"+Names+")\\s*(?::|=|\\s)\\s*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\\s*(?<unit>cm|mm)\\s*[.!]?\\s*\\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
@@ -81,7 +92,12 @@ public static class ALineRequestMeasurements
         foreach(var text in new[]{prompt,notes})
         foreach(var segment in Regex.Split(text,@";|[\r\n\v\f\u0085\u2028\u2029]",RegexOptions.None,TimeSpan.FromMilliseconds(100)))
         {
-            if(!Mention.IsMatch(Fold(segment)))continue;
+            if(!Mention.IsMatch(Fold(segment)))
+            {
+                if(ApproximateMention.IsMatch(Approximate(segment)))
+                    issues.Add("A kesim alan adı benzer fakat açık değil; yazımı kontrol edin. Kaynak metin korunur: "+segment);
+                continue;
+            }
             if(AmbiguousNumber.IsMatch(segment)) { issues.Add("A kesim sayısında üç basamaklı ayırıcı belirsiz: "+segment+". Binlik ayırıcı kullanmayın; 1000 mm veya 1 mm gibi açık yazın. Ondalık hassasiyet için eşdeğer cm/mm değerini üç basamaklı gruplama olmadan belirtin.");continue; }
             if(!TryReadGroup(segment,out var group)) { issues.Add("A kesim alanları açık, tam etiketli ve birimli değil: "+segment);continue; }
             foreach(var (index,value) in group)
