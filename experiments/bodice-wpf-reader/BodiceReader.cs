@@ -1,12 +1,27 @@
+using System.IO;
 using System.Text.Json;
 using System.Windows;
 
 namespace BodiceWpfReader;
 
-public sealed record Segment(string Type, Point? To=null, Point? Cp1=null, Point? Cp2=null);
-public sealed record Part(string Name,IReadOnlyList<Segment> Segments);
-public sealed record Preview(IReadOnlyList<Part> Parts)
+public sealed class Segment
 {
+    internal Segment(string type,Point? to=null,Point? cp1=null,Point? cp2=null) { Type=type;To=to;Cp1=cp1;Cp2=cp2; }
+    public string Type { get; }
+    public Point? To { get; }
+    public Point? Cp1 { get; }
+    public Point? Cp2 { get; }
+}
+public sealed class Part
+{
+    internal Part(string name,IReadOnlyList<Segment> segments) { Name=name;Segments=segments; }
+    public string Name { get; }
+    public IReadOnlyList<Segment> Segments { get; }
+}
+public sealed class Preview
+{
+    internal Preview(IReadOnlyList<Part> parts) { Parts=parts; }
+    public IReadOnlyList<Part> Parts { get; }
     public bool ProductionAllowed => false;
     public bool ExportAllowed => false;
 }

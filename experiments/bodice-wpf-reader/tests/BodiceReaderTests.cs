@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using BodiceWpfReader;
 using Xunit;
@@ -13,6 +14,10 @@ public class BodiceReaderTests
         var r=Read(Json());Assert.Equal(new[]{"breanna.front","breanna.back"},r.Parts.Select(p=>p.Name));
         var curve=r.Parts[0].Segments[2];Assert.Equal("cubic",curve.Type);Assert.Equal(10,curve.Cp1!.Value.X);Assert.Equal(5,curve.Cp2!.Value.Y);
         Assert.False(r.ProductionAllowed);Assert.False(r.ExportAllowed);
+    }
+    [Fact] public void ResponseTypesHaveNoPublicConstructors()
+    {
+        Assert.Empty(typeof(Preview).GetConstructors());Assert.Empty(typeof(Part).GetConstructors());Assert.Empty(typeof(Segment).GetConstructors());
     }
     [Fact] public void RejectsUnknownDuplicateMissingAndIncorrectScope()
     {
