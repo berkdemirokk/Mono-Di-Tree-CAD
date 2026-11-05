@@ -124,6 +124,22 @@ internal static partial class DesktopVerification
                 Check(ALineRequestMeasurements.Review(result.Prompt,result.Measurements).Millimeters[0] is null,
                     "Question, repeated punctuation and mixed clauses never become a definite arc: "+answer,checks);
             }
+            foreach(var answer in new[]{"36\u00a0cm\n40\u00a0cm","36\u202fcm değil"})
+            {
+                window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+                var result=window.CaptureForVerification();
+                Check(result.Prompt.EndsWith(answer,StringComparison.Ordinal) && !result.Prompt.Contains("Ön bel yayı: ",StringComparison.Ordinal) &&
+                    ALineRequestMeasurements.Review(result.Prompt,result.Measurements).Millimeters[0] is null,
+                    "Unicode-spaced multiline or negated text is retained verbatim and never attached as a definite short answer",checks);
+            }
+            var easeSource=source with { Prompt=source.Prompt+"\nÖn bel yayı: 36 cm\nArka bel yayı: 36 cm\nÖn kalça yayı: 50 cm\nArka kalça yayı: 50 cm" };
+            window.LoadForVerification(easeSource);
+            Check(window.ConversationForVerification.Text.Contains("Sıradaki alan (5/11): Ön bel yayı bolluğu"),"Explicit arcs lead to the first ease question",checks);
+            window.ChatInputForVerification.Text="0\u202fcm!";window.SendMessageForVerification();
+            var easeResult=window.CaptureForVerification();
+            Check(easeResult.Prompt.EndsWith("Ön bel yayı bolluğu: 0\u202fcm!",StringComparison.Ordinal) &&
+                  ALineRequestMeasurements.Review(easeResult.Prompt,easeResult.Measurements).Millimeters[4]==0 && window.ChatInputForVerification.Text.Length==0,
+                  "Unicode-spaced zero ease is accepted only for the explicitly asked ease field",checks);
             foreach(var answer in new[]{"0 cm.","0 mm!"})
             {
                 window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
