@@ -70,5 +70,25 @@
   {
     "text": "ön bel yayı 36 cm ve arka bel yayı 36 cm ve ön kalça yayı 50 cm ve arka kalça yayı 50 cm ve ön bel yayı bolluğu 2 cm ve arka bel yayı bolluğu 2 cm ve ön kalça yayı bolluğu 3 cm ve arka kalça yayı bolluğu 3 cm ve belden etek boyu 60 cm",
     "valid": false
+  },
+  {
+    "text": "ön bel yayi 36 cm",
+    "valid": false
+  },
+  {
+    "text": "on bel yayi 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ÖN BEL YAYİ 36 CM",
+    "valid": false
+  },
+  {
+    "text": "arka kalca yayi 50 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel YAYİ BOLLUĞU 2 cm",
+    "valid": false
   }
 ]
