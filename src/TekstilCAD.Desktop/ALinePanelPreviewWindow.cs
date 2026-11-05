@@ -160,6 +160,29 @@ internal sealed class ALinePanelPreviewWindow : Window
         Closed+=(_,_)=>closed=true;
         void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         void RefreshWaistComparison()=>WaistComparisonForVerification.Text=ALineWaistSourceComparison.Describe(promptSnapshot,measurementSnapshot,fields[0].Text,fields[1].Text,CurrentUnit());
+        var correctionFields=new ComboBox { ItemsSource=labels,SelectedIndex=-1,Margin=new Thickness(0,4,0,4) };
+        body.Children.Add(new Label { Content="Düzeltilecek açık istek ölçüsü",Target=correctionFields });body.Children.Add(correctionFields);
+        var correctSource=new Button { Content="Kaynak ölçüyü düzelt…",Padding=new Thickness(8),HorizontalAlignment=HorizontalAlignment.Left };
+        body.Children.Add(correctSource);
+        correctSource.Click+=(_,_)=>
+        {
+            try
+            {
+                if(owner is not DesignRequestWindow request)throw new InvalidOperationException("Kaynak istek penceresi bulunamadı.");
+                int index=correctionFields.SelectedIndex;if(index<0)throw new ArgumentException("Düzeltilecek alanı seçin.");
+                var form=fields.Select(f=>f.Text).ToArray();var chosenUnit=CurrentUnit();var version=editVersion;
+                var plan=ALineSourceCorrection.Create(promptSnapshot,measurementSnapshot,index,form[index],chosenUnit);
+                bool approved=request.CorrectALineSource(promptSnapshot,measurementSnapshot,plan,
+                    ()=>MessageBox.Show(this,$"Kaynak: {plan.Place}\nAlan: {plan.Label}\nEski: {plan.OldText}\nYeni: {plan.NewText}\n\nYalnız bu açık değer güncellenecek. Form korunur; ölçü ve simetri onayları sıfırlanır.","Kaynak ölçüyü düzelt",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes,
+                    ()=>!closed && editVersion==version && correctionFields.SelectedIndex==index && CurrentUnit()==chosenUnit && form.SequenceEqual(fields.Select(f=>f.Text)));
+                if(!approved) { status.Text="Düzeltme iptal edildi veya istek/form değişti; değerler korundu.";return; }
+                promptSnapshot=plan.Prompt;measurementSnapshot=plan.Notes;
+                requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
+                agreement.IsChecked=false;Clear();RefreshProposal();RefreshWaistComparison();
+                status.Text="Kaynak ölçü güncellendi; form korundu. Simetri ve ölçüleri yeniden inceleyip onaylayın.";
+            }
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
+        };
         foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
         unit.SelectionChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();

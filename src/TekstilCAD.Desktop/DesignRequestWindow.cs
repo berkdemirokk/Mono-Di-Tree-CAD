@@ -838,6 +838,25 @@ internal sealed class DesignRequestWindow : Window
     }
     internal static bool PhotoObservationSnapshotMatches(DesignRequest before,DesignRequest current,long expectedRevision,long currentRevision,string expectedChat,string currentChat,bool originalDirty,bool currentDirty,bool pending) =>
         !pending && expectedRevision==currentRevision && expectedChat==currentChat && originalDirty==currentDirty && SameRequest(before,current);
+    private bool correctingALineSource;
+    internal bool CorrectALineSource(string expectedPrompt,string expectedNotes,ALineCorrectionPlan plan,Func<bool> confirm,Func<bool> formUnchanged)
+    {
+        if(closed || correctingALineSource || referenceLoadRunning || referenceSelectionPending || prompt.Text!=expectedPrompt || measurements.Text!=expectedNotes)return false;
+        var before=Capture();var revision=referenceRevision;var question=questionRevision;var wasDirty=dirty;var chat=chatInput.Text;
+        var selected=selectedModelText;var tracked=modelSnapshot;var start=selectedModelStart;var ambiguous=modelAmbiguous;var loaded=selectedModelFromLoaded;
+        correctingALineSource=true;
+        try
+        {
+            if(!confirm())return false;
+            if(closed || referenceLoadRunning || referenceSelectionPending || revision!=referenceRevision || question!=questionRevision || wasDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()) ||
+               selected!=selectedModelText || tracked!=modelSnapshot || start!=selectedModelStart || ambiguous!=modelAmbiguous || loaded!=selectedModelFromLoaded || !formUnchanged())return false;
+            if(plan.Prompt!=before.Prompt)prompt.Text=plan.Prompt;
+            else if(plan.Notes!=before.Measurements)measurements.Text=plan.Notes;
+            else return false;
+            return true;
+        }
+        finally { correctingALineSource=false; }
+    }
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }

@@ -29,6 +29,22 @@ internal static partial class DesktopVerification
             Check(!request.CanPreviewALineForVerification,"V2 non-A-line identity cannot be overridden by descriptive text",checks);
             request.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null,null,2));
             Check(!request.CanPreviewALineForVerification,"Missing V2 identity does not infer an A-line model from text",checks);
+            var correctionSource=new DesignRequest("A kesim elbise","Ön bel yayı: 35 cm; başka not",null,"aline",2);
+            request.LoadForVerification(correctionSource);
+            var correction=ALineSourceCorrection.Create(correctionSource.Prompt,correctionSource.Measurements,0,"36",ALineLengthUnit.Centimeter);
+            Check(correction.Place=="Ölçü notları" && correction.OldText=="35 cm" && correction.NewText=="36 cm" && correction.Notes=="Ön bel yayı: 36 cm; başka not", "Correction plan changes only the exact explicit value span",checks);
+            Check(!request.CorrectALineSource(correctionSource.Prompt,correctionSource.Measurements,correction,()=>false,()=>true) && request.CaptureForVerification()==correctionSource,"Declining correction keeps source unchanged",checks);
+            bool nested=false;
+            Check(request.CorrectALineSource(correctionSource.Prompt,correctionSource.Measurements,correction,()=>{ nested=request.CorrectALineSource(correctionSource.Prompt,correctionSource.Measurements,correction,()=>true,()=>true);return true; },()=>true) && !nested &&
+                request.CaptureForVerification()==(correctionSource with { Measurements=correction.Notes }),"Correction applies only once and retains unrelated request fields",checks);
+            request.LoadForVerification(correctionSource);
+            Check(!request.CorrectALineSource(correctionSource.Prompt,correctionSource.Measurements,correction,()=>true,()=>false) && request.CaptureForVerification()==correctionSource,"Changed A-line form prevents source update",checks);
+            Check(!request.CorrectALineSource(correctionSource.Prompt,correctionSource.Measurements,correction,()=>{ request.MeasurementsForVerification.Text+=" değişti";return true; },()=>true),"Changed request during correction confirmation is never overwritten",checks);
+            foreach(var ambiguous in new[]{"Ön bel yayı: 35 cm; Ön bel yayı: 35 cm","Ön bel yayı: 35 cm?","Ön bel yayı: 35 cm ise"})
+            {
+                bool rejected=false;try { _=ALineSourceCorrection.Create("",ambiguous,0,"36",ALineLengthUnit.Centimeter); } catch(ArgumentException) { rejected=true; }
+                Check(rejected,"Ambiguous or repeated source is never rewritten: "+ambiguous,checks);
+            }
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             window.ConfirmDiscardWorkForVerification=()=>true;
             Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
