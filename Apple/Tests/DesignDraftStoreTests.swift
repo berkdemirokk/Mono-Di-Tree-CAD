@@ -149,6 +149,22 @@ final class DesignDraftStoreTests: XCTestCase {
         try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
         XCTAssertThrowsError(try PhotoLibraryReference.read(url))
     }
+    func testMeasurementGroupsCoverFieldsAndReportUnfinishedValues() throws {
+        let indices = BodyMeasurementNotes.groups.flatMap { Array($0.indices) }
+        XCTAssertEqual(indices, Array(BodyMeasurementNotes.fields.indices))
+        var values = Array(repeating: "", count: BodyMeasurementNotes.fields.count)
+        values[0] = "31,5"; values[8] = "72"; values[12] = " "
+        let missing = BodyMeasurementNotes.missingIndices(values)
+        XCTAssertEqual(missing.count, 13); XCTAssertTrue(missing.contains(12)); XCTAssertFalse(missing.contains(0))
+        let pending = try XCTUnwrap(ExperimentalDesignBrief.MeasurementForm.pending(values: values, unit: "mm"))
+        var draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "", hips: "100 cm", length: "110 cm", otherMeasurements: "not", image: nil, imageName: nil)
+        draft.measurementForm = pending
+        let restored = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(draft))
+        XCTAssertEqual(restored.measurementForm, pending)
+        XCTAssertEqual(restored.measurements, draft.measurements)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(restored))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(restored))
+    }
     func testModelPickerListsEveryChoiceExactlyOnce() {
         let styles = ExperimentalDesignBrief.selectableStyles
         XCTAssertEqual(styles, [.wrap, .aline, .corset, .sheath, .straight, .shirt, .describe])

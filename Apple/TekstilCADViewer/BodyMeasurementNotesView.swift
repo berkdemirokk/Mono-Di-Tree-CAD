@@ -18,6 +18,18 @@ enum BodyMeasurementNotes {
         .init(label: "omuz eğimi", angle: true), .init(label: "omuzdan bileğe", angle: false),
         .init(label: "bilek çevresi", angle: false)
     ]
+    struct FieldGroup {
+        let title: String
+        let indices: Range<Int>
+    }
+    static let groups: [FieldGroup] = [
+        .init(title: "Kol ve göğüs", indices: 0..<5),
+        .init(title: "Gövde ve bel", indices: 5..<10),
+        .init(title: "Boyun, omuz ve kol", indices: 10..<15)
+    ]
+    static func missingIndices(_ values: [String]) -> [Int] {
+        fields.indices.filter { $0 >= values.count || values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
     enum ValidationError: Error { case empty, whitespace(String), invalid(String), duplicate(String), ambiguous(String), tooLong }
     static func whitespaceOnlyIndices(_ values: [String]) -> [Int] {
         values.indices.filter { !values[$0].isEmpty && values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -94,6 +106,7 @@ struct BodyMeasurementNotesView: View {
     @State private var values = Array(repeating: "", count: BodyMeasurementNotes.fields.count)
     @FocusState private var focusedIndex: Int?
     @State private var unit = "cm"
+    @State private var groupIndex = 0
     @State private var status = ""
     @State private var confirm = false
     @State private var discard = false
@@ -102,17 +115,31 @@ struct BodyMeasurementNotesView: View {
     @State private var ambiguousLabel = ""
     @State private var initialNotes: String?
     @State private var readyToSaveForm = false
+    @ViewBuilder private var groupActions: some View {
+        if groupIndex > 0 {
+            Button("Önceki") { focusedIndex = nil; groupIndex -= 1 }.frame(minHeight: 44)
+        }
+        if groupIndex < BodyMeasurementNotes.groups.count - 1 {
+            Button("Sonraki ölçüler") { focusedIndex = nil; groupIndex += 1 }.frame(minHeight: 44)
+        }
+    }
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
+                    Text("Göğüs çevresi, kalça çevresi ve elbise boyu ana istek ekranında ayrıca girilir; bu form onları hesaplamaz.").font(.caption)
+                    Text("Bu bilgiler iPhone’dan Windows’a istek olarak aktarılır; kalıp üretilmez.").font(.caption)
                     Text(localSaveStatus()).font(.caption).foregroundStyle(.secondary)
                     Picker("Uzunluk birimi", selection: $unit) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
                     Text("Birim değişirse girdiğiniz sayılar dönüştürülmez; yeniden kontrol edin.").font(.caption)
                 }
-                Section("Beden ölçüleri") {
-                    ForEach(BodyMeasurementNotes.fields.indices, id: \.self) { index in
+                Section {
+                    Text("Adım \(groupIndex + 1) / \(BodyMeasurementNotes.groups.count): \(BodyMeasurementNotes.groups[groupIndex].title)")
+                        .font(.headline).accessibilityAddTraits(.isHeader)
+                    Text("\(BodyMeasurementNotes.fields.count - BodyMeasurementNotes.missingIndices(values).count) / \(BodyMeasurementNotes.fields.count) alan dolduruldu. Bilmediklerinizi boş bırakabilirsiniz.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(BodyMeasurementNotes.groups[groupIndex].indices, id: \.self) { index in
                         let field = BodyMeasurementNotes.fields[index]
                         VStack(alignment: .leading) {
                             Text("\(field.label) (\(field.angle ? "derece" : unit))")
@@ -120,6 +147,15 @@ struct BodyMeasurementNotesView: View {
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
                                 .accessibilityHint(field.angle ? "Yataya göre açı girin, bilinmiyorsa boş bırakın." : "Pozitif ölçü girin, bilinmiyorsa boş bırakın.")
                                 .focused($focusedIndex, equals: index).frame(minHeight: 44)
+                        }
+                    }
+                }
+                Section {
+                    DisclosureGroup("Boş veya tamamlanmamış alanlar: \(BodyMeasurementNotes.missingIndices(values).count)") {
+                        if BodyMeasurementNotes.missingIndices(values).isEmpty { Text("Tüm alanlarda giriş var; değerlerin doğruluğunu ayrıca kontrol edin.") }
+                        ForEach(BodyMeasurementNotes.missingIndices(values), id: \.self) { index in
+                            let field = BodyMeasurementNotes.fields[index]
+                            Text("\(field.label) · \(field.angle ? "derece" : unit)")
                         }
                     }
                 }
@@ -140,14 +176,23 @@ struct BodyMeasurementNotesView: View {
                     }
                     Button("Yalnız boşluk içeren alanları temizle…") { confirmWhitespaceCleanup = true }.frame(minHeight: 44)
                 }
-                if !status.isEmpty { Text(status).accessibilityLabel("Ölçü uyarısı: \(status)") }
-                Button("Girilenleri gözden geçir ve ekle") { confirm = true }.frame(minHeight: 44)
+            }
+            .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 6) {
+                    if !status.isEmpty { Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status) }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 16) { groupActions }.fixedSize(horizontal: true, vertical: false)
+                        VStack(spacing: 4) { groupActions }
+                    }.frame(maxWidth: .infinity)
+                    Button("Girilenleri gözden geçir ve ekle") { focusedIndex = nil; confirm = true }
+                        .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.borderedProminent)
+                }.padding(8).background(.regularMaterial)
             }
             .tint(colorScheme == .dark ? Color(red: 1, green: 0.72, blue: 0.78) : Color(red: 0.29, green: 0.08, blue: 0.14))
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Klavyeyi kapat") { focusedIndex = nil } } }
             .navigationTitle("Beden ölçüleri")
             .interactiveDismissDisabled(true)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Vazgeç") { if values.contains(where: { !$0.isEmpty }) { discard = true } else { dismiss() } } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { if values.contains(where: { !$0.isEmpty }) { discard = true } else { dismiss() } } } }
             .onAppear {
                 initialNotes = notes
                 if let form = savedForm, form.values.count == BodyMeasurementNotes.fields.count { values = form.values; unit = form.unit }
@@ -171,7 +216,7 @@ struct BodyMeasurementNotesView: View {
                 Button("Önceki notu koruyarak ekle") { apply(allowAmbiguous: true) }
                 Button("Notu kontrol edeceğim", role: .cancel) { }
             } message: { Text("\(ambiguousLabel) önceki notlarda geçiyor. Çelişki olabilir; mevcut not silinmez. Devam etmeden önce kontrol edin.") }
-            .confirmationDialog("Girilenler silinsin mi?", isPresented: $discard, titleVisibility: .visible) {
+            .confirmationDialog("Formdan çıkılsın mı?", isPresented: $discard, titleVisibility: .visible) {
                 Button("Formu taslakta tut ve çık") { rememberForm(); dismiss() }
                 Button("Formu sil ve çık", role: .destructive) { savedForm = nil; readyToSaveForm = false; dismiss() }
                 Button("Düzenlemeye devam et", role: .cancel) { }
