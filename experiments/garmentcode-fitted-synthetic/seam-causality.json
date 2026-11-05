@@ -1,0 +1,2412 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "numpy": "1.26.4",
+  "scipy": "1.17.1",
+  "cases": [
+    {
+      "id": "synthetic-base",
+      "overrides": {},
+      "body_waist_cm": 80.0,
+      "body_back_waist_cm": 36.0,
+      "stage_trace": [
+        {
+          "panel": "right",
+          "operation": "add_sleeves",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 38.43222375625897,
+                "projected_cm": 38.43222375625897,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.413625368196502,
+                "projected_cm": 19.413625368196502,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 34.61068401982393,
+                "projected_cm": 34.61068401982393,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 25.884833824262003,
+                "projected_cm": 25.884833824262003,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.207446785085423,
+                "projected_cm": 19.207446785085423,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.155715914754754,
+                "projected_cm": 18.155715914754754,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.335090692902607,
+                "projected_cm": 18.335090692902607,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "panel": "right",
+          "operation": "add_collars",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 19.207446785085423,
+                "projected_cm": 19.207446785085423,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.155715914754754,
+                "projected_cm": 18.155715914754754,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.335090692902607,
+                "projected_cm": 18.335090692902607,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.207446785085423,
+                "projected_cm": 19.207446785085423,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.507540596087262,
+                "projected_cm": 6.507540596087262,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.686915507627468,
+                "projected_cm": 6.686915507627468,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "upper_waist": {
+        "length_cm": 80.35710875438605,
+        "projected_cm": 80.35710875438605,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              2
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              2,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              7
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              7,
+              10
+            ]
+          }
+        ]
+      },
+      "lower_waist": {
+        "length_cm": 79.99999999999999,
+        "projected_cm": 80.0,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              10
+            ]
+          }
+        ]
+      },
+      "skirt_sides": [
+        {
+          "a": {
+            "length_cm": 57.51704227451101,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.672894388236564,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.05,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "a": {
+            "length_cm": 57.51704227468076,
+            "projected_cm": 57.51704227468076,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.67289438841496,
+            "projected_cm": 57.51704227468092,
+            "ruffle": [
+              {
+                "coefficient": 1.05,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.0,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "synthetic-distinct",
+      "overrides": {
+        "bust": 96,
+        "back_width": 43,
+        "waist": 74,
+        "waist_back_width": 34,
+        "hips": 102,
+        "hip_back_width": 54,
+        "waist_line": 39,
+        "waist_over_bust_line": 42
+      },
+      "body_waist_cm": 74.0,
+      "body_back_waist_cm": 34.0,
+      "stage_trace": [
+        {
+          "panel": "right",
+          "operation": "add_sleeves",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 40.68442474169285,
+                "projected_cm": 40.68442474169285,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.413625368196502,
+                "projected_cm": 19.413625368196502,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 20.0,
+                "projected_cm": 20.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 37.60311853013408,
+                "projected_cm": 37.60311853013408,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 23.188496967568042,
+                "projected_cm": 23.188496967568042,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 17.157785321343944,
+                "projected_cm": 17.157785321343944,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 21.328166286132813,
+                "projected_cm": 21.328166286132813,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.142503333001383,
+                "projected_cm": 18.142503333001383,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 20.0,
+                "projected_cm": 20.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 20.82123637226094,
+                "projected_cm": 20.82123637226094,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.33509069074967,
+                "projected_cm": 18.33509069074967,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 17.157785321343944,
+                "projected_cm": 17.157785321343944,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "panel": "right",
+          "operation": "add_collars",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 21.328166286132813,
+                "projected_cm": 21.328166286132813,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.142503333001383,
+                "projected_cm": 18.142503333001383,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 20.0,
+                "projected_cm": 20.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 20.82123637226094,
+                "projected_cm": 20.82123637226094,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.33509069074967,
+                "projected_cm": 18.33509069074967,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 17.157785321343944,
+                "projected_cm": 17.157785321343944,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 21.328166286132813,
+                "projected_cm": 21.328166286132813,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.494327953400815,
+                "projected_cm": 6.494327953400815,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 20.0,
+                "projected_cm": 20.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 20.82123637226094,
+                "projected_cm": 20.82123637226094,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.686915509318583,
+                "projected_cm": 6.686915509318583,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 17.157785321343944,
+                "projected_cm": 17.157785321343944,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "upper_waist": {
+        "length_cm": 74.31557064268789,
+        "projected_cm": 74.31557064268789,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              2
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              2,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              7
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              7,
+              10
+            ]
+          }
+        ]
+      },
+      "lower_waist": {
+        "length_cm": 74.0,
+        "projected_cm": 74.0,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              10
+            ]
+          }
+        ]
+      },
+      "skirt_sides": [
+        {
+          "a": {
+            "length_cm": 56.717042274511016,
+            "projected_cm": 56.717042274511016,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 57.87289438823657,
+            "projected_cm": 56.717042274511016,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.05,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "a": {
+            "length_cm": 56.717042274680765,
+            "projected_cm": 56.717042274680765,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 57.87289438841496,
+            "projected_cm": 56.71704227468092,
+            "ruffle": [
+              {
+                "coefficient": 1.05,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.0,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "synthetic-front-length-plus-one",
+      "overrides": {
+        "waist_over_bust_line": 42
+      },
+      "body_waist_cm": 80.0,
+      "body_back_waist_cm": 36.0,
+      "stage_trace": [
+        {
+          "panel": "right",
+          "operation": "add_sleeves",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 38.43222375697112,
+                "projected_cm": 38.43222375697112,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.413625368196502,
+                "projected_cm": 19.413625368196502,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 34.61068401982393,
+                "projected_cm": 34.61068401982393,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 25.884833824262003,
+                "projected_cm": 25.884833824262003,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.20744678456445,
+                "projected_cm": 19.20744678456445,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.15571591463889,
+                "projected_cm": 18.15571591463889,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.335090692902607,
+                "projected_cm": 18.335090692902607,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "panel": "right",
+          "operation": "add_collars",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 19.20744678456445,
+                "projected_cm": 19.20744678456445,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.15571591463889,
+                "projected_cm": 18.15571591463889,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.335090692902607,
+                "projected_cm": 18.335090692902607,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.20744678456445,
+                "projected_cm": 19.20744678456445,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.507540590888978,
+                "projected_cm": 6.507540590888978,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.838867420791487,
+                "projected_cm": 18.838867420791487,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.686915507627468,
+                "projected_cm": 6.686915507627468,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.178554377193024,
+                "projected_cm": 18.178554377193024,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "upper_waist": {
+        "length_cm": 80.35710875438605,
+        "projected_cm": 80.35710875438605,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              2
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              2,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              7
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              7,
+              10
+            ]
+          }
+        ]
+      },
+      "lower_waist": {
+        "length_cm": 79.99999999999999,
+        "projected_cm": 80.0,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              10
+            ]
+          }
+        ]
+      },
+      "skirt_sides": [
+        {
+          "a": {
+            "length_cm": 57.51704227451101,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.672894388236564,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.05,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "a": {
+            "length_cm": 57.51704227468076,
+            "projected_cm": 57.51704227468076,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.67289438841496,
+            "projected_cm": 57.51704227468092,
+            "ruffle": [
+              {
+                "coefficient": 1.05,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.0,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "synthetic-shoulder-18",
+      "overrides": {
+        "shoulder_incl": 18
+      },
+      "body_waist_cm": 80.0,
+      "body_back_waist_cm": 36.0,
+      "stage_trace": [
+        {
+          "panel": "right",
+          "operation": "add_sleeves",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 38.4322237563104,
+                "projected_cm": 38.4322237563104,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 18.92632003628881,
+                "projected_cm": 18.92632003628881,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 35.08532319743743,
+                "projected_cm": 35.08532319743743,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 25.235093381718414,
+                "projected_cm": 25.235093381718414,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.11564291214229,
+                "projected_cm": 18.11564291214229,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.096931287089898,
+                "projected_cm": 19.096931287089898,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 17.738660557938406,
+                "projected_cm": 17.738660557938406,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.759760906791414,
+                "projected_cm": 18.759760906791414,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 17.874857862814732,
+                "projected_cm": 17.874857862814732,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.11564291214229,
+                "projected_cm": 18.11564291214229,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "panel": "right",
+          "operation": "add_collars",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 19.096931287089898,
+                "projected_cm": 19.096931287089898,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 17.738660557938406,
+                "projected_cm": 17.738660557938406,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.759760906791414,
+                "projected_cm": 18.759760906791414,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 17.874857862814732,
+                "projected_cm": 17.874857862814732,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.11564291214229,
+                "projected_cm": 18.11564291214229,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.096931287089898,
+                "projected_cm": 19.096931287089898,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.382868274298239,
+                "projected_cm": 6.382868274298239,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 18.759760906791414,
+                "projected_cm": 18.759760906791414,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.5190658686502605,
+                "projected_cm": 6.5190658686502605,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.11564291214229,
+                "projected_cm": 18.11564291214229,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "upper_waist": {
+        "length_cm": 80.23128582428457,
+        "projected_cm": 80.23128582428457,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              2
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              2,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              7
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              7,
+              10
+            ]
+          }
+        ]
+      },
+      "lower_waist": {
+        "length_cm": 79.99999999999999,
+        "projected_cm": 80.0,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              10
+            ]
+          }
+        ]
+      },
+      "skirt_sides": [
+        {
+          "a": {
+            "length_cm": 57.51704227451101,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.672894388236564,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.05,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "a": {
+            "length_cm": 57.51704227468076,
+            "projected_cm": 57.51704227468076,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.67289438841496,
+            "projected_cm": 57.51704227468092,
+            "ruffle": [
+              {
+                "coefficient": 1.05,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.0,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "synthetic-shoulder-30",
+      "overrides": {
+        "shoulder_incl": 30
+      },
+      "body_waist_cm": 80.0,
+      "body_back_waist_cm": 36.0,
+      "stage_trace": [
+        {
+          "panel": "right",
+          "operation": "add_sleeves",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 38.43222375637914,
+                "projected_cm": 38.43222375637914,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 20.784609690826528,
+                "projected_cm": 20.784609690826528,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 33.57073975969711,
+                "projected_cm": 33.57073975969711,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 27.71281292110204,
+                "projected_cm": 27.71281292110204,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.364998082808167,
+                "projected_cm": 18.364998082808167,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.47668051936562,
+                "projected_cm": 19.47668051936562,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.33439830374188,
+                "projected_cm": 19.33439830374188,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 19.01219142093243,
+                "projected_cm": 19.01219142093243,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.62990926399331,
+                "projected_cm": 19.62990926399331,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.364998082808167,
+                "projected_cm": 18.364998082808167,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "panel": "right",
+          "operation": "add_collars",
+          "before": {
+            "front": {
+              "outside": {
+                "length_cm": 19.47668051936562,
+                "projected_cm": 19.47668051936562,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.33439830374188,
+                "projected_cm": 19.33439830374188,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 19.01219142093243,
+                "projected_cm": 19.01219142093243,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 19.62990926399331,
+                "projected_cm": 19.62990926399331,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.364998082808167,
+                "projected_cm": 18.364998082808167,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          "after": {
+            "front": {
+              "outside": {
+                "length_cm": 19.47668051936562,
+                "projected_cm": 19.47668051936562,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 6.8636324712190895,
+                "projected_cm": 6.8636324712190895,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 22.0,
+                "projected_cm": 22.0,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              }
+            },
+            "back": {
+              "outside": {
+                "length_cm": 19.01219142093243,
+                "projected_cm": 19.01219142093243,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      2
+                    ]
+                  }
+                ]
+              },
+              "shoulder": {
+                "length_cm": 7.159143482809114,
+                "projected_cm": 7.159143482809114,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      1
+                    ]
+                  }
+                ]
+              },
+              "bottom": {
+                "length_cm": 18.364998082808167,
+                "projected_cm": 18.364998082808167,
+                "ruffle": [
+                  {
+                    "coefficient": 1.0,
+                    "section": [
+                      0,
+                      3
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "upper_waist": {
+        "length_cm": 80.72999616561634,
+        "projected_cm": 80.72999616561634,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              2
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              2,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              7
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              7,
+              10
+            ]
+          }
+        ]
+      },
+      "lower_waist": {
+        "length_cm": 79.99999999999999,
+        "projected_cm": 80.0,
+        "ruffle": [
+          {
+            "coefficient": 1.0,
+            "section": [
+              0,
+              4
+            ]
+          },
+          {
+            "coefficient": 1.0,
+            "section": [
+              4,
+              10
+            ]
+          }
+        ]
+      },
+      "skirt_sides": [
+        {
+          "a": {
+            "length_cm": 57.51704227451101,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.672894388236564,
+            "projected_cm": 57.51704227451101,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.05,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "a": {
+            "length_cm": 57.51704227468076,
+            "projected_cm": 57.51704227468076,
+            "ruffle": [
+              {
+                "coefficient": 1.0,
+                "section": [
+                  0,
+                  2
+                ]
+              }
+            ]
+          },
+          "b": {
+            "length_cm": 58.67289438841496,
+            "projected_cm": 57.51704227468092,
+            "ruffle": [
+              {
+                "coefficient": 1.05,
+                "section": [
+                  0,
+                  1
+                ]
+              },
+              {
+                "coefficient": 1.0,
+                "section": [
+                  1,
+                  2
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

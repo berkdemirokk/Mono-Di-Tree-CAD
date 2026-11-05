@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -370,6 +370,59 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckSeamCausality()
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.seam-causality.json") ?? throw new InvalidDataException("Missing seam trace");
+        using var reader=new StreamReader(stream,Encoding.UTF8,true);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="117866ADEAC64971C1CB5997FE45BC3ECBB7ED0334FA918D620B18ED6EC08F5B","seam trace hash");
+        using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
+        Need(root.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31" && root.GetProperty("numpy").GetString()=="1.26.4" && root.GetProperty("scipy").GetString()=="1.17.1","seam trace provenance");
+        var cases=root.GetProperty("cases").EnumerateArray().ToDictionary(x=>x.GetProperty("id").GetString()!,StringComparer.Ordinal);
+        Need(cases.Keys.ToHashSet().SetEquals(new[]{"synthetic-base","synthetic-distinct","synthetic-front-length-plus-one","synthetic-shoulder-18","synthetic-shoulder-30"}),"seam trace cases");
+        double Projected(JsonElement e)=>e.GetProperty("projected_cm").GetDouble();
+        bool UnitRuffle(JsonElement e)=>e.GetProperty("ruffle").EnumerateArray().All(r=>r.GetProperty("coefficient").GetDouble()==1);
+        var gaps=new Dictionary<string,double>();
+        foreach(var (id,c) in cases) {
+            double waist=c.GetProperty("body_waist_cm").GetDouble(),backWaist=c.GetProperty("body_back_waist_cm").GetDouble();
+            var trace=c.GetProperty("stage_trace").EnumerateArray().ToArray();
+            Need(trace.Length==2 && trace[0].GetProperty("panel").GetString()=="right" && trace[0].GetProperty("operation").GetString()=="add_sleeves" && trace[1].GetProperty("operation").GetString()=="add_collars","seam trace stages");
+            var before=trace[0].GetProperty("before");var afterSleeve=trace[0].GetProperty("after");var afterCollar=trace[1].GetProperty("after");
+            foreach(string side in new[]{"front","back"})foreach(string part in new[]{"outside","shoulder","bottom"}) {
+                Need(UnitRuffle(before.GetProperty(side).GetProperty(part)) && UnitRuffle(afterSleeve.GetProperty(side).GetProperty(part)) && UnitRuffle(afterCollar.GetProperty(side).GetProperty(part)),"unencoded bodice ruffle");
+                double initial=Projected(before.GetProperty(side).GetProperty("bottom"));
+                Need(Math.Abs(initial-Projected(afterSleeve.GetProperty(side).GetProperty("bottom")))<1e-8 && Math.Abs(initial-Projected(afterCollar.GetProperty(side).GetProperty("bottom")))<1e-8,"bodice cuts altered waist interface");
+            }
+            var upper=c.GetProperty("upper_waist");var lower=c.GetProperty("lower_waist");double u=Projected(upper),l=Projected(lower);
+            Need(UnitRuffle(upper)&&UnitRuffle(lower) && Math.Abs(l-waist)<1e-6,"waist source target or ruffle");
+            double f=Projected(before.GetProperty("front").GetProperty("bottom")),b=Projected(before.GetProperty("back").GetProperty("bottom"));
+            Need(Math.Abs(f-(waist-backWaist)/2)<1e-6 && b>backWaist/2 && Math.Abs(u-2*(f+b))<1e-6 && Math.Abs((u-l)-2*(b-backWaist/2))<1e-6,"source waist excess decomposition");
+            gaps[id]=u-l;
+            foreach(string part in new[]{"outside","shoulder"}) {
+                double fBefore=Projected(before.GetProperty("front").GetProperty(part)),fAfter=Projected(afterSleeve.GetProperty("front").GetProperty(part));
+                double bBefore=Projected(before.GetProperty("back").GetProperty(part)),bAfter=Projected(afterSleeve.GetProperty("back").GetProperty(part));
+                Need(Math.Abs(fBefore-fAfter)>1 && Math.Abs(bBefore-bAfter)>1,"sleeve stage did not cut both interfaces");
+                if(part=="outside")Need(Math.Abs(fAfter-Projected(afterCollar.GetProperty("front").GetProperty(part)))<1e-7 && Math.Abs(bAfter-Projected(afterCollar.GetProperty("back").GetProperty(part)))<1e-7,"collar altered outside seam");
+            }
+            var skirt=c.GetProperty("skirt_sides").EnumerateArray().ToArray();Need(skirt.Length==2,"skirt side count");
+            foreach(var side in skirt) {
+                var a=side.GetProperty("a");var bside=side.GetProperty("b");
+                Need(UnitRuffle(a) && bside.GetProperty("ruffle").EnumerateArray().Count(r=>r.GetProperty("coefficient").GetDouble()==1.05)==1 && Math.Abs(Projected(a)-Projected(bside))<1e-5,"encoded skirt side projection");
+            }
+        }
+        Need(Math.Abs(gaps["synthetic-base"]-gaps["synthetic-front-length-plus-one"])<1e-7 && gaps["synthetic-shoulder-18"]<gaps["synthetic-base"] && gaps["synthetic-base"]<gaps["synthetic-shoulder-30"],"synthetic waist sensitivity");
+        using var backStream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back stages");
+        using var backReader=new StreamReader(backStream,Encoding.UTF8,true);string backText=backReader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(backText)))=="6A8386924160425D49E48A88117419C3ECBD3CDA154413CD8EA2323579B1A856","back stage hash");
+        using var backDoc=JsonDocument.Parse(backText);
+        foreach(var c in backDoc.RootElement.GetProperty("cases").EnumerateArray().Where(x=>x.GetProperty("id").GetString() is "synthetic-base" or "synthetic-distinct")) {
+            string id=c.GetProperty("id").GetString()!;var e=c.GetProperty("edges");double len=0,horizontal=0;
+            foreach(int n in new[]{0,3,6}) { var edge=e[n];len+=edge.GetProperty("length_cm").GetDouble();horizontal+=Math.Abs(edge.GetProperty("end")[0].GetDouble()-edge.GetProperty("start")[0].GetDouble()); }
+            double target=c.GetProperty("body_input_cm_degree").GetProperty("waist_back_width").GetDouble()/2;
+            double curveExcess=len-horizontal,remainingHorizontal=horizontal-target;
+            Need(curveExcess>0 && remainingHorizontal>0 && Math.Abs(2*(curveExcess+remainingHorizontal)-gaps[id])<1e-6,"source back waist breakdown");
+            Console.WriteLine($"{id} source half-back waist excess: curve-vs-horizontal={curveExcess:G8} cm, remaining horizontal={remainingHorizontal:G8} cm; source-only diagnostic.");
+        }
+    }
     internal static void CheckOptimizerTrace()
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.optimizer-trace.json") ?? throw new InvalidDataException("Missing optimizer trace");
