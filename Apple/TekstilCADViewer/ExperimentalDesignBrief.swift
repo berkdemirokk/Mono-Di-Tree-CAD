@@ -198,7 +198,11 @@ enum ExperimentalDesignBrief {
         let checkedDescription = description.replacingOccurrences(of: "İ", with: "i").lowercased()
         let condition = #"(?<![\p{L}\p{N}_])(?:eğer|şayet)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: condition, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
-        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o|bunlar|şunlar|onlar|bunları|şunları|onları|hepsini|tümünü)[ \t]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm))(?![\p{L}\p{N}_])"#
+        // Plural references have no reliable antecedent here; do not guess
+        // whether they refer to the measurements or some other part of the request.
+        let pluralReference = #"(?<![\p{L}\p{N}_])(?:(?:bunlar|şunlar|onlar)(?:ı|ın|a|da|dan|la)?|hepsi(?:ni|ne|nin|nden|yle)?|tümü(?:nü|ne|nün|nden|yle)?)(?![\p{L}\p{N}_])"#
+        guard checkedDescription.range(of: pluralReference, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
+        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o)[ \t]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm))(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: unresolved, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         let reference = #"(?<![\p{L}\p{N}_])(?:göğüs|bel|kalça|elbise[ \t]+boyu|ölçü\p{L}*|değer(?:ler(?:i|in|im|den)?|i|in|im|e|de|den)?)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return proposal }
