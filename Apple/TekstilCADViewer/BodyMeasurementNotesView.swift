@@ -31,6 +31,44 @@ enum BodyMeasurementNotes {
         fields.indices.filter { $0 >= values.count || values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
     enum ValidationError: Error { case empty, whitespace(String), invalid(String), duplicate(String), ambiguous(String), tooLong }
+    struct UnitChange {
+        let before: ExperimentalDesignBrief.MeasurementForm
+        let after: ExperimentalDesignBrief.MeasurementForm
+        let revision: UUID
+        let notes: String
+        let existingNotes: String
+        func matches(form: ExperimentalDesignBrief.MeasurementForm, revision: UUID, notes: String, existingNotes: String) -> Bool {
+            before == form && self.revision == revision && self.notes == notes && self.existingNotes == existingNotes
+        }
+    }
+    private static func numericValue(_ raw: String, angle: Bool, unit: String) -> Decimal? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let pattern = angle ? #"\A-?[0-9]{1,5}(?:[.,][0-9]{1,8})?\z"# : #"\A[0-9]{1,5}(?:[.,][0-9]{1,8})?\z"#
+        guard text.range(of: pattern, options: .regularExpression) != nil,
+              text.range(of: #"\A-?[0-9]+[.,][0-9]{3}\z"#, options: .regularExpression) == nil,
+              let value = Decimal(string: text.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")) else { return nil }
+        if angle { return value > -90 && value < 90 ? value : nil }
+        let mm = unit == "cm" ? value * 10 : value
+        return mm > 0 && mm <= 10_000 ? mm : nil
+    }
+    static func convertUnit(_ form: ExperimentalDesignBrief.MeasurementForm, to target: String) throws -> ExperimentalDesignBrief.MeasurementForm {
+        guard form.values.count == fields.count, ["cm", "mm"].contains(form.unit), ["cm", "mm"].contains(target) else { throw ValidationError.tooLong }
+        if form.unit == target { return form }
+        var values = form.values
+        for index in fields.indices {
+            let raw = form.values[index]
+            if raw.isEmpty { continue }
+            let field = fields[index]
+            guard let original = numericValue(raw, angle: field.angle, unit: form.unit) else { throw ValidationError.invalid(field.label) }
+            if field.angle { continue }
+            let converted = target == "cm" ? original / 10 : original
+            var text = NSDecimalNumber(decimal: converted).stringValue
+            if let dot = text.firstIndex(of: "."), text.distance(from: text.index(after: dot), to: text.endIndex) == 3 { text += "0" }
+            guard numericValue(text, angle: false, unit: target) == original else { throw ValidationError.invalid(field.label) }
+            values[index] = text
+        }
+        return .init(values: values, unit: target)
+    }
     static func whitespaceOnlyIndices(_ values: [String]) -> [Int] {
         values.indices.filter { !values[$0].isEmpty && values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
@@ -107,6 +145,9 @@ struct BodyMeasurementNotesView: View {
     @FocusState private var focusedIndex: Int?
     @State private var unit = "cm"
     @State private var groupIndex = 0
+    @State private var revision = UUID()
+    @State private var unitChange: BodyMeasurementNotes.UnitChange?
+    @State private var confirmUnit = false
     @State private var status = ""
     @State private var confirm = false
     @State private var discard = false
@@ -131,8 +172,8 @@ struct BodyMeasurementNotesView: View {
                     Text("Göğüs çevresi, kalça çevresi ve elbise boyu ana istek ekranında ayrıca girilir; bu form onları hesaplamaz.").font(.caption)
                     Text("Bu bilgiler iPhone’dan Windows’a istek olarak aktarılır; kalıp üretilmez.").font(.caption)
                     Text(localSaveStatus()).font(.caption).foregroundStyle(.secondary)
-                    Picker("Uzunluk birimi", selection: $unit) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
-                    Text("Birim değişirse girdiğiniz sayılar dönüştürülmez; yeniden kontrol edin.").font(.caption)
+                    Picker("Uzunluk birimi", selection: Binding(get: { unit }, set: { requestUnit($0) })) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
+                    Text("Dolu alanların birimi yalnız açıkça onaylanan kayıpsız dönüşümle değişir. Omuz eğimi derece olarak kalır.").font(.caption)
                 }
                 Section {
                     Text("Adım \(groupIndex + 1) / \(BodyMeasurementNotes.groups.count): \(BodyMeasurementNotes.groups[groupIndex].title)")
@@ -143,7 +184,9 @@ struct BodyMeasurementNotesView: View {
                         let field = BodyMeasurementNotes.fields[index]
                         VStack(alignment: .leading) {
                             Text("\(field.label) (\(field.angle ? "derece" : unit))")
-                            TextField("Bilinmiyorsa boş bırakın", text: $values[index])
+                            TextField("Bilinmiyorsa boş bırakın", text: Binding(get: { values[index] }, set: { value in
+                                if values[index] != value { values[index] = value; revision = UUID() }
+                            }))
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
                                 .accessibilityHint(field.angle ? "Yataya göre açı girin, bilinmiyorsa boş bırakın." : "Pozitif ölçü girin, bilinmiyorsa boş bırakın.")
                                 .focused($focusedIndex, equals: index).frame(minHeight: 44)
@@ -199,8 +242,28 @@ struct BodyMeasurementNotesView: View {
                 readyToSaveForm = true
             }
             .onDisappear { rememberForm() }
-            .onChange(of: values) { _ in rememberForm() }
-            .onChange(of: unit) { _ in rememberForm() }
+            .onChange(of: values) { _ in revision = UUID(); rememberForm() }
+            .onChange(of: unit) { _ in revision = UUID(); rememberForm() }
+            .confirmationDialog("Uzunluk birimi değiştirilsin mi?", isPresented: $confirmUnit, titleVisibility: .visible) {
+                Button("Değerleri dönüştür") {
+                    guard let change = unitChange, change.matches(form: .init(values: values, unit: unit), revision: revision,
+                                                                   notes: notes, existingNotes: measurementsWithNotes(notes)) else {
+                        unitChange = nil; status = "Girişler veya kaynak değişti; birim değiştirilmedi."; return
+                    }
+                    values = change.after.values; unit = change.after.unit; revision = UUID(); unitChange = nil
+                    rememberForm(); status = "Uzunluklar dönüştürüldü. Değerleri tekrar gözden geçirin; açı değişmedi."
+                }
+                Button("Vazgeç", role: .cancel) { unitChange = nil }
+            } message: {
+                if let change = unitChange {
+                    Text(BodyMeasurementNotes.fields.indices.compactMap { index in
+                        let field = BodyMeasurementNotes.fields[index]
+                        guard !field.angle, !change.before.values[index].isEmpty else { return nil }
+                        return "\(field.label): \(change.before.values[index]) \(change.before.unit) → \(change.after.values[index]) \(change.after.unit)"
+                    }.joined(separator: "\n"))
+                    Text("Boş alanlar ve derece cinsinden omuz eğimi korunur.")
+                }
+            }
             .confirmationDialog("Girilen ölçüler notlara eklensin mi?", isPresented: $confirm, titleVisibility: .visible) {
                 Button("Ölçüleri ekle") { apply() }
                 Button("Düzenlemeye devam et", role: .cancel) { }
@@ -222,6 +285,19 @@ struct BodyMeasurementNotesView: View {
                 Button("Düzenlemeye devam et", role: .cancel) { }
             }
         }
+    }
+    private func requestUnit(_ target: String) {
+        guard target != unit else { return }
+        focusedIndex = nil
+        let before = ExperimentalDesignBrief.MeasurementForm(values: values, unit: unit)
+        if !before.hasValues { unit = target; revision = UUID(); return }
+        do {
+            let after = try BodyMeasurementNotes.convertUnit(before, to: target)
+            unitChange = .init(before: before, after: after, revision: revision, notes: notes, existingNotes: measurementsWithNotes(notes))
+            confirmUnit = true
+        } catch BodyMeasurementNotes.ValidationError.invalid(let label) {
+            status = "\(label) belirsiz veya geçersiz; birim değiştirilmedi. Alanı kontrol edin."
+        } catch { status = "Birim dönüştürülemedi; girişler korundu." }
     }
     private func rememberForm() {
         guard readyToSaveForm else { return }

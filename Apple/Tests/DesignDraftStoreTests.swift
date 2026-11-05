@@ -149,6 +149,44 @@ final class DesignDraftStoreTests: XCTestCase {
         try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
         XCTAssertThrowsError(try PhotoLibraryReference.read(url))
     }
+    func testBodyFormUnitConversionIsExactAndPreservesAnglesAndPendingForm() throws {
+        var values = Array(repeating: "", count: 15)
+        values[0] = "31,5"; values[8] = "72"; values[12] = "-2,5"
+        let before = ExperimentalDesignBrief.MeasurementForm(values: values, unit: "cm")
+        let after = try BodyMeasurementNotes.convertUnit(before, to: "mm")
+        XCTAssertEqual(after.values[0], "315"); XCTAssertEqual(after.values[8], "720")
+        XCTAssertEqual(after.values[12], "-2,5"); XCTAssertEqual(after.values[1], ""); XCTAssertEqual(after.unit, "mm")
+        let restored = try BodyMeasurementNotes.convertUnit(after, to: "cm")
+        XCTAssertEqual(restored.values[0], "31.5"); XCTAssertEqual(restored.values[8], "72")
+        XCTAssertEqual(restored.values[12], "-2,5")
+        var draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "", hips: "", length: "", otherMeasurements: "korunan not", image: nil, imageName: nil)
+        draft.measurementForm = before
+        let old = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(draft))
+        XCTAssertEqual(old.measurementForm, before); XCTAssertEqual(old.otherMeasurements, "korunan not")
+        draft.measurementForm = after
+        let newer = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(draft))
+        XCTAssertEqual(newer.measurementForm, after); XCTAssertEqual(newer.measurements, old.measurements)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(newer)); XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(newer))
+    }
+    func testBodyFormUnitConversionRejectsUnclearAndStaleInputs() throws {
+        let blank = ExperimentalDesignBrief.MeasurementForm(values: Array(repeating: "", count: 15), unit: "cm")
+        XCTAssertEqual(try BodyMeasurementNotes.convertUnit(blank, to: "mm").unit, "mm")
+        for bad in ["0", "-1", "1,000", " ", "1001", "abc"] {
+            var form = blank; var values = form.values; values[8] = bad; form = .init(values: values, unit: "cm")
+            XCTAssertThrowsError(try BodyMeasurementNotes.convertUnit(form, to: "mm"), bad)
+            XCTAssertEqual(form.values[8], bad); XCTAssertEqual(form.unit, "cm")
+        }
+        var tinyValues = blank.values; tinyValues[0] = "0.00000001"
+        XCTAssertThrowsError(try BodyMeasurementNotes.convertUnit(.init(values: tinyValues, unit: "mm"), to: "cm"))
+        var angleValues = blank.values; angleValues[12] = "0"
+        XCTAssertEqual(try BodyMeasurementNotes.convertUnit(.init(values: angleValues, unit: "cm"), to: "mm").values[12], "0")
+        let revision = UUID(), change = BodyMeasurementNotes.UnitChange(before: blank, after: try BodyMeasurementNotes.convertUnit(blank, to: "mm"), revision: revision, notes: "not", existingNotes: "bel")
+        XCTAssertTrue(change.matches(form: blank, revision: revision, notes: "not", existingNotes: "bel"))
+        XCTAssertFalse(change.matches(form: blank, revision: UUID(), notes: "not", existingNotes: "bel"))
+        XCTAssertFalse(change.matches(form: blank, revision: revision, notes: "yeni", existingNotes: "bel"))
+        XCTAssertFalse(change.matches(form: change.after, revision: revision, notes: "not", existingNotes: "bel"))
+        XCTAssertFalse(change.matches(form: blank, revision: revision, notes: "not", existingNotes: "değişti"))
+    }
     func testMeasurementGroupsCoverFieldsAndReportUnfinishedValues() throws {
         let indices = BodyMeasurementNotes.groups.flatMap { Array($0.indices) }
         XCTAssertEqual(indices, Array(BodyMeasurementNotes.fields.indices))
