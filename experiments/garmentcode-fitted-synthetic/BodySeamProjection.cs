@@ -21,8 +21,12 @@ internal static class BodySeamProjection
     }
     internal static UnverifiedResult Calculate(IResearchPatternBody body,ResearchDesign design)
         =>CalculateCore(body,design,null,null,null);
-    internal static UnverifiedResult CalculateChanged(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph graph,IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left)
-        =>CalculateCore(body,design,graph,right,left);
+    internal static UnverifiedResult CalculateChanged(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph graph,CombinedGraphStudy.VerifiedPanels panels)
+    {
+        ArgumentNullException.ThrowIfNull(panels);
+        if(panels.Snapshot!=body.Snapshot(design))throw new ArgumentException("Changed panels belong to another body snapshot");
+        return CalculateCore(body,design,graph,panels.Right,panels.Left);
+    }
     static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left)
     {
         ResearchBody.RequireSupported(body);
