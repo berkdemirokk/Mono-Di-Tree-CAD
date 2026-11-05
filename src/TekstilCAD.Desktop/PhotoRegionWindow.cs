@@ -14,6 +14,9 @@ internal sealed class PhotoRegionWindow : Window
     private readonly BitmapSource image;
     private CancellationTokenSource? running;
     private bool closed;
+    private bool changingRectangle,rectangleConfirmationActive;
+    internal Func<bool>? ConfirmRectangleChangeForVerification { get; set; }
+    internal Func<bool>? ConfirmCloseForVerification { get; set; }
     private MaskComponents? components;
     private RegionProposal.Snapshot? snapshot;
     private RegionProposal.Snapshot? undoSnapshot;
@@ -110,13 +113,50 @@ internal sealed class PhotoRegionWindow : Window
                 if(TryMapViewPixel(e.GetPosition(view),view.RenderSize,true,out var last) && stroke[^1]!=last) { if(stroke.Count>=4096)strokeOverflow=true;else stroke.Add(last); }
                 view.ReleaseMouseCapture();if(strokeOverflow || strokeMode!=MarkMode.SelectedIndex || strokeSize!=BrushSize.SelectedIndex)Status.Text="Fırça hareketi çok uzun veya türü değişti; yeni işaret eklenmedi.";else TryAddStroke(stroke);e.Handled=true;return; }
             if(dragStart is not System.Windows.Point start)return;dragStart=null;view.ReleaseMouseCapture();
-            if(!TrySetRectangleFromView(start,e.GetPosition(view),view.RenderSize))Status.Text="Fotoğrafta en az iki piksel genişliğinde ve yüksekliğinde alan seçin.";e.Handled=true; };
+            TrySetRectangleFromView(start,e.GetPosition(view),view.RenderSize);e.Handled=true; };
         view.LostMouseCapture+=(_,_)=> { dragStart=null;activeStroke=null; };
         Regions.SelectionChanged+=(_,_)=>ShowSelection();
-        foreach(var box in new[] { left,top,width,height })box.TextChanged+=(_,_)=>InvalidateResult();
+        foreach(var box in new[] { left,top,width,height })
+        {
+            box.Tag=box.Text;
+            box.TextChanged+=(_,_)=> {
+                if(changingRectangle)return;
+                var previous=(string)box.Tag;
+                if(!ConfirmRectangleChange()) { changingRectangle=true;try { box.Text=previous; } finally { changingRectangle=false; } Status.Text="Dikdörtgen değişikliği iptal edildi; bölge ve işaretler korundu.";return; }
+                box.Tag=box.Text;InvalidateResult();
+            };
+        }
         UpdateBoxOverlay();
         Status.Text="Dikdörtgeni kontrol edin ve Bölge ara seçin. Önceki çizim değişmez.";
+        Closing+=(_,e)=> {
+            if(DialogResult==true)return;
+            if(!ConfirmDiscard(ConfirmCloseForVerification,"Bölge penceresi kapatılırsa mevcut öneri ve işaretler aktarılmaz. Kapatılsın mı?","Bölgeyi kapat"))
+            { e.Cancel=true;Status.Text="Kapatma iptal edildi; bölge ve işaretler korundu."; }
+        };
         Closed+=(_,_)=> { closed=true;running?.Cancel(); };
+    }
+    private bool ConfirmRectangleChange() => ConfirmDiscard(ConfirmRectangleChangeForVerification,
+        "Dikdörtgen değişirse mevcut bölge ve düzeltme işaretleri silinir. Devam edilsin mi?","Bölgeyi değiştir");
+    private bool ConfirmDiscard(Func<bool>? confirmForVerification,string message,string title)
+    {
+        if(closed || rectangleConfirmationActive)return false;
+        if(snapshot is null && pendingMarks.Count==0 && running is null)return true;
+        var oldSnapshot=snapshot;var oldComponents=components;var oldRunning=running;var oldApplied=appliedMarks;
+        var oldUndo=undoSnapshot;var oldUndoComponents=undoComponents;var oldUndoApplied=undoAppliedMarks;
+        var oldPendingUndo=pendingUndo;var oldSource=sourceBgr;var oldContour=SelectedContour;
+        var oldMarks=pendingMarks.ToArray();var oldSelection=Regions.SelectedItem;var oldOmitHoles=OmitHoles.IsChecked;
+        var oldFields=new[] { left.Text,top.Text,width.Text,height.Text };
+        rectangleConfirmationActive=true;bool accepted;
+        try { accepted=confirmForVerification?.Invoke() ??
+            MessageBox.Show(this,message,title,MessageBoxButton.YesNo,MessageBoxImage.Warning)==MessageBoxResult.Yes; }
+        finally { rectangleConfirmationActive=false; }
+        return accepted && !closed && ReferenceEquals(snapshot,oldSnapshot) && ReferenceEquals(components,oldComponents) &&
+            ReferenceEquals(running,oldRunning) && ReferenceEquals(appliedMarks,oldApplied) && ReferenceEquals(undoSnapshot,oldUndo) &&
+            ReferenceEquals(undoComponents,oldUndoComponents) && ReferenceEquals(undoAppliedMarks,oldUndoApplied) &&
+            ReferenceEquals(pendingUndo,oldPendingUndo) && ReferenceEquals(sourceBgr,oldSource) && ReferenceEquals(SelectedContour,oldContour) &&
+            ReferenceEquals(Regions.SelectedItem,oldSelection) && OmitHoles.IsChecked==oldOmitHoles && pendingMarks.Count==oldMarks.Length &&
+            oldMarks.All(mark=>pendingMarks.TryGetValue(mark.Key,out var value) && value==mark.Value) &&
+            oldFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text });
     }
     private void InvalidateResult()
     {
@@ -139,13 +179,18 @@ internal sealed class PhotoRegionWindow : Window
     }
     internal bool TrySetRectangleFromView(System.Windows.Point start,System.Windows.Point end,Size viewport)
     {
-        if(!TryMapViewPixel(start,viewport,false,out var a) || !TryMapViewPixel(end,viewport,true,out var b))return false;
+        if(!TryMapViewPixel(start,viewport,false,out var a) || !TryMapViewPixel(end,viewport,true,out var b)) { Status.Text="Fotoğraf içinde bir alan seçin.";return false; }
         var x=(int)Math.Min(a.X,b.X);var y=(int)Math.Min(a.Y,b.Y);
         var w=(int)Math.Abs(a.X-b.X)+1;var h=(int)Math.Abs(a.Y-b.Y)+1;
-        if(w<2 || h<2)return false;
-        left.Text=x.ToString(CultureInfo.InvariantCulture);top.Text=y.ToString(CultureInfo.InvariantCulture);
-        width.Text=w.ToString(CultureInfo.InvariantCulture);height.Text=h.ToString(CultureInfo.InvariantCulture);
-        Status.Text="Dikdörtgen seçildi; sarı çerçeveyi kontrol edip Bölge ara seçin.";return true;
+        if(w<2 || h<2) { Status.Text="Fotoğrafta en az iki piksel genişliğinde ve yüksekliğinde alan seçin.";return false; }
+        var values=new[] { x.ToString(CultureInfo.InvariantCulture),y.ToString(CultureInfo.InvariantCulture),w.ToString(CultureInfo.InvariantCulture),h.ToString(CultureInfo.InvariantCulture) };
+        var boxes=new[] { left,top,width,height };
+        if(boxes.Select((box,i)=>box.Text==values[i]).All(equal=>equal))return true;
+        if(!ConfirmRectangleChange()) { Status.Text="Dikdörtgen değişikliği iptal edildi; bölge ve işaretler korundu.";return false; }
+        changingRectangle=true;
+        try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=values[i];boxes[i].Tag=values[i]; } }
+        finally { changingRectangle=false; }
+        InvalidateResult();Status.Text="Dikdörtgen seçildi; sarı çerçeveyi kontrol edip Bölge ara seçin.";return true;
     }
     private void UpdateBoxOverlay()
     {
@@ -180,6 +225,10 @@ internal sealed class PhotoRegionWindow : Window
             sourceBgr=result.Bgr;snapshot=result.Snapshot;ShowComponents(result.Components);
         }
         catch(OperationCanceledException) { if(!closed)Status.Text="Arama iptal edildi; önceki çizim değişmedi."; }
+        catch(TypeInitializationException ex) when(ex.GetBaseException() is DllNotFoundException or BadImageFormatException)
+        { if(!closed)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
+        catch(Exception ex) when(ex is DllNotFoundException or BadImageFormatException)
+        { if(!closed)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or DllNotFoundException or BadImageFormatException or TypeInitializationException)
         { if(!closed)Status.Text="Bölge önerisi hazırlanamadı: "+ex.Message; }
         finally { if(ReferenceEquals(running,cts))running=null;cts.Dispose(); }

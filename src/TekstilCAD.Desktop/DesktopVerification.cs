@@ -9701,7 +9701,7 @@ internal static partial class DesktopVerification
                 regionPixels[offset+2]=(byte)(inside ? 220 : 75);regionPixels[offset+3]=255;
             }
             var regionBitmap=BitmapSource.Create(96,72,96,96,PixelFormats.Bgra32,null,regionPixels,96*4);regionBitmap.Freeze();
-            var regionDialog=new PhotoRegionWindow(workspace,regionBitmap);
+            var regionDialog=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmRectangleChangeForVerification=()=>true,ConfirmCloseForVerification=()=>true };
             var regionDialogContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(regionDialog.Dispatcher));
             try
             {
@@ -9761,16 +9761,81 @@ internal static partial class DesktopVerification
                 regionDialog.ShowAppliedMarks.IsChecked=false;
                 Check(!regionDialog.HasMarksOverlay,"Hiding applied photo marks preserves mask state",checks);
                 regionDialog.MarkMode.SelectedIndex=1;Check(regionDialog.TryAddMark(5,5),"New mark can follow successful region refinement",checks);
+                var oldRectangle=regionDialog.left.Text;var beforeCancelledChange=regionDialog.CopyMaskForVerification()!;
+                regionDialog.ConfirmRectangleChangeForVerification=()=>false;
+                regionDialog.left.Text="16";
+                Check(regionDialog.left.Text==oldRectangle && regionDialog.PendingMarkCount==1 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Cancelled rectangle edit preserves region and pending marks",checks);
+                Check(!regionDialog.TrySetRectangleFromView(new Point(110,130),new Point(290,270),new Size(400,400)) &&
+                      regionDialog.left.Text==oldRectangle && regionDialog.PendingMarkCount==1 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Cancelled rectangle drag preserves region and pending marks",checks);
+                regionDialog.ConfirmRectangleChangeForVerification=()=> { regionDialog.TryAddMark(6,6);return true; };
+                regionDialog.left.Text="16";
+                Check(regionDialog.left.Text==oldRectangle && regionDialog.PendingMarkCount==2 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Stale text confirmation preserves newly added correction",checks);
+                Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkCount==1,"Stale text confirmation retains undoable new correction",checks);
+                regionDialog.ConfirmRectangleChangeForVerification=()=> { regionDialog.TryAddMark(7,7);return true; };
+                Check(!regionDialog.TrySetRectangleFromView(new Point(110,130),new Point(290,270),new Size(400,400)) &&
+                      regionDialog.left.Text==oldRectangle && regionDialog.PendingMarkCount==2 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Stale drag confirmation preserves newly added correction",checks);
+                Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkCount==1,"Stale drag confirmation retains undoable new correction",checks);
+                regionDialog.ConfirmRectangleChangeForVerification=()=>true;
+                regionDialog.ConfirmRectangleChangeForVerification=()=> { regionDialog.OmitHoles.IsChecked=true;return true; };
+                Check(!regionDialog.TrySetRectangleFromView(new Point(110,130),new Point(290,270),new Size(400,400)) &&
+                      regionDialog.OmitHoles.IsChecked==true && regionDialog.PendingMarkCount==1 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Stale rectangle confirmation preserves changed hole omission choice",checks);
+                regionDialog.OmitHoles.IsChecked=false;regionDialog.ConfirmRectangleChangeForVerification=()=>true;
+                regionDialog.ConfirmCloseForVerification=()=>false;regionDialog.Close();
+                Check(regionDialog.PendingMarkCount==1 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange) &&
+                      regionDialog.Status.Text.Contains("Kapatma iptal edildi"),"Cancelled region close preserves mask and pending marks",checks);
+                regionDialog.ConfirmCloseForVerification=()=> { regionDialog.TryAddMark(8,8);return true; };regionDialog.Close();
+                Check(regionDialog.PendingMarkCount==2 && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeCancelledChange),
+                      "Stale close confirmation preserves newly added correction",checks);
+                Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkCount==1,"Stale close confirmation retains undoable correction",checks);
+                regionDialog.ConfirmCloseForVerification=()=>true;
                 regionDialog.BeforeRefineForVerification=_=>throw new InvalidOperationException("sentetik hata");
                 var failedRefine=regionDialog.RefineAsync();PumpUntil(()=>failedRefine.IsCompleted);failedRefine.GetAwaiter().GetResult();regionDialog.BeforeRefineForVerification=null;
                 Check(regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!) && regionDialog.PendingMarkCount==1,
                       "Failed region refinement preserves current mask and pending marks",checks);
+                regionDialog.BeforeRefineForVerification=_=>throw new DllNotFoundException("simulated native library unavailable");
+                var missingNative=regionDialog.RefineAsync();PumpUntil(()=>missingNative.IsCompleted);missingNative.GetAwaiter().GetResult();regionDialog.BeforeRefineForVerification=null;
+                Check(regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!) && regionDialog.PendingMarkCount==1 &&
+                      regionDialog.Status.Text.Contains("Düzeltme uygulanamadı") && regionDialog.Status.Text.Contains("simulated native library unavailable"),
+                      "Missing native photo library preserves mask and pending marks while showing an error",checks);
                 Check(!regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),"Region refinement undo cannot discard pending marks",checks);
                 regionDialog.ClearMarks();
                 Check(regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(maskBeforeCorrection) &&
                       regionDialog.Regions.SelectedIndex==-1 && regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.AppliedMarkForVerification(40,30)==0 &&
                       !regionDialog.UndoRefinement(),"Region refinement undo restores exact previous mask and applied marks once",checks);
                 Check(regionDialog.TryAddMark(5,5),"Region mark can follow refinement undo",checks);
+                using(var enteredCompletion=new ManualResetEventSlim())using(var releaseCompletion=new ManualResetEventSlim())
+                {
+                    regionDialog.BeforeRefineForVerification=_=> { enteredCompletion.Set();releaseCompletion.Wait(); };
+                    try {
+                        var finishing=regionDialog.RefineAsync();PumpUntil(()=>enteredCompletion.IsSet);
+                        var originalLeft=regionDialog.left.Text;
+                        regionDialog.ConfirmRectangleChangeForVerification=()=> { releaseCompletion.Set();PumpUntil(()=>finishing.IsCompleted);finishing.GetAwaiter().GetResult();return true; };
+                        regionDialog.left.Text="16";
+                        Check(regionDialog.left.Text==originalLeft && regionDialog.CopyMaskForVerification() is not null && regionDialog.PendingMarkCount==0 &&
+                              regionDialog.AppliedMarkForVerification(5,5)==1,"Completion during rectangle confirmation preserves newer region",checks);
+                    }
+                    finally { releaseCompletion.Set();regionDialog.BeforeRefineForVerification=null;regionDialog.ConfirmRectangleChangeForVerification=()=>true; }
+                }
+                Check(regionDialog.TryAddMark(6,6),"Region mark can precede close confirmation race",checks);
+                using(var enteredClose=new ManualResetEventSlim())using(var releaseClose=new ManualResetEventSlim())
+                {
+                    regionDialog.BeforeRefineForVerification=_=> { enteredClose.Set();releaseClose.Wait(); };
+                    try {
+                        var finishing=regionDialog.RefineAsync();PumpUntil(()=>enteredClose.IsSet);
+                        regionDialog.ConfirmCloseForVerification=()=> { releaseClose.Set();PumpUntil(()=>finishing.IsCompleted);finishing.GetAwaiter().GetResult();return true; };
+                        regionDialog.Close();
+                        Check(regionDialog.CopyMaskForVerification() is not null && regionDialog.PendingMarkCount==0 &&
+                              regionDialog.AppliedMarkForVerification(6,6)==1 && regionDialog.Status.Text.Contains("Kapatma iptal edildi"),
+                              "Completion during close confirmation preserves newer region",checks);
+                    }
+                    finally { releaseClose.Set();regionDialog.BeforeRefineForVerification=null;regionDialog.ConfirmCloseForVerification=()=>true; }
+                }
+                Check(regionDialog.TryAddMark(5,5),"Region mark can follow completed confirmation race",checks);
                 using(var enteredRefine=new ManualResetEventSlim())using(var releaseRefine=new ManualResetEventSlim())
                 {
                     regionDialog.BeforeRefineForVerification=_=> { enteredRefine.Set();releaseRefine.Wait(); };
