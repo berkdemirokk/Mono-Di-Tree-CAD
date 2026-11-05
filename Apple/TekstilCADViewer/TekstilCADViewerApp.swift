@@ -2683,6 +2683,27 @@ private struct ExperimentalDesignBriefView: View {
         .background(plum.opacity(colorScheme == .dark ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .combine)
     }
+    @ViewBuilder private func measurementOverview(_ overview: ExperimentalDesignBrief.AtelierOverview) -> some View {
+        if typeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 8) {
+                measurementTile("GÖĞÜS", value: overview.bust)
+                measurementTile("BEL", value: overview.waist)
+                measurementTile("KALÇA", value: overview.hips)
+                measurementTile("ELBİSE BOYU", value: overview.length)
+            }
+        } else {
+            VStack(spacing: 8) {
+                HStack(alignment: .top, spacing: 8) {
+                    measurementTile("GÖĞÜS", value: overview.bust)
+                    measurementTile("BEL", value: overview.waist)
+                }
+                HStack(alignment: .top, spacing: 8) {
+                    measurementTile("KALÇA", value: overview.hips)
+                    measurementTile("ELBİSE BOYU", value: overview.length)
+                }
+            }
+        }
+    }
     private func styleCaption(_ option: ExperimentalDesignBrief.DressStyle) -> String {
         switch option {
         case .wrap: return "Kruvaze görünüm · örnek"
@@ -3339,11 +3360,7 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     Text(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı." : summary.description)
                         .font(.subheadline).lineLimit(3).accessibilityLabel("Tarif: \(summary.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Henüz tarif yazılmadı" : summary.description)")
-                    HStack(alignment: .top, spacing: 8) {
-                        measurementTile("GÖĞÜS", value: overview.bust)
-                        measurementTile("BEL", value: overview.waist)
-                        measurementTile("KALÇA", value: overview.hips)
-                    }
+                    measurementOverview(overview)
                     if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
                     if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")
@@ -3431,11 +3448,7 @@ private struct ExperimentalDesignBriefView: View {
                 Section {
                     let overview = ExperimentalDesignBrief.AtelierOverview(draft)
                     Text("Ölçülerini ekle").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                    HStack(alignment: .top, spacing: 8) {
-                        measurementTile("GÖĞÜS", value: overview.bust)
-                        measurementTile("BEL", value: overview.waist)
-                        measurementTile("KALÇA", value: overview.hips)
-                    }
+                    measurementOverview(overview)
                     if overview.hasOtherMeasurements { Text("Ek ölçü veya not girildi.").font(.caption) }
                     if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Kutulardaki ölçüler, ölçü mesajı veya ek notlarla karşılaştırılmadı. Çelişki olup olmadığını tüm metni inceleyerek kontrol edin.")

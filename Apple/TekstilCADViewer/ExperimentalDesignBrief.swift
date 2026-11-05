@@ -288,6 +288,7 @@ enum ExperimentalDesignBrief {
         let bust: String
         let waist: String
         let hips: String
+        let length: String
         let hasOtherMeasurements: Bool
         let hasPendingMeasurements: Bool
         let referenceName: String?
@@ -296,7 +297,8 @@ enum ExperimentalDesignBrief {
         }
         init(_ draft: Draft) {
             bust = Self.display(draft.bust); waist = Self.display(draft.waist); hips = Self.display(draft.hips)
-            hasOtherMeasurements = !draft.length.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draft.otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            length = Self.display(draft.length)
+            hasOtherMeasurements = !draft.otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             hasPendingMeasurements = draft.measurementForm?.hasValues == true
             referenceName = draft.image == nil ? nil : draft.imageName
         }
