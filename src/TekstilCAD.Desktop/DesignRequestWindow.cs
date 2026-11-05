@@ -360,8 +360,23 @@ internal sealed class DesignRequestWindow : Window
         try { suggestion=ChatModelChoice.Review(message); }
         catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { SetStatus("Model ifadesi incelenemedi; mesaj korundu, seçim yapılmadı.");return; }
         if(suggestion.ModelId is null) { if(suggestion.Explanation.Length>0)SetStatus(suggestion.Explanation+" Mesajınız aynen korundu.");return; }
-        if(referenceLoadRunning || (requestVersion==1 && reference is not null))
-        { SetStatus("Mesaj korundu; model seçilmedi. Görsel işlemi tamamlanınca önce 'V2 model kimliğiyle çalış…' ile görseli ve biçim dönüşümünü doğrulayın, ardından model mesajını yeniden gönderin.");return; }
+        if(referenceLoadRunning)
+        { SetStatus("Mesaj korundu; görsel işlemi sürerken model seçilmedi.");return; }
+        if(requestVersion==1 && reference is not null)
+        {
+            var original=Capture();
+            try { _=DesignRequestStorage.SerializeV2(original with { Version=2,ModelId=null },ReferencePhotoDecoder.ValidateV2); }
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or IOException or NotSupportedException)
+            { SetStatus("Mesaj ve görsel korundu; V2 görsel doğrulaması başarısız, model seçilmedi: "+ex.Message);return; }
+            ConvertToV2();
+            if(requestVersion!=2) { SetStatus("V2 dönüşümü uygulanmadı; mesaj korundu, model seçilmedi.");return; }
+            var converted=Capture();
+            if(closed || referenceLoadRunning || chatInput.Text.Length!=0 || !SameRequest(original with { Version=2,ModelId=converted.ModelId },converted))
+            { SetStatus("İstek değişti; korunmuş model mesajı uygulanmadı.");return; }
+            // Re-evaluate the already appended original message, never SendMessage:
+            // that would append it a second time. Model approval remains separate.
+            SuggestChatModel(message);return;
+        }
         var before=Capture();var index=Array.IndexOf(PortableModelIds,suggestion.ModelId);
         if(index<0)return;
         var trackedModel=selectedModelText;var trackedLoaded=selectedModelFromLoaded;var trackedAmbiguous=modelAmbiguous;

@@ -60,6 +60,57 @@ internal static partial class DesktopVerification
             window.ChatInputForVerification.Text="Gömlek elbise istiyorum";window.SendMessageForVerification();
             Check(window.CaptureForVerification().Version==1 && window.CaptureForVerification().ModelId is null && window.StatusForVerification.Text.Contains("onay sırasında değişti"),
                 "Changing V1 tracking state without changing saved request fields invalidates approval",checks);
+            var bitmap=System.Windows.Media.Imaging.BitmapSource.Create(2,2,96,96,System.Windows.Media.PixelFormats.Bgra32,null,
+                new byte[]{0,0,0,255,255,255,255,255,0,0,255,255,0,255,0,255},8);
+            var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+            using var imageStream=new MemoryStream();encoder.Save(imageStream);var imageBytes=imageStream.ToArray();
+            DesignRequest ImageRequest()=>new("Görselli başlangıç","bel çevresi 72 cm",new DesignReference("sentetik.png","image/png",(byte[])imageBytes.Clone()));
+            const string imageMessage="A kesim elbise istiyorum, uzun kollu";
+            void SendImageMessage(string text=imageMessage) { window!.ChatInputForVerification.Text=text;window.SendMessageForVerification(); }
+            void CheckImage(string name)
+            {
+                var captured=window!.CaptureForVerification();
+                Check(captured.Reference!.Data.SequenceEqual(imageBytes) && captured.Measurements=="bel çevresi 72 cm" &&
+                    captured.Prompt.Split(imageMessage,StringSplitOptions.None).Length==2,name,checks);
+            }
+            window.LoadForVerification(ImageRequest());var conversions=0;var choices=0;
+            window.ConfirmV2ConversionForVerification=_=> { conversions++;return true; };
+            window.ConfirmChatModelForVerification=_=> { choices++;return true; };
+            SendImageMessage();
+            Check(conversions==1 && choices==1 && window.CaptureForVerification().Version==2 && window.CaptureForVerification().ModelId=="aline",
+                "Image V1 message validates and converts before separate model approval without resending",checks);
+            CheckImage("Successful conversion and selection preserve original image bytes, notes and one message occurrence");
+            window.LoadForVerification(ImageRequest());choices=0;
+            window.ConfirmV2ConversionForVerification=_=>false;SendImageMessage();
+            Check(window.CaptureForVerification().Version==1 && choices==0,"Cancelling image V2 conversion never reaches model approval",checks);
+            CheckImage("Cancelled conversion preserves image bytes and exactly one message");
+            window.LoadForVerification(ImageRequest());window.ConfirmV2ConversionForVerification=_=>true;window.ConfirmChatModelForVerification=_=>false;
+            SendImageMessage();Check(window.CaptureForVerification().Version==2 && window.CaptureForVerification().ModelId is null,"Cancelling model approval keeps conversion but does not select a model",checks);
+            CheckImage("Cancelled model approval preserves image and one message");
+            foreach(var changeChat in new[]{false,true})
+            {
+                window.LoadForVerification(ImageRequest());choices=0;
+                window.ConfirmChatModelForVerification=_=> { choices++;return true; };
+                window.ConfirmV2ConversionForVerification=_=> { if(changeChat)window.ChatInputForVerification.Text="Yeni bekleyen mesaj";else window.MeasurementsForVerification.Text="bel çevresi 73 cm";return true; };
+                SendImageMessage();
+                Check(window.CaptureForVerification().Version==1 && choices==0 && window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
+                    "Changed "+(changeChat ? "unsent message" : "draft")+" aborts conversion and selection without altering image",checks);
+            }
+            foreach(var text in new[]{"A kesim istemiyorum","A kesim veya anvelop"})
+            {
+                window.LoadForVerification(ImageRequest());conversions=0;choices=0;
+                window.ConfirmV2ConversionForVerification=_=> { conversions++;return true; };
+                window.ConfirmChatModelForVerification=_=> { choices++;return true; };
+                SendImageMessage(text);
+                Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 && window.CaptureForVerification().Prompt.EndsWith(text,StringComparison.Ordinal) && window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
+                    "Negative or multiple model message does not trigger image conversion: "+text,checks);
+            }
+            var trailingBytes=imageBytes.Concat(new byte[]{0}).ToArray();
+            window.LoadForVerification(new DesignRequest("Görselli başlangıç","",new DesignReference("sentetik.png","image/png",trailingBytes)));
+            conversions=0;choices=0;SendImageMessage();
+            Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 &&
+                window.CaptureForVerification().Reference!.Data.SequenceEqual(trailingBytes) && window.StatusForVerification.Text.Contains("doğrulaması başarısız"),
+                "PNG trailing data fails the existing V2 image gate before conversion and retains original bytes",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

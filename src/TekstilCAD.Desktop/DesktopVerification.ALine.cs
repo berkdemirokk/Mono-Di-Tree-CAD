@@ -29,6 +29,9 @@ internal static partial class DesktopVerification
             request.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null,null,2));
             Check(!request.CanPreviewALineForVerification,"Missing V2 identity does not infer an A-line model from text",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
+            Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
+                window.KnownTotalsForVerification.Text.Contains("ön ve arka") && window.FieldsForVerification.All(f=>f.Text.Length==0),
+                "Existing waist and hip totals are shown initially without inventing or filling front/back arcs",checks);
             static void Click(Button b)=>b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             static void Fill(ALinePanelPreviewWindow w,bool cm)
             {

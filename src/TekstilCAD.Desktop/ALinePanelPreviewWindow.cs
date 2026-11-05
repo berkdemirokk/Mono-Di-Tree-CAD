@@ -20,12 +20,22 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal TextBlock SummaryForVerification { get; }
     internal TextBlock StatusForVerification { get; }
     internal Canvas CanvasForVerification { get; }
+    internal TextBlock KnownTotalsForVerification { get; }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
         StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(16) };
         Content=new ScrollViewer { Content=body,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+        KnownTotalsForVerification=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,10) };
+        try
+        {
+            var known=ALineBodyTotals.Review(promptSnapshot,measurementSnapshot);
+            string Display(decimal? mm)=>mm is decimal value ? $"{value/10m:G} cm ({value:G} mm)" : "Eksik veya belirsiz; notları kontrol edin";
+            KnownTotalsForVerification.Text=$"İstekteki toplam BEDEN bel çevresi: {Display(known.WaistMm)}\nİstekteki toplam BEDEN kalça çevresi: {Display(known.HipMm)}\nBunlar açılış anındaki notlardan okunmuştur; ölçüm doğruluğu onaylanmadı. Toplam çevre ön ve arka dağılımını belirtmez. Bu yüzden ön ve arka yayları yan dikiş konumları arasında ayrı ölçmeniz gerekir; yarı yarıya dağıtılmadı, aşağıdaki alanlar otomatik doldurulmadı.";
+        }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { KnownTotalsForVerification.Text="İstek ölçüleri zaman aşımı nedeniyle okunamadı; hiçbir alan doldurulmadı."; }
+        body.Children.Add(KnownTotalsForVerification);
         body.Children.Add(new TextBlock { Text="Tam elbise kalıbı değildir. Sağ/sol simetri varsayılır: ön ve arka yaylar ikiye bölünür; sağ/sol asimetri desteklenmez. Ön/arka yayları BEDEN üzerinde, amaçlanan yan dikiş konumları arasında ayrı ölçün; bu yaylara bolluk dahil etmeyin. Bollukları ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür; bolluk dahildir. Elbise boyu yerine BELDEN etek boyunu girin. Pencere kapanınca girdiler saklanmaz.",TextWrapping=TextWrapping.Wrap });
         var unit=new ComboBox { ItemsSource=new[]{"cm — santimetre","mm — milimetre"},SelectedIndex=-1,Margin=new Thickness(0,4,0,8) };
         body.Children.Add(new Label { Content="Tüm alanlar için birim seçin (zorunlu)",Target=unit });body.Children.Add(unit);
