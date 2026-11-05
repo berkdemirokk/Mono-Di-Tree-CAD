@@ -58,5 +58,3 @@ public static class DartClosure
         return x * x + y * y;
     }
 }
-
-

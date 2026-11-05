@@ -17,4 +17,3 @@ Doğrulama: `dotnet run --project experiments/dart-closure-geometry/DartClosureG
 Kaynak konturu geçersizse, kimlik veya bölüm eksikse engellenir; dönüştürülmüş kalan bütün çizgiler arasında kesişme/çakışma ve bölüm sınırını geçen kenarlar ayrıca raporlanır. Pens bacakları kaldırılır, uçlar zorla birleştirilmez. Eğriler, döndürme hatasının sertifikasyonu ve gerçek katlanma geometrisi desteklenmez; dolayısıyla temiz görünen bir inceleme bile `blocked` durumundadır. Bu tanılama üretime veya dikişe onay vermez.
 
 Giriş dizileri Capture boyunca çağıran tarafından sabit tutulmalıdır; eşzamanlı mutasyon sırasında atomik anlık görüntü garantisi yoktur. Capture sonrasında iç kopya kullanılır. Temas kategorileri sadece temsil edilen binary64 koordinatlar için tam aritmetik kullanır; dönüşümün yuvarlama hatası ve fiziksel temas belirsizdir. Pens bacakları çıkarılınca 0 ve 3 numaralı dış kenarlar aday ortak uçta komşu sayılır; uçlar birleştirilmez.
-
