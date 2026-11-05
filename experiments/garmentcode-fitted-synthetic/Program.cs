@@ -151,6 +151,14 @@ try
     var cross=ExactBezierSeparation.Compare([new(0,0),new(2,2)],[new(0,2),new(2,0)],false,8,1000);
     if(cross!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier crossing must stay unresolved");
     if(!ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(1,2),new(2,0)]) || ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(2,2),new(-2,2),new(0,0)])) throw new Exception("Bezier monotonicity");
+    // Both axes fail monotonicity: the final 2 -> 1 step must be checked.
+    if(ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(2,0),new(1,0)]))throw new Exception("Quadratic final reversal accepted");
+    if(ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(.25,0),new(2,0),new(1,0)]))throw new Exception("Cubic final reversal accepted");
+    if(!ExactBezierSeparation.HasMonotoneCoordinate([new(3,0),new(2,0),new(2,0),new(1,0)]))throw new Exception("Descending monotone curve rejected");
+    if(!ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(2,1),new(1,2)]))throw new Exception("Independent monotone axis rejected");
+    var reversalContour=new[]{new BodyCurveStudy.Edge("reversal",0,"Q",0,0,1,0,[(2,0)],null),new BodyCurveStudy.Edge("reversal",1,"L",1,0,1,1,[],null),new BodyCurveStudy.Edge("reversal",2,"L",1,1,0,1,[],null),new BodyCurveStudy.Edge("reversal",3,"L",0,1,0,0,[],null)};
+    var reversalStudy=BodyCurveStudy.Inspect("reversal",reversalContour,4);
+    if(reversalStudy.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented || reversalStudy.NonMonotone!=1 || reversalStudy.Status!="unresolved" || reversalStudy.ExportAllowed || reversalStudy.ProductionAllowed)throw new Exception("Reversing contour not reported");
     if(ExactBezierSeparation.Compare([new(0,0),new(1,1),new(2,0)],[new(0,1),new(1,0),new(2,1)],false,0,1)!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier budget fail closed");
     foreach(string id in new[]{"synthetic-base","synthetic-distinct"}) foreach(bool left in new[]{false,true})
     {

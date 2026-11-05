@@ -48,8 +48,13 @@ internal static class ExactBezierSeparation
         var c=Build(controls);
         bool Axis(Func<V,Q> select)
         {
-            var p=c.C.Select(select).ToArray(); int sign=p[^1].CompareTo(p[0]);
-            return sign!=0 && Enumerable.Range(1,p.Length-1).All(i=>sign*p[i].CompareTo(p[i-1])>=0);
+            var p=c.C.Select(select).ToArray();int sign=p[^1].CompareTo(p[0]);
+            if(sign==0)return false;
+            // Include every consecutive pair, especially the last control
+            // point and the endpoint; a backwards step fails closed.
+            for(int i=1;i<p.Length;i++)
+                if(sign*p[i].CompareTo(p[i-1])<0)return false;
+            return true;
         }
         return Axis(p=>p.X)||Axis(p=>p.Y);
     }
