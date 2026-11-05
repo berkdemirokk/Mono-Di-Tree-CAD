@@ -7,7 +7,7 @@ from assets.garment_programs.bodice import BodiceHalf
 from assets.garment_programs.meta_garment import MetaGarment
 
 def measure(interface):
-    return {'length_cm':float(interface.edges.length()),'projected_cm':float(interface.projecting_lengths().sum()),
+    return {'edge_count':len(interface.edges),'length_cm':float(interface.edges.length()),'projected_cm':float(interface.projecting_lengths().sum()),
             'ruffle': [{'coefficient':float(r['coeff']),'section':[int(x) for x in r['sec']]} for r in interface.ruffle]}
 def capture(obj):
     return {side:{name:measure(panel.interfaces[name]) for name in ('outside','shoulder','bottom')}

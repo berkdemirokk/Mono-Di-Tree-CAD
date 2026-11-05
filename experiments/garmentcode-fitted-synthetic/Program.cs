@@ -370,17 +370,31 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void ValidateTraceRuffles(JsonElement trace)
+    {
+        Need(trace.ValueKind==JsonValueKind.Object && trace.TryGetProperty("edge_count",out var countElement) && countElement.TryGetInt32(out var edgeCount) && edgeCount>0,"trace edge count");
+        int expected=trace.GetProperty("edge_count").GetInt32();
+        Need(trace.TryGetProperty("ruffle",out var segments) && segments.ValueKind==JsonValueKind.Array && segments.GetArrayLength()>0,"trace ruffle sections missing");
+        int covered=0;
+        foreach(var segment in segments.EnumerateArray()) {
+            Need(segment.ValueKind==JsonValueKind.Object && segment.TryGetProperty("coefficient",out var c) && c.TryGetDouble(out var f) && double.IsFinite(f) && f>0,"trace ruffle coefficient");
+            Need(segment.TryGetProperty("section",out var interval) && interval.ValueKind==JsonValueKind.Array && interval.GetArrayLength()==2,"trace ruffle section");
+            Need(interval[0].TryGetInt32(out var start) && interval[1].TryGetInt32(out var end) && start==covered && end>start && end<=expected,"trace ruffle coverage");
+            covered=interval[1].GetInt32();
+        }
+        Need(covered==expected,"trace ruffle incomplete");
+    }
     internal static void CheckSeamCausality()
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.seam-causality.json") ?? throw new InvalidDataException("Missing seam trace");
         using var reader=new StreamReader(stream,Encoding.UTF8,true);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
-        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="117866ADEAC64971C1CB5997FE45BC3ECBB7ED0334FA918D620B18ED6EC08F5B","seam trace hash");
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="D5EC8B4AF4CD1DC3E3EEEC0F6DC10196EB2C83405B6CA52DBE5D474DC4BA3C35","seam trace hash");
         using var doc=JsonDocument.Parse(text);var root=doc.RootElement;
         Need(root.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31" && root.GetProperty("numpy").GetString()=="1.26.4" && root.GetProperty("scipy").GetString()=="1.17.1","seam trace provenance");
         var cases=root.GetProperty("cases").EnumerateArray().ToDictionary(x=>x.GetProperty("id").GetString()!,StringComparer.Ordinal);
         Need(cases.Keys.ToHashSet().SetEquals(new[]{"synthetic-base","synthetic-distinct","synthetic-front-length-plus-one","synthetic-shoulder-18","synthetic-shoulder-30"}),"seam trace cases");
         double Projected(JsonElement e)=>e.GetProperty("projected_cm").GetDouble();
-        bool UnitRuffle(JsonElement e)=>e.GetProperty("ruffle").EnumerateArray().All(r=>r.GetProperty("coefficient").GetDouble()==1);
+        bool UnitRuffle(JsonElement e) { ValidateTraceRuffles(e);return e.GetProperty("ruffle").EnumerateArray().All(r=>r.GetProperty("coefficient").GetDouble()==1); }
         var gaps=new Dictionary<string,double>();
         foreach(var (id,c) in cases) {
             double waist=c.GetProperty("body_waist_cm").GetDouble(),backWaist=c.GetProperty("body_back_waist_cm").GetDouble();
@@ -404,11 +418,34 @@ internal static class Validator
                 if(part=="outside")Need(Math.Abs(fAfter-Projected(afterCollar.GetProperty("front").GetProperty(part)))<1e-7 && Math.Abs(bAfter-Projected(afterCollar.GetProperty("back").GetProperty(part)))<1e-7,"collar altered outside seam");
             }
             var skirt=c.GetProperty("skirt_sides").EnumerateArray().ToArray();Need(skirt.Length==2,"skirt side count");
-            foreach(var side in skirt) {
-                var a=side.GetProperty("a");var bside=side.GetProperty("b");
-                Need(UnitRuffle(a) && bside.GetProperty("ruffle").EnumerateArray().Count(r=>r.GetProperty("coefficient").GetDouble()==1.05)==1 && Math.Abs(Projected(a)-Projected(bside))<1e-5,"encoded skirt side projection");
+            for(int i=0;i<skirt.Length;i++) {
+                var a=skirt[i].GetProperty("a");var bside=skirt[i].GetProperty("b");ValidateTraceRuffles(bside);
+                var sections=bside.GetProperty("ruffle").EnumerateArray().ToArray();
+                Need(UnitRuffle(a) && bside.GetProperty("edge_count").GetInt32()==2 && sections.Length==2 &&
+                    sections[0].GetProperty("coefficient").GetDouble()==(i==0?1:1.05) && sections[1].GetProperty("coefficient").GetDouble()==(i==0?1.05:1) &&
+                    sections[0].GetProperty("section")[0].GetInt32()==0 && sections[0].GetProperty("section")[1].GetInt32()==1 &&
+                    sections[1].GetProperty("section")[0].GetInt32()==1 && sections[1].GetProperty("section")[1].GetInt32()==2 &&
+                    Math.Abs(Projected(a)-Projected(bside))<1e-5,"encoded skirt side projection");
             }
         }
+        var sample=cases["synthetic-base"].GetProperty("upper_waist");
+        void RejectTrace(Action<JsonObject> mutate) {
+            var obj=JsonNode.Parse(sample.GetRawText())!.AsObject();mutate(obj);
+            using var changed=JsonDocument.Parse(obj.ToJsonString());
+            try { ValidateTraceRuffles(changed.RootElement);throw new Exception("Malformed trace ruffle accepted"); } catch(InvalidDataException) { }
+        }
+        RejectTrace(x=>x["ruffle"]=new JsonArray());
+        RejectTrace(x=>x.Remove("ruffle"));
+        RejectTrace(x=>x.Remove("edge_count"));
+        RejectTrace(x=>x["edge_count"]=0);
+        RejectTrace(x=>x["ruffle"]![0]!.AsObject().Remove("coefficient"));
+        RejectTrace(x=>x["ruffle"]![0]!.AsObject().Remove("section"));
+        RejectTrace(x=>x["ruffle"]![0]!["section"]![1]=0);
+        RejectTrace(x=>x["ruffle"]!.AsArray().RemoveAt(0));
+        RejectTrace(x=>x["ruffle"]![0]!["section"]![1]=1);
+        RejectTrace(x=>x["ruffle"]![1]!["section"]![0]=1);
+        RejectTrace(x=>x["ruffle"]!.AsArray()[3]!["section"]![1]=10000);
+        RejectTrace(x=>x["ruffle"]![0]!["coefficient"]=0);
         Need(Math.Abs(gaps["synthetic-base"]-gaps["synthetic-front-length-plus-one"])<1e-7 && gaps["synthetic-shoulder-18"]<gaps["synthetic-base"] && gaps["synthetic-base"]<gaps["synthetic-shoulder-30"],"synthetic waist sensitivity");
         using var backStream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back stages");
         using var backReader=new StreamReader(backStream,Encoding.UTF8,true);string backText=backReader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');

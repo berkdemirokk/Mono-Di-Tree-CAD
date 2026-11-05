@@ -15,6 +15,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 38.43222375625897,
                 "projected_cm": 38.43222375625897,
                 "ruffle": [
@@ -28,6 +29,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.413625368196502,
                 "projected_cm": 19.413625368196502,
                 "ruffle": [
@@ -41,6 +43,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -56,6 +59,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 34.61068401982393,
                 "projected_cm": 34.61068401982393,
                 "ruffle": [
@@ -69,6 +73,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 25.884833824262003,
                 "projected_cm": 25.884833824262003,
                 "ruffle": [
@@ -82,6 +87,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -99,6 +105,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.207446785085423,
                 "projected_cm": 19.207446785085423,
                 "ruffle": [
@@ -112,6 +119,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.155715914754754,
                 "projected_cm": 18.155715914754754,
                 "ruffle": [
@@ -125,6 +133,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -140,6 +149,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -153,6 +163,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.335090692902607,
                 "projected_cm": 18.335090692902607,
                 "ruffle": [
@@ -166,6 +177,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -187,6 +199,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.207446785085423,
                 "projected_cm": 19.207446785085423,
                 "ruffle": [
@@ -200,6 +213,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.155715914754754,
                 "projected_cm": 18.155715914754754,
                 "ruffle": [
@@ -213,6 +227,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -228,6 +243,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -241,6 +257,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.335090692902607,
                 "projected_cm": 18.335090692902607,
                 "ruffle": [
@@ -254,6 +271,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -271,6 +289,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.207446785085423,
                 "projected_cm": 19.207446785085423,
                 "ruffle": [
@@ -284,6 +303,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.507540596087262,
                 "projected_cm": 6.507540596087262,
                 "ruffle": [
@@ -297,6 +317,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -312,6 +333,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -325,6 +347,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.686915507627468,
                 "projected_cm": 6.686915507627468,
                 "ruffle": [
@@ -338,6 +361,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -355,6 +379,7 @@
         }
       ],
       "upper_waist": {
+        "edge_count": 10,
         "length_cm": 80.35710875438605,
         "projected_cm": 80.35710875438605,
         "ruffle": [
@@ -389,6 +414,7 @@
         ]
       },
       "lower_waist": {
+        "edge_count": 10,
         "length_cm": 79.99999999999999,
         "projected_cm": 80.0,
         "ruffle": [
@@ -411,6 +437,7 @@
       "skirt_sides": [
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227451101,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -424,6 +451,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.672894388236564,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -446,6 +474,7 @@
         },
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227468076,
             "projected_cm": 57.51704227468076,
             "ruffle": [
@@ -459,6 +488,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.67289438841496,
             "projected_cm": 57.51704227468092,
             "ruffle": [
@@ -502,6 +532,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 40.68442474169285,
                 "projected_cm": 40.68442474169285,
                 "ruffle": [
@@ -515,6 +546,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.413625368196502,
                 "projected_cm": 19.413625368196502,
                 "ruffle": [
@@ -528,6 +560,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 20.0,
                 "projected_cm": 20.0,
                 "ruffle": [
@@ -543,6 +576,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 37.60311853013408,
                 "projected_cm": 37.60311853013408,
                 "ruffle": [
@@ -556,6 +590,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 23.188496967568042,
                 "projected_cm": 23.188496967568042,
                 "ruffle": [
@@ -569,6 +604,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 17.157785321343944,
                 "projected_cm": 17.157785321343944,
                 "ruffle": [
@@ -586,6 +622,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 21.328166286132813,
                 "projected_cm": 21.328166286132813,
                 "ruffle": [
@@ -599,6 +636,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.142503333001383,
                 "projected_cm": 18.142503333001383,
                 "ruffle": [
@@ -612,6 +650,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 20.0,
                 "projected_cm": 20.0,
                 "ruffle": [
@@ -627,6 +666,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 20.82123637226094,
                 "projected_cm": 20.82123637226094,
                 "ruffle": [
@@ -640,6 +680,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.33509069074967,
                 "projected_cm": 18.33509069074967,
                 "ruffle": [
@@ -653,6 +694,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 17.157785321343944,
                 "projected_cm": 17.157785321343944,
                 "ruffle": [
@@ -674,6 +716,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 21.328166286132813,
                 "projected_cm": 21.328166286132813,
                 "ruffle": [
@@ -687,6 +730,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.142503333001383,
                 "projected_cm": 18.142503333001383,
                 "ruffle": [
@@ -700,6 +744,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 20.0,
                 "projected_cm": 20.0,
                 "ruffle": [
@@ -715,6 +760,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 20.82123637226094,
                 "projected_cm": 20.82123637226094,
                 "ruffle": [
@@ -728,6 +774,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.33509069074967,
                 "projected_cm": 18.33509069074967,
                 "ruffle": [
@@ -741,6 +788,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 17.157785321343944,
                 "projected_cm": 17.157785321343944,
                 "ruffle": [
@@ -758,6 +806,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 21.328166286132813,
                 "projected_cm": 21.328166286132813,
                 "ruffle": [
@@ -771,6 +820,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.494327953400815,
                 "projected_cm": 6.494327953400815,
                 "ruffle": [
@@ -784,6 +834,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 20.0,
                 "projected_cm": 20.0,
                 "ruffle": [
@@ -799,6 +850,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 20.82123637226094,
                 "projected_cm": 20.82123637226094,
                 "ruffle": [
@@ -812,6 +864,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.686915509318583,
                 "projected_cm": 6.686915509318583,
                 "ruffle": [
@@ -825,6 +878,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 17.157785321343944,
                 "projected_cm": 17.157785321343944,
                 "ruffle": [
@@ -842,6 +896,7 @@
         }
       ],
       "upper_waist": {
+        "edge_count": 10,
         "length_cm": 74.31557064268789,
         "projected_cm": 74.31557064268789,
         "ruffle": [
@@ -876,6 +931,7 @@
         ]
       },
       "lower_waist": {
+        "edge_count": 10,
         "length_cm": 74.0,
         "projected_cm": 74.0,
         "ruffle": [
@@ -898,6 +954,7 @@
       "skirt_sides": [
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 56.717042274511016,
             "projected_cm": 56.717042274511016,
             "ruffle": [
@@ -911,6 +968,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 57.87289438823657,
             "projected_cm": 56.717042274511016,
             "ruffle": [
@@ -933,6 +991,7 @@
         },
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 56.717042274680765,
             "projected_cm": 56.717042274680765,
             "ruffle": [
@@ -946,6 +1005,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 57.87289438841496,
             "projected_cm": 56.71704227468092,
             "ruffle": [
@@ -982,6 +1042,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 38.43222375697112,
                 "projected_cm": 38.43222375697112,
                 "ruffle": [
@@ -995,6 +1056,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.413625368196502,
                 "projected_cm": 19.413625368196502,
                 "ruffle": [
@@ -1008,6 +1070,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1023,6 +1086,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 34.61068401982393,
                 "projected_cm": 34.61068401982393,
                 "ruffle": [
@@ -1036,6 +1100,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 25.884833824262003,
                 "projected_cm": 25.884833824262003,
                 "ruffle": [
@@ -1049,6 +1114,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -1066,6 +1132,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.20744678456445,
                 "projected_cm": 19.20744678456445,
                 "ruffle": [
@@ -1079,6 +1146,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.15571591463889,
                 "projected_cm": 18.15571591463889,
                 "ruffle": [
@@ -1092,6 +1160,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1107,6 +1176,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -1120,6 +1190,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.335090692902607,
                 "projected_cm": 18.335090692902607,
                 "ruffle": [
@@ -1133,6 +1204,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -1154,6 +1226,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.20744678456445,
                 "projected_cm": 19.20744678456445,
                 "ruffle": [
@@ -1167,6 +1240,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.15571591463889,
                 "projected_cm": 18.15571591463889,
                 "ruffle": [
@@ -1180,6 +1254,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1195,6 +1270,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -1208,6 +1284,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.335090692902607,
                 "projected_cm": 18.335090692902607,
                 "ruffle": [
@@ -1221,6 +1298,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -1238,6 +1316,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.20744678456445,
                 "projected_cm": 19.20744678456445,
                 "ruffle": [
@@ -1251,6 +1330,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.507540590888978,
                 "projected_cm": 6.507540590888978,
                 "ruffle": [
@@ -1264,6 +1344,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1279,6 +1360,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.838867420791487,
                 "projected_cm": 18.838867420791487,
                 "ruffle": [
@@ -1292,6 +1374,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.686915507627468,
                 "projected_cm": 6.686915507627468,
                 "ruffle": [
@@ -1305,6 +1388,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.178554377193024,
                 "projected_cm": 18.178554377193024,
                 "ruffle": [
@@ -1322,6 +1406,7 @@
         }
       ],
       "upper_waist": {
+        "edge_count": 10,
         "length_cm": 80.35710875438605,
         "projected_cm": 80.35710875438605,
         "ruffle": [
@@ -1356,6 +1441,7 @@
         ]
       },
       "lower_waist": {
+        "edge_count": 10,
         "length_cm": 79.99999999999999,
         "projected_cm": 80.0,
         "ruffle": [
@@ -1378,6 +1464,7 @@
       "skirt_sides": [
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227451101,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -1391,6 +1478,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.672894388236564,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -1413,6 +1501,7 @@
         },
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227468076,
             "projected_cm": 57.51704227468076,
             "ruffle": [
@@ -1426,6 +1515,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.67289438841496,
             "projected_cm": 57.51704227468092,
             "ruffle": [
@@ -1462,6 +1552,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 38.4322237563104,
                 "projected_cm": 38.4322237563104,
                 "ruffle": [
@@ -1475,6 +1566,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 18.92632003628881,
                 "projected_cm": 18.92632003628881,
                 "ruffle": [
@@ -1488,6 +1580,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1503,6 +1596,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 35.08532319743743,
                 "projected_cm": 35.08532319743743,
                 "ruffle": [
@@ -1516,6 +1610,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 25.235093381718414,
                 "projected_cm": 25.235093381718414,
                 "ruffle": [
@@ -1529,6 +1624,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.11564291214229,
                 "projected_cm": 18.11564291214229,
                 "ruffle": [
@@ -1546,6 +1642,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.096931287089898,
                 "projected_cm": 19.096931287089898,
                 "ruffle": [
@@ -1559,6 +1656,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 17.738660557938406,
                 "projected_cm": 17.738660557938406,
                 "ruffle": [
@@ -1572,6 +1670,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1587,6 +1686,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.759760906791414,
                 "projected_cm": 18.759760906791414,
                 "ruffle": [
@@ -1600,6 +1700,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 17.874857862814732,
                 "projected_cm": 17.874857862814732,
                 "ruffle": [
@@ -1613,6 +1714,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.11564291214229,
                 "projected_cm": 18.11564291214229,
                 "ruffle": [
@@ -1634,6 +1736,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.096931287089898,
                 "projected_cm": 19.096931287089898,
                 "ruffle": [
@@ -1647,6 +1750,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 17.738660557938406,
                 "projected_cm": 17.738660557938406,
                 "ruffle": [
@@ -1660,6 +1764,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1675,6 +1780,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.759760906791414,
                 "projected_cm": 18.759760906791414,
                 "ruffle": [
@@ -1688,6 +1794,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 17.874857862814732,
                 "projected_cm": 17.874857862814732,
                 "ruffle": [
@@ -1701,6 +1808,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.11564291214229,
                 "projected_cm": 18.11564291214229,
                 "ruffle": [
@@ -1718,6 +1826,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.096931287089898,
                 "projected_cm": 19.096931287089898,
                 "ruffle": [
@@ -1731,6 +1840,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.382868274298239,
                 "projected_cm": 6.382868274298239,
                 "ruffle": [
@@ -1744,6 +1854,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1759,6 +1870,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 18.759760906791414,
                 "projected_cm": 18.759760906791414,
                 "ruffle": [
@@ -1772,6 +1884,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.5190658686502605,
                 "projected_cm": 6.5190658686502605,
                 "ruffle": [
@@ -1785,6 +1898,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.11564291214229,
                 "projected_cm": 18.11564291214229,
                 "ruffle": [
@@ -1802,6 +1916,7 @@
         }
       ],
       "upper_waist": {
+        "edge_count": 10,
         "length_cm": 80.23128582428457,
         "projected_cm": 80.23128582428457,
         "ruffle": [
@@ -1836,6 +1951,7 @@
         ]
       },
       "lower_waist": {
+        "edge_count": 10,
         "length_cm": 79.99999999999999,
         "projected_cm": 80.0,
         "ruffle": [
@@ -1858,6 +1974,7 @@
       "skirt_sides": [
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227451101,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -1871,6 +1988,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.672894388236564,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -1893,6 +2011,7 @@
         },
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227468076,
             "projected_cm": 57.51704227468076,
             "ruffle": [
@@ -1906,6 +2025,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.67289438841496,
             "projected_cm": 57.51704227468092,
             "ruffle": [
@@ -1942,6 +2062,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 38.43222375637914,
                 "projected_cm": 38.43222375637914,
                 "ruffle": [
@@ -1955,6 +2076,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 20.784609690826528,
                 "projected_cm": 20.784609690826528,
                 "ruffle": [
@@ -1968,6 +2090,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -1983,6 +2106,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 33.57073975969711,
                 "projected_cm": 33.57073975969711,
                 "ruffle": [
@@ -1996,6 +2120,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 27.71281292110204,
                 "projected_cm": 27.71281292110204,
                 "ruffle": [
@@ -2009,6 +2134,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.364998082808167,
                 "projected_cm": 18.364998082808167,
                 "ruffle": [
@@ -2026,6 +2152,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.47668051936562,
                 "projected_cm": 19.47668051936562,
                 "ruffle": [
@@ -2039,6 +2166,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.33439830374188,
                 "projected_cm": 19.33439830374188,
                 "ruffle": [
@@ -2052,6 +2180,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -2067,6 +2196,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.01219142093243,
                 "projected_cm": 19.01219142093243,
                 "ruffle": [
@@ -2080,6 +2210,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.62990926399331,
                 "projected_cm": 19.62990926399331,
                 "ruffle": [
@@ -2093,6 +2224,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.364998082808167,
                 "projected_cm": 18.364998082808167,
                 "ruffle": [
@@ -2114,6 +2246,7 @@
           "before": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.47668051936562,
                 "projected_cm": 19.47668051936562,
                 "ruffle": [
@@ -2127,6 +2260,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.33439830374188,
                 "projected_cm": 19.33439830374188,
                 "ruffle": [
@@ -2140,6 +2274,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -2155,6 +2290,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.01219142093243,
                 "projected_cm": 19.01219142093243,
                 "ruffle": [
@@ -2168,6 +2304,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 19.62990926399331,
                 "projected_cm": 19.62990926399331,
                 "ruffle": [
@@ -2181,6 +2318,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.364998082808167,
                 "projected_cm": 18.364998082808167,
                 "ruffle": [
@@ -2198,6 +2336,7 @@
           "after": {
             "front": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.47668051936562,
                 "projected_cm": 19.47668051936562,
                 "ruffle": [
@@ -2211,6 +2350,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 6.8636324712190895,
                 "projected_cm": 6.8636324712190895,
                 "ruffle": [
@@ -2224,6 +2364,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 2,
                 "length_cm": 22.0,
                 "projected_cm": 22.0,
                 "ruffle": [
@@ -2239,6 +2380,7 @@
             },
             "back": {
               "outside": {
+                "edge_count": 2,
                 "length_cm": 19.01219142093243,
                 "projected_cm": 19.01219142093243,
                 "ruffle": [
@@ -2252,6 +2394,7 @@
                 ]
               },
               "shoulder": {
+                "edge_count": 1,
                 "length_cm": 7.159143482809114,
                 "projected_cm": 7.159143482809114,
                 "ruffle": [
@@ -2265,6 +2408,7 @@
                 ]
               },
               "bottom": {
+                "edge_count": 3,
                 "length_cm": 18.364998082808167,
                 "projected_cm": 18.364998082808167,
                 "ruffle": [
@@ -2282,6 +2426,7 @@
         }
       ],
       "upper_waist": {
+        "edge_count": 10,
         "length_cm": 80.72999616561634,
         "projected_cm": 80.72999616561634,
         "ruffle": [
@@ -2316,6 +2461,7 @@
         ]
       },
       "lower_waist": {
+        "edge_count": 10,
         "length_cm": 79.99999999999999,
         "projected_cm": 80.0,
         "ruffle": [
@@ -2338,6 +2484,7 @@
       "skirt_sides": [
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227451101,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -2351,6 +2498,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.672894388236564,
             "projected_cm": 57.51704227451101,
             "ruffle": [
@@ -2373,6 +2521,7 @@
         },
         {
           "a": {
+            "edge_count": 2,
             "length_cm": 57.51704227468076,
             "projected_cm": 57.51704227468076,
             "ruffle": [
@@ -2386,6 +2535,7 @@
             ]
           },
           "b": {
+            "edge_count": 2,
             "length_cm": 58.67289438841496,
             "projected_cm": 57.51704227468092,
             "ruffle": [

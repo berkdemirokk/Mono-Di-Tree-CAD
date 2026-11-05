@@ -37,3 +37,9 @@ Kaynakta bir katsayı veya açık tasarım talimatı olmayan bağlantılarda omu
 `capture_seam_causality.py` mevcut sentetik kaynak üreticisinin commit/dosya kontrolünden sonra beş sabit örneği bellekte hesaplar; gövdenin sağ yarısında kol evi ve yaka öncesi/sonrası arayüzleri ve eteğin bel/yan izdüşümlerini kaydeder. `seam-causality.json` kaynak commit’i, NumPy/SciPy sürümleri ve yerel SHA-256 ile testte sabitlenmiştir; bağımsız imza değildir. Kaynak `back-waist-stages.json` ile bel ayrışımı ve iki mevcut kaynak grafiğindeki omuz/yan farkları regresyonda kontrol edilir. Yalnız Python soket çağrıları engellenmiştir; bu, işletim sistemi düzeyinde ağ izolasyonu iddiası değildir.
 
 Tüm sonuçlar `Unverified`/`unresolved`; gerçek ölçüm protokolü, kumaş ve beden provası doğrulanmadı. Üretim, dışa aktarma ve plotter kapalıdır.
+
+## Büzgü bölüm kapsamı doğrulaması
+
+Kaynak aşama izi her arayüz için kenar sayısını da kaydeder. Test, bel, omuz, yan ve etek arayüzlerinde büzgü bölümlerinin boş olmadığını, ilk kenardan başlayıp son kenarda bitecek şekilde sıralı, boşluksuz, çakışmasız ve sınırlar içinde olduğunu; katsayıların sonlu ve pozitif olduğunu doğrular. Birim katsayı iddiası bu kapsam denetiminden **sonra** değerlendirilir. Etek yanındaki iki bölüm için `1` ve `1,05` sırası ve aralıkları da ayrı sınanır.
+
+Boş veya eksik bölüm listesi, eksik/sıfır kenar sayısı, boşluk, çakışma, sıfır uzunluklu bölüm, kenar sınırını aşma ve eksik/geçersiz katsayı negatif fixture testlerinde reddedilir. Bu kontrol yalnız kaydedilen arayüz bölüm kapsamı ve katsayıları içindir; gerçek kumaş büzgüsü, dikiş uygunluğu veya üretim doğrulaması değildir.

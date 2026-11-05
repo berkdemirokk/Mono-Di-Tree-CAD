@@ -294,3 +294,5 @@ Sentetik testler eksik/null alan, yanlış birim, türetilmiş alan, tekrar, tek
 ## Sentetik dikiş farkı neden analizi
 
 [Kaynak aşama izi ve dikiş farkı analizi](SEAM_CAUSALITY_TR.md), üst–etek bel farkını kaynak arka bel eğrisi/pens sonrası arayüz fazlasıyla sayısal olarak ayrıştırır; kol evi ve yaka kesimlerinin omuz/yan arayüzlerine etkisini beş sentetik örnekte gösterir. Seçili arka etek yanındaki `1,05` kaynakta açık bölüm katsayısıdır; omuz, gövde yanı ve üst–etek bel farkları için kaydedilmiş katsayı `1` olup fiziksel rahatlık niyeti bu verilerden çıkarılamaz. Bunlar üretim talimatları değildir; ölçüye bağlı bir düzeltici henüz uygulanmamıştır.
+
+Büzgü katsayısı araştırma izi artık arayüz kenar sayısını ve bölümlerin boşluksuz, çakışmasız tam kapsamını da denetler; boş veya eksik bölüm `1` katsayılı kabul edilmez. Negatif fixture testleri [dikiş farkı analizinde](SEAM_CAUSALITY_TR.md) açıklanır. Üretim kapalıdır.
