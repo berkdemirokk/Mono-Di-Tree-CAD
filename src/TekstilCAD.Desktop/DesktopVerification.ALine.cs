@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using Polygon = System.Windows.Shapes.Polygon;
 
 namespace TekstilCAD.Desktop;
@@ -15,6 +16,10 @@ internal static partial class DesktopVerification
         var owner=new Window();ALinePanelPreviewWindow? window=null;ALinePanelPreviewWindow? conflict=null;
         try
         {
+            // WPF requires an HWND before another Window can name this owner.
+            // EnsureHandle creates the native source without Show/ShowDialog.
+            var ownerHandle=new WindowInteropHelper(owner).EnsureHandle();
+            Check(ownerHandle!=IntPtr.Zero && !owner.IsVisible,"Owner has a native handle without being shown",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             static void Click(Button b)=>b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             static void Fill(ALinePanelPreviewWindow w,bool cm)
