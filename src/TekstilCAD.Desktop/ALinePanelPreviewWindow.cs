@@ -36,6 +36,26 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal bool SaveSelectedWorkForVerification(Func<string?> selectPath)=>saveSelectedWork(selectPath);
     internal bool CanCloseWorkForVerification()=>canCloseWork();
     internal bool LoadWorkForVerification(string path,Func<bool> confirm)=>loadWork(path,confirm);
+    internal bool TrySaveWork(Func<string?> selectPath)
+    {
+        try
+        {
+            if(!saveSelectedWork(selectPath))return false;
+            StatusForVerification.Text="Ölçü çalışması yeni dosyaya kaydedildi. Ölçüler ve model varsayımları onaylanmadı; çıktı kapalı.";
+            return true;
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        { StatusForVerification.Text="Çalışma kaydedilemedi; form korundu. Yeni bir dosya adı kullanın. "+ex.Message;return false; }
+    }
+    internal bool TryOpenWork(Func<string?> selectPath,Func<bool> approve)
+    {
+        try
+        {
+            var path=selectPath();return path is not null && loadWork(path,approve);
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+        { StatusForVerification.Text="Çalışma açılamadı; mevcut form korundu. "+ex.Message;return false; }
+    }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         long editVersion=0;bool closed=false;
@@ -283,28 +303,16 @@ internal sealed class ALinePanelPreviewWindow : Window
         var openDraft=new Button { Content="Ölçü çalışmasını aç…",Padding=new Thickness(8) };
         draftTools.Children.Add(saveDraft);draftTools.Children.Add(openDraft);body.Children.Insert(0,draftTools);
         body.Children.Insert(1,new TextBlock { Text="Çalışma dosyası 11 alanı ve birimi açık metin olarak içerir; kişisel ölçüler şifrelenmez. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
-        saveDraft.Click+=(_,_)=>
+        saveDraft.Click+=(_,_)=>TrySaveWork(()=>
         {
-            try
-            {
-                var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,
-                    FileName="A kesim çalışma"+ALineWorkDraftStorage.Extension,DefaultExt=ALineWorkDraftStorage.Extension,AddExtension=true,OverwritePrompt=false };
-                if(!saveSelectedWork(()=>dialog.ShowDialog(this)==true ? dialog.FileName : null))return;
-                status.Text="Ölçü çalışması yeni dosyaya kaydedildi. Ölçüler ve model varsayımları onaylanmadı; çıktı kapalı.";
-            }
-            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
-            { status.Text="Çalışma kaydedilemedi; form korundu. Yeni bir dosya adı kullanın. "+ex.Message; }
-        };
-        openDraft.Click+=(_,_)=>
+            var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,
+                FileName="A kesim çalışma"+ALineWorkDraftStorage.Extension,DefaultExt=ALineWorkDraftStorage.Extension,AddExtension=true,OverwritePrompt=false };
+            return dialog.ShowDialog(this)==true ? dialog.FileName : null;
+        });
+        openDraft.Click+=(_,_)=>TryOpenWork(()=>
         {
-            try
-            {
-                var dialog=new OpenFileDialog { Title="A kesim ölçü çalışmasını aç",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,CheckFileExists=true,Multiselect=false };
-                if(dialog.ShowDialog(this)!=true)return;
-                loadWork(dialog.FileName,()=>MessageBox.Show(this,"Dosyadaki 11 alan ve birim bu formun mevcut değerlerinin yerini alacak. Kaydetmediğiniz alanlar kaybolabilir. Ana istek değişmeyecek; simetri ve ölçü onayları sıfırlanacak. Devam edilsin mi?","Çalışma alanlarını değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
-            }
-            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
-            { status.Text="Çalışma açılamadı; mevcut form korundu. "+ex.Message; }
-        };
+            var dialog=new OpenFileDialog { Title="A kesim ölçü çalışmasını aç",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,CheckFileExists=true,Multiselect=false };
+            return dialog.ShowDialog(this)==true ? dialog.FileName : null;
+        },()=>MessageBox.Show(this,"Dosyadaki 11 alan ve birim bu formun mevcut değerlerinin yerini alacak. Kaydetmediğiniz alanlar kaybolabilir. Ana istek değişmeyecek; simetri ve ölçü onayları sıfırlanacak. Devam edilsin mi?","Çalışma alanlarını değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
     }
 }

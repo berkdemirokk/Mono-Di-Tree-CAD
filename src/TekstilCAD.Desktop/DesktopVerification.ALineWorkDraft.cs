@@ -25,6 +25,7 @@ internal static partial class DesktopVerification
             window.AgreementForVerification.IsChecked=true;Click(window.ReviewForVerification);
             window.ConfirmationForVerification.IsChecked=true;Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count>0,"Draft fixture initially produces only explicitly confirmed preview",checks);
+            VerifyALineStorageErrorBoundary(window,folder,checks);
             window.SaveWorkForVerification(path);
             Check(window.CanCloseWorkForVerification(),"Successfully saved raw fields and unit establish the clean checkpoint",checks);
             window.FieldsForVerification[0].Text="37";
