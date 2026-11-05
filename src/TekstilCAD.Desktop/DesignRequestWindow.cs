@@ -659,10 +659,13 @@ internal sealed class DesignRequestWindow : Window
         try { DesignRequestStorage.Validate(Capture()); }
         catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
         var before=Capture();var beforeChat=chatInput.Text;var beforeRevision=referenceRevision;
+        var modelOnlyCompatibility=before.Version==2 && before.ModelId is not null && string.IsNullOrWhiteSpace(before.Prompt) && before.Reference is null;
+        const string compatibilityNotice=" Tarif veya görsel içermeyen bu V2 model isteği eski Windows ve iPhone sürümlerinde açılamayabilir.";
+        if(modelOnlyCompatibility)SetStatus("Kaydedilecek istek:"+compatibilityNotice);
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || closed) { SetStatus("İstek değişti; kaydetme iptal edildi.");return; }
-        try { if(before.Version==2)DesignRequestStorage.SaveNewV2(dialog.FileName,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(dialog.FileName,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
+        try { if(before.Version==2)DesignRequestStorage.SaveNewV2(dialog.FileName,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(dialog.FileName,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
