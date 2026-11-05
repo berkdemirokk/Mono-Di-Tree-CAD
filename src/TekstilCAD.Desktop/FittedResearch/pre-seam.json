@@ -1,0 +1,668 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "unit": "cm",
+  "cases": [
+    {
+      "id": "synthetic-base",
+      "upper": [
+        {
+          "panel": "right_ftorso",
+          "kind": "Edge",
+          "start": [
+            -24.666666666666668,
+            0.0
+          ],
+          "end": [
+            -11.166666650858906,
+            3.265724797726275e-16
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.500000015807762
+        },
+        {
+          "panel": "right_ftorso",
+          "kind": "Edge",
+          "start": [
+            -8.49999998419224,
+            0.0
+          ],
+          "end": [
+            0.0,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 8.49999998419224
+        },
+        {
+          "panel": "left_ftorso",
+          "kind": "Edge",
+          "start": [
+            0.0,
+            0.0
+          ],
+          "end": [
+            8.49999998419224,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 8.49999998419224
+        },
+        {
+          "panel": "left_ftorso",
+          "kind": "Edge",
+          "start": [
+            11.166666650858906,
+            3.265724797726275e-16
+          ],
+          "end": [
+            24.666666666666668,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.500000015807762
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            23.0,
+            0.0
+          ],
+          "end": [
+            16.200226783286464,
+            1.323648083757685
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.92862220602464,
+          "relative_controls": [
+            [
+              0.5018359140796891,
+              -0.01622620719076925
+            ]
+          ]
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            13.71978646475504,
+            1.635763168628199
+          ],
+          "end": [
+            9.240830929614203,
+            2.067242170519952
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.4999548647708965,
+          "relative_controls": [
+            [
+              0.5003812015962668,
+              -0.009383499810480728
+            ]
+          ]
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            6.746408369276725,
+            2.2341436099368264
+          ],
+          "end": [
+            0.0,
+            2.4241573550109408
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.749977306397484,
+          "relative_controls": [
+            [
+              0.4996154599952749,
+              -0.014093420612411567
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            0.0,
+            2.4241573550109408
+          ],
+          "end": [
+            -6.746408369276725,
+            2.2341436099368264
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.749977306397484,
+          "relative_controls": [
+            [
+              0.5003845400047251,
+              -0.014093420612411567
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            -9.240830929614203,
+            2.067242170519952
+          ],
+          "end": [
+            -13.71978646475504,
+            1.635763168628199
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.499954864770903,
+          "relative_controls": [
+            [
+              0.4996187984037333,
+              -0.009383499810480728
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            -16.200226783286464,
+            1.323648083757685
+          ],
+          "end": [
+            -23.0,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.928622206024636,
+          "relative_controls": [
+            [
+              0.49816408592031086,
+              -0.01622620719076925
+            ]
+          ]
+        }
+      ],
+      "lower": [
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            -8.487760513166272,
+            0.3999999999999986
+          ],
+          "end": [
+            -21.98776073890375,
+            0.3999999999999986
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.500000225737477
+        },
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            9.000000156639178,
+            0.3999999999999986
+          ],
+          "end": [
+            -7.999999774262524,
+            0.3999999999999986
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 16.9999999309017
+        },
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            22.987760738903745,
+            0.3999999999999986
+          ],
+          "end": [
+            9.487760895542927,
+            0.3999999999999986
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.499999843360818
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            19.137148836929754,
+            0.5499999999999972
+          ],
+          "end": [
+            25.887148775848935,
+            0.5499999999999972
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.749999938919181
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            10.943574371518544,
+            0.5499999999999972
+          ],
+          "end": [
+            15.443574449005286,
+            0.5499999999999972
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.500000077486742
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -6.249999793257484,
+            0.5499999999999972
+          ],
+          "end": [
+            7.249999983594076,
+            0.5499999999999972
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.49999977685156
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -14.443574134247818,
+            0.5499999999999972
+          ],
+          "end": [
+            -9.943574181181951,
+            0.5499999999999972
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.499999953065867
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -24.887148775848935,
+            0.5499999999999972
+          ],
+          "end": [
+            -18.137148522172286,
+            0.5499999999999972
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.7500002536766495
+        }
+      ]
+    },
+    {
+      "id": "synthetic-distinct",
+      "upper": [
+        {
+          "panel": "right_ftorso",
+          "kind": "Edge",
+          "start": [
+            -24.333333333333332,
+            0.0
+          ],
+          "end": [
+            -12.83333334571974,
+            5.306802796305197e-16
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 11.499999987613592
+        },
+        {
+          "panel": "right_ftorso",
+          "kind": "Edge",
+          "start": [
+            -8.500000012386408,
+            0.0
+          ],
+          "end": [
+            0.0,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 8.500000012386408
+        },
+        {
+          "panel": "left_ftorso",
+          "kind": "Edge",
+          "start": [
+            0.0,
+            0.0
+          ],
+          "end": [
+            8.500000012386408,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 8.500000012386408
+        },
+        {
+          "panel": "left_ftorso",
+          "kind": "Edge",
+          "start": [
+            12.83333334571974,
+            5.306802796305197e-16
+          ],
+          "end": [
+            24.333333333333332,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 11.499999987613592
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            20.75,
+            0.0
+          ],
+          "end": [
+            14.951219265926488,
+            1.1250503116565844
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 5.907820893611834,
+          "relative_controls": [
+            [
+              0.5017513985014124,
+              -0.015202556699485921
+            ]
+          ]
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            13.092275292285112,
+            1.3699019052033972
+          ],
+          "end": [
+            8.61572595505207,
+            1.8252427975318257
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.499976329024647,
+          "relative_controls": [
+            [
+              0.5004811232225936,
+              -0.010467255508166594
+            ]
+          ]
+        },
+        {
+          "panel": "left_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            6.745539521502715,
+            1.9595100823332157
+          ],
+          "end": [
+            0.0,
+            2.1716409638639678
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.749988098707458,
+          "relative_controls": [
+            [
+              0.4996222900761459,
+              -0.015735671656144527
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            0.0,
+            2.1716409638639678
+          ],
+          "end": [
+            -6.745539521502715,
+            1.9595100823332157
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 6.749988098707458,
+          "relative_controls": [
+            [
+              0.5003777099238541,
+              -0.015735671656144527
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            -8.61572595505207,
+            1.8252427975318257
+          ],
+          "end": [
+            -13.092275292285112,
+            1.3699019052033972
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.499976329024646,
+          "relative_controls": [
+            [
+              0.4995188767774063,
+              -0.010467255508166594
+            ]
+          ]
+        },
+        {
+          "panel": "right_btorso",
+          "kind": "CurveEdge",
+          "start": [
+            -14.951219265926488,
+            1.1250503116565844
+          ],
+          "end": [
+            -20.75,
+            0.0
+          ],
+          "flipped": false,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 5.907820893611838,
+          "relative_controls": [
+            [
+              0.4982486014985876,
+              -0.015202556699485921
+            ]
+          ]
+        }
+      ],
+      "lower": [
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            -10.487760519320874,
+            0.6000000000000014
+          ],
+          "end": [
+            -21.98776073890375,
+            0.6000000000000014
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 11.500000219582875
+        },
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            8.50000014783847,
+            0.6000000000000014
+          ],
+          "end": [
+            -8.499999780417127,
+            0.6000000000000014
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 16.999999928255598
+        },
+        {
+          "panel": "skirt_front",
+          "kind": "Edge",
+          "start": [
+            21.987760738903745,
+            0.6000000000000014
+          ],
+          "end": [
+            10.487760886742219,
+            0.6000000000000014
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 11.499999852161526
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            19.137148838224626,
+            0.75
+          ],
+          "end": [
+            24.887148775848935,
+            0.75
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 5.74999993762431
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            10.693574376241834,
+            0.75
+          ],
+          "end": [
+            15.193574450300158,
+            0.75
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.500000074058324
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -6.750000024478613,
+            0.75
+          ],
+          "end": [
+            6.7499999883173665,
+            0.75
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 13.50000001279598
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -15.193574129072463,
+            0.75
+          ],
+          "end": [
+            -10.69357441240308,
+            0.75
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 4.499999716669382
+        },
+        {
+          "panel": "skirt_back",
+          "kind": "Edge",
+          "start": [
+            -24.887148775848935,
+            0.75
+          ],
+          "end": [
+            -19.13714851699693,
+            0.75
+          ],
+          "flipped": true,
+          "right_wrong": false,
+          "coefficient": 1.0,
+          "length_cm": 5.750000258852005
+        }
+      ]
+    }
+  ]
+}

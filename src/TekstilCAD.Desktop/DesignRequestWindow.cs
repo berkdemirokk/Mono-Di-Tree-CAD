@@ -244,6 +244,10 @@ internal sealed class DesignRequestWindow : Window
         // First item in the body directly below the fixed composer. Keeping it
         // scrollable preserves message entry space on compact windows.
         body.Children.Insert(0,lowerPanelPreview);
+        var fittedResearch=new Button { Content="Sentetik elbise araştırmasını incele…",Margin=new Thickness(0,6,0,6),Padding=new Thickness(8) };
+        AutomationProperties.SetHelpText(fittedResearch,"Yalnız sabit sentetik örnekler; kişisel ölçü, üretim ve çıktı desteklenmez.");
+        fittedResearch.Click+=(_,_)=>new FittedResearchWindow(this).ShowDialog();
+        body.Children.Insert(0,fittedResearch);
         var recovery=ALineSourceRecoveryForVerification;
         recovery.Children.Add(new TextBlock { Text="Kaynak ölçü ifadelerini düzenle",FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap });
         recovery.Children.Add(new TextBlock { Text="Çelişki veya belirsizlik var. Tarif ve ölçü notlarını birlikte kontrol edin; doğru değeri siz belirleyin. Düzenlemek mesajı göndermez, eski değeri otomatik silmez.",TextWrapping=TextWrapping.Wrap });
@@ -1031,3 +1035,4 @@ internal sealed class DesignRequestWindow : Window
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }
+

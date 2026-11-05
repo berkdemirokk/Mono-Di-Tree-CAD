@@ -12,6 +12,12 @@
     <Description>Windows tekstil CAD geliştirme önizlemesi</Description>
     <ApplicationIcon>Assets\Studio.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="FittedResearch\pre-seam.json" LogicalName="FittedCheck.pre-seam.json" />
+    <EmbeddedResource Include="FittedResearch\golden.json" LogicalName="FittedCheck.golden.json" />
+    <EmbeddedResource Include="FittedResearch\expected-seams.json" LogicalName="FittedCheck.expected-seams.json" />
+    <Content Include="FittedResearch\GarmentCode-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <!-- Only explicitly requested preview builds use a separate runtime data directory. -->
   <PropertyGroup Condition="'$(TekstilCADIsolatedPreview)' == 'true'">
     <DefineConstants>$(DefineConstants);TEKSTILCAD_ISOLATED_PREVIEW</DefineConstants>
@@ -34,5 +40,6 @@
     <ProjectReference Include="../TekstilCAD.MachineGateway/TekstilCAD.MachineGateway.csproj" />
   </ItemGroup>
 </Project>
+
 
 
