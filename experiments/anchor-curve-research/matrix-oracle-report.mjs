@@ -2,7 +2,6 @@
 import {readFileSync,writeFileSync,openSync,readSync,closeSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {inspectDyadic} from './dyadic-box-oracle.mjs';
 const SOURCE_SHA='a68c9d9184ccbe40b0eaeb8e18c58ab75c4a16b5ef03fd9e26d2866837330c1b';
 const ORACLE_SHA='ee91c77a7561ac1614392f47101e8492935398c2dcfdc96829b6a8718fc859ec';
 const sha=b=>createHash('sha256').update(b).digest('hex');
@@ -39,14 +38,19 @@ export function validateMatrix(data) {
  if(seen.size!==15||partCount!==30||anchorCount!==45)throw Error('incomplete matrix');
  return {caseCount:seen.size,partCount,anchorCount};
 }
-export function report(bytes,limits) {
+export async function report(bytes,limits) {
  if(!Buffer.isBuffer(bytes)||bytes.length>20_000_000||sha(bytes)!==SOURCE_SHA)throw Error('source hash mismatch');
  const oracleBytes=readFileSync(fileURLToPath(new URL('./dyadic-box-oracle.mjs',import.meta.url)));
  if(sha(oracleBytes)!==ORACLE_SHA)throw Error('oracle hash mismatch');
+ // Import precisely the bytes whose digest was checked, not the mutable path.
+ const {inspectDyadic}=await import('data:text/javascript;base64,'+oracleBytes.toString('base64'));
  const data=JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/,''));const counts=validateMatrix(data);
  const results=[];
  for(const c of data.cases)for(const part of c.parts)for(const anchor of part.anchors) {
   const inspection=inspectDyadic(anchor.anchor,part.edges,limits);
+  const returned=[...inspection.excludedEdges,...inspection.unresolved.map(x=>x.edgeId)];
+  const expected=part.edges.map(e=>e.id);
+  if(returned.length!==expected.length||new Set(returned).size!==expected.length||returned.some(id=>!expected.includes(id)))throw Error('incomplete oracle edge result');
   results.push({body:c.body,variant:c.variant,sourceVersion:data.sourceVersion,partId:part.part,coordinateSpace:part.coordinateSpace,anchorName:anchor.name,sourceEdgeIds:part.edges.map(e=>e.id),inspection});
  }
  return {scope:'synthetic only; no sewing role, fit, CAD or production approval',sourceSha256:SOURCE_SHA,oracleSha256:ORACLE_SHA,sourceHashes:data.sourceHashes,limits,counts,results};
@@ -54,6 +58,6 @@ export function report(bytes,limits) {
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]) {
  if(process.argv.length!==7)throw Error('usage: node matrix-oracle-report.mjs input.json new-output.json threshold-mm max-depth max-nodes');
  const [input,output,threshold,depth,nodes]=process.argv.slice(2);
- const bytes=boundedRead(input);const result=report(bytes,{thresholdMm:Number(threshold),maxDepth:Number(depth),maxNodes:Number(nodes)});
+ const bytes=boundedRead(input);const result=await report(bytes,{thresholdMm:Number(threshold),maxDepth:Number(depth),maxNodes:Number(nodes)});
  writeFileSync(output,JSON.stringify(result,null,2)+'\n',{flag:'wx'});
 }
