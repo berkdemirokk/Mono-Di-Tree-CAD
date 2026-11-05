@@ -2590,6 +2590,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var imageName: String?
     @State private var v2ImageReview = ExperimentalDesignBrief.V2ImageReviewState()
     @State private var selectingImage = false
+    @State private var filePickerTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
+    @State private var pendingFileTicket: ExperimentalDesignBrief.PhotoSelectionTicket?
     #if os(iOS)
     @State private var selectingPhoto = false
     @State private var photoItem: PhotosPickerItem?
@@ -2844,16 +2846,18 @@ private struct ExperimentalDesignBriefView: View {
     #endif
     private func cancelReferenceLoad() {
         referenceLoadID = nil; referenceTask?.cancel(); referenceTask = nil; referenceLoading = false
+        filePickerTicket = nil
         #if os(iOS)
         photoTicket = nil
         #endif
     }
     private func startReferenceLoad(_ url: URL) {
-        guard !draftTransition, !referenceDecisionPending else {
-            message = "Önce devam eden taslak veya görsel işlemini tamamlayın."; return
+        guard let ticket = filePickerTicket,
+              ticket.matches(id: filePickerTicket?.id, draft: draft, revision: modelSuggestionRevision),
+              !draftTransition, !referenceDecisionPending else {
+            filePickerTicket = nil; message = "İstek değişti; görsel uygulanmadı. Yeniden seçin."; return
         }
-        cancelReferenceLoad()
-        let ticket = ExperimentalDesignBrief.ReferenceLoadTicket(original: currentReference)
+        cancelReferenceLoad(); filePickerTicket = ticket; pendingFileTicket = nil
         referenceLoadID = ticket.id; referenceLoading = true; message = "Görsel yükleniyor; mevcut görsel korunuyor."
         let worker = Task.detached(priority: .userInitiated) { () throws -> ExperimentalDesignBrief.ReferenceSelection in
             let data = try ExperimentalDesignBrief.readImage(url)
@@ -2866,17 +2870,27 @@ private struct ExperimentalDesignBriefView: View {
                 let candidate = try await worker.value
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil
-                guard ticket.matches(id: ticket.id, current: currentReference) else { message = "Seçili görsel değişti; yüklenen görsel uygulanmadı."; return }
-                pendingReferenceChange = .init(original: ticket.original, replacement: candidate)
+                guard !draftTransition, ticket.matches(id: filePickerTicket?.id, draft: draft, revision: modelSuggestionRevision) else {
+                    filePickerTicket = nil; message = "İstek değişti; görsel uygulanmadı. Mevcut görsel korundu."; return
+                }
+                filePickerTicket = nil; pendingFileTicket = ticket
+                pendingReferenceChange = .init(original: currentReference, replacement: candidate)
                 if currentReference == nil { applyReferenceChange() } else { confirmReferenceChange = true }
             } catch {
                 guard ticket.id == referenceLoadID else { return }
-                referenceLoading = false; referenceTask = nil; referenceLoadID = nil
+                referenceLoading = false; referenceTask = nil; referenceLoadID = nil; filePickerTicket = nil
                 if !(error is CancellationError) { message = "Görsel okunamadı veya desteklenmiyor; mevcut görsel korundu." }
             }
         }
     }
     private func applyReferenceChange() {
+        if let ticket = pendingFileTicket {
+            guard !draftTransition, ticket.matches(id: ticket.id, draft: draft, revision: modelSuggestionRevision) else {
+                pendingFileTicket = nil; pendingReferenceChange = nil
+                message = "İstek değişti; görsel uygulanmadı. Mevcut görsel korundu."; return
+            }
+            pendingFileTicket = nil
+        }
         #if os(iOS)
         if let ticket = pendingPhotoTicket {
             guard ticket.matches(id: ticket.id, draft: draft, revision: modelSuggestionRevision) else {
@@ -3427,7 +3441,10 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 if step == 2 {
                 Section("Örnek görsel · isteğe bağlı") {
-                    Button("Dosyalardan görsel seç") { selectingImage = true }.disabled(referenceLoading)
+                    Button("Dosyalardan görsel seç") {
+                        filePickerTicket = .init(draft: draft, revision: modelSuggestionRevision)
+                        selectingImage = true
+                    }.disabled(draftTransition || referenceDecisionPending || isSelectingPhoto)
                     #if os(iOS)
                     Button("Fotoğraflardan görsel seç") {
                         photoItem = nil
@@ -3757,7 +3774,7 @@ private struct ExperimentalDesignBriefView: View {
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in
                 if !shown {
-                    pendingReferenceChange = nil
+                    pendingReferenceChange = nil; pendingFileTicket = nil
                     #if os(iOS)
                     pendingPhotoTicket = nil
                     #endif
@@ -3863,7 +3880,7 @@ private struct ExperimentalDesignBriefView: View {
             }
             .fileImporter(isPresented: $selectingImage, allowedContentTypes: [.image]) { result in
                 do { startReferenceLoad(try result.get()) }
-                catch { if !isFilePickerCancellation(error) { message = "Görsel seçilemedi; mevcut görsel korundu." } }
+                catch { filePickerTicket = nil; if !isFilePickerCancellation(error) { message = "Görsel seçilemedi; mevcut görsel korundu." } }
             }
             .background {
                 #if os(iOS)

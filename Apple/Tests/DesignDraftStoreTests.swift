@@ -133,6 +133,25 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6_000, height: 5_000, frames: 1))
         XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 1, height: 1, frames: 2))
     }
+    func testFileReferenceTicketRejectsChangedModelMeasurementsAndStaleResult() throws {
+        let oldImage = Data([1, 2, 3])
+        let original = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: oldImage, imageName: "önceki.png")
+        let revision = UUID(), ticket = ExperimentalDesignBrief.PhotoSelectionTicket(draft: original, revision: revision)
+        XCTAssertTrue(ticket.matches(id: ticket.id, draft: original, revision: revision))
+        let changedModel = ExperimentalDesignBrief.Draft(style: .wrap, description: original.description, bust: original.bust, waist: original.waist, hips: "", length: "", otherMeasurements: original.otherMeasurements, image: oldImage, imageName: original.imageName)
+        let changedMeasure = ExperimentalDesignBrief.Draft(style: .aline, description: original.description, bust: original.bust, waist: "73 cm", hips: "", length: "", otherMeasurements: original.otherMeasurements, image: oldImage, imageName: original.imageName)
+        XCTAssertFalse(ticket.matches(id: ticket.id, draft: changedModel, revision: revision))
+        XCTAssertFalse(ticket.matches(id: ticket.id, draft: changedMeasure, revision: revision))
+        XCTAssertFalse(ticket.matches(id: ticket.id, draft: original, revision: UUID()))
+        XCTAssertFalse(ticket.matches(id: nil, draft: original, revision: revision))
+        XCTAssertFalse(ticket.matches(id: UUID(), draft: original, revision: revision))
+        let old = ExperimentalDesignBrief.ReferenceSelection(data: oldImage, name: "önceki.png")
+        let replacement = ExperimentalDesignBrief.ReferenceSelection(data: Data([4]), name: "yeni.png")
+        let change = ExperimentalDesignBrief.ReferenceChange(original: old, replacement: replacement)
+        XCTAssertEqual(try change.apply(to: old), replacement)
+        XCTAssertThrowsError(try change.apply(to: .init(data: Data([9]), name: "başka.png")))
+        XCTAssertEqual(original.image, oldImage); XCTAssertEqual(original.waist, "72 cm")
+    }
     func testPhotoTransferPreservesBytesAndRejectsInvalidOrOversizedFiles() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
