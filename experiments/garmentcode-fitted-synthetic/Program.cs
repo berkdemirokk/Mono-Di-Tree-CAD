@@ -495,24 +495,45 @@ internal static class Validator
     }
     static void CheckSourceTwoSidedBound(JsonElement reference)
     {
+        var frontRefs=new[]{(Panel:"right_ftorso",Edge:7,Flipped:false,RightWrong:false),(Panel:"right_ftorso",Edge:4,Flipped:false,RightWrong:false)};
+        var backRefs=new[]{(Panel:"right_btorso",Edge:7,Flipped:false,RightWrong:false),(Panel:"right_btorso",Edge:8,Flipped:false,RightWrong:false)};
+        void RequireIdentity(JsonElement sourceSide,(string Panel,int Edge,bool Flipped,bool RightWrong)[] expected) {
+            RequireUnitSourceSide(sourceSide);
+            var edges=sourceSide.GetProperty("edges");Need(edges.GetArrayLength()==expected.Length,"source side identity count");
+            for(int i=0;i<expected.Length;i++) {
+                var edge=edges[i];var wanted=expected[i];
+                Need(edge.ValueKind==JsonValueKind.Object && edge.TryGetProperty("panel",out var panel) && panel.ValueKind==JsonValueKind.String && panel.GetString()==wanted.Panel
+                    && edge.TryGetProperty("edge",out var index) && index.ValueKind==JsonValueKind.Number && index.TryGetInt32(out var n) && n==wanted.Edge
+                    && edge.TryGetProperty("flipped",out var flipped) && (flipped.ValueKind is JsonValueKind.True or JsonValueKind.False) && flipped.GetBoolean()==wanted.Flipped
+                    && edge.TryGetProperty("right_wrong",out var rightWrong) && (rightWrong.ValueKind is JsonValueKind.True or JsonValueKind.False) && rightWrong.GetBoolean()==wanted.RightWrong,
+                    "source side edge identity or direction");
+            }
+        }
+        var side=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()=="right" && r.GetProperty("owner_type").GetString()=="BodiceHalf" && r.GetProperty("index").GetInt32()==1);
+        RequireIdentity(side.GetProperty("a"),frontRefs);RequireIdentity(side.GetProperty("b"),backRefs);
         var panels=reference.GetProperty("panels");
-        TwoSidedEndpointStudy.Segment Segment(string panel,int index) {
-            var edge=panels.GetProperty(panel).GetProperty("edges")[index];Need(edge.GetProperty("kind").GetString()=="Edge","source side not a line");
+        TwoSidedEndpointStudy.Segment Segment((string Panel,int Edge,bool Flipped,bool RightWrong) source) {
+            var edge=panels.GetProperty(source.Panel).GetProperty("edges")[source.Edge];Need(edge.GetProperty("kind").GetString()=="Edge","source side not a line");
             var a=Point(edge.GetProperty("start"));var b=Point(edge.GetProperty("end"));return new(new(a.X,a.Y),new(b.X,b.Y));
         }
-        var result=TwoSidedEndpointStudy.AssessSegments(Segment("right_ftorso",4),Segment("right_ftorso",7),Segment("right_btorso",8),Segment("right_btorso",7),.5);
+        var result=TwoSidedEndpointStudy.AssessSegments(Segment(frontRefs[1]),Segment(frontRefs[0]),Segment(backRefs[1]),Segment(backRefs[0]),.5);
         Need(result.front.Disjoint(result.back),"source endpoint-only family not separated");
-        var side=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()=="right" && r.GetProperty("owner_type").GetString()=="BodiceHalf" && r.GetProperty("index").GetInt32()==1);
-        foreach(string key in new[]{"a","b"})RequireUnitSourceSide(side.GetProperty(key));
-        void RejectSourceSide(Action<JsonObject> mutate) {
-            var sideNode=JsonNode.Parse(side.GetProperty("a").GetRawText())!.AsObject();mutate(sideNode);
+        void RejectSourceSide(string key,(string Panel,int Edge,bool Flipped,bool RightWrong)[] expected,Action<JsonObject> mutate) {
+            var sideNode=JsonNode.Parse(side.GetProperty(key).GetRawText())!.AsObject();mutate(sideNode);
             using var bad=JsonDocument.Parse(sideNode.ToJsonString());
-            try { RequireUnitSourceSide(bad.RootElement);throw new Exception("Malformed source side accepted"); } catch(InvalidDataException) { }
+            try { RequireIdentity(bad.RootElement,expected);throw new Exception("Malformed source side accepted"); } catch(InvalidDataException) { }
         }
-        RejectSourceSide(x=>x["ruffle"]=new JsonArray());
-        RejectSourceSide(x=>x.Remove("ruffle"));
-        RejectSourceSide(x=>x["ruffle"]![0]!["sec"]![1]=1);
-        RejectSourceSide(x=>x["ruffle"]![0]!["coeff"]=1.05);
+        RejectSourceSide("a",frontRefs,x=>x["ruffle"]=new JsonArray());
+        RejectSourceSide("a",frontRefs,x=>x.Remove("ruffle"));
+        RejectSourceSide("a",frontRefs,x=>x["ruffle"]![0]!["sec"]![1]=1);
+        RejectSourceSide("a",frontRefs,x=>x["ruffle"]![0]!["coeff"]=1.05);
+        foreach(var (key,expected,otherPanel) in new[]{("a",frontRefs,"right_btorso"),("b",backRefs,"right_ftorso")}) {
+            RejectSourceSide(key,expected,x=>x["edges"]![0]!["panel"]=otherPanel);
+            RejectSourceSide(key,expected,x=>x["edges"]![0]!["edge"]=6);
+            RejectSourceSide(key,expected,x=>x["edges"]![0]!["flipped"]=true);
+            RejectSourceSide(key,expected,x=>x["edges"]![0]!["right_wrong"]=true);
+            RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
+        }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
     }
     internal static void CheckJointSideExperiment()

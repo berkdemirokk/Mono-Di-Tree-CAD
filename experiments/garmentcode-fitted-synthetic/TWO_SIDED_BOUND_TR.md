@@ -27,6 +27,8 @@ Son sütun, aralıklar ayrık kaldığı sürece `M` artırılarak elde edilmiş
 
 İki orijinal Python kaynak fixture’ının ön/arka doğrusal yanları, büzgü katsayısı `1` ve bölüm kapsamı doğrulanarak aynı ±5 mm hesaplamasıyla ayrıca sınandı; ikisinde de aralıklar ayrık bulundu. C# ve Python sınırları, kaynak optimizerinin farklılığı nedeniyle ayrı sayılardır.
 
+Kaynakta `right` / `BodiceHalf` / `1` dikişinin sıralı kenarları ön için `right_ftorso` 7 ve 4, arka için `right_btorso` 7 ve 8 olarak doğrulanır; her kenarda `flipped` ve `right_wrong` değerleri `false` olmalıdır. Ölçüm aynı referansları kullanır. Her iki tarafta yanlış panel, kenar, sıra ve yön alanları negatif regresyonlarla reddedilir; bu güvence yalnız bu fixture’lara ilişkindir.
+
 ## Önce/sonra, topoloji ve komşu kenarlar
 
 Önceki C# sağ ön ve arka konturları dört sentetik örnekte kapanış ve temsil edilen eğri çifti denetiminden geçti. Başlangıç yarım arka bel uzunlukları sırasıyla yaklaşık 18,1785; 17,1577; 19,1200; 17,5750 cm, hedefleri 18; 17; 19; 17,5 cm idi. ±5 mm ailesinde yan eşitliği zaten dışlandığından **sonrası için aday üretilmedi**; son uzunluk veya topoloji uydurulmaz. Bel yan uçları gerçekten taşınsaydı komşu bel kenarları da değişecekti ve yeni konturlar/dikiş grafiği ayrıca doğrulanacaktı.
