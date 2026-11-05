@@ -4,7 +4,7 @@ import ImageIO
 
 /// Converts only a bounded, single-frame HEIC image to metadata-free PNG.
 enum HEICPhotoConversion {
-    private final class Output {
+    final class Output {
         var bytes = Data()
         var exceeded = false
         func append(_ buffer: UnsafeRawPointer, count: Int) -> Int {

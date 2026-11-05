@@ -3295,7 +3295,7 @@ private struct ExperimentalDesignBriefView: View {
                         photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
                         selectingPhoto = true
                     }.disabled(draftTransition || referenceDecisionPending || selectingImage)
-                    Text("Tek kare HEIC yerelde PNG’ye dönüştürülür; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
+                    Text("Fotoğraflar’dan seçilen tek kare HEIC yerelde PNG’ye dönüştürülür; Dosyalar’dan JPEG veya PNG seçin; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. Dönüşüm çok bellek kullanabilir; iptal işlem bitince tamamlanabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
                     #endif
                     if referenceLoading {
                         ProgressView("Görsel yükleniyor…")
@@ -3309,7 +3309,7 @@ private struct ExperimentalDesignBriefView: View {
                             pendingReferenceChange = .init(original: currentReference, replacement: nil); confirmReferenceChange = true
                         }.disabled(referenceLoading)
                     }
-                    Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. HEIC dönüştürülür ve fotoğraf üst bilgileri aktarılmaz. En fazla 8 MiB.").font(.caption)
+                    Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. Fotoğraflar’dan HEIC seçilirse dönüştürülür ve fotoğraf üst bilgileri aktarılmaz; Dosyalar HEIC desteklemez. En fazla 8 MiB.").font(.caption)
                 }
                 }
                 if step == 3 {

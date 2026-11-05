@@ -1,6 +1,7 @@
 import XCTest
 import ImageIO
 import CoreGraphics
+import UIKit
 @testable import TekstilCADViewer_iOS
 
 private func makeTestRequest(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
@@ -43,6 +44,71 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(props[kCGImagePropertyExifDictionary])
         XCTAssertNoThrow(try ExperimentalDesignBrief.validateV2Image(output))
         XCTAssertEqual(encoded as Data, source)
+    }
+    func testHEICAllOrientationsAgainstUIKitIncludingMirrors() throws {
+        guard let context = CGContext(data: nil, width: 64, height: 32, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return XCTFail("No test context") }
+        for (color, rect) in [(UIColor.red, CGRect(x: 0, y: 0, width: 32, height: 16)),
+                              (UIColor.green, CGRect(x: 32, y: 0, width: 32, height: 16)),
+                              (UIColor.blue, CGRect(x: 0, y: 16, width: 32, height: 16)),
+                              (UIColor.yellow, CGRect(x: 32, y: 16, width: 32, height: 16))] {
+            context.setFillColor(color.cgColor); context.fill(rect)
+        }
+        let image = try XCTUnwrap(context.makeImage())
+        let orientations: [UIImage.Orientation] = [.up, .upMirrored, .down, .downMirrored, .leftMirrored, .right, .rightMirrored, .left]
+        func samples(_ image: UIImage, size: CGSize) throws -> [[UInt8]] {
+            let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = false
+            let rendered = UIGraphicsImageRenderer(size: size, format: format).image { _ in image.draw(in: CGRect(origin: .zero, size: size)) }
+            let pixels = try XCTUnwrap(rendered.cgImage)
+            var data = [UInt8](repeating: 0, count: pixels.width * pixels.height * 4)
+            try data.withUnsafeMutableBytes { memory in
+                guard let canvas = CGContext(data: memory.baseAddress, width: pixels.width, height: pixels.height, bitsPerComponent: 8,
+                                             bytesPerRow: pixels.width * 4, space: CGColorSpaceCreateDeviceRGB(),
+                                             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue) else { throw CocoaError(.fileReadUnknown) }
+                canvas.draw(pixels, in: CGRect(x: 0, y: 0, width: CGFloat(pixels.width), height: CGFloat(pixels.height)))
+            }
+            return [(pixels.width / 4, pixels.height / 4), (pixels.width * 3 / 4, pixels.height / 4),
+                    (pixels.width / 4, pixels.height * 3 / 4), (pixels.width * 3 / 4, pixels.height * 3 / 4)].map { x, y in
+                let offset = (y * pixels.width + x) * 4; return Array(data[offset..<(offset + 3)])
+            }
+        }
+        for (index, orientation) in orientations.enumerated() {
+            let encoded = NSMutableData()
+            guard let dest = CGImageDestinationCreateWithData(encoded as CFMutableData, "public.heic" as CFString, 1, nil) else { throw XCTSkip("HEIC encoder unavailable") }
+            CGImageDestinationAddImage(dest, image, [kCGImagePropertyOrientation: index + 1] as CFDictionary)
+            guard CGImageDestinationFinalize(dest) else { throw XCTSkip("HEIC encoder unavailable") }
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(encoded as Data as CFData, nil))
+            let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+            XCTAssertEqual(properties[kCGImagePropertyOrientation] as? Int, index + 1)
+            let sourceImage = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))
+            let converted = try HEICPhotoConversion.convert(encoded as Data)
+            let resultSource = try XCTUnwrap(CGImageSourceCreateWithData(converted as CFData, nil))
+            let result = try XCTUnwrap(CGImageSourceCreateImageAtIndex(resultSource, 0, nil))
+            let size = CGSize(width: CGFloat(result.width), height: CGFloat(result.height))
+            let reference = UIImage(cgImage: sourceImage, scale: 1, orientation: orientation)
+            let expected = try samples(reference, size: size), actual = try samples(UIImage(cgImage: result), size: size)
+            for (a, b) in zip(expected.flatMap({ $0 }), actual.flatMap({ $0 })) {
+                XCTAssertLessThanOrEqual(abs(Int(a) - Int(b)), 8, "Orientation \(index + 1)")
+            }
+        }
+    }
+    func testHEICOutputRejectsOverflowBeforeAppending() {
+        let output = HEICPhotoConversion.Output()
+        let bytes = Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1)
+        bytes.withUnsafeBytes { buffer in
+            XCTAssertEqual(output.append(buffer.baseAddress!, count: buffer.count), 0)
+        }
+        XCTAssertTrue(output.exceeded); XCTAssertTrue(output.bytes.isEmpty)
+    }
+    func testHEICConversionRejectsMultipleFramesWhenEncoderAvailable() throws {
+        guard let context = CGContext(data: nil, width: 64, height: 32, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let image = context.makeImage() else { return XCTFail("No test image") }
+        let encoded = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(encoded as CFMutableData, "public.heic" as CFString, 2, nil) else { throw XCTSkip("Multi-image HEIC encoder unavailable") }
+        CGImageDestinationAddImage(dest, image, nil); CGImageDestinationAddImage(dest, image, nil)
+        guard CGImageDestinationFinalize(dest), let source = CGImageSourceCreateWithData(encoded as Data as CFData, nil), CGImageSourceGetCount(source) > 1 else { throw XCTSkip("Multi-image HEIC encoder unavailable") }
+        XCTAssertThrowsError(try HEICPhotoConversion.convert(encoded as Data))
     }
     func testHEICConversionRejectsInvalidAndOversizedInput() {
         XCTAssertThrowsError(try HEICPhotoConversion.convert(Data([0, 1, 2])))
