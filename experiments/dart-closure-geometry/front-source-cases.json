@@ -1,0 +1,1016 @@
+{
+  "sourceVersion": "4.10.2",
+  "matrixSha256": "a68c9d9184ccbe40b0eaeb8e18c58ab75c4a16b5ef03fd9e26d2866837330c1b",
+  "sourceHashes": {
+    "front.mjs": "95dbf0b0fddcc2d81b7aa6a85bf09fcf2543f19e643ba09c60132367eb90ec67",
+    "front-primary-only.mjs": "401b29397eeb3c5e43ab137168cfe046719009a17f97f6ac8df05fe88f89d469",
+    "dart-utils.mjs": "f8e08b1f9c84087fb7366e64c97d80b5de0558c2b0a58ed69ab378975d9e1bb6"
+  },
+  "cases": [
+    {
+      "id": "synthetic-base",
+      "variant": "primary-only",
+      "options": {
+        "primaryBustDart": "06:00",
+        "secondaryBustDart": "none",
+        "waistDart": false,
+        "shoulderDart": false
+      },
+      "edges": [
+        {
+          "id": "breanna.front/seam/op-1",
+          "sourceOpIndex": 1,
+          "type": "line",
+          "from": {
+            "x": -1.1802325279039548e-15,
+            "y": 59.61238663520877
+          },
+          "to": {
+            "x": 0,
+            "y": 459
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfWaist"
+          ],
+          "length": {
+            "lower": 399.3876133647912,
+            "upper": 399.3876133647912,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-2",
+          "sourceOpIndex": 2,
+          "type": "line",
+          "from": {
+            "x": 0,
+            "y": 459
+          },
+          "to": {
+            "x": 60.91646622453142,
+            "y": 453.30974532553245
+          },
+          "fromNames": [
+            "cfWaist"
+          ],
+          "toNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "length": {
+            "lower": 61.18165456691064,
+            "upper": 61.18165456691064,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-3",
+          "sourceOpIndex": 3,
+          "type": "line",
+          "from": {
+            "x": 60.91646622453142,
+            "y": 453.30974532553245
+          },
+          "to": {
+            "x": 99.04490889806684,
+            "y": 303.84082258254284
+          },
+          "fromNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "toNames": [
+            "primaryBustDartTip"
+          ],
+          "length": {
+            "lower": 154.2554278029103,
+            "upper": 154.2554278029103,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-4",
+          "sourceOpIndex": 4,
+          "type": "line",
+          "from": {
+            "x": 99.04490889806684,
+            "y": 303.84082258254284
+          },
+          "to": {
+            "x": 177.33408282060913,
+            "y": 436.7526063083842
+          },
+          "fromNames": [
+            "primaryBustDartTip"
+          ],
+          "toNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "length": {
+            "lower": 154.2554278029104,
+            "upper": 154.2554278029104,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-5",
+          "sourceOpIndex": 5,
+          "type": "line",
+          "from": {
+            "x": 177.33408282060913,
+            "y": 436.7526063083842
+          },
+          "to": {
+            "x": 317.1071749835111,
+            "y": 409.9571933794324
+          },
+          "fromNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "toNames": [
+            "waist"
+          ],
+          "length": {
+            "lower": 142.31834543308926,
+            "upper": 142.31834543308926,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-6",
+          "sourceOpIndex": 6,
+          "type": "line",
+          "from": {
+            "x": 317.1071749835111,
+            "y": 409.9571933794324
+          },
+          "to": {
+            "x": 266.41090232677357,
+            "y": 230.67074991083354
+          },
+          "fromNames": [
+            "waist"
+          ],
+          "toNames": [
+            "armhole"
+          ],
+          "length": {
+            "lower": 186.31623888675233,
+            "upper": 186.31623888675233,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-7",
+          "sourceOpIndex": 7,
+          "type": "curve",
+          "from": {
+            "x": 266.41090232677357,
+            "y": 230.67074991083354
+          },
+          "to": {
+            "x": 185.25,
+            "y": 123.67688020054584
+          },
+          "cp1": {
+            "x": 182.66869858153808,
+            "y": 224.03444972660557
+          },
+          "cp2": {
+            "x": 185.25,
+            "y": 154.7206533848096
+          },
+          "fromNames": [
+            "armhole"
+          ],
+          "toNames": [
+            "armholePitch"
+          ],
+          "length": {
+            "lower": 153.0198013359094,
+            "upper": 153.01980628804137,
+            "leaves": 2633,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-8",
+          "sourceOpIndex": 8,
+          "type": "curve",
+          "from": {
+            "x": 185.25,
+            "y": 123.67688020054584
+          },
+          "to": {
+            "x": 195,
+            "y": 30.872771015423453
+          },
+          "cp1": {
+            "x": 185.25,
+            "y": 92.63310701628208
+          },
+          "cp2": {
+            "x": 191.9869801005261,
+            "y": 42.117514364476094
+          },
+          "fromNames": [
+            "armholePitch"
+          ],
+          "toNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "length": {
+            "lower": 93.44031891741747,
+            "upper": 93.44032342672463,
+            "leaves": 329,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-9",
+          "sourceOpIndex": 9,
+          "type": "line",
+          "from": {
+            "x": 195,
+            "y": 30.872771015423453
+          },
+          "to": {
+            "x": 79.78125,
+            "y": 0
+          },
+          "fromNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "toNames": [
+            "hps"
+          ],
+          "length": {
+            "lower": 119.28322741162427,
+            "upper": 119.28322741162427,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-10",
+          "sourceOpIndex": 10,
+          "type": "curve",
+          "from": {
+            "x": 79.78125,
+            "y": 0
+          },
+          "to": {
+            "x": -1.1802325279039548e-15,
+            "y": 59.61238663520877
+          },
+          "cp1": {
+            "x": 63.808159142203934,
+            "y": 59.61238663520877
+          },
+          "cp2": {
+            "x": -1.1802325279039548e-15,
+            "y": 59.61238663520877
+          },
+          "fromNames": [
+            "hps"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 107.02221463960653,
+            "upper": 107.02221973717883,
+            "leaves": 2025,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-11",
+          "sourceOpIndex": 11,
+          "type": "close",
+          "from": {
+            "x": -1.1802325279039548e-15,
+            "y": 59.61238663520877
+          },
+          "to": {
+            "x": -1.1802325279039548e-15,
+            "y": 59.61238663520877
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 0,
+            "upper": 0,
+            "certified": false
+          },
+          "exactZero": true,
+          "classification": "redundant-close"
+        }
+      ]
+    },
+    {
+      "id": "synthetic-scaled",
+      "variant": "primary-only",
+      "options": {
+        "primaryBustDart": "06:00",
+        "secondaryBustDart": "none",
+        "waistDart": false,
+        "shoulderDart": false
+      },
+      "edges": [
+        {
+          "id": "breanna.front/seam/op-1",
+          "sourceOpIndex": 1,
+          "type": "line",
+          "from": {
+            "x": -1.3218604312524252e-15,
+            "y": 66.7658730314338
+          },
+          "to": {
+            "x": 0,
+            "y": 514.08
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfWaist"
+          ],
+          "length": {
+            "lower": 447.31412696856626,
+            "upper": 447.31412696856626,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-2",
+          "sourceOpIndex": 2,
+          "type": "line",
+          "from": {
+            "x": 0,
+            "y": 514.08
+          },
+          "to": {
+            "x": 68.22644217147518,
+            "y": 507.70691476459655
+          },
+          "fromNames": [
+            "cfWaist"
+          ],
+          "toNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "length": {
+            "lower": 68.5234531149399,
+            "upper": 68.5234531149399,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-3",
+          "sourceOpIndex": 3,
+          "type": "line",
+          "from": {
+            "x": 68.22644217147518,
+            "y": 507.70691476459655
+          },
+          "to": {
+            "x": 110.93029796583484,
+            "y": 340.30172129244806
+          },
+          "fromNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "toNames": [
+            "primaryBustDartTip"
+          ],
+          "length": {
+            "lower": 172.76607913925966,
+            "upper": 172.76607913925966,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-4",
+          "sourceOpIndex": 4,
+          "type": "line",
+          "from": {
+            "x": 110.93029796583484,
+            "y": 340.30172129244806
+          },
+          "to": {
+            "x": 198.61417275908207,
+            "y": 489.16291906539016
+          },
+          "fromNames": [
+            "primaryBustDartTip"
+          ],
+          "toNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "length": {
+            "lower": 172.76607913925938,
+            "upper": 172.76607913925938,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-5",
+          "sourceOpIndex": 5,
+          "type": "line",
+          "from": {
+            "x": 198.61417275908207,
+            "y": 489.16291906539016
+          },
+          "to": {
+            "x": 355.1600359815324,
+            "y": 459.1520565849643
+          },
+          "fromNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "toNames": [
+            "waist"
+          ],
+          "length": {
+            "lower": 159.3965468850601,
+            "upper": 159.3965468850601,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-6",
+          "sourceOpIndex": 6,
+          "type": "line",
+          "from": {
+            "x": 355.1600359815324,
+            "y": 459.1520565849643
+          },
+          "to": {
+            "x": 298.3802106059864,
+            "y": 258.35123990013363
+          },
+          "fromNames": [
+            "waist"
+          ],
+          "toNames": [
+            "armhole"
+          ],
+          "length": {
+            "lower": 208.6741875531626,
+            "upper": 208.6741875531626,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-7",
+          "sourceOpIndex": 7,
+          "type": "curve",
+          "from": {
+            "x": 298.3802106059864,
+            "y": 258.35123990013363
+          },
+          "to": {
+            "x": 207.48000000000002,
+            "y": 138.51810582461135
+          },
+          "cp1": {
+            "x": 204.5889424113227,
+            "y": 250.91858369379835
+          },
+          "cp2": {
+            "x": 207.48000000000002,
+            "y": 173.28713179098676
+          },
+          "fromNames": [
+            "armhole"
+          ],
+          "toNames": [
+            "armholePitch"
+          ],
+          "length": {
+            "lower": 171.38217772068873,
+            "upper": 171.38218281755832,
+            "leaves": 2701,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-8",
+          "sourceOpIndex": 8,
+          "type": "curve",
+          "from": {
+            "x": 207.48000000000002,
+            "y": 138.51810582461135
+          },
+          "to": {
+            "x": 218.40000000000003,
+            "y": 34.57750353727427
+          },
+          "cp1": {
+            "x": 207.48000000000002,
+            "y": 103.74907985823594
+          },
+          "cp2": {
+            "x": 215.02541771258927,
+            "y": 47.17161608821321
+          },
+          "fromNames": [
+            "armholePitch"
+          ],
+          "toNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "length": {
+            "lower": 104.65315734968257,
+            "upper": 104.65316207575165,
+            "leaves": 341,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-9",
+          "sourceOpIndex": 9,
+          "type": "line",
+          "from": {
+            "x": 218.40000000000003,
+            "y": 34.57750353727427
+          },
+          "to": {
+            "x": 89.355,
+            "y": 0
+          },
+          "fromNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "toNames": [
+            "hps"
+          ],
+          "length": {
+            "lower": 133.5972147010192,
+            "upper": 133.5972147010192,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-10",
+          "sourceOpIndex": 10,
+          "type": "curve",
+          "from": {
+            "x": 89.355,
+            "y": 0
+          },
+          "to": {
+            "x": -1.3218604312524252e-15,
+            "y": 66.7658730314338
+          },
+          "cp1": {
+            "x": 71.46513823926841,
+            "y": 66.7658730314338
+          },
+          "cp2": {
+            "x": -1.3218604312524252e-15,
+            "y": 66.7658730314338
+          },
+          "fromNames": [
+            "hps"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 119.86488069572096,
+            "upper": 119.86488580623791,
+            "leaves": 2123,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-11",
+          "sourceOpIndex": 11,
+          "type": "close",
+          "from": {
+            "x": -1.3218604312524252e-15,
+            "y": 66.7658730314338
+          },
+          "to": {
+            "x": -1.3218604312524252e-15,
+            "y": 66.7658730314338
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 0,
+            "upper": 0,
+            "certified": false
+          },
+          "exactZero": true,
+          "classification": "redundant-close"
+        }
+      ]
+    },
+    {
+      "id": "synthetic-distinct",
+      "variant": "primary-only",
+      "options": {
+        "primaryBustDart": "06:00",
+        "secondaryBustDart": "none",
+        "waistDart": false,
+        "shoulderDart": false
+      },
+      "edges": [
+        {
+          "id": "breanna.front/seam/op-1",
+          "sourceOpIndex": 1,
+          "type": "line",
+          "from": {
+            "x": -9.50128436967942e-16,
+            "y": 60.51600830680028
+          },
+          "to": {
+            "x": 0,
+            "y": 479.40000000000003
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfWaist"
+          ],
+          "length": {
+            "lower": 418.88399169319973,
+            "upper": 418.88399169319973,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-2",
+          "sourceOpIndex": 2,
+          "type": "line",
+          "from": {
+            "x": 0,
+            "y": 479.40000000000003
+          },
+          "to": {
+            "x": 70.91230603321281,
+            "y": 471.7425962986822
+          },
+          "fromNames": [
+            "cfWaist"
+          ],
+          "toNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "length": {
+            "lower": 71.32454681519529,
+            "upper": 71.32454681519529,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-3",
+          "sourceOpIndex": 3,
+          "type": "line",
+          "from": {
+            "x": 70.91230603321281,
+            "y": 471.7425962986822
+          },
+          "to": {
+            "x": 107.33772046383315,
+            "y": 319.5271553375445
+          },
+          "fromNames": [
+            "origBustDart1",
+            "primaryBustDart1"
+          ],
+          "toNames": [
+            "primaryBustDartTip"
+          ],
+          "length": {
+            "lower": 156.51310259347628,
+            "upper": 156.51310259347628,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-4",
+          "sourceOpIndex": 4,
+          "type": "line",
+          "from": {
+            "x": 107.33772046383315,
+            "y": 319.5271553375445
+          },
+          "to": {
+            "x": 191.45726815415975,
+            "y": 451.5129613161077
+          },
+          "fromNames": [
+            "primaryBustDartTip"
+          ],
+          "toNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "length": {
+            "lower": 156.51310259347636,
+            "upper": 156.51310259347636,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-5",
+          "sourceOpIndex": 5,
+          "type": "line",
+          "from": {
+            "x": 191.45726815415975,
+            "y": 451.5129613161077
+          },
+          "to": {
+            "x": 336.38620637338795,
+            "y": 418.34681522775116
+          },
+          "fromNames": [
+            "origBustDart2",
+            "primaryBustDart2"
+          ],
+          "toNames": [
+            "waist"
+          ],
+          "length": {
+            "lower": 148.67545318480475,
+            "upper": 148.67545318480475,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-6",
+          "sourceOpIndex": 6,
+          "type": "line",
+          "from": {
+            "x": 336.38620637338795,
+            "y": 418.34681522775116
+          },
+          "to": {
+            "x": 278.63783339669453,
+            "y": 231.06908782877758
+          },
+          "fromNames": [
+            "waist"
+          ],
+          "toNames": [
+            "armhole"
+          ],
+          "length": {
+            "lower": 195.97913603539425,
+            "upper": 195.97913603539425,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-7",
+          "sourceOpIndex": 7,
+          "type": "curve",
+          "from": {
+            "x": 278.63783339669453,
+            "y": 231.06908782877758
+          },
+          "to": {
+            "x": 194.74999999999997,
+            "y": 126.05561177555916
+          },
+          "cp1": {
+            "x": 190.00542368228142,
+            "y": 227.5502924206488
+          },
+          "cp2": {
+            "x": 194.74999999999997,
+            "y": 159.54302670326229
+          },
+          "fromNames": [
+            "armhole"
+          ],
+          "toNames": [
+            "armholePitch"
+          ],
+          "length": {
+            "lower": 155.6068790459538,
+            "upper": 155.60688400875995,
+            "leaves": 2703,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-8",
+          "sourceOpIndex": 8,
+          "type": "curve",
+          "from": {
+            "x": 194.74999999999997,
+            "y": 126.05561177555916
+          },
+          "to": {
+            "x": 205,
+            "y": 25.9285793274666
+          },
+          "cp1": {
+            "x": 194.74999999999997,
+            "y": 92.56819684785603
+          },
+          "cp2": {
+            "x": 202.3890906029745,
+            "y": 38.21194228983294
+          },
+          "fromNames": [
+            "armholePitch"
+          ],
+          "toNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "length": {
+            "lower": 100.75329202842036,
+            "upper": 100.75329785692847,
+            "leaves": 265,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-9",
+          "sourceOpIndex": 9,
+          "type": "line",
+          "from": {
+            "x": 205,
+            "y": 25.9285793274666
+          },
+          "to": {
+            "x": 83.015625,
+            "y": 0
+          },
+          "fromNames": [
+            "shoulder",
+            "shoulderNoEase"
+          ],
+          "toNames": [
+            "hps"
+          ],
+          "length": {
+            "lower": 124.7095785017388,
+            "upper": 124.7095785017388,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-10",
+          "sourceOpIndex": 10,
+          "type": "curve",
+          "from": {
+            "x": 83.015625,
+            "y": 0
+          },
+          "to": {
+            "x": -9.50128436967942e-16,
+            "y": 60.51600830680028
+          },
+          "cp1": {
+            "x": 70.15255034831202,
+            "y": 60.51600830680028
+          },
+          "cp2": {
+            "x": -9.50128436967942e-16,
+            "y": 60.51600830680028
+          },
+          "fromNames": [
+            "hps"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 111.1720351804109,
+            "upper": 111.17204031308393,
+            "leaves": 2108,
+            "certified": false
+          },
+          "exactZero": false,
+          "classification": "nonzero-or-unresolved"
+        },
+        {
+          "id": "breanna.front/seam/op-11",
+          "sourceOpIndex": 11,
+          "type": "close",
+          "from": {
+            "x": -9.50128436967942e-16,
+            "y": 60.51600830680028
+          },
+          "to": {
+            "x": -9.50128436967942e-16,
+            "y": 60.51600830680028
+          },
+          "fromNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "toNames": [
+            "cfNeck",
+            "gridAnchor"
+          ],
+          "length": {
+            "lower": 0,
+            "upper": 0,
+            "certified": false
+          },
+          "exactZero": true,
+          "classification": "redundant-close"
+        }
+      ]
+    }
+  ]
+}
