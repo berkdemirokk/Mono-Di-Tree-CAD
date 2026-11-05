@@ -228,6 +228,17 @@ internal static partial class DesktopVerification
             Check(window.CaptureForVerification().ModelId is null&&window.CaptureForVerification().Prompt.EndsWith("A kesim elbise istiyorum",StringComparison.Ordinal)&&!window.RequestDetailsForVerification.IsExpanded,"Primary Send button still requires model approval while retaining text and collapsed details",checks);
             window.ChatInputForVerification.Text="bel çevresi 72 cm";window.SendActionForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&!window.RequestDetailsForVerification.IsExpanded&&window.ChatInputForVerification.Text.Length==0,"Chat measurement still updates hidden detail fields without forcing them open",checks);
+            var photoShortcut=window.ReferenceShortcutForVerification!;
+            Check(layoutBody.Children.IndexOf(photoShortcut)>layoutBody.Children.IndexOf(composeParent)&&layoutBody.Children.IndexOf(photoShortcut)<layoutBody.Children.IndexOf(window.RequestDetailsForVerification)&&!InDetails(photoShortcut),"Photo shortcut is next to chat outside collapsed request details",checks);
+            Check(AutomationProperties.GetHelpText(photoShortcut).Contains("Görselden ölçü veya kalıp çıkarmaz")&&photoShortcut.Focusable,"Photo shortcut is accessible without implying image-to-pattern generation",checks);
+            window.LoadForVerification(new DesignRequest("Fotoğrafı koru","bel çevresi 72 cm",new DesignReference("sentetik.png","image/png",imageBytes)));window.ChatInputForVerification.Text="Bekleyen mesaj";
+            int chooserCalls=0;window.ReferencePathForVerification=()=> { chooserCalls++;return null; };
+            photoShortcut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.ReferencePathForVerification=null;
+            Check(chooserCalls==1&&window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes)&&window.CaptureForVerification().Prompt=="Fotoğrafı koru"&&window.ChatInputForVerification.Text=="Bekleyen mesaj"&&!window.RequestDetailsForVerification.IsExpanded,"Photo shortcut reaches existing chooser and cancellation preserves photo bytes and unsent text",checks);
+            window.LoadForVerification(new DesignRequest("Sentetik kart isteği","bel çevresi 72 cm",null));window.ChatInputForVerification.Text="Uzun kollu olsun";
+            var cardPanel=(Panel)window.ModelScrollerForVerification.Content;var alineCard=cardPanel.Children.OfType<Button>().Single(b=>AutomationProperties.GetName(b)=="A kesim elbise");
+            alineCard.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().Prompt.Contains("A kesim elbise; detaylar:")&&!window.RequestDetailsForVerification.IsExpanded&&window.ChatInputForVerification.Text=="Uzun kollu olsun"&&ReferenceEquals(System.Windows.Input.FocusManager.GetFocusedElement(window),window.ChatInputForVerification),"V1 model card preserves pending message and directs logical focus to chat without opening saved prose",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

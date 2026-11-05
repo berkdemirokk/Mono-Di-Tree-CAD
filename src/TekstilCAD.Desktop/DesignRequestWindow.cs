@@ -49,6 +49,8 @@ internal sealed class DesignRequestWindow : Window
     internal Expander RequestDetailsForVerification=>requestDetails;
     internal Button? ReviewActionForVerification { get; private set; }
     internal Button? SendActionForVerification { get; private set; }
+    internal Button? ReferenceShortcutForVerification { get; private set; }
+    internal Func<string?>? ReferencePathForVerification { get; set; }
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
     internal DesignRequest CaptureForVerification()=>Capture();
@@ -135,7 +137,7 @@ internal sealed class DesignRequestWindow : Window
                     var index=modelCards.FindIndex(card=>ReferenceEquals(card.Button,button));
                     if(index<0 || index>=PortableModelIds.Length)return;
                     portableModelId=PortableModelIds[index];dirty=true;SetLastModel(button);
-                    SetStatus("Model kimliği seçildi; tarif korunuyor. Model ile tarifin uyumunu kontrol edin.");return;
+                    FocusChatInput();SetStatus("Model kimliği seçildi; tarif korunuyor. Model ile tarifin uyumunu kontrol edin.");return;
                 }
                 if(selectedModelText==template)
                 {
@@ -145,7 +147,7 @@ internal sealed class DesignRequestWindow : Window
                         SetStatus("Model seçimi onaylandı; mevcut tarif korundu.");
                     }
                     else SetStatus("Bu model zaten seçili; mevcut tarif korundu.");
-                    return;
+                    FocusChatInput();return;
                 }
                 if(modelAmbiguous || selectedModelFromLoaded)
                 {
@@ -168,7 +170,7 @@ internal sealed class DesignRequestWindow : Window
                     selectedModelText=template;modelSnapshot=prompt.Text;modelAmbiguous=false;selectedModelFromLoaded=false;SetLastModel(button);
                 }
                 finally { changingModel=false; }
-                prompt.CaretIndex=selectedModelStart+template.Length;FocusRequestEditor(prompt);SetStatus("Model fikri seçildi. Tarifi ve ölçüleri düzenleyebilirsiniz; kalıp oluşturulmadı.");
+                prompt.CaretIndex=selectedModelStart+template.Length;FocusChatInput();SetStatus("Model fikri seçildi. Tarifi ve ölçüleri düzenleyebilirsiniz; kalıp oluşturulmadı.");
             };
             modelCards.Add((button,caption,label,template));models.Children.Add(button);
         }
@@ -206,6 +208,10 @@ internal sealed class DesignRequestWindow : Window
         SendActionForVerification=send;
         send.Background=Accent;send.Foreground=Surface;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
+        var referenceShortcut=new Button { Content="Referans görseli ekle…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
+        ReferenceShortcutForVerification=referenceShortcut;AutomationProperties.SetName(referenceShortcut,"Referans görseli ekle");
+        AutomationProperties.SetHelpText(referenceShortcut,"PNG/JPEG referansı mevcut görsel seçme ve doğrulama akışıyla ekler. Görselden ölçü veya kalıp çıkarmaz; özgün baytlar isteğe eklenir.");
+        referenceShortcut.Click+=(_,_)=>ChooseReference();body.Children.Add(referenceShortcut);
         AutomationProperties.SetHelpText(RetryModelForVerification,"Son gönderilen mesaj hâlâ tarifin sonunda duruyorsa güncel ölçü ve görselle yeniden inceler; metni tekrar eklemez. Seçim ayrıca onay ister.");
         RetryModelForVerification.Click+=(_,_)=>RetryLastModelMessage();body.Children.Add(RetryModelForVerification);
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Ölçüleri ayrı satır veya noktalı virgülle ayırabilir, açık etiketli ve birimli iki ölçüyü “ve” ile birleştirebilirsiniz. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
@@ -263,6 +269,11 @@ internal sealed class DesignRequestWindow : Window
     {
         requestDetails.IsExpanded=true;
         requestDetails.UpdateLayout();editor.BringIntoView();editor.Focus();
+    }
+    private void FocusChatInput()
+    {
+        System.Windows.Input.FocusManager.SetFocusedElement(this,chatInput);
+        chatInput.BringIntoView();chatInput.Focus();
     }
     private void SetStatus(string message)
     {
@@ -518,6 +529,10 @@ internal sealed class DesignRequestWindow : Window
     private void ChooseReference()
     {
         if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; tamamlanmasını bekleyin.");return; }
+        if(ReferencePathForVerification is not null)
+        {
+            var path=ReferencePathForVerification();if(path is not null)_=ChooseReferenceFileAsync(path);return;
+        }
         var dialog=new OpenFileDialog { Title="Referans görseli seç",Filter="PNG veya JPEG (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
         _=ChooseReferenceFileAsync(dialog.FileName);
