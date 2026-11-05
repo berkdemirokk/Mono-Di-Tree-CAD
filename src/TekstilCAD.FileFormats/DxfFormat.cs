@@ -848,6 +848,57 @@ public static class DxfFormat
                 pieceSources.Add(new DxfPieceSource(doc.Pieces[^1].Id,sourceSection,sourceBlock,sourceLayer,sourceType,ordinals.ToImmutableArray())
                     { ChildSourceOrdinals=childOrdinals?.ToImmutableArray() ?? ImmutableArray<int>.Empty,BlockHeaderOrdinal=blockHeaderOrdinal });
         }
+        Dictionary<string,string>? circleBlockOwners=null;
+        static string CircleHandle(string value)
+        {
+            if(value.Length is <1 or >16 || value.Any(c=>!Uri.IsHexDigit(c)))
+                throw new InvalidDataException("CIRCLE veya BLOCK_RECORD tanıtıcısı geçersiz.");
+            var canonical=value.TrimStart('0').ToUpperInvariant();
+            if(canonical.Length==0)throw new InvalidDataException("CIRCLE veya BLOCK_RECORD tanıtıcısı sıfır olamaz.");
+            return canonical;
+        }
+        void ValidateCircleOwner(Entity circle)
+        {
+            var ids=circle.Data.Where(g=>g.Code==5).ToArray();
+            if(ids.Length>1)throw new InvalidDataException("CIRCLE tanıtıcısı yinelenmiş.");
+            if(ids.Length==1)_=CircleHandle(ids[0].Value);
+            var owners=circle.Data.Where(g=>g.Code==330).ToArray();
+            if(owners.Length>1)throw new InvalidDataException("CIRCLE sahiplik tanıtıcısı yinelenmiş.");
+            if(owners.Length==0)return; // Legacy DXF may not declare a handle.
+            var owner=CircleHandle(owners[0].Value);
+            if(ids.Length==1 && CircleHandle(ids[0].Value)==owner)throw new InvalidDataException("CIRCLE kendi sahibini gösteremez.");
+            if(circleBlockOwners is null)
+            {
+                var index=new Dictionary<string,string>(StringComparer.Ordinal);string currentSection="";bool inTable=false,foundTable=false;
+                foreach(var item in entities)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if(item.Type=="SECTION") { currentSection=item.Text(2);inTable=false;continue; }
+                    if(item.Type=="ENDSEC") { if(inTable)throw new InvalidDataException("BLOCK_RECORD tablosu kapatılmamış.");currentSection="";continue; }
+                    if(currentSection!="TABLES")continue;
+                    if(inTable && item.Type=="TABLE")throw new InvalidDataException("BLOCK_RECORD tablosu kapatılmamış.");
+                    if(item.Type=="TABLE" && item.Data.Any(g=>g.Code==2 && g.Value.Equals("BLOCK_RECORD",StringComparison.OrdinalIgnoreCase)))
+                    {
+                        if(inTable || foundTable || item.Data.Count(g=>g.Code==2)!=1)throw new InvalidDataException("BLOCK_RECORD tablosu belirsiz.");
+                        inTable=true;foundTable=true;continue;
+                    }
+                    if(item.Type=="ENDTAB") { inTable=false;continue; }
+                    if(!inTable || item.Type!="BLOCK_RECORD")continue;
+                    var names=item.Data.Where(g=>g.Code==2).ToArray();var handles=item.Data.Where(g=>g.Code==5).ToArray();
+                    if(names.Length!=1 || string.IsNullOrWhiteSpace(names[0].Value) || handles.Length!=1)
+                        throw new InvalidDataException("BLOCK_RECORD adı veya tanıtıcısı eksik ya da yinelenmiş.");
+                    if(index.Count>=10_000)throw new InvalidDataException("BLOCK_RECORD tablosu inceleme sınırını aşıyor.");
+                    var handle=CircleHandle(handles[0].Value);
+                    if(!index.TryAdd(handle,names[0].Value))throw new InvalidDataException("BLOCK_RECORD tanıtıcısı yinelenmiş.");
+                }
+                if(inTable)throw new InvalidDataException("BLOCK_RECORD tablosu kapatılmamış.");
+                if(!foundTable || index.Count(pair=>pair.Value.Equals("*Model_Space",StringComparison.OrdinalIgnoreCase))!=1)
+                    throw new InvalidDataException("CIRCLE model alanı sahipliği doğrulanamadı.");
+                circleBlockOwners=index;
+            }
+            if(!circleBlockOwners.TryGetValue(owner,out var blockName) || !blockName.Equals("*Model_Space",StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("CIRCLE sahipliği model alanıyla eşleşmiyor.");
+        }
         long bulgeValidationComparisons = 0;
         int convertedBulgeSegments = 0, convertedBulgeContours = 0, convertedCircles = 0;
         List<Point2> ApproximateBulge(List<DxfBulgeVertex> vertices, bool closed, List<Point2> originalEndpoints)
@@ -1157,6 +1208,7 @@ public static class DxfFormat
                 // Unknown attributes may carry manufacturing semantics and are not discarded.
                 if(e.Data.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 39 or 40 or 60 or 62 or 67 or 100 or 210 or 220 or 230 or 330 or 410 or 6)))
                     throw new InvalidDataException("CIRCLE desteklenmeyen alan içeriyor.");
+                ValidateCircleOwner(e);
                 var subclasses=e.Data.Where(g=>g.Code==100).Select(g=>g.Value).ToArray();
                 if(subclasses.Any(v=>v is not ("AcDbEntity" or "AcDbCircle")) || subclasses.Distinct(StringComparer.Ordinal).Count()!=subclasses.Length)
                     throw new InvalidDataException("CIRCLE alt sınıfı belirsiz.");

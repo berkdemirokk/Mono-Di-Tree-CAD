@@ -1,2 +1,5 @@
 # The reference is verified byte-for-byte; checkout must not rewrite its line endings.
 tests/TekstilCAD.Tests/Fixtures/wearcad-100mm-square.dxf -text
+
+# Independent interoperability fixture is verified by byte hash.
+tests/TekstilCAD.Tests/Fixtures/ezdxf-circle-owner.dxf -text -diff

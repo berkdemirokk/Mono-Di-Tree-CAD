@@ -117,4 +117,4 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 
 - Fotoğraf incelemesindeki “Çizimi gizle”, işaret ve uyarıları geçici olarak gizler; bu sırada çizim ve uygulama araçları devre dışıdır. Yeniden gösterildiğinde taslak ve bekleyen öneri korunur. Görsel karşılaştırma fotoğraf sınırının doğruluğunu veya üretim uygunluğunu kanıtlamaz; gerçek kullanıcı ve ekran okuyucu kabul testi yapılmadı.
 
-- Deneysel [DXF daire aktarımı](docs/DXF_CIRCLE_EXPERIMENT.md) yalnız açık eğri seçimiyle, doğrulanabilen model alanı 2B CIRCLE kayıtlarını çizgi parçalarına yaklaştırır. Kapalı ve kesik katman, bilinmeyen alan veya belirsiz normal gibi durumlar reddedilebilir. Katman kesim anlamı, gerçek DXF dosyaları ve üretim doğruluğu doğrulanmadı.
+- Deneysel [DXF daire aktarımı](docs/DXF_CIRCLE_EXPERIMENT.md) yalnız açık eğri seçimiyle, doğrulanabilen model alanı 2B CIRCLE kayıtlarını çizgi parçalarına yaklaştırır. Kapalı ve kesik katman, bilinmeyen alan, belirsiz normal veya doğrulanamayan 330 sahipliği gibi durumlar reddedilebilir; 330 bulunmayan kayıtlarda sahiplik doğrulanmaz. Katman kesim anlamı, gerçek DXF dosyaları ve üretim doğruluğu doğrulanmadı.

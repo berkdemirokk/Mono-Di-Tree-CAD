@@ -45,6 +45,64 @@ public sealed class DxfCircleImportTests
         Assert.Throws<InvalidDataException>(()=>Import(input));
     }
 
+    private static MemoryStream WithOwnerTable(string records,string circleFields)
+    {
+        var source="0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nBLOCK_RECORD\n"+records+
+            "0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n0\nCIRCLE\n10\n0\n20\n0\n40\n5\n"+
+            circleFields+"0\nENDSEC\n0\nEOF\n";
+        return new MemoryStream(Encoding.UTF8.GetBytes(source));
+    }
+    private const string OwnerRecords="0\nBLOCK_RECORD\n2\n*Model_Space\n5\nA1\n0\nBLOCK_RECORD\n2\n*Paper_Space\n5\nB2\n";
+
+    [Theory]
+    [InlineData("A1")] [InlineData("0000a1")]
+    public void CircleOwnerMustResolveToTheUniqueModelSpaceBlock(string owner)
+    {
+        using var input=WithOwnerTable(OwnerRecords,"5\nF3\n330\n"+owner+"\n");
+        var result=Import(input);Assert.Single(result.Project.Pieces);
+        Assert.Contains(result.Warnings,w=>w.Contains("tanıtıcıları"));
+    }
+
+    [Theory]
+    [InlineData("330\nB2\n")]
+    [InlineData("330\nA2\n")]
+    [InlineData("330\n0\n")]
+    [InlineData("330\nnothex\n")]
+    [InlineData("330\nA1\n330\nA1\n")]
+    [InlineData("5\nA1\n330\nA1\n")]
+    [InlineData("5\nX\n")]
+    [InlineData("5\n12\n5\n13\n")]
+    public void InvalidOrNonModelOwnerDoesNotImport(string fields)
+    {
+        using var input=WithOwnerTable(OwnerRecords,fields);Assert.Throws<InvalidDataException>(()=>Import(input));
+    }
+
+    [Fact]
+    public void MissingAmbiguousOrDuplicateBlockRecordsCannotVerifyOwner()
+    {
+        using var missing=Stream(Circle+"330\nA1\n");Assert.Throws<InvalidDataException>(()=>Import(missing));
+        using var duplicate=WithOwnerTable(OwnerRecords+"0\nBLOCK_RECORD\n2\nOther\n5\n00A1\n","330\nA1\n");
+        Assert.Throws<InvalidDataException>(()=>Import(duplicate));
+        using var modelDuplicate=WithOwnerTable(OwnerRecords+"0\nBLOCK_RECORD\n2\n*model_space\n5\nC3\n","330\nA1\n");
+        Assert.Throws<InvalidDataException>(()=>Import(modelDuplicate));
+    }
+
+    [Fact]
+    public void IndependentlyGeneratedEzdxfCircleHasModelOwnerAndExpectedBounds()
+    {
+        var root=new DirectoryInfo(AppContext.BaseDirectory);
+        while(root is not null && !File.Exists(Path.Combine(root.FullName,"AGENTS.md")))root=root.Parent;
+        Assert.NotNull(root);
+        var path=Path.Combine(root!.FullName,"tests","TekstilCAD.Tests","Fixtures","ezdxf-circle-owner.dxf");
+        var bytes=File.ReadAllBytes(path);
+        Assert.Equal("951066BE129929750030C9214D2D816F9EC8ABB3384532B5659E6580869A9824",Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)));
+        using var input=new MemoryStream(bytes);var result=Import(input);var piece=Assert.Single(result.Project.Pieces);
+        Assert.True(piece.Closed);
+        Assert.Equal(5,piece.Points.Min(p=>p.X),8);Assert.Equal(15,piece.Points.Max(p=>p.X),8);
+        Assert.Equal(15,piece.Points.Min(p=>p.Y),8);Assert.Equal(25,piece.Points.Max(p=>p.Y),8);
+        Assert.Contains(result.PieceSources!.Value,source=>source.EntityType=="CIRCLE");
+    }
+
     [Fact]
     public void ImportChoiceParticipatesInReviewFingerprint()
     {
