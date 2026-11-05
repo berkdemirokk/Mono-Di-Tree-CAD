@@ -1,0 +1,19 @@
+<Project>
+  <!-- Research-only publish filter: never mutate an existing output directory. -->
+  <Target Name="TekstilCADResearchExcludeOpenCvVideoDll"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(TekstilCADResearchNoVideo)' == 'true'">
+    <Error Condition="'$(RuntimeIdentifier)' != 'win-x64' or '$(SelfContained)' != 'true'"
+           Text="The photo research profile requires a self-contained win-x64 publish." />
+    <ItemGroup>
+      <_ResearchVideoDll Include="@(ResolvedFileToPublish)"
+        Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'opencv_videoio_ffmpeg4100_64.dll'" />
+    </ItemGroup>
+    <Error Condition="'@(_ResearchVideoDll)' == ''"
+           Text="Expected the resolved OpenCV FFmpeg x64 DLL; inspect the package and SDK before publishing." />
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(_ResearchVideoDll)" />
+    </ItemGroup>
+    <Message Importance="high" Text="Research publish excludes the resolved OpenCV FFmpeg x64 video DLL; no license or distribution claim is implied." />
+  </Target>
+</Project>
