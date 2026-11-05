@@ -1,6 +1,11 @@
 import XCTest
 @testable import TekstilCADViewer_iOS
 
+private func makeTestRequest(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
+    try ExperimentalDesignBrief.make(.init(style: .describe, description: prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: measurements, image: image, imageName: imageName))
+}
+
+
 #if DEBUG
 @MainActor
 final class DesignDraftStoreTests: XCTestCase {
@@ -153,7 +158,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(original.version, 1)
         let reference = try XCTUnwrap(original.reference)
         let image = try XCTUnwrap(Data(base64Encoded: reference.dataBase64))
-        let output = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: image, imageName: reference.name)
+        let output = try makeTestRequest(prompt: original.prompt, measurements: original.measurements, image: image, imageName: reference.name)
         let roundTrip = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: output)
         XCTAssertEqual(roundTrip.prompt, original.prompt)
         XCTAssertEqual(roundTrip.measurements, original.measurements)
@@ -165,7 +170,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(imported.image, image)
         let badVersion = Data(#"{"format":"tekstilcad.design-request","version":2,"prompt":"x","measurements":"","reference":null}"#.utf8)
         XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(badVersion))
-        let whitespace = try ExperimentalDesignBrief.make(prompt: "x", measurements: "  ", image: nil, imageName: nil)
+        let whitespace = try makeTestRequest(prompt: "x", measurements: "  ", image: nil, imageName: nil)
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(whitespace).measurements, "  ")
     }
     func testPortableImportRejectsUnknownAndDuplicateFields() {
@@ -191,7 +196,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(original.style, .describe) // v1 has no model ID; do not infer it.
         let editedText = original.description + "\nKol: uzun 👗"
         let whitespaceMeasurements = "  \t\n "
-        let output = try ExperimentalDesignBrief.make(prompt: editedText, measurements: whitespaceMeasurements,
+        let output = try makeTestRequest(prompt: editedText, measurements: whitespaceMeasurements,
                                                        image: original.image, imageName: original.imageName)
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -221,11 +226,11 @@ final class DesignDraftStoreTests: XCTestCase {
         let prior = try ExperimentalDesignBrief.portableDraft(Data(contentsOf: url))
         var maximum = try XCTUnwrap(prior.image)
         maximum.append(Data(count: ExperimentalDesignBrief.maxImageBytes - maximum.count))
-        let output = try ExperimentalDesignBrief.make(prompt: "Düz", measurements: "", image: maximum, imageName: "örnek.png")
+        let output = try makeTestRequest(prompt: "Düz", measurements: "", image: maximum, imageName: "örnek.png")
         let restored = try ExperimentalDesignBrief.portableDraft(output)
         XCTAssertEqual(restored.image, maximum)
         var oversized = maximum; oversized.append(0)
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Düz", measurements: "", image: oversized, imageName: "örnek.png"))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "Düz", measurements: "", image: oversized, imageName: "örnek.png"))
         XCTAssertEqual(prior.image, try ExperimentalDesignBrief.portableDraft(Data(contentsOf: url)).image)
     }
     func testFifteenMeasurementFieldsAppendOnlyOnExplicitApply() throws {
@@ -252,7 +257,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(result.hasSuffix("Bitmiş etek çevresi (bolluk dahil): 180 cm"))
         XCTAssertEqual(draft.otherMeasurements, "Özgün not 👗"); XCTAssertEqual(draft.waist, "72 cm"); XCTAssertEqual(draft.style, .aline)
         let updated = ExperimentalDesignBrief.Draft(style: draft.style, description: draft.description, bust: draft.bust, waist: draft.waist, hips: draft.hips, length: draft.length, otherMeasurements: result, image: nil, imageName: nil)
-        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: updated.prompt, measurements: updated.measurements, image: nil, imageName: nil))
+        let v1 = try ExperimentalDesignBrief.portableDraft(makeTestRequest(prompt: updated.prompt, measurements: updated.measurements, image: nil, imageName: nil))
         let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(updated))
         XCTAssertEqual(v1.measurements, updated.measurements); XCTAssertEqual(v2.measurements, updated.measurements)
         XCTAssertEqual(v2.style, .aline); XCTAssertEqual(v2.description, draft.description)
@@ -374,13 +379,13 @@ final class DesignDraftStoreTests: XCTestCase {
     }
     func testImportedModelLabelIsNeverSilentlyReplaced() throws {
         let old = "Seçilen elbise modeli: A kesim elbise\nİpek 👗"
-        let windows = try ExperimentalDesignBrief.make(prompt: old, measurements: "Bel çevresi: 72 cm", image: nil, imageName: nil)
+        let windows = try makeTestRequest(prompt: old, measurements: "Bel çevresi: 72 cm", image: nil, imageName: nil)
         let imported = try ExperimentalDesignBrief.portableDraft(windows)
         XCTAssertEqual(imported.style, .describe)
         XCTAssertEqual(imported.prompt, old)
         XCTAssertTrue(ExperimentalDesignBrief.hasConflictingModelLabels(style: .wrap, description: imported.description))
         XCTAssertFalse(ExperimentalDesignBrief.hasConflictingModelLabels(style: .describe, description: imported.description))
-        let preserved = try ExperimentalDesignBrief.make(prompt: imported.prompt, measurements: imported.measurements, image: nil, imageName: nil)
+        let preserved = try makeTestRequest(prompt: imported.prompt, measurements: imported.measurements, image: nil, imageName: nil)
         let reopened = try ExperimentalDesignBrief.portableDraft(preserved)
         XCTAssertEqual(reopened.prompt, old)
         XCTAssertEqual(reopened.measurements, "Bel çevresi: 72 cm")
@@ -434,6 +439,22 @@ final class DesignDraftStoreTests: XCTestCase {
         let oldFixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "dress-draft-v1", withExtension: "json"))
         XCTAssertNil(try ExperimentalDesignBrief.DraftStore.recoveryDraft(Data(contentsOf: oldFixture)).measurementForm)
     }
+    func testBothPortableExportVersionsRejectAnyPendingALineInput() throws {
+        let base = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "korunan not", image: nil, imageName: nil)
+        for input in [ALineMeasurementGuide.Input(values: ["36"] + Array(repeating: "", count: 10), unit: ""),
+                      ALineMeasurementGuide.Input(values: Array(repeating: "", count: 11), unit: "cm")] {
+            var pending = base; pending.aLineGuideInput = input
+            XCTAssertThrowsError(try ExperimentalDesignBrief.make(pending)) { error in
+                guard let issue = error as? ExperimentalDesignBrief.Error, case .pendingALineGuide = issue else { return XCTFail("Unexpected error: \(error)") }
+            }
+            XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(pending)) { error in
+                guard let issue = error as? ExperimentalDesignBrief.Error, case .pendingALineGuide = issue else { return XCTFail("Unexpected error: \(error)") }
+            }
+            XCTAssertEqual(try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(pending)), pending)
+        }
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(base)).measurements, base.measurements)
+        XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(base)).measurements, base.measurements)
+    }
     func testPendingALineGuideSurvivesLocalAndRecoveryWithoutApplying() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -450,8 +471,11 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(restored.aLineGuideInput, pending)
         XCTAssertEqual(restored.measurements, draft.measurements)
         XCTAssertFalse(restored.measurements.contains("Ön bel yayı"))
-        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: restored.prompt, measurements: restored.measurements, image: nil, imageName: nil))
-        let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(restored))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(restored))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(restored))
+        var approved = restored; approved.aLineGuideInput = nil
+        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(approved))
+        let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(approved))
         XCTAssertNil(v1.aLineGuideInput); XCTAssertNil(v2.aLineGuideInput)
         XCTAssertEqual(v1.measurements, restored.measurements); XCTAssertEqual(v2.measurements, restored.measurements)
         var both = draft; both.measurementForm = .init(values: Array(repeating: "", count: 15), unit: "cm")
@@ -624,7 +648,7 @@ final class DesignDraftStoreTests: XCTestCase {
         let selection = PhotoObservation.Selection(silhouette: .unknown, sleeve: .short, neck: .round)
         let description = try PhotoObservation.append(selection, description: "Özgün tarif", notes: "Diğer not")
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: description, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "Diğer not", image: image, imageName: reference.name)
-        let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: image, imageName: reference.name))
+        let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: image, imageName: reference.name))
         let v2 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.makeV2(draft))
         XCTAssertEqual(v1.measurements, draft.measurements); XCTAssertEqual(v2.measurements, draft.measurements)
         XCTAssertTrue(v1.prompt.contains(description)); XCTAssertEqual(v2.prompt, description)
@@ -725,7 +749,7 @@ final class DesignDraftStoreTests: XCTestCase {
         for (style, description) in [(ExperimentalDesignBrief.DressStyle.aline, ""), (.wrap, "  \n"), (.describe, "İpek elbise")] {
             let draft = ExperimentalDesignBrief.Draft(style: style, description: description, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
             let summary = ExperimentalDesignBrief.RequestSummary(draft)
-            let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
+            let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
             let v2Data = try ExperimentalDesignBrief.makeV2(draft)
             let v2 = try XCTUnwrap(JSONSerialization.jsonObject(with: v2Data) as? [String: Any])
             XCTAssertEqual(summary.v1Prompt, v1.prompt)
@@ -758,7 +782,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(draft.measurements, original.measurements)
         XCTAssertEqual(draft.image, Data(base64Encoded: try XCTUnwrap(original.reference).dataBase64))
         XCTAssertEqual(draft.imageName, original.reference?.name)
-        let output = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: draft.image, imageName: draft.imageName)
+        let output = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: draft.image, imageName: draft.imageName)
         let reopened = try ExperimentalDesignBrief.portableDraft(output)
         XCTAssertEqual(reopened.prompt, draft.prompt)
         XCTAssertEqual(reopened.measurements, draft.measurements)
@@ -808,7 +832,7 @@ final class DesignDraftStoreTests: XCTestCase {
         let changedStyle = ExperimentalDesignBrief.Draft(style: .aline, description: draft.description, bust: draft.bust, waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: "örnek.png")
         XCTAssertFalse(proposal.matches(changedStyle, explicitSelection: false, importedPortable: true, revision: revision))
         let selected = ExperimentalDesignBrief.Draft(style: proposal.suggested, description: draft.description, bust: draft.bust, waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: draft.imageName)
-        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: selected.prompt, measurements: selected.measurements, image: selected.image, imageName: selected.imageName))
+        let v1 = try ExperimentalDesignBrief.portableDraft(makeTestRequest(prompt: selected.prompt, measurements: selected.measurements, image: selected.image, imageName: selected.imageName))
         XCTAssertEqual(v1.style, .describe); XCTAssertEqual(v1.description, selected.prompt); XCTAssertEqual(v1.image, image)
         let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(selected))
         XCTAssertEqual(v2.style, .wrap); XCTAssertEqual(v2.description, draft.description); XCTAssertEqual(v2.measurements, selected.measurements); XCTAssertEqual(v2.image, image)
@@ -864,7 +888,7 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft(text)), text)
         }
         let approved = ExperimentalDesignBrief.Draft(style: .aline, description: original, bust: "", waist: try XCTUnwrap(proposal.values["bel çevresi"]), hips: try XCTUnwrap(proposal.values["kalça çevresi"]), length: "", otherMeasurements: "", image: nil, imageName: nil)
-        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: approved.prompt, measurements: approved.measurements, image: nil, imageName: nil))
+        let v1 = try ExperimentalDesignBrief.portableDraft(makeTestRequest(prompt: approved.prompt, measurements: approved.measurements, image: nil, imageName: nil))
         let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(approved))
         XCTAssertTrue(v1.description.contains(original)); XCTAssertEqual(v1.measurements, approved.measurements)
         XCTAssertEqual(v2.description, original); XCTAssertEqual(v2.measurements, approved.measurements); XCTAssertEqual(v2.style, .aline)
@@ -891,7 +915,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(conflicting.description, "Model: düz")
         let unknownField = #"{"format":"tekstilcad.design-request","version":2,"prompt":"İpek","measurements":"","reference":null,"model":{"id":"aline","extra":true}}"#
         XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(unknownField.utf8)))
-        let v1 = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: image, imageName: original.imageName)
+        let v1 = try makeTestRequest(prompt: original.prompt, measurements: original.measurements, image: image, imageName: original.imageName)
         let v1Reopened = try ExperimentalDesignBrief.portableDraft(v1)
         XCTAssertEqual(v1Reopened.style, .describe)
         XCTAssertEqual(v1Reopened.prompt, original.prompt)
@@ -968,7 +992,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(whitespaceResult.description, whitespace.description); XCTAssertEqual(whitespaceResult.measurements, whitespace.measurements)
         let noModel = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(noModel))
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "", measurements: "Bel çevresi: 72 cm", image: nil, imageName: nil))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "", measurements: "Bel çevresi: 72 cm", image: nil, imageName: nil))
         for text in ["Seçilen elbise modeli: A kesim elbise", "Seçilen elbise modeli: Düz elbise"] {
             let draft = ExperimentalDesignBrief.Draft(style: .aline, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
             let reopened = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
@@ -983,7 +1007,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(draft.measurements, "Bel çevresi: 72 cm\nKalça çevresi: 100 cm")
         let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
         XCTAssertEqual(v2.style, draft.style); XCTAssertEqual(v2.description, draft.description); XCTAssertEqual(v2.measurements, draft.measurements)
-        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
+        let v1 = try ExperimentalDesignBrief.portableDraft(makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
         XCTAssertEqual(v1.style, .describe); XCTAssertEqual(v1.description, draft.prompt); XCTAssertEqual(v1.measurements, draft.measurements)
         for model in ["null", "{\"id\":\"unknown\"}", "{\"id\":\"\"}"] {
             let raw = "{\"format\":\"tekstilcad.design-request\",\"version\":2,\"prompt\":\"\",\"measurements\":\"bel çevresi 72 cm\",\"reference\":null,\"model\":\(model)}"
@@ -996,12 +1020,12 @@ final class DesignDraftStoreTests: XCTestCase {
         let v2 = try ExperimentalDesignBrief.makeV2(original)
         let reopened = try ExperimentalDesignBrief.portableDraft(v2)
         XCTAssertEqual(reopened.description, text)
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: reopened.prompt, measurements: reopened.measurements, image: nil, imageName: nil))
+        XCTAssertThrowsError(try makeTestRequest(prompt: reopened.prompt, measurements: reopened.measurements, image: nil, imageName: nil))
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(v2).description, text)
     }
     func testPortableV1AndV2AttemptsKeepSnapshotWhenCancelledOrSuperseded() throws {
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "İpek 👗", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
-        let v1 = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+        let v1 = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
         let v2 = try ExperimentalDesignBrief.makeV2(draft)
         let first = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: v1)
         let second = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: v2)
@@ -1027,7 +1051,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(draft.measurements, message)
         let recovered = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(draft))
         XCTAssertEqual(recovered.otherMeasurements, message)
-        let portable = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+        let portable = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(portable).measurements, message)
     }
     func testMeasurementMessageParserAcceptsOnlyExplicitLabelsAndUnits() throws {
@@ -1061,7 +1085,7 @@ final class DesignDraftStoreTests: XCTestCase {
         let data = try Data(contentsOf: raw)
         let draft = try ExperimentalDesignBrief.portableDraft(data)
         XCTAssertEqual(draft.otherMeasurements, source)
-        let serialized = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+        let serialized = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(serialized).otherMeasurements, source)
     }
     func testMeasurementMessageParserRejectsConflictsWithoutMutatingInputs() {
@@ -1117,7 +1141,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 2, revision: revision))
         XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 1, revision: UUID()))
         XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("Mavi elbise", waist: "70 cm")))
-        let data = try ExperimentalDesignBrief.make(prompt: conflict.prompt, measurements: conflict.measurements, image: nil, imageName: nil)
+        let data = try makeTestRequest(prompt: conflict.prompt, measurements: conflict.measurements, image: nil, imageName: nil)
         let saved = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
         XCTAssertEqual(saved.prompt, conflict.description)
         XCTAssertEqual(saved.measurements, conflict.measurements)
@@ -1131,7 +1155,7 @@ final class DesignDraftStoreTests: XCTestCase {
             let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
             XCTAssertEqual(draft.measurements, message)
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft))
-            let data = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+            let data = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
             XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data).measurements, message)
         }
         for message in ["bel çevresi 72 cm?", "bel çevresi 72 cm mı?", "bel çevresi 72 cm olmasın", "bel çevresi 72 cm, olmasın", "eğer bel çevresi 72 cm", "eğer bel çevresi 72 cm ise"] {
@@ -1140,7 +1164,7 @@ final class DesignDraftStoreTests: XCTestCase {
             let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
             XCTAssertEqual(draft.measurements, message)
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft))
-            let data = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+            let data = try makeTestRequest(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
             XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data).measurements, message)
         }
         XCTAssertEqual(try MeasurementMessageParser.parse("bel çevresi 72,5 cm", existing: [:]).values["bel çevresi"], "72,5 cm")
@@ -1162,7 +1186,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["değer", "bel çevresi: 72 cm"]))
         let split = ExperimentalDesignBrief.Draft(style: .describe, description: "eğer kumaş ipekse", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk([split.description, split.measurements]))
-        let encoded = try ExperimentalDesignBrief.make(prompt: split.prompt, measurements: split.measurements, image: nil, imageName: nil)
+        let encoded = try makeTestRequest(prompt: split.prompt, measurements: split.measurements, image: nil, imageName: nil)
         let restored = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: encoded)
         XCTAssertEqual(restored.prompt, "eğer kumaş ipekse")
         XCTAssertEqual(restored.measurements, "Bel çevresi: 72 cm")
@@ -1230,7 +1254,7 @@ final class DesignDraftStoreTests: XCTestCase {
         let imported = try ExperimentalDesignBrief.portableDraft(raw)
         XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview(imported.otherMeasurements))
         XCTAssertEqual(imported.measurements, original.measurements)
-        let bytes = try ExperimentalDesignBrief.make(prompt: imported.prompt, measurements: imported.measurements, image: nil, imageName: nil)
+        let bytes = try makeTestRequest(prompt: imported.prompt, measurements: imported.measurements, image: nil, imageName: nil)
         let reopened = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: bytes)
         XCTAssertEqual(reopened.prompt, original.prompt); XCTAssertEqual(reopened.measurements, original.measurements)
     }
@@ -1249,7 +1273,7 @@ final class DesignDraftStoreTests: XCTestCase {
                 XCTAssertEqual(imported.image, Data(base64Encoded: reference.dataBase64))
                 XCTAssertEqual(imported.imageName, reference.name)
             } else { XCTAssertNil(imported.image) }
-            let bytes = try ExperimentalDesignBrief.make(prompt: imported.prompt, measurements: imported.measurements, image: imported.image, imageName: imported.imageName)
+            let bytes = try makeTestRequest(prompt: imported.prompt, measurements: imported.measurements, image: imported.image, imageName: imported.imageName)
             let roundTrip = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: bytes)
             XCTAssertEqual(roundTrip.prompt, expected.prompt); XCTAssertEqual(roundTrip.measurements, expected.measurements)
             XCTAssertEqual(roundTrip.reference?.dataBase64, expected.reference?.dataBase64)

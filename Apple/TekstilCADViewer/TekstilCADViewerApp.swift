@@ -2749,7 +2749,7 @@ private struct ExperimentalDesignBriefView: View {
         let worker = Task.detached(priority: .userInitiated) { () throws -> ExperimentalDesignBrief.ReferenceSelection in
             let data = try ExperimentalDesignBrief.readImage(url)
             try Task.checkCancellation()
-            _ = try ExperimentalDesignBrief.make(prompt: "kontrol", measurements: "", image: data, imageName: url.lastPathComponent)
+            _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: url.lastPathComponent))
             try Task.checkCancellation()
             return .init(data: data, name: url.lastPathComponent)
         }
@@ -2995,7 +2995,7 @@ private struct ExperimentalDesignBriefView: View {
             let candidate = draft
             let data: Data
             if requestExportVersion == 2 { data = try ExperimentalDesignBrief.makeV2(candidate) }
-            else { data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName) }
+            else { data = try ExperimentalDesignBrief.make(candidate) }
             pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
             confirmingExportDestination = true
         } catch {

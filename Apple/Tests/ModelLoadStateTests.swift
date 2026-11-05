@@ -1,6 +1,11 @@
 import XCTest
 @testable import TekstilCADViewer_iOS
 
+private func makeTestRequest(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
+    try ExperimentalDesignBrief.make(.init(style: .describe, description: prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: measurements, image: image, imageName: imageName))
+}
+
+
 final class ModelLoadStateTests: XCTestCase {
     #if DEBUG
     func testOldExporterCannotDismissNewAttempt() {
@@ -30,7 +35,7 @@ final class ModelLoadStateTests: XCTestCase {
             .init(style: .aline, description: text, bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: image == nil ? nil : "photo.png")
         }
         let original = makeDraft("İpek")
-        let bytes = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: nil, imageName: nil)
+        let bytes = try makeTestRequest(prompt: original.prompt, measurements: original.measurements, image: nil, imageName: nil)
         let attempt = ExperimentalDesignBrief.ExportAttempt(draft: original, bytes: bytes)
         XCTAssertTrue(attempt.matchesCurrentDraft(original))
         XCTAssertFalse(attempt.matchesCurrentDraft(makeDraft("Keten")))
@@ -59,7 +64,7 @@ final class ModelLoadStateTests: XCTestCase {
     func testDressStyleAndOnlyEnteredMeasurementsAreCarriedIntoRequest() throws {
         let prompt = ExperimentalDesignBrief.prompt(style: .aline, description: "Uzun kollu")
         let measures = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "", hips: "  ", length: "110 cm", other: "Omuz: 38 cm")
-        let data = try ExperimentalDesignBrief.make(prompt: prompt, measurements: measures, image: nil, imageName: nil)
+        let data = try makeTestRequest(prompt: prompt, measurements: measures, image: nil, imageName: nil)
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
         XCTAssertEqual(brief.prompt, "Seçilen elbise modeli: A kesim elbise\nUzun kollu")
         XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nKalça çevresi:   \nElbise boyu: 110 cm\nOmuz: 38 cm")
@@ -68,13 +73,13 @@ final class ModelLoadStateTests: XCTestCase {
     }
     func testDressMeasurementsUseDesktopCircumferenceNames() throws {
         let measures = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "72 cm", hips: "98 cm", length: "110 cm", other: "")
-        let data = try ExperimentalDesignBrief.make(prompt: "Düz elbise", measurements: measures, image: nil, imageName: nil)
+        let data = try makeTestRequest(prompt: "Düz elbise", measurements: measures, image: nil, imageName: nil)
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
         XCTAssertEqual(brief.measurements, "Göğüs çevresi: 92 cm\nBel çevresi: 72 cm\nKalça çevresi: 98 cm\nElbise boyu: 110 cm")
     }
     func testDesignBriefPreservesUserTextAndReferenceBytes() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
-        let bytes = try ExperimentalDesignBrief.make(prompt: "Mavi ceket\nCepli", measurements: "Göğüs 92 cm", image: image, imageName: "ornek.png")
+        let bytes = try makeTestRequest(prompt: "Mavi ceket\nCepli", measurements: "Göğüs 92 cm", image: image, imageName: "ornek.png")
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: bytes)
         XCTAssertEqual(brief.format, "tekstilcad.design-request")
         XCTAssertEqual(brief.version, 1)
@@ -84,21 +89,21 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertEqual(reference.name, "ornek.png")
         XCTAssertEqual(reference.mediaType, "image/png")
         XCTAssertEqual(reference.dataBase64, image.base64EncodedString())
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: image, imageName: "..\\ornek.png"))
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: image, imageName: String(repeating: "x", count: 256)))
-        let imageOnly = try ExperimentalDesignBrief.make(prompt: "", measurements: "", image: image, imageName: "ornek.png")
+        XCTAssertThrowsError(try makeTestRequest(prompt: "Ceket", measurements: "", image: image, imageName: "..\\ornek.png"))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "Ceket", measurements: "", image: image, imageName: String(repeating: "x", count: 256)))
+        let imageOnly = try makeTestRequest(prompt: "", measurements: "", image: image, imageName: "ornek.png")
         XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: imageOnly).prompt, "")
     }
 
     func testDesignBriefRejectsMissingOrOversizedInputAndAllowsNoImage() throws {
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "  ", measurements: "", image: nil, imageName: nil))
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: String(repeating: "x", count: 16_385), measurements: "", image: nil, imageName: nil))
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: Data([0, 1]), imageName: "x.png"))
-        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: Data(count: 8 * 1024 * 1024 + 1), imageName: "x.png"))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "  ", measurements: "", image: nil, imageName: nil))
+        XCTAssertThrowsError(try makeTestRequest(prompt: String(repeating: "x", count: 16_385), measurements: "", image: nil, imageName: nil))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "Ceket", measurements: "", image: Data([0, 1]), imageName: "x.png"))
+        XCTAssertThrowsError(try makeTestRequest(prompt: "Ceket", measurements: "", image: Data(count: 8 * 1024 * 1024 + 1), imageName: "x.png"))
         let brief = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self,
-            from: ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: nil, imageName: nil))
+            from: makeTestRequest(prompt: "Ceket", measurements: "", image: nil, imageName: nil))
         XCTAssertNil(brief.reference)
-        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: ExperimentalDesignBrief.make(prompt: "Ceket", measurements: "", image: nil, imageName: nil)) as? [String: Any])
+        let raw = try XCTUnwrap(JSONSerialization.jsonObject(with: makeTestRequest(prompt: "Ceket", measurements: "", image: nil, imageName: nil)) as? [String: Any])
         XCTAssertTrue(raw["reference"] is NSNull)
     }
     #endif
