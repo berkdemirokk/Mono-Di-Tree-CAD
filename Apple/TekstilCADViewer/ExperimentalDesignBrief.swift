@@ -612,6 +612,20 @@ enum ExperimentalDesignBrief {
             }
         }
     }
+    struct V2ImageReviewState {
+        private var reviewed: Data?
+        private var result: V2ImageReview?
+        mutating func publish(_ result: V2ImageReview, for bytes: Data, current: Data?) {
+            guard current == bytes else { return }
+            reviewed = bytes; self.result = result
+        }
+        func status(for current: Data?) -> String {
+            guard let current else { return "" }
+            guard reviewed == current, let result else { return "V2 görsel denetimi sürüyor…" }
+            return result.explanation
+        }
+        func hasResult(for bytes: Data) -> Bool { reviewed == bytes && result != nil }
+    }
     static func makeV2(_ draft: Draft) throws -> Data {
         try validatePortableExport(draft)
         if let image = draft.image { try validateV2Image(image) }

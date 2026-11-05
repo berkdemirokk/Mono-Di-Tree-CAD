@@ -856,6 +856,24 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalDesignBrief.validateV2Image(animated))
         XCTAssertEqual(ExperimentalDesignBrief.V2ImageReview.inspect(Data([0, 1])), .incompatible)
     }
+    func testV2ImageReviewStateKeepsResultsBoundToBytesAcrossAsyncCompletion() async {
+        let a = Data([1]), b = Data([2])
+        var state = ExperimentalDesignBrief.V2ImageReviewState()
+        state.publish(.compatible, for: a, current: a)
+        XCTAssertEqual(state.status(for: a), ExperimentalDesignBrief.V2ImageReview.compatible.explanation)
+        XCTAssertEqual(state.status(for: nil), "")
+        XCTAssertEqual(state.status(for: b), "V2 görsel denetimi sürüyor…")
+        // The filename is intentionally not part of this pixel-data validation identity.
+        let sameBytesDifferentName = Data(a)
+        XCTAssertTrue(state.hasResult(for: sameBytesDifferentName))
+        let lateA = Task { () -> ExperimentalDesignBrief.V2ImageReview in await Task.yield(); return .compatible }
+        state.publish(.incompatible, for: b, current: b)
+        let resultA = await lateA.value
+        state.publish(resultA, for: a, current: b)
+        XCTAssertEqual(state.status(for: b), ExperimentalDesignBrief.V2ImageReview.incompatible.explanation)
+        state.publish(resultA, for: a, current: nil)
+        XCTAssertEqual(state.status(for: nil), "")
+    }
     func testPhotoObservationThumbnailDoesNotChangeSourceBytes() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
         let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
