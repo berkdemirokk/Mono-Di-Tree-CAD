@@ -147,6 +147,19 @@ internal static partial class DesktopVerification
             Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(trailingBytes) && window.StatusForVerification.Text.Contains("doğrulaması başarısız"),
                 "PNG trailing data fails the existing V2 image gate before conversion and retains original bytes",checks);
+            window.LoadForVerification(new DesignRequest("Soru biçimindeki sentetik ölçü","kalça çevresi 100 cm",null));
+            int questionApprovals=0;window.ConfirmChatModelForVerification=_=> { questionApprovals++;return true; };
+            const string questionMessage="A kesim elbise istiyorum; göğüs çevresi 96 cm ve bel çevresi 72 cm?";
+            window.ChatInputForVerification.Text=questionMessage;window.SendMessageForVerification();
+            Check(questionApprovals==0&&window.CaptureForVerification().ModelId is null,"Question measurement prevents long-message model suggestion",checks);
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin"&&window.MeasurementTilesForVerification["göğüs çevresi"].Text=="Kontrol edin"&&window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm","Question keeps joined tiles uncertain and independent sentinel definite",checks);
+            Check(window.ConversationForVerification.Text.Contains("ifade belirsiz")&&!window.ConversationForVerification.Text.Contains("Temel ölçüler açıkça yazıldı"),"Conversation asks clarification instead of claiming complete measurements",checks);
+            var questionSaved=window.CaptureForVerification();var questionLoaded=DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(questionSaved));window.LoadForVerification(questionLoaded);
+            Check(questionLoaded.Prompt==questionSaved.Prompt&&questionLoaded.Prompt.EndsWith(questionMessage,StringComparison.Ordinal)&&window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","Question text survives serialization/load without becoming definite",checks);
+            window.MeasurementsForVerification.Text="kalça çevresi 100 cm; bel çevresi 72 cm";
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","Same-value assertion does not silently erase an unresolved question",checks);
+            window.PromptForVerification.Text="göğüs çevresi 96 cm ve bel çevresi 72 cm.";
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&window.MeasurementTilesForVerification["göğüs çevresi"].Text=="96 cm","Explicit correction to affirmative punctuation restores definite joined measurements",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
