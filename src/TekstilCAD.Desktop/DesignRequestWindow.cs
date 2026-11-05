@@ -636,13 +636,13 @@ internal sealed class DesignRequestWindow : Window
         {
             var original=Capture();
             var expected=new ModelValidationRevision(questionRevision,referenceRevision,chatRevision,modelRevision);
-            var trackedModel=selectedModelText;var trackedLoaded=selectedModelFromLoaded;var trackedAmbiguous=modelAmbiguous;
-            var trackedStart=selectedModelStart;var trackedSnapshot=modelSnapshot;var trackedDirty=dirty;
+            var validationModel=selectedModelText;var validationLoaded=selectedModelFromLoaded;var validationAmbiguous=modelAmbiguous;
+            var validationStart=selectedModelStart;var validationSnapshot=modelSnapshot;var validationDirty=dirty;
             bool Current()=>ModelValidationRevision.IsCurrent(expected,new(questionRevision,referenceRevision,chatRevision,modelRevision),closed,
                 referenceLoadRunning || referenceSelectionPending,cancellation.IsCancellationRequested) &&
                 ReferenceEquals(modelValidationCancellation,cancellation) && SameRequest(original,Capture()) && chatInput.Text.Length==0 &&
-                trackedModel==selectedModelText && trackedLoaded==selectedModelFromLoaded && trackedAmbiguous==modelAmbiguous &&
-                trackedStart==selectedModelStart && trackedSnapshot==modelSnapshot && trackedDirty==dirty;
+                validationModel==selectedModelText && validationLoaded==selectedModelFromLoaded && validationAmbiguous==modelAmbiguous &&
+                validationStart==selectedModelStart && validationSnapshot==modelSnapshot && validationDirty==dirty;
             var validator=ModelValidatorForVerification;
             lock(modelWorkerGate)
             {
