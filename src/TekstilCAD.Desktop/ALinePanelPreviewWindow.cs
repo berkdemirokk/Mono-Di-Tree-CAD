@@ -37,6 +37,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal bool LoadWorkForVerification(string path,Func<bool> confirm)=>loadWork(path,confirm);
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
+        long editVersion=0;bool closed=false;
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
         StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(16) };
@@ -142,7 +143,6 @@ internal sealed class ALinePanelPreviewWindow : Window
             for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && Math.Abs(current[i]-(double)value)>0.000001)
                 throw new ArgumentException(ALineRequestMeasurements.Labels[i]+": form değeri açık istek ölçüsüyle çelişiyor; önce kaynağı düzeltin.");
         }
-        long editVersion=0;bool closed=false;
         Closed+=(_,_)=>closed=true;
         void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal(); };
