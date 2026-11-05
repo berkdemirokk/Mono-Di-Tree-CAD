@@ -19,6 +19,7 @@ internal sealed class HpglReviewWindow : Window
     internal TextBox GeometryText { get; } = new() { IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Padding=new Thickness(6,2,6,2) };
     internal ComboBox SampleSelector { get; } = new() { MinWidth=160,Margin=new Thickness(0,0,8,0),IsEnabled=false };
     internal Button ShowWholeButton { get; } = new() { Content="Tüm parça",Padding=new Thickness(8,4,8,4),IsEnabled=false };
+    internal Button ShowWorstDisplacementButtonForVerification { get; } = new() { Content="En çok kayan noktayı göster",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,0,4),HorizontalAlignment=HorizontalAlignment.Left,IsEnabled=false };
     internal Button ZoomInButton { get; } = new() { Content="+",Width=32,Padding=new Thickness(0),Margin=new Thickness(4,0,0,0),IsEnabled=false };
     internal Button ZoomOutButton { get; } = new() { Content="−",Width=32,Padding=new Thickness(0),Margin=new Thickness(4,0,0,0),IsEnabled=false };
     internal Button ResetZoomButton { get; } = new() { Content="1×",Width=38,Padding=new Thickness(0),Margin=new Thickness(4,0,0,0),IsEnabled=false };
@@ -141,7 +142,7 @@ internal sealed class HpglReviewWindow : Window
         var legend=new TextBlock { Text="Kaynak: kesik/üçgen; HPGL: düz/daire. Ölçüm değildir; görünüm kırpılabilir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,3) };
         DockPanel.SetDock(legend,Dock.Top);comparisonPanel.Children.Add(legend);
         AutomationProperties.SetName(GeometryText,"Kaynak ve HPGL örnek koordinatları");
-        AutomationProperties.SetHelpText(GeometryText,"Yaklaşık kaynak ve HPGL kenar uzunluklarını, en büyük kenar farkını ve örnek dönüş koordinatlarını okuyun ve kopyalayın.");
+        AutomationProperties.SetHelpText(GeometryText,"Yaklaşık kaynak ve HPGL kenar uzunluklarını, en büyük nokta ve kenar farklarını ve örnek dönüş koordinatlarını okuyun ve kopyalayın.");
         GeometryText.Text="Karşılaştırma için bir parça seçip ayrıntılı incelemeyi başlatın.";
         GeometryComparison.MinHeight=70;comparisonPanel.Children.Add(GeometryComparison);
         ReportsGrid.IsReadOnly=true;ReportsGrid.AutoGenerateColumns=false;ReportsGrid.CanUserAddRows=false;
@@ -195,7 +196,11 @@ internal sealed class HpglReviewWindow : Window
         gridArea.Children.Add(empty);sourcePanel.Children.Add(gridArea);
         detailsTabs.Items.Add(new TabItem { Header="Parçalar ve noktalar",Content=sourcePanel });
         detailsTabs.Items.Add(new TabItem { Header="Kaynak / HPGL karşılaştırması",Content=comparisonPanel });
-        detailsTabs.Items.Add(new TabItem { Header="Uzunluk ve koordinatlar",Content=GeometryText });
+        var geometryDetails=new DockPanel();
+        AutomationProperties.SetName(ShowWorstDisplacementButtonForVerification,"En çok kayan noktayı karşılaştırmada göster");
+        AutomationProperties.SetHelpText(ShowWorstDisplacementButtonForVerification,"En büyük ızgara farkına sahip kaynak noktasına odaklanır; cihaz doğruluğunu doğrulamaz.");
+        DockPanel.SetDock(ShowWorstDisplacementButtonForVerification,Dock.Top);geometryDetails.Children.Add(ShowWorstDisplacementButtonForVerification);geometryDetails.Children.Add(GeometryText);
+        detailsTabs.Items.Add(new TabItem { Header="Uzunluk ve koordinatlar",Content=geometryDetails });
         if(interaction is { Status:HpglPieceInteraction.State.Found,FirstPiece:Guid firstId,SecondPiece:Guid secondId })
         {
             var first=rows.Single(r=>r.Report.PieceId==firstId);var second=rows.Single(r=>r.Report.PieceId==secondId);
@@ -239,7 +244,13 @@ internal sealed class HpglReviewWindow : Window
             }
             else { GeometryComparison.ShowWhole();UpdateZoomControls();GeometryText.Text=GeometryDescription(currentGeometry,currentLengths,currentPage.Report.Samples); }
         };
-        ShowWholeButton.Click+=(_,_)=> { SampleSelector.SelectedIndex=-1; };
+        ShowWholeButton.Click+=(_,_)=> { SampleSelector.SelectedIndex=-1;GeometryComparison.ShowWhole();UpdateZoomControls();
+            if(currentGeometry is not null && currentLengths is not null && currentPage is not null)GeometryText.Text=GeometryDescription(currentGeometry,currentLengths,currentPage.Report.Samples); };
+        ShowWorstDisplacementButtonForVerification.Click+=(_,_)=> {
+            if(currentLengths is null || currentGeometry is null || !GeometryComparison.ShowVertex(currentLengths.WorstDisplacementIndex))return;
+            updatingSamples=true;try { SampleSelector.SelectedIndex=-1; } finally { updatingSamples=false; }
+            detailsTabs.SelectedIndex=1;UpdateZoomControls();
+        };
         ZoomInButton.Click+=(_,_)=> { GeometryComparison.SetZoom(GeometryComparison.ZoomFactorForVerification*2);UpdateZoomControls(); };
         ZoomOutButton.Click+=(_,_)=> { GeometryComparison.SetZoom(GeometryComparison.ZoomFactorForVerification/2);UpdateZoomControls(); };
         ResetZoomButton.Click+=(_,_)=> { GeometryComparison.SetZoom(1);UpdateZoomControls(); };
@@ -336,7 +347,7 @@ internal sealed class HpglReviewWindow : Window
             { currentPage=result.Page;pageRow=row;SelectedDetails.Text=Details(row with { Report=result.Page.Report },true);PageStatus.Text=PageSummary(result.Page);
                 currentGeometry=result.Geometry;currentLengths=result.Lengths;GeometryComparison.SetData(result.Geometry,result.Page.Report.Samples.Select(s=>s.SourceVertexIndex));
                 updatingSamples=true;SampleSelector.ItemsSource=result.Page.Report.Samples.Select(s=>new SampleChoice(s)).ToArray();SampleSelector.SelectedIndex=-1;updatingSamples=false;
-                SampleSelector.IsEnabled=result.Page.Report.Samples.Count>0;ShowWholeButton.IsEnabled=true;UpdateZoomControls();
+                SampleSelector.IsEnabled=result.Page.Report.Samples.Count>0;ShowWholeButton.IsEnabled=true;ShowWorstDisplacementButtonForVerification.IsEnabled=true;UpdateZoomControls();
                 GeometryText.Text=GeometryDescription(result.Geometry,result.Lengths,result.Page.Report.Samples); }
         }
         catch(OperationCanceledException) when(cancellation.IsCancellationRequested)
@@ -360,12 +371,12 @@ internal sealed class HpglReviewWindow : Window
     private void ClearComparison()
     {
         currentGeometry=null;currentLengths=null;GeometryComparison.Clear();updatingSamples=true;SampleSelector.ItemsSource=null;SampleSelector.SelectedIndex=-1;updatingSamples=false;
-        SampleSelector.IsEnabled=false;ShowWholeButton.IsEnabled=false;UpdateZoomControls();
+        SampleSelector.IsEnabled=false;ShowWholeButton.IsEnabled=false;ShowWorstDisplacementButtonForVerification.IsEnabled=false;UpdateZoomControls();
         GeometryText.Text="Karşılaştırma için bir parça seçip ayrıntılı incelemeyi başlatın.";
     }
     private void UpdateZoomControls()
     {
-        var selected=SampleSelector.SelectedItem is SampleChoice;
+        var selected=GeometryComparison.FocusedIndexForVerification is not null;
         var factor=GeometryComparison.ZoomFactorForVerification;
         ZoomInButton.IsEnabled=selected && factor<8;ZoomOutButton.IsEnabled=selected && factor>1;ResetZoomButton.IsEnabled=selected && factor!=1;
         comparisonMode.Text=selected ? $"{MeasurementInput.Format(factor)}× · yakın" : "Tüm parça";

@@ -4178,6 +4178,31 @@ internal static class DesktopVerification
                 && displayedGeometry.Points[4].PlotX==200 && displayedGeometry.Points[4].PlotY==400 && highlighted.Contains(4)
                 && review.GeometryText.Text.Contains("5: kaynak (5, 9.99) mm; HPGL (5, 10) mm"),
                 "V notch comparison presents the captured source and actual flattened HPGL coordinate",checks);
+            Check(review.ShowWorstDisplacementButtonForVerification.IsEnabled && FullyVisible(review.ShowWorstDisplacementButtonForVerification,root) &&
+                AutomationProperties.GetName(review.ShowWorstDisplacementButtonForVerification)=="En çok kayan noktayı karşılaştırmada göster",
+                "Maximum displacement action is visible and available in the compact numeric review",checks);
+            review.ShowWorstDisplacementButtonForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Render(review,Path.ChangeExtension(reportPath,".hpgl-maximum-shift.png"),580,420);
+            Check(displayedGeometry is not null && review.GeometryComparison.FocusedIndexForVerification==HpglLengthReview.Analyze(displayedGeometry).WorstDisplacementIndex &&
+                review.SampleSelector.SelectedIndex==-1 && review.ZoomInButton.IsEnabled && review.GeometryComparison.LastLocalSourceForVerification.Length>=2 &&
+                Descendants<TabControl>(root).Single().SelectedIndex==1,
+                "Maximum displacement action focuses the captured point and enables proportional zoom",checks);
+            review.ShowWholeButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(review.GeometryComparison.FocusedIndexForVerification is null && !review.ZoomInButton.IsEnabled,
+                "Returning to the whole HPGL path clears a maximum-displacement focus",checks);
+            var endpointPiece=new PatternPiece { Closed=false,Points=[new(.25,.25),new(10.25,.25)] };
+            var endpointGeometry=HpglFormat.Prepare(new ProjectDocument { Pieces=[endpointPiece] },1).GetPieceGeometry(endpointPiece.Id);
+            var endpointPreview=new HpglGeometryComparison();endpointPreview.SetData(endpointGeometry,[]);
+            endpointPreview.Measure(new Size(200,100));endpointPreview.Arrange(new Rect(0,0,200,100));endpointPreview.UpdateLayout();
+            foreach(var endpointIndex in new[] { 0,1 })
+            {
+                Check(endpointPreview.ShowVertex(endpointIndex),"Open HPGL endpoint can be selected for local comparison",checks);
+                endpointPreview.UpdateLayout();
+                var bitmap=new RenderTargetBitmap(200,100,96,96,PixelFormats.Pbgra32);bitmap.Render(endpointPreview);
+                Check(endpointPreview.FocusedIndexForVerification==endpointIndex && endpointPreview.LastLocalSourceForVerification.Length==2 &&
+                    endpointPreview.LastLocalPlotForVerification.Length==2 && endpointPreview.LastLocalScaleForVerification>0,
+                    $"Open two-point HPGL path renders a local view at endpoint {endpointIndex}; source={endpointPreview.LastLocalSourceForVerification.Length}, plot={endpointPreview.LastLocalPlotForVerification.Length}, scale={endpointPreview.LastLocalScaleForVerification:G17}, size={endpointPreview.ActualWidth:G17}x{endpointPreview.ActualHeight:G17}",checks);
+            }
             Descendants<TabControl>(root).Single().SelectedIndex=1;
             Render(review,Path.ChangeExtension(reportPath,".hpgl-comparison-compact.png"),580,420);
             Check(review.GeometryComparison.ActualWidth>=150 && review.GeometryComparison.ActualHeight>=70 && FullyVisible(review.GeometryComparison,root)

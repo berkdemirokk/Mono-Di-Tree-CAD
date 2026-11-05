@@ -13,6 +13,7 @@ internal sealed class HpglGeometryComparison : FrameworkElement
     private int[] examples=[];
     private int[] normalized=[];
     private int? focusedIndex;
+    internal int? FocusedIndexForVerification=>focusedIndex;
     internal double ZoomFactorForVerification { get; private set; }=1;
     internal double LastLocalScaleForVerification { get; private set; }
     internal Point[] LastLocalSourceForVerification { get; private set; }=[];
@@ -35,6 +36,11 @@ internal sealed class HpglGeometryComparison : FrameworkElement
     internal void ShowWhole() { focusedIndex=null;ZoomFactorForVerification=1;LastLocalScaleForVerification=0;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual(); }
     internal void ShowLocal(int sourceVertexIndex)
     { focusedIndex=examples.Contains(sourceVertexIndex) && Array.IndexOf(normalized,sourceVertexIndex)>=0 ? sourceVertexIndex : null;ZoomFactorForVerification=1;LastLocalScaleForVerification=0;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual(); }
+    internal bool ShowVertex(int sourceVertexIndex)
+    {
+        if(geometry is null || normalized.Length<2 || Array.IndexOf(normalized,sourceVertexIndex)<0)return false;
+        focusedIndex=sourceVertexIndex;ZoomFactorForVerification=1;LastLocalScaleForVerification=0;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual();return true;
+    }
     internal void SetZoom(double factor) { if(!double.IsFinite(factor))throw new ArgumentOutOfRangeException(nameof(factor));if(focusedIndex is null)return;ZoomFactorForVerification=Math.Clamp(factor,1,8);InvalidateVisual(); }
     internal void Clear() { geometry=null;examples=[];normalized=[];focusedIndex=null;ZoomFactorForVerification=1;LastLocalSourceForVerification=[];LastLocalPlotForVerification=[];InvalidateVisual(); }
     protected override void OnRender(DrawingContext dc)
@@ -47,11 +53,11 @@ internal sealed class HpglGeometryComparison : FrameworkElement
         if(focusedIndex is int focus)
         {
             var position=Array.IndexOf(normalized,focus);
-            if(position<0 || normalized.Length<3)return;
+            if(position<0 || normalized.Length<2)return;
             var previous=position-1;var next=position+1;
             if(geometry.Closed) { previous=(position+normalized.Length-1)%normalized.Length;next=(position+1)%normalized.Length; }
-            if(previous<0 || next>=normalized.Length)return;
-            displayIndices=[normalized[previous],focus,normalized[next]];
+            var local=new List<int>(3);if(previous>=0)local.Add(normalized[previous]);local.Add(focus);if(next<normalized.Length)local.Add(normalized[next]);
+            displayIndices=local.ToArray();
         }
         else displayIndices=Enumerable.Range(0,points.Count).ToArray();
         double minX=double.PositiveInfinity,minY=double.PositiveInfinity,maxX=double.NegativeInfinity,maxY=double.NegativeInfinity;
