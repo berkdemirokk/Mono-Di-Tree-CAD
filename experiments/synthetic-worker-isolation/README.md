@@ -1,6 +1,6 @@
 # Yalnız sentetik worker ve izolasyon deneyi
 
-Üç sabit uydurma senaryo (`synthetic-base`, `synthetic-scaled`, `synthetic-distinct`) için önceki yerel Breanna 4.10.2 araştırma motoru, tek sabit pens seçeneğinde ön ve arka dikiş eğrileri üretir. stdin yalnız bu üç anahtardan birini içeren bir nesne kabul eder; ölçü nesnesi, başka alan ve bilinmeyen kimlik reddedilir. Kullanıcıya ait ölçüler işlenmez. Sonuçlar araştırma amaçlıdır ve `approved:false`; CAD, çıktı, baskı, cihaz, üretim veya fiziksel uygunluk yetkisi yoktur.
+Üç sabit uydurma senaryo (`synthetic-base`, `synthetic-scaled`, `synthetic-distinct`) için önceki yerel Breanna 4.10.2 araştırma motoru, tek sabit pens seçeneğinde ön ve arka dikiş eğrileri üretir. stdin için en fazla 1024 baytlık dar bir gramer uygulanır: yalnız tek, kaçışsız `id` anahtarı ve üç sabit değerden biri; JSON boşluk karakterlerine izin verilir. Yinelenen anahtar, kaçışla yazılmış anahtar veya değer, başka alan ve bilinmeyen kimlik reddedilir. Reddedilen ham istek doğrulama sırasında yine de belleğe ulaşır; worker'a kullanıcıya ait ölçüler veya hassas metin gönderilmemelidir. Sonuçlar araştırma amaçlıdır ve `approved:false`; CAD, çıktı, baskı, cihaz, üretim veya fiziksel uygunluk yetkisi yoktur.
 
 ## Gözlemlenen modüller ve sınırları
 
@@ -20,6 +20,6 @@ Bu iş ağacının kökünden:
 & 'C:\Users\pc\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe' --test experiments/synthetic-worker-isolation/worker.test.mjs
 ```
 
-**4/4 sentetik test geçti:** üç farklı sentetik şekil ve 96 gözlemlenen modül kümesi; bilinmeyen veya ölçü taşıyan girdilerin reddi; Node dosya yazma izni yokken beklenen ret; yerel loopback bağlantısının mümkün olduğunu gösteren negatif izolasyon testi. İkinci test grubundaki geçiş, ağın güvenli olduğu anlamına gelmez: tersine izolasyonun eksikliğini doğrular. Önceki kaynak ağacının yerel paketleri ve kaydedilmiş mutlak yollar gereklidir. Testler gerçek kullanıcı verisi veya ücretli hizmet kullanmaz.
+**6/6 sentetik test geçti:** üç farklı sentetik şekil ve 96 gözlemlenen modül kümesi; yinelenen anahtar, escape, ek alan, geçersiz UTF-8 ve boyut sınırları; Node dosya yazma izni yokken beklenen ret; yerel loopback bağlantısının mümkün olduğunu gösteren negatif izolasyon testi. Bu son testin geçmesi, ağın güvenli olduğu anlamına gelmez: tersine izolasyonun eksikliğini doğrular. Önceki kaynak ağacının yerel paketleri ve kaydedilmiş mutlak yollar gereklidir. Testler gerçek kullanıcı verisi veya ücretli hizmet kullanmaz.
 
 Gerçek ölçülere geçmeden önce işletim sistemi düzeyinde kapalı ağ/dosya ortamı, son kullanıcı yetkileri altında bağımsız saldırı testleri, yüklenen runtime ve tüm bağımlılıklar için güvenilir imzalı dağıtım ve değiştirme yarışı koruması, gizlilik ve lisans incelemesi gerekir. Dikiş/topoloji, uzman kontrolü ve numune prova ayrıca çözülmelidir.
