@@ -24,6 +24,8 @@ public static class ChatModelChoice
     {
         ArgumentNullException.ThrowIfNull(message);
         if(message.Length>DesignRequestStorage.MaximumTextLength)throw new ArgumentException("Mesaj çok uzun.");
+        var compound=CompoundChatRequest.Parse(message);
+        if(compound is not null)return new(compound.ModelId,Models.First(m=>m.Id==compound.ModelId).Label,"Model fikri tanındı; seçmek için onay gerekir. Kalıp oluşturulmaz.");
         string folded;
         try { folded=Fold(message); }
         catch(ArgumentException) { return new(null,null,"Mesaj geçerli Unicode değil; model önerilmedi, özgün metin korunur."); }

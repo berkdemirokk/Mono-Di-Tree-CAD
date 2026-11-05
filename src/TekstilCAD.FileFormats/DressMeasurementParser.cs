@@ -92,6 +92,21 @@ public static partial class DressMeasurementParser
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
             order++;
+            var compound=CompoundChatRequest.Parse(segment);
+            if(compound is not null && compound.Measurements.Count>0)
+            {
+                var keys=new HashSet<string>(StringComparer.Ordinal);
+                foreach(var atom in compound.Measurements)
+                {
+                    var key=atom.Label!;keys.Add(key);
+                    if(!values.TryGetValue(key,out var entries))values[key]=entries=[];
+                    entries.Add((atom.Millimeters!.Value,segment));
+                    if(!evidence.TryGetValue(key,out var occurrences))evidence[key]=occurrences=[];
+                    occurrences.Add(new(field,segmentOffset,order,null,false));
+                }
+                if(keys.Count>1)coupled.Add(keys);
+                continue;
+            }
             var combined=TrySplitModelMeasurement(segment,out var measurementOffset);
             var measurementSegment=combined ? segment[measurementOffset..] : segment;
             var search=FoldCase(measurementSegment);

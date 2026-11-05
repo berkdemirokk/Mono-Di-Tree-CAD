@@ -2,6 +2,43 @@ using TekstilCAD.FileFormats;
 namespace TekstilCAD.Tests;
 public sealed class ChatModelChoiceTests
 {
+    [Fact] public void MultipleDetailsAndMeasurementsRetainSourceAndModelApproval()
+    {
+        const string text="A kesim elbise istiyorum uzun kollu bel çevresi 72 cm kalça çevresi 100 cm";
+        var suggestion=ChatModelChoice.Review(text);
+        Assert.Equal("aline",suggestion.ModelId);Assert.Contains("onay",suggestion.Explanation);
+        var review=DressMeasurementParser.Review(text,"");
+        Assert.Contains(review.Measurements,m=>m.Label=="bel çevresi" && m.Millimeters==720 && m.SourceExpressions.Contains(text));
+        Assert.Contains(review.Measurements,m=>m.Label=="kalça çevresi" && m.Millimeters==1000 && m.SourceExpressions.Contains(text));
+        Assert.Empty(review.Unrecognized);
+    }
+    [Theory]
+    [InlineData("A kesim elbise istiyorum uzun kollu kısa kollu bel çevresi 72 cm")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm bel çevresi 90 cm")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm değil")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm?")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm olursa")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm anvelop")]
+    [InlineData("A kesim elbise istiyorum uzun kollu bel çevresi 72 cm bilinmeyen")]
+    public void MultiDetailUnknownOrConflictingInputIsNotPartiallyAccepted(string text)
+    {
+        Assert.Null(ChatModelChoice.Review(text).ModelId);
+        Assert.Empty(DressMeasurementParser.Review(text,"").Measurements);
+    }
+    [Fact] public void MultiDetailEquivalentRepeatedMeasurementsAndLimits()
+    {
+        const string text="Anvelop istiyorum v yaka bel çevresi 72,5 cm bel çevresi 725 mm";
+        Assert.Equal("wrap",ChatModelChoice.Review(text).ModelId);
+        Assert.Equal(725m,Assert.Single(DressMeasurementParser.Review(text,"").Measurements).Millimeters);
+        var excessive="A kesim istiyorum "+string.Join(" ",Enumerable.Repeat("uzun kollu",33));
+        Assert.Null(ChatModelChoice.Review(excessive).ModelId);
+    }
+    [Fact] public void MultiDetailMeasurementsConflictAsOneGroupWithOtherField()
+    {
+        var review=DressMeasurementParser.Review("A kesim istiyorum uzun kollu bel çevresi 72 cm kalça çevresi 100 cm","bel çevresi 90 cm");
+        Assert.Empty(review.Measurements);
+        Assert.Contains(review.Questions,q=>q.StartsWith("kalça çevresi:") && q.Contains("belirsiz"));
+    }
     [Theory]
     [InlineData("A kesim","Yeni tarif\nA kesim","",true)]
     [InlineData("A kesim","Yeni tarif\nA kesim","yeni mesaj",false)]

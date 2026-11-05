@@ -30,6 +30,16 @@ internal static partial class DesktopVerification
             Check(accepted.Version==2 && accepted.ModelId=="aline" && accepted.Prompt.StartsWith("Önceki serbest tarif",StringComparison.Ordinal) && accepted.Prompt.EndsWith(message,StringComparison.Ordinal) && accepted.Measurements==initial.Measurements,
                 "Explicit V1 approval selects A-line in V2 while retaining prior prose and exact new message",checks);
             Check(window.CanPreviewALineForVerification,"Chat selection reaches the existing A-line preview eligibility",checks);
+            const string multiMessage="A kesim elbise istiyorum uzun kollu bel çevresi 72 cm kalça çevresi 100 cm";
+            window.LoadForVerification(new DesignRequest("Önceki not","",null));
+            window.ConfirmChatModelForVerification=_=>false;window.ChatInputForVerification.Text=multiMessage;window.SendMessageForVerification();
+            Check(window.CaptureForVerification().ModelId is null && window.CaptureForVerification().Prompt.EndsWith(multiMessage,StringComparison.Ordinal) && window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm",
+                "Declining multi-detail suggestion keeps text and explicit measurements",checks);
+            window.LoadForVerification(new DesignRequest("Önceki not","",null));
+            window.ConfirmChatModelForVerification=_=>true;window.ChatInputForVerification.Text=multiMessage;window.SendMessageForVerification();
+            Check(window.CaptureForVerification().ModelId=="aline" && window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm" && window.CaptureForVerification().Prompt.EndsWith(multiMessage,StringComparison.Ordinal),
+                "Approved multi-detail suggestion preserves message and both measurements",checks);
+            window.LoadForVerification(accepted);
             window.LoadForVerification(new DesignRequest("Önceki not","bel çevresi 90 cm",null));
             const string combinedMessage="A kesim elbise istiyorum bel çevresi 72 cm";
             window.ConfirmChatModelForVerification=_=>false;window.ChatInputForVerification.Text=combinedMessage;window.SendMessageForVerification();
