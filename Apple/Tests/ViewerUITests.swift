@@ -1,6 +1,28 @@
 import XCTest
 
 final class ViewerUITests: XCTestCase {
+    func testDressBriefFooterAtAccessibilityTextSize() {
+        let app = XCUIApplication()
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityXXXL"]
+        app.launch()
+        let open = app.buttons["Elbise isteği oluştur"]
+        XCTAssertTrue(open.waitForExistence(timeout: 15)); open.tap()
+        let restore = app.buttons["Taslağı geri yükle"]
+        if restore.waitForExistence(timeout: 2) { restore.tap() }
+        let description = app.textViews["Elbise tarifiniz"]
+        for _ in 0..<12 where !description.isHittable { app.swipeUp() }
+        XCTAssertTrue(description.waitForExistence(timeout: 5)); XCTAssertTrue(description.isHittable)
+        description.tap(); description.typeText("sentetik")
+        let next = app.buttons["Görsele devam"]
+        XCTAssertTrue(next.waitForExistence(timeout: 5)); XCTAssertTrue(next.isHittable); next.tap()
+        let back = app.buttons["Geri"], review = app.buttons["İsteği gözden geçir"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5)); XCTAssertTrue(back.isHittable); XCTAssertTrue(review.isHittable)
+        XCTAssertLessThan(back.frame.maxY, review.frame.minY)
+        review.tap()
+        let save = app.buttons["İstek dosyasını kaydet…"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5)); XCTAssertTrue(save.isHittable)
+        XCTAssertLessThan(back.frame.maxY, save.frame.minY)
+    }
     func testDressBriefModelAndMeasurementNavigation() {
         let app = XCUIApplication()
         app.launch()

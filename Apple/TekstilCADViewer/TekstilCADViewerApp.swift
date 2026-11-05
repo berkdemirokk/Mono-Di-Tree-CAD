@@ -2548,6 +2548,7 @@ private final class DraftBackgroundLease {
     #endif
 }
 private struct ExperimentalDesignBriefView: View {
+    @Environment(\.dynamicTypeSize) private var typeSize
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     private var plum: Color { colorScheme == .dark ? Color(red: 1.0, green: 0.72, blue: 0.78) : Color(red: 0.29, green: 0.08, blue: 0.14) }
@@ -3092,6 +3093,19 @@ private struct ExperimentalDesignBriefView: View {
             message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
         }
     }
+    @ViewBuilder private var footerActions: some View {
+        if step > 0 {
+            Button("Geri") { step = step == 2 ? 0 : step - 1; message = "" }
+                .buttonStyle(.bordered).controlSize(.large).frame(minHeight: 48)
+        }
+        if step < 3 {
+            Button(step < 2 ? "Görsele devam" : "İsteği gözden geçir") { step = step < 2 ? 2 : 3; message = ""; focusedInput = nil }
+                .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
+        } else {
+            Button("İstek dosyasını kaydet…") { choosingRequestVersion = true }
+                .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
+        }
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -3167,8 +3181,8 @@ private struct ExperimentalDesignBriefView: View {
                                 .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(option.rawValue + ", " + styleCaption(option))
-                            .accessibilityHint("Model tercihini belirler; kalıp oluşturmaz.")
+                            .accessibilityLabel(option.rawValue)
+                            .accessibilityHint(styleCaption(option) + ". Model tercihini belirler; kalıp oluşturmaz.")
                             .accessibilityValue((modelExplicitlySelected && style == option) ? "Seçili" : "Seçili değil")
                             .accessibilityAddTraits((modelExplicitlySelected && style == option) ? .isSelected : [])
                         }
@@ -3427,19 +3441,15 @@ private struct ExperimentalDesignBriefView: View {
                     .padding(.horizontal).padding(.vertical, 6)
                     .background(Color.secondary.opacity(0.10))
                 }
-                HStack(spacing: 12) {
-                    if step > 0 {
-                        Button("Geri") { step = step == 2 ? 0 : step - 1; message = "" }
-                            .buttonStyle(.bordered).controlSize(.large)
-                    }
-                    if step < 3 {
-                        Button(step < 2 ? "Görsele devam" : "İsteği gözden geçir") { step = step < 2 ? 2 : 3; message = ""; focusedInput = nil }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
-                            .frame(maxWidth: .infinity, minHeight: 48)
+                Group {
+                    if typeSize.isAccessibilitySize {
+                        VStack(spacing: 8) { footerActions }.frame(maxWidth: .infinity)
                     } else {
-                        Button("İstek dosyasını kaydet…") { choosingRequestVersion = true }
-                            .buttonStyle(.borderedProminent).controlSize(.large)
-                            .frame(maxWidth: .infinity, alignment: .trailing)
+                        ViewThatFits(in: .horizontal) {
+                            HStack(spacing: 12) { footerActions }.fixedSize(horizontal: true, vertical: false)
+                            VStack(spacing: 8) { footerActions }
+                        }
+                        .frame(maxWidth: .infinity)
                     }
                 }
                 .disabled(draftTransition || referenceDecisionPending)
