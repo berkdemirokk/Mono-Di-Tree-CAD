@@ -25,8 +25,8 @@ internal static class GeneratedGraph
         {
             var sorted=group.OrderBy(e=>e.Id).ToArray();
             if(sorted.Select(e=>e.Id).Where((id,i)=>id!=i).Any()) { issues.Add("incomplete-edge-order:"+group.Key); continue; }
-            if(sorted.Any(e=>e.Kind!="L")) { issues.Add("curve-topology-unproven:"+group.Key); continue; }
             if(sorted.Length<3 || sorted.Where((e,i)=>e.End!=sorted[(i+1)%sorted.Length].Start).Any()) { issues.Add("open-contour:"+group.Key); continue; }
+            if(sorted.Any(e=>e.Kind!="L")) { issues.Add("curve-topology-unproven:"+group.Key); continue; }
             try { Geometry.ValidateContour(sorted.Select(e=>e.Start).ToArray()); }
             catch(ArgumentException) { issues.Add("self-intersection-or-degenerate:"+group.Key); }
         }

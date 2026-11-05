@@ -54,6 +54,9 @@ try
     if(!GeneratedGraph.Inspect("s",openEdges,[seam],[seam]).Issues.Any(x=>x.StartsWith("open-contour:"))) throw new Exception("Graph open path");
     var bow=new[]{new GeneratedGraph.Edge("s","a",0,"L",new(0,0),new(2,2)),new GeneratedGraph.Edge("s","a",1,"L",new(2,2),new(0,2)),new GeneratedGraph.Edge("s","a",2,"L",new(0,2),new(2,0)),new GeneratedGraph.Edge("s","a",3,"L",new(2,0),new(0,0))};
     if(!GeneratedGraph.Inspect("s",bow,[seam],[seam]).Issues.Any(x=>x.StartsWith("self-intersection-or-degenerate:"))) throw new Exception("Graph crossing path");
+    var openCurved=graphEdges.ToArray();openCurved[0]=openCurved[0] with { Kind="C",End=new(2,.1) };
+    if(!GeneratedGraph.Inspect("s",openCurved,[seam],[seam]).Issues.Any(x=>x.StartsWith("open-contour:"))) throw new Exception("Open curved graph accepted");
+    try { SyntheticArmholeCut.Create("other"); throw new Exception("Unknown armhole input accepted"); } catch(ArgumentException) { }
     var curved=graphEdges.ToArray(); curved[0]=curved[0] with { Kind="Q" };
     if(!GeneratedGraph.Inspect("s",curved,[seam],[seam]).Issues.Any(x=>x.StartsWith("curve-topology-unproven:"))) throw new Exception("Graph curve gate");
     var incomplete=baseParts.Segments.Select(e=>new GeneratedGraph.Edge("s",e.Panel,e.Edge,e.SourceKind=="Edge"?"L":"Q",new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
@@ -265,6 +268,35 @@ internal static class Validator
             Need(derived.EnumerateObject().Count()==predicted.Count,"derived field count");
             foreach(var pair in predicted) Need(derived.TryGetProperty(pair.Key,out var value)&&Math.Abs(value.GetDouble()-pair.Value)<1e-10,"derived mismatch: "+pair.Key);
             VerifySeams(id,item.GetProperty("stitches"));
+            foreach(bool left in new[]{false,true})
+            {
+                var path=FrontBodiceCandidate.Create(id,left);
+                Need(path.Edges.Count==12 && path.Darts.Count==2 && path.Status=="unresolved" && !path.ProductionAllowed && !path.ExportAllowed,"front body candidate gate");
+                foreach(var edge in path.Edges)
+                {
+                    var source=item.GetProperty("panels").GetProperty(path.Panel).GetProperty("edges")[edge.Id];
+                    P a=Point(source.GetProperty("start")),b=Point(source.GetProperty("end"));
+                    Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<1e-5 && (b-new P(edge.End.X,edge.End.Y)).Length()<1e-5,"front body candidate: "+path.Panel+":"+edge.Id);
+                    string sourceKind=source.GetProperty("kind").GetString()!;
+                    Need((edge.Kind,sourceKind) is ("L","Edge") or ("A","CircleEdge") or ("C","CurveEdge"),"front body edge kind");
+                    if(edge.Kind=="A") Need(Math.Abs(source.GetProperty("control_y").GetDouble()-edge.ArcControlY!.Value)<1e-7,"front body arc");
+                    if(edge.Kind=="C") { var cp=source.GetProperty("relative_controls"); Need(cp.GetArrayLength()==2 && (Point(cp[0])-new P(edge.Controls[0].X,edge.Controls[0].Y)).Length()<1e-12 && (Point(cp[1])-new P(edge.Controls[1].X,edge.Controls[1].Y)).Length()<1e-12,"front body cubic"); }
+                }
+                var graph=path.Edges.Select(e=>new GeneratedGraph.Edge(id,path.Panel,e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+                var actualDarts=path.Darts.Select(d=>new GeneratedGraph.Seam(id,path.Panel,d.EdgeA,d.FlipA,path.Panel,d.EdgeB,d.FlipB)).ToArray();
+                var expectedPanelDarts=item.GetProperty("stitches").EnumerateArray().Where(r=>r.GetProperty("owner").GetString()==path.Panel && r.GetProperty("owner_type").GetString()=="BodiceFrontHalf").OrderBy(r=>r.GetProperty("index").GetInt32()).Select(r=>new GeneratedGraph.Seam(id,path.Panel,r.GetProperty("a").GetProperty("edges")[0].GetProperty("edge").GetInt32(),r.GetProperty("a").GetProperty("edges")[0].GetProperty("flipped").GetBoolean(),path.Panel,r.GetProperty("b").GetProperty("edges")[0].GetProperty("edge").GetInt32(),r.GetProperty("b").GetProperty("edges")[0].GetProperty("flipped").GetBoolean())).ToArray();
+                var diagnostic=GeneratedGraph.Inspect(id,graph,actualDarts,expectedPanelDarts);
+                Need(actualDarts.Length==2 && diagnostic.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !diagnostic.Issues.Any(x=>x.StartsWith("open-contour:")) && !diagnostic.Issues.Contains("seam-identity-or-direction-mismatch") && !diagnostic.ExportAllowed,"front body topology remains unresolved");
+            }
+            var armholes=SyntheticArmholeCut.Create(id);
+            foreach(var curve in armholes.Curves)
+            {
+                var source=item.GetProperty("panels").GetProperty(curve.Panel).GetProperty("edges")[curve.Index];
+                P a=Point(source.GetProperty("start")),b=Point(source.GetProperty("end"));
+                var controls=source.GetProperty("relative_controls"); P c1=Point(controls[0]),c2=Point(controls[1]);
+                Need(source.GetProperty("kind").GetString()=="CurveEdge" && (a-new P(curve.Start.X,curve.Start.Y)).Length()<1e-5 && (b-new P(curve.End.X,curve.End.Y)).Length()<1e-5 && (c1-new P(curve.Control1.X,curve.Control1.Y)).Length()<1e-12 && (c2-new P(curve.Control2.X,curve.Control2.Y)).Length()<1e-12,"source armhole: "+curve.Panel);
+            }
+            Need(armholes.Status=="unresolved"&&!armholes.ProductionAllowed&&!armholes.ExportAllowed,"armhole gate");
             var neck=FrontNeckCut.Create(id);
             foreach(var pair in new[]{("right_ftorso",1,neck.Right),("left_ftorso",10,neck.Left)})
             {

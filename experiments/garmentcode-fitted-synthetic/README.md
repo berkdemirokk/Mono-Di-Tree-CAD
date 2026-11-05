@@ -77,3 +77,11 @@ Bu kontrol, temsil edilen çizgilerin sayısal ölçümüdür; bağımsız hata 
 Pens kuralları artık her bacağın kaynak kenar yönüne göre hangi uçta tepe bulunduğunu açıkça belirtir; yalnız bu iki tepe ucu karşılaştırılır. Aynı uzunlukta olup başka uçları birleşen sentetik karşı örnek reddedilir. Kaynak fixture'ında da belirtilen uçların birleşmesi ayrıca kontrol edilir. Bu sayısal kontrol fiziksel pens kapanması değildir.
 
 `FrontNeckCut`, sabit sentetik kaynak tasarımının `CircleNeckHalf` ön yaka kesimini C# formüllerinden hesaplar: iki ön yarım panel için dairesel yaka uçları, göreli daire kontrolü ve orta ön çizgi uçları iki Python kaynak örneğiyle karşılaştırıldı. Kaynak köşe yerleştirme optimizasyonu burada analitik olarak modellenir; `1e-5 cm` uç ve `1e-7` göreli kontrol eşiği yalnız bu sentetik karşılaştırma içindir. Bu, kol evi kesiminin, diğer konturların veya eğrilerin fiziksel/topolojik doğrulaması değildir; üretim ve gerçek veri kapalıdır.
+
+## Kolsuz kol evi ve ön gövde adayları
+
+`SyntheticArmholeCut`, seçili kaynak kolsuz `ArmholeCurve` tasarımının ön ve arka yarımlardaki köşe kesim uçlarını ve kübik Bézier göreli kontrollerini C#'ta hesaplar. Kaynağın köşe optimizasyonunun seçili iki çizgisel köşesi, burada analitik kesişimle çözülür. İki sentetik bedende dört yarımın uçları Python kaynağıyla `1e-5 cm`, kontrolleri `1e-12` araştırma eşiğinde karşılaştırıldı. Kaynak seçenekleri, bu iki sabit sentetik beden ve kolsuz tasarımla sınırlıdır; bu eşikler dikiş toleransı değildir.
+
+`FrontBodiceCandidate`, C# yaka yayı, kol evi kübiği, pensler ve çizgilerden her vaka için iki adet 12 kenarlı ön yarım gövde adayı kurar. Toplam dört adayın bütün uçları, kenar türleri ve yay/kübik kontrol verileri kaynakla karşılaştırıldı. Adayın panel düzeyi iki pens ilişkisinin kimliği/yönü ve sıralı uç sürekliliği ayrıca denetlenir. Grafik denetleyicisi artık eğrili yolda da önce açıklık olup olmadığını kontrol eder; açık eğrili örnek reddedilir.
+
+Bunlar kaynakla sayısal karşılaştırılmış adaylardır: eğri-eğri/çizgi-eğri temas ve kesişimlerinin tam topolojisi, sırt gövdesinin tam rekonstrüksiyonu, omuz/yan/bel dahil tüm giysi dikiş grafiği, kumaş davranışı ve numune provası henüz doğrulanmadı. Grafik `curve-topology-unproven` ve fiziksel dikiş belirsizliğini korur. Gerçek veri, üretim, dışa aktarma ve plotter kapalıdır.
