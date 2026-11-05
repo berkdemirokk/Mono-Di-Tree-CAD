@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Shapes;
+using Polygon = System.Windows.Shapes.Polygon;
 
 namespace TekstilCAD.Desktop;
 
