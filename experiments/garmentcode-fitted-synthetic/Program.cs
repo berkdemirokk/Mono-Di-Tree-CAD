@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -386,6 +386,11 @@ internal static class Validator
     }
     internal static void CheckWaistConstraints()
     {
+        var outerTest=new BackWaistConstraintStudy.Segment(0,0,10,0);var dartTest=new BackWaistConstraintStudy.Segment(0,0,1,0);
+        Need(BackWaistRotationStudy.Assess(outerTest,dartTest,dartTest,Math.BitDecrement(8)).ImpossibleUnderConstraints && !BackWaistRotationStudy.Assess(outerTest,dartTest,dartTest,8).ImpossibleUnderConstraints,"rotation bound threshold");
+        try { BackWaistRotationStudy.Assess(outerTest,new(0,0,0,0),dartTest,8);throw new InvalidDataException("Degenerate rotated dart accepted"); } catch(ArgumentException) { }
+        try { BackWaistRotationStudy.Assess(outerTest,dartTest,dartTest,0);throw new InvalidDataException("Zero rotation target accepted"); } catch(ArgumentException) { }
+        try { BackWaistRotationStudy.Assess(outerTest,dartTest,dartTest,double.NaN);throw new InvalidDataException("Non-finite rotation target accepted"); } catch(ArgumentException) { }
         var paths=new[]{new BackWaistConstraintStudy.Segment(0,0,1,0),new BackWaistConstraintStudy.Segment(10,10,11,10),new BackWaistConstraintStudy.Segment(0,-5,1,-5)};
         var exact=BackWaistConstraintStudy.AssessVectors(paths,3);
         var below=BackWaistConstraintStudy.AssessVectors(paths,Math.BitDecrement(3));
@@ -413,12 +418,22 @@ internal static class Validator
             var source=new[]{0,3,6}.Select(n=>{ var a=Point(edges[n].GetProperty("start"));var b=Point(edges[n].GetProperty("end"));return new BackWaistConstraintStudy.Segment(a.X,a.Y,b.X,b.Y); }).ToArray();
             double target=item.GetProperty("body_input_cm_degree").GetProperty("waist_back_width").GetDouble()/2;
             var sourceProof=BackWaistConstraintStudy.AssessVectors(source,target);
+            BackWaistConstraintStudy.Segment Segment(int a,bool aEnd,int b,bool bEnd) {
+                var x=Point(edges[a].GetProperty(aEnd?"end":"start"));var y=Point(edges[b].GetProperty(bEnd?"end":"start"));return new(x.X,x.Y,y.X,y.Y);
+            }
+            var rotationSource=BackWaistRotationStudy.Assess(Segment(0,false,6,true),Segment(1,false,2,true),Segment(4,false,5,true),target);
+            Need(rotationSource.ImpossibleUnderConstraints && !rotationSource.ExportAllowed && !rotationSource.ProductionAllowed,"source rotating-dart bound");
             var body=SyntheticBodyCatalog.Create(id);var candidate=BackWaistConstraintStudy.Inspect(body,ResearchDesign.PinnedFitted);
             var beforeTopology=BackBezierAudit.Inspect(BackWaistCandidate.Create(id));
             Need(beforeTopology.Separated==44 && beforeTopology.EndpointOnly==11 && beforeTopology.Unresolved==0 && beforeTopology.NonMonotone==0 && !beforeTopology.ExportAllowed,"constraint candidate baseline topology");
             var sourceInput=item.GetProperty("body_input_cm_degree");var partialFields=ResearchMeasurements.FieldsFor(ResearchMeasurements.Operation.PinnedGarment);
             var partial=ResearchMeasurements.Create(partialFields.Select(k=>new KeyValuePair<string,decimal>(k,sourceInput.GetProperty(k).GetDecimal())),"cm","degree").BuildPinnedGarment();
             var partialProof=BackWaistConstraintStudy.Inspect(partial,ResearchDesign.PinnedFitted);
+            var represented=BackWaistCandidate.CreateFromBody(partial,ResearchDesign.PinnedFitted).Edges;
+            BackWaistConstraintStudy.Segment Rep(int a,bool aEnd,int b,bool bEnd) { var x=aEnd?represented[a].End:represented[a].Start;var y=bEnd?represented[b].End:represented[b].Start;return new(x.X,x.Y,y.X,y.Y); }
+            var rotationCandidate=BackWaistRotationStudy.Assess(Rep(0,false,6,true),Rep(1,false,2,true),Rep(4,false,5,true),target);
+            Need(rotationCandidate.ImpossibleUnderConstraints,"candidate rotating-dart bound");
+            Console.WriteLine($"{id} fixed ends, rigid rotated darts: source lower≈{rotationSource.ApproximateLowerBoundCm:G10} cm, candidate lower≈{rotationCandidate.ApproximateLowerBoundCm:G10} cm, target={target:G10} cm; impossible under constraints.");
             Need(partialProof.Assessment==candidate.Assessment && partialProof.TargetCm==candidate.TargetCm && partialProof.ApproximateVectorLowerBoundCm==candidate.ApproximateVectorLowerBoundCm,"partial constraint differs from full body");
             Need(sourceProof.Assessment==BackWaistConstraintStudy.Finding.ImpossibleUnderConstraints && candidate.Assessment==BackWaistConstraintStudy.Finding.ImpossibleUnderConstraints,"waist constraint result: "+id);
             Need(candidate.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !candidate.ProductionAllowed && !candidate.ExportAllowed && candidate.Status=="unresolved","constraint output gate");
@@ -428,6 +443,22 @@ internal static class Validator
             double sourceBefore=new[]{0,3,6}.Sum(n=>edges[n].GetProperty("length_cm").GetDouble());
             Console.WriteLine($"{id} fixed ends/translated darts: source before={sourceBefore:G10} cm, candidate before≈[{current.ApproximateLowerCm:G10},{current.ApproximateUpperCm:G10}] cm, source vector lower≈{sourceProof.ApproximateVectorLowerBoundCm:G10} cm, candidate vector lower≈{candidate.ApproximateVectorLowerBoundCm:G10} cm, target={target:G10} cm; no corrected candidate.");
         }
+    }
+    internal static void CheckSideExperiment()
+    {
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct","synthetic-third","synthetic-fifth"}) {
+            var experiment=BackWaistSideExperiment.Create(id);
+            Need(experiment.ShiftCm>0 && Math.Abs(experiment.After.ApproximateLowerCm-experiment.TargetCm)<.000011 && Math.Abs(experiment.After.ApproximateUpperCm-experiment.TargetCm)<.000011,"side experiment waist bound");
+            var original=BackWaistCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted).Edges;
+            Need(new[]{1,2,4,5}.All(i=>experiment.Edges[i]==original[i]) && experiment.Edges[0].Start==original[0].Start && experiment.Edges[7].End==original[7].End && experiment.Edges[6].End.X>original[6].End.X,"side experiment dart/landmark invariants");
+            Need(experiment.BeforeTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && experiment.BeforeTopology.Unresolved==0 && experiment.BeforeTopology.NonMonotone==0,"side experiment baseline topology");
+            Need(experiment.Topology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && experiment.Topology.Unresolved==0 && experiment.Topology.NonMonotone==0,"side experiment topology");
+            Need(experiment.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && experiment.Status=="unresolved" && !experiment.ExportAllowed && !experiment.ProductionAllowed,"side experiment gate");
+            try { experiment.RequireResearchComposition();throw new InvalidDataException("Side experiment composed"); } catch(InvalidOperationException) { }
+            Console.WriteLine($"{id} side experiment: half-waist before≈[{experiment.Before.ApproximateLowerCm:G10},{experiment.Before.ApproximateUpperCm:G10}] cm, after≈[{experiment.After.ApproximateLowerCm:G10},{experiment.After.ApproximateUpperCm:G10}] cm, target={experiment.TargetCm:G10} cm, side shift={experiment.ShiftCm:G8} cm, front side={experiment.FrontSideCm:G10} cm, back side before={experiment.BackSideBeforeCm:G10} cm, after={experiment.BackSideAfterCm:G10} cm, topology pairs before/after={experiment.BeforeTopology.Pairs}/{experiment.Topology.Pairs}, unresolved={experiment.BeforeTopology.Unresolved}/{experiment.Topology.Unresolved}; research only.");
+        }
+        foreach(string? id in new string?[]{"synthetic-small-difference","unknown",null})
+            try { BackWaistSideExperiment.Create(id!);throw new InvalidDataException("Unsupported side experiment accepted"); } catch(ArgumentException) { }
     }
     internal static void CheckSeamCausality()
     {

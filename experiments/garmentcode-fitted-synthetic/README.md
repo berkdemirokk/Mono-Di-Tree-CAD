@@ -300,3 +300,7 @@ Büzgü katsayısı araştırma izi artık arayüz kenar sayısını ve bölüml
 ## Arka bel düzeltme fizibilitesi
 
 [Sabit dış uçlar ve pens kısıtları çalışması](WAIST_CONSTRAINT_STUDY_TR.md), kaynak ve C# adaylarını beş sentetik bedende ayrı inceler. Tam eşitlik hedefinde ve iki pensin yalnız dönmeden/bozulmadan ötelenebilmesi koşulunda, üç bel parçasının toplam yer değiştirme vektörü kesin dyadic aritmetikle hedef uzunluktan büyüktür. Bu beş örnekte kısıtlar altında düzeltme geometrik olarak erişilemez; prototip sahte bir düzeltme üretmez. Kısıtların gevşetildiği başka problemler veya fiziksel toleranslar bu bulgudan çözülmez. Önceki topoloji yalnız temsil edilen geometri içindir, sonrasında aday yoktur. Üretim ve plotter kapalıdır.
+
+## Pens döndürme ve yan uç gevşetme deneyleri
+
+[Pens döndürme ve yan uç deneyinde](WAIST_RELAXATION_EXPERIMENT_TR.md), dış uçlar sabit kalıp pensler rijit biçimde dönebilse bile beş sentetik kaynak/C# örneğinde üçgen eşitsizliği tam eşitlik hedefini dışlar. Alternatif olarak dört sabit sentetik örnekte pensleri aynen koruyup yan ucu kontrollü kaydıran bir C# adayı araştırılır; sayısal bel aralığı ve temsil edilen sağ arka kontur denetlenir. Komşu yan dikiş değişir ve ön–arka fark sürer. Bilinen 30° uyuşmazlığı reddedilir. Bu yalnız araştırma adaylarıdır; kaynak optimizer eşdeğerliği, fiziksel tolerans veya tam giysi doğrulaması değildir ve kompozisyon/üretim/plotter kapalıdır.
