@@ -2610,7 +2610,16 @@ private struct ExperimentalDesignBriefView: View {
     @State private var exportPresentation = ExperimentalDesignBrief.ExportPresentation()
     @State private var exportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var savedDraft: ExperimentalDesignBrief.Draft?
-    @State private var message = ""
+    @State private var statusMessage = ""
+    private var message: String {
+        get { statusMessage }
+        nonmutating set {
+            statusMessage = newValue
+            #if os(iOS)
+            if !newValue.isEmpty { UIAccessibility.post(notification: .announcement, argument: newValue) }
+            #endif
+        }
+    }
 
     @State private var restoreCandidate: ExperimentalDesignBrief.Draft?
     @State private var draftRevision: Data?
@@ -3115,6 +3124,7 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Modelini seç").font(.largeTitle).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                     Text("Özel dikim için temel elbise siluetini belirleyin veya kendi tarifinizi yazın.").font(.subheadline).foregroundStyle(.secondary)
                     Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    Text("Tüm modelleri görmek için aşağı kaydırın.").font(.caption).foregroundStyle(.secondary)
                     VStack(spacing: 8) {
                         ForEach(ExperimentalDesignBrief.selectableStyles) { option in
                             Button {
@@ -3375,7 +3385,6 @@ private struct ExperimentalDesignBriefView: View {
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
                 Text("Bu istek dosyası kalıp üretmez, baskıya göndermez veya otomatik gönderilmez.").font(.caption).foregroundStyle(.secondary)
                 }
-                if !message.isEmpty { Text(message).foregroundStyle(.secondary) }
             }
             .disabled(draftTransition)
             .scrollContentBackground(.hidden)
@@ -3403,6 +3412,21 @@ private struct ExperimentalDesignBriefView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 0) {
+                if !message.isEmpty {
+                    HStack(alignment: .top, spacing: 8) {
+                        ScrollView {
+                            Text(message).font(.subheadline).foregroundStyle(.primary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .accessibilityLabel("İşlem durumu: " + message)
+                        }
+                        .frame(maxHeight: 110)
+                        Button { message = "" } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }
+                            .accessibilityLabel("Durum mesajını kapat")
+                    }
+                    .padding(.horizontal).padding(.vertical, 6)
+                    .background(Color.secondary.opacity(0.10))
+                }
                 HStack(spacing: 12) {
                     if step > 0 {
                         Button("Geri") { step = step == 2 ? 0 : step - 1; message = "" }
@@ -3420,6 +3444,7 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 .disabled(draftTransition || referenceDecisionPending)
                 .padding(.horizontal).padding(.vertical, 10)
+                }
                 .background(ivory)
             }
             .fileExporter(isPresented: $showingDraftCopyExport, document: recoveryCopy, contentType: .json, defaultFilename: "elbise-taslak-kurtarma.json") { result in
