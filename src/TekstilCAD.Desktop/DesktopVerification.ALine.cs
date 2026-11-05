@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using TekstilCAD.FileFormats;
 using Polygon = System.Windows.Shapes.Polygon;
 
 namespace TekstilCAD.Desktop;
@@ -13,13 +14,20 @@ internal static partial class DesktopVerification
     public static int RunALine(string reportPath)
     {
         var checks=new List<string>();string? failure=null;
-        var owner=new Window();ALinePanelPreviewWindow? window=null;ALinePanelPreviewWindow? conflict=null;
+        var owner=new Window();ALinePanelPreviewWindow? window=null;ALinePanelPreviewWindow? conflict=null;DesignRequestWindow? request=null;
         try
         {
             // WPF requires an HWND before another Window can name this owner.
             // EnsureHandle creates the native source without Show/ShowDialog.
             var ownerHandle=new WindowInteropHelper(owner).EnsureHandle();
             Check(ownerHandle!=IntPtr.Zero && !owner.IsVisible,"Owner has a native handle without being shown",checks);
+            request=new DesignRequestWindow(owner);
+            request.LoadForVerification(new DesignRequest("Serbest tarif","",null,"aline",2));
+            Check(request.CanPreviewALineForVerification,"Loaded V2 A-line identity enables the preview without requiring a V1 text template",checks);
+            request.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null,"wrap",2));
+            Check(!request.CanPreviewALineForVerification,"V2 non-A-line identity cannot be overridden by descriptive text",checks);
+            request.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null,null,2));
+            Check(!request.CanPreviewALineForVerification,"Missing V2 identity does not infer an A-line model from text",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             static void Click(Button b)=>b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             static void Fill(ALinePanelPreviewWindow w,bool cm)
@@ -71,7 +79,7 @@ internal static partial class DesktopVerification
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
-        finally { conflict?.Close();window?.Close();owner.Close(); }
+        finally { request?.Close();conflict?.Close();window?.Close();owner.Close(); }
         var full=Path.GetFullPath(reportPath);Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         // A verification run never replaces an earlier report.
         using var report=new FileStream(full,FileMode.CreateNew,FileAccess.Write,FileShare.None);

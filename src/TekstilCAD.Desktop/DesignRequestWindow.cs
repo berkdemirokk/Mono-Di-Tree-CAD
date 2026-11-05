@@ -35,6 +35,7 @@ internal sealed class DesignRequestWindow : Window
     private bool dirty,loading,changingModel,hasSavedRequest;
     private int requestVersion=1;
     private string? portableModelId;
+    internal bool CanPreviewALineForVerification => requestVersion==2 ? portableModelId=="aline" : selectedModelText=="A kesim elbise; detaylar: " && !modelAmbiguous;
     private static readonly string[] PortableModelIds=["wrap","aline","corset","sheath","straight","shirt"];
     private string? selectedModelText;private string modelSnapshot="";private int selectedModelStart;
     private bool modelAmbiguous,selectedModelFromLoaded;
@@ -168,7 +169,7 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetHelpText(lowerPanelPreview,"A kesim fikri için açık ön/arka ölçülerle deneysel kesit gösterir; tam elbise kalıbı, projeye ekleme veya çıktı oluşturmaz.");
         lowerPanelPreview.Click+=(_,_)=>
         {
-            if(selectedModelText!="A kesim elbise; detaylar: " || modelAmbiguous)
+            if(!CanPreviewALineForVerification)
             { SetStatus("Önce A kesim model fikrini açıkça seçin; mevcut tarif korunur.");return; }
             if(!string.IsNullOrWhiteSpace(chatInput.Text)) { SetStatus("Önce bekleyen mesajı gönderin; ölçü notları önizlemeye anlık kopyalanacak.");return; }
             new ALinePanelPreviewWindow(this,prompt.Text,measurements.Text).ShowDialog();
