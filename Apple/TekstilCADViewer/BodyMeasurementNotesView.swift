@@ -18,6 +18,25 @@ enum BodyMeasurementNotes {
         .init(label: "omuz eğimi", angle: true), .init(label: "omuzdan bileğe", angle: false),
         .init(label: "bilek çevresi", angle: false)
     ]
+    // Mirrors the local BreannaMeasurementGate definitions; these descriptions
+    // are research guidance and have not been independently verified by a tailor.
+    static let instructions: [String] = [
+        "Üst kolun en geniş yerinden çevresini ölçün.",
+        "Göğsün en dolgun yerinden, bir yan dikiş noktasından diğerine ön taraftan ölçün.",
+        "İki göğüs noktası arasındaki mesafeyi ölçün.",
+        "Göğsün üstünden geçen üst göğüs çevresini ölçün.",
+        "Üst göğüs hattında yan dikiş noktaları arasında ön kısmı ölçün.",
+        "Boyun ile omzun birleştiği omuz üst noktasından (HPS), göğüs noktalarından geçen göğüs çevresi hizasına doğru düz aşağı ölçün.",
+        "Boyun dibindeki omuz üst noktasından sırt üzerinden bele ölçün.",
+        "Boyun dibindeki omuz üst noktasından ön taraftan bele ölçün.",
+        "Bel çevresini ölçün.",
+        "Bedenin yan tarafında bel hattından kalça kemiğinin üst noktasına doğru aşağı ölçün.",
+        "Boyun çevresini ölçün.",
+        "Bir omuz ucundan sırt üzerinden diğer omuz ucuna ölçün.",
+        "Omuz çizgisinin yataya göre aşağı eğimini dereceyle belirtin.",
+        "Kol doğal şekilde hafif bükülü dururken omuz ucundan kol boyunca bileğe kadar ölçün.",
+        "Bilek çevresini ölçün."
+    ]
     struct FieldGroup {
         let title: String
         let indices: Range<Int>
@@ -181,6 +200,8 @@ struct BodyMeasurementNotesView: View {
                 Section {
                     Text("Bildiğiniz ölçüleri girin; bilinmeyenleri boş bırakın. Uzunluklarda cm veya mm seçin; omuz eğimi derecedir. Bu form kalıp oluşturmaz. Girişler yalnız onayla notlara eklenir. Henüz eklenmemiş değerler yerel taslağa kaydedilmeye çalışılır; ani kapanışta son değişiklikler kaybolabilir.")
                     Text("Göğüs çevresi, kalça çevresi ve elbise boyu ana istek ekranında ayrıca girilir; bu form onları hesaplamaz.").font(.caption)
+                    Text("Ölçüm açıklamaları araştırma kaynağından alınmıştır; bağımsız kalıp uzmanı tarafından doğrulanmadı. Emin olmadığınız değerleri boş bırakın.").font(.caption)
+                    Text("Bu formdaki belden kalçaya ölçü kalça kemiğinin üst noktasına yöneliktir. A kesim rehberindeki belden kalça hattına düşüklük ve ayrı ön/arka yaylar farklı ölçülerdir; aynı referans noktası olduğu varsayılmaz.").font(.caption)
                     Text("Bu bilgiler iPhone’dan Windows’a istek olarak aktarılır; kalıp üretilmez.").font(.caption)
                     Text(localSaveStatus()).font(.caption).foregroundStyle(.secondary)
                     Picker("Uzunluk birimi", selection: Binding(get: { unit }, set: { requestUnit($0) })) { Text("cm").tag("cm"); Text("mm").tag("mm") }.pickerStyle(.segmented)
@@ -195,11 +216,12 @@ struct BodyMeasurementNotesView: View {
                         let field = BodyMeasurementNotes.fields[index]
                         VStack(alignment: .leading) {
                             Text("\(field.label) (\(field.angle ? "derece" : unit))")
+                            Text(BodyMeasurementNotes.instructions[index]).font(.caption).foregroundStyle(.secondary)
                             TextField("Bilinmiyorsa boş bırakın", text: Binding(get: { values[index] }, set: { value in
                                 if values[index] != value { values[index] = value; revision = UUID() }
                             }))
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
-                                .accessibilityHint(field.angle ? "Yataya göre açı girin, bilinmiyorsa boş bırakın." : "Pozitif ölçü girin, bilinmiyorsa boş bırakın.")
+                                .accessibilityHint(BodyMeasurementNotes.instructions[index] + " Bilinmiyorsa boş bırakın.")
                                 .focused($focusedIndex, equals: index).frame(minHeight: 44)
                         }
                     }

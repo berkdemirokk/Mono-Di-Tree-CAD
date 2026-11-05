@@ -207,6 +207,16 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(change.matches(form: change.after, revision: revision, notes: "not", existingNotes: "bel"))
         XCTAssertFalse(change.matches(form: blank, revision: revision, notes: "not", existingNotes: "değişti"))
     }
+    func testBodyMeasurementInstructionsMatchLocalResearchDefinitions() {
+        XCTAssertEqual(BodyMeasurementNotes.instructions.count, BodyMeasurementNotes.fields.count)
+        XCTAssertTrue(BodyMeasurementNotes.instructions.allSatisfy { !$0.isEmpty })
+        XCTAssertEqual(BodyMeasurementNotes.fields[1].label, "ön göğüs")
+        XCTAssertEqual(BodyMeasurementNotes.instructions[1], "Göğsün en dolgun yerinden, bir yan dikiş noktasından diğerine ön taraftan ölçün.")
+        XCTAssertEqual(BodyMeasurementNotes.fields[9].label, "belden kalçaya")
+        XCTAssertEqual(BodyMeasurementNotes.instructions[9], "Bedenin yan tarafında bel hattından kalça kemiğinin üst noktasına doğru aşağı ölçün.")
+        XCTAssertTrue(BodyMeasurementNotes.instructions[12].contains("dereceyle"))
+        XCTAssertTrue(BodyMeasurementNotes.instructions[13].contains("hafif bükülü"))
+    }
     func testMeasurementGroupsCoverFieldsAndReportUnfinishedValues() throws {
         let indices = BodyMeasurementNotes.groups.flatMap { Array($0.indices) }
         XCTAssertEqual(indices, Array(BodyMeasurementNotes.fields.indices))
