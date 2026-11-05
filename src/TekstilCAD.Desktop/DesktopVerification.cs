@@ -9702,6 +9702,24 @@ internal static partial class DesktopVerification
                 regionPixels[offset+2]=(byte)(inside ? 220 : 75);regionPixels[offset+3]=255;
             }
             var regionBitmap=BitmapSource.Create(96,72,96,96,PixelFormats.Bgra32,null,regionPixels,96*4);regionBitmap.Freeze();
+            var edgeRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
+            try
+            {
+                var edgeMask=new byte[96*72];for(var y=10;y<20;y++)for(var x=0;x<10;x++)edgeMask[y*96+x]=1;
+                for(var y=30;y<40;y++)for(var x=30;x<40;x++)edgeMask[y*96+x]=1;
+                var edgeComponents=PhotoRegionSharpPrototype.MaskComponents.Analyze(edgeMask,96,72);
+                typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(edgeRegion,[edgeComponents]);
+                edgeRegion.Regions.SelectedIndex=0;
+                Render(edgeRegion,Path.ChangeExtension(reportPath,".photo-region-image-edge.png"),620,550);
+                Check(edgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && edgeRegion.Status.Text.Contains("kırpılmış") &&
+                    FullyVisible(edgeRegion.AcknowledgeImageEdge,(FrameworkElement)edgeRegion.Content) && !edgeRegion.TrySelectContour() && edgeRegion.SelectedContour is null,
+                    "Image-edge region warns and requires an explicit visible acknowledgement before contour preview",checks);
+                edgeRegion.AcknowledgeImageEdge.IsChecked=true;
+                Check(edgeRegion.TrySelectContour() && edgeRegion.SelectedContour is { Length:>=3 },"Acknowledged image-edge contour remains an explicit preview",checks);
+                edgeRegion.Regions.SelectedIndex=1;edgeRegion.Regions.SelectedIndex=0;
+                Check(edgeRegion.AcknowledgeImageEdge.IsChecked!=true && !edgeRegion.TrySelectContour(),"Image-edge acknowledgement does not carry to a new region selection",checks);
+            }
+            finally { edgeRegion.Close(); }
             var regionDialog=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmRectangleChangeForVerification=()=>true,ConfirmCloseForVerification=()=>true };
             var regionDialogContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(regionDialog.Dispatcher));
             try

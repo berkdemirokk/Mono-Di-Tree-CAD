@@ -50,6 +50,7 @@ internal sealed class PhotoRegionWindow : Window
     internal CheckBox OmitHoles { get; }=new() { Content="İç boşlukların aktarılmayacağını anlıyorum",Margin=new Thickness(0,4,0,4) };
     internal Button SaveSessionForVerification { get; private set; }=null!;
     internal Button LoadSessionForVerification { get; private set; }=null!;
+    internal CheckBox AcknowledgeImageEdge { get; }=new() { Content="Görüntü kenarındaki sınırın kırpılmış olabileceğini inceledim",Margin=new Thickness(0,4,0,4),Visibility=Visibility.Collapsed };
     internal CheckBox ComparePrevious { get; }=new() { Content="Öncekiyle farkı göster",Margin=new Thickness(8,4,0,4),IsEnabled=false };
     internal CheckBox ShowAppliedMarks { get; }=new() { Content="Uygulananları göster",Margin=new Thickness(8,4,0,4) };
     internal TextBlock Status { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) };
@@ -128,7 +129,7 @@ internal sealed class PhotoRegionWindow : Window
         addMark.Click+=(_,_)=> { if(!int.TryParse(MarkX.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var mx) || !int.TryParse(MarkY.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var my)) { Status.Text="Görüntü içindeki tam sayı koordinatlarını girin.";return; }
             if(MarkMode.SelectedIndex==3)TrySelectComponentAt(mx,my);else TryAddMark(mx,my); };
         AutomationProperties.SetName(MarkX,"Seçim veya düzeltme X piksel");AutomationProperties.SetName(MarkY,"Seçim veya düzeltme Y piksel");AutomationProperties.SetName(MarkMode,"Dikdörtgen, düzeltme veya bölge seçimi");AutomationProperties.SetName(BrushSize,"Düzeltme fırçası çapı piksel");
-        var options=new WrapPanel();if(!reviewOnly)options.Children.Add(OmitHoles);
+        var options=new WrapPanel();if(!reviewOnly) { options.Children.Add(OmitHoles);options.Children.Add(AcknowledgeImageEdge); }
         var undoRefinement=new Button { Content="Düzeltmeyi geri al",Padding=new Thickness(8,3,8,3),Margin=new Thickness(8,0,0,2) };
         AutomationProperties.SetHelpText(undoRefinement,"Son başarılı düzeltme veya yeniden aramadan önceki bölgeyi bir kez geri yükler; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
         undoRefinement.Click+=(_,_)=>UndoRefinement();options.Children.Add(undoRefinement);options.Children.Add(ShowAppliedMarks);options.Children.Add(ComparePrevious);controls.Children.Add(options);controls.Children.Add(Status);
@@ -185,7 +186,7 @@ internal sealed class PhotoRegionWindow : Window
         var oldSnapshot=snapshot;var oldComponents=components;var oldRunning=running;var oldApplied=appliedMarks;
         var oldUndo=undoSnapshot;var oldUndoComponents=undoComponents;var oldUndoApplied=undoAppliedMarks;
         var oldPendingUndo=pendingUndo;var oldSource=sourceBgr;var oldContour=SelectedContour;
-        var oldMarks=pendingMarks.ToArray();var oldSelection=Regions.SelectedItem;var oldOmitHoles=OmitHoles.IsChecked;
+        var oldMarks=pendingMarks.ToArray();var oldSelection=Regions.SelectedItem;var oldOmitHoles=OmitHoles.IsChecked;var oldEdgeAcknowledgement=AcknowledgeImageEdge.IsChecked;
         var oldFields=new[] { left.Text,top.Text,width.Text,height.Text };var oldReviewRevision=reviewRevision;
         rectangleConfirmationActive=true;bool accepted;
         try { accepted=confirmForVerification?.Invoke() ??
@@ -195,7 +196,7 @@ internal sealed class PhotoRegionWindow : Window
             ReferenceEquals(running,oldRunning) && ReferenceEquals(appliedMarks,oldApplied) && ReferenceEquals(undoSnapshot,oldUndo) &&
             ReferenceEquals(undoComponents,oldUndoComponents) && ReferenceEquals(undoAppliedMarks,oldUndoApplied) &&
             ReferenceEquals(pendingUndo,oldPendingUndo) && ReferenceEquals(sourceBgr,oldSource) && ReferenceEquals(SelectedContour,oldContour) &&
-            ReferenceEquals(Regions.SelectedItem,oldSelection) && OmitHoles.IsChecked==oldOmitHoles && pendingMarks.Count==oldMarks.Length &&
+            ReferenceEquals(Regions.SelectedItem,oldSelection) && OmitHoles.IsChecked==oldOmitHoles && AcknowledgeImageEdge.IsChecked==oldEdgeAcknowledgement && pendingMarks.Count==oldMarks.Length &&
             oldMarks.All(mark=>pendingMarks.TryGetValue(mark.Key,out var value) && value==mark.Value) &&
             oldFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text });
     }
@@ -515,12 +516,13 @@ internal sealed class PhotoRegionWindow : Window
     }
     private void ShowSelection()
     {
-        SelectedContour=null;overlay.Source=null;OmitHoles.IsChecked=false;
+        SelectedContour=null;overlay.Source=null;OmitHoles.IsChecked=false;AcknowledgeImageEdge.IsChecked=false;AcknowledgeImageEdge.Visibility=Visibility.Collapsed;
         if(components is null || Regions.SelectedItem is not Choice choice)return;
+        var touchesImageEdge=TouchesImageEdge(choice);if(touchesImageEdge)AcknowledgeImageEdge.Visibility=Visibility.Visible;
         var selected=components.CopySelection([choice.Id]);var pixels=new byte[checked(selected.Length*4)];
         for(var i=0;i<selected.Length;i++)if(selected[i]!=0) { var p=i*4;pixels[p]=210;pixels[p+1]=190;pixels[p+2]=0;pixels[p+3]=100; }
         var mask=BitmapSource.Create(image.PixelWidth,image.PixelHeight,image.DpiX,image.DpiY,PixelFormats.Bgra32,null,pixels,image.PixelWidth*4);mask.Freeze();overlay.Source=mask;
-        Status.Text=ComparePrevious.IsChecked==true ? "Tüm maske farkı: yeşil eklenen, kırmızı çıkarılan piksel; değişmeyen alan görünmez. Bu bir doğruluk ölçümü değildir." : "Mavi alan seçilen bölgedir; diğer bölgeler aktarılmaz. Sınırın fotoğrafla uyumunu kontrol edin.";
+        Status.Text=(ComparePrevious.IsChecked==true ? "Tüm maske farkı: yeşil eklenen, kırmızı çıkarılan piksel; değişmeyen alan görünmez. Bu bir doğruluk ölçümü değildir." : "Mavi alan seçilen bölgedir; diğer bölgeler aktarılmaz. Sınırın fotoğrafla uyumunu kontrol edin.")+(touchesImageEdge ? " Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir." : "");
     }
     private void ResetComparison()
     {
@@ -552,12 +554,14 @@ internal sealed class PhotoRegionWindow : Window
         if(comparisonOverlay.Source is not BitmapSource bitmap)return null;
         var pixels=new byte[checked(bitmap.PixelWidth*bitmap.PixelHeight*4)];bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);return pixels;
     }
+    private bool TouchesImageEdge(Choice choice)=>choice.Left==0 || choice.Top==0 || choice.Right==image.PixelWidth-1 || choice.Bottom==image.PixelHeight-1;
     internal bool TrySelectContour()
     {
         if(pendingMarks.Count>0) { Status.Text="Önce bekleyen işaretleri uygulayın veya silin.";return false; }
         if(running is not null || components is null || Regions.SelectedItem is not Choice choice) { Status.Text="Önce arama tamamlanınca bir bölge seçin.";return false; }
         try
         {
+            if(TouchesImageEdge(choice) && AcknowledgeImageEdge.IsChecked!=true) { Status.Text="Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir. İnceledikten sonra seçimi onaylayın.";return false; }
             var contours=MaskContours.Extract(components.CopySelection([choice.Id]),image.PixelWidth,image.PixelHeight);
             var outer=contours.Loops.Where(l=>!l.IsHole).ToArray();var holes=contours.Loops.Count(l=>l.IsHole);
             if(outer.Length!=1) { Status.Text="Seçilen bölgenin birden fazla dış sınırı var; otomatik seçim yapılmadı.";return false; }
