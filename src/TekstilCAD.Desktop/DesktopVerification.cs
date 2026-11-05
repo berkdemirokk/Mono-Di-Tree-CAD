@@ -10988,6 +10988,24 @@ internal static partial class DesktopVerification
             trace.SetPlaneSettings((200,100));var canvas=trace.CanvasForVerification;
             Check(canvas.ReferencePointCount==4 && trace.HasDraft && trace.LengthForVerification.IsReadOnly,"Plane mode uses four reference corners and retains its settings",checks);
             foreach(var p in new[] { new Point(10,10),new Point(90,10),new Point(90,90),new Point(10,90) })canvas.TryAddPixelPoint(p);
+            var traceFile=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"trace-"+Guid.NewGuid().ToString("N")+".tdtrace");
+            try {
+                canvas.TryAddPixelPoint(new Point(20,20));var savedPoints=canvas.Points.ToArray();trace.ConfirmForVerification=_=>true;
+                var save=trace.TrySaveTraceSessionAsync(traceFile);PumpUntil(()=>save.IsCompleted);
+                Check(save.GetAwaiter().GetResult() && File.Exists(traceFile),"Photo trace saves a new checkpoint",checks);
+                var duplicate=trace.TrySaveTraceSessionAsync(traceFile);PumpUntil(()=>duplicate.IsCompleted);
+                Check(!duplicate.GetAwaiter().GetResult(),"Photo trace checkpoint cannot overwrite an existing file",checks);
+                canvas.ClearPoints();trace.SetPlaneSettings(null);trace.LengthForVerification.Text="7";
+                var load=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>load.IsCompleted);
+                Check(load.GetAwaiter().GetResult() && trace.PlaneSettings==(200d,100d) && canvas.Points.SequenceEqual(savedPoints),"Photo trace restores plane and reference points",checks);
+                var beforeInvalid=canvas.Points.ToArray();var originalJson=File.ReadAllText(traceFile);File.WriteAllText(traceFile,originalJson.Replace("\"Version\":1","\"Version\":1,\"Version\":1"));
+                var bad=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>bad.IsCompleted);
+                Check(!bad.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid),"Malformed photo trace leaves the current draft intact",checks);
+                File.WriteAllText(traceFile,originalJson.Replace(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),new string('A',64)));
+                var wrong=trace.TryLoadTraceSessionAsync(traceFile);PumpUntil(()=>wrong.IsCompleted);
+                Check(!wrong.GetAwaiter().GetResult() && canvas.Points.SequenceEqual(beforeInvalid),"Photo trace rejects a different photo without changing the draft",checks);
+            } finally { if(File.Exists(traceFile))File.Delete(traceFile); }
+            canvas.UndoPoint();
             Check(!canvas.SuggestLastEdge(),"Plane reference corners cannot be changed by the trace edge suggestion",checks);
             try { trace.SetPlaneSettings(null);throw new InvalidOperationException("Changed calibration with points present."); }
             catch(InvalidOperationException) { Check(canvas.ReferencePointCount==4 && canvas.Points.Count==4,"Changing calibration with existing points is blocked",checks); }

@@ -1,4 +1,8 @@
 using System.ComponentModel;
+using System.IO;
+using System.Text.Json;
+using Microsoft.Win32;
+using TekstilCAD.FileFormats;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -42,6 +46,7 @@ internal sealed class PhotoTraceWindow : Window
     private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
     private bool allowClose,closed;
     private CancellationTokenSource? pathCancellation;
+    private CancellationTokenSource? sessionCancellation;
 
     internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
     {
@@ -55,6 +60,12 @@ internal sealed class PhotoTraceWindow : Window
         var apply=Action("CAD'e taslak ekle",TryApply);apply.Background=DesignRequestWindow.Accent;apply.Foreground=DesignRequestWindow.Surface;
         ApplyForVerification=apply;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
+        var traceMenu=new ContextMenu();
+        var saveTrace=new MenuItem { Header="Çizgiyi kaydet…" };saveTrace.Click+=(_,_)=>_ = SaveTraceDialogAsync();traceMenu.Items.Add(saveTrace);
+        var loadTrace=new MenuItem { Header="Çizgiyi aç…" };loadTrace.Click+=(_,_)=>_ = LoadTraceDialogAsync();traceMenu.Items.Add(loadTrace);
+        var cancelTrace=new MenuItem { Header="Dosya işlemini iptal et" };cancelTrace.Click+=(_,_)=> { sessionCancellation?.Cancel();StatusForVerification.Text="İptal istendi; tamamlanmış kayıt geri alınmaz."; };traceMenu.Items.Add(cancelTrace);
+        var traceFiles=Action("⋯",()=> { traceMenu.IsOpen=true; });actions.Children.Remove(traceFiles);traceFiles.Width=25;traceFiles.Padding=new Thickness(0);traceFiles.Margin=new Thickness(1,0,0,4);traceMenu.PlacementTarget=traceFiles;AutomationProperties.SetName(traceFiles,"Çizgi dosyası");
+        AutomationProperties.SetHelpText(traceFiles,"Referans ve çizgi noktalarını kaydedin veya aynı fotoğrafa ait taslağı açın. Fotoğraf ve bölge maskesi dosyaya dahil değildir.");
         Action("Kapat",Close);
         var region=Action("Bölge…",OpenRegionSuggestion);RegionForVerification=region;
         AutomationProperties.SetHelpText(region,"Dikdörtgen içinden deneysel renk bölgesi önerir. Giysi fotoğrafında yalnız inceleme yapılır; düz kalıp görselinde sınır ayrıca önizlenebilir. Üretim doğruluğu göstermez.");
@@ -63,7 +74,7 @@ internal sealed class PhotoTraceWindow : Window
         SourcePurposeForVerification.ItemsSource=new[] { "Giysi/model referansı", "Düz serilmiş kalıp görseli" };
         AutomationProperties.SetName(SourcePurposeForVerification,"Görsel türü seçimi");
         AutomationProperties.SetHelpText(SourcePurposeForVerification,"Görsel otomatik sınıflandırılmaz. Giysi/model yalnız görsel referanstır; düz serilmiş kalıp seçilirse ölçek ve çizim araçları açılır.");
-        sourceRow.Children.Add(SourcePurposeForVerification);sourceRow.Children.Add(ColorPathForVerification);sourceRow.Children.Add(WidePathForVerification);sourceRow.Children.Add(PhotoOnlyForVerification);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
+        sourceRow.Children.Add(SourcePurposeForVerification);sourceRow.Children.Add(ColorPathForVerification);sourceRow.Children.Add(WidePathForVerification);sourceRow.Children.Add(PhotoOnlyForVerification);sourceRow.Children.Add(traceFiles);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
         var input=new WrapPanel();DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
         ReferenceInputsForVerification=input;
         referenceLabel.Content="İki uç arası bilinen mesafe (mm)";referenceLabel.Target=LengthForVerification;input.Children.Add(referenceLabel);AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
@@ -149,7 +160,7 @@ internal sealed class PhotoTraceWindow : Window
             Title=flat ? "Fotoğrafta elle taslak çiz" : "Referans fotoğrafı";
             var visible=flat ? Visibility.Visible : Visibility.Collapsed;
             input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;WidePathForVerification.Visibility=visible;PhotoOnlyForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
-            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;region.Visibility=SourcePurpose==PhotoSourcePurpose.Unspecified ? Visibility.Collapsed : Visibility.Visible;
+            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;traceFiles.Visibility=visible;region.Visibility=SourcePurpose==PhotoSourcePurpose.Unspecified ? Visibility.Collapsed : Visibility.Visible;
             region.Content=flat ? "Bölge…" : "Giysi bölgesini incele…";UpdatePhotoOnly();
             UpdateStatus();
         }
@@ -161,7 +172,67 @@ internal sealed class PhotoTraceWindow : Window
         };
         UpdatePurpose();root.Children.Add(CanvasForVerification);
         Closing+=OnClosing;
-        workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
+        workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();sessionCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
+    }
+    private bool CanUseTraceSession()
+    {
+        if(closed || SourcePurpose!=PhotoSourcePurpose.FlatPattern || sessionCancellation is not null || pathCancellation is not null || sourceSha256 is null || sourceByteLength<=0)
+        { if(!closed)StatusForVerification.Text="Düz kalıp görseli seçili olmalı; kaynak fotoğraf kimliği bulunmalı ve süren işlem bitmeli.";return false; }
+        return true;
+    }
+    private PhotoTraceSession.Data CaptureTraceSession()=>new(1,sourceSha256!,sourceByteLength,sourceOrientation,sourceWidth,sourceHeight,image.PixelWidth,image.PixelHeight,
+        PlaneSettings?.Width,PlaneSettings?.Height,LengthForVerification.Text,xInput.Text,yInput.Text,ReviewClosureForVerification.IsChecked==true,ColorPathForVerification.IsChecked==true,WidePathForVerification.IsChecked==true,
+        CanvasForVerification.Points.Select(p=>new PhotoTraceSession.Pixel(p.X,p.Y)).ToArray());
+    private async Task SaveTraceDialogAsync()
+    {
+        if(!CanUseTraceSession())return;var revision=DraftRevision;
+        var dialog=new SaveFileDialog { Filter="Fotoğraf çizgisi (*.tdtrace)|*.tdtrace",DefaultExt=".tdtrace",AddExtension=true,OverwritePrompt=false };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(!CanUseTraceSession() || revision!=DraftRevision) { StatusForVerification.Text="Taslak değişti; dosya kaydedilmedi.";return; }
+        await TrySaveTraceSessionAsync(dialog.FileName);
+    }
+    private async Task LoadTraceDialogAsync()
+    {
+        if(!CanUseTraceSession())return;var revision=DraftRevision;
+        var dialog=new OpenFileDialog { Filter="Fotoğraf çizgisi (*.tdtrace)|*.tdtrace",CheckFileExists=true };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(!CanUseTraceSession() || revision!=DraftRevision) { StatusForVerification.Text="Taslak değişti; dosya açılmadı.";return; }
+        await TryLoadTraceSessionAsync(dialog.FileName);
+    }
+    internal async Task<bool> TrySaveTraceSessionAsync(string path)
+    {
+        if(!CanUseTraceSession())return false;var data=CaptureTraceSession();var revision=DraftRevision;var cts=new CancellationTokenSource();sessionCancellation=cts;
+        try {
+            var full=PhotoTraceSession.SavePath(path);StatusForVerification.Text="Çizgi dosyası kaydediliyor…";
+            await Task.Run(()=> { var text=PhotoTraceSession.Encode(data);ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null),cts.Token); },cts.Token);
+            if(!closed)StatusForVerification.Text=revision==DraftRevision ? "Çizgi yeni dosyaya kaydedildi; fotoğraf ve bölge maskesi dahil değil." : "Önceki çizgi durumu kaydedildi; sonraki değişiklikler dosyada yok.";
+            return true;
+        } catch(OperationCanceledException) { if(!closed)StatusForVerification.Text="Kayıt iptal edildi; tamamlanmış kayıt geri alınmaz.";return false; }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { if(!closed)StatusForVerification.Text="Çizgi kaydedilemedi: "+ex.Message;return false; }
+        finally { if(ReferenceEquals(sessionCancellation,cts))sessionCancellation=null;cts.Dispose(); }
+    }
+    internal async Task<bool> TryLoadTraceSessionAsync(string path)
+    {
+        if(!CanUseTraceSession())return false;var revision=DraftRevision;
+        if(HasDraft) { var accepted=ConfirmForVerification?.Invoke("Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?") ?? (MessageBox.Show(this,"Çizgi dosyası mevcut taslağın yerini alacak. Devam edilsin mi?","Çizgiyi aç",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            if(!accepted || revision!=DraftRevision || !CanUseTraceSession()) { if(!closed)StatusForVerification.Text="Çizgi açılmadı; mevcut taslak korundu.";return false; } }
+        var cts=new CancellationTokenSource();sessionCancellation=cts;
+        try {
+            StatusForVerification.Text="Çizgi dosyası açılıyor; mevcut taslak korunuyor…";
+            var data=await Task.Run(()=>PhotoTraceSession.Decode(path,cts.Token),cts.Token);cts.Token.ThrowIfCancellationRequested();
+            if(closed || revision!=DraftRevision || SourcePurpose!=PhotoSourcePurpose.FlatPattern) { if(!closed)StatusForVerification.Text="Taslak değişti; dosya uygulanmadı.";return false; }
+            if(!string.Equals(data.Sha256,sourceSha256,StringComparison.OrdinalIgnoreCase) || data.ByteLength!=sourceByteLength || data.Orientation!=sourceOrientation || data.SourceWidth!=sourceWidth || data.SourceHeight!=sourceHeight || data.PreviewWidth!=image.PixelWidth || data.PreviewHeight!=image.PixelHeight)
+                throw new InvalidDataException("Dosya bu fotoğrafa veya önizlemeye ait değil.");
+            CanvasForVerification.ClearPoints();SetPlaneSettings(data.PlaneWidth is double w ? (w,data.PlaneHeight!.Value) : null);
+            LengthForVerification.Text=data.Length;xInput.Text=data.XInput;yInput.Text=data.YInput;
+            ReviewClosureForVerification.IsChecked=data.Closure;ColorPathForVerification.IsChecked=data.Color;WidePathForVerification.IsChecked=data.Wide;
+            foreach(var point in data.Points)if(!CanvasForVerification.TryAddPixelPoint(new Point(point.X,point.Y)))throw new InvalidOperationException("Doğrulanmış nokta yüklenemedi.");
+            StatusForVerification.Text="Çizgi aynı fotoğrafa yüklendi; fotoğraf ve bölge maskesi dosyada yok. Taslak ve ölçüler doğrulanmadı.";return true;
+        } catch(OperationCanceledException) { if(!closed)StatusForVerification.Text="Açma iptal edildi; mevcut taslak korundu.";return false; }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { if(!closed)StatusForVerification.Text="Çizgi açılamadı: "+ex.Message;return false; }
+        finally { if(ReferenceEquals(sessionCancellation,cts))sessionCancellation=null;cts.Dispose(); }
     }
     internal PhotoTracePointEditWindow? CreatePointEditor()
     {
