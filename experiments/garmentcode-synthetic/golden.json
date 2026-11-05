@@ -1,0 +1,696 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "unit": "cm",
+  "cases": [
+    {
+      "id": "synthetic-base",
+      "scale": 1.0,
+      "body_cm": {
+        "bust": 100.0,
+        "back_width": 44.0,
+        "waist": 80.0,
+        "waist_back_width": 36.0,
+        "waist_line": 40.0,
+        "_shoulder_incl": 12,
+        "height": 170.0,
+        "head_l": 24.0,
+        "shoulder_w": 40.0
+      },
+      "shirt": {
+        "width": 1.1,
+        "flare": 1.0,
+        "length": 1.0
+      },
+      "skirt": {
+        "length_cm": 60.0,
+        "flare_cm": 12.0
+      },
+      "panels": {
+        "front_half": {
+          "edges": [
+            {
+              "start": [
+                0.0,
+                0.0
+              ],
+              "end": [
+                -30.800000000000008,
+                0.0
+              ],
+              "length": 30.800000000000008,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -30.800000000000008,
+                0.0
+              ],
+              "end": [
+                -30.800000000000008,
+                38.724660629979866
+              ],
+              "length": 38.724660629979866,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -30.800000000000008,
+                38.724660629979866
+              ],
+              "end": [
+                0.0,
+                45.27140272941655
+              ],
+              "length": 31.488090321842908,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                0.0,
+                45.27140272941655
+              ],
+              "end": [
+                0.0,
+                0.0
+              ],
+              "length": 45.27140272941655,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "bottom": {
+              "lengths": [
+                30.800000000000008
+              ],
+              "projected_lengths": [
+                22.0
+              ]
+            }
+          }
+        },
+        "back_half": {
+          "edges": [
+            {
+              "start": [
+                0.0,
+                0.0
+              ],
+              "end": [
+                -24.200000000000003,
+                0.0
+              ],
+              "length": 24.200000000000003,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -24.200000000000003,
+                0.0
+              ],
+              "end": [
+                -24.200000000000003,
+                40.0
+              ],
+              "length": 40.0,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -24.200000000000003,
+                40.0
+              ],
+              "end": [
+                0.0,
+                45.14386879241454
+              ],
+              "length": 24.74064239573371,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                0.0,
+                45.14386879241454
+              ],
+              "end": [
+                0.0,
+                0.0
+              ],
+              "length": 45.14386879241454,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "bottom": {
+              "lengths": [
+                24.200000000000003
+              ],
+              "projected_lengths": [
+                18.0
+              ]
+            }
+          }
+        },
+        "skirt_front": {
+          "edges": [
+            {
+              "start": [
+                -34.0,
+                -60.0
+              ],
+              "end": [
+                -22.0,
+                0.0
+              ],
+              "length": 61.18823416311342,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -22.0,
+                0.0
+              ],
+              "end": [
+                22.0,
+                0.0
+              ],
+              "length": 44.0,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                22.0,
+                0.0
+              ],
+              "end": [
+                34.0,
+                -60.0
+              ],
+              "length": 61.18823416311342,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                34.0,
+                -60.0
+              ],
+              "end": [
+                -34.0,
+                -60.0
+              ],
+              "length": 68.0,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "right": {
+              "lengths": [
+                61.18823416311342
+              ],
+              "projected_lengths": [
+                61.18823416311342
+              ]
+            },
+            "top": {
+              "lengths": [
+                44.0
+              ],
+              "projected_lengths": [
+                44.0
+              ]
+            },
+            "left": {
+              "lengths": [
+                61.18823416311342
+              ],
+              "projected_lengths": [
+                61.18823416311342
+              ]
+            },
+            "bottom": {
+              "lengths": [
+                68.0
+              ],
+              "projected_lengths": [
+                68.0
+              ]
+            }
+          }
+        },
+        "skirt_back": {
+          "edges": [
+            {
+              "start": [
+                -30.0,
+                -60.0
+              ],
+              "end": [
+                -18.0,
+                0.0
+              ],
+              "length": 61.18823416311342,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -18.0,
+                0.0
+              ],
+              "end": [
+                18.0,
+                0.0
+              ],
+              "length": 36.0,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                18.0,
+                0.0
+              ],
+              "end": [
+                30.0,
+                -60.0
+              ],
+              "length": 61.18823416311342,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                30.0,
+                -60.0
+              ],
+              "end": [
+                -30.0,
+                -60.0
+              ],
+              "length": 60.0,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "right": {
+              "lengths": [
+                61.18823416311342
+              ],
+              "projected_lengths": [
+                61.18823416311342
+              ]
+            },
+            "top": {
+              "lengths": [
+                36.0
+              ],
+              "projected_lengths": [
+                36.0
+              ]
+            },
+            "left": {
+              "lengths": [
+                61.18823416311342
+              ],
+              "projected_lengths": [
+                61.18823416311342
+              ]
+            },
+            "bottom": {
+              "lengths": [
+                60.0
+              ],
+              "projected_lengths": [
+                60.0
+              ]
+            }
+          }
+        }
+      },
+      "source_stitches": [
+        {
+          "a": "skirt_front:right",
+          "b": "skirt_back:right",
+          "projected_cm": [
+            61.18823416311342,
+            61.18823416311342
+          ]
+        },
+        {
+          "a": "skirt_front:left",
+          "b": "skirt_back:left",
+          "projected_cm": [
+            61.18823416311342,
+            61.18823416311342
+          ]
+        }
+      ],
+      "upper_lower_stitches": "not_generated"
+    },
+    {
+      "id": "synthetic-scaled",
+      "scale": 1.2,
+      "body_cm": {
+        "bust": 120.0,
+        "back_width": 52.8,
+        "waist": 96.0,
+        "waist_back_width": 43.199999999999996,
+        "waist_line": 48.0,
+        "_shoulder_incl": 12,
+        "height": 204.0,
+        "head_l": 28.799999999999997,
+        "shoulder_w": 48.0
+      },
+      "shirt": {
+        "width": 1.1,
+        "flare": 1.0,
+        "length": 1.0
+      },
+      "skirt": {
+        "length_cm": 72.0,
+        "flare_cm": 14.399999999999999
+      },
+      "panels": {
+        "front_half": {
+          "edges": [
+            {
+              "start": [
+                0.0,
+                0.0
+              ],
+              "end": [
+                -36.96,
+                0.0
+              ],
+              "length": 36.96,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -36.96,
+                0.0
+              ],
+              "end": [
+                -36.96,
+                46.46959275597584
+              ],
+              "length": 46.46959275597584,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -36.96,
+                46.46959275597584
+              ],
+              "end": [
+                0.0,
+                54.32568327529986
+              ],
+              "length": 37.78570838621148,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                0.0,
+                54.32568327529986
+              ],
+              "end": [
+                0.0,
+                0.0
+              ],
+              "length": 54.32568327529986,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "bottom": {
+              "lengths": [
+                36.96
+              ],
+              "projected_lengths": [
+                26.400000000000002
+              ]
+            }
+          }
+        },
+        "back_half": {
+          "edges": [
+            {
+              "start": [
+                0.0,
+                0.0
+              ],
+              "end": [
+                -29.04,
+                0.0
+              ],
+              "length": 29.04,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -29.04,
+                0.0
+              ],
+              "end": [
+                -29.04,
+                48.0
+              ],
+              "length": 48.0,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -29.04,
+                48.0
+              ],
+              "end": [
+                0.0,
+                54.17264255089744
+              ],
+              "length": 29.68877087488045,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                0.0,
+                54.17264255089744
+              ],
+              "end": [
+                0.0,
+                0.0
+              ],
+              "length": 54.17264255089744,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "bottom": {
+              "lengths": [
+                29.04
+              ],
+              "projected_lengths": [
+                21.599999999999998
+              ]
+            }
+          }
+        },
+        "skirt_front": {
+          "edges": [
+            {
+              "start": [
+                -40.0,
+                -72.0
+              ],
+              "end": [
+                -25.600000000000005,
+                0.0
+              ],
+              "length": 73.4258809957361,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -25.600000000000005,
+                0.0
+              ],
+              "end": [
+                27.200000000000003,
+                0.0
+              ],
+              "length": 52.80000000000001,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                27.200000000000003,
+                0.0
+              ],
+              "end": [
+                41.599999999999994,
+                -72.0
+              ],
+              "length": 73.4258809957361,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                41.599999999999994,
+                -72.0
+              ],
+              "end": [
+                -40.0,
+                -72.0
+              ],
+              "length": 81.6,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "right": {
+              "lengths": [
+                73.4258809957361
+              ],
+              "projected_lengths": [
+                73.4258809957361
+              ]
+            },
+            "top": {
+              "lengths": [
+                52.80000000000001
+              ],
+              "projected_lengths": [
+                52.80000000000001
+              ]
+            },
+            "left": {
+              "lengths": [
+                73.4258809957361
+              ],
+              "projected_lengths": [
+                73.4258809957361
+              ]
+            },
+            "bottom": {
+              "lengths": [
+                81.6
+              ],
+              "projected_lengths": [
+                81.6
+              ]
+            }
+          }
+        },
+        "skirt_back": {
+          "edges": [
+            {
+              "start": [
+                -36.0,
+                -72.0
+              ],
+              "end": [
+                -21.599999999999998,
+                0.0
+              ],
+              "length": 73.4258809957361,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                -21.599999999999998,
+                0.0
+              ],
+              "end": [
+                21.599999999999994,
+                0.0
+              ],
+              "length": 43.19999999999999,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                21.599999999999994,
+                0.0
+              ],
+              "end": [
+                36.0,
+                -72.0
+              ],
+              "length": 73.42588099573611,
+              "type": "Edge"
+            },
+            {
+              "start": [
+                36.0,
+                -72.0
+              ],
+              "end": [
+                -36.0,
+                -72.0
+              ],
+              "length": 72.0,
+              "type": "Edge"
+            }
+          ],
+          "self_intersecting": false,
+          "interfaces": {
+            "right": {
+              "lengths": [
+                73.4258809957361
+              ],
+              "projected_lengths": [
+                73.4258809957361
+              ]
+            },
+            "top": {
+              "lengths": [
+                43.19999999999999
+              ],
+              "projected_lengths": [
+                43.19999999999999
+              ]
+            },
+            "left": {
+              "lengths": [
+                73.42588099573611
+              ],
+              "projected_lengths": [
+                73.42588099573611
+              ]
+            },
+            "bottom": {
+              "lengths": [
+                72.0
+              ],
+              "projected_lengths": [
+                72.0
+              ]
+            }
+          }
+        }
+      },
+      "source_stitches": [
+        {
+          "a": "skirt_front:right",
+          "b": "skirt_back:right",
+          "projected_cm": [
+            73.4258809957361,
+            73.4258809957361
+          ]
+        },
+        {
+          "a": "skirt_front:left",
+          "b": "skirt_back:left",
+          "projected_cm": [
+            73.4258809957361,
+            73.42588099573611
+          ]
+        }
+      ],
+      "upper_lower_stitches": "not_generated"
+    }
+  ]
+}
