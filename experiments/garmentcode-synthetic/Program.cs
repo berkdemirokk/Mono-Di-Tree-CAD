@@ -13,7 +13,7 @@ try
         var b=item.GetProperty("body_cm"); var shirt=item.GetProperty("shirt"); var skirt=item.GetProperty("skirt");
         double B(string n)=>b.GetProperty(n).GetDouble(); double S(string n)=>shirt.GetProperty(n).GetDouble();
         var input=new Input(B("bust"),B("back_width"),B("waist"),B("waist_back_width"),B("waist_line"),B("_shoulder_incl"),S("width"),S("flare"),S("length"),skirt.GetProperty("length_cm").GetDouble(),skirt.GetProperty("flare_cm").GetDouble());
-        var slice=Engine.Create(input); Check(slice.Status=="unresolved"&&!slice.ProductionAllowed&&!slice.ExportAllowed,"gate");
+        var slice=Engine.Create(item.GetProperty("id").GetString()!,input); Check(slice.Status=="unresolved"&&!slice.ProductionAllowed&&!slice.ExportAllowed,"gate");
         foreach(var panel in slice.Panels)
         {
             var expected=item.GetProperty("panels").GetProperty(panel.Name);
@@ -45,10 +45,12 @@ try
         }
         Check(slice.SourceSkirtStitches.Count==2 && item.GetProperty("source_stitches").GetArrayLength()==2 && item.GetProperty("upper_lower_stitches").GetString()=="not_generated","stitch scope");
     }
-    void Reject(Input x) { try { Engine.Create(x); } catch(ArgumentException) { return; } throw new Exception("Invalid input accepted"); }
+    void Reject(Input x) { try { Engine.Create("synthetic-base",x); } catch(ArgumentException) { return; } throw new Exception("Invalid input accepted"); }
     var valid=new Input(100,44,80,36,40,12,1.1,1,1,60,12);
-    Reject(valid with { Bust=double.NaN }); Reject(valid with { BackWidth=100 }); Reject(valid with { WaistBackWidth=80 }); Reject(valid with { SkirtLength=0 }); Reject(valid with { ShoulderDegrees=90 });
+    Reject(valid with { Bust=100.000000001 }); Reject(valid with { Bust=double.NaN }); Reject(valid with { BackWidth=100 }); Reject(valid with { WaistBackWidth=80 }); Reject(valid with { SkirtLength=0 }); Reject(valid with { ShoulderDegrees=90 });
+    try { Engine.Create("unknown",valid); throw new Exception("Unknown ID accepted"); } catch(ArgumentException) { }
     Console.WriteLine("PASS: two synthetic Python fixtures, four panels each, line vectors and lengths; invalid inputs rejected; production unresolved."); return 0;
 }
 catch(Exception ex) { Console.Error.WriteLine("FAIL: "+ex.Message); return 1; }
+
 
