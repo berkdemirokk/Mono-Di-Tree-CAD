@@ -1,4 +1,7 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -70,10 +73,14 @@ internal static class Program
             if(SyntheticBoundary.Parse(cm,"cm").Any(x=>x.Value!=expected[x.Key]))throw new Exception("unit conversion");
             try{boundary.Evaluate(expected,false);throw new Exception("unconfirmed accepted");}catch(InvalidOperationException){}
             var invalid=new Dictionary<string,decimal>(expected){["waist"]=741};try{boundary.Evaluate(invalid,true);throw new Exception("nonfixture accepted");}catch(InvalidOperationException){}
-            var output=boundary.Evaluate(expected,true);var parts=output.GetProperty("parts").EnumerateArray().ToArray();
-            if(parts.Length!=2 || parts.Any(p=>!p.GetProperty("segments").EnumerateArray().Any(s=>s.GetProperty("type").GetString()=="cubic")))throw new Exception("curves missing");
+            var output=boundary.Evaluate(expected,true);var parts=output.Parts;
+            if(parts.Count!=2 || parts.Any(p=>!p.Segments.Any(s=>s.Type=="cubic")))throw new Exception("curves missing");
+            foreach(var part in parts){var geo=Preview.Geometry(part);var fig=geo.Figures.Single();if(fig.StartPoint!=part.Segments[0].To)throw new Exception("start coordinates changed");var commands=part.Segments.Skip(1).Where(s=>s.Type!="close").ToArray();if(fig.Segments.Count!=commands.Length)throw new Exception("segment count changed");for(int i=0;i<commands.Length;i++){var source=commands[i];if(source.Type=="line" && (fig.Segments[i] is not LineSegment line || line.Point!=source.To))throw new Exception("line coordinates changed");if(source.Type=="cubic" && (fig.Segments[i] is not BezierSegment curve || curve.Point1!=source.Cp1 || curve.Point2!=source.Cp2 || curve.Point3!=source.To))throw new Exception("cubic coordinates changed");}}
+            var assembly=System.Reflection.Assembly.GetExecutingAssembly();var resource=assembly.GetManifestResourceNames().Single(n=>n.EndsWith("synthetic-fixture.json",StringComparison.Ordinal));using var stream=assembly.GetManifestResourceStream(resource)!;using var reader=new StreamReader(stream);string fixture=reader.ReadToEnd();
+            var swapped=JsonNode.Parse(fixture)!;var array=swapped["output"]!["parts"]!.AsArray();var a=array[0]!.DeepClone();var b=array[1]!.DeepClone();array[0]=b;array[1]=a;var reversed=SyntheticBoundary.ReadFixture(Encoding.UTF8.GetBytes(swapped.ToJsonString()));if(Preview.Label(reversed.Parts[0])!="Arka gövde"||Preview.Label(reversed.Parts[1])!="Ön gövde")throw new Exception("reversed labels");
+            foreach(var bad in new[]{fixture.Replace("\"approved\": false","\"approved\": true"),fixture.Replace("\"biceps\": 300","\"biceps\": 301"),fixture.Replace("\"coordinateSpace\": \"part-local\"","\"coordinateSpace\": \"placed\""),fixture.Replace("\"name\": \"breanna.front\"","\"name\": \"breanna.back\""),fixture.Replace("\"type\": \"cubic\"","\"type\": \"invalid\"")}){if(bad==fixture)throw new Exception("test mutation did not apply");try{SyntheticBoundary.ReadFixture(Encoding.UTF8.GetBytes(bad));throw new Exception("invalid fixture accepted");}catch(InvalidDataException){}}
             var app=new Application();var w=new ResearchWindow();w.EnterSample();w.ShowCandidate();if(!w.Shown||!w.RendersInk())throw new Exception("preview missing or blank");w.Alter();if(w.Shown||w.Confirmed)throw new Exception("stale preview");
-            Console.WriteLine("PASS: 15 fields, explicit units, fixed synthetic-only input, cubic source fixture, stale preview clearing; no window shown");return 0;
+            Console.WriteLine("PASS: synthetic input and units, validated fixture rejection, reversed labels, exact geometry, rendering and stale clearing; no window shown");return 0;
         }catch(Exception e){Console.Error.WriteLine("FAIL: "+e.Message);return 1;}
     }
 }

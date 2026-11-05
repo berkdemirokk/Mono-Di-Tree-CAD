@@ -1,31 +1,52 @@
 using System.Globalization;
+using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Media;
+using BodiceWpfReader;
 using TekstilCAD.Patterns;
+using BodiceSnapshot = BodiceWpfReader.Preview;
 
 namespace BodiceResearch;
 
 internal sealed class SyntheticBoundary
 {
-    private readonly JsonDocument fixture;
+    private readonly BodiceSnapshot snapshot;
+    private static readonly IReadOnlyDictionary<string,decimal> Sample = new Dictionary<string,decimal>(StringComparer.Ordinal) {
+        ["biceps"]=300,["bustFront"]=500,["bustSpan"]=190,["highBust"]=900,["highBustFront"]=450,["hpsToBust"]=270,
+        ["hpsToWaistBack"]=420,["hpsToWaistFront"]=450,["waist"]=740,["waistToHips"]=200,["neck"]=370,
+        ["shoulderToShoulder"]=390,["shoulderSlope"]=15,["shoulderToWrist"]=580,["wrist"]=160 };
     internal SyntheticBoundary()
     {
         var assembly=Assembly.GetExecutingAssembly();
         var name=assembly.GetManifestResourceNames().Single(n=>n.EndsWith("synthetic-fixture.json",StringComparison.Ordinal));
         using var stream=assembly.GetManifestResourceStream(name)??throw new InvalidOperationException("Sentetik örnek yok.");
-        fixture=JsonDocument.Parse(stream);
+        if(stream.Length>1_100_000)throw new InvalidDataException("Fixture too large");
+        using var buffer=new MemoryStream();stream.CopyTo(buffer);snapshot=ReadFixture(buffer.ToArray());
     }
-    internal Dictionary<string,decimal> Expected => fixture.RootElement.GetProperty("measurements").EnumerateObject().ToDictionary(x=>x.Name,x=>x.Value.GetDecimal(),StringComparer.Ordinal);
-    internal JsonElement Evaluate(IReadOnlyDictionary<string,decimal> values,bool confirmed)
+    internal static BodiceSnapshot ReadFixture(ReadOnlyMemory<byte> input)
     {
-        if(!confirmed || values.Count!=Expected.Count || Expected.Any(x=>!values.TryGetValue(x.Key,out var v)||v!=x.Value))
+        if(input.Length==0 || input.Length>1_100_000)throw new InvalidDataException("Invalid fixture size");
+        try {
+            using var doc=JsonDocument.Parse(input.ToArray(),new JsonDocumentOptions{MaxDepth=10});var root=doc.RootElement;
+            if(root.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid fixture");
+            var fields=root.EnumerateObject().ToArray();
+            if(fields.Length!=2 || fields.Count(x=>x.Name=="measurements")!=1 || fields.Count(x=>x.Name=="output")!=1)throw new InvalidDataException("Invalid fixture fields");
+            var measurements=root.GetProperty("measurements");if(measurements.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Invalid measurements");
+            var seen=new HashSet<string>(StringComparer.Ordinal);
+            foreach(var p in measurements.EnumerateObject())if(!seen.Add(p.Name)||!Sample.TryGetValue(p.Name,out var value)||p.Value.ValueKind!=JsonValueKind.Number||!p.Value.TryGetDecimal(out var actual)||actual!=value)throw new InvalidDataException("Non-synthetic fixture measurements");
+            if(seen.Count!=Sample.Count)throw new InvalidDataException("Missing fixture measurements");
+            return BodiceReader.Read(Encoding.UTF8.GetBytes(root.GetProperty("output").GetRawText()));
+        }catch(JsonException ex){throw new InvalidDataException("Invalid fixture JSON",ex);}
+    }
+    internal Dictionary<string,decimal> Expected => new(Sample,StringComparer.Ordinal);
+    internal BodiceSnapshot Evaluate(IReadOnlyDictionary<string,decimal> values,bool confirmed)
+    {
+        if(!confirmed || values.Count!=Sample.Count || Sample.Any(x=>!values.TryGetValue(x.Key,out var v)||v!=x.Value))
             throw new InvalidOperationException("Bu araştırma sürümü yalnız belirtilen sentetik örneği kabul eder; gerçek kişisel ölçü girmeyin.");
-        var output=fixture.RootElement.GetProperty("output");
-        if(output.GetProperty("approved").GetBoolean() || output.GetProperty("unit").GetString()!="mm" || output.GetProperty("coordinateSpace").GetString()!="part-local")throw new InvalidOperationException("Bilinmeyen örnek formatı.");
-        return output;
+        return snapshot;
     }
     internal static Dictionary<string,decimal> Parse(IReadOnlyDictionary<string,string> inputs,string? unit)
     {
@@ -45,23 +66,25 @@ internal sealed class SyntheticBoundary
 
 internal sealed class Preview : FrameworkElement
 {
-    internal JsonElement? Data {get;set;}
+    internal BodiceSnapshot? Data {get;set;}
+    internal static string Label(Part p)=>p.Name switch {"breanna.front"=>"Ön gövde","breanna.back"=>"Arka gövde",_=>throw new InvalidDataException("Unknown part")};
+    internal static PathGeometry Geometry(Part part)
+    {
+        var figure=new PathFigure{StartPoint=part.Segments[0].To!.Value,IsClosed=true,IsFilled=false};
+        foreach(var s in part.Segments.Skip(1))switch(s.Type){case "line":figure.Segments.Add(new LineSegment(s.To!.Value,true));break;case "cubic":figure.Segments.Add(new BezierSegment(s.Cp1!.Value,s.Cp2!.Value,s.To!.Value,true));break;case "close":break;default:throw new InvalidDataException("Invalid segment");}
+        return new PathGeometry(new[]{figure});
+    }
     protected override void OnRender(DrawingContext dc)
     {
         base.OnRender(dc);dc.DrawRectangle(Brushes.White,null,new Rect(RenderSize));
         if(Data is not { } data || RenderSize.Width<100 || RenderSize.Height<100)return;
-        var parts=data.GetProperty("parts").EnumerateArray().ToArray();if(parts.Length!=2)return;
-        for(int i=0;i<2;i++)
+        for(int i=0;i<data.Parts.Count;i++)
         {
-            var segs=parts[i].GetProperty("segments").EnumerateArray().ToArray();var points=new List<Point>();
-            foreach(var s in segs)foreach(var k in new[]{"to","cp1","cp2"})if(s.TryGetProperty(k,out var p))points.Add(Read(p));
-            if(points.Count==0)continue;double minx=points.Min(p=>p.X),maxx=points.Max(p=>p.X),miny=points.Min(p=>p.Y),maxy=points.Max(p=>p.Y);
-            double width=RenderSize.Width/2, scale=Math.Min((width-50)/Math.Max(1,maxx-minx),(RenderSize.Height-70)/Math.Max(1,maxy-miny));
-            Point Map(JsonElement p){var q=Read(p);return new(i*width+25+(q.X-minx)*scale,40+(q.Y-miny)*scale);}
-            var g=new StreamGeometry();using(var c=g.Open())foreach(var s in segs){switch(s.GetProperty("type").GetString()) {case "move":c.BeginFigure(Map(s.GetProperty("to")),false,true);break;case "line":c.LineTo(Map(s.GetProperty("to")),true,false);break;case "cubic":c.BezierTo(Map(s.GetProperty("cp1")),Map(s.GetProperty("cp2")),Map(s.GetProperty("to")),true,false);break;case "close":break;default:throw new InvalidOperationException("Bilinmeyen geometri.");}}
-            dc.DrawGeometry(null,new Pen(Brushes.SteelBlue,2),g);
-            dc.DrawText(new FormattedText(i==0?"Ön gövde":"Arka gövde",CultureInfo.GetCultureInfo("tr-TR"),FlowDirection.LeftToRight,new Typeface("Segoe UI"),14,Brushes.Black,1),new Point(i*width+25,12));
+            var part=data.Parts[i];var g=Geometry(part);var bounds=g.Bounds;if(bounds.IsEmpty)continue;
+            double width=RenderSize.Width/2, scale=Math.Min((width-50)/Math.Max(1,bounds.Width),(RenderSize.Height-70)/Math.Max(1,bounds.Height));
+            dc.PushTransform(new MatrixTransform(scale,0,0,scale,i*width+25-bounds.X*scale,40-bounds.Y*scale));
+            dc.DrawGeometry(null,new Pen(Brushes.SteelBlue,2/scale),g);dc.Pop();
+            dc.DrawText(new FormattedText(Label(part),CultureInfo.GetCultureInfo("tr-TR"),FlowDirection.LeftToRight,new Typeface("Segoe UI"),14,Brushes.Black,1),new Point(i*width+25,12));
         }
     }
-    private static Point Read(JsonElement p)=>new(p.GetProperty("x").GetDouble(),p.GetProperty("y").GetDouble());
 }
