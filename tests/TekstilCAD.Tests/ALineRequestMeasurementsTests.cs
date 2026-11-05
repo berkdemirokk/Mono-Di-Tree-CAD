@@ -112,6 +112,10 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("ölçüleri kullanmak istiyorum")]
     [InlineData("Bu ölçüleri kullanmak istiyorum.")]
     [InlineData("önölçüleri kullanmayacağım")]
+    [InlineData("bu kumaşı kullanmayın")]
+    [InlineData("bu model geçersiz; tüm kumaşlar ipek olsun")]
+    [InlineData("bunaltıcı kumaş istemiyorum")]
+    [InlineData("onlarca düğme; onuncu model")]
     public void HarmlessDesignWordsAndExplicitZeroEaseRemainSupported(string description)
     {
         var result=ALineRequestMeasurements.Review(description,AllFields.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 0 mm"));
@@ -124,5 +128,30 @@ public sealed class ALineRequestMeasurementsTests
         Assert.False(ALineRequestMeasurements.Review("ölçüler geçerli?",AllFields).Complete);
         Assert.True(ALineRequestMeasurements.Review("ölçüler geçerli",AllFields).Complete);
         Assert.True(ALineRequestMeasurements.Review(AllFields,"ölçüleri kullanmak istiyorum").Complete);
+    }
+    [Theory]
+    [InlineData("bunları kullanmayın")]
+    [InlineData("bunlar geçersiz")]
+    [InlineData("hepsini kullanmayın")]
+    [InlineData("tümünü dikkate almayacağım")]
+    [InlineData("şunlar yanlışmış")]
+    [InlineData("onları geri çekiyorum")]
+    [InlineData("bunlar geçerli")]
+    [InlineData("bunun doğruluğu bilinmiyor")]
+    public void PronounReferenceCannotBeSilentlyResolvedByFieldOrderOrAffirmativeException(string reference)
+    {
+        var snapshots=new[]{(AllFields+";"+reference,""),(reference+";"+AllFields,""),(AllFields,reference),(reference,AllFields),
+            ("ölçüler geçerli",AllFields+";"+reference),(AllFields+";"+reference,"ölçüler geçerli"),
+            ("ölçüleri kullanmak istiyorum",reference+";"+AllFields),(reference+";"+AllFields,"ölçüleri kullanmak istiyorum")};
+        foreach(var (prompt,notes) in snapshots)
+        {
+            var result=ALineRequestMeasurements.Review(prompt,notes);
+            Assert.False(result.Complete);Assert.Contains(result.Issues,s=>s.Contains("referans zamirinin"));
+        }
+    }
+    [Fact] public void PronounPolicyRequiresMeasurementContextButAlsoCoversExplicitBodyTotals()
+    {
+        Assert.Empty(ALineRequestMeasurements.Review("bunlar kumaş örnekleri","").Issues);
+        Assert.Contains(ALineRequestMeasurements.Review("bunları kullanmayın","bel çevresi 72 cm").Issues,s=>s.Contains("referans zamirinin"));
     }
 }

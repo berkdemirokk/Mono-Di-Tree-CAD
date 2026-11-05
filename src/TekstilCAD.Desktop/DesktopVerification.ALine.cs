@@ -111,6 +111,7 @@ internal static partial class DesktopVerification
                 sourceText+";bu ölçüler geçerli değil",sourceText+";önceki ölçüleri kullanmayın",
                 sourceText+";ölçüler doğru değilmiş",sourceText+";ölçüleri kullanmayacağım",
                 sourceText+";ölçüler yanlışmış",sourceText+";ölçüleri dikkate almayacağım",sourceText+";ölçüler değiştirilecek",
+                sourceText+";bunları kullanmayın",sourceText+";bunlar geçersiz",sourceText+";hepsini kullanmayın",
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1,000 mm"),
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1.000 mm")})
             {
@@ -133,6 +134,21 @@ internal static partial class DesktopVerification
                 designOnlyWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(designOnlyWindow);
             }
             finally { designOnlyWindow.Close(); }
+            foreach(var (pronounPrompt,pronounNotes) in new[]{("bunlar geçersiz",sourceText),(sourceText,"hepsini kullanmayın"),
+                ("ölçüler geçerli",sourceText+";bunları kullanmayın"),(sourceText+";tümünü kullanmayın","ölçüleri kullanmak istiyorum")})
+            {
+                var referentWindow=new ALinePanelPreviewWindow(owner,pronounPrompt,pronounNotes);
+                try
+                {
+                    Check(!referentWindow.ProposalAgreementForVerification.IsEnabled && referentWindow.ProposalForVerification.Text.Contains("referans zamirinin"),
+                        "Pronoun source in either field stays unresolved despite another field's affirmative phrase",checks);
+                    Fill(referentWindow,true);referentWindow.UnitForVerification.SelectedIndex=0;referentWindow.AgreementForVerification.IsChecked=true;
+                    Click(referentWindow.ReviewForVerification);referentWindow.ConfirmationForVerification.IsChecked=true;Click(referentWindow.DrawForVerification);
+                    Check(referentWindow.CanvasForVerification.Children.Count==0 && referentWindow.StatusForVerification.Text.Contains("referans zamirinin"),
+                        "Manual entry cannot bypass an unresolved pronoun referring to the source measurements",checks);
+                }
+                finally { referentWindow.Close(); }
+            }
             foreach(var affirmative in new[]{"ölçüler geçerli","ölçüleri kullanmak istiyorum"})
             {
                 var affirmativeWindow=new ALinePanelPreviewWindow(owner,affirmative,sourceText);

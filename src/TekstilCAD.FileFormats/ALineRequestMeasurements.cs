@@ -25,6 +25,10 @@ public static class ALineRequestMeasurements
     // Recognize the whole ölçü-rooted word, not an open-ended list of negative
     // conjugations. Input length and regex time are bounded by Review.
     private static readonly Regex GeneralMeasurement=new(@"(?<![\p{L}\p{M}\p{N}_])ölçü[\p{L}\p{M}]*(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // An unresolved pronoun may refer back/forward to measurements in either
+    // field. Do not guess its referent or whether the predicate is affirmative.
+    // Bare adjectival bu/şu/o/tüm are not matched (e.g. "bu kumaş", "tüm modeller").
+    private static readonly Regex Referent=new(@"(?<![\p{L}\p{M}\p{N}_])(?:bunlar[\p{L}\p{M}]*|şunlar[\p{L}\p{M}]*|onlar(?:ı|ın|a|da|dan|la)?|bunun[\p{L}\p{M}]*|şunun[\p{L}\p{M}]*|onun(?:la|ki)?|bunu|buna|bunda|bundan|şunu|şuna|şunda|şundan|onu|ona|onda|ondan|hepsi[\p{L}\p{M}]*|tümü[\p{L}\p{M}]*)(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // These are the only free-text affirmative exceptions, and must occupy an
     // entire input field: a following sentence must not silently retract them.
     private static readonly Regex AffirmativeField=new(@"\A\s*(?:bu\s+)?(?:ölçüler\s+geçerli|ölçüleri\s+kullanmak\s+istiyorum)\s*[.!]?\s*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
@@ -46,6 +50,10 @@ public static class ALineRequestMeasurements
     {
         var totals=DressMeasurementParser.Review(prompt,notes); // Also validates input size and global conditions.
         var values=new decimal?[Labels.Count];var issues=new List<string>();
+        var foldedFields=new[]{Fold(prompt),Fold(notes)};
+        var measurementContext=totals.Measurements.Count>0 || foldedFields.Any(text=>Mention.IsMatch(text)||GeneralMeasurement.IsMatch(text));
+        if(measurementContext && foldedFields.Any(text=>Referent.IsMatch(text)))
+            issues.Add("Ölçü içeren istekte bunlar/hepsi/tümü gibi bir referans zamirinin neyi anlattığı açık değil. Önceki veya sonraki alandaki olumlu ifade bunu çözmez. Öneri ve kaynağa bağlı çizim durduruldu; istek metni korunur. İlgili ölçüyü veya kumaş/model adını açıkça belirterek açıklayın ve pencereyi yeniden açın.");
         if(new[]{prompt,notes}.Any(text=>GeneralMeasurement.IsMatch(Fold(text))&&!AffirmativeField.IsMatch(Fold(text))))
             issues.Add("İstekte desteklenmeyen serbest ölçü ifadesi var; olumlu, olumsuz veya geri çekme anlamı varsayılmadı. Kapsam netleşmeden ölçü önerisi ve kaynağa bağlı çizim yapılamaz. Açılış anındaki metin korunur; açık etiketli ölçüleri düzeltip pencereyi yeniden açın.");
         foreach(var text in new[]{prompt,notes})
