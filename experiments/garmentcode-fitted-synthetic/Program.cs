@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -535,6 +535,22 @@ internal static class Validator
             RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
         }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
+    internal static void CheckSideCurvature()
+    {
+        int accepted=0;
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct","synthetic-third","synthetic-fifth"}) {
+            try {
+                var r=SideCurvatureExperiment.Create(id,3);accepted++;
+                Need(!r.ProductionAllowed&&!r.ExportAllowed&&r.Status=="unresolved","curvature research gate");
+                Console.WriteLine($"{id} curvature experiment: front=[{r.Front.ApproximateLowerCm:G9},{r.Front.ApproximateUpperCm:G9}] cm, back before=[{r.Before.ApproximateLowerCm:G9},{r.Before.ApproximateUpperCm:G9}], after=[{r.After.ApproximateLowerCm:G9},{r.After.ApproximateUpperCm:G9}]; max deviation≈{r.DisplacementCm:G7} cm, virtual midpoint shift≈{r.VirtualNotchShiftCm:G7} cm; topology unresolved front/back={r.FrontTopology.Unresolved}/{r.BackTopology.Unresolved}; research only.");
+            } catch(ArgumentException ex) { Console.WriteLine($"{id} curvature experiment rejected: {ex.Message}"); }
+        }
+        Need(accepted>0,"curvature positive example missing");
+        try { SideCurvatureExperiment.Create("synthetic-base",0.5);throw new Exception("Tight curvature limit accepted"); } catch(ArgumentException) { }
+        try { SideCurvatureExperiment.Create("synthetic-base",0);throw new Exception("Zero curvature limit accepted"); } catch(ArgumentException) { }
+        try { SideCurvatureExperiment.Create("synthetic-base",double.NaN);throw new Exception("Invalid curvature limit accepted"); } catch(ArgumentException) { }
+        try { SideCurvatureExperiment.Create("unknown",3);throw new Exception("Unknown curvature fixture accepted"); } catch(ArgumentException) { }
     }
     internal static void CheckJointSideExperiment()
     {
