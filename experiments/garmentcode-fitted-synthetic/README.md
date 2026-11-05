@@ -304,3 +304,5 @@ Büzgü katsayısı araştırma izi artık arayüz kenar sayısını ve bölüml
 ## Pens döndürme ve yan uç gevşetme deneyleri
 
 [Pens döndürme ve yan uç deneyinde](WAIST_RELAXATION_EXPERIMENT_TR.md), dış uçlar sabit kalıp pensler rijit biçimde dönebilse bile beş sentetik kaynak/C# örneğinde üçgen eşitsizliği tam eşitlik hedefini dışlar. Alternatif olarak dört sabit sentetik örnekte pensleri aynen koruyup yan ucu kontrollü kaydıran bir C# adayı araştırılır; sayısal bel aralığı ve temsil edilen sağ arka kontur denetlenir. Komşu yan dikiş değişir ve ön–arka fark sürer. Bilinen 30° uyuşmazlığı reddedilir. Bu yalnız araştırma adaylarıdır; kaynak optimizer eşdeğerliği, fiziksel tolerans veya tam giysi doğrulaması değildir ve kompozisyon/üretim/plotter kapalıdır.
+
+Yan uç deneyinde uzunluk ve topoloji yollarının aynı önerilen eğriyi kullandığı, göreli kontrolden hesaplanan mutlak kontrol noktalarının birebir karşılaştırılması ve değiştirilmiş/eski-mutlak kontrol negatif testleriyle ayrıca doğrulandı. Önceki yol `RelativeControls` kullanıyordu; uç değiştiğinde mutlak kontrol yeniden hesaplanıyordu. Dört sentetik sonuç yeniden çalıştırıldı; üretim kapalıdır.

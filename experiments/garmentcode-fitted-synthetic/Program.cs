@@ -451,6 +451,29 @@ internal static class Validator
             Need(experiment.ShiftCm>0 && Math.Abs(experiment.After.ApproximateLowerCm-experiment.TargetCm)<.000011 && Math.Abs(experiment.After.ApproximateUpperCm-experiment.TargetCm)<.000011,"side experiment waist bound");
             var original=BackWaistCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted).Edges;
             Need(new[]{1,2,4,5}.All(i=>experiment.Edges[i]==original[i]) && experiment.Edges[0].Start==original[0].Start && experiment.Edges[7].End==original[7].End && experiment.Edges[6].End.X>original[6].End.X,"side experiment dart/landmark invariants");
+            var proposedEdge=experiment.Edges[6];var topologyEdge=experiment.TopologyWaistEdge;
+            BackWaistSideExperiment.ValidateTopologyWaistEdge(proposedEdge,topologyEdge);
+            var topologyControls=BodyCurveStudy.BezierControls(topologyEdge) ?? throw new InvalidDataException("Missing topology quadratic controls");
+            var oldTopology=BackWaistSideExperiment.ToTopologyWaistEdge(original[6]);
+            var oldControls=BodyCurveStudy.BezierControls(oldTopology) ?? throw new InvalidDataException("Missing original quadratic controls");
+            var relative=proposedEdge.RelativeControl ?? throw new InvalidDataException("Missing proposed relative control");
+            double dx=proposedEdge.End.X-proposedEdge.Start.X,dy=proposedEdge.End.Y-proposedEdge.Start.Y;
+            var independentlyComputed=new P(proposedEdge.Start.X+dx*relative.X-dy*relative.Y,proposedEdge.Start.Y+dy*relative.X+dx*relative.Y);
+            Need(topologyControls.Length==3 && topologyControls[1].X==independentlyComputed.X && topologyControls[1].Y==independentlyComputed.Y,"topology absolute control differs from proposed");
+            Need(topologyControls[1]!=oldControls[1],"side shift did not change absolute control");
+            // Copying the old *relative* control with the new endpoint is the
+            // previous representation and must reconstruct the same curve.
+            var priorRelativeRepresentation=topologyEdge with { RelativeControls=oldTopology.RelativeControls };
+            BackWaistSideExperiment.ValidateTopologyWaistEdge(proposedEdge,priorRelativeRepresentation);
+            var priorControls=BodyCurveStudy.BezierControls(priorRelativeRepresentation)!;
+            Need(priorControls.SequenceEqual(topologyControls),"relative-control reconstruction changed");
+            var stale=topologyEdge with { RelativeControls=Array.AsReadOnly(new[]{(oldControls[1].X,oldControls[1].Y)}) };
+            try { BackWaistSideExperiment.ValidateTopologyWaistEdge(proposedEdge,stale);throw new InvalidDataException("Stale absolute control accepted as relative"); } catch(ArgumentException) { }
+            var changedTopology=topologyEdge with { RelativeControls=Array.AsReadOnly(new[]{(relative.X+.1,relative.Y)}) };
+            try { BackWaistSideExperiment.ValidateTopologyWaistEdge(proposedEdge,changedTopology);throw new InvalidDataException("Changed topology control accepted"); } catch(ArgumentException) { }
+            var changedCandidate=proposedEdge with { RelativeControl=new(relative.X+.1,relative.Y) };
+            try { BackWaistSideExperiment.ValidateTopologyWaistEdge(changedCandidate,topologyEdge);throw new InvalidDataException("Changed candidate control accepted"); } catch(ArgumentException) { }
+
             Need(experiment.BeforeTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && experiment.BeforeTopology.Unresolved==0 && experiment.BeforeTopology.NonMonotone==0,"side experiment baseline topology");
             Need(experiment.Topology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && experiment.Topology.Unresolved==0 && experiment.Topology.NonMonotone==0,"side experiment topology");
             Need(experiment.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && experiment.Status=="unresolved" && !experiment.ExportAllowed && !experiment.ProductionAllowed,"side experiment gate");

@@ -6,13 +6,13 @@ internal static class BackWaistSideExperiment
 {
     internal sealed class Result
     {
-        internal Result(string id,IReadOnlyList<BackWaistCandidate.Edge> edges,double shift,double target,BezierLengthBounds.Bounds before,BezierLengthBounds.Bounds after,double frontSide,double backBefore,double backAfter,BodyCurveStudy.Result beforeTopology,BodyCurveStudy.Result topology)
-        { Id=id;Edges=edges;ShiftCm=shift;TargetCm=target;Before=before;After=after;FrontSideCm=frontSide;BackSideBeforeCm=backBefore;BackSideAfterCm=backAfter;BeforeTopology=beforeTopology;Topology=topology; }
+        internal Result(string id,IReadOnlyList<BackWaistCandidate.Edge> edges,double shift,double target,BezierLengthBounds.Bounds before,BezierLengthBounds.Bounds after,double frontSide,double backBefore,double backAfter,BodyCurveStudy.Result beforeTopology,BodyCurveStudy.Result topology,BodyCurveStudy.Edge topologyWaistEdge)
+        { Id=id;Edges=edges;ShiftCm=shift;TargetCm=target;Before=before;After=after;FrontSideCm=frontSide;BackSideBeforeCm=backBefore;BackSideAfterCm=backAfter;BeforeTopology=beforeTopology;Topology=topology;TopologyWaistEdge=topologyWaistEdge; }
         public string Id { get; } public IReadOnlyList<BackWaistCandidate.Edge> Edges { get; }
         public double ShiftCm { get; } public double TargetCm { get; }
         public BezierLengthBounds.Bounds Before { get; } public BezierLengthBounds.Bounds After { get; }
         public double FrontSideCm { get; } public double BackSideBeforeCm { get; } public double BackSideAfterCm { get; }
-        public BodyCurveStudy.Result BeforeTopology { get; } public BodyCurveStudy.Result Topology { get; }
+        public BodyCurveStudy.Result BeforeTopology { get; } public BodyCurveStudy.Result Topology { get; } public BodyCurveStudy.Edge TopologyWaistEdge { get; }
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Experimental side geometry cannot be composed.");
@@ -22,6 +22,23 @@ internal static class BackWaistSideExperiment
         if(e.Kind!="Q" || e.RelativeControl is not { } c)throw new ArgumentException("Unsupported waist curve");
         double dx=e.End.X-e.Start.X,dy=e.End.Y-e.Start.Y;
         return [new(e.Start.X,e.Start.Y),new(e.Start.X+dx*c.X-dy*c.Y,e.Start.Y+dy*c.X+dx*c.Y),new(e.End.X,e.End.Y)];
+    }
+    // The contour stores relative controls. Construct it from the proposed
+    // edge itself, then independently compare the resulting absolute controls.
+    internal static BodyCurveStudy.Edge ToTopologyWaistEdge(BackWaistCandidate.Edge edge)
+    {
+        if(edge.Id!=6 || edge.Kind!="Q" || edge.RelativeControl is not { } c)throw new ArgumentException("Unsupported proposed waist edge.");
+        return new("right_btorso",edge.Id,edge.Kind,edge.Start.X,edge.Start.Y,edge.End.X,edge.End.Y,Array.AsReadOnly(new[]{(c.X,c.Y)}),null);
+    }
+    internal static void ValidateTopologyWaistEdge(BackWaistCandidate.Edge candidate,BodyCurveStudy.Edge topologyEdge)
+    {
+        ArgumentNullException.ThrowIfNull(candidate);ArgumentNullException.ThrowIfNull(topologyEdge);
+        if(topologyEdge.Panel!="right_btorso" || topologyEdge.Id!=candidate.Id || topologyEdge.Kind!=candidate.Kind ||
+           topologyEdge.Ax!=candidate.Start.X || topologyEdge.Ay!=candidate.Start.Y || topologyEdge.Bx!=candidate.End.X || topologyEdge.By!=candidate.End.Y)
+            throw new ArgumentException("Topology edge identity or endpoints differ.");
+        var expected=Controls(candidate);var actual=BodyCurveStudy.BezierControls(topologyEdge) ?? throw new ArgumentException("Missing topology controls.");
+        if(actual.Length!=expected.Length || actual.Where((p,i)=>p.X!=expected[i].X || p.Y!=expected[i].Y).Any())
+            throw new ArgumentException("Topology controls differ from proposed waist curve.");
     }
     static double ApproximateLength(BackWaistCandidate.Edge e)
     {
@@ -65,8 +82,9 @@ internal static class BackWaistSideExperiment
         var panelEdges=backPanel.Edges.Select(e=>new BodyCurveStudy.Edge("right_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY)).ToArray();
         var beforeTopology=BodyCurveStudy.Inspect("right_btorso",panelEdges,13);
         if(beforeTopology.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented || beforeTopology.Unresolved!=0 || beforeTopology.NonMonotone!=0)throw new ArgumentException("Baseline contour not proven at represented coordinates.");
-        var old6=panelEdges[6];var old7=panelEdges[7];
-        panelEdges[6]=old6 with { Bx=proposed[6].End.X,By=proposed[6].End.Y };
+        var old7=panelEdges[7];
+        panelEdges[6]=ToTopologyWaistEdge(proposed[6]);
+        ValidateTopologyWaistEdge(proposed[6],panelEdges[6]);
         panelEdges[7]=old7 with { Ax=proposed[7].Start.X,Ay=proposed[7].Start.Y };
         var topology=BodyCurveStudy.Inspect("right_btorso",panelEdges,13);
         if(topology.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented || topology.Unresolved!=0 || topology.NonMonotone!=0)throw new ArgumentException("Experimental contour not proven at represented coordinates.");
@@ -76,6 +94,6 @@ internal static class BackWaistSideExperiment
         var f4=frontPanel.Edges[4];var f7=frontPanel.Edges[7];
         double frontSide=Line(f4.Start.X,f4.Start.Y,f4.End.X,f4.End.Y)+Line(f7.Start.X,f7.Start.Y,f7.End.X,f7.End.Y);
         if(!double.IsFinite(delta)||!double.IsFinite(frontSide)||!double.IsFinite(beforeSide)||!double.IsFinite(afterSide))throw new ArgumentException("Non-finite side diagnostic.");
-        return new(id,Array.AsReadOnly(proposed),delta,target,before,after,frontSide,beforeSide,afterSide,beforeTopology,topology);
+        return new(id,Array.AsReadOnly(proposed),delta,target,before,after,frontSide,beforeSide,afterSide,beforeTopology,topology,panelEdges[6]);
     }
 }

@@ -30,3 +30,9 @@ Penslerin dört kenarı deney öncesi/sonrası temsil edilen koordinatlarda bire
 ## Sınırlar ve güvenlik
 
 Dört aday da ayrı `Unverified` tipindedir; kompozisyon isteği hata verir. Hesap genel kullanıcı bedenini veya gerçek veriyi kabul etmez, kaynak kısıtlamalarını otomatik gevşetmez ve üretim/plotter açmaz. Kaynak bel/yan farklarının fiziksel hedefi, ölçüm protokolü, dikiş payı, olası rahatlık, malzeme ve farklı bedenlerde prova henüz belirlenmemiştir. Aday, tam giysi çözümü veya gerçek kalıp olarak sunulmamalıdır.
+
+## Topoloji ve uzunluk kontrol noktası eşleşmesi
+
+Bağımsız incelemedeki olası uyumsuzluk izlendi. `BodyCurveStudy.Edge`, mutlak kontrol noktası değil `RelativeControls` saklar; `7ff9e92` içindeki eski topoloji yolu da değişen uçla bu göreli noktayı yeniden mutlak koordinata çeviriyordu. Bu nedenle bildirilen eski-mutlak-kontrol davranışı mevcut veri tiplerinde yeniden üretilmedi.
+
+Buna rağmen bağ artık örtük bırakılmaz: deney, topoloji kenarını doğrudan önerilen 6 numaralı kenarın uçları ve göreli kontrolünden oluşturur; uzunluk hesabı ve topoloji dönüşümündeki **üç mutlak kontrol noktası birebir karşılaştırılır**. Dört sentetik örnekte yan uç kayınca mutlak kontrolün gerçekten değiştiği, önceki göreli temsilin yeni uçla aynı eğriyi verdiği, eski mutlak noktanın göreli değer gibi kullanılması veya iki yoldan birindeki kontrolün değiştirilmesi halinde açık ret verildiği test edilir. Dört örnek yeniden hesaplandı; bel aralıkları, yan farkları ve 78 çiftlik temsil edilen topoloji sonuçları yukarıdakiyle değişmedi. Bu, kaynak optimizerini veya fiziksel üretimi doğrulamaz; tüm kapılar kapalıdır.

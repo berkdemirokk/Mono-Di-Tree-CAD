@@ -32,14 +32,7 @@ internal static class BodyCurveStudy
         // Equality is exact for the represented binary64 endpoints only. It is
         // not an enclosure of earlier rounding or the source optimizer.
         if(edges.Where((e,i)=>e.Bx!=edges[(i+1)%edges.Count].Ax || e.By!=edges[(i+1)%edges.Count].Ay).Any())return Failure(ClosureEvidence.Open);
-        ExactBezierSeparation.Point[]? Controls(Edge e) {
-            if(e.Kind=="A")return null;
-            if(e.Kind=="L" && e.RelativeControls.Count==0)return [new(e.Ax,e.Ay),new(e.Bx,e.By)];
-            if(e.Kind!="Q" && e.Kind!="C" || e.RelativeControls.Count!=(e.Kind=="Q"?1:2))throw new ArgumentException("Unsupported curve");
-            double dx=e.Bx-e.Ax,dy=e.By-e.Ay;
-            return new[]{new ExactBezierSeparation.Point(e.Ax,e.Ay)}.Concat(e.RelativeControls.Select(c=>new ExactBezierSeparation.Point(e.Ax+dx*c.X-dy*c.Y,e.Ay+dy*c.X+dx*c.Y))).Append(new(e.Bx,e.By)).ToArray();
-        }
-        var all=edges.Select(Controls).ToArray();int separated=0,endpoint=0,unresolved=0,nonmonotone=all.Count(c=>c is not null&&!ExactBezierSeparation.HasMonotoneCoordinate(c));
+        var all=edges.Select(BezierControls).ToArray();int separated=0,endpoint=0,unresolved=0,nonmonotone=all.Count(c=>c is not null&&!ExactBezierSeparation.HasMonotoneCoordinate(c));
         var unresolvedEdges=new List<(int A,int B)>();
         void Mark(int a,int b) { unresolved++;unresolvedEdges.Add((a,b)); }
         for(int i=0;i<edges.Count;i++)for(int j=i+1;j<edges.Count;j++) {
@@ -56,4 +49,13 @@ internal static class BodyCurveStudy
         }
         return new(panel,ClosureEvidence.ClosedRepresented,edges.Count*(edges.Count-1)/2,separated,endpoint,unresolved,nonmonotone,unresolvedEdges.AsReadOnly());
     }
+    internal static ExactBezierSeparation.Point[]? BezierControls(Edge e)
+    {
+        if(e.Kind=="A")return null;
+        if(e.Kind=="L" && e.RelativeControls.Count==0)return [new(e.Ax,e.Ay),new(e.Bx,e.By)];
+        if(e.Kind!="Q" && e.Kind!="C" || e.RelativeControls.Count!=(e.Kind=="Q"?1:2))throw new ArgumentException("Unsupported curve");
+        double dx=e.Bx-e.Ax,dy=e.By-e.Ay;
+        return new[]{new ExactBezierSeparation.Point(e.Ax,e.Ay)}.Concat(e.RelativeControls.Select(c=>new ExactBezierSeparation.Point(e.Ax+dx*c.X-dy*c.Y,e.Ay+dy*c.X+dx*c.Y))).Append(new(e.Bx,e.By)).ToArray();
+    }
+
 }
