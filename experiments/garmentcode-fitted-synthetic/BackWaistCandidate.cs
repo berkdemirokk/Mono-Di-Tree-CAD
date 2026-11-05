@@ -13,7 +13,7 @@ internal static class BackWaistCandidate
     }
     internal sealed record Edge(int Id,string Kind,P Start,P End,P? RelativeControl);
     internal sealed record Trace(P BaseStart,P BaseEnd,P BaseRelativeControl,double DartWidth,double OuterOffset,double InnerOffset,double OuterLeg,double InnerLeg);
-    internal enum ReferenceState { Unassessed, KnownMismatch }
+    internal enum ReferenceState { Unassessed, KnownMismatch, Unverified }
     internal sealed class Path
     {
         public string Snapshot { get; }
@@ -21,13 +21,13 @@ internal static class BackWaistCandidate
         public IReadOnlyList<GeneratedGraph.Seam> DartRules { get; }
         public Trace SourceSteps { get; }
         public ReferenceState ReferenceAssessment { get; }
-        internal Path(string snapshot,IReadOnlyList<Edge> edges,IReadOnlyList<GeneratedGraph.Seam> rules,Trace sourceSteps)
+        internal Path(string snapshot,IReadOnlyList<Edge> edges,IReadOnlyList<GeneratedGraph.Seam> rules,Trace sourceSteps,ReferenceState state)
         {
             Snapshot=snapshot;Edges=edges;DartRules=rules;SourceSteps=sourceSteps;
-            ReferenceAssessment=snapshot=="synthetic-small-difference" ? ReferenceState.KnownMismatch : ReferenceState.Unassessed;
+            ReferenceAssessment=state;
         }
         // Unassessed never means accepted, validated or suitable for production.
-        public void RequireResearchComposition() { if(ReferenceAssessment==ReferenceState.KnownMismatch) throw new InvalidOperationException("Known source reference mismatch; composition blocked."); }
+        public void RequireResearchComposition() { if(ReferenceAssessment!=ReferenceState.Unassessed) throw new InvalidOperationException("Source mismatch or unverified input; composition blocked."); }
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
     readonly record struct Quad(P A,P C,P B)
@@ -58,11 +58,24 @@ internal static class BackWaistCandidate
     static P Abs(P start,P end,P control) { P d=end-start;return start+d*control.X+new P(-d.Y,d.X)*control.Y; }
     internal static Path Create(string id)
     {
-        var body=id switch { "synthetic-base"=>(Back:48d,WaistBack:36d,WaistLine:37d,Angle:22d,Bum:18d,Vert:21d,Bust:26d),"synthetic-distinct"=>(Back:43d,WaistBack:34d,WaistLine:39d,Angle:22d,Bum:18d,Vert:21d,Bust:26d),"synthetic-third"=>(Back:50d,WaistBack:38d,WaistLine:38d,Angle:18d,Bum:19d,Vert:22d,Bust:25d),"synthetic-small-difference"=>(Back:44d,WaistBack:38d,WaistLine:40d,Angle:30d,Bum:18d,Vert:22d,Bust:24d),_=>throw new ArgumentException("Unsupported synthetic case") };
-        const double shoulder=18; double angle=body.Angle,bumPoints=body.Bum,vertBust=body.Vert,bust=body.Bust;
-        double width=body.Back/2,waist=body.WaistBack/2,tan=Math.Tan(angle*Math.PI/180),h=tan*width/4;
+        var body=SyntheticBodyCatalog.Create(id);
+        var state=id=="synthetic-small-difference"?ReferenceState.KnownMismatch:ReferenceState.Unassessed;
+        return Calculate(id,body,ResearchDesign.PinnedFitted,state);
+    }
+    // Explicit body/design input remains local, unverified and non-composable.
+    // No fixture, process launch, networking, persistence or export occurs.
+    internal static Path CreateFromBody(ResearchBody body,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
+        return Calculate(body.Snapshot(design),body,design,ReferenceState.Unverified);
+    }
+    private static Path Calculate(string id,ResearchBody body,ResearchDesign design,ReferenceState state)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
+        double shoulder=(double)body["shoulder_w"]/2,angle=(double)body["shoulder_incl"],bumPoints=(double)body["bum_points"];
+        double width=(double)body["back_width"]/2,waist=(double)body["waist_back_width"]/2,tan=Math.Tan(angle*Math.PI/180),h=tan*width/4;
         double diff=width-waist,side=diff<4?0:diff/6,dartWidth=(diff-side)/2;
-        double length=body.WaistLine-tan*(width-shoulder),bustLine=2*vertBust/3+bust/3;
+        double length=(double)body["waist_line"]-tan*(width-shoulder),bustLine=body.Derive().BustLine;
         if(dartWidth<=0 || length<=bustLine)throw new ArgumentException("Unsupported dart geometry");
         P start=new(0,h),end=new(-width,0);double len=Math.Sqrt(width*width+h*h);
         // One feasible exact tangent direction, initialized at half-unit norm.
@@ -106,9 +119,9 @@ internal static class BackWaistCandidate
         void L(int i,P a,P b)=>edges.Add(new(i,"L",a,b,null));
         QEdge(0,0,inner.lo);L(1,q.Eval(inner.lo),inner.tip);L(2,inner.tip,q.Eval(inner.hi));
         QEdge(3,inner.hi,outer.lo);L(4,q.Eval(outer.lo),outer.tip);L(5,outer.tip,q.Eval(outer.hi));QEdge(6,outer.hi,1,true);
-        P sideBottom=new(-width+side,0),sideMiddle=new(-width,body.WaistLine-bustLine),sideTop=new(-width,length),top=new(0,length+tan*width);
+        P sideBottom=new(-width+side,0),sideMiddle=new(-width,(double)body["waist_line"]-bustLine),sideTop=new(-width,length),top=new(0,length+tan*width);
         L(7,sideBottom,sideMiddle);L(8,sideMiddle,sideTop);L(9,sideTop,top);L(10,top,start);
         var seams=new[]{new GeneratedGraph.Seam(id,"precut_back",4,false,"precut_back",5,false),new GeneratedGraph.Seam(id,"precut_back",1,false,"precut_back",2,false)};
-        return new(id,edges.AsReadOnly(),Array.AsReadOnly(seams),new(start,end,rel,dartWidth,outerOffset,innerOffset,.9*(length-bustLine),length-bustLine));
+        return new(id,edges.AsReadOnly(),Array.AsReadOnly(seams),new(start,end,rel,dartWidth,outerOffset,innerOffset,.9*(length-bustLine),length-bustLine),state);
     }
 }

@@ -1,32 +1,36 @@
-# Sentetik kaynak ölçüm eşlemesi
+# Kaynak ölçü alanları: araştırma eşlemesi
 
-Kaynak ölçü tanımları araştırma amaçlıdır; cm ve derece kullanılır. `_` alanları ölçüm girdisi değildir. Bu liste kişisel ölçü alma ya da üretim onayı değildir. Kaynak: https://github.com/maria-korosteleva/GarmentCode/blob/d449629979028123a5c4dc9e732a2ec19b7fce31/docs/Body%20Measurements%20GarmentCode.pdf
+Bu liste ölçü alma kılavuzu değildir. [GarmentCode ölçü belgesi](https://github.com/maria-korosteleva/GarmentCode/blob/d449629979028123a5c4dc9e732a2ec19b7fce31/docs/Body%20Measurements%20GarmentCode.pdf) ve kaynak şemasındaki adları eşler; uzunluklar cm, açılar derecedir. Kaynak açıklaması, gerçek kişilerde tekrarlanabilir işaretleme ve ölçüm protokolü olarak bağımsız doğrulanmamıştır. Otomatik tahmin yapılmaz; gerçek kullanıcıdan ölçü toplamak için kullanılmamalıdır.
 
-| Alan | Ölçüm tanımı |
+| Kaynak alanı | Kaynakta ifade edilen kavram; ölçüm yöntemi doğrulanmadı |
 |---|---|
-| waist | Kaburga ile kalça kemiği arasındaki doğal bel çevresi. |
-| bust | Göğüs uçlarından, yere paralel geçen çevre. |
-| underbust | Göğüs hemen altından yere paralel çevre. |
-| hips | Kalçanın arka çıkıntı noktalarından, yere paralel çevre. |
-| leg_circ | Tek uyluğun en kalın çevresi. |
-| wrist | Bileğin el kökündeki en ince çevresi. |
-| waist_back_width | Belde iki yan denge çizgisi arasındaki arka çevre bölümü. |
-| back_width | Göğüs çevresinde iki yan denge çizgisi arasındaki arka bölüm. |
-| hip_back_width | Kalça çevresinde iki yan denge çizgisi arasındaki arka bölüm. |
-| neck_w | Boyun tabanının iki yan denge çizgisi arasında arkadan yaklaşık genişliği. |
-| waist_line | Ense noktasından bel hattına sırt yüzeyinden mesafe. |
-| waist_over_bust_line | Boyun tabanından göğüs noktası üzerinden ön bel hattına, mezurayla ölçülen mesafe. |
-| bust_line | Omuz hizasından göğüs noktasına, ön bel ölçüm hattı üzerinden mesafe. |
-| arm_length | Omuzdan bileğe kol yüzeyi boyunca mesafe. |
-| height | Ayak tabanından başın tepesine boy. |
-| head_l | Ense noktasından baş tepesine düz mesafe. |
-| shoulder_w | Sol ve sağ köprücük kemiklerinin en dış uçları arası mesafe. |
-| armscye_depth | Omuzdan koltuk altının en altına sırt tarafından mesafe. |
-| bust_points | İki göğüs çıkıntı noktası arası mesafe. |
-| hips_line | Bel hattı ile kalça çevresi hattı arasındaki düşey mesafe. |
-| bum_points | İki kalça çıkıntı noktası arası mesafe. |
-| crotch_hip_diff | Kalça çevresi hizasından ağın en derin noktasına düşey mesafe. |
-| vert_bust_line | Ense hizasından göğüs çevresi hizasına düşey mesafe. |
-| hip_inclination | Beden yanında bel–kalça açısı; dikey yan için 0°. |
-| shoulder_incl | Boyun tabanından köprücük kemiği ucuna omuz hattının yataya eğimi. |
-| arm_pose_angle | Kaynak motorun iki kol için aynı kabul ettiği omuz eklemi kol poz açısı. |
+| waist | Bel çevresi |
+| bust | Göğüs çevresi |
+| underbust | Göğüs altı çevresi |
+| hips | Kalça çevresi |
+| leg_circ | Tek uyluk çevresi |
+| wrist | Bilek çevresi |
+| waist_back_width | Bel çevresinin arka bölümü |
+| back_width | Göğüs çevresinin arka bölümü |
+| hip_back_width | Kalça çevresinin arka bölümü |
+| neck_w | Boyun tabanı genişliği |
+| waist_line | Arka bel hattı uzunluğu |
+| waist_over_bust_line | Ön bel–göğüs üzerinden boyun tabanına uzunluk |
+| bust_line | Omuz düzeyinden göğüs noktasına uzunluk |
+| arm_length | Omuz–bilek uzunluğu |
+| height | Boy |
+| head_l | Ense–baş tepesi mesafesi |
+| shoulder_w | Kaynakta köprücük kemiklerinin dış uçları arası mesafe |
+| armscye_depth | Arka omuz–koltuk altı mesafesi |
+| bust_points | Göğüs çıkıntıları arası mesafe |
+| hips_line | Bel ve kalça düzeyleri arası düşey mesafe |
+| bum_points | Kaynakta kalça çıkıntıları arası mesafe |
+| crotch_hip_diff | Kalça düzeyi–ağ düşey mesafesi |
+| vert_bust_line | Ense ve göğüs çevresi düzeyleri arası düşey mesafe |
+| hip_inclination | Kaynakta yan bel–kalça açısı |
+| shoulder_incl | Kaynakta omuz hattı eğimi |
+| arm_pose_angle | Kaynakta omuz eklemindeki kol poz açısı |
+
+Kaynak, üç `*_back_width` alanını yan denge çizgileri arasında arka çevre bölümü olarak adlandırır; fakat pratik uygulamada çevre yayı ile düz kiriş ayrımının ve çizgilerin işaretlenmesinin yeterli doğruluğu henüz doğrulanmadı. Omuz ve boyun başlangıç noktaları, açıların eksenleri ve işaret yönleri, `bum_points` noktalarının belirlenmesi ve kişinin duruşu da bağımsız protokol incelemesi gerektirir. Kaynak PDF bazı geometrik açıklamalar verse de bunları doğrulanmış kullanıcı talimatı saymıyoruz.
+
+`_waist_level`, `_leg_length`, `_base_sleeve_balance`, `_bust_line`, `_hip_inclination`, `_shoulder_incl` ve `_armscye_depth` kaynak koddan hesaplanan türevlerdir; kullanıcı ölçüsü olarak istenmez. C# sözleşmesindeki sınırlar yalnız teknik kontrollerdir, anatomik geçerlilik veya kalıp uygunluğu onayı değildir.

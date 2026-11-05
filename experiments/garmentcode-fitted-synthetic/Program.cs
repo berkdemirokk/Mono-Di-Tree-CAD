@@ -12,7 +12,7 @@ try
 {
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckTangentSweep();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -148,6 +148,18 @@ try
     var bentFine=BezierLengthBounds.Enclose([new(0,0),new(1,2),new(2,0)],8);
     if(bentFine.ApproximateWidthCm>=bentCoarse.ApproximateWidthCm || bentFine.ApproximateWidthCm<=0)throw new Exception("Bezier bounds refinement");
     try { BezierLengthBounds.Enclose([new(double.NaN,0),new(1,0)]);throw new Exception("Invalid length geometry accepted"); } catch(ArgumentException) { }
+    // Exercise the complete 26-field local contract using synthetic values only.
+    var bodyPairs=ResearchBody.Fields.Select(k=>new KeyValuePair<string,decimal>(k,SyntheticBodyCatalog.Create("synthetic-base")[k])).ToArray();
+    void RejectBody(IEnumerable<KeyValuePair<string,decimal>> values,string length="cm",string angle="degree") { try { ResearchBody.Create(values,length,angle);throw new Exception("Invalid body accepted"); } catch(ArgumentException) { } }
+    RejectBody(bodyPairs.Skip(1)); RejectBody(bodyPairs.Append(bodyPairs[0])); RejectBody(bodyPairs.Append(new("_waist_level",1))); RejectBody(bodyPairs,"mm","degree");
+    RejectBody(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,0):p));
+    RejectBody(bodyPairs.Select(p=>p.Key=="back_width"?new KeyValuePair<string,decimal>(p.Key,100):p));
+    RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_incl"?new KeyValuePair<string,decimal>(p.Key,45):p));
+    var unsupportedCut=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
+    try { BackWaistCandidate.CreateFromBody(unsupportedCut,ResearchDesign.PinnedFitted);throw new Exception("Out-of-range cut accepted"); } catch(ArgumentException) { }
+    var changedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,81):p),"cm","degree");
+    NeedLocal(changedBody.Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted),"changed body snapshot");
+    void NeedLocal(bool condition,string error) { if(!condition)throw new Exception(error); }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -158,24 +170,58 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckTangentSweep()
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.tangent-sweep.json") ?? throw new InvalidDataException("Missing tangent sweep");
+        using var reader=new StreamReader(stream);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="92C42F546CB24AFC4AD8BFD64A36EBC55FEDDEB39DCCF6936B8C7DE8CB5E4ECA","tangent sweep hash");
+        using var doc=JsonDocument.Parse(text);Need(doc.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","tangent source");
+        var cases=doc.RootElement.GetProperty("cases").EnumerateArray().ToArray();Need(cases.Length==8,"angle sweep count");
+        int within=0,rejected=0;var seen=new HashSet<string>();
+        foreach(var item in cases)
+        {
+            string id=item.GetProperty("id").GetString()!;Need(seen.Add(id),"duplicate angle");var result=TangentRayStudy.Create(id);
+            Need(item.GetProperty("angle_degrees").GetInt32()==result.Degrees && result.Status=="unresolved" && !result.CanCompose && !result.ExportAllowed,"angle gate");
+            P source=Point(item.GetProperty("relative_control")),candidate=new(result.Candidate.X,result.Candidate.Y),alt=new(result.Alternative.X,result.Alternative.Y),target=new(result.Target.X,result.Target.Y);
+            double error=(source-candidate).Length();if(error<.0004)within++;else rejected++;
+            double Cross(P x,P y)=>x.X*y.Y-x.Y*y.X;
+            Need(Math.Abs(Cross(candidate,target))<1e-15 && Math.Abs(Cross(alt,target))<1e-15 && (alt-candidate).Length()>.24,"tangent objective ambiguity");
+            Console.WriteLine($"{id}: source tangent control difference={error:G7}; {(error<.0004?"within diagnostic threshold":"outside diagnostic threshold; blocked")}.");
+        }
+        Need(within>0 && rejected>0,"angle sweep must show both outcomes");
+    }
     internal static void CheckBackWaist()
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back waist reference");
         using var reader=new StreamReader(stream);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
-        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="EE68A43079A2791C1C32A4E2BC6905585E1FFF2EC0D30072C653B64EC223BD1E","back fixture hash");
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="6A8386924160425D49E48A88117419C3ECBD3CDA154413CD8EA2323579B1A856","back fixture hash");
         using var reference=JsonDocument.Parse(text);
         Need(reference.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","back source");
         var caseIds=new HashSet<string>();
-        Need(reference.RootElement.GetProperty("cases").GetArrayLength()==4,"back case count");
+        Need(reference.RootElement.GetProperty("cases").GetArrayLength()==5,"back case count");
         foreach(var item in reference.RootElement.GetProperty("cases").EnumerateArray())
         {
             string id=item.GetProperty("id").GetString()!;Need(caseIds.Add(id),"duplicate back fixture");var path=BackWaistCandidate.Create(id);var expected=item.GetProperty("edges");
             var inputs=item.GetProperty("body_input_cm_degree");
+            var rawInputs=inputs.EnumerateObject().Select(p=>new KeyValuePair<string,decimal>(p.Name,p.Value.GetDecimal())).ToArray();
+            var explicitBody=ResearchBody.Create(rawInputs,"cm","degree");
+            var sourceCatalog=SyntheticBodyCatalog.Create(id);
+            foreach(string field in ResearchBody.Fields)Need(explicitBody[field]==sourceCatalog[field],"catalog body mismatch: "+field);
+            var calculated=explicitBody.Derive();var derivedSource=item.GetProperty("derived");
+            foreach(var v in new[]{("_waist_level",calculated.WaistLevel),("_leg_length",calculated.LegLength),("_base_sleeve_balance",calculated.BaseSleeveBalance),("_bust_line",calculated.BustLine),("_hip_inclination",calculated.HipInclination),("_shoulder_incl",calculated.ShoulderInclination),("_armscye_depth",calculated.ArmscyeDepth)}) Need(Math.Abs(derivedSource.GetProperty(v.Item1).GetDouble()-v.Item2)<1e-10,"derived body mismatch: "+v.Item1);
+            var generic=BackWaistCandidate.CreateFromBody(explicitBody,ResearchDesign.PinnedFitted);
+            Need(generic.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && generic.Status=="unresolved" && !generic.ExportAllowed && !generic.ProductionAllowed && generic.Snapshot==explicitBody.Snapshot(ResearchDesign.PinnedFitted),"explicit body gate");
+            Need(generic.Edges.Count==path.Edges.Count,"explicit body edge count");
+            for(int i=0;i<path.Edges.Count;i++) Need(generic.Edges[i]==path.Edges[i],"explicit body differs from fixture calculation");
+            try { generic.RequireResearchComposition();throw new InvalidDataException("Unverified body composed"); } catch(InvalidOperationException) { }
+            var reordered=ResearchBody.Create(rawInputs.Reverse(),"cm","degree");
+            Need(reordered.Snapshot(ResearchDesign.PinnedFitted)==generic.Snapshot,"body order changed snapshot");
             var expectedInput=id switch {
                 "synthetic-base"=>(Back:48m,WaistBack:36m,WaistLine:37m,Angle:22m,Bum:18m,Vert:21m,Bust:26m),
                 "synthetic-distinct"=>(Back:43m,WaistBack:34m,WaistLine:39m,Angle:22m,Bum:18m,Vert:21m,Bust:26m),
                 "synthetic-third"=>(Back:50m,WaistBack:38m,WaistLine:38m,Angle:18m,Bum:19m,Vert:22m,Bust:25m),
                 "synthetic-small-difference"=>(Back:44m,WaistBack:38m,WaistLine:40m,Angle:30m,Bum:18m,Vert:22m,Bust:24m),
+                "synthetic-fifth"=>(Back:46m,WaistBack:35m,WaistLine:38m,Angle:15m,Bum:17m,Vert:20m,Bust:25m),
                 _=>throw new InvalidDataException("Unknown back fixture") };
             foreach(var p in new[]{("back_width",expectedInput.Back),("waist_back_width",expectedInput.WaistBack),("waist_line",expectedInput.WaistLine),("shoulder_incl",expectedInput.Angle),("bum_points",expectedInput.Bum),("vert_bust_line",expectedInput.Vert),("bust_line",expectedInput.Bust)}) Need(ExactDecimalEqual(inputs.GetProperty(p.Item1),p.Item2),"back input mismatch: "+p.Item1);
             Need(inputs.EnumerateObject().All(p=>!p.Name.StartsWith('_')),"derived field in body inputs");
