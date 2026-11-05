@@ -550,7 +550,7 @@ internal sealed class DesignRequestWindow : Window
     {
         lastSentModelMessage=null;RetryModelForVerification.IsEnabled=false;
         DesignRequestStorage.Validate(value);loading=true;
-        try { ClearModelTracking();requestVersion=value.Version;portableModelId=value.ModelId;prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=value.Version==2 && value.Reference is not null;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;if(value.Version==1)RecoverLoadedModelCandidate();else if(value.ModelId is not null) { var index=Array.IndexOf(PortableModelIds,value.ModelId);if(index>=0)SetLastModel(modelCards[index].Button); }RefreshConversation(); }
+        try { ClearModelTracking();requestVersion=value.Version;portableModelId=value.ModelId;prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=value.Version==2 && value.Reference is not null;referenceRevision++;referenceSelectionPending=false;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;if(value.Version==1)RecoverLoadedModelCandidate();else if(value.ModelId is not null) { var index=Array.IndexOf(PortableModelIds,value.ModelId);if(index>=0)SetLastModel(modelCards[index].Button); }RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()

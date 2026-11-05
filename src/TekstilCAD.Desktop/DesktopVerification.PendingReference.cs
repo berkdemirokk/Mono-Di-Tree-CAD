@@ -16,6 +16,7 @@ internal static partial class DesktopVerification
         var photo=new DesignReference("sample.png","image/png",new byte[]{137,80,78,71,13,10,26,10});
         try
         {
+            Check(!owner.IsVisible,"Verification owner remains hidden",checks);
             window.LoadForVerification(new DesignRequest("Kaydedilmiş","",null));
             window.ReferenceLoaderForVerification=_=> { reached.Set();release.Wait();return photo; };
             pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
@@ -30,6 +31,10 @@ internal static partial class DesktopVerification
             Check(!pending.IsCompleted && window.CaptureForVerification().Prompt=="Kaydedilmiş","Cancelling file picker keeps approved pending operation",checks);
             window.OpenPathChoiceForVerification=()=>path;window.OpenForVerification();
             Check(window.CaptureForVerification().Prompt=="Yeni istek","Approved open loads replacement while old image remains pending",checks);
+            int replacementPrompts=0;window.ConfirmDiscardForVerification=_=> { replacementPrompts++;return false; };
+            Check(window.ClosingAllowedForVerification() && replacementPrompts==0,"Clean replacement does not warn for the invalidated prior selection",checks);
+            var blockedSecond=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>blockedSecond.IsCompleted);
+            Check(!blockedSecond.GetAwaiter().GetResult(),"Replacement cannot start another image worker until old worker stops",checks);
             release.Set();PumpUntil(()=>pending.IsCompleted);Check(!pending.GetAwaiter().GetResult() && window.CaptureForVerification().Reference is null,"Late image cannot attach to replacement request",checks);pending=null;
 
             window.LoadForVerification(new DesignRequest("Fotoğraflı","",photo));
@@ -71,6 +76,19 @@ internal static partial class DesktopVerification
             Check(!window.ClosingAllowedForVerification() && window.CaptureForVerification().Prompt=="Değişti","Changes during confirmation refuse stale approval",checks);
             window.ConfirmDiscardForVerification=_=>true;window.Close();release.Set();PumpUntil(()=>pending.IsCompleted);
             Check(!pending.GetAwaiter().GetResult(),"Approved actual close prevents late attachment",checks);pending=null;
+
+            var replacementWindow=new DesignRequestWindow(owner);var reachedReplacement=new ManualResetEventSlim();var releaseReplacement=new ManualResetEventSlim();Task<bool>? replacementPending=null;
+            try
+            {
+                replacementWindow.LoadForVerification(new DesignRequest("Önce","",null));
+                replacementWindow.ReferenceLoaderForVerification=_=> { reachedReplacement.Set();releaseReplacement.Wait();return photo; };
+                replacementPending=replacementWindow.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reachedReplacement.IsSet);
+                replacementWindow.ConfirmDiscardForVerification=_=>true;replacementWindow.OpenPathChoiceForVerification=()=>path;replacementWindow.OpenForVerification();
+                int extraPrompts=0;replacementWindow.ConfirmDiscardForVerification=_=> { extraPrompts++;return false; };
+                replacementWindow.Close();releaseReplacement.Set();PumpUntil(()=>replacementPending.IsCompleted);
+                Check(extraPrompts==0 && !replacementPending.GetAwaiter().GetResult(),"Closing clean replacement needs no stale warning and late worker cannot attach",checks);replacementPending=null;
+            }
+            finally { releaseReplacement.Set();if(replacementPending is not null){PumpUntil(()=>replacementPending.IsCompleted);replacementPending.GetAwaiter().GetResult();} }
         }
         finally { release.Set();if(pending is not null){PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();}owner.Close(); }
     }
