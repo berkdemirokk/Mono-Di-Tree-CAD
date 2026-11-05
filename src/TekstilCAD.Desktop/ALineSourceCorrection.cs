@@ -9,7 +9,7 @@ namespace TekstilCAD.Desktop;
 internal sealed record ALineCorrectionPlan(string Prompt,string Notes,string Place,string Label,string OldText,string NewText);
 internal static class ALineSourceCorrection
 {
-    private static string NormalizeLabel(string text)=>Regex.Replace(text.Trim().Normalize(NormalizationForm.FormC).ToLower(CultureInfo.GetCultureInfo("tr-TR")),@"[ \t]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static string NormalizeLabel(string text)=>Regex.Replace(text.Trim().Normalize(NormalizationForm.FormC).ToLower(CultureInfo.GetCultureInfo("tr-TR")),@"[\t\p{Zs}]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     internal static ALineCorrectionPlan Create(string prompt,string notes,int index,string formText,ALineLengthUnit? unit)
     {
         if(index<0||index>=ALineRequestMeasurements.Labels.Count || unit is not (ALineLengthUnit.Centimeter or ALineLengthUnit.Millimeter))throw new ArgumentException("Alan ve birim seçin.");
@@ -21,7 +21,7 @@ internal static class ALineSourceCorrection
         string selected=formText.Trim(),suffix=unit==ALineLengthUnit.Centimeter ? "cm" : "mm";
         var candidate=selected+" "+suffix;var label=ALineRequestMeasurements.Labels[index];
         var matches=new List<(int Field,int Start,int Length,string Old)>();
-        var pattern=new Regex(@"\A(?<lead>\s*)(?<label>[^:=\r\n;]+?)(?<sep>\s*(?::|=|\s)\s*)(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?\s*(?:cm|mm))(?<tail>\s*[.!]?\s*)\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var pattern=new Regex(@"\A(?<lead>[\t\p{Zs}]*)(?<label>[^:=\r\n;]+?)(?<sep>[\t\p{Zs}]*(?::|=|[\t\p{Zs}])[\t\p{Zs}]*)(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:cm|mm))(?<tail>[\t\p{Zs}]*[.!]?[\t\p{Zs}]*)\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         foreach(var (text,field) in new[]{(prompt,0),(notes,1)})
         foreach(Match part in Regex.Matches(text,@"[^;\r\n\v\f\u0085\u2028\u2029]+",RegexOptions.None,TimeSpan.FromMilliseconds(100)))
         {

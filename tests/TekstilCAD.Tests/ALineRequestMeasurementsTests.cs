@@ -5,6 +5,9 @@ namespace TekstilCAD.Tests;
 public sealed class ALineRequestMeasurementsTests
 {
     [Theory]
+    [InlineData("ön bel yayı\u00a036\u00a0cm",0,360)]
+    [InlineData("ön\u00a0bel\u00a0yayı 36 cm",0,360)]
+    [InlineData("ön bel yayı\u200936\u2009cm",0,360)]
     [InlineData("ön  bel yayı 36 cm",0,360)]
     [InlineData("ön\tbel yayı 36 cm",0,360)]
     [InlineData("ön bel  yayı 36 cm",0,360)]
@@ -15,6 +18,8 @@ public sealed class ALineRequestMeasurementsTests
         Assert.Empty(review.Issues);Assert.Equal((decimal)expected,review.Millimeters[index]);
     }
     [Theory]
+    [InlineData("ön bel yayı\u202836 cm")]
+    [InlineData("ön bel yayı 36\u2028cm")]
     [InlineData("ön bel yayi 36 cm")]
     [InlineData("on bel yayi 36 cm")]
     [InlineData("ÖN BEL YAYİ 36 CM")]

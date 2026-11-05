@@ -27,11 +27,11 @@ public static class ALineRequestMeasurements
         return plain.Replace('ı','i').Normalize(NormalizationForm.FormC);
     }
     private static readonly Regex ApproximateMention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+
-        string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[ \t]+",Approximate(s).Split(' ').Select(Regex.Escape))))+
+        string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[\t\p{Zs}]+",Approximate(s).Split(' ').Select(Regex.Escape))))+
         ")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-    private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[ \t]+",Fold(s).Split(' ').Select(Regex.Escape))));
+    private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[\t\p{Zs}]+",Fold(s).Split(' ').Select(Regex.Escape))));
     private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-    private static readonly Regex Exact=new("\\A\\s*(?<label>"+Names+")\\s*(?::|=|\\s)\\s*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\\s*(?<unit>cm|mm)\\s*[.!]?\\s*\\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Exact=new(@"\A[\t\p{Zs}]*(?<label>"+Names+@")[\t\p{Zs}]*(?::|=|[\t\p{Zs}])[\t\p{Zs}]*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(?<unit>cm|mm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Unknown assertions about measurements are not affirmative evidence.
     // Recognize the whole ölçü-rooted word, not an open-ended list of negative
     // conjugations. Input length and regex time are bounded by Review.
@@ -58,7 +58,7 @@ public static class ALineRequestMeasurements
     {
         index=-1;mm=0;var match=Exact.Match(Fold(text));
         if(!match.Success || AmbiguousNumber.IsMatch(match.Groups["value"].Value))return false;
-        var normalizedLabel=Regex.Replace(match.Groups["label"].Value,@"[ \t]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var normalizedLabel=Regex.Replace(match.Groups["label"].Value,@"[\t\p{Zs}]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         index=Enumerable.Range(0,Labels.Count).Single(i=>Fold(Labels[i])==normalizedLabel);
         if(!decimal.TryParse(match.Groups["value"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out mm))return false;
         if(match.Groups["unit"].Value=="cm")mm*=10m;
@@ -69,7 +69,7 @@ public static class ALineRequestMeasurements
     private static bool TryReadGroup(string text,out List<(int Index,decimal Mm)> fields)
     {
         fields=[];
-        var parts=Regex.Split(Fold(text),@"[ \t]+ve[ \t]+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var parts=Regex.Split(Fold(text),@"[\t\p{Zs}]+ve[\t\p{Zs}]+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         if(parts.Length is <1 or >8)return false;
         foreach(var part in parts)
         {
