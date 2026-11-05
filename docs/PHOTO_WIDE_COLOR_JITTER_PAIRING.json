@@ -1,0 +1,16 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "paired_jobs": 960,
+  "paired_contours": 80,
+  "jitter_pixels": 2.0,
+  "geometry_validity_transitions": {
+    "True -> True": 71,
+    "False -> False": 9
+  },
+  "standard_only_local_over_5": 1,
+  "wide_only_local_over_5": 0,
+  "source_files": {
+    "standard": "photo-standard-color-jitter-bound",
+    "wide": "photo-wide-color-jitter"
+  }
+}
