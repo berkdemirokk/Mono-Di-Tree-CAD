@@ -1,0 +1,389 @@
+{
+  "runtimeDiskHash": "b59feb2088f80e1fa431c8f9c316861e660e5936f968fd97b802e550fed356c5",
+  "modules": [
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/draft.mjs",
+      "sha256": "325fd5135733c4c76d7edc3eb62d58de4f8e8730aa1a8eccb576f406d84d92d9"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/about.json",
+      "sha256": "63b44bfda550c97287eae76b45ec732399cc3a4122242e35e6ff6f098701f3e9"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/i18n/en.json",
+      "sha256": "00add2582ce1e182e6ab5a604c515db4a94e99a57605f67d0d66cfd80e849aa7"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/i18n/index.mjs",
+      "sha256": "2f11e785dc2467ef8fb31734f8241d2462be5ff5b245c20644484ff5254e5329"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/back.mjs",
+      "sha256": "2eb13d29c5549ef18cc8180ed751f4d50635a91e408526c9fbed3de3e5d9edb0"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/base.mjs",
+      "sha256": "ad41c6f69f32190752df116bd039d59cfd8de163373a4461f89fc19a0306cd97"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/dart-utils.mjs",
+      "sha256": "f8e08b1f9c84087fb7366e64c97d80b5de0558c2b0a58ed69ab378975d9e1bb6"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-base.mjs",
+      "sha256": "d4533319539fc895a7189163936269b726c21951df28d5691e994a5cfd500dbf"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1100.mjs",
+      "sha256": "6025bf61b1432b2aaf7150c6f2a6c864ec6906f1063cedcf389a92d8986dc5ca"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1130.mjs",
+      "sha256": "a95cb094e010b8ceb496bd26f291e58dc555d41e38fbb67c58093eec14db41d3"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1200.mjs",
+      "sha256": "6b2ed712264db5b802997b5662f7632532e33baa46859dda555cfa61b57f16d8"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1300.mjs",
+      "sha256": "66824b9c28fd978947bc0cd3aa100e0b9ec675e5cebfe7ce8d3fa8659c2f417c"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1330.mjs",
+      "sha256": "32c54331e96ccc587bfa2af01336c10a4551edee0c076bb43f4d3c7153c7c3bc"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-1400.mjs",
+      "sha256": "e5299917d3d09c01355924f6bddfb2f1654e1911d1ec27b494aa662304fd5d59"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-600.mjs",
+      "sha256": "5acfa824db0625ab124b66462ae742fb4adf9112db15d7d085cb943f2ee8bcd6"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-700.mjs",
+      "sha256": "fec8b637b48c61237304c6cb3b5317d2a399039ca90ef8689465474a874344b5"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-800.mjs",
+      "sha256": "44913afe64e459ce820e8567554bde599620b32e27a66b7938f5aa104b597a61"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front-primary-only.mjs",
+      "sha256": "401b29397eeb3c5e43ab137168cfe046719009a17f97f6ac8df05fe88f89d469"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/front.mjs",
+      "sha256": "95dbf0b0fddcc2d81b7aa6a85bf09fcf2543f19e643ba09c60132367eb90ec67"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/index.mjs",
+      "sha256": "8d71c2e6a78317fac7211772303cb04d10855d31ac04a912eb72b78ef8c73536"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/sleeve.mjs",
+      "sha256": "cea07d605b725a372312243080c31f08c330cc531f0fafffad77f296842d1b7b"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/breanna/src/sleevecap.mjs",
+      "sha256": "cb3dfc021737c83bdaf07b81ce4da8540aab9513e65467aa092fd1ea65499edc"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/apikeys.mjs",
+      "sha256": "c1bb499c10b1bef425683bf16e51de27a6d7f43c7a51ebc5f89b899176913e1f"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/control.mjs",
+      "sha256": "351867c24438c6bbc84819897d547ca22b96186f2169752bf9db55457255a61a"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/domains.mjs",
+      "sha256": "bb771c3e36a5c5fa2dff0f3c069cd163b64fe945035f114f9fc249be89d9156f"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/index.mjs",
+      "sha256": "6144d53232464e91f2eb7c60c53b5b4949046ed4527c2fd1d5485daaf8e7df7e"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/logo.mjs",
+      "sha256": "e2de1318444993e44f86c97700c34597e5d2dd625907b4de0dbfe160c10e8d17"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/measurements.mjs",
+      "sha256": "434b8f0fe648cd33d5844be2fe806fd44e0be86bd6d0d8f334a8be9b587f1c70"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/roles.mjs",
+      "sha256": "84e5f44ce3a19d7ad6286083daa8f96dce494ea40465e3ef9c298159bc359915"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/sewing.mjs",
+      "sha256": "3ce4dafe5a58b61010bdbe6ada69b60a3373967ae030a65d3dbd858ac7114072"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/config/src/urls.mjs",
+      "sha256": "979fc9909f7ec74c43d7441900853ae6f36857034d7b13b43293d3ca0e32c3bd"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core-plugins/about.json",
+      "sha256": "10cc68accc0834b9e77deea7fc82490d059dcc8cdecdd6c1adab42f4b8a2c4cd"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core-plugins/src/index.mjs",
+      "sha256": "e73154ca873d6de4dd3e99597c7708740680d600420b7187f002faecaf03c572"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/about.json",
+      "sha256": "b95ea5fde42877fe82efe22572ecdf7ebc05ede0be34cd80fe53f4dbaf2ebfae"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/attributes.mjs",
+      "sha256": "d8a51ee3f80e96adcbbe3e65c291c466016cec3d927d81a9a2a94b45ac135187"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/bezier.mjs",
+      "sha256": "ce3b0a643508e8698a0d0eae3c7898b923f3a94fe909834ff98a949368ae4abe"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/config.mjs",
+      "sha256": "a87474ac236bc8289e6cdc69abde023bb56dc979daa5067272cbdb81e0b6aa4e"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/defs.mjs",
+      "sha256": "7943fe1b7cdaa7b4796bf0e568e54b0ee9b6ec3d77aa635af57ef6532488414d"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/design.mjs",
+      "sha256": "5355105d73ce196cae766fba00ba73f177f245d412c726816fa9aaf4b9af9421"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/hooks.mjs",
+      "sha256": "ba337183f87d3c6dfb3256ee06273cb3565ba2765bf6b00e70c17683f6f416ec"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/index.mjs",
+      "sha256": "0774f2514cf0352ee33fab261769da72e8b80381f3e4e77c0b1120d39baab5aa"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/part.mjs",
+      "sha256": "950788a93bc3c0fc6793646975937f628f2bab7641ae3afd47d0b8d6315e8660"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/path.mjs",
+      "sha256": "c3834fb1a3ac527203714260c9033a2627a6f4430d30685a4f70acd8ee0fffce"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/index.mjs",
+      "sha256": "f6cb7a077c8147787e74695c62cff485a3d8254527d9ae671fbae2198050ae50"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/pattern-config.mjs",
+      "sha256": "31e5d207ae76b46be462c7dee10a2ce590c559a9d8371a6b11509e0febbfb0ab"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/pattern-drafter.mjs",
+      "sha256": "e3ccc7e4d74d1c3f5ec13c431e90b5d93c87b05e8a04cc5deb995681d03ea835"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/pattern-plugins.mjs",
+      "sha256": "b6f26c385bd53c6ff6bbd8fcbc4596330dbba563970c45d958d3762c6b11cb80"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/pattern-renderer.mjs",
+      "sha256": "bde8c1e64e9957029b1680ab4be2689de2eb0b0f0d96905e271e1006b2e91307"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/pattern/pattern-sampler.mjs",
+      "sha256": "941b8b20bd556c401eadf8a6f77277e173f7320fa6620dc95f4e6b0636813b6f"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/point.mjs",
+      "sha256": "33a77bf3ed46ee01a6373336c440e6b21d58cede2951ef4ed2271e4c02290653"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/snippet.mjs",
+      "sha256": "38525d9c727b0b784078d625abd871ee1e23e595486037b42d9a4cd6fff0bc67"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/stack.mjs",
+      "sha256": "832f8467acee6a91c05c4a0d54de5cf3323a9bf8e626725f5ffcf9bfbed8bc0b"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/store.mjs",
+      "sha256": "2b3f68f9198c8ee2aab4c6162e7577be2c9e8bd20f3e49b4d26ad26c63c947b6"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/svg.mjs",
+      "sha256": "e9d2a08145313132e440c372ee3e10fd1d31ef3845952718767107650f5ffec1"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/core/src/utils.mjs",
+      "sha256": "76f4a3ffc823daf2eec009fbdff859842ae6e38ee5104275076a0410009f2f5a"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/about.json",
+      "sha256": "ccc8006797c5bbcade4d32123f94faa7405f74143778090358555b12ae204759"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/i18n/en.json",
+      "sha256": "6cf30c0ef81bafcd43c50be2f10cdb163b7f16e8056a33d77fe62622a902373d"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/i18n/index.mjs",
+      "sha256": "2f11e785dc2467ef8fb31734f8241d2462be5ff5b245c20644484ff5254e5329"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/banner.mjs",
+      "sha256": "b7ce13971d0aee27edde5537fe16744369145275992bce27b5385985a1a88b95"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/bannerbox.mjs",
+      "sha256": "e4c2f2b9332a0141201683c8af8d135aa5dbd231bfab22cb07795a6e6795967f"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/bartack.mjs",
+      "sha256": "58c4cf120fd7b3e33b9ada15e785947177750273cb792503dddd33228485c986"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/buttons.mjs",
+      "sha256": "e9c8960098c963bb272595453edd716f1a161bf4b19c3e33c147fe82a399836e"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/crossbox.mjs",
+      "sha256": "304f3c4a49b6aa332458ffb415984b6d9ca83f443945357bd54750a034845f07"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/cutlist.mjs",
+      "sha256": "f03f6b1bbae62a9c58f992c55d9c7e38509ccfe3c8f78fcec12acc02fed697ae"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/cutonfold.mjs",
+      "sha256": "710b17c3756d50f35477feddc9c36be873edb8c88767139f1d2ebb37230a9a24"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/dimensions.mjs",
+      "sha256": "169b68404304133ee4037006485c3bf95103a2fafe4fbef0bbc53b618c971261"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/flag.mjs",
+      "sha256": "75cd02f40aa53a8aa7234d7b447d9a45f01d6448414c6f4139f38a34f4a0833a"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/grainline.mjs",
+      "sha256": "504333e6fab1ae821394181d16e8b1a862c10328c44222c609d85d107abec62c"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/index.mjs",
+      "sha256": "10e3aabb5a217624005d7ab187249bc1652d90910bdd9cf86696ff6ed820de40"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/logo.mjs",
+      "sha256": "9ab90cc9c1f7660c2a7fc2fe1d17744ab48285c25450221510488a13debc2630"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/notches.mjs",
+      "sha256": "3b5ee5be471025628af4c9d40d6d79d0684b2db1e6b71222a860d4838e892e6c"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/pleat.mjs",
+      "sha256": "69c0a1eb09a4fbf719bb3621357a62090c9aa30dcebe56b0c64327a1c651d8bf"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/scalebox.mjs",
+      "sha256": "f8c51db823bd692880ef9702701fe98856744833b8b5ff0940ebab7ce7f8615c"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/sewtogether.mjs",
+      "sha256": "7efb8044b7ef056231c56ebee35a7bf7582713ced0b082a264c1e779539fabe8"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-annotations/src/title.mjs",
+      "sha256": "856da61225d9a7115ef2b6a8dc760070684b496cbd7b5a01d5f73b0c197b9cbc"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-bin-pack/about.json",
+      "sha256": "60e8b4fcd51889b96ae9e4ca867a0fa32edb3c4f463bedcc9b7332aa38f64ee7"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-bin-pack/src/growing-packer.mjs",
+      "sha256": "cba1d525943acfc8d92ca7396650110c04463f357b52b8aa38a25b6465ad5172"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-bin-pack/src/index.mjs",
+      "sha256": "b752b92cea04172ee80be6a26d3bee86223399621d226a8743b0d85bc9c03476"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-measurements/about.json",
+      "sha256": "7167b01115c4ec9183cda79fea200a20a85aa45069c81204f3b28fb77edb7443"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-measurements/src/index.mjs",
+      "sha256": "583f2cd035fc6852e017bcc64620b932da59e2126f3de64ced4e7b75395d14b5"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-mirror/about.json",
+      "sha256": "f5eb61c7186926169f0b164365c523e97d1e6a61c97a94693f782874063faa7d"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-mirror/src/index.mjs",
+      "sha256": "e0999450547b8db370c5970449b6b549f04d2ee5253694dfe544452e2a470c1c"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-round/about.json",
+      "sha256": "d952ae8a12c94e01ab166784c16d41b5f084afc4c1456d3a0f214267862a8cc4"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-round/src/index.mjs",
+      "sha256": "1d5d2d0bde4bf1b7de437417d9d1109a7cf915c8661d80dfffacec0cb3f05838"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-sprinkle/about.json",
+      "sha256": "9b13b819a2b375ff2b328e1a915ac92baf4a97ac257fee9e9074149f7d3b0845"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-sprinkle/src/index.mjs",
+      "sha256": "26ada758a30f667c7de28781c5d77522d3e633e7fd96d22a5c1509f81e71c1b7"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-transform/about.json",
+      "sha256": "466d3657346e2bf5d9946b2bc3c7ac59791b8b61756db0b91a05ddaee57179e2"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/@freesewing/plugin-transform/src/index.mjs",
+      "sha256": "e635d81f3d2c1f3ebc718723192ab4f4adaef0ee0f5f25953ffcde427c2dd66d"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/bezier-js/src/bezier.js",
+      "sha256": "ae20cb2547fe05581d07a67f966004ee4d86aeaf0117505bada9b1442114eb47"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/bezier-js/src/poly-bezier.js",
+      "sha256": "f73640e4d80a0d317136375d8b2e77d2ad9e77caf5b973709b4a19199b044c38"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/bezier-js/src/utils.js",
+      "sha256": "b09ff99724bac1ab7663a6944487fd25c31e8c684814083f9eb2c33833c5a64f"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/lodash.clonedeep/index.js",
+      "sha256": "43e8e3a411bc763300082c0cefe036ef344cd5fb840b6649d878338a3ec2bc02"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/lodash.get/index.js",
+      "sha256": "7e6eda802e4079bf2345f03fd81430595fc80c4820e9983d7ac5a42377816648"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/lodash.set/index.js",
+      "sha256": "e9ac9629f36ec3a67c41ce2475bcb06f95ff0347b1e07f00d205f3d40c950849"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/dress-research-c494587/experiments/breanna-4.10.2/node_modules/lodash.unset/index.js",
+      "sha256": "e0d931e0836fc003b98a8f7218a47df518e3125dda6de3533acf9902d177aede"
+    },
+    {
+      "url": "file:///C:/Projects/TekstilCAD/work/synthetic-worker-isolation-1105/experiments/synthetic-worker-isolation/synthetic-engine.mjs",
+      "sha256": "40ce5f876d995fd98e89a9552013eb98346363ccf88d76d325c43e9942b7c3f6"
+    }
+  ]
+}
