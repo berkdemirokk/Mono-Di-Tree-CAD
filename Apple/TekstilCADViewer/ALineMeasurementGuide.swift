@@ -68,7 +68,7 @@ enum ALineMeasurementGuide {
             for segment in source.components(separatedBy: CharacterSet.newlines.union(CharacterSet(charactersIn: ";"))) {
                 let normalized = fold(segment)
                 let patterns = labels.map { label in
-                    fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: " ")
+                    fold(label).split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
                 }
                 let mentions = patterns.contains { pattern in
                     normalized.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
