@@ -31,14 +31,59 @@ enum DesignRequestShareFile {
     }
 }
 struct DesignRequestShareItem: Identifiable { let id: UUID; let url: URL }
+enum DesignRequestShareOutcome: Equatable {
+    case completed, cancelled, failed
+    static func classify(completed: Bool, error: Error?) -> Self {
+        error != nil ? .failed : (completed ? .completed : .cancelled)
+    }
+    var message: String {
+        switch self {
+        case .completed: return "Paylaşım seçimi tamamlandı; Windows’a ulaştığını ayrıca kontrol edin."
+        case .cancelled: return "Paylaşım iptal edildi; kayıtlı dosya ve taslak korundu."
+        case .failed: return "Paylaşım tamamlanamadı; kayıtlı dosya ve taslak korundu."
+        }
+    }
+}
+/// Host is already in the sheet hierarchy before presenting the iPad popover.
+final class DesignRequestShareHost: UIViewController {
+    let item: DesignRequestShareItem
+    let finished: (UUID, Bool, Error?) -> Void
+    private var presented = false
+    init(item: DesignRequestShareItem, finished: @escaping (UUID, Bool, Error?) -> Void) {
+        self.item = item; self.finished = finished; super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { return nil }
+    static func anchor(in bounds: CGRect) -> CGRect { CGRect(x: bounds.midX, y: bounds.midY, width: 1, height: 1) }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .systemBackground
+        let button = UIButton(type: .system)
+        button.setTitle("Paylaşımı kapat", for: .normal)
+        button.addTarget(self, action: #selector(cancelShare), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(button)
+        NSLayoutConstraint.activate([button.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                                     button.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+                                     button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)])
+    }
+    @objc private func cancelShare() { finished(item.id, false, nil) }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard !presented else { return }; presented = true
+        let controller = UIActivityViewController(activityItems: [item.url], applicationActivities: nil)
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = Self.anchor(in: view.bounds)
+            popover.permittedArrowDirections = []
+        }
+        controller.completionWithItemsHandler = { [finished = self.finished, id = self.item.id] _, completed, _, error in finished(id, completed, error) }
+        present(controller, animated: true)
+    }
+}
 struct DesignRequestShareSheet: UIViewControllerRepresentable {
     let item: DesignRequestShareItem
     let finished: (UUID, Bool, Error?) -> Void
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        let controller = UIActivityViewController(activityItems: [item.url], applicationActivities: nil)
-        controller.completionWithItemsHandler = { _, completed, _, error in finished(item.id, completed, error) }
-        return controller
-    }
-    func updateUIViewController(_ controller: UIActivityViewController, context: Context) { }
+    func makeUIViewController(context: Context) -> DesignRequestShareHost { DesignRequestShareHost(item: item, finished: finished) }
+    func updateUIViewController(_ controller: DesignRequestShareHost, context: Context) { }
 }
 #endif

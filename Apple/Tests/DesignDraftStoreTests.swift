@@ -270,6 +270,16 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertFalse(attempt.canPrepareShare(current: pending, referencePending: false, measurementPending: false, transition: false))
         }
     }
+    func testSharePopoverAnchorAndOutcomesAreExplicit() {
+        XCTAssertEqual(DesignRequestShareHost.anchor(in: CGRect(x: 0, y: 0, width: 320, height: 240)), CGRect(x: 160, y: 120, width: 1, height: 1))
+        XCTAssertEqual(DesignRequestShareHost.anchor(in: CGRect(x: 20, y: 10, width: 500, height: 600)), CGRect(x: 270, y: 310, width: 1, height: 1))
+        XCTAssertEqual(DesignRequestShareOutcome.classify(completed: true, error: nil), .completed)
+        XCTAssertEqual(DesignRequestShareOutcome.classify(completed: false, error: nil), .cancelled)
+        XCTAssertEqual(DesignRequestShareOutcome.classify(completed: true, error: CocoaError(.fileReadUnknown)), .failed)
+        XCTAssertTrue(DesignRequestShareOutcome.completed.message.contains("ayrıca kontrol"))
+        XCTAssertTrue(DesignRequestShareOutcome.cancelled.message.contains("korundu"))
+        XCTAssertTrue(DesignRequestShareOutcome.failed.message.contains("korundu"))
+    }
     func testShareTemporaryCopyIsBoundedAndCleanupCannotRemoveOtherFiles() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
@@ -283,6 +293,22 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try DesignRequestShareFile.create(bytes: Data(count: 12 * 1024 * 1024 + 1), id: UUID(), base: base))
         try DesignRequestShareFile.remove(file, id: id, base: base)
         XCTAssertFalse(FileManager.default.fileExists(atPath: file.path)); XCTAssertEqual(try Data(contentsOf: unrelated), bytes)
+    }
+    func testShareCompletionAndCancellationCleanupKeepsAnotherActiveShare() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let data = Data("{}".utf8), activeID = UUID()
+        let active = try DesignRequestShareFile.create(bytes: data, id: activeID, base: base)
+        for (completed, error) in [(true, nil), (false, nil), (false, CocoaError(.fileReadUnknown))] as [(Bool, Error?)] {
+            let id = UUID(), temporary = try DesignRequestShareFile.create(bytes: data, id: id, base: base)
+            let outcome = DesignRequestShareOutcome.classify(completed: completed, error: error)
+            XCTAssertFalse(outcome.message.isEmpty)
+            try DesignRequestShareFile.remove(temporary, id: id, base: base)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: temporary.path))
+            XCTAssertEqual(try Data(contentsOf: active), data)
+        }
+        try DesignRequestShareFile.remove(active, id: activeID, base: base)
     }
     func testCancelledSharePreparationDoesNotLeaveTemporaryCopy() async throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

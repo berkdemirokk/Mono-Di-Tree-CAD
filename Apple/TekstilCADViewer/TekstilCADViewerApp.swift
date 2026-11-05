@@ -3733,12 +3733,12 @@ private struct ExperimentalDesignBriefView: View {
                 #if os(iOS)
                 Color.clear.sheet(item: $shareItem, onDismiss: { cleanupSavedShare() }) { item in
                     DesignRequestShareSheet(item: item) { id, completed, error in
-                        guard shareItem?.id == id else { return }
-                        shareItem = nil
-                        if error != nil { message = "Paylaşım tamamlanamadı; kayıtlı dosya ve taslak korundu." }
-                        else if completed { message = "Paylaşım seçimi tamamlandı; Windows’a ulaştığını ayrıca kontrol edin." }
-                        else { message = "Paylaşım iptal edildi; kayıtlı dosya ve taslak korundu." }
-                    }
+                        Task { @MainActor in
+                            guard shareItem?.id == id else { return }
+                            shareItem = nil
+                            message = DesignRequestShareOutcome.classify(completed: completed, error: error).message
+                        }
+                    }.interactiveDismissDisabled(true)
                 }
                 #endif
             }
