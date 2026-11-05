@@ -67,6 +67,21 @@ try
     var line=new InterfaceMatcher.Edge("test","Edge",new(0,0),new(10,0),[],true,false,1);
     var matched=InterfaceMatcher.Match("test",[line],[line with { End=new(4,0), Flipped=false },line with { Start=new(4,0),Flipped=false }]);
     if(matched.Upper.Length!=2 || Math.Abs(matched.Upper[0].Start.X-6)>1e-8 || !matched.Upper.All(e=>e.Flipped)) throw new Exception("Flipped split orientation");
+    var firstCase=data.RootElement.GetProperty("cases")[0];
+    var firstRule=PartialDartRelations.Create("synthetic-base")[0];
+    var sourceRule=firstCase.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()==firstRule.Owner && r.GetProperty("index").GetInt32()==firstRule.SourceRule);
+    void RejectDartRule(Action<JsonNode> mutate)
+    {
+        var node=JsonNode.Parse(sourceRule.GetRawText())!; mutate(node);
+        using var doc=JsonDocument.Parse(node.ToJsonString());
+        try { DartRuleCheck.Validate(firstRule,doc.RootElement,baseParts.Segments); throw new Exception("Invalid dart rule accepted"); } catch(InvalidDataException) { }
+    }
+    RejectDartRule(n=>n["a"]!["edges"]!.AsArray().Add(n["a"]!["edges"]![0]!.DeepClone()));
+    RejectDartRule(n=>n["a"]!["edges"]![0]!["right_wrong"]=true);
+    RejectDartRule(n=>n["a"]!["ruffle"]![0]!["coeff"]=1.1);
+    var unequalLegs=baseParts.Segments.ToArray(); int legIndex=Array.FindIndex(unequalLegs,e=>e.Panel==firstRule.Owner && e.Edge==firstRule.EdgeA);
+    unequalLegs[legIndex]=unequalLegs[legIndex] with { Start=new(unequalLegs[legIndex].Start.X+.1,unequalLegs[legIndex].Start.Y) };
+    try { DartRuleCheck.Validate(firstRule,sourceRule,unequalLegs); throw new Exception("Unequal dart legs accepted"); } catch(InvalidDataException) { }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -224,6 +239,7 @@ internal static class Validator
                 var source=expectedDarts.Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("index").GetInt32()==rule.SourceRule);
                 var a=source.GetProperty("a").GetProperty("edges")[0]; var b=source.GetProperty("b").GetProperty("edges")[0];
                 Need(rule.Snapshot==id && a.GetProperty("panel").GetString()==rule.Owner && b.GetProperty("panel").GetString()==rule.Owner && a.GetProperty("edge").GetInt32()==rule.EdgeA && b.GetProperty("edge").GetInt32()==rule.EdgeB && a.GetProperty("flipped").GetBoolean()==rule.FlipA && b.GetProperty("flipped").GetBoolean()==rule.FlipB,"source dart seam relation");
+                DartRuleCheck.Validate(rule,source,generated.Segments);
             }
             Need(generated.Status=="unresolved" && !generated.ProductionAllowed && !generated.ExportAllowed,"partial output gate");
             var frontPath=FrontSkirtCandidate.Create(id);
@@ -299,6 +315,7 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
 
 
 
