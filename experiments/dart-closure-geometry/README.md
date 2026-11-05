@@ -9,3 +9,9 @@ Yalnızca `primaryBustDart=06:00`, `secondaryBustDart=none`, arka bel ve omuz pe
 Sentetik temel örnekte dış parçalar toplamı yaklaşık 203,5 mm, açık zincir yaklaşık 512,010856 mm, düz başlangıç kirişi yaklaşık 320,877169 mm'dir. Bunlar birbirinin yerine geçmez. Aynı senaryodaki bağımsız alt panelin ön ve arka yarım bel çizgileri sırasıyla 180 ve 195 mm'dir; parçaların ilişkilendirilmesi, üst arka zincir, pens kapatılmış gerçek kontur, bolluk, yön, dikiş payı, kumaş ve prova henüz çözülmedi. Ölçülen farklardan üretim ya da uyum kararı çıkarılamaz.
 
 Doğrulama: `dotnet run --project experiments/dart-closure-geometry/DartClosureGeometry.csproj -- --verify`. Analitik eşit ve eşitsiz bacak örnekleri, dönüş, öteleme, eşik ve hatalı girişler, iki sentetik kaynak zinciri ve mevcut A-line alt paneli sınanır.
+
+## Kontur ve topoloji tanılaması
+
+`OutsideSegmentsIntersect`, döndürülmüş iki dış parçanın mevcut kayan noktalı koordinatlarda kesişmesini veya çakışmasını ayrıca bildirir. Eşit pens bacakları bunu engellemez. `ContourDiagnostic`, yalnızca tamamı doğrusal, sıralı, kapalı bir kaynak konturu ve her köşe için dönen/sabit bölüm bildirimi alır; binary64 nokta sırasının SHA-256 kimliğini beklenen kimlikle karşılaştırır. Bu kimlik, verinin nereden geldiğinin veya rol adlarının doğruluğunun kanıtı değildir. İlk beş noktanın merkez, birinci bacak, pens ucu, ikinci bacak ve yan sıra kimliği çağıranın sorumluluğundadır.
+
+Kaynak konturu geçersizse, kimlik veya bölüm eksikse engellenir; dönüştürülmüş kalan bütün çizgiler arasında kesişme/çakışma ve bölüm sınırını geçen kenarlar ayrıca raporlanır. Pens bacakları kaldırılır, uçlar zorla birleştirilmez. Eğriler, döndürme hatasının sertifikasyonu ve gerçek katlanma geometrisi desteklenmez; dolayısıyla temiz görünen bir inceleme bile `blocked` durumundadır. Bu tanılama üretime veya dikişe onay vermez.

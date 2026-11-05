@@ -13,6 +13,16 @@ try
     Near(exact.RotatedCenter.X,10); Near(exact.RotatedCenter.Y,2); Near(exact.EndpointGap,0);
     Near(exact.OutsideLength,5); Check(exact.ExactBinarySquaredLegsEqual, "exact squared distance");
     Check(exact.WithinNumericalThreshold && exact.SewingStatus == "unresolved" && !exact.ProductionAllowed && !exact.ExportAllowed, "status");
+    var overlap = DartClosure.Analyze(new(0,5),new(0,10),new(0,0),new(10,0),new(0,0),0);
+    Check(overlap.ExactBinarySquaredLegsEqual && overlap.OutsideSegmentsIntersect, "counterexample: equal legs and overlapping outside pieces");
+    Point2[] contour = [new(-2,10),new(0,10),new(0,0),new(10,0),new(10,-3),new(-3,-3),new(-3,10)];
+    bool[] partition = [true,true,false,false,false,false,true];
+    var diagnostic = ContourDiagnostic.Inspect(contour, ContourDiagnostic.Identity(contour),partition);
+    Check(diagnostic.Status == "blocked" && !diagnostic.ProductionAllowed && !diagnostic.ExportAllowed && diagnostic.Issues.Count > 0, "contour remains blocked");
+    Check(ContourDiagnostic.Inspect(contour, "wrong identity",partition).Status == "blocked", "identity mismatch");
+    Check(ContourDiagnostic.Inspect(contour, ContourDiagnostic.Identity(contour),new bool[2]).Status == "blocked", "incomplete partition");
+    Point2[] crossing = [new(0,5),new(0,10),new(0,0),new(10,0),new(0,0)];
+    Check(ContourDiagnostic.Inspect(crossing, ContourDiagnostic.Identity(crossing),[true,true,false,false,false]).Status == "blocked", "counterexample source contour rejected");
     var unequal = DartClosure.Analyze(center,a,tip,new(12,0),new(12,-3),1);
     Near(unequal.EndpointGap,2); Check(!unequal.ExactBinarySquaredLegsEqual && !unequal.WithinNumericalThreshold, "unequal legs");
     Check(DartClosure.Analyze(center,a,tip,new(12,0),new(12,-3),3).SewingStatus == "unresolved", "threshold is not approval");
@@ -57,3 +67,4 @@ try
     return 0;
 }
 catch (Exception ex) { Console.Error.WriteLine($"FAIL: {ex.Message}"); return 1; }
+

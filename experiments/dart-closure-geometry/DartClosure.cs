@@ -7,7 +7,7 @@ namespace DartClosureGeometry;
 public sealed record DartAnalysis(Point2 RotatedCenter, Point2 RotatedLegA, Point2 FixedLegB,
     double LegALength, double LegBLength, double EndpointGap, double OutsideLength,
     double OpenChainLength, double OriginalChordLength, double NumericalThreshold,
-    bool WithinNumericalThreshold, bool ExactBinarySquaredLegsEqual)
+    bool WithinNumericalThreshold, bool ExactBinarySquaredLegsEqual, bool OutsideSegmentsIntersect)
 {
     public string SewingStatus => "unresolved";
     public bool ProductionAllowed => false;
@@ -37,7 +37,8 @@ public static class DartClosure
         double gap = Geometry.Distance(mapped, legB), outside = outerA + outerB;
         return new(Rotate(center), mapped, legB, a, b, gap, outside, outside + a + b,
             Geometry.Distance(center, side), numericalThreshold, gap <= numericalThreshold,
-            SquaredDistance(tip, legA) == SquaredDistance(tip, legB));
+            SquaredDistance(tip, legA) == SquaredDistance(tip, legB),
+            Geometry.SegmentsIntersect(Rotate(center), mapped, legB, side));
     }
 
     // Every finite binary64 value is an integer multiple of 2^-1074. This checks
@@ -57,3 +58,4 @@ public static class DartClosure
         return x * x + y * y;
     }
 }
+
