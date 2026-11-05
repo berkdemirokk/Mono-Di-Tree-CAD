@@ -7,6 +7,11 @@ const fixture=()=>({status:'inspected',body:'synthetic',variant:'one',options:{w
 test('reports a directed source-consistent candidate without approving a seam',()=>{
  const r=traceCase(fixture());assert.equal(r.status,'unresolved');assert.equal(r.candidate.lengthMm,5);assert.equal(r.candidate.direction,'waist-to-armhole');
 });
+test('negative operation index and missing draft identifiers cannot identify a candidate',()=>{
+ for(const edit of [c=>{c.parts[0].edges[0].sourceOpIndex=-1;c.parts[0].edges[0].id='breanna.back/seam/op--1';},c=>delete c.body,c=>c.body='  ',c=>delete c.variant,c=>c.variant='\t',c=>c.options=[]]) {
+  const c=fixture();edit(c);const r=traceCase(c);assert.equal(r.status,'unresolved');assert.equal(r.candidate,null);
+ }
+});
 test('missing, duplicate, reversed, nonfinite and degenerate candidates remain unresolved',()=>{
  for(const edit of [c=>delete c.options.waistDart,c=>c.parts.push(c.parts[0]),c=>c.parts[0].edges.push({...c.parts[0].edges[0]}),c=>c.parts[0].edges[0].fromNames=['armhole'],c=>c.parts[0].edges[0].to.x=NaN,c=>c.parts[0].edges[0].to={...c.parts[0].edges[0].from},c=>c.parts[0].edges[0].fromNames=['waist','other'],c=>c.parts[0].edges[0].id='wrong']) {
   const c=fixture();edit(c);const r=traceCase(c);assert.equal(r.status,'unresolved');assert.equal(r.candidate,null);

@@ -11,12 +11,12 @@ const has=(names,name)=>Array.isArray(names) && names.length===1 && names[0]===n
 
 export function traceCase(c) {
  const unresolved=reason=>({status:'unresolved',reason,candidate:null});
- if(!c || c.status!=='inspected' || typeof c.body!=='string' || !c.body || typeof c.variant!=='string' || !c.variant || !c.options || typeof c.options!=='object' || typeof c.options.waistDart!=='boolean' || typeof c.options.shoulderDart!=='boolean') return unresolved('missing case or options');
+ if(!c || c.status!=='inspected' || typeof c.body!=='string' || !c.body.trim() || typeof c.variant!=='string' || !c.variant.trim() || !c.options || typeof c.options!=='object' || Array.isArray(c.options) || typeof c.options.waistDart!=='boolean' || typeof c.options.shoulderDart!=='boolean') return unresolved('missing case or options');
  if(!Array.isArray(c.parts)) return unresolved('missing parts');
  const parts=c.parts.filter(p=>p?.part==='breanna.back');
  if(parts.length!==1 || !Array.isArray(parts[0].edges)) return unresolved('back part ambiguous');
  const edges=parts[0].edges;
- if(edges.some(e=>!e || typeof e.id!=='string' || !Number.isSafeInteger(e.sourceOpIndex) || e.id!==`breanna.back/seam/op-${e.sourceOpIndex}`)) return unresolved('invalid edge identity');
+ if(edges.some(e=>!e || typeof e.id!=='string' || !Number.isSafeInteger(e.sourceOpIndex) || e.sourceOpIndex<0 || e.id!==`breanna.back/seam/op-${e.sourceOpIndex}`)) return unresolved('invalid edge identity');
  if(new Set(edges.map(e=>e.id)).size!==edges.length) return unresolved('duplicate edge identity');
  const matches=edges.filter(e=>e.type==='line' && has(e.fromNames,'waist') && has(e.toNames,'armhole'));
  if(matches.length!==1) return unresolved('endpoint match missing or ambiguous');

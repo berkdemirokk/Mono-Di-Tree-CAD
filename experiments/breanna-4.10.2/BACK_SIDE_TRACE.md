@@ -4,6 +4,8 @@ Only the back waist-to-armhole side is investigated; waist seam and dart closure
 
 The matrix bytes are pinned by SHA-256 and privately copied before parsing; the matrix records the expected source hash. This verifies the archived bytes, not the installed source files or all transitive dependencies. Source and matrix are not signed. All options and body/variant identities remain visible. Coordinates are local mm, unplaced; length is binary64 and not a certified bound. No matching to front or skirt, tolerance, fit, export, cutting, production or device authorization is provided. Missing or ambiguous fields fail closed.
 
+For a case, `body` and `variant` are nonblank caller-declared identifiers, not independently authenticated draft identities; options must include boolean `waistDart` and `shoulderDart`. Each edge's nonnegative safe-integer operation index must match its declared part/path/operation ID, and duplicates are rejected. Additional case keys are not validated and are not evidence. Only the byte-pinned matrix entry point binds declarations to the archived synthetic fixture; `traceCase` by itself accepts untrusted declarations and always reports unresolved.
+
 Synthetic tests require the existing pinned matrix and do not modify it. In PowerShell:
 
 ```powershell
