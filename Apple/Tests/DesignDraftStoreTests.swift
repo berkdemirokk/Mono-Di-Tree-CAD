@@ -208,14 +208,31 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(change.matches(form: blank, revision: revision, notes: "not", existingNotes: "değişti"))
     }
     func testBodyMeasurementInstructionsMatchLocalResearchDefinitions() {
-        XCTAssertEqual(BodyMeasurementNotes.instructions.count, BodyMeasurementNotes.fields.count)
-        XCTAssertTrue(BodyMeasurementNotes.instructions.allSatisfy { !$0.isEmpty })
-        XCTAssertEqual(BodyMeasurementNotes.fields[1].label, "ön göğüs")
-        XCTAssertEqual(BodyMeasurementNotes.instructions[1], "Göğsün en dolgun yerinden, bir yan dikiş noktasından diğerine ön taraftan ölçün.")
-        XCTAssertEqual(BodyMeasurementNotes.fields[9].label, "belden kalçaya")
-        XCTAssertEqual(BodyMeasurementNotes.instructions[9], "Bedenin yan tarafında bel hattından kalça kemiğinin üst noktasına doğru aşağı ölçün.")
-        XCTAssertTrue(BodyMeasurementNotes.instructions[12].contains("dereceyle"))
-        XCTAssertTrue(BodyMeasurementNotes.instructions[13].contains("hafif bükülü"))
+        let expected: [(String, String, Bool)] = [
+            ("üst kol çevresi", "Üst kolun en geniş yerinden çevresini ölçün.", false),
+            ("ön göğüs", "Göğsün en dolgun yerinden, bir yan dikiş noktasından diğerine ön taraftan ölçün.", false),
+            ("göğüs noktaları arası", "İki göğüs noktası arasındaki mesafeyi ölçün.", false),
+            ("üst göğüs çevresi", "Göğsün üstünden geçen üst göğüs çevresini ölçün.", false),
+            ("ön üst göğüs", "Üst göğüs hattında yan dikiş noktaları arasında ön kısmı ölçün.", false),
+            ("omuz üst noktasından göğse", "Boyun ile omzun birleştiği omuz üst noktasından (HPS), göğüs noktalarından geçen göğüs çevresi hizasına doğru düz aşağı ölçün.", false),
+            ("omuz üst noktasından arka bele", "Boyun dibindeki omuz üst noktasından sırt üzerinden bele ölçün.", false),
+            ("omuz üst noktasından ön bele", "Boyun dibindeki omuz üst noktasından ön taraftan bele ölçün.", false),
+            ("bel çevresi", "Bel çevresini ölçün.", false),
+            ("belden kalçaya", "Bedenin yan tarafında bel hattından kalça kemiğinin üst noktasına doğru aşağı ölçün.", false),
+            ("boyun çevresi", "Boyun çevresini ölçün.", false),
+            ("omuzdan omuza", "Bir omuz ucundan sırt üzerinden diğer omuz ucuna ölçün.", false),
+            ("omuz eğimi", "Omuz çizgisinin yataya göre aşağı eğimini dereceyle belirtin.", true),
+            ("omuzdan bileğe", "Kol doğal şekilde hafif bükülü dururken omuz ucundan kol boyunca bileğe kadar ölçün.", false),
+            ("bilek çevresi", "Bilek çevresini ölçün.", false)
+        ]
+        XCTAssertEqual(BodyMeasurementNotes.fields.count, expected.count)
+        XCTAssertEqual(BodyMeasurementNotes.instructions.count, expected.count)
+        guard BodyMeasurementNotes.fields.count == expected.count, BodyMeasurementNotes.instructions.count == expected.count else { return }
+        for (index, item) in expected.enumerated() {
+            XCTAssertEqual(BodyMeasurementNotes.fields[index].label, item.0, "Etiket \(index)")
+            XCTAssertEqual(BodyMeasurementNotes.instructions[index], item.1, "Açıklama \(index)")
+            XCTAssertEqual(BodyMeasurementNotes.fields[index].angle, item.2, "Birim türü \(index)")
+        }
     }
     func testMeasurementGroupsCoverFieldsAndReportUnfinishedValues() throws {
         let indices = BodyMeasurementNotes.groups.flatMap { Array($0.indices) }
