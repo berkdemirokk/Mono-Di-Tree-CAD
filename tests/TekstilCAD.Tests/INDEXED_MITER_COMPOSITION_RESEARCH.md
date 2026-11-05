@@ -1,0 +1,7 @@
+# Indexed miter composition research
+
+This test-only composition binds a source piece ID, ordered binary64 point bits, closed flag and absence of attached mark/physical-feature records to a private snapshot. It reuses the existing exact-grid indexed evaluator, validates the candidate contour and winding, and invokes the existing requested-binary64-miter interval check. A second source check after evaluation detects observed edits; callers must still prevent concurrent mutation during snapshot copying and checks. Piece identity is a caller-provided in-memory ID, not authenticated history or a persisted edge identity. The check covers corresponding indexed finite segments, not all possible garment semantics.
+
+Both 512-point synthetic windings are exercised together with changed source ID, changed point bits and reversed order. A shallow unmarked V demonstrates why numeric/geometry evidence cannot certify all physical features. Attached physical identities are rejected, and a closing narrow channel remains rejected. The composition returns no `PatternPiece`; the existing fallback is independently asserted to remain closed. Neither evidence nor test tolerances approve production, garment fit, notch completeness, export or devices. No production code is changed.
+
+Run from repository root: `dotnet test tests/TekstilCAD.Tests/TekstilCAD.Tests.csproj --filter FullyQualifiedName~IndexedMiterEvidenceCompositionTests`.
