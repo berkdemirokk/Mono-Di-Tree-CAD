@@ -9905,6 +9905,16 @@ internal static partial class DesktopVerification
                 var maskBeforeCorrection=regionDialog.CopyMaskForVerification()!;
                 var refineTask=regionDialog.RefineAsync();PumpUntil(()=>refineTask.IsCompleted);refineTask.GetAwaiter().GetResult();
                 var correctedMask=regionDialog.CopyMaskForVerification();
+                Check(regionDialog.ComparePrevious.IsEnabled,"Previous mask comparison becomes available after refinement",checks);
+                regionDialog.ComparePrevious.IsChecked=true;
+                var diffPixels=regionDialog.ComparisonPixelsForVerification();
+                Check(diffPixels is not null && Enumerable.Range(0,maskBeforeCorrection.Length).All(i=> {
+                    var old=maskBeforeCorrection[i];var next=correctedMask![i];var p=i*4;
+                    return diffPixels[p]==0 && diffPixels[p+1]==(old!=next && next!=0 ? 220 : 0) &&
+                           diffPixels[p+2]==(old!=next && next==0 ? 255 : 0) && diffPixels[p+3]==(old!=next ? 180 : 0);
+                }) && regionDialog.Status.Text.Contains("doğruluk ölçümü değildir"),"Comparison correctly colors every added and removed pixel without asserting accuracy",checks);
+                regionDialog.ComparePrevious.IsChecked=false;
+                Check(regionDialog.ComparisonPixelsForVerification() is null && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),"Closing comparison preserves the current region mask",checks);
                 Check(correctedMask is not null && correctedMask[3*96+3]==1 && correctedMask[30*96+40]==0 && regionDialog.Regions.SelectedIndex==-1 &&
                       DocumentSession.ContentEquals(initial,workspace.Document),"Explicit photo region corrections update mask and require a new selection",checks);
                 Check(regionDialog.AppliedMarkForVerification(3,3)==1 && regionDialog.AppliedMarkForVerification(40,30)==2 && !regionDialog.HasMarksOverlay,
@@ -9973,7 +9983,7 @@ internal static partial class DesktopVerification
                 Check(!regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),"Region refinement undo cannot discard pending marks",checks);
                 regionDialog.ClearMarks();
                 Check(regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(maskBeforeCorrection) &&
-                      regionDialog.Regions.SelectedIndex==-1 && regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.AppliedMarkForVerification(40,30)==0 &&
+                      !regionDialog.ComparePrevious.IsEnabled && regionDialog.ComparisonPixelsForVerification() is null && regionDialog.Regions.SelectedIndex==-1 && regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.AppliedMarkForVerification(40,30)==0 &&
                       !regionDialog.UndoRefinement(),"Region refinement undo restores exact previous mask and applied marks once",checks);
                 regionDialog.MarkMode.SelectedIndex=1;
                 Check(regionDialog.TryAddMark(3,3),"A photo mark can be added before recomputation",checks);
