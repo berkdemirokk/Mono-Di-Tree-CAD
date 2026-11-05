@@ -44,7 +44,7 @@ enum ALineMeasurementGuide {
         }
         let sources = [draft.description, draft.otherMeasurements]
         guard sources.allSatisfy({ $0.utf16.count <= ExperimentalDesignBrief.maxTextUnits }) else { throw Failure.tooLong }
-        let guarded = #"(?<![\p{L}\p{M}\p{N}_])(?:eğer|şayet|ise|olursa|olma[\p{L}\p{M}]*|değil[\p{L}\p{M}]*|bunlar[\p{L}\p{M}]*|şunlar[\p{L}\p{M}]*|onlar(?:i|in|a|da|dan|la)?|bunun[\p{L}\p{M}]*|şunun[\p{L}\p{M}]*|onun(?:la|ki)?|bunu|buna|bunda|bundan|şunu|şuna|şunda|şundan|onu|ona|onda|ondan|hepsi[\p{L}\p{M}]*|tümü[\p{L}\p{M}]*|ölçü[\p{L}\p{M}]*)(?![\p{L}\p{M}\p{N}_])|[?？]"#
+        let guarded = #"(?<![\p{L}\p{M}\p{N}_])(?:eğer|şayet|gerekirse|koşuluyla|şartiyla|takdirde|ise|olursa|olma[\p{L}\p{M}]*|değil[\p{L}\p{M}]*|bunlar[\p{L}\p{M}]*|şunlar[\p{L}\p{M}]*|onlar(?:i|in|a|da|dan|la)?|bunun[\p{L}\p{M}]*|şunun[\p{L}\p{M}]*|onun(?:la|ki)?|bunu|buna|bunda|bundan|şunu|şuna|şunda|şundan|onu|ona|onda|ondan|hepsi[\p{L}\p{M}]*|tümü[\p{L}\p{M}]*|ölçü[\p{L}\p{M}]*)(?![\p{L}\p{M}\p{N}_])|[?？]"#
         guard sources.allSatisfy({ fold($0).range(of: guarded, options: .regularExpression) == nil }) else { throw Failure.uncertain }
         for source in sources {
             let normalized = fold(source)

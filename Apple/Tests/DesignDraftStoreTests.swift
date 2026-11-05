@@ -257,6 +257,17 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(v1.measurements, updated.measurements); XCTAssertEqual(v2.measurements, updated.measurements)
         XCTAssertEqual(v2.style, .aline); XCTAssertEqual(v2.description, draft.description)
     }
+    func testALineGuideStopsSharedConditionalAndNegativeSources() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "aline-conditional-conflicts", withExtension: "json"))
+        let examples = try JSONDecoder().decode([String].self, from: Data(contentsOf: url))
+        let input = ALineMeasurementGuide.Input(values: ["36", "36", "50", "50", "2", "2", "3", "3", "20", "60", "180"], unit: "cm")
+        for source in examples {
+            let draft = ExperimentalDesignBrief.Draft(style: .aline, description: source, bust: "", waist: "72 cm", hips: "100 cm", length: "", otherMeasurements: "Özgün not", image: nil, imageName: nil)
+            XCTAssertThrowsError(try ALineMeasurementGuide.prepare(input, draft: draft), source)
+            XCTAssertEqual(draft.description, source)
+            XCTAssertEqual(draft.otherMeasurements, "Özgün not")
+        }
+    }
     func testALineGuideSharedFixtureKeepsV2Values() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-aline-11.tcad-request", withExtension: "json"))
         let draft = try ExperimentalDesignBrief.portableDraft(Data(contentsOf: url))

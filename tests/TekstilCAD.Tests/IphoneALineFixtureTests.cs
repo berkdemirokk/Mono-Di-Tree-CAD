@@ -1,9 +1,23 @@
 using TekstilCAD.FileFormats;
+using System.Text.Json;
 
 namespace TekstilCAD.Tests;
 
 public sealed class IphoneALineFixtureTests
 {
+    [Fact]
+    public void SharedConditionalAndNegativeSourcesStopDesktopReview()
+    {
+        var root = new DirectoryInfo(AppContext.BaseDirectory);
+        while (root is not null && !File.Exists(Path.Combine(root.FullName, "Apple", "project.yml"))) root = root.Parent;
+        Assert.NotNull(root);
+        var folder = Path.Combine(root.FullName, "Apple", "Tests", "Fixtures");
+        var examples = JsonSerializer.Deserialize<string[]>(File.ReadAllText(Path.Combine(folder, "aline-conditional-conflicts.json")))!;
+        var request = DesignRequestStorage.Deserialize(File.ReadAllText(Path.Combine(folder, "ios-aline-11.tcad-request.json")));
+        foreach (var source in examples)
+            Assert.False(ALineRequestMeasurements.Review(source, request.Measurements).Complete, source);
+    }
+
     [Fact]
     public void SyntheticIphoneElevenMeasurementsMatchDesktopReviewContract()
     {
