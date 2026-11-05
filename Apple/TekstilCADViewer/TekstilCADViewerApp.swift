@@ -2825,7 +2825,14 @@ private struct ExperimentalDesignBriefView: View {
         } catch { localStatus = "Kurtarma kopyası hazırlanamadı; alanları ve boyut sınırlarını kontrol edin." }
     }
     private var desktopMeasurementRisk: Bool {
-        [description, bust, waist, hips, length, otherMeasurements].contains { MeasurementMessageParser.mayNeedDesktopReview($0) }
+        let fields = [description, draft.measurements]
+        return fields.contains { MeasurementMessageParser.mayNeedDesktopReview($0) }
+            || MeasurementMessageParser.hasConditionalMeasurementRisk(fields)
+    }
+    private var measurementReviewStartStep: Int {
+        let fields = [description, draft.measurements]
+        return MeasurementMessageParser.mayNeedDesktopReview(description)
+            || MeasurementMessageParser.hasConditionalMeasurementRisk(fields) ? 0 : 1
     }
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
@@ -3085,7 +3092,7 @@ private struct ExperimentalDesignBriefView: View {
                     if summary.hasPendingMeasurements {
                         Text("Ölçü formunda henüz onaylanmamış giriş var; bu girişler yukarıdaki ölçülere dahil değil.").foregroundStyle(.secondary)
                     }
-                    Button("Tarif ve ölçüleri gözden geçir") { step = MeasurementMessageParser.mayNeedDesktopReview(description) ? 0 : 1 }.frame(minHeight: 44)
+                    Button("Tarif ve ölçüleri gözden geçir") { step = measurementReviewStartStep }.frame(minHeight: 44)
                     Text("Referans görseli").font(.headline).accessibilityAddTraits(.isHeader)
                     if let name = summary.referenceName { Text("Eklendi: \(ModelStore.safeLabel(name))") }
                     else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
@@ -3237,7 +3244,7 @@ private struct ExperimentalDesignBriefView: View {
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }
-                Button("Tarif ve ölçüleri gözden geçir") { step = MeasurementMessageParser.mayNeedDesktopReview(description) ? 0 : 1 }
+                Button("Tarif ve ölçüleri gözden geçir") { step = measurementReviewStartStep }
                 Button("Vazgeç", role: .cancel) { }
             } message: { Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }

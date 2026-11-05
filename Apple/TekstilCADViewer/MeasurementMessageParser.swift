@@ -25,14 +25,23 @@ enum MeasurementMessageParser {
     }
     /// Desktop v1 splits comma/semicolon/newline, but not conjunctions or sentence periods.
     /// This is only a narrow warning, not proof of downstream interpretation.
+    static func hasConditionalMeasurementRisk(_ parts: [String]) -> Bool {
+        guard parts.allSatisfy({ $0.utf16.count <= 16_384 }) else { return true }
+        let condition = #"(?i)(?<![\p{L}\p{N}_])eğer(?![\p{L}\p{N}_])"#
+        let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        // A condition and a measurement in different segments or fields can
+        // still be related; warn without claiming to interpret the sentence.
+        return parts.contains { $0.range(of: condition, options: .regularExpression) != nil }
+            && parts.contains { $0.range(of: measurement, options: .regularExpression) != nil }
+    }
     static func mayNeedDesktopReview(_ message: String) -> Bool {
         guard message.utf16.count <= 16_384 else { return true }
         let expression = #"(?i)(?:cm|mm)(?:[ \t]+olsun)?(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
         let ambiguousNumber = #"(?i)(?<![0-9.,])[0-9]{1,3}[.,][0-9]{3}[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
         let question = #"(?i)(?:cm|mm)(?:[ \t]+(?:olsun|mi|mı|mu|mü))?[ \t]*[?？]"#
         let qualified = #"(?i)(?:cm|mm)(?:[ \t]+|[ \t]*,[ \t]*)(?:olma\p{L}*|değil\p{L}*|olursa|ise)(?![\p{L}\p{N}_])"#
-        let conditionalPrefix = #"(?i)(?<![\p{L}\p{N}_])eğer[ \t]+(?:göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
-        return [expression, ambiguousNumber, question, qualified, conditionalPrefix].contains { message.range(of: $0, options: .regularExpression) != nil }
+        return [expression, ambiguousNumber, question, qualified].contains { message.range(of: $0, options: .regularExpression) != nil }
+            || hasConditionalMeasurementRisk([message])
     }
     static func parse(_ message: String, existing: [String: String]) throws -> Proposal {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }

@@ -736,7 +736,16 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm olursa"))
         XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm olsun"))
         XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm, kalça çevresi 98 cm"))
-        XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("eğer kumaş ipekse; bel çevresi 72 cm"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("eğer kumaş ipekse; bel çevresi 72 cm"))
+        XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk(["eğer kumaş ipekse", "bel çevresi: 72 cm"]))
+        XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["eğer kumaş ipekse", "uzun kollu"]))
+        XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["değer", "bel çevresi: 72 cm"]))
+        let split = ExperimentalDesignBrief.Draft(style: .describe, description: "eğer kumaş ipekse", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk([split.description, split.measurements]))
+        let encoded = try ExperimentalDesignBrief.make(prompt: split.prompt, measurements: split.measurements, image: nil, imageName: nil)
+        let restored = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: encoded)
+        XCTAssertEqual(restored.prompt, "eğer kumaş ipekse")
+        XCTAssertEqual(restored.measurements, "Bel çevresi: 72 cm")
     }
     func testMessageLabelsRejectUnknownTurkishICaseWithoutPartialProposal() throws {
         XCTAssertEqual(MeasurementMessageParser.canonicalLabel("BEL ÇEVRESİ"), "bel çevresi")
