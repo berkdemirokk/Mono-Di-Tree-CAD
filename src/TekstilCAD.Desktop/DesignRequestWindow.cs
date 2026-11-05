@@ -522,10 +522,12 @@ internal sealed class DesignRequestWindow : Window
     {
         var message=chatInput.Text;
         if(string.IsNullOrWhiteSpace(message)) { SetStatus("Göndermek için bir mesaj yazın.");return; }
+        // Ignore only surrounding line breaks while recognizing a single answer; preserve the original message.
+        var answerText=message.Trim('\r','\n');
         // A bare number is likely an answer, but guessing cm/mm is unsafe and
         // silently appending it as prose leaves the same question unanswered.
         if((CanPreviewALineForVerification || answerContext?.ALine==true) && (answerContext?.Label is not null || suggestedMeasurement is not null) &&
-           System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+           System.Text.RegularExpressions.Regex.IsMatch(answerText,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
         {
             var context=answerContext;
             if(context is null || !context.ALine || !CanPreviewALineForVerification || context.Label is null || context.Label!=suggestedMeasurement ||
@@ -535,7 +537,7 @@ internal sealed class DesignRequestWindow : Window
             SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return;
         }
         if(!CanPreviewALineForVerification && answerContext?.ALine!=true && (answerContext?.Label is not null || suggestedMeasurement is not null) &&
-           System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+           System.Text.RegularExpressions.Regex.IsMatch(answerText,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
         {
             var context=answerContext;
             if(context is null || context.Label is null || context.Label!=suggestedMeasurement || context.Prompt!=prompt.Text ||
@@ -545,7 +547,7 @@ internal sealed class DesignRequestWindow : Window
             SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return;
         }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
-        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(answerText,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         var answerLabel=shortAnswer ? suggestedMeasurement : null;
         if(shortAnswer && (CanPreviewALineForVerification || answerContext?.ALine==true))
         {
@@ -556,7 +558,7 @@ internal sealed class DesignRequestWindow : Window
                     context.Prompt!=prompt.Text || context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision || context.QuestionRevision!=questionRevision || referenceLoadRunning || referenceSelectionPending ||
                     ALineRequestMeasurements.Review(prompt.Text,measurements.Text).Issues.Count>0)
                     throw new ArgumentException("Soru veya kaynak değişti/belirsiz. Mesaj korunuyor; ölçüyü tam etiketi ve cm/mm birimiyle yazın.");
-                var candidate=ALineRequestMeasurements.Review(context.Label+": "+message,"");
+                var candidate=ALineRequestMeasurements.Review(context.Label+": "+answerText,"");
                 var index=ALineRequestMeasurements.Labels.ToList().IndexOf(context.Label);
                 if(index<0 || candidate.Issues.Count>0 || candidate.Millimeters[index] is null)
                     throw new ArgumentException("Bu alan için değer/birim açık değil veya sınır dışında. Sıfır yalnız bolluk alanlarında kabul edilir; mesaj korundu.");
@@ -577,14 +579,16 @@ internal sealed class DesignRequestWindow : Window
             {
                 if(System.Text.RegularExpressions.Regex.IsMatch(message,@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
                 { SetStatus("Üç basamaklı ayırıcı belirsiz; binlik ayırıcı kullanmadan açık bir değer ve birim yazın. Mesajınız korundu.");return; }
-                var candidate=DressMeasurementParser.Review(context.Label+": "+message,"");
+                var candidate=DressMeasurementParser.Review(context.Label+": "+answerText,"");
                 if(candidate.Measurements.Count!=1 || candidate.Measurements[0].Label!=context.Label)
                 { SetStatus("Ölçü geçersiz veya sınır dışında; pozitif değeri ve cm/mm birimini kontrol edin. Mesajınız korundu.");return; }
             }
             catch(Exception ex) when(ex is ArgumentException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { SetStatus("Ölçü denetlenemedi; mesajınız korundu. "+ex.Message);return; }
         }
-        var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
+        var leadingLineBreaks=message.Length-message.TrimStart('\r','\n').Length;
+        var labeledMessage=answerLabel is null ? message : message.Substring(0,leadingLineBreaks)+answerLabel+": "+message.Substring(leadingLineBreaks);
+        var addition=(prompt.Text.Length==0 ? "" : "\n")+labeledMessage;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
         prompt.AppendText(addition);

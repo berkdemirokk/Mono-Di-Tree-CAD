@@ -184,6 +184,33 @@ internal static partial class DesktopVerification
             window.MeasurementsForVerification.Text+="; not";var genericStale=window.CaptureForVerification();window.SendMessageForVerification();
             Check(window.CaptureForVerification()==genericStale && window.ChatInputForVerification.Text=="96 cm." && window.StatusForVerification.Text.Contains("Soru veya kaynak"),
                 "General punctuated answer retains stale-context protection",checks);
+            foreach(var answer in new[]{"96 cm\r\n","\r\n96 cm!\r\n"})
+            {
+                window.LoadForVerification(source with { ModelId="wrap" });window.ChatInputForVerification.Text=answer;
+                var original=window.ChatInputForVerification.Text;window.SendMessageForVerification();
+                var captured=window.CaptureForVerification();
+                Check(captured.Prompt.Contains(original.Replace("96", "göğüs çevresi: 96"),StringComparison.Ordinal) &&
+                    DressMeasurementParser.Review(captured.Prompt,captured.Measurements).Measurements.Any(m=>m.Label=="göğüs çevresi") && window.ChatInputForVerification.Text.Length==0,
+                    "General answer recognizes surrounding line breaks and preserves message: "+answer,checks);
+            }
+            window.LoadForVerification(source);window.ChatInputForVerification.Text="36 cm\r\n";var alineOriginal=window.ChatInputForVerification.Text;window.SendMessageForVerification();
+            Check(window.CaptureForVerification().Prompt.EndsWith("Ön bel yayı: "+alineOriginal,StringComparison.Ordinal) &&
+                ALineRequestMeasurements.Review(window.CaptureForVerification().Prompt,window.CaptureForVerification().Measurements).Millimeters[0]==360,
+                "A-line answer recognizes a trailing line break",checks);
+            foreach(var model in new[]{"wrap","aline"})
+            {
+                var modelSource=source with { ModelId=model };
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36\r\n";var bare=window.ChatInputForVerification.Text;window.SendMessageForVerification();
+                Check(window.CaptureForVerification()==modelSource && window.ChatInputForVerification.Text==bare && window.StatusForVerification.Text.Contains("cm veya mm"),
+                    "Line break does not bypass unit requirement: "+model,checks);
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36 cm\r\n";var staleText=window.ChatInputForVerification.Text;
+                window.MeasurementsForVerification.Text+="; not";var stale=window.CaptureForVerification();window.SendMessageForVerification();
+                Check(window.CaptureForVerification()==stale && window.ChatInputForVerification.Text==staleText && window.StatusForVerification.Text.Contains("Soru veya kaynak"),
+                    "Line break does not bypass stale context: "+model,checks);
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36 cm\r\nnot";window.SendMessageForVerification();
+                Check(!window.CaptureForVerification().Prompt.Contains(model=="aline" ? "Ön bel yayı: 36 cm" : "göğüs çevresi: 36 cm",StringComparison.Ordinal),
+                    "A second line is not treated as a short answer: "+model,checks);
+            }
             Check(!window.IsVisible && !owner.IsVisible,"A-line question checks never show windows",checks);
         }
         finally { window.LoadForVerification(new DesignRequest("Temiz kapanış","",null));window.Close(); }
