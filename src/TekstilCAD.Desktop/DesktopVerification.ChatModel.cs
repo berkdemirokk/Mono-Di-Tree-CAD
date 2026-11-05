@@ -36,6 +36,7 @@ internal static partial class DesktopVerification
                 "Photo observation snapshot rejects changed bytes, revision or pending selection",checks);
             var observationBitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);observationBitmap.Freeze();
             _=new WindowInteropHelper(window).EnsureHandle();
+            VerifyGenericChatContext(window,checks);
             VerifyRepeatedPhotoObservations(window,observationBitmap,checks);
             VerifyObservationRegionEntry(window,checks);
             VerifyPhotoObservationEdits(window,observationBitmap,checks);

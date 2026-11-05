@@ -539,6 +539,15 @@ internal sealed class DesignRequestWindow : Window
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { SetStatus(ex.Message);return; }
         }
+        if(shortAnswer && !CanPreviewALineForVerification && answerContext?.ALine!=true &&
+           (answerContext?.Label is not null || suggestedMeasurement is not null))
+        {
+            var context=answerContext;
+            if(context is null || context.Label is null || context.Label!=suggestedMeasurement ||
+               context.Prompt!=prompt.Text || context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision ||
+               context.QuestionRevision!=questionRevision || referenceLoadRunning || referenceSelectionPending || closed)
+            { SetStatus("Soru veya kaynak değişti; yanıt korunuyor. Ölçüyü güncel etiketi ve birimiyle yeniden yazın.");return; }
+        }
         var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
