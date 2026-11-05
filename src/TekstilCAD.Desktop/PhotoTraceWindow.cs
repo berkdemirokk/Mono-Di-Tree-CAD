@@ -262,8 +262,9 @@ internal sealed class PhotoTraceWindow : Window
         if(dialog.ShowDialog()!=true || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }
-        StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır.";
-        _=StartTraceTopologyReviewAsync();
+        var approximationNote=dialog.SelectedContourMaximumDeviation is double deviation ? $" Sadeleştirilmiş: kaynak noktalarının en büyük uzaklığı {deviation:0.###} önizleme pikseli; ince ayrıntılar kaybolabilir, fiziksel hata ölçülmedi." : "";
+        StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır."+approximationNote;
+        _=StartTraceTopologyReviewAsync(approximationNote);
     }
     private void OpenPlaneSetup()
     {
@@ -334,7 +335,7 @@ internal sealed class PhotoTraceWindow : Window
             : result.Edges is not null ? " Piksel geometrisi uyarısı: turuncu kenarlar kesişiyor veya temas ediyor; inceleyin."
             : " Piksel geometrisi uyarısı: çakışma, sıfır kenar veya kapanış sorunu olabilir; öneriyi düzeltin.";
     }
-    internal async Task StartTraceTopologyReviewAsync()
+    internal async Task StartTraceTopologyReviewAsync(string approximationNote="")
     {
         if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="Çizim denetimi için düz serilmiş kalıp görselini seçin.";return; }
         if(closed)return;
@@ -343,7 +344,7 @@ internal sealed class PhotoTraceWindow : Window
         var snapshot=proposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray();
         if(snapshot.Length<2) { StatusForVerification.Text="Denetlemek için en az iki çizgi noktası seçin.";return; }
         var closure=ReviewClosureForVerification.IsChecked==true || CanvasForVerification.ProposedPathHasClosingEdge;var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;
-        StatusForVerification.Text=usesProposal ? "Yol önerisi piksel geometrisinde denetleniyor." : "Çizgi piksel geometrisinde denetleniyor.";
+        StatusForVerification.Text=(usesProposal ? "Yol önerisi piksel geometrisinde denetleniyor." : "Çizgi piksel geometrisinde denetleniyor.")+approximationNote;
         try
         {
             var result=await AnalyzePixelTopologyAsync(snapshot,closure,cts.Token);
@@ -356,6 +357,7 @@ internal sealed class PhotoTraceWindow : Window
                 : result.Edges is not null ? $"{prefix}: piksel geometrisi uyarısı; turuncu kenarlar kesişiyor veya temas ediyor."
                 : $"{prefix}: piksel geometrisi uyarısı; çakışma, sıfır kenar veya kapanış sorunu olabilir.";
             if(closure)StatusForVerification.Text+=" Kapanış kenarı önizlemedir; taslak açık kalır.";
+            StatusForVerification.Text+=approximationNote;
         }
         catch(OperationCanceledException) { if(!closed && DraftRevision==revision)StatusForVerification.Text="Piksel denetimi iptal edildi; çizgi değişmedi."; }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)

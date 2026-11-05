@@ -56,6 +56,8 @@ internal sealed class PhotoRegionWindow : Window
     internal TextBlock BoundaryWarning { get; }=new() { TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Visibility=Visibility.Collapsed };
     internal TextBlock Status { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) };
     internal System.Windows.Point[]? SelectedContour { get; private set; }
+    internal double? SelectedContourMaximumDeviation { get; private set; }
+    internal Button ApproximateContourForVerification { get; }=new() { Content="1 piksel sadeleştirmeyi önizle",Visibility=Visibility.Collapsed,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
     internal bool HasRectangleOverlay => boxOverlay.Source is not null;
     internal byte[]? CopyMaskForVerification()=>snapshot?.CopyBinaryMask();
     internal int PendingMarkCount => pendingMarks.Count;
@@ -90,7 +92,9 @@ internal sealed class PhotoRegionWindow : Window
         var clearMarks=new Button { Content="İşaretleri sil",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
         compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=async (_,_)=> { if(await TrySelectContourAsync() && !closed)DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
-        actions.Children.Add(compute);if(!reviewOnly)actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
+        AutomationProperties.SetHelpText(ApproximateContourForVerification,"Noktaları en çok 1 önizleme pikseli hedefiyle azaltır. İnce ayrıntılar kaybolabilir; piksel sapması fiziksel doğruluk değildir. Sonuç ayrıca incelenmelidir.");
+        ApproximateContourForVerification.Click+=async (_,_)=> { if(await TrySelectContourAsync(true) && !closed)DialogResult=true; };
+        actions.Children.Add(compute);if(!reviewOnly) { actions.Children.Add(accept);actions.Children.Add(ApproximateContourForVerification); }actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
         {
             var save=new Button { Content="Bölgeyi kaydet…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
             var load=new Button { Content="Bölgeyi aç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
@@ -521,7 +525,7 @@ internal sealed class PhotoRegionWindow : Window
     }
     private void ShowSelection()
     {
-        SelectedContour=null;overlay.Source=null;OmitHoles.IsChecked=false;AcknowledgeImageEdge.IsChecked=false;AcknowledgeImageEdge.Visibility=Visibility.Collapsed;BoundaryWarning.Visibility=Visibility.Collapsed;BoundaryWarning.Text="";
+        SelectedContour=null;SelectedContourMaximumDeviation=null;ApproximateContourForVerification.Visibility=Visibility.Collapsed;overlay.Source=null;OmitHoles.IsChecked=false;AcknowledgeImageEdge.IsChecked=false;AcknowledgeImageEdge.Visibility=Visibility.Collapsed;BoundaryWarning.Visibility=Visibility.Collapsed;BoundaryWarning.Text="";
         if(components is null || Regions.SelectedItem is not Choice choice)return;
         var touchesImageEdge=TouchesImageEdge(choice);var distanceToSearchEdge=SearchEdgeDistance(choice);var touchesSearchEdge=distanceToSearchEdge==0;var nearSearchEdge=distanceToSearchEdge is 1 or 2;
         if(touchesImageEdge || touchesSearchEdge) { AcknowledgeImageEdge.Content=touchesImageEdge && touchesSearchEdge ? "Görüntü ve arama sınırında kırpılma olasılığını inceledim" : touchesImageEdge ? "Görüntü kenarındaki sınırın kırpılmış olabileceğini inceledim" : "Arama dikdörtgenindeki sınırın kırpılmış olabileceğini inceledim";AcknowledgeImageEdge.Visibility=Visibility.Visible; }
@@ -581,7 +585,7 @@ internal sealed class PhotoRegionWindow : Window
         }
         return null;
     }
-    internal async Task<bool> TrySelectContourAsync()
+    internal async Task<bool> TrySelectContourAsync(bool approximate=false)
     {
         if(pendingMarks.Count>0) { Status.Text="Önce bekleyen işaretleri uygulayın veya silin.";return false; }
         if(running is not null || components is null || Regions.SelectedItem is not Choice choice) { Status.Text="Önce arama tamamlanınca bir bölge seçin.";return false; }
@@ -598,14 +602,24 @@ internal sealed class PhotoRegionWindow : Window
                 var outer=contours.Loops.Where(l=>!l.IsHole).ToArray();var holes=contours.Loops.Count(l=>l.IsHole);
                 if(outer.Length!=1)throw new InvalidDataException("Seçilen bölgenin birden fazla dış sınırı var; otomatik seçim yapılmadı.");
                 if(holes>0 && !omit)throw new InvalidDataException($"Bölgede {holes} iç boşluk var. Bunlar çizgiye aktarılmayacak; devam için seçimi onaylayın.");
-                var points=ContourCollinearReduction.Reduce(outer[0].CopyPoints(),cts.Token);
-                if(points.Length<3 || points.Length>PhotoTraceCanvas.MaximumPoints-4)throw new InvalidDataException("Sınırın nokta sayısı desteklenen aralıkta değil; mevcut çizim korunuyor.");
-                return points.Select(p=>new System.Windows.Point(p.X,p.Y)).ToArray();
+                var rawPoints=outer[0].CopyPoints();var points=ContourCollinearReduction.Reduce(rawPoints,cts.Token);double? deviation=null;
+                if(points.Length<3)throw new InvalidDataException("Sınırın yeterli noktası yok; mevcut çizim korunuyor.");
+                if(points.Length>PhotoTraceCanvas.MaximumPoints-4)
+                {
+                    if(!approximate)return (Points:(System.Windows.Point[]?)null,Deviation:(double?)null,Count:points.Length);
+                    var simplified=PhotoContourApproximation.Create(rawPoints,PhotoTraceCanvas.MaximumPoints-4,cts.Token);points=simplified.Points;deviation=simplified.MaximumVertexDistance;
+                }
+                return (Points:(System.Windows.Point[]?)points.Select(p=>new System.Windows.Point(p.X,p.Y)).ToArray(),Deviation:deviation,Count:points.Length);
             },cts.Token);
             cts.Token.ThrowIfCancellationRequested();
             if(closed || regionVersion!=regionRevision || reviewVersion!=reviewRevision || !ReferenceEquals(original,components) || !ReferenceEquals(choice,Regions.SelectedItem))
             { if(!closed)Status.Text="Bölge veya inceleme seçimi değişti; sınır uygulanmadı.";return false; }
-            SelectedContour=reduced;return true;
+            if(reduced.Points is null)
+            {
+                ApproximateContourForVerification.Visibility=Visibility.Visible;
+                Status.Text=$"Sınırda {reduced.Count} nokta var; 508 noktayı aşıyor. İsterseniz 1 piksel sadeleştirme önizlemesini seçin; ince ayrıntılar kaybolabilir.";return false;
+            }
+            SelectedContour=reduced.Points;SelectedContourMaximumDeviation=reduced.Deviation;return true;
         }
         catch(OperationCanceledException) { if(!closed)Status.Text="Sınır hazırlama iptal edildi; mevcut bölge korundu.";return false; }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or InvalidDataException or DllNotFoundException or BadImageFormatException or TypeInitializationException)

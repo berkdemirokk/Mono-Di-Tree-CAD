@@ -9588,6 +9588,16 @@ internal static partial class DesktopVerification
     }
     private static void VerifyPhotoTrace(string reportPath,List<string> checks)
     {
+        var denseCircle=Enumerable.Range(0,1800).Select(i=> {
+            var angle=2*Math.PI*i/1800;return new OpenCvSharp.Point((int)Math.Round(700+500*Math.Cos(angle)),(int)Math.Round(700+500*Math.Sin(angle)));
+        }).Distinct().ToArray();
+        var denseCopy=denseCircle.ToArray();var reducedCircle=PhotoContourApproximation.Create(denseCircle,508,CancellationToken.None);
+        Check(denseCircle.Length>508 && reducedCircle.Points.Length<=508 && reducedCircle.MaximumVertexDistance<=1 && denseCircle.SequenceEqual(denseCopy),
+            "Opt-in contour approximation reduces a dense closed boundary within the measured pixel-vertex limit",checks);
+        try { PhotoContourApproximation.Create([new(0,0),new(10,10),new(0,10),new(10,0)],508,CancellationToken.None);throw new InvalidOperationException("Crossing contour accepted."); }
+        catch(ArgumentException) { Check(true,"Contour approximation refuses an invalid source boundary",checks); }
+        try { PhotoContourApproximation.Create(denseCircle,508,new CancellationToken(true));throw new InvalidOperationException("Cancelled contour approximation accepted."); }
+        catch(OperationCanceledException) { Check(true,"Contour approximation observes cancellation before computation",checks); }
         var edgePixels=new byte[20*20*4];
         for(int y=0;y<20;y++)for(int x=0;x<20;x++) { var i=(y*20+x)*4;edgePixels[i]=edgePixels[i+1]=edgePixels[i+2]=(byte)(x<10 ? 0 : 255);edgePixels[i+3]=255; }
         var edgeBitmap=BitmapSource.Create(20,20,96,96,PixelFormats.Bgra32,null,edgePixels,80);
@@ -10330,6 +10340,7 @@ internal static partial class DesktopVerification
                     DocumentSession.ContentEquals(initial,workspace.Document),"A wide path fallback is disclosed before any proposal can change the project",checks);
             }
             finally { budgetTrace.CanvasForVerification.ClearPoints();budgetTrace.Close();SynchronizationContext.SetSynchronizationContext(budgetContext); }
+            VerifyDenseRegionApproximation(workspace,reportPath,checks);
             var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
             trace=new PhotoTraceWindow(workspace,bitmap,stamp,100,50,photoHash,encodedPhoto.Length);trace.ConfirmForVerification=_=>false;
             Render(trace,Path.ChangeExtension(reportPath,".photo-purpose-unselected.png"),560,480);
@@ -10999,6 +11010,29 @@ internal static partial class DesktopVerification
         VerifyPhotoTraceOwnerClose(reportPath,checks);
     }
 
+    private static void VerifyDenseRegionApproximation(MainWindow workspace,string reportPath,List<string> checks)
+    {
+        const int side=768;var pixels=new byte[side*side*4];var labels=new byte[side*side];
+        for(var y=0;y<side;y++)for(var x=0;x<side;x++) { var index=y*side+x;pixels[index*4+3]=255;var dx=x-384;var dy=y-384;if(dx*dx+dy*dy<=330*330)labels[index]=1; }
+        var bitmap=BitmapSource.Create(side,side,96,96,PixelFormats.Bgra32,null,pixels,side*4);bitmap.Freeze();
+        var bgr=PhotoRasterCapture.CaptureBgr(bitmap,new Int32Rect(0,0,side,side));
+        var snapshot=new PhotoRegionSharpPrototype.RegionProposal.Snapshot(side,side,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bgr)),labels);
+        var path=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"dense-region-"+Guid.NewGuid().ToString("N")+".tdregion");
+        File.WriteAllText(path,PhotoRegionSession.Encode(snapshot,null,10,10,748,748));
+        var window=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
+        try {
+            var load=window.TryLoadSessionAsync(path);PumpUntil(()=>load.IsCompleted);Check(load.GetAwaiter().GetResult(),"Dense synthetic photo region opens",checks);
+            window.Regions.SelectedIndex=0;var raw=window.TrySelectContourAsync();PumpUntil(()=>raw.IsCompleted);
+            Render(window,Path.ChangeExtension(reportPath,".dense-region-approximation.png"),620,550);
+            Check(!raw.GetAwaiter().GetResult() && window.SelectedContour is null && window.ApproximateContourForVerification.Visibility==Visibility.Visible &&
+                FullyVisible(window.ApproximateContourForVerification,(FrameworkElement)window.Content) &&
+                FullyVisible(Descendants<Grid>((FrameworkElement)window.Content).Single(g=>AutomationProperties.GetName(g)=="Bölge dikdörtgeni seçimi"),(FrameworkElement)window.Content),
+                "Dense contour requires a visible image and explicit approximation choice",checks);
+            var approximate=window.TrySelectContourAsync(true);PumpUntil(()=>approximate.IsCompleted);
+            Check(approximate.GetAwaiter().GetResult() && window.SelectedContour is { Length:>=3 and <=508 } && window.SelectedContourMaximumDeviation is double deviation && deviation<=1,
+                "Explicit approximation produces a bounded photo contour preview",checks);
+        } finally { window.Close();File.Delete(path); }
+    }
     private static bool SelectContourForVerification(PhotoRegionWindow window)
     {
         var task=window.TrySelectContourAsync();PumpUntil(()=>task.IsCompleted);return task.GetAwaiter().GetResult();
