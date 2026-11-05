@@ -79,6 +79,13 @@ public static class ALineRequestMeasurements
         return true;
     }
     internal static bool IsExplicitSeparateField(string text)=>TryReadGroup(text,out _);
+    // Recognize the separate-field *shape* even when its numeric value is
+    // ambiguous. It must remain an A-line issue, not a total circumference.
+    internal static bool IsSeparateFieldShape(string text)
+    {
+        var parts=Regex.Split(Fold(text),@"[\t\p{Zs}]+ve[\t\p{Zs}]+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        return parts.Length is >=1 and <=8 && parts.All(part=>Exact.IsMatch(part));
+    }
 
     public static ALineRequestMeasurementReview Review(string prompt,string notes)
     {

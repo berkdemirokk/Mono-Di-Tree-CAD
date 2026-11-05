@@ -94,6 +94,8 @@ public static partial class DressMeasurementParser
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
             order++;
+            if(AmbiguousNumber.IsMatch(segment) && ALineRequestMeasurements.IsSeparateFieldShape(segment))
+            { other.Add(segment);continue; }
             // Three fractional digits can also be a thousands group. Preserve
             // every affected label as unclear, including joined measurements.
             if(AmbiguousNumber.IsMatch(segment) && !OtherChestMeasurement.IsMatch(FoldCase(segment)) && !ALineRequestMeasurements.IsExplicitSeparateField(segment))

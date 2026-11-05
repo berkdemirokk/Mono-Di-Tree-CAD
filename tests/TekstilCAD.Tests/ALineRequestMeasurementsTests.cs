@@ -163,6 +163,18 @@ public sealed class ALineRequestMeasurementsTests
         }
     }
     [Theory]
+    [InlineData("Ön bel yayı 1.000 cm")]
+    [InlineData("Ön bel yayı 1,000 cm ve arka bel yayı 36 cm")]
+    public void AmbiguousSectionRemainsAnIssueWithoutChangingTheSeparateTotal(string section)
+    {
+        var totals=DressMeasurementParser.Review("bel çevresi 72 cm",section);
+        Assert.Equal(720m,Assert.Single(totals.Measurements,m=>m.Label=="bel çevresi").Millimeters);
+        var review=ALineRequestMeasurements.Review("bel çevresi 72 cm",section);
+        Assert.Null(review.Millimeters[0]);
+        Assert.Contains(review.Issues,issue=>issue.Contains("üç basamaklı ayırıcı belirsiz"));
+        Assert.DoesNotContain(review.Issues,issue=>issue.Contains("toplam beden ölçüsündeki belirsizliği"));
+    }
+    [Theory]
     [InlineData("1,000")]
     [InlineData("1.000")]
     [InlineData("36.125")]
