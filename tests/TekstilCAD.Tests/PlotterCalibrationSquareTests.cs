@@ -41,6 +41,24 @@ public sealed class PlotterCalibrationSquareTests
         Assert.Null(PlotterCalibrationSquare.Prepare(units,1).MarkerPieceId);
     }
 
+    [Theory]
+    [InlineData(40,4000)]
+    [InlineData(0.1,10)]
+    public void ReferencePassesDeclaredBedButRejectsInsufficientBoundsAndMismatchedUnits(double units,int side)
+    {
+        var output=PlotterCalibrationSquare.PrepareWithOrientationMarker(units,1).Output;
+        var profile=new PlotterCapabilityProfile("Test vendor","Test model","Test firmware","Test driver","Test adapter","Synthetic evidence",
+            PlotterPlatform.Windows,PlotterTransport.WindowsSpooler,units,100,100,256,CapabilitySupport.Supported,CapabilitySupport.Unknown)
+        { ProtocolIdentifier="synthetic",SupportedCommands=PlotterHpglCommands.CurrentExporter,LineBreaks=CapabilitySupport.Supported,
+          MaximumXPlotUnits=side,MaximumYPlotUnits=side,MaximumJobBytes=100000 };
+        var accepted=PlotterFileCheck.Inspect(output,profile,true);
+        Assert.Equal(PlotterFileCheck.Status.Passed,accepted.State);
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(output.Text))),accepted.Inspection!.Sha256);
+        Assert.Equal(PlotterFileCheck.Status.Rejected,PlotterFileCheck.Inspect(output,profile with { MaximumXPlotUnits=side-1 },true).State);
+        Assert.Equal(PlotterFileCheck.Status.Rejected,PlotterFileCheck.Inspect(output,profile with { MaximumYPlotUnits=side-1 },true).State);
+        Assert.Equal(PlotterFileCheck.Status.UnitMismatch,PlotterFileCheck.Inspect(output,profile with { UnitsPerMillimeter=units*2 },true).State);
+        Assert.Equal(PlotterFileCheck.Status.Incomplete,PlotterFileCheck.Inspect(output,profile,false).State);
+    }
     [Fact]
     public void OrientationMarkerRejectsGridTooCoarseToDistinguishItsEdges()
     {
