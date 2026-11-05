@@ -4100,9 +4100,33 @@ internal static partial class DesktopVerification
             foreach(var item in new Dictionary<string,string> { ["manufacturer"]="Vendor",["model"]="Model",["firmware"]="1",["driver"]="1",["adapter"]="1",["reference"]="example",["protocol"]="HPGL",["units"]="40",["width"]="100",["height"]="100",["maxX"]="4000",["maxY"]="4000",["command"]="256",["job"]="100000" })fileCheck.InputsForVerification[item.Key].Text=item.Value;
             fileCheck.TransportForVerification.SelectedIndex=0;fileCheck.CommandsForVerification.IsChecked=true;fileCheck.OriginForVerification.IsChecked=true;
             pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
-            Check(fileCheck.ResultForVerification.Text.Contains("kontrolden geçti") && fileCheck.ResultForVerification.Text.Contains("doğrulanmadı"),
-                "Declared file limits can pass without claiming physical compatibility",checks);
+            Check(fileCheck.ResultForVerification.Text.Contains("kontrolden geçti") && fileCheck.ResultForVerification.Text.Contains("doğrulanmadı") &&
+                fileCheck.ResultForVerification.Text.Contains("Vendor") && fileCheck.ResultForVerification.Text.Contains("100 × 100 mm") && fileCheck.ResultForVerification.Text.Contains("Dosya özeti"),
+                "Declared file limits report the checked profile and hash without claiming physical compatibility",checks);
+            fileCheck.InputsForVerification["width"].Text="1";
+            Check(fileCheck.ResultForVerification.Text.Contains("yeniden kontrol") && !fileCheck.ResultForVerification.Text.Contains("Dosya özeti") && !fileCheck.ResultForVerification.Text.Contains("kontrolden geçti"),
+                "Narrowing a checked area invalidates the previous success and hash",checks);
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            Check(fileCheck.ResultForVerification.Text.Contains("kabul edilmedi"),"Narrowed area is rejected on recheck",checks);
+            fileCheck.InputsForVerification["width"].Text="100";
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            fileCheck.CommandsForVerification.IsChecked=false;
+            Check(fileCheck.ResultForVerification.Text.Contains("yeniden kontrol") && !fileCheck.ResultForVerification.Text.Contains("Dosya özeti"),
+                "Changing command declaration invalidates the previous success and hash",checks);
+            fileCheck.CommandsForVerification.IsChecked=true;
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            fileCheck.OriginForVerification.IsChecked=false;
+            Check(fileCheck.ResultForVerification.Text.Contains("yeniden kontrol") && !fileCheck.ResultForVerification.Text.Contains("Dosya özeti"),
+                "Changing origin declaration invalidates the previous success and hash",checks);
+            fileCheck.OriginForVerification.IsChecked=true;
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+            fileCheck.TransportForVerification.SelectedIndex=1;
+            Check(fileCheck.ResultForVerification.Text.Contains("yeniden kontrol") && !fileCheck.ResultForVerification.Text.Contains("Dosya özeti"),
+                "Changing transport declaration invalidates the previous success and hash",checks);
+            pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             fileCheck.InputsForVerification["units"].Text="20";
+            Check(fileCheck.ResultForVerification.Text.Contains("yeniden kontrol") && !fileCheck.ResultForVerification.Text.Contains("Dosya özeti"),
+                "Changing units invalidates the previous success and hash",checks);
             pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             Check(fileCheck.ResultForVerification.Text.Contains("birimi farklı"),"Declared unit mismatch remains visible",checks);
             fileCheck.InputsForVerification["units"].Text="40";fileCheck.InputsForVerification["width"].Text="1";

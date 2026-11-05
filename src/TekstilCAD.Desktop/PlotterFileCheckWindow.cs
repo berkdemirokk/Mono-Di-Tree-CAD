@@ -22,6 +22,7 @@ internal sealed class PlotterFileCheckWindow : Window
     private readonly StackPanel form = new();
     private CancellationTokenSource? cancellation;
     private bool closed;
+    private long declarationRevision;
     internal Task? CheckTaskForVerification { get; private set; }
 
     internal PlotterFileCheckWindow(Window owner,HpglPreparedOutput output)
@@ -36,6 +37,7 @@ internal sealed class PlotterFileCheckWindow : Window
         void Field(string key,string label)
         {
             var input=new TextBox { MinHeight=28,MaxLength=200 };InputsForVerification.Add(key,input);
+            input.TextChanged+=(_,_)=>InvalidateDeclaration();
             form.Children.Add(new Label { Content=label,Target=input });form.Children.Add(input);AutomationProperties.SetName(input,label);
         }
         Field("manufacturer","Üretici (beyan)");Field("model","Model (beyan)");Field("firmware","Yazılım sürümü (beyan)");
@@ -43,16 +45,27 @@ internal sealed class PlotterFileCheckWindow : Window
         Field("protocol","HPGL protokol tanımı (beyan)");
         form.Children.Add(new Label { Content="Windows aktarım türü (beyan)",Target=TransportForVerification });
         TransportForVerification.Items.Add("Windows yazdırma kuyruğu");TransportForVerification.Items.Add("Üretici SDK");form.Children.Add(TransportForVerification);
+        TransportForVerification.SelectionChanged+=(_,_)=>InvalidateDeclaration();
         Field("units","Hedef birim/mm");Field("width","Çizilebilir X genişliği (mm)");Field("height","Çizilebilir Y uzunluğu (mm)");
         Field("maxX","En büyük X koordinatı (çizici birimi)");Field("maxY","En büyük Y koordinatı (çizici birimi)");
         Field("command","Komut başına en çok bayt");Field("job","İş başına en çok bayt");
         form.Children.Add(OriginForVerification);form.Children.Add(CommandsForVerification);
+        OriginForVerification.Checked+=(_,_)=>InvalidateDeclaration();OriginForVerification.Unchecked+=(_,_)=>InvalidateDeclaration();
+        CommandsForVerification.Checked+=(_,_)=>InvalidateDeclaration();CommandsForVerification.Unchecked+=(_,_)=>InvalidateDeclaration();
         ResultForVerification.Text="Kontrol edilmedi. Tüm alanları bilginize göre doldurun; bilinmeyen değerleri tahmin etmeyin.";
         AutomationProperties.SetName(ResultForVerification,"Dosya ön kontrol sonucu");AutomationProperties.SetLiveSetting(ResultForVerification,AutomationLiveSetting.Polite);form.Children.Add(ResultForVerification);
         CheckForVerification.Click+=(_,_)=>CheckTaskForVerification=CheckAsync();
         CancelForVerification.Click+=(_,_)=> { if(cancellation is not null) { cancellation.Cancel();ResultForVerification.Text="İptal istendi."; } else Close(); };
         Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
     }
+    private void InvalidateDeclaration()
+    {
+        declarationRevision++;cancellation?.Cancel();
+        ResultForVerification.Text="Beyan değişti; dosyayı yeniden kontrol edin. Önceki sonuç artık geçerli değil.";
+    }
+    private static string ProfileSummary(PlotterCapabilityProfile p)=>
+        $"Kontrol edilen beyan: {p.Manufacturer} · {p.Model}; yazılım {p.Firmware}; sürücü {p.DriverVersion}; adaptör {p.AdapterVersion}; kayıt {p.QualificationId}; protokol {p.ProtocolIdentifier}; aktarım {(p.Transport==PlotterTransport.WindowsSpooler ? "Windows yazdırma kuyruğu" : "üretici SDK")}.\n"+
+        $"Birim/mm: {p.UnitsPerMillimeter:G17}; çizilebilir X/Y: {p.WidthMillimeters:G17} × {p.HeightMillimeters:G17} mm; koordinat üst sınırı X/Y: {p.MaximumXPlotUnits}/{p.MaximumYPlotUnits}; komut/iş sınırı: {p.MaximumCommandBytes}/{p.MaximumJobBytes} bayt. Başlangıç 0,0 ve pozitif X/Y ile listelenen komutlar kullanıcı tarafından beyan edildi.";
     internal PlotterCapabilityProfile? ReadProfileForVerification()
     {
         string Text(string key)=>InputsForVerification[key].Text.Trim();
@@ -71,14 +84,16 @@ internal sealed class PlotterFileCheckWindow : Window
         var profile=ReadProfileForVerification();var origin=OriginForVerification.IsChecked==true;
         if(profile is null || !profile.IsComplete || !origin)
         { ResultForVerification.Text="Beyan eksik veya geçersiz. Tüm alanları ve başlangıç/komut bildirimlerini kontrol edin; dosya değiştirilmedi.";return; }
-        var tokenSource=new CancellationTokenSource();cancellation=tokenSource;form.IsEnabled=false;CheckForVerification.IsEnabled=false;
+        var tokenSource=new CancellationTokenSource();var revision=declarationRevision;cancellation=tokenSource;form.IsEnabled=false;CheckForVerification.IsEnabled=false;
         ResultForVerification.Text="Dosya kontrol ediliyor…";
         try
         {
             var result=await Task.Run(()=>PlotterFileCheck.Inspect(output,profile,origin,tokenSource.Token));
-            if(!closed)ResultForVerification.Text=result.Message+(result.Inspection is { } info ? $"\nDosya özeti: {info.Sha256} · {info.ByteCount} bayt · {info.CommandCount} komut." : "");
+            tokenSource.Token.ThrowIfCancellationRequested();
+            if(!closed && revision==declarationRevision)
+                ResultForVerification.Text=result.Message+"\n"+ProfileSummary(profile)+(result.Inspection is { } info ? $"\nDosya özeti: {info.Sha256} · {info.ByteCount} bayt · {info.CommandCount} komut." : "");
         }
-        catch(OperationCanceledException) { if(!closed)ResultForVerification.Text="Kontrol iptal edildi; dosya değiştirilmedi."; }
+        catch(OperationCanceledException) { if(!closed)ResultForVerification.Text=revision==declarationRevision ? "Kontrol iptal edildi; dosya değiştirilmedi." : "Beyan değişti; dosyayı yeniden kontrol edin. Önceki sonuç artık geçerli değil."; }
         finally { cancellation=null;tokenSource.Dispose();if(!closed) { form.IsEnabled=true;CheckForVerification.IsEnabled=true; } }
     }
 }
