@@ -29,12 +29,31 @@ internal static partial class DesktopVerification
                 Layout(size);var entry=request.ALinePreviewEntryForVerification;var viewport=request.BodyScrollerForVerification;
                 var position=entry.TransformToAncestor(viewport).Transform(new Point());
                 Check(entry.Visibility==Visibility.Visible && entry.IsEnabled && entry.Focusable &&
-                    entry.Parent==viewport.Content && ((Panel)viewport.Content).Children[0]==entry &&
+                    entry.Parent==viewport.Content && ((Panel)viewport.Content).Children.OfType<UIElement>().First(child=>child.Visibility==Visibility.Visible)==entry &&
+                    request.ALineSourceRecoveryForVerification.Visibility==Visibility.Collapsed &&
                     !request.RequestDetailsForVerification.IsExpanded && viewport.ActualHeight>0 && position.Y>=0 && position.Y+entry.ActualHeight<=viewport.ActualHeight &&
                     entry.ActualHeight>0 && entry.ActualWidth>0 && request.ChatInputForVerification.ActualHeight>0 &&
                     Descendants<TextBlock>(entry).Any(t=>t.Text.Contains("Tam elbise kalıbı değildir")),
                     $"A-line entry is the first scrollable action below chat at {size.Width}x{size.Height}, with visible capability boundary",checks);
             }
+            request.LoadForVerification(loaded with { Prompt="Ön bel yayı: 35 cm\nÖn bel yayı: 36 cm" });
+            foreach(var size in new[]{new Size(480,420),new Size(900,700)})
+            {
+                Layout(size);var viewport=request.BodyScrollerForVerification;
+                Check(request.ALineSourceRecoveryForVerification.Visibility==Visibility.Visible &&
+                    ((Panel)viewport.Content).Children.OfType<UIElement>().First(child=>child.Visibility==Visibility.Visible)==request.ALineSourceRecoveryForVerification,
+                    $"Blocked A-line source puts recovery first at {size.Width}x{size.Height}",checks);
+                foreach(var action in new[]{request.EditALinePromptForVerification,request.EditALineNotesForVerification,request.ALinePreviewEntryForVerification})
+                {
+                    action.BringIntoView();root.UpdateLayout();
+                    var position=action.TransformToAncestor(viewport).Transform(new Point());
+                    Check(action.Visibility==Visibility.Visible && action.IsEnabled && action.Focusable && action.IsTabStop &&
+                        action.ActualHeight>0 && viewport.ActualHeight>0 && position.Y>=-1 && position.Y+action.ActualHeight<=viewport.ActualHeight+1 &&
+                        !string.IsNullOrEmpty(AutomationProperties.GetName(action)),
+                        $"Recovery and preview actions remain individually scrollable and keyboard accessible at {size.Width}x{size.Height}: "+AutomationProperties.GetName(action),checks);
+                }
+            }
+            request.LoadForVerification(loaded);
             request.ChatInputForVerification.Text="Gönderilmemiş özgün mesaj";
             Check(request.CreateALinePreview() is null && request.ChatInputForVerification.Text=="Gönderilmemiş özgün mesaj" &&
                 request.CaptureForVerification()==loaded,"Preview entry preserves and blocks unsent message",checks);
