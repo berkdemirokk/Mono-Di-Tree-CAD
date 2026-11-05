@@ -33,6 +33,8 @@ internal sealed class PhotoTraceCheckWindow : Window
     private sealed record Comparison(int First,int Second,bool AlongTrace,PhotoTraceMeasurementResult Result,double? AssumedPixelError,string Sensitivity,string Display)
     { public override string ToString()=>Display; }
     private readonly ObservableCollection<Comparison> comparisons=[];
+    private long reportRevision;
+    private bool reportClosed;
     internal IReadOnlyList<string> ComparisonsForVerification=>comparisons.Select(c=>c.Display).ToArray();
     internal TextBlock ReportStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,4) };
     internal TextBlock ReportDisclosureForVerification { get; } = new() { Text="Rapor; fotoğrafın SHA-256 özeti ve boyutları, tüm taslak ve geçici kontrol noktalarının koordinatları, kalibrasyon ile girilen ölçüleri içerir. Fotoğrafın kendisi eklenmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,6) };
@@ -47,6 +49,7 @@ internal sealed class PhotoTraceCheckWindow : Window
     internal PhotoTraceCheckWindow(Window owner,BitmapSource image,int sourceWidth,int sourceHeight,double referenceLength,IReadOnlyList<Point> snapshot,PhotoPlaneCalibration? plane=null,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(snapshot);ArgumentNullException.ThrowIfNull(image);
+        comparisons.CollectionChanged+=(_,_)=>reportRevision++;Closed+=(_,_)=>reportClosed=true;
         if(snapshot.Count<3 || snapshot.Count>PhotoTraceCanvas.MaximumPoints)throw new ArgumentOutOfRangeException(nameof(snapshot));
         previewWidth=image.PixelWidth;previewHeight=image.PixelHeight;this.sourceWidth=sourceWidth;this.sourceHeight=sourceHeight;this.referenceLength=referenceLength;this.plane=plane?.Clone();this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;
         points=snapshot.Select(p=>new Point2(p.X,p.Y)).ToList();originalPointCount=points.Count;
@@ -103,9 +106,7 @@ internal sealed class PhotoTraceCheckWindow : Window
         var clearComparisons=new Button { Content="Listeyi temizle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
         var saveReport=new Button { Content="İnceleme raporu kaydet…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
         AutomationProperties.SetHelpText(saveReport,"Kaynak özeti, tüm nokta koordinatları, kalibrasyon ve ölçüleri yeni JSON dosyasına kaydeder; fotoğrafı içermez ve üretim onayı değildir.");
-        saveReport.Click+=(_,_)=> { if(comparisons.Count==0) { ReportStatusForVerification.Text="Rapor için önce bir karşılaştırmayı listeye ekleyin.";return; }
-            var dialog=new SaveFileDialog { Filter="Fotoğraf ölçü incelemesi (*.json)|*.json",DefaultExt=".json",AddExtension=true,OverwritePrompt=false };
-            if(dialog.ShowDialog(this)==true)TrySaveReport(dialog.FileName); };
+        saveReport.Click+=(_,_)=>SelectAndSaveReport(()=> { var dialog=new SaveFileDialog { Filter="Fotoğraf ölçü incelemesi (*.json)|*.json",DefaultExt=".json",AddExtension=true,OverwritePrompt=false }; return dialog.ShowDialog(this)==true?dialog.FileName:null; });
         addComparison.Click+=(_,_)=> { if(!AddComparison())ResultForVerification.BringIntoView(); };removeComparison.Click+=(_,_)=>RemoveComparison();clearComparisons.Click+=(_,_)=>comparisons.Clear();
         listActions.Children.Add(addComparison);listActions.Children.Add(removeComparison);listActions.Children.Add(clearComparisons);listActions.Children.Add(saveReport);body.Children.Add(listActions);
         AutomationProperties.SetName(ReportStatusForVerification,"Fotoğraf inceleme raporu durumu");AutomationProperties.SetLiveSetting(ReportStatusForVerification,AutomationLiveSetting.Polite);body.Children.Add(ReportStatusForVerification);
@@ -131,7 +132,7 @@ internal sealed class PhotoTraceCheckWindow : Window
         var first=FirstForVerification.SelectedIndex;var second=SecondForVerification.SelectedIndex;
         var options=((Choice[])FirstForVerification.ItemsSource).ToList();var index=points.Count;
         options.Add(new Choice(index,$"{index+1} · kontrol · X {MeasurementInput.Format(point.X)}, Y {MeasurementInput.Format(point.Y)}"));
-        points.Add(point);PreviewForVerification.AddControlPoint(point);var updated=options.ToArray();FirstForVerification.ItemsSource=updated;SecondForVerification.ItemsSource=updated;
+        points.Add(point);reportRevision++;PreviewForVerification.AddControlPoint(point);var updated=options.ToArray();FirstForVerification.ItemsSource=updated;SecondForVerification.ItemsSource=updated;
         FirstForVerification.SelectedIndex=first;SecondForVerification.SelectedIndex=second;
         PickStatusForVerification.Text=$"{index+1}. geçici kontrol noktası eklendi; çizim ve proje değişmedi. Ölçüm için uç listesinden seçin.";return true;
     }
@@ -205,6 +206,16 @@ internal sealed class PhotoTraceCheckWindow : Window
         { ResultForVerification.Text="Karşılaştırma yapılamadı: "+ex.Message; }
     }
     // A separate, user-requested snapshot; this is not a project or approval.
+    internal bool SelectAndSaveReport(Func<string?> choosePath)
+    {
+        if(reportClosed)return false;
+        if(comparisons.Count==0) { ReportStatusForVerification.Text="Rapor için önce bir karşılaştırmayı listeye ekleyin.";return false; }
+        var revision=reportRevision;var path=choosePath();
+        if(path is null)return false;
+        if(reportClosed || reportRevision!=revision) { if(!reportClosed)ReportStatusForVerification.Text="Rapor seçimi sırasında liste veya noktalar değişti; dosya kaydedilmedi.";return false; }
+        return TrySaveReport(path);
+    }
+
     internal bool TrySaveReport(string path)
     {
         try

@@ -10276,8 +10276,13 @@ internal static partial class DesktopVerification
                     checkWindow.ComparisonsForVerification[0].Contains("ölçülen 150 mm") && DocumentSession.ContentEquals(initial,workspace.Document),
                     "Additional photo comparisons preserve prior entries and leave the project unchanged",checks);
                 var reviewPath=Path.ChangeExtension(reportPath,".photo-measurement-review.json");
+                var staleReviewPath=Path.ChangeExtension(reportPath,".photo-measurement-stale.json");
+                Check(!checkWindow.SelectAndSaveReport(()=> { checkWindow.AddComparison();checkWindow.ComparisonListForVerification.SelectedIndex=2;checkWindow.RemoveComparison();return staleReviewPath; }) &&
+                    checkWindow.ComparisonsForVerification.Count==2 && !File.Exists(staleReviewPath) && checkWindow.ReportStatusForVerification.Text.Contains("değişti"),
+                    "Report selection rejects a comparison list changed and restored during the picker",checks);
+                Check(!checkWindow.SelectAndSaveReport(()=>null),"Canceling report selection does not save a report",checks);
                 var resultBeforeReport=checkWindow.ResultForVerification.Text;
-                Check(checkWindow.TrySaveReport(reviewPath) && DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom) &&
+                Check(checkWindow.SelectAndSaveReport(()=>reviewPath) && DocumentSession.ContentEquals(initial,workspace.Document) && canvas.Points.SequenceEqual(beforeZoom) &&
                     checkWindow.ResultForVerification.Text==resultBeforeReport && checkWindow.ComparisonsForVerification.Count==2,
                     "Photo measurement report saves an independent snapshot without changing the draft or comparison list",checks);
                 var reportBytes=File.ReadAllBytes(reviewPath);using(var saved=JsonDocument.Parse(reportBytes))
