@@ -14,19 +14,24 @@ internal sealed class PhotoObservationWindow : Window
     internal readonly ComboBox Neck=new() { ItemsSource=new[]{"Bilinmiyor / görünmüyor","Yuvarlak yaka","V yaka","Yakalı"},SelectedIndex=0 };
     internal readonly CheckBox Confirm=new() { Content=new TextBlock { Text="Bunlar kendi gözlemlerimdir; mevcut tarif ve seçili modelle olası çelişkileri kendim karşılaştırdım. Otomatik karşılaştırma yapılmaz.",TextWrapping=TextWrapping.Wrap },Margin=new Thickness(0,8,0,8) };
     internal readonly TextBlock Status=new() { TextWrapping=TextWrapping.Wrap };
+    internal readonly TextBox ExistingDescription=new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,MinHeight=70,MaxHeight=140,Margin=new Thickness(0,0,0,8) };
+    internal ScrollViewer ControlsForVerification { get; private set; }=null!;
+    internal Image PhotoForVerification { get; private set; }=null!;
     internal IReadOnlyList<string>? Approved { get; private set; }
-    internal PhotoObservationWindow(Window owner,BitmapSource image,string model)
+    internal PhotoObservationWindow(Window owner,BitmapSource image,string model,string descriptionText)
     {
         Owner=owner;Title="Fotoğrafa bakarak özellikleri belirt";Width=850;Height=650;MinWidth=500;MinHeight=450;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Gözlemleri mevcut tarif ve seçili modelle kendiniz karşılaştırın; serbest tarifle çelişkiler otomatik bulunmaz. Bunlar kullanıcı gözlemidir; otomatik analiz, ölçü veya kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
-        var panel=new StackPanel { Width=250,Margin=new Thickness(10,0,0,0) };DockPanel.SetDock(panel,Dock.Right);root.Children.Add(panel);
+        var panel=new StackPanel { Margin=new Thickness(10,0,0,0) };
+        var scroller=new ScrollViewer { Content=panel,Width=250,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };ControlsForVerification=scroller;DockPanel.SetDock(scroller,Dock.Right);root.Children.Add(scroller);
         panel.Children.Add(new TextBlock { Text="Mevcut model fikri: "+model,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        panel.Children.Add(new TextBlock { Text="Mevcut tarif",Margin=new Thickness(0,0,0,3) });ExistingDescription.Text=descriptionText;AutomationProperties.SetName(ExistingDescription,"Mevcut tarif; salt okunur");panel.Children.Add(ExistingDescription);
         void Field(string label,ComboBox box) { panel.Children.Add(new TextBlock { Text=label,Margin=new Thickness(0,6,0,3) });AutomationProperties.SetName(box,label);panel.Children.Add(box); }
         Field("Siluet",Silhouette);Field("Kol",Sleeve);Field("Yaka",Neck);panel.Children.Add(Confirm);
         var apply=new Button { Content="Seçilen gözlemleri tarife ekle",Padding=new Thickness(8) };panel.Children.Add(apply);panel.Children.Add(Status);
         apply.Click+=(_,_)=> { var observations=Build(Silhouette.SelectedIndex,Sleeve.SelectedIndex,Neck.SelectedIndex);if(observations.Count==0) { Status.Text="En az bir görünür özellik seçin.";return; }if(Confirm.IsChecked!=true) { Status.Text="Gözlemlerin size ait olduğunu onaylayın.";return; }Approved=observations;DialogResult=true; };
-        var photo=new Image { Source=image,Stretch=Stretch.Uniform };AutomationProperties.SetName(photo,"Referans fotoğrafı; otomatik yorumlanmaz");root.Children.Add(photo);
+        var photo=new Image { Source=image,Stretch=Stretch.Uniform };PhotoForVerification=photo;AutomationProperties.SetName(photo,"Referans fotoğrafı; otomatik yorumlanmaz");root.Children.Add(photo);
     }
     internal static IReadOnlyList<string> Build(int silhouette,int sleeve,int neck)
     {

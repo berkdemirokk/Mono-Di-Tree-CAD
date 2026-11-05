@@ -4,6 +4,8 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
@@ -31,6 +33,17 @@ internal static partial class DesktopVerification
                 !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,4,"","",false,false,false) &&
                 !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,3,"","",false,false,true),
                 "Photo observation snapshot rejects changed bytes, revision or pending selection",checks);
+            var observationBitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);observationBitmap.Freeze();
+            var observationWindow=new PhotoObservationWindow(window,observationBitmap,"aline","Uzun kollu elbise\n"+new string('x',1500));
+            try
+            {
+                var layout=(FrameworkElement)observationWindow.Content;layout.Measure(new Size(500,450));layout.Arrange(new Rect(0,0,500,450));layout.UpdateLayout();
+                var image=new RenderTargetBitmap(500,450,96,96,PixelFormats.Pbgra32);image.Render(layout);
+                Check(observationWindow.ExistingDescription.IsReadOnly && observationWindow.ExistingDescription.Text.StartsWith("Uzun kollu elbise",StringComparison.Ordinal) &&
+                    AutomationProperties.GetName(observationWindow.ExistingDescription).Contains("salt okunur") && observationWindow.PhotoForVerification.ActualWidth>0 && observationWindow.ControlsForVerification.ScrollableHeight>0,
+                    "Photo observation displays accessible source prose and scrollable controls beside the image at minimum size",checks);
+            }
+            finally { observationWindow.Close(); }
             Check(!window.RequestDetailsForVerification.IsExpanded,"Saved request editing starts collapsed for the primary chat flow",checks);
             var modelOnly=new DesignRequest("","bel çevresi 72 cm",null,"aline",2);
             window.LoadForVerification(modelOnly);
