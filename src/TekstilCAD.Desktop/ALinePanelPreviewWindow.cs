@@ -67,6 +67,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         var proposalAgreement=new CheckBox { Content=new TextBlock { Text="İstekteki 11 açık ölçünün yukarıdaki cm/mm özetini kontrol ettim; geçici forma mm olarak aktarılmasını onaylıyorum.",TextWrapping=TextWrapping.Wrap },IsEnabled=false };
         var proposalApply=new Button { Content="Onaylanan istek ölçülerini geçici forma aktar",IsEnabled=false,Padding=new Thickness(8) };
         body.Children.Insert(2,proposal);body.Children.Insert(3,proposalAgreement);body.Children.Insert(4,proposalApply);
+        body.Children.Insert(5,new TextBlock { Text="Dil desteği sınırlıdır: formdaki 11 tam etiket ve açık cm/mm değerleri tanınır. Ölçüler için geçerli/doğru/kesin değil ifadeleri ve sınırlı çekimleri; yanlış/geçersiz, kullanma ifadeleri ve sınırlı çekimleri; dikkate almayın, geri çekiyorum ve iptal ediyorum ifadeleri ihtiyatla engellenir. Tüm Türkçe cümleler veya olumsuzluklar anlaşılmaz; özetin tamamını ölçü kaynağınızla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,8) });
         ProposalForVerification=proposal;ProposalAgreementForVerification=proposalAgreement;ProposalApplyForVerification=proposalApply;
         ALineRequestMeasurementReview? requestFields=null;
         try

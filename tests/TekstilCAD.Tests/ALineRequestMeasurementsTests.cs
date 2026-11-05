@@ -66,6 +66,13 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("ölçüleri geri çekiyorum")]
     [InlineData("ölçüler yanlış")]
     [InlineData("ölçüleri dikkate almayın")]
+    [InlineData("ölçüler doğru değilmiş")]
+    [InlineData("ölçüleri kullanmayacağım")]
+    [InlineData("ölçüleri kullanmadım")]
+    [InlineData("ölçüleri kullanmam")]
+    [InlineData("ölçüler kesin değillermiş")]
+    [InlineData("BU ÖLÇÜLER DOĞRU DEĞİLMİŞ")]
+    [InlineData("ölçüleri kullanmayacağız")]
     public void WithdrawalInEitherFieldOrOrderBlocksAllProposals(string withdrawal)
     {
         foreach(var (prompt,notes) in new[]{(AllFields+";"+withdrawal,""),(withdrawal+";"+AllFields,""),(AllFields,withdrawal),(withdrawal,AllFields)})
@@ -92,6 +99,11 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("önceki modeli kullanmayın")]
     [InlineData("ölçüler geçerli")]
     [InlineData("elbise; kumaş düz olsun")]
+    [InlineData("kumaş doğru değilmiş; modeli kullanmayacağım")]
+    [InlineData("ölçüleri kullanmak istiyorum")]
+    [InlineData("önölçüleri kullanmayacağım")]
+    [InlineData("ölçüleri başkullanmayacağım")]
+    [InlineData("ölçüleri kullanmakılavuzu")]
     public void HarmlessDesignWordsAndExplicitZeroEaseRemainSupported(string description)
     {
         var result=ALineRequestMeasurements.Review(description,AllFields.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 0 mm"));

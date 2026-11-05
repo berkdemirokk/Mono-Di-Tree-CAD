@@ -22,8 +22,11 @@ public static class ALineRequestMeasurements
     private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new("\\A\\s*(?<label>"+Names+")\\s*(?::|=|\\s)\\s*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\\s*(?<unit>cm|mm)\\s*[.!]?\\s*\\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Explicit measurement withdrawal vocabulary, across both snapshot fields.
-    // Do not interpret arbitrary Turkish negative suffixes or design preferences.
-    private static readonly Regex Withdrawal=new(@"(?<![\p{L}\p{M}\p{N}_])(?:ölçüler(?:in)?\s+(?:(?:geçerli|doğru|kesin)\s+değil(?:dir)?|yanlış|geçersiz)|ölçüleri\s+(?:kullanma(?:yın|yalım)?|dikkate\s+alma(?:yın|yalım)?|geri\s+çekiyorum|iptal\s+ediyorum))(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // Bounded whole words only: değil + up to 16 letters/marks, and kullanma
+    // with d/m/y/z-led suffixes (up to 16). Some inflections remain ambiguous
+    // and deliberately block a proposal. The affirmative infinitive kullanmak
+    // and unrelated design nouns are not matched. This is not Turkish NLP.
+    private static readonly Regex Withdrawal=new(@"(?<![\p{L}\p{M}\p{N}_])(?:ölçüler(?:in)?\s+(?:(?:geçerli|doğru|kesin)\s+değil[\p{L}\p{M}]{0,16}|yanlış|geçersiz)|ölçüleri\s+(?:kullanma(?:[dmyz][\p{L}\p{M}]{0,15})?|dikkate\s+alma(?:yın|yalım)?|geri\s+çekiyorum|iptal\s+ediyorum))(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex AmbiguousNumber=new(@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static bool TryRead(string text,out int index,out decimal mm)
     {
@@ -43,7 +46,7 @@ public static class ALineRequestMeasurements
         var totals=DressMeasurementParser.Review(prompt,notes); // Also validates input size and global conditions.
         var values=new decimal?[Labels.Count];var issues=new List<string>();
         if(new[]{prompt,notes}.Any(text=>Withdrawal.IsMatch(Fold(text))))
-            issues.Add("İstek ölçüleri geçersiz sayılıyor veya geri çekiliyor; kapsam netleşmeden ölçü önerisi ve kaynağa bağlı çizim yapılamaz. Açılış anındaki istek metnini düzeltip pencereyi yeniden açın.");
+            issues.Add("İstek ölçüleri geçersiz sayılıyor, geri çekiliyor veya kullanımları belirsiz; kapsam netleşmeden ölçü önerisi ve kaynağa bağlı çizim yapılamaz. Açılış anındaki istek metnini düzeltip pencereyi yeniden açın.");
         foreach(var text in new[]{prompt,notes})
         foreach(var segment in Regex.Split(text,@";|[\r\n\v\f\u0085\u2028\u2029]",RegexOptions.None,TimeSpan.FromMilliseconds(100)))
         {

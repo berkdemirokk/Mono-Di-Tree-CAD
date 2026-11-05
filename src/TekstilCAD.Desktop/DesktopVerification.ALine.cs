@@ -109,6 +109,7 @@ internal static partial class DesktopVerification
             finally { proposalWindow.Close(); }
             foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse",
                 sourceText+";bu ölçüler geçerli değil",sourceText+";önceki ölçüleri kullanmayın",
+                sourceText+";ölçüler doğru değilmiş",sourceText+";ölçüleri kullanmayacağım",
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1,000 mm"),
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1.000 mm")})
             {
@@ -123,6 +124,14 @@ internal static partial class DesktopVerification
                 }
                 finally { refusedWindow.Close(); }
             }
+            var designOnlyWindow=new ALinePanelPreviewWindow(owner,"Kumaş doğru değilmiş; önceki modeli kullanmayacağım",sourceText);
+            try
+            {
+                Check(designOnlyWindow.ProposalAgreementForVerification.IsEnabled,"Design-only negative inflections do not withdraw explicitly stated measurements",checks);
+                designOnlyWindow.ProposalAgreementForVerification.IsChecked=true;Click(designOnlyWindow.ProposalApplyForVerification);
+                designOnlyWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(designOnlyWindow);
+            }
+            finally { designOnlyWindow.Close(); }
             Fill(window,true);window.UnitForVerification.SelectedIndex=0;window.AgreementForVerification.IsChecked=true;
             window.FieldsForVerification[4].Text="1,000";Click(window.ReviewForVerification);Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count==0 && !window.ConfirmationForVerification.IsEnabled && window.StatusForVerification.Text.Contains("üç basamaklı ayırıcı belirsiz"),
