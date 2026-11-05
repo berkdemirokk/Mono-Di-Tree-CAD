@@ -3148,7 +3148,7 @@ private struct ExperimentalDesignBriefView: View {
                         }
                     }
                     DisclosureGroup("V2 dosyası · ham tarif ve model") {
-                        Text("V2 tarifi olduğu gibi yazar; model seçimi açıklamaya eklenmez, ayrı kaydedilir.").font(.caption)
+                        Text("V2 tarifi olduğu gibi yazar; model seçimi açıklamaya eklenmez, ayrı kaydedilir. Kayıt için diğer kontroller de geçmelidir.").font(.caption)
                         if let id = summary.v2ModelID, let model = summary.model { Text(verbatim: "Ayrı model: \(model) (\(id))") }
                         else { Text("Ayrı model seçilmedi.") }
                         if summary.v2Prompt.isEmpty { Text("Ham tarif boş; dosyaya boş metin yazılır.") }
