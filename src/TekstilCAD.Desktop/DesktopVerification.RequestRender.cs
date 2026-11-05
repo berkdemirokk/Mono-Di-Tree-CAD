@@ -15,7 +15,7 @@ internal static partial class DesktopVerification
     public static int RenderDesignRequest(string reportPath)
     {
         Window? owner=null;DesignRequestWindow? request=null;
-        var streams=new List<FileStream>();var created=new List<string>();
+        var streams=new List<FileStream>();var created=new List<string>();var failed=false;
         try
         {
             reportPath=AllowedReportPath(reportPath);
@@ -38,19 +38,21 @@ internal static partial class DesktopVerification
             Capture(request,streams[2],900,700);
             if(owner.IsVisible || request.IsVisible)throw new InvalidOperationException("Capture windows became visible.");
             JsonSerializer.Serialize(streams[0],new { status="PASS",scope="Hidden request content at 480x420 and 900x700; no interactive UI verification." });
-            foreach(var stream in streams)stream.Dispose();
-            streams.Clear();created.Clear();
-            return 0;
-        }
-        catch
-        {
-            foreach(var stream in streams)stream.Dispose();
-            foreach(var path in created)try { File.Delete(path); } catch { }
-            return 1;
-        }
-        finally { request?.Close();owner?.Close(); }
-    }
 
+        }
+        catch(Exception ex)
+        {
+            failed=true;try { Console.Error.WriteLine("Capture failed: "+ex.Message); } catch { }
+        }
+        finally
+        {
+            foreach(var stream in streams) { try { stream.Dispose(); } catch { failed=true; } }
+            try { request?.Close(); } catch { }
+            try { owner?.Close(); } catch { }
+        }
+        if(failed)try { foreach(var path in created)Console.Error.WriteLine("Created output may be incomplete: "+path); } catch { }
+        return failed ? 1 : 0;
+    }
     private static void Capture(Window window,Stream output,int width,int height)
     {
         var content=(FrameworkElement)window.Content;
