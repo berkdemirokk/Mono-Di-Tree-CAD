@@ -333,6 +333,7 @@ internal static partial class DesktopVerification
             VerifyALineWorkDraft(owner,reportPath,checks);
             VerifyALineEarlyTotals(owner,checks);
             VerifyALineEntry(owner,checks);
+            VerifyALineTransferOrder(owner,checks);
             VerifyALineChat(owner,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

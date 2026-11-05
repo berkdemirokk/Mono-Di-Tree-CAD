@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
@@ -94,7 +95,11 @@ internal sealed class ALinePanelPreviewWindow : Window
         body.Children.Add(KnownTotalsForVerification);
         body.Children.Add(new TextBlock { Text="Tam elbise kalıbı değildir. Sağ/sol simetri varsayılır: ön ve arka yaylar ikiye bölünür; sağ/sol asimetri desteklenmez. Ön/arka yayları BEDEN üzerinde, amaçlanan yan dikiş konumları arasında ayrı ölçün; bu yaylara bolluk dahil etmeyin. Bollukları ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür; bolluk dahildir. Elbise boyu yerine BELDEN etek boyunu girin. Otomatik kayıt yoktur; pencere kapanınca yalnız açıkça dosyaya kaydettiğiniz çalışma geri açılabilir.",TextWrapping=TextWrapping.Wrap });
         var unit=new ComboBox { ItemsSource=new[]{"cm — santimetre","mm — milimetre"},SelectedIndex=-1,Margin=new Thickness(0,4,0,8) };
-        body.Children.Add(new Label { Content="Tüm alanlar için birim seçin (zorunlu)",Target=unit });body.Children.Add(unit);
+        var unitLabel=new Label { Content="Tüm alanlar için birim seçin (zorunlu)",Target=unit };
+        AutomationProperties.SetName(unit,"Ölçü aktarımından önce tüm alanlar için birim seçin (zorunlu)");
+        AutomationProperties.SetLabeledBy(unit,unitLabel);
+        AutomationProperties.SetHelpText(unit,"Önce cm veya mm seçin, ardından aktarım özetini inceleyip ayrıca onaylayın. Varsayılan birim yoktur; birim seçmek alanları doldurmaz.");
+        body.Children.Add(unitLabel);body.Children.Add(unit);
         string[] labels=["Ön bel yayı","Arka bel yayı","Ön kalça yayı","Arka kalça yayı","Ön bel yayı bolluğu","Arka bel yayı bolluğu","Ön kalça yayı bolluğu","Arka kalça yayı bolluğu","Belden kalçaya düşüklük","Belden etek boyu","Bitmiş etek çevresi (bolluk dahil)"];
         var fields=new List<TextBox>();
         foreach(var label in labels)
@@ -120,8 +125,8 @@ internal sealed class ALinePanelPreviewWindow : Window
         var proposal=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
         var proposalAgreement=new CheckBox { Content=new TextBlock { Text="Doldurulacak, korunacak ve eksik alanları kontrol ettim; yalnız açık kaynak değerlerinin seçtiğim birimde boş alanlara aktarılmasını onaylıyorum.",TextWrapping=TextWrapping.Wrap },IsEnabled=false };
         var proposalApply=new Button { Content="Onaylanan istek ölçülerini geçici forma aktar",IsEnabled=false,Padding=new Thickness(8) };
-        body.Children.Insert(2,proposal);body.Children.Insert(3,proposalAgreement);body.Children.Insert(4,proposalApply);
-        body.Children.Insert(5,new TextBlock { Text="Dil desteği sınırlıdır: formdaki 11 tam etiket ve açık cm/mm değerleri tanınır. Genel ölçülere atıf yapan serbest metnin anlamı varsayılmaz; öneri ve çizim durdurulur. Ölçü içeren istekte bunlar/hepsi/tümü gibi zamirlerin neyi anlattığı da varsayılmaz; diğer alandaki olumlu cümle bu belirsizliği kaldırmaz. Yalnız bir metin alanının tamamını oluşturan “ölçüler geçerli” veya “ölçüleri kullanmak istiyorum” sabit olumlu ifadeleri kabul edilir (başında “bu” olabilir). Bunlara eklenen başka cümleler kabul edilmez. Bu yardımcı tüm Türkçeyi anlamaz; özetin tamamını ölçü kaynağınızla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,8) });
+        body.Children.Insert(4,proposal);body.Children.Insert(5,proposalAgreement);body.Children.Insert(6,proposalApply);
+        body.Children.Insert(7,new TextBlock { Text="Dil desteği sınırlıdır: formdaki 11 tam etiket ve açık cm/mm değerleri tanınır. Genel ölçülere atıf yapan serbest metnin anlamı varsayılmaz; öneri ve çizim durdurulur. Ölçü içeren istekte bunlar/hepsi/tümü gibi zamirlerin neyi anlattığı da varsayılmaz; diğer alandaki olumlu cümle bu belirsizliği kaldırmaz. Yalnız bir metin alanının tamamını oluşturan “ölçüler geçerli” veya “ölçüleri kullanmak istiyorum” sabit olumlu ifadeleri kabul edilir (başında “bu” olabilir). Bunlara eklenen başka cümleler kabul edilmez. Bu yardımcı tüm Türkçeyi anlamaz; özetin tamamını ölçü kaynağınızla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,8) });
         ProposalForVerification=proposal;ProposalAgreementForVerification=proposalAgreement;ProposalApplyForVerification=proposalApply;
         ALineRequestMeasurementReview? requestFields=null;string? sourceError=null;
         try
