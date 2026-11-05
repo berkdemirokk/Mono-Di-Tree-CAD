@@ -522,8 +522,11 @@ internal sealed class DesignRequestWindow : Window
     {
         var message=chatInput.Text;
         if(string.IsNullOrWhiteSpace(message)) { SetStatus("Göndermek için bir mesaj yazın.");return; }
-        // Ignore only surrounding line breaks while recognizing a single answer; preserve the original message.
-        var answerText=message.Trim('\r','\n');
+        // Ignore surrounding horizontal whitespace and line breaks only for recognition.
+        static bool AnswerEdgeSpace(char c)=>c is '\r' or '\n' or '\t' || char.GetUnicodeCategory(c)==System.Globalization.UnicodeCategory.SpaceSeparator;
+        var answerStart=0;while(answerStart<message.Length && AnswerEdgeSpace(message[answerStart]))answerStart++;
+        var answerEnd=message.Length;while(answerEnd>answerStart && AnswerEdgeSpace(message[answerEnd-1]))answerEnd--;
+        var answerText=message.Substring(answerStart,answerEnd-answerStart);
         // A bare number is likely an answer, but guessing cm/mm is unsafe and
         // silently appending it as prose leaves the same question unanswered.
         if((CanPreviewALineForVerification || answerContext?.ALine==true) && (answerContext?.Label is not null || suggestedMeasurement is not null) &&
@@ -586,8 +589,7 @@ internal sealed class DesignRequestWindow : Window
             catch(Exception ex) when(ex is ArgumentException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { SetStatus("Ölçü denetlenemedi; mesajınız korundu. "+ex.Message);return; }
         }
-        var leadingLineBreaks=message.Length-message.TrimStart('\r','\n').Length;
-        var labeledMessage=answerLabel is null ? message : message.Substring(0,leadingLineBreaks)+answerLabel+": "+message.Substring(leadingLineBreaks);
+        var labeledMessage=answerLabel is null ? message : message.Substring(0,answerStart)+answerLabel+": "+message.Substring(answerStart);
         var addition=(prompt.Text.Length==0 ? "" : "\n")+labeledMessage;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }

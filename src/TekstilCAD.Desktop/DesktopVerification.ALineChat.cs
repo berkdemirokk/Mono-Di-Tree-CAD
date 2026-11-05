@@ -184,7 +184,7 @@ internal static partial class DesktopVerification
             window.MeasurementsForVerification.Text+="; not";var genericStale=window.CaptureForVerification();window.SendMessageForVerification();
             Check(window.CaptureForVerification()==genericStale && window.ChatInputForVerification.Text=="96 cm." && window.StatusForVerification.Text.Contains("Soru veya kaynak"),
                 "General punctuated answer retains stale-context protection",checks);
-            foreach(var answer in new[]{"96 cm\r\n","\r\n96 cm!\r\n"})
+            foreach(var answer in new[]{"96 cm\r\n","\r\n96 cm!\r\n","96 cm\r\n "," \r\n96 cm","\t\r\n96 cm!\r\n\u00a0"})
             {
                 window.LoadForVerification(source with { ModelId="wrap" });window.ChatInputForVerification.Text=answer;
                 var original=window.ChatInputForVerification.Text;window.SendMessageForVerification();
@@ -200,14 +200,14 @@ internal static partial class DesktopVerification
             foreach(var model in new[]{"wrap","aline"})
             {
                 var modelSource=source with { ModelId=model };
-                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36\r\n";var bare=window.ChatInputForVerification.Text;window.SendMessageForVerification();
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text=" \r\n36\r\n ";var bare=window.ChatInputForVerification.Text;window.SendMessageForVerification();
                 Check(window.CaptureForVerification()==modelSource && window.ChatInputForVerification.Text==bare && window.StatusForVerification.Text.Contains("cm veya mm"),
                     "Line break does not bypass unit requirement: "+model,checks);
-                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36 cm\r\n";var staleText=window.ChatInputForVerification.Text;
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text=" \r\n36 cm\r\n ";var staleText=window.ChatInputForVerification.Text;
                 window.MeasurementsForVerification.Text+="; not";var stale=window.CaptureForVerification();window.SendMessageForVerification();
                 Check(window.CaptureForVerification()==stale && window.ChatInputForVerification.Text==staleText && window.StatusForVerification.Text.Contains("Soru veya kaynak"),
                     "Line break does not bypass stale context: "+model,checks);
-                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text="36 cm\r\nnot";window.SendMessageForVerification();
+                window.LoadForVerification(modelSource);window.ChatInputForVerification.Text=" \r\n36 cm\r\nnot\r\n ";window.SendMessageForVerification();
                 Check(!window.CaptureForVerification().Prompt.Contains(model=="aline" ? "Ön bel yayı: 36 cm" : "göğüs çevresi: 36 cm",StringComparison.Ordinal),
                     "A second line is not treated as a short answer: "+model,checks);
             }
