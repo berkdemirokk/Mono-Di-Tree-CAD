@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Interop;
 using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
@@ -7,7 +8,7 @@ internal static partial class DesktopVerification
 {
     private static void VerifyPendingReferenceProtection(List<string> checks)
     {
-        var owner=new Window();var window=new DesignRequestWindow(owner);
+        var owner=new Window();_=new WindowInteropHelper(owner).EnsureHandle();var window=new DesignRequestWindow(owner);
         var dir=Path.Combine(Path.GetTempPath(),"tcad-pending-reference-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
         var path=Path.Combine(dir,"next.tcad-request.json");
         DesignRequestStorage.SaveNew(path,new DesignRequest("Yeni istek","",null));
@@ -39,9 +40,33 @@ internal static partial class DesktopVerification
             var success=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>success.IsCompleted);
             Check(success.GetAwaiter().GetResult() && window.CaptureForVerification().Reference!.Data.SequenceEqual(photo.Data),"Successful image selection attaches the checked candidate",checks);
 
+            // Explicit removal invalidates the pending selection immediately;
+            // a second load remains blocked until the first worker has stopped.
             reached.Reset();release.Reset();window.LoadForVerification(new DesignRequest("Temiz","",null));
             window.ReferenceLoaderForVerification=_=> { reached.Set();release.Wait();return photo; };
             pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
+            window.RemoveReferenceForVerification();int removalPrompts=0;window.ConfirmDiscardForVerification=_=> { removalPrompts++;return false; };
+            Check(window.ClosingAllowedForVerification() && removalPrompts==0,"Removed pending selection no longer prompts on a clean request",checks);
+            var second=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>second.IsCompleted);
+            Check(!second.GetAwaiter().GetResult(),"A second reference load cannot start until the invalidated worker ends",checks);
+            release.Set();PumpUntil(()=>pending.IsCompleted);
+            Check(!pending.GetAwaiter().GetResult() && window.CaptureForVerification().Reference is null,"Removed pending image never returns after completion",checks);pending=null;
+
+            // A file-picker callback may pump the dispatcher while the old load completes.
+            reached.Reset();release.Reset();window.LoadForVerification(new DesignRequest("Temiz","",null));
+            pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
+            window.ConfirmDiscardForVerification=_=>true;
+            window.OpenPathChoiceForVerification=()=> { release.Set();PumpUntil(()=>pending.IsCompleted);return path; };
+            window.OpenForVerification();
+            Check(pending.GetAwaiter().GetResult() && window.CaptureForVerification().Prompt=="Temiz" && window.CaptureForVerification().Reference is not null,
+                "Image completion while picker is open cancels replacement and preserves completed selection",checks);pending=null;
+
+            reached.Reset();release.Reset();window.LoadForVerification(new DesignRequest("Temiz","",null));
+            window.ReferenceLoaderForVerification=_=> { reached.Set();release.Wait();return photo; };
+            pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
+            window.PromptForVerification.Text="Düzenlenmiş";warning="";
+            window.ConfirmDiscardForVerification=m=> { warning=m;return false; };
+            Check(!window.ClosingAllowedForVerification() && warning.Contains("Kaydedilmemiş") && warning.Contains("bekleyen görsel"),"Dirty draft and pending selection are both disclosed",checks);
             window.ConfirmDiscardForVerification=_=> { window.PromptForVerification.Text="Değişti";return true; };
             Check(!window.ClosingAllowedForVerification() && window.CaptureForVerification().Prompt=="Değişti","Changes during confirmation refuse stale approval",checks);
             window.ConfirmDiscardForVerification=_=>true;window.Close();release.Set();PumpUntil(()=>pending.IsCompleted);

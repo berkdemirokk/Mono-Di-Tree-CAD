@@ -570,9 +570,11 @@ internal sealed class DesignRequestWindow : Window
     private void RemoveReference()
     {
         referenceRevision++;
+        referenceSelectionPending=false;
         if(reference is not null) { reference=null;referenceDecoded=false;dirty=true;UpdateReference(); }
         if(referenceLoadRunning)SetStatus("Bekleyen görsel seçimi iptal edildi; mevcut referans kaldırıldı.");
     }
+    internal void RemoveReferenceForVerification()=>RemoveReference();
     private void ChooseReference()
     {
         if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; tamamlanmasını bekleyin.");return; }
