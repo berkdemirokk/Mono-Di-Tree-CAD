@@ -274,6 +274,9 @@ final class DesignDraftStoreTests: XCTestCase {
         for (groupIndex, group) in BodyMeasurementNotes.groups.enumerated() {
             for field in group.indices { XCTAssertEqual(BodyMeasurementNotes.groupIndex(forField: field), groupIndex) }
         }
+        let ids = BodyMeasurementNotes.fields.indices.map { BodyMeasurementNotes.fieldScrollID($0) }
+        XCTAssertEqual(Set(ids).count, BodyMeasurementNotes.fields.count)
+        XCTAssertEqual(BodyMeasurementNotes.fieldScrollID(4), "measurement-field-4")
         XCTAssertNil(BodyMeasurementNotes.groupIndex(forField: -1))
         XCTAssertNil(BodyMeasurementNotes.groupIndex(forField: BodyMeasurementNotes.fields.count))
     }

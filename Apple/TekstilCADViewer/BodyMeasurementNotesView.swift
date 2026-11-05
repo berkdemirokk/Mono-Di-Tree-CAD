@@ -59,6 +59,7 @@ enum BodyMeasurementNotes {
         .init(title: "Gövde ve bel", indices: 5..<10),
         .init(title: "Boyun, omuz ve kol", indices: 10..<15)
     ]
+    static func fieldScrollID(_ index: Int) -> String { "measurement-field-\(index)" }
     static func groupIndex(forField index: Int) -> Int? {
         groups.firstIndex { $0.indices.contains(index) }
     }
@@ -188,6 +189,9 @@ struct BodyMeasurementNotesView: View {
     let localSaveStatus: () -> String
     @State private var values = Array(repeating: "", count: BodyMeasurementNotes.fields.count)
     @FocusState private var focusedIndex: Int?
+    @AccessibilityFocusState private var accessibilityField: Int?
+    @State private var pendingFieldJump: Int?
+    @State private var fieldJumpRevision = UUID()
     @State private var unit = "cm"
     @State private var groupIndex = 0
     @State private var revision = UUID()
@@ -197,7 +201,7 @@ struct BodyMeasurementNotesView: View {
     @State private var statusFieldIndex: Int?
     private var status: String {
         get { statusText }
-        nonmutating set { statusText = newValue; statusFieldIndex = nil }
+        nonmutating set { statusText = newValue; statusFieldIndex = nil; pendingFieldJump = nil; fieldJumpRevision = UUID() }
     }
     @State private var confirm = false
     @State private var pendingAddition: BodyMeasurementNotes.AdditionReview?
@@ -209,10 +213,10 @@ struct BodyMeasurementNotesView: View {
     @State private var readyToSaveForm = false
     @ViewBuilder private var groupActions: some View {
         if groupIndex > 0 {
-            Button("Önceki") { focusedIndex = nil; groupIndex -= 1 }.frame(minHeight: 44)
+            Button("Önceki") { focusedIndex = nil; pendingFieldJump = nil; fieldJumpRevision = UUID(); groupIndex -= 1 }.frame(minHeight: 44)
         }
         if groupIndex < BodyMeasurementNotes.groups.count - 1 {
-            Button("Sonraki ölçüler") { focusedIndex = nil; groupIndex += 1 }.frame(minHeight: 44)
+            Button("Sonraki ölçüler") { focusedIndex = nil; pendingFieldJump = nil; fieldJumpRevision = UUID(); groupIndex += 1 }.frame(minHeight: 44)
         }
     }
     var body: some View {
@@ -246,8 +250,9 @@ struct BodyMeasurementNotesView: View {
                                 .measurementKeyboard(isAngle: field.angle)
                                 .accessibilityLabel("\(field.label), \(field.angle ? "derece" : unit)")
                                 .accessibilityHint(BodyMeasurementNotes.instructions[index] + " Bilinmiyorsa boş bırakın.")
+                                .accessibilityFocused($accessibilityField, equals: index)
                                 .focused($focusedIndex, equals: index).frame(minHeight: 44)
-                        }
+                        }.id(BodyMeasurementNotes.fieldScrollID(index))
                     }
                 }
                 Section {
@@ -282,13 +287,13 @@ struct BodyMeasurementNotesView: View {
                     if !status.isEmpty {
                         Text(status).font(.caption).frame(maxWidth: .infinity, alignment: .leading).accessibilityLabel("Ölçü uyarısı: " + status)
                         if let index = statusFieldIndex, let group = BodyMeasurementNotes.groupIndex(forField: index) {
-                            Button("İlgili ölçü adımına git") {
-                                focusedIndex = nil
-                                if groupIndex == group { proxy.scrollTo("measurement-group-heading", anchor: .top) }
-                                else { groupIndex = group }
+                            Button("İlgili ölçü alanına git") {
+                                focusedIndex = nil; fieldJumpRevision = UUID()
+                                if groupIndex == group { scrollToField(index, group: group, proxy: proxy) }
+                                else { pendingFieldJump = index; groupIndex = group }
                             }
                             .frame(minHeight: 44)
-                            .accessibilityHint(BodyMeasurementNotes.fields[index].label + " alanının bulunduğu adımı açar.")
+                            .accessibilityHint(BodyMeasurementNotes.fields[index].label + " alanını gösterir.")
                         }
                     }
                     ViewThatFits(in: .horizontal) {
@@ -316,10 +321,15 @@ struct BodyMeasurementNotesView: View {
             }
             .onDisappear { rememberForm() }
             .onChange(of: groupIndex) { index in
-                proxy.scrollTo("measurement-group-heading", anchor: .top)
-                #if os(iOS)
-                UIAccessibility.post(notification: .announcement, argument: "Adım \(index + 1), \(BodyMeasurementNotes.groups[index].title)")
-                #endif
+                if let target = pendingFieldJump, BodyMeasurementNotes.groupIndex(forField: target) == index {
+                    pendingFieldJump = nil
+                    scrollToField(target, group: index, proxy: proxy)
+                } else {
+                    proxy.scrollTo("measurement-group-heading", anchor: .top)
+                    #if os(iOS)
+                    UIAccessibility.post(notification: .announcement, argument: "Adım \(index + 1), \(BodyMeasurementNotes.groups[index].title)")
+                    #endif
+                }
             }
             .onChange(of: values) { _ in revision = UUID(); rememberForm() }
             .onChange(of: unit) { _ in revision = UUID(); rememberForm() }
@@ -358,7 +368,10 @@ struct BodyMeasurementNotesView: View {
             } message: { Text("Yalnız tamamen boşluk içeren alanlar temizlenir. Diğer ham ölçüler ve önceki notlar değiştirilmez.") }
             .confirmationDialog("Önceki not belirsiz", isPresented: $ambiguousConfirm, titleVisibility: .visible) {
                 Button("Önceki notu koruyarak ekle") { apply(allowAmbiguous: true) }
-                Button("Notu kontrol edeceğim", role: .cancel) { pendingAddition = nil }
+                Button("Notu kontrol edeceğim", role: .cancel) {
+                    pendingAddition = nil
+                    showSourceIssue("Önceki not formun dışındadır. Formu taslakta tutup ana istek ekranındaki notu kontrol edin.")
+                }
             } message: { Text("\(ambiguousLabel) önceki notlarda geçiyor. Çelişki olabilir; mevcut not silinmez. Devam etmeden önce kontrol edin.") }
             .confirmationDialog("Formdan çıkılsın mı?", isPresented: $discard, titleVisibility: .visible) {
                 Button("Formu taslakta tut ve çık") { rememberForm(); dismiss() }
@@ -367,6 +380,23 @@ struct BodyMeasurementNotesView: View {
             }
             }
         }
+    }
+    private func scrollToField(_ index: Int, group: Int, proxy: ScrollViewProxy) {
+        let revision = fieldJumpRevision
+        DispatchQueue.main.async {
+            guard fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
+            proxy.scrollTo(BodyMeasurementNotes.fieldScrollID(index), anchor: .center)
+            DispatchQueue.main.async {
+                guard fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
+                accessibilityField = index
+            }
+        }
+    }
+    private func showSourceIssue(_ text: String) {
+        status = text
+        #if os(iOS)
+        UIAccessibility.post(notification: .announcement, argument: text)
+        #endif
     }
     private func showFieldIssue(_ label: String, _ text: String) {
         status = text
@@ -410,7 +440,7 @@ struct BodyMeasurementNotesView: View {
         catch BodyMeasurementNotes.ValidationError.whitespace(let label) { showFieldIssue(label, "\(label) yalnız boşluk içeriyor. Alanı inceleyin veya onayla temizleyin.") }
         catch BodyMeasurementNotes.ValidationError.invalid(let label) { showFieldIssue(label, "\(label): Pozitif uzunluk veya -90 ile 90 arasında (uçlar hariç) omuz açısı girin.") }
         catch BodyMeasurementNotes.ValidationError.ambiguous(let label) { ambiguousLabel = label; ambiguousConfirm = true }
-        catch BodyMeasurementNotes.ValidationError.duplicate(let label) { showFieldIssue(label, "\(label) önceki notlarda olabilir. Çelişkiyi çözmek için mevcut notları kontrol edin.") }
+        catch BodyMeasurementNotes.ValidationError.duplicate(let label) { showSourceIssue("\(label) önceki notlarda olabilir. Formu taslakta tutup ana istek ekranındaki notu kontrol edin; önceki not değiştirilmedi.") }
         catch { status = "Ölçüler eklenemedi; metin sınırını kontrol edin. Önceki notlar korundu." }
     }
 }

@@ -91,7 +91,7 @@ final class ViewerUITests: XCTestCase {
         guard reveal(form) else { return XCTFail("Ölçü formu görünmedi") }; form.tap()
         let resume = app.buttons["Formu geri yükle"]
         if resume.waitForExistence(timeout: 2) { resume.tap() }
-        let field = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", "üst kol çevresi,")).firstMatch
+        let field = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", "ön üst göğüs,")).firstMatch
         guard reveal(field) else { return XCTFail("İlk alan görünmedi") }; field.tap()
         if let old = field.value as? String, old != "Bilinmiyorsa boş bırakın", !old.isEmpty {
             field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
@@ -105,9 +105,11 @@ final class ViewerUITests: XCTestCase {
         guard reveal(review) else { return XCTFail("Ölçü onayı görünmedi") }; review.tap()
         let add = app.buttons["Ölçüleri ekle"]
         XCTAssertTrue(add.waitForExistence(timeout: 5)); add.tap()
-        let jump = app.buttons["İlgili ölçü adımına git"]
+        let jump = app.buttons["İlgili ölçü alanına git"]
         XCTAssertTrue(jump.waitForExistence(timeout: 5)); jump.tap()
-        guard reveal(field) else { return XCTFail("Hatalı alan adımı açılmadı") }
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        let visible = expectation(for: NSPredicate(format: "hittable == true"), evaluatedWith: field)
+        wait(for: [visible], timeout: 5)
         XCTAssertEqual(field.value as? String, "0")
     }
     func testDressBriefModelAndMeasurementNavigation() {
