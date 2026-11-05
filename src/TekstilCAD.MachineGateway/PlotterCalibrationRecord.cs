@@ -20,8 +20,9 @@ public static class PlotterCalibrationRecordStorage
         return new(path,hash,units,1,orientation,x,y,d1,d2,xy.XDeviationMillimeters,xy.YDeviationMillimeters,diagonal?.FirstDeviationMillimeters,diagonal?.SecondDeviationMillimeters,diagonal?.DifferenceMillimeters);
     }
     private static bool Valid(double n,double max)=>double.IsFinite(n) && n>0 && n<=max;
-    // Untrusted notes must never cause automatic network/device or link traversal.
-    // Run this on a worker: even ordinary local storage can be slow.
+    // Reject network/device paths and links observed during this check. This is
+    // not an atomic traversal: concurrent local path replacement can race it.
+    // Run on a worker because ordinary local storage can also be slow.
     public static bool ReferenceMatches(PlotterCalibrationRecord record)
     {
         var path=record.ReferencePath;

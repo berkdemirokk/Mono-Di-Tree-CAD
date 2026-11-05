@@ -66,6 +66,10 @@ public sealed class MachineCenterWindow : Window
     private string savedCalibrationSnapshot="|||";
     internal Func<string,bool>? ConfirmCalibrationDiscardForVerification;
     internal Func<PlotterCalibrationRecord,Task<bool>>? CheckCalibrationReferenceForVerification;
+    internal Func<bool,string?>? ChooseCalibrationRecordForVerification;
+    internal Func<bool,bool>? ConfirmCalibrationRecordForVerification;
+    internal Func<string,Task<PlotterCalibrationRecord>>? ReadCalibrationRecordForVerification;
+    internal Action<string,PlotterCalibrationRecord>? WriteCalibrationRecordForVerification;
     internal bool CalibrationDirtyForVerification=>CalibrationSnapshot()!=savedCalibrationSnapshot;
     private string CalibrationSnapshot()
     {
@@ -423,6 +427,28 @@ public sealed class MachineCenterWindow : Window
     private Task<bool> CheckCalibrationReference(PlotterCalibrationRecord record)=>CheckCalibrationReferenceForVerification?.Invoke(record) ?? Task.Run(()=>PlotterCalibrationRecordStorage.ReferenceMatches(record));
     internal long CalibrationRevisionForVerification=>calibrationRevision;
     internal bool CalibrationOperationCurrent(long revision)=>!calibrationClosed && revision==calibrationRevision;
+    private bool CalibrationOperationReady(long revision)
+    {
+        if(CalibrationOperationCurrent(revision))return true;
+        if(!calibrationClosed) { result.Foreground=StudioTheme.Warning;result.Text="Ölçüler veya referans işlem sırasında değişti; alanlar korundu, kayıt yapılmadı veya açılmadı."; }
+        return false;
+    }
+    private string? ChooseCalibrationRecord(bool save)
+    {
+        if(ChooseCalibrationRecordForVerification is { } choose)return choose(save);
+        if(save)
+        {
+            var dialog=new Microsoft.Win32.SaveFileDialog { Title="Yeni ölçü kaydı",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",FileName="plotter-olcumu.tcad-plotter-calibration.json",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+            return dialog.ShowDialog(this)==true ? dialog.FileName : null;
+        }
+        var open=new Microsoft.Win32.OpenFileDialog { Title="Ölçü kaydı aç",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        return open.ShowDialog(this)==true ? open.FileName : null;
+    }
+    private bool ConfirmCalibrationRecord(bool save)=>ConfirmCalibrationRecordForVerification?.Invoke(save) ??
+        (MessageBox.Show(this,save ? "Ölçüler bu referansın fiziksel çıktısına mı ait? Bu kayıt cihaz veya üretim uygunluğu onayı değildir." : "Mevcut ölçü alanları açılan kayıtla değiştirilsin mi?",save ? "Ölçü ilişkisi" : "Ölçüleri aç",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes);
+    internal Task SaveCalibrationRecordForVerification()=>ExecuteCalibration(SaveCalibrationRecord);
+    internal Task LoadCalibrationRecordForVerification()=>ExecuteCalibration(LoadCalibrationRecord);
+    internal string CalibrationMessageForVerification=>result.Text;
     private async Task SaveCalibrationRecord()
     {
         var reference=calibrationReference ?? throw new InvalidOperationException("Önce referans oluşturun veya ölçü kaydı açın.");
@@ -431,33 +457,31 @@ public sealed class MachineCenterWindow : Window
         var record=PlotterCalibrationRecordStorage.Create(reference.Path,reference.Hash,reference.Units,reference.Orientation,Number(MeasuredXForVerification),Number(MeasuredYForVerification),d1,d2);
         var revision=calibrationRevision;
         var matches=await CheckCalibrationReference(record);
-        if(!CalibrationOperationCurrent(revision))return;
+        if(!CalibrationOperationReady(revision))return;
         if(!matches)throw new InvalidOperationException("Referans değişmiş, güvenli bir yerel dosya değil veya bulunamıyor; kayıt oluşturulmadı.");
-        if(MessageBox.Show(this,"Ölçüler bu referansın fiziksel çıktısına mı ait? Bu kayıt cihaz veya üretim uygunluğu onayı değildir.","Ölçü ilişkisi",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
-        if(!CalibrationOperationCurrent(revision))return;
-        var dialog=new Microsoft.Win32.SaveFileDialog { Title="Yeni ölçü kaydı",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",FileName="plotter-olcumu.tcad-plotter-calibration.json",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
-        if(dialog.ShowDialog(this)!=true)return;
-        if(!CalibrationOperationCurrent(revision))return;
+        if(!ConfirmCalibrationRecord(true))return;
+        if(!CalibrationOperationReady(revision))return;
+        var path=ChooseCalibrationRecord(true);if(path is null)return;
+        if(!CalibrationOperationReady(revision))return;
         matches=await CheckCalibrationReference(record);
-        if(!CalibrationOperationCurrent(revision))return;
+        if(!CalibrationOperationReady(revision))return;
         if(!matches)throw new InvalidOperationException("Referans değişmiş veya bulunamıyor; kayıt oluşturulmadı.");
-        PlotterCalibrationRecordStorage.SaveNew(dialog.FileName,record);
+        if(WriteCalibrationRecordForVerification is { } write)write(path,record);else PlotterCalibrationRecordStorage.SaveNew(path,record);
         savedCalibrationSnapshot=CalibrationSnapshot();
         result.Foreground=StudioTheme.Accent;result.Text="Ölçü kaydı oluşturuldu. Fiziksel çıktı ve cihaz doğrulanmadı.";
     }
     private async Task LoadCalibrationRecord()
     {
         var revision=calibrationRevision;
-        var dialog=new Microsoft.Win32.OpenFileDialog { Title="Ölçü kaydı aç",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
-        if(dialog.ShowDialog(this)!=true)return;
-        if(!CalibrationOperationCurrent(revision))return;
-        var record=await Task.Run(()=>PlotterCalibrationRecordStorage.Load(dialog.FileName));
-        if(!CalibrationOperationCurrent(revision))return;
-        if(new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification}.Any(b=>!string.IsNullOrWhiteSpace(b.Text)) && MessageBox.Show(this,"Mevcut ölçü alanları açılan kayıtla değiştirilsin mi?","Ölçüleri aç",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
-        if(!CalibrationOperationCurrent(revision))return;
+        var path=ChooseCalibrationRecord(false);if(path is null)return;
+        if(!CalibrationOperationReady(revision))return;
+        var record=await (ReadCalibrationRecordForVerification?.Invoke(path) ?? Task.Run(()=>PlotterCalibrationRecordStorage.Load(path)));
+        if(!CalibrationOperationReady(revision))return;
+        if(new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification}.Any(b=>!string.IsNullOrWhiteSpace(b.Text)) && !ConfirmCalibrationRecord(false))return;
+        if(!CalibrationOperationReady(revision))return;
         bool matches;
         try { matches=await CheckCalibrationReference(record); } catch(System.IO.IOException) { matches=false; } catch(UnauthorizedAccessException) { matches=false; }
-        if(!CalibrationOperationCurrent(revision))return;
+        if(!CalibrationOperationReady(revision))return;
         calibrationReference=(record.ReferencePath,record.Sha256,record.UnitsPerMillimeter,record.Orientation);calibrationRevision++;
         MeasuredXForVerification.Text=record.X.ToString("G17",CultureInfo.InvariantCulture);MeasuredYForVerification.Text=record.Y.ToString("G17",CultureInfo.InvariantCulture);
         DiagonalOneForVerification.Text=record.Diagonal1?.ToString("G17",CultureInfo.InvariantCulture) ?? "";DiagonalTwoForVerification.Text=record.Diagonal2?.ToString("G17",CultureInfo.InvariantCulture) ?? "";

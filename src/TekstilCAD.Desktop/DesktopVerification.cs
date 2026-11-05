@@ -1145,6 +1145,7 @@ internal static partial class DesktopVerification
             VerifyHpglPreparationFlow(studio,work,checks);
             VerifyMachineHpglCancellation(studio,work,checks);
             VerifyMachineHpglReview(studio,work,checks);
+            VerifyCalibrationRecordFlows(studio,work,checks);
             VerifyMachineConfirmationFailure(studio,work,checks);
             VerifyMachineDxfSourceConfirmation(studio,work,checks);
             VerifyMachineOpenApprovalState(studio,work,checks);
@@ -7079,6 +7080,60 @@ internal static partial class DesktopVerification
                 "Checking a missing output reports both failed integrity and unreadable preview",checks);
         }
         finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+    }
+    private static void VerifyCalibrationRecordFlows(MainWindow studio,string work,List<string> checks)
+    {
+        var oldContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
+        try
+        {
+            var prepared=PlotterCalibrationSquare.Prepare(40,1);
+            var path=Path.Combine(work,"record-reference.plt");
+            var record=PlotterCalibrationRecordStorage.Create(path,prepared.ContentSha256,40,false,100,101,null,null);
+            MachineCenterWindow Fixture()
+            {
+                var window=new MachineCenterWindow(studio,new SimulationQueue(Path.Combine(work,"record-spool")));
+                window.ConfirmCalibrationDiscardForVerification=_=>true;
+                window.ChooseCalibrationRecordForVerification=_=>Path.Combine(work,"record.tcad-plotter-calibration.json");
+                window.ConfirmCalibrationRecordForVerification=_=>true;
+                window.CheckCalibrationReferenceForVerification=_=>Task.FromResult(true);
+                return window;
+            }
+            var late=Fixture();late.MeasuredXForVerification.Text="99";
+            var read=new TaskCompletionSource<PlotterCalibrationRecord>();late.ReadCalibrationRecordForVerification=_=>read.Task;
+            var load=late.LoadCalibrationRecordForVerification();
+            late.MeasuredXForVerification.Text="98";late.MeasuredXForVerification.Text="99";read.SetResult(record);
+            PumpUntil(()=>load.IsCompleted);load.GetAwaiter().GetResult();
+            Check(late.MeasuredXForVerification.Text=="99" && late.CalibrationMessageForVerification.Contains("alanlar korundu"),"Late calibration load preserves ABA-edited fields",checks);
+            late.Close();
+            var closed=Fixture();var readAfterClose=new TaskCompletionSource<PlotterCalibrationRecord>();
+            closed.ReadCalibrationRecordForVerification=_=>readAfterClose.Task;
+            var closedLoad=closed.LoadCalibrationRecordForVerification();closed.Close();readAfterClose.SetResult(record);
+            PumpUntil(()=>closedLoad.IsCompleted);closedLoad.GetAwaiter().GetResult();
+            Check(closed.MeasuredXForVerification.Text=="","Calibration load finishing after close does not apply fields",checks);
+            var save=Fixture();save.FinishCalibrationReference(prepared,path,(_,_)=>{});
+            save.MeasuredXForVerification.Text="100";save.MeasuredYForVerification.Text="101";
+            var attempts=0;save.WriteCalibrationRecordForVerification=(_,_)=> { attempts++;if(attempts==1)throw new IOException("simulated"); };
+            var failed=save.SaveCalibrationRecordForVerification();PumpUntil(()=>failed.IsCompleted);failed.GetAwaiter().GetResult();
+            Check(attempts==1 && save.CalibrationDirtyForVerification && save.CalibrationMessageForVerification.Contains("başarısız"),"Failed calibration save keeps dirty fields",checks);
+            var retried=save.SaveCalibrationRecordForVerification();PumpUntil(()=>retried.IsCompleted);retried.GetAwaiter().GetResult();
+            Check(attempts==2 && !save.CalibrationDirtyForVerification,"Calibration save can be retried after a write failure",checks);
+            save.Close();
+            var pending=Fixture();pending.FinishCalibrationReference(prepared,path,(_,_)=>{});
+            pending.MeasuredXForVerification.Text="100";pending.MeasuredYForVerification.Text="101";
+            var checkCount=0;var approved=false;var chosen=false;var wrote=false;
+            var secondCheck=new TaskCompletionSource<bool>();
+            pending.CheckCalibrationReferenceForVerification=_=>++checkCount==1 ? Task.FromResult(true) : secondCheck.Task;
+            pending.ConfirmCalibrationRecordForVerification=_=> { approved=true;return true; };
+            pending.ChooseCalibrationRecordForVerification=_=> { chosen=true;return Path.Combine(work,"pending.tcad-plotter-calibration.json"); };
+            pending.WriteCalibrationRecordForVerification=(_,_)=>wrote=true;
+            var pendingSave=pending.SaveCalibrationRecordForVerification();
+            pending.MeasuredXForVerification.Text="99";pending.MeasuredXForVerification.Text="100";secondCheck.SetResult(true);
+            PumpUntil(()=>pendingSave.IsCompleted);pendingSave.GetAwaiter().GetResult();
+            Check(approved && chosen && !wrote && pending.CalibrationDirtyForVerification && pending.CalibrationMessageForVerification.Contains("kayıt yapılmadı"),"Save after chooser rejects ABA changes during reference check",checks);
+            pending.Close();
+        }
+        finally { SynchronizationContext.SetSynchronizationContext(oldContext); }
     }
     private static void VerifyMachineHpglReview(MainWindow studio,string work,List<string> checks)
     {
