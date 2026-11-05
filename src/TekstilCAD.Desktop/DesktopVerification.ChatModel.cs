@@ -118,9 +118,20 @@ internal static partial class DesktopVerification
             window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(conversions==0 && choices==0 && window.CaptureForVerification().Prompt==retained && window.StatusForVerification.Text.Contains("doğrulaması başarısız"),
                 "Retry validates changed image bytes rather than trusting the old revision",checks);
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 &&
+                window.CaptureForVerification().Reference!.Data.SequenceEqual(trailingBytes) && window.CaptureForVerification().Prompt==retained &&
+                window.CaptureForVerification().Measurements=="bel çevresi 72 cm" && window.RetryModelForVerification.IsEnabled,
+                "Repeated invalid PNG retry remains handled and preserves draft, image bytes and retry availability",checks);
             imageField.SetValue(window,new DesignReference("current.png","image/png",(byte[])imageBytes.Clone()));
             revisionField.SetValue(window,(long)revisionField.GetValue(window)!+1);
             window.MeasurementsForVerification.Text="bel çevresi 73 cm";
+            window.ConfirmV2ConversionForVerification=_=> { conversions++;return false; };
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions==1 && choices==0 && window.CaptureForVerification().Version==1 && window.CaptureForVerification().Prompt==retained &&
+                window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
+                "Cancelling valid retry after a failed PNG validation still preserves current image and message",checks);
+            conversions=0;window.ConfirmV2ConversionForVerification=_=> { conversions++;return true; };
             window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(conversions==1 && choices==1 && window.CaptureForVerification().ModelId=="aline" && window.CaptureForVerification().Prompt==retained &&
                 window.CaptureForVerification().Measurements=="bel çevresi 73 cm" && window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),

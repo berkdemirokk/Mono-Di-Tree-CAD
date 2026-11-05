@@ -379,7 +379,7 @@ internal sealed class DesignRequestWindow : Window
         {
             var original=Capture();
             try { _=DesignRequestStorage.SerializeV2(original with { Version=2,ModelId=null },ReferencePhotoDecoder.ValidateV2); }
-            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or IOException or NotSupportedException)
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException or NotSupportedException)
             { SetStatus("Mesaj ve görsel korundu; V2 görsel doğrulaması başarısız, model seçilmedi: "+ex.Message);return; }
             ConvertToV2();
             if(requestVersion!=2) { SetStatus("V2 dönüşümü uygulanmadı; mesaj korundu, model seçilmedi.");return; }
