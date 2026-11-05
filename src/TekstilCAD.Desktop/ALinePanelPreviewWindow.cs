@@ -143,6 +143,18 @@ internal sealed class ALinePanelPreviewWindow : Window
             for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && Math.Abs(current[i]-(double)value)>0.000001)
                 throw new ArgumentException(ALineRequestMeasurements.Labels[i]+": form değeri açık istek ölçüsüyle çelişiyor; önce kaynağı düzeltin.");
         }
+        void ValidateRequestTotals(ALinePanelInput input)
+        {
+            var review=DressMeasurementParser.Review(promptSnapshot,measurementSnapshot);
+            foreach(var (label,total) in new[]{("bel çevresi",input.FrontWaistArc+input.BackWaistArc),("kalça çevresi",input.FrontHipArc+input.BackHipArc)})
+            {
+                if(review.Questions.Any(q=>q.StartsWith(label+":",StringComparison.Ordinal) && !q.Contains("açık ölçü ve birim")))
+                    throw new ArgumentException(label+": istek notlarındaki belirsizliği önce düzeltin.");
+                var existing=review.Measurements.FirstOrDefault(m=>m.Label==label);
+                if(existing is not null && Math.Abs((double)existing.Millimeters-total)>0.000001)
+                    throw new ArgumentException(label+": ön ve arka yay toplamı kayıtlı istek ölçüsünden farklı; önce kaynağı düzeltin.");
+            }
+        }
         Closed+=(_,_)=>closed=true;
         void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal(); };
@@ -159,7 +171,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Önce simetri ve kesit varsayımlarını inceleyin.");
-                var input=ReadInput();ValidateRequestFields(input);reviewGate.Stage(input);
+                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);reviewGate.Stage(input);
                 double[] normalized=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
                 string Both(double mm)=>$"{mm:G9} mm = {mm/10:G9} cm";
                 summary.Text=string.Join(Environment.NewLine,labels.Select((label,i)=>label+": "+Both(normalized[i])))+
@@ -175,18 +187,9 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Gösterim varsayımını okuyup seçin.");
-                var input=ReadInput();ValidateRequestFields(input);
+                var input=ReadInput();ValidateRequestFields(input);ValidateRequestTotals(input);
                 if(confirm.IsChecked!=true)throw new ArgumentException("Önce cm/mm özetini inceleyip ölçüleri onaylayın.");
                 reviewGate.Confirm();reviewGate.RequireConfirmed(input);
-                var review=DressMeasurementParser.Review(promptSnapshot,measurementSnapshot);
-                foreach(var (label,total) in new[]{("bel çevresi",input.FrontWaistArc+input.BackWaistArc),("kalça çevresi",input.FrontHipArc+input.BackHipArc)})
-                {
-                    if(review.Questions.Any(q=>q.StartsWith(label+":",StringComparison.Ordinal) && !q.Contains("açık ölçü ve birim")))
-                        throw new ArgumentException(label+": istek notlarındaki belirsizliği önce düzeltin.");
-                    var existing=review.Measurements.FirstOrDefault(m=>m.Label==label);
-                    if(existing is not null && Math.Abs((double)existing.Millimeters-total)>0.000001)
-                        throw new ArgumentException(label+": ön ve arka yay toplamı kayıtlı istek ölçüsünden farklı; önce kaynağı düzeltin.");
-                }
                 var preview=ALinePanelPreview.Create(input);
                 var scale=Math.Min(240/(input.FinishedHemCircumference/4),280/input.WaistToHem);
                 void Draw(IReadOnlyList<Point2> points,double x,string label,Brush stroke)
