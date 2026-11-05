@@ -29,6 +29,9 @@ enum BodyMeasurementNotes {
     }
     static func append(values: [String], unit: String, current: String, existingNotes: String, allowAmbiguous: Bool = false) throws -> String {
         guard values.count == fields.count, unit == "cm" || unit == "mm" else { throw ValidationError.tooLong }
+        let separators = CharacterSet.newlines.union(CharacterSet(charactersIn: ";"))
+        let segments = existingNotes.components(separatedBy: separators)
+        let knownLabels = fields.map(\.label) + ["göğüs çevresi", "kalça çevresi", "elbise boyu"]
         var lines: [String] = []
         for (field, raw) in zip(fields, values) {
             let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -40,14 +43,26 @@ enum BodyMeasurementNotes {
             guard text.range(of: regex, options: .regularExpression) != nil,
                   let value = Decimal(string: text.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")),
                   (field.angle ? (value > -90 && value < 90) : (value > 0 && value <= (unit == "cm" ? 1000 : 10000))) else { throw ValidationError.invalid(field.label) }
-            // Detect numeric claims even when written as “yaklaşık 70” or “= 70”.
-            // Other mentions are ambiguous; only an explicit no-measurement statement is ignored.
-            for rawLine in existingNotes.split(whereSeparator: \.isNewline) {
-                let line = String(rawLine)
-                guard let match = line.range(of: field.label, options: [.caseInsensitive]) else { continue }
-                let suffix = line[match.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
-                if suffix.localizedCaseInsensitiveCompare("ölçülmedi") == .orderedSame { continue }
-                if line.contains(where: { $0.isNumber }) { throw ValidationError.duplicate(field.label) }
+            // A semicolon or newline separates claims. A number in another
+            // segment must not be attributed to this label; ambiguous content
+            // inside the same segment is still handled conservatively.
+            for (index, segment) in segments.enumerated() {
+                guard let match = segment.range(of: field.label, options: [.caseInsensitive]) else { continue }
+                let prefix = segment[..<match.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+                let suffix = segment[match.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+                if prefix.isEmpty && suffix.localizedCaseInsensitiveCompare("ölçülmedi") == .orderedSame {
+                    if index + 1 < segments.count {
+                        let next = segments[index + 1]
+                        let numericMeasurement = next.range(of: #"(?i)(?<![\p{L}\p{N}_])[0-9]+(?:[.,][0-9]+)?[ \t]*(?:cm|mm|derece)(?![\p{L}\p{N}_])"#, options: .regularExpression) != nil
+                        let hasKnownExplicitMeasurement = knownLabels.contains { label in
+                            let pattern = #"(?i)\A[ \t]*"# + NSRegularExpression.escapedPattern(for: label) + #"[ \t]*(?::|=)?[ \t]*[0-9]+(?:[.,][0-9]+)?[ \t]*(?:cm|mm|derece)[ \t]*[.!]?[ \t]*\z"#
+                            return next.range(of: pattern, options: .regularExpression) != nil
+                        }
+                        if numericMeasurement && !hasKnownExplicitMeasurement && !allowAmbiguous { throw ValidationError.ambiguous(field.label) }
+                    }
+                    continue
+                }
+                if segment.contains(where: { $0.isNumber }) { throw ValidationError.duplicate(field.label) }
                 if !allowAmbiguous { throw ValidationError.ambiguous(field.label) }
             }
             lines.append("\(field.label) \(text) \(field.angle ? "derece" : unit)")
