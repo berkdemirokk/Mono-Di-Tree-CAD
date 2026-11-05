@@ -76,6 +76,33 @@ public class AtomicWriteCancellationBoundaryTests
     }
 
     [Fact]
+    public void NewFileCancellationAfterFlushRemovesOwnedTempAndLeavesNoTarget()
+    {
+        var directory=NewDirectory();var path=Path.Combine(directory,"checkpoint.tdregion");
+        try {
+            using var cancellation=new CancellationTokenSource();
+            var expected=new ProjectFileVersion(Path.GetFullPath(path),null);
+            Assert.Throws<OperationCanceledException>(()=>Write(path,"checkpoint data",expected,cancellation.Token,
+                ()=> { Assert.False(File.Exists(path));Assert.Single(Directory.GetFiles(directory,"checkpoint.tdregion.*.tmp"));cancellation.Cancel(); },
+                ()=>throw new InvalidOperationException("Commit must not be reached.")));
+            Assert.False(File.Exists(path));Assert.Empty(Directory.GetFiles(directory,"checkpoint.tdregion.*.tmp"));
+        } finally { if(File.Exists(path))File.Delete(path);Directory.Delete(directory); }
+    }
+
+    [Fact]
+    public void NewFileCancellationAfterFinalCheckReportsCompletedCommit()
+    {
+        var directory=NewDirectory();var path=Path.Combine(directory,"checkpoint.tdregion");
+        try {
+            using var cancellation=new CancellationTokenSource();
+            var expected=new ProjectFileVersion(Path.GetFullPath(path),null);
+            Write(path,"checkpoint data",expected,cancellation.Token,()=>{},()=>cancellation.Cancel());
+            Assert.True(cancellation.IsCancellationRequested);Assert.Equal("checkpoint data",File.ReadAllText(path));
+            Assert.Empty(Directory.GetFiles(directory,"checkpoint.tdregion.*.tmp"));
+        } finally { if(File.Exists(path))File.Delete(path);Directory.Delete(directory); }
+    }
+
+    [Fact]
     public void ExternalChangeDuringTemporaryWriteIsPreserved()
     {
         var directory = NewDirectory(); var path = Path.Combine(directory, "out.plt");

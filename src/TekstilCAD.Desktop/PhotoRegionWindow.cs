@@ -57,6 +57,10 @@ internal sealed class PhotoRegionWindow : Window
     internal bool? PendingMarkAtForVerification(int x,int y)=>pendingMarks.TryGetValue(y*image.PixelWidth+x,out var value) ? value : null;
     internal Action<CancellationToken>? BeforeRefineForVerification { get; set; }
     internal Action<CancellationToken>? BeforeComputeForVerification { get; set; }
+    internal Action<CancellationToken>? BeforeSessionSaveForVerification { get; set; }
+    internal Action<CancellationToken>? BeforeSessionLoadForVerification { get; set; }
+    internal Button CancelSessionForVerification { get; }=new() { Content="Dosya işlemini iptal et",Visibility=Visibility.Collapsed,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
+    private bool sessionOperation;
     private sealed record Choice(int Id,int Pixels,int Left,int Top,int Right,int Bottom)
     {
         public override string ToString()=>$"Bölge {Id} · {Pixels} piksel · ({Left},{Top})–({Right},{Bottom})";
@@ -85,18 +89,20 @@ internal sealed class PhotoRegionWindow : Window
             var load=new Button { Content="Bölgeyi aç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
             AutomationProperties.SetHelpText(save,"Maskeyi ve uygulanmış işaretleri fotoğraf piksel özetiyle yeni dosyaya kaydeder. Fotoğraf veya kalıp içermez; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
             AutomationProperties.SetHelpText(load,"Aynı çözülmüş fotoğrafa ait bölgeyi açar; CAD projesi değişmez.");
-            save.Click+=(_,_)=> { if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return; }
+            save.Click+=async (_,_)=> { if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return; }
                 var savedSnapshot=snapshot;var savedApplied=appliedMarks;var savedRevision=regionRevision;
                 var savedFields=new[] { left.Text,top.Text,width.Text,height.Text };
                 var dialog=new SaveFileDialog { Filter="Fotoğraf bölgesi (*.tdregion)|*.tdregion",DefaultExt=".tdregion",AddExtension=true,OverwritePrompt=false };
                 if(dialog.ShowDialog(this)!=true)return;
                 if(closed || running is not null || pendingMarks.Count!=0 || regionRevision!=savedRevision || !ReferenceEquals(snapshot,savedSnapshot) || !ReferenceEquals(appliedMarks,savedApplied) ||
                    !savedFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text })) { Status.Text="Bölge seçim sırasında değişti; dosya kaydedilmedi.";return; }
-                TrySaveSession(dialog.FileName); };
-            load.Click+=(_,_)=> { if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return; }
+                await TrySaveSessionAsync(dialog.FileName); };
+            load.Click+=async (_,_)=> { if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return; }
                 var dialog=new OpenFileDialog { Filter="Fotoğraf bölgesi (*.tdregion)|*.tdregion",CheckFileExists=true };
-                if(dialog.ShowDialog(this)==true)TryLoadSession(dialog.FileName); };
+                if(dialog.ShowDialog(this)==true)await TryLoadSessionAsync(dialog.FileName); };
             actions.Children.Add(save);actions.Children.Add(load);
+            AutomationProperties.SetName(CancelSessionForVerification,"Bölge dosyası işlemini iptal et");
+            CancelSessionForVerification.Click+=(_,_)=>CancelSessionOperation();actions.Children.Add(CancelSessionForVerification);
         }
         var controls=new StackPanel();DockPanel.SetDock(controls,Dock.Top);root.Children.Add(controls);
         controls.Children.Add(new TextBlock { Text=reviewOnly ? "Giysi fotoğrafında bölge arayıp düzeltmeleri inceleyin. Bu yalnız renk tahminidir; ölçü, kalıp veya CAD aktarımı değildir." : "Dikdörtgen sürükleyin, bölge arayın; listeden veya fotoğraftan seçin. Ekle/çıkar fırçasıyla düzeltin; az işaret büyük gösterilir. Sonuç renk tahminidir.",TextWrapping=TextWrapping.Wrap });
@@ -155,7 +161,7 @@ internal sealed class PhotoRegionWindow : Window
         Status.Text="Dikdörtgeni kontrol edin ve Bölge ara seçin. Önceki çizim değişmez.";
         Closing+=(_,e)=> {
             if(DialogResult==true)return;
-            if(!ConfirmDiscard(ConfirmCloseForVerification,"Bölge penceresi kapatılırsa mevcut öneri ve işaretler aktarılmaz. Kapatılsın mı?","Bölgeyi kapat"))
+            if(!ConfirmDiscard(ConfirmCloseForVerification,sessionOperation ? "Dosya işlemi sürüyor; kapatma iptal ister. Tamamlanmış kayıt geri alınmaz. Bölge ve işaretler aktarılmaz. Kapatılsın mı?" : "Bölge penceresi kapatılırsa mevcut öneri ve işaretler aktarılmaz. Kapatılsın mı?","Bölgeyi kapat"))
             { e.Cancel=true;Status.Text="Kapatma iptal edildi; bölge ve işaretler korundu."; }
         };
         Closed+=(_,_)=> { closed=true;running?.Cancel(); };
@@ -262,34 +268,71 @@ internal sealed class PhotoRegionWindow : Window
         { if(!closed && revision==regionRevision)Status.Text="Bölge önerisi hazırlanamadı; önceki bölge korundu: "+ex.Message; }
         finally { if(ReferenceEquals(running,cts))running=null;cts.Dispose(); }
     }
-    internal bool TrySaveSession(string path)
+    internal void CancelSessionOperation()
+    {
+        if(!sessionOperation || running is null || running.IsCancellationRequested)return;
+        running.Cancel();CancelSessionForVerification.IsEnabled=false;
+        Status.Text="İptal istendi; süren dosya okuma veya yazma adımı bitince duracak. Tamamlanmış kayıt geri alınmaz.";
+    }
+    private void BeginSessionOperation(CancellationTokenSource cts)
+    {
+        running=cts;sessionOperation=true;CancelSessionForVerification.IsEnabled=true;CancelSessionForVerification.Visibility=Visibility.Visible;
+    }
+    private void EndSessionOperation(CancellationTokenSource cts)
+    {
+        if(ReferenceEquals(running,cts)) { running=null;sessionOperation=false;if(!closed)CancelSessionForVerification.Visibility=Visibility.Collapsed; }
+        cts.Dispose();
+    }
+    internal async Task<bool> TrySaveSessionAsync(string path)
     {
         if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return false; }
+        if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) || !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
+           !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) || !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h))
+        { Status.Text="Bölge kaydedilemedi: Bölge dikdörtgeni geçersiz.";return false; }
+        var original=snapshot;var marks=appliedMarks;var revision=regionRevision;var cts=new CancellationTokenSource();BeginSessionOperation(cts);
+        Status.Text="Bölge dosyası kaydediliyor…";
         try {
-            if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) || !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
-               !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) || !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h))throw new InvalidDataException("Bölge dikdörtgeni geçersiz.");
-            var text=PhotoRegionSession.Encode(snapshot,appliedMarks,x,y,w,h);var full=Path.GetFullPath(path);
-            ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null));
-            Status.Text="Bölge yeni dosyaya kaydedildi; fotoğraf veya kalıp içermez.";return true;
-        } catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
-        { Status.Text="Bölge kaydedilemedi: "+ex.Message;return false; }
+            await Task.Run(()=> {
+                BeforeSessionSaveForVerification?.Invoke(cts.Token);cts.Token.ThrowIfCancellationRequested();
+                var text=PhotoRegionSession.Encode(original,marks,x,y,w,h,cts.Token);var full=Path.GetFullPath(path);
+                ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null),cts.Token);
+            },cts.Token);
+            if(!closed && revision==regionRevision)Status.Text="Bölge yeni dosyaya kaydedildi; fotoğraf veya kalıp içermez.";
+            return true; // A commit completed even if cancellation arrived after it.
+        } catch(OperationCanceledException) { if(!closed && revision==regionRevision)Status.Text="Bölge kaydı iptal edildi; hedef dosya tamamlanmadı.";return false; }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { if(!closed && revision==regionRevision)Status.Text="Bölge kaydedilemedi: "+ex.Message;return false; }
+        finally { EndSessionOperation(cts); }
     }
-    internal bool TryLoadSession(string path)
+    internal async Task<bool> TryLoadSessionAsync(string path)
     {
         if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return false; }
         if(!ConfirmDiscard(ConfirmRectangleChangeForVerification,"Dosya açılırsa mevcut bölge ve işaretler değiştirilir. Devam edilsin mi?","Bölgeyi aç")) { Status.Text="Bölge açma iptal edildi; mevcut çalışma korundu.";return false; }
+        var oldSnapshot=snapshot;var oldMarks=appliedMarks;var oldSelection=Regions.SelectedItem;var oldOmit=OmitHoles.IsChecked;var oldShow=ShowAppliedMarks.IsChecked;var oldPending=pendingMarks.ToArray();var oldPendingUndo=pendingUndo;var revision=regionRevision;
+        var cts=new CancellationTokenSource();BeginSessionOperation(cts);Status.Text="Bölge dosyası açılıyor; mevcut çalışma korunuyor…";
         try {
-            var bgr=PhotoRasterCapture.CaptureBgr(image,new Int32Rect(0,0,image.PixelWidth,image.PixelHeight),CancellationToken.None);
-            var data=PhotoRegionSession.Decode(path,bgr,image.PixelWidth,image.PixelHeight);
-            var restored=new RegionProposal.Snapshot(data.Width,data.Height,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bgr)),data.Labels);
-            var found=MaskComponents.Analyze(restored.CopyBinaryMask(),data.Width,data.Height);
-            if(found.Components.Count>512)throw new InvalidDataException("Bölge sayısı seçim sınırını aşıyor.");
-            var boxes=new[] { left,top,width,height };var values=new[] { data.X,data.Y,data.RectangleWidth,data.RectangleHeight };
+            var result=await Task.Run(()=> {
+                BeforeSessionLoadForVerification?.Invoke(cts.Token);cts.Token.ThrowIfCancellationRequested();
+                var bgr=PhotoRasterCapture.CaptureBgr(image,new Int32Rect(0,0,image.PixelWidth,image.PixelHeight),cts.Token);
+                var data=PhotoRegionSession.Decode(path,bgr,image.PixelWidth,image.PixelHeight,cts.Token);
+                var restored=new RegionProposal.Snapshot(data.Width,data.Height,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bgr)),data.Labels);
+                var found=MaskComponents.Analyze(restored.CopyBinaryMask(),data.Width,data.Height,cts.Token);
+                if(found.Components.Count>512)throw new InvalidDataException("Bölge sayısı seçim sınırını aşıyor.");
+                return (Bgr:bgr,Data:data,Snapshot:restored,Components:found);
+            },cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+            if(closed || revision!=regionRevision || !ReferenceEquals(snapshot,oldSnapshot) || !ReferenceEquals(appliedMarks,oldMarks) ||
+               !ReferenceEquals(Regions.SelectedItem,oldSelection) || OmitHoles.IsChecked!=oldOmit || ShowAppliedMarks.IsChecked!=oldShow || !ReferenceEquals(pendingUndo,oldPendingUndo) || pendingMarks.Count!=oldPending.Length ||
+               oldPending.Any(mark=>!pendingMarks.TryGetValue(mark.Key,out var value) || value!=mark.Value))
+            { if(!closed && revision==regionRevision)Status.Text="Çalışma değişti; dosya uygulanmadı.";return false; }
+            var data=result.Data;var boxes=new[] { left,top,width,height };var values=new[] { data.X,data.Y,data.RectangleWidth,data.RectangleHeight };
             changingRectangle=true;try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=values[i].ToString(CultureInfo.InvariantCulture);boxes[i].Tag=boxes[i].Text; } } finally { changingRectangle=false; }
-            regionRevision++;snapshot=restored;sourceBgr=bgr;appliedMarks=data.AppliedMarks;undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;pendingMarks.Clear();pendingUndo=null;
-            UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(found);Status.Text="Bölge aynı fotoğraf pikselleriyle açıldı; bölgeyi yeniden seçin. Kalıp veya ölçü doğrulanmadı.";return true;
-        } catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
-        { Status.Text="Bölge açılamadı; mevcut çalışma korundu: "+ex.Message;return false; }
+            regionRevision++;snapshot=result.Snapshot;sourceBgr=result.Bgr;appliedMarks=data.AppliedMarks;undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;pendingMarks.Clear();pendingUndo=null;
+            UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(result.Components);Status.Text="Bölge aynı fotoğraf pikselleriyle açıldı; bölgeyi yeniden seçin. Kalıp veya ölçü doğrulanmadı.";return true;
+        } catch(OperationCanceledException) { if(!closed && revision==regionRevision)Status.Text="Bölge açma iptal edildi; mevcut çalışma korundu.";return false; }
+        catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { if(!closed && revision==regionRevision)Status.Text="Bölge açılamadı; mevcut çalışma korundu: "+ex.Message;return false; }
+        finally { EndSessionOperation(cts); }
     }
     private void ShowComponents(MaskComponents result)
     {

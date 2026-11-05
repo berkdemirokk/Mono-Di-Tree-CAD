@@ -734,7 +734,7 @@ public static class ProjectStorage
     /// Cooperative writers share a mutex; external writers and aliases remain outside this contract.</summary>
     public static void AtomicWriteIfUnchanged(string path, string text, ProjectFileVersion expectedVersion)
         => AtomicWriteIfUnchanged(path, text, expectedVersion, CancellationToken.None);
-    internal static void AtomicWriteIfUnchanged(string path, string text, ProjectFileVersion expectedVersion, CancellationToken cancellationToken)
+    public static void AtomicWriteIfUnchanged(string path, string text, ProjectFileVersion expectedVersion, CancellationToken cancellationToken)
         => AtomicWriteIfUnchangedCore(path, text, expectedVersion, cancellationToken, null, null);
 
     // Per-call boundary observers are private and supplied only by deterministic
