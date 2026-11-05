@@ -5,6 +5,34 @@ namespace TekstilCAD.Tests;
 public sealed class ALinePanelPreviewTests
 {
     private static ALinePanelInput Input => new(360,360,500,500,20,20,20,20,200,700,1600);
+    private static string[] CmFields => ["36","36","50","50","2","2","2","2","20","70","160"];
+    [Fact] public void MissingUnitCannotSilentlyInterpretCentimetersAsMillimeters()
+    {
+        Assert.Throws<ArgumentException>(()=>ALineMeasurementReview.Normalize(CmFields,null));
+        Assert.Equal(Input,ALineMeasurementReview.Normalize(CmFields,ALineLengthUnit.Centimeter));
+        Assert.Equal(Input,ALineMeasurementReview.Normalize(["360","360","500","500","20","20","20","20","200","700","1600"],ALineLengthUnit.Millimeter));
+        Assert.Equal(36,ALineMeasurementReview.Normalize(CmFields,ALineLengthUnit.Millimeter).FrontWaistArc);
+    }
+    [Fact] public void UnitOrMeasurementChangeRequiresFreshReviewAndConfirmation()
+    {
+        var gate=new ALineMeasurementReview();
+        Assert.Throws<InvalidOperationException>(()=>gate.Confirm());
+        gate.Stage(Input);Assert.Throws<InvalidOperationException>(()=>gate.RequireConfirmed(Input));
+        gate.Confirm();gate.RequireConfirmed(Input);
+        Assert.Throws<InvalidOperationException>(()=>gate.RequireConfirmed(Input with { WaistToHem=710 }));
+        Assert.Throws<InvalidOperationException>(()=>gate.RequireConfirmed(ALineMeasurementReview.Normalize(CmFields,ALineLengthUnit.Millimeter)));
+        gate.Invalidate();Assert.Throws<InvalidOperationException>(()=>gate.Confirm());
+        Assert.Throws<InvalidOperationException>(()=>gate.RequireConfirmed(Input));
+        gate.Stage(Input);gate.Confirm();gate.RequireConfirmed(Input);
+        Assert.Throws<ArgumentException>(()=>gate.Stage(Input with { HipDepth=900 }));
+        Assert.Throws<InvalidOperationException>(()=>gate.RequireConfirmed(Input));
+    }
+    [Fact] public void PreviewDisclosesLeftRightSymmetryAndNeverApprovesFit()
+    {
+        var preview=ALinePanelPreview.Create(Input);
+        Assert.Contains(preview.Unresolved,s=>s.Contains("Sağ ve sol") && s.Contains("asimetri"));
+        Assert.False(preview.CanApplyOrExport);
+    }
     [Fact] public void ExplicitSectionsDetermineWidthsAndLengthsWithoutDefaults()
     {
         var a=ALinePanelPreview.Create(Input);var b=ALinePanelPreview.Create(Input);

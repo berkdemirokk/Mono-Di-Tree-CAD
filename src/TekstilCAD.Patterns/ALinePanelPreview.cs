@@ -18,6 +18,7 @@ public sealed class ALinePanelPreview
     public double SideMismatchMm => Math.Abs(FrontSideLengthMm-BackSideLengthMm);
     public bool CanApplyOrExport => false;
     public IReadOnlyList<string> Unresolved { get; } = Array.AsReadOnly(new[] {
+        "Sağ ve sol beden simetrik varsayılır; ön/arka yaylar ikiye bölünür. Sağ/sol asimetri modellenmez.",
         "Üst beden, kol evi, yaka ve elbiseye birleşim üretilmedi.",
         "Pens dağılımı, bel eğrisi ve vücuda uyum çözülmedi; düz kesit çizgileri kullanıldı.",
         "Yan dikiş uzunlukları ölçülür; eşit uzunluk dikiş eşleşmesi veya prova doğrulaması değildir.",
