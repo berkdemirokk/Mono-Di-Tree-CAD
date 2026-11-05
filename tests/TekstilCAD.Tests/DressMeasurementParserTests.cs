@@ -5,6 +5,32 @@ namespace TekstilCAD.Tests;
 public class DressMeasurementParserTests
 {
     [Theory]
+    [InlineData("göğüs çevresi 1.000 cm")]
+    [InlineData("göğüs çevresi 1,000 cm")]
+    [InlineData("göğüs çevresi 1.000 cm ve bel çevresi 72 cm")]
+    public void AmbiguousThreeDigitSeparatorNeverCreatesDefiniteMeasurement(string text)
+    {
+        var result=DressMeasurementParser.Review(text,"");
+        Assert.DoesNotContain(result.Measurements,m=>m.Label=="göğüs çevresi");
+        Assert.Contains(result.Questions,q=>q.StartsWith("göğüs çevresi: ifade belirsiz"));
+        if(text.Contains("bel çevresi"))Assert.DoesNotContain(result.Measurements,m=>m.Label=="bel çevresi");
+        Assert.Contains(text,result.Unrecognized);
+    }
+    [Fact]
+    public void AmbiguousNumberCannotBeErasedByPriorQuestionClarification()
+    {
+        var text="göğüs çevresi 96 cm?; göğüs çevresi 96 cm; göğüs çevresi 1.000 cm";
+        var result=DressMeasurementParser.Review(text,"");
+        Assert.DoesNotContain(result.Measurements,m=>m.Label=="göğüs çevresi");
+        Assert.Contains(result.Questions,q=>q.StartsWith("göğüs çevresi: ifade belirsiz"));
+    }
+    [Fact]
+    public void FourDecimalDigitsRemainUnambiguous()
+    {
+        var result=DressMeasurementParser.Review("göğüs çevresi 1.0000 cm","");
+        Assert.Equal(10m,Assert.Single(result.Measurements).Millimeters);
+    }
+    [Theory]
     [InlineData("ön göğüs 42 cm")]
     [InlineData("göğüs noktaları arası 20 cm")]
     [InlineData("üst göğüs çevresi 90 cm")]

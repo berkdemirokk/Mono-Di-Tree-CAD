@@ -13,6 +13,7 @@ public static partial class DressMeasurementParser
     private const string Labels=@"(?:göğüs(?:\s+çevresi)?|bel(?:\s+çevresi)?|kalça(?:\s+çevresi)?|elbise\s+boyu|kol\s+boyu)";
     private const string ExactLabels=@"(?:göğüs\s+çevresi|bel\s+çevresi|kalça\s+çevresi|elbise\s+boyu|kol\s+boyu)";
     private static readonly Regex SegmentSplit=new(@";|(?:\r\n|[\r\n\v\f\u0085\u2028\u2029])(?:[^\S\r\n\v\f\u0085\u2028\u2029]*(?:\r\n|[\r\n\v\f\u0085\u2028\u2029]))*|,(?=\s*"+Labels+@"\b)",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex AmbiguousNumber=new(@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Conjunction=new(@"\s+ve\s+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex LabelPattern=new(@"\b"+Labels+@"\b",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // A question is not an asserted measurement. It enters the existing unclear
@@ -92,6 +93,23 @@ public static partial class DressMeasurementParser
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
             order++;
+            // Three fractional digits can also be a thousands group. Preserve
+            // every affected label as unclear, including joined measurements.
+            if(AmbiguousNumber.IsMatch(segment) && !OtherChestMeasurement.IsMatch(FoldCase(segment)) && !ALineRequestMeasurements.IsExplicitSeparateField(segment))
+            {
+                var labels=LabelPattern.Matches(FoldCase(segment)).Cast<Match>().Select(m=>Canonical(m.Value)).Distinct(StringComparer.Ordinal).ToArray();
+                if(labels.Length>0)
+                {
+                    foreach(var label in labels)
+                    {
+                        unclear.Add(label);
+                        if(!evidence.TryGetValue(label,out var occurrences))evidence[label]=occurrences=[];
+                        occurrences.Add(new(field,segmentOffset,order,null,false));
+                    }
+                    if(labels.Length>1)coupled.Add(labels.ToHashSet(StringComparer.Ordinal));
+                    other.Add(segment);continue;
+                }
+            }
             var compound=CompoundChatRequest.Parse(segment);
             if(compound is not null && compound.Measurements.Count>0)
             {

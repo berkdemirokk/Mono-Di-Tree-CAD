@@ -5,6 +5,15 @@ internal static partial class DesktopVerification
     private static void VerifyGenericChatContext(DesignRequestWindow window,List<string> checks)
     {
         var source=new DesignRequest("Düz elbise istiyorum","",null,"straight",2);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96\u00a0cm";window.InsertMeasurementLabel();
+        Check(window.ChatInputForVerification.Text=="göğüs çevresi: 96\u00a0cm", "Label action prefixes the existing standalone measurement without rewriting it",checks);
+        window.SendMessageForVerification();
+        Check(DressMeasurementParser.Review(window.CaptureForVerification().Prompt,"").Measurements.Any(m=>m.Label=="göğüs çevresi" && m.Millimeters==960),
+              "An explicitly prefixed measurement can be sent to the requested field",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96";window.InsertMeasurementLabel();
+        Check(window.ChatInputForVerification.Text=="göğüs çevresi: 96", "Label action preserves a standalone unitless value for further editing",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm değil";window.InsertMeasurementLabel();
+        Check(window.ChatInputForVerification.Text=="96 cm değil\ngöğüs çevresi: ", "Negated prose keeps its original order when adding a label",checks);
         foreach(var answer in new[]{"96","\u00a096,5\u202f"})
         {
             window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
@@ -24,6 +33,16 @@ internal static partial class DesktopVerification
         var staleUnicode=window.CaptureForVerification();window.SendMessageForVerification();
         Check(window.CaptureForVerification()==staleUnicode && window.ChatInputForVerification.Text=="96\u202fcm",
               "Generic Unicode-spaced answer cannot attach after its question changes",checks);
+        foreach(var answer in new[]{"1.000 cm","1,000 cm"})
+        {
+            window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text==answer && window.StatusForVerification.Text.Contains("ayırıcı belirsiz"),
+                "Generic ambiguous three-digit separator remains editable instead of becoming a measurement",checks);
+            window.InsertMeasurementLabel();window.SendMessageForVerification();
+            var explicitSource=window.CaptureForVerification();var reviewed=DressMeasurementParser.Review(explicitSource.Prompt,explicitSource.Measurements);
+            Check(!reviewed.Measurements.Any(m=>m.Label=="göğüs çevresi") && reviewed.Questions.Any(q=>q.Contains("göğüs çevresi") && q.Contains("belirsiz")),
+                "Explicitly labeled ambiguous number is preserved but not accepted as a definite measurement",checks);
+        }
         foreach(var answer in new[]{"0 cm","1001 cm"})
         {
             window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();

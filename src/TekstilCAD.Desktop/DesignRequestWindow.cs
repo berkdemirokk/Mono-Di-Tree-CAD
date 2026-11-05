@@ -267,7 +267,7 @@ internal sealed class DesignRequestWindow : Window
         body.Children.Add(new TextBlock { Text="Ölçüler için yazışma",FontFamily=new FontFamily("Georgia"),FontSize=19,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
         body.Children.Add(new Label { Foreground=Ink,Content="Konuşma ve sıradaki soru",Target=conversation,Padding=new Thickness(0,4,0,4) });
         AutomationProperties.SetName(conversation,"İsteğiniz ve sıradaki ölçü sorusu");body.Children.Add(new Border { Child=conversation,Background=Surface,BorderBrush=BorderColor,BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(8),Padding=new Thickness(3),Margin=new Thickness(0,0,0,6) });
-        AutomationProperties.SetHelpText(measurementShortcut,"Sorulan ölçünün etiketini mesajın sonuna ekler; sayı veya birim seçmez. Mevcut metin korunur.");
+        AutomationProperties.SetHelpText(measurementShortcut,"Sorulan ölçünün etiketini ekler; mesaj yalnız sayı veya ölçüyse etiket başa, diğer metinlerde sona eklenir. Sayı ve birim seçilmez; mevcut metin korunur.");
         body.Children.Add(measurementShortcut);measurementShortcut.Click+=(_,_)=>InsertMeasurementLabel();
         AutomationProperties.SetName(chatInput,"Elbise isteği veya ölçü mesajı");
         var nextStepRow=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,4) };
@@ -573,6 +573,8 @@ internal sealed class DesignRequestWindow : Window
             { SetStatus("Soru veya kaynak değişti; yanıt korunuyor. Ölçüyü güncel etiketi ve birimiyle yeniden yazın.");return; }
             try
             {
+                if(System.Text.RegularExpressions.Regex.IsMatch(message,@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+                { SetStatus("Üç basamaklı ayırıcı belirsiz; binlik ayırıcı kullanmadan açık bir değer ve birim yazın. Mesajınız korundu.");return; }
                 var candidate=DressMeasurementParser.Review(context.Label+": "+message,"");
                 if(candidate.Measurements.Count!=1 || candidate.Measurements[0].Label!=context.Label)
                 { SetStatus("Ölçü geçersiz veya sınır dışında; pozitif değeri ve cm/mm birimini kontrol edin. Mesajınız korundu.");return; }
@@ -636,12 +638,22 @@ internal sealed class DesignRequestWindow : Window
         ClearModelTracking();requestVersion=2;portableModelId=suggestion.ModelId;dirty=true;SetLastModel(modelCards[index].Button);
         SetStatus($"{suggestion.Label} model fikri onayla seçildi. Metin korundu; V2 model kimliği etkin. Kalıp oluşturulmadı.");
     }
-    private void InsertMeasurementLabel()
+    internal void InsertMeasurementLabel()
     {
         var label=suggestedMeasurement;
         if(label is null)return;
         var text=label+": ";
         if(chatInput.Text.EndsWith(text,StringComparison.Ordinal)) { chatInput.Focus();return; }
+        // An explicit click can label a standalone value already being edited.
+        // Keep ambiguous or multi-clause text in its original order.
+        if(System.Text.RegularExpressions.Regex.IsMatch(chatInput.Text,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:(?:mm|cm)[\t\p{Zs}]*)?[.!]?[\t\p{Zs}]*\z",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+        {
+            if((long)chatInput.Text.Length+text.Length>chatInput.MaxLength)
+            { SetStatus("Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.");return; }
+            chatInput.Text=text+chatInput.Text;chatInput.CaretIndex=chatInput.Text.Length;chatInput.Focus();
+            SetStatus("Ölçü etiketi mevcut değerin başına eklendi; birimi ve değeri kontrol edin.");return;
+        }
         var addition=(chatInput.Text.Length==0 ? "" : "\n")+text;
         if((long)chatInput.Text.Length+addition.Length+addition.Count(c=>c=='\n')>chatInput.MaxLength)
         { SetStatus("Ölçü etiketi eklenemedi: mesaj uzunluk sınırına ulaşıldı. Mevcut mesaj korundu.");return; }
