@@ -48,7 +48,7 @@ public sealed class DesignRequestV2Tests
             var folder=Path.Combine(Path.GetTempPath(),"request-v2-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
             try
             {
-                var path=Path.Combine(folder,"request.json");DesignRequestStorage.SaveNewV2(path,original,_=>throw new Exception("No image expected"));
+                var path=Path.Combine(folder,Guid.NewGuid().ToString("N")+".tcad-request.json");DesignRequestStorage.SaveNewV2(path,original,_=>throw new Exception("No image expected"));
                 Assert.Equal(original,DesignRequestStorage.Load(path));
                 Assert.Equal(original,DesignRequestStorage.Deserialize(File.ReadAllText(path)));
             }
