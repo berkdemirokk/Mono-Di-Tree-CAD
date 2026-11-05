@@ -1,0 +1,40 @@
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Text.Json.Nodes;
+using System.Text;
+using TekstilCAD.Patterns;
+using SyntheticBridge;
+using FourPieceResearch;
+using UpperPreview=BodiceWpfReader.Preview;
+namespace WaistInspection;
+
+internal sealed class ResearchWindow:Window
+{
+    readonly ComboBox selection=new(){ItemsSource=new[]{"synthetic-base","synthetic-scaled","synthetic-distinct"},SelectedIndex=-1};
+    readonly ComboBox measure=new(){ItemsSource=new[]{"Arka yarım bel: üst aday ↔ alt bel çizgisi"},SelectedIndex=-1};
+    readonly TextBlock status=new(){TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8)},summary=new(){TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8)};
+    readonly FourView view=new(){Height=600,Visibility=Visibility.Collapsed};readonly Coordinator coordinator=new();long generation;
+    internal ResearchWindow(){Title="Sentetik arka bel incelemesi";Width=1080;Height=850;var root=new StackPanel{Margin=new Thickness(16)};Content=new ScrollViewer{Content=root,VerticalScrollBarVisibility=ScrollBarVisibility.Auto};
+        root.Children.Add(new TextBlock{Text="YALNIZ UYDURMA SENARYO. Üst ve alt farklı ölçü/bolluk yöntemlerinden gelir; aynı beden, dikiş uyumu veya birleştirilmiş elbise varsayılmaz. Ağ yalıtımı, çalışan motor kimliği ve lisansı doğrulanmadı. CAD, gerçek kişi verisi, üretim, baskı, export ve cihaz yok. Uzman incelemesi ve numune prova gerekir.",TextWrapping=TextWrapping.Wrap,Foreground=Brushes.DarkRed});
+        root.Children.Add(new TextBlock{Text="1 · Sabit sentetik senaryo",Margin=new Thickness(0,12,0,4)});root.Children.Add(selection);root.Children.Add(new TextBlock{Text="2 · Karşılaştırma seçimi: yalnız arka yarım bel. Üst kaynak adayı ile alt merkez–yan çizgisi, ortak dikiş oldukları ispatlanmadan yan yana ölçülür.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,4)});root.Children.Add(measure);
+        selection.SelectionChanged+=(_,_)=>InvalidateSelection();measure.SelectionChanged+=(_,_)=>InvalidateSelection();var row=new StackPanel{Orientation=Orientation.Horizontal};var run=new Button{Content="Sentetik ölçüleri incele",Margin=new Thickness(0,10,10,10)};var cancel=new Button{Content="İptal",Margin=new Thickness(0,10,0,10)};row.Children.Add(run);row.Children.Add(cancel);root.Children.Add(row);root.Children.Add(status);root.Children.Add(summary);root.Children.Add(view);
+        cancel.Click+=(_,_)=>{generation++;coordinator.Cancel();Clear();status.Text="İptal edildi.";};
+        run.Click+=async(_,_)=>{var id=selection.SelectedItem as string;if(!Envelope.ValidId(id)||measure.SelectedIndex!=0){status.Text="Senaryoyu ve karşılaştırmayı seçin.";return;}long mine=++generation;Clear();status.Text="Sentetik kaynaklar inceleniyor…";try{await coordinator.Start(id!,ct=>Worker.Run(Worker.Real,id!,TimeSpan.FromSeconds(15),ct),upper=>Publish(id!,upper,Compare.Source()));}catch{if(mine==generation){Clear();status.Text="Sentetik sonuç doğrulanamadı.";}}};
+        Closed+=(_,_)=>{generation++;coordinator.Cancel();};
+    }
+    void InvalidateSelection(){generation++;coordinator.Cancel();Clear();status.Text="Seçim değişti; incelemeyi yeniden başlatın.";}
+    void Clear(){view.Panels=null;view.Visibility=Visibility.Collapsed;view.InvalidateVisual();summary.Text="";}
+    void Publish(string id,UpperPreview upper,byte[] source){if(measure.SelectedIndex!=0||!StringComparer.Ordinal.Equals(selection.SelectedItem as string,id))return;var scenario=Scenario.Get(id);var lower=ALinePanelPreview.Create(scenario.Lower);view.Panels=Layout.Build(upper,lower);view.Visibility=Visibility.Visible;view.InvalidateVisual();var m=Compare.Inspect(id,upper,lower,source);summary.Text=m.Text+"\n"+scenario.Explain;status.Text=m.Available?"Seçili iki sentetik hattın yalnız sayısal incelemesi; uyum ve üretim onayı yok.":"Kaynak adayı doğrulanamadı; sayısal karşılaştırma yapılmadı.";}
+    internal void SelectForTest(string id){selection.SelectedItem=id;measure.SelectedIndex=0;}
+    internal void PublishForTest(string id,UpperPreview upper,byte[] source)=>Publish(id,upper,source);
+    internal bool VisibleForTest=>view.Visibility==Visibility.Visible;
+    internal string SummaryForTest=>summary.Text;
+    internal void ClearChoiceForTest()=>measure.SelectedIndex=-1;
+}
+internal static class Program
+{
+    [STAThread]static int Main(string[] args){if(args.SequenceEqual(new[]{"--verify"})){try{var r=VerifyAsync().GetAwaiter().GetResult();VerifyUi(r.a,r.b);Console.WriteLine("PASS: two synthetic source-specific waist measurements, mismatched evidence rejection, configuration and stale checks; no window shown");return 0;}catch(Exception e){Console.Error.WriteLine("FAIL: "+e.Message);return 1;}}return new Application().Run(new ResearchWindow());}
+    static async Task<(UpperPreview a,UpperPreview b)> VerifyAsync(){var a=await Worker.Run(Worker.Real,"synthetic-base",TimeSpan.FromSeconds(20),CancellationToken.None);var b=await Worker.Run(Worker.Real,"synthetic-scaled",TimeSpan.FromSeconds(20),CancellationToken.None);var source=Compare.Source();var l1=ALinePanelPreview.Create(Scenario.Get("synthetic-base").Lower);var l2=ALinePanelPreview.Create(Scenario.Get("synthetic-scaled").Lower);var x=Compare.Inspect("synthetic-base",a,l1,source);var y=Compare.Inspect("synthetic-scaled",b,l2,source);if(!x.Available||!y.Available||Math.Abs(x.UpperMm-203.5)>1e-8||Math.Abs(x.LowerMm-195)>1e-8||Math.Abs(x.DifferenceMm-8.5)>1e-8||Math.Abs(y.UpperMm-227.92)>1e-8||Math.Abs(y.LowerMm-218.4)>1e-8)throw new Exception("unexpected measurements");if(Compare.Inspect("synthetic-base",b,l1,source).Available||Compare.Inspect("synthetic-base",a,l2,source).Available)throw new Exception("wrong scenario accepted");var data=JsonNode.Parse(source)!;data["cases"]![0]!["options"]!["waistDart"]=true;if(Compare.Inspect("synthetic-base",a,l1,Encoding.UTF8.GetBytes(data.ToJsonString())).Available)throw new Exception("wrong dart config accepted");var altered=JsonNode.Parse(source)!;altered["cases"]![0]!["edges"]![2]!["to"]!["x"]=999;if(Compare.Inspect("synthetic-base",a,l1,Encoding.UTF8.GetBytes(altered.ToJsonString())).Available)throw new Exception("altered source edge accepted");var coordinator=new Coordinator();var pending=new TaskCompletionSource<UpperPreview>(TaskCreationOptions.RunContinuationsAsynchronously);int count=0;var old=coordinator.Start("synthetic-base",_=>pending.Task,_=>count++);coordinator.Cancel();pending.SetResult(a);if(await old||count!=0)throw new Exception("stale result");return(a,b);}
+    static void VerifyUi(UpperPreview a,UpperPreview b){var app=new Application();var w=new ResearchWindow();var source=Compare.Source();w.SelectForTest("synthetic-base");w.PublishForTest("synthetic-base",a,source);if(!w.VisibleForTest||!w.SummaryForTest.Contains("203,500")&&!w.SummaryForTest.Contains("203.500"))throw new Exception("measurement not visible");w.ClearChoiceForTest();if(w.VisibleForTest||w.SummaryForTest!="")throw new Exception("stale measurement");w.SelectForTest("synthetic-scaled");w.PublishForTest("synthetic-scaled",b,source);if(!w.VisibleForTest||!w.SummaryForTest.Contains("onayı")&&!w.SummaryForTest.Contains("kararı"))throw new Exception("warning missing");}
+}
