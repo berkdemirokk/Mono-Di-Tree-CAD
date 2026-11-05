@@ -11,6 +11,8 @@ internal static class ALineWaistSourceComparison
         const string scope=" Beden yaylarına bolluk dahil değildir; bolluk ayrı girilir. Belden kalçaya ölçümün referans noktası en geniş kalça hizasıyla aynı olmayabilir. Bu karşılaştırma ölçüm veya üretim onayı değildir.";
         try
         {
+            var source=ALineRequestMeasurements.Review(prompt,notes);
+            if(source.Issues.Count>0)return "İstek ölçüleri belirsiz veya geri çekilmiş; bel karşılaştırması yapılamadı."+scope;
             var waist=ALineBodyTotals.Review(prompt,notes).WaistMm;
             if(waist is null)return "İstekte açık ve tek bir bel çevresi yok veya ifade belirsiz; karşılaştırma yapılamadı."+scope;
             if(string.IsNullOrWhiteSpace(front)||string.IsNullOrWhiteSpace(back)||unit is null)return "İstekte açık bel çevresi var; A kesim ön ve arka beden yayları veya birimi eksik."+scope;

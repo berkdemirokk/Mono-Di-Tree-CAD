@@ -47,6 +47,9 @@ internal static partial class DesktopVerification
                 ALineWaistSourceComparison.Describe("","bel çevresi 72 cm ise","350","370",ALineLengthUnit.Millimeter).Contains("belirsiz") &&
                 ALineWaistSourceComparison.Describe("","bel çevresi 72 cm","350","370",ALineLengthUnit.Millimeter).Contains("eşit"),
                 "Waist comparison rejects question and conflicting sources and normalizes explicit units",checks);
+            foreach(var statement in new[]{"bel çevresi 80 cm; ölçüler geçersiz","bel çevresi 80 cm; bunlar geçerli mi?","bel çevresi 80 cm?"})
+                Check(!ALineWaistSourceComparison.Describe("",statement,"35","45",ALineLengthUnit.Centimeter).Contains("sayılar eşit"),"Ambiguous or withdrawn source cannot yield early waist equality: "+statement,checks);
+            Check(ALineWaistSourceComparison.Describe("","bel çevresi 80 cm","35","45",ALineLengthUnit.Centimeter).Contains("sayılar eşit"),"Explicit valid source still permits a numeric comparison",checks);
             static void Click(Button b)=>b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             static void Fill(ALinePanelPreviewWindow w,bool cm)
             {
