@@ -634,7 +634,7 @@ enum ExperimentalDesignBrief {
         var explanation: String {
             switch self {
             case .compatible: return "Görsel bu iPhone'da V2 görsel denetimini geçti. Windows ile gerçek aktarım henüz doğrulanmadı."
-            case .incompatible: return "Görsel V2 denetimini geçmedi. V2 tek kare PNG/JPEG, en fazla 8 MiB, 12.000 piksel kenar ve 24 milyon piksel ister; animasyonlu PNG ve bozuk görseller kabul edilmez. Farklı bir görsel seçebilirsiniz. V1 kaydedilebilir, ancak Windows'ta görsel açılmayabilir. Mevcut görsel korunuyor."
+            case .incompatible: return "Görsel V2 denetimini geçmedi. V2 tek kare PNG/JPEG, en fazla 8 MiB, 12.000 piksel kenar ve 24 milyon piksel ister; animasyonlu PNG ve bozuk görseller kabul edilmez. Farklı bir görsel seçebilirsiniz. V1 kaydını deneyebilirsiniz; ancak Windows'ta görsel açılmayabilir. Mevcut görsel korunuyor."
             }
         }
     }
