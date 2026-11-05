@@ -15,6 +15,7 @@ internal static partial class DesktopVerification
         try
         {
             _=new WindowInteropHelper(owner).EnsureHandle();window=new DesignRequestWindow(owner);
+            Check(!window.RequestDetailsForVerification.IsExpanded,"Saved request editing starts collapsed for the primary chat flow",checks);
             var initial=new DesignRequest("","bel çevresi 72 cm",null);
             // Empty description is valid as a transient form, not persisted here.
             window.MeasurementsForVerification.Text=initial.Measurements;
@@ -205,6 +206,28 @@ internal static partial class DesktopVerification
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin"&&window.ReviewForVerification.Text.Contains("koşullu")&&window.ReviewForVerification.Text.Contains("çelişiyor"),"Condition in notes survives question clarification and retains conflicting-value warning",checks);
             window.LoadForVerification(new DesignRequest("gömlek elbise;bel çevresi 72 cm?;bel çevresi 720 mm!","kalça çevresi 100 cm.",null));
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm","Elbise does not trigger suffix detection; nonconditional clarification stays functional",checks);
+            var layoutBody=(StackPanel)window.BodyScrollerForVerification.Content;
+            var composeParent=(UIElement)LogicalTreeHelper.GetParent(window.ChatInputForVerification);
+            Check(layoutBody.Children.IndexOf(composeParent)>=0&&layoutBody.Children.IndexOf(composeParent)<layoutBody.Children.IndexOf(window.RequestDetailsForVerification),"Real chat composer precedes collapsible request editing in logical layout",checks);
+            bool InDetails(DependencyObject element)
+            {
+                for(DependencyObject? current=element;current is not null;current=LogicalTreeHelper.GetParent(current))if(ReferenceEquals(current,window.RequestDetailsForVerification))return true;
+                return false;
+            }
+            Check(InDetails(window.PromptForVerification)&&InDetails(window.MeasurementsForVerification)&&InDetails(window.ReferenceLabelForVerification)&&!InDetails(window.ChatInputForVerification),"Saved prose, measurements and photo controls belong to details; chat stays outside",checks);
+            window.RequestDetailsForVerification.IsExpanded=false;
+            window.LoadForVerification(new DesignRequest("Kayıtlı sentetik tarif","bel çevresi 72 cm",new DesignReference("sentetik.png","image/png",imageBytes)));
+            var detailSnapshot=window.CaptureForVerification();window.ChatInputForVerification.Text="Gönderilmeyen taslak";
+            window.RequestDetailsForVerification.IsExpanded=true;window.RequestDetailsForVerification.IsExpanded=false;
+            Check(window.CaptureForVerification().Prompt==detailSnapshot.Prompt&&window.CaptureForVerification().Measurements==detailSnapshot.Measurements&&window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes)&&window.ChatInputForVerification.Text=="Gönderilmeyen taslak","Expanding/collapsing preserves all stored fields, image bytes and unsent message",checks);
+            Check(AutomationProperties.GetName(window.RequestDetailsForVerification)=="İstek ayrıntılarını düzenle"&&AutomationProperties.GetName(window.ChatInputForVerification)=="Elbise isteği veya ölçü mesajı","Details and primary chat retain explicit accessible names",checks);
+            window.ReviewActionForVerification!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.RequestDetailsForVerification.IsExpanded&&window.ReviewForVerification.Text.Contains("720")&&window.ChatInputForVerification.Text=="Gönderilmeyen taslak","Persistent review action expands its result without consuming unsent text",checks);
+            window.LoadForVerification(new DesignRequest("Sentetik sohbet başlangıcı","",null));window.RequestDetailsForVerification.IsExpanded=false;
+            window.ConfirmChatModelForVerification=_=>false;window.ChatInputForVerification.Text="A kesim elbise istiyorum";window.SendActionForVerification!.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().ModelId is null&&window.CaptureForVerification().Prompt.EndsWith("A kesim elbise istiyorum",StringComparison.Ordinal)&&!window.RequestDetailsForVerification.IsExpanded,"Primary Send button still requires model approval while retaining text and collapsed details",checks);
+            window.ChatInputForVerification.Text="bel çevresi 72 cm";window.SendActionForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&!window.RequestDetailsForVerification.IsExpanded&&window.ChatInputForVerification.Text.Length==0,"Chat measurement still updates hidden detail fields without forcing them open",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

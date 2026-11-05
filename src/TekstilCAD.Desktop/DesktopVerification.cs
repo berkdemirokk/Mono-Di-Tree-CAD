@@ -10433,6 +10433,7 @@ internal static partial class DesktopVerification
             var reference=new DesignReference("örnek.png","image/png",png);
             window.LoadForVerification(new DesignRequest("Yeni taslak", "bel 72 cm",reference));
             var root=(FrameworkElement)window.Content;
+            window.RequestDetailsForVerification.IsExpanded=true;root.UpdateLayout();
             var card=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
             var convert=Descendants<Button>(root).Single(b=>Equals(b.Content,"V2 model kimliğiyle çalış…"));
             card.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var v1Choice=window.CaptureForVerification();
@@ -10574,6 +10575,7 @@ internal static partial class DesktopVerification
                 "Measurement conversation shortcut navigates without altering a pending message or request",checks);
             Render(window,Path.ChangeExtension(reportPath,".atelier-chat-shortcut.png"),900,700);
             window.ChatInputForVerification.Clear();window.BodyScrollerForVerification.ScrollToTop();
+            window.RequestDetailsForVerification.IsExpanded=true;requestRoot.UpdateLayout();
             var detailChip=Descendants<Button>(requestRoot).Single(b=>AutomationProperties.GetName(b)=="Tarife ekle: Midi boy");
             detailChip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var afterChip=window.PromptForVerification.Text;detailChip.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
