@@ -50,6 +50,7 @@ export function diagnose(input) {
       if ((e.sourceVersion && v.source?.version && e.sourceVersion !== v.source.version) || (e.sourceHash && v.source?.hash && e.sourceHash !== v.source.hash)) throw new Error('mixed sources');
       if (!id(e.draft) || !id(e.piece) || !id(e.sourceVersion) || !id(e.sourceHash)) reasons.push('missing-edge-source');
       if (!Array.isArray(e.length) || e.length.length !== 2 || !e.length.every(finite) || e.length[0] < 0 || e.length[1] < e.length[0]) { reasons.push('invalid-length-interval'); continue; }
+      if (e.length[0] === 0) { reasons.push('zero-or-ambiguous-edge'); continue; }
       lo += e.length[0] * scale; hi += e.length[1] * scale;
     }
     if (!finite(lo) || !finite(hi)) throw new Error('length overflow');

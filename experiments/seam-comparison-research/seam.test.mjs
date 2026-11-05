@@ -37,6 +37,16 @@ test('boundary contact is not disjoint and result snapshots caller data', () => 
   assert.equal(r.comparison.disjointBeyondDeclaredTolerance,false);
   v.sides[0].edges[0].length[0]=999; assert.equal(r.sides[0].edges[0].length[0],180);
 });
+test('zero-length and zero-containing edge intervals remain unresolved', () => {
+  for (const length of [[0,0],[0,2]]) {
+    const v=fixture(); v.sides[0].edges[0].length=length;
+    const r=diagnose(v);
+    assert.equal(r.status,'unresolved');
+    assert.ok(r.reasons.includes('zero-or-ambiguous-edge'));
+    assert.equal(r.comparison,null);
+    assert.equal(r.productionApproved,false);
+  }
+});
 test('nonfinite, overflow, negative and invalid interval never approve', () => {
   for (const mutate of [v=>v.measurements.frontArc=Infinity,v=>v.measurements.frontEase=-1,v=>v.measurements.frontArc=Number.MAX_VALUE,v=>v.sides[0].edges[0].length=[3,2],v=>v.sides[0].edges[0].length=[-1,2]]) {
     const v=fixture(); mutate(v); try { assert.equal(diagnose(v).status,'unresolved'); } catch (e) { assert.ok(e instanceof Error); }
