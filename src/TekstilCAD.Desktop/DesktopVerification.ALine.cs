@@ -87,8 +87,10 @@ internal static partial class DesktopVerification
             try
             {
                 Check(proposalWindow.KnownTotalsForVerification.Text.Contains("72 cm") && proposalWindow.KnownTotalsForVerification.Text.Contains("100 cm") &&
-                    proposalWindow.FieldsForVerification.All(f=>f.Text.Length==0) && !proposalWindow.ProposalApplyForVerification.IsEnabled && proposalWindow.ProposalAgreementForVerification.IsEnabled,
-                    "Explicit front/back clauses retain totals and show an opt-in proposal without filling fields",checks);
+                    proposalWindow.FieldsForVerification.All(f=>f.Text.Length==0) && !proposalWindow.ProposalApplyForVerification.IsEnabled && !proposalWindow.ProposalAgreementForVerification.IsEnabled && proposalWindow.UnitForVerification.SelectedIndex==-1,
+                    "Explicit front/back clauses retain totals but transfer requires an explicit target unit",checks);
+                proposalWindow.UnitForVerification.SelectedIndex=1;
+                Check(proposalWindow.ProposalAgreementForVerification.IsEnabled,"Selecting mm permits review of the complete transfer plan",checks);
                 Check(proposalWindow.ProposalForVerification.Text.Contains("360 mm = 36 cm") && proposalWindow.ProposalForVerification.Text.Contains("Ön bel yayı bolluğu"),
                     "Request proposal exposes normalized source values and explicit ease before acceptance",checks);
                 Click(proposalWindow.ProposalApplyForVerification);
@@ -107,6 +109,48 @@ internal static partial class DesktopVerification
                     "Proposal verification remains unshown and leaves its request text unchanged",checks);
             }
             finally { proposalWindow.Close(); }
+            var partialWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise","ön bel yayı 36 cm;arka kalça yayı 500 mm;ön bel yayı bolluğu 0.0125 cm");
+            try
+            {
+                Check(!partialWindow.ProposalAgreementForVerification.IsEnabled && partialWindow.FieldsForVerification.All(f=>f.Text.Length==0),
+                    "Partial source without chosen target unit neither offers acceptance nor fills fields",checks);
+                partialWindow.UnitForVerification.SelectedIndex=1;partialWindow.FieldsForVerification[1].Text=" 360 ";
+                Check(partialWindow.ProposalAgreementForVerification.IsEnabled && partialWindow.ProposalForVerification.Text.Contains("KORUNACAK") &&
+                    partialWindow.ProposalForVerification.Text.Contains("EKSİK") && partialWindow.ProposalForVerification.Text.Contains("0.1250 mm"),
+                    "Partial plan shows preserved, missing and exactly represented source values",checks);
+                partialWindow.ProposalAgreementForVerification.IsChecked=true;partialWindow.FieldsForVerification[8].Text="200";
+                Check(partialWindow.ProposalAgreementForVerification.IsChecked!=true && !partialWindow.ProposalApplyForVerification.IsEnabled,
+                    "Editing any field invalidates the accepted transfer plan",checks);
+                Click(partialWindow.ProposalApplyForVerification);
+                Check(partialWindow.FieldsForVerification[0].Text=="","Stale field acceptance cannot copy a source value",checks);
+                partialWindow.ProposalAgreementForVerification.IsChecked=true;partialWindow.UnitForVerification.SelectedIndex=0;
+                Check(partialWindow.ProposalAgreementForVerification.IsChecked!=true && !partialWindow.ProposalApplyForVerification.IsEnabled && partialWindow.FieldsForVerification[1].Text==" 360 ",
+                    "Changing target units invalidates transfer approval while preserving typed text",checks);
+                partialWindow.UnitForVerification.SelectedIndex=1;partialWindow.ProposalAgreementForVerification.IsChecked=true;Click(partialWindow.ProposalApplyForVerification);
+                Check(partialWindow.FieldsForVerification[0].Text=="360" && partialWindow.FieldsForVerification[3].Text=="500" && partialWindow.FieldsForVerification[4].Text=="0.1250" &&
+                    partialWindow.FieldsForVerification[1].Text==" 360 " && partialWindow.FieldsForVerification[8].Text=="200" && partialWindow.FieldsForVerification[5].Text=="",
+                    "Confirmed partial transfer copies only known empty fields, preserving unknown ease and typed values",checks);
+                Check(partialWindow.AgreementForVerification.IsChecked!=true && !partialWindow.ConfirmationForVerification.IsEnabled && partialWindow.CanvasForVerification.Children.Count==0,
+                    "Partial transfer cannot assume symmetry or enable final confirmation or drawing",checks);
+                partialWindow.AgreementForVerification.IsChecked=true;Click(partialWindow.ReviewForVerification);Click(partialWindow.DrawForVerification);
+                Check(!partialWindow.ConfirmationForVerification.IsEnabled && partialWindow.CanvasForVerification.Children.Count==0,
+                    "Missing fields after transfer still prevent all preview geometry",checks);
+                Fill(partialWindow,false);partialWindow.FieldsForVerification[4].Text="0.1250";ReviewAndDraw(partialWindow);
+                Check(request.CaptureForVerification()==requestBeforeProposal && !request.DirtyForVerification && !partialWindow.IsVisible,
+                    "Partial transfer and manual completion leave the saved request untouched and window unshown",checks);
+            }
+            finally { partialWindow.Close(); }
+            var partialConflict=new ALinePanelPreviewWindow(owner,"ön bel yayı 36 cm","bel çevresi 72 cm");
+            try
+            {
+                partialConflict.UnitForVerification.SelectedIndex=0;partialConflict.FieldsForVerification[1].Text="37";
+                Check(!partialConflict.ProposalAgreementForVerification.IsEnabled && partialConflict.ProposalForVerification.Text.Contains("toplam beden ölçüsüyle çelişiyor"),
+                    "A preserved manual arc conflicting with the source total blocks partial transfer",checks);
+                Click(partialConflict.ProposalApplyForVerification);
+                Check(partialConflict.FieldsForVerification[0].Text=="" && partialConflict.FieldsForVerification[1].Text=="37",
+                    "Rejected partial transfer preserves both empty and conflicting typed fields",checks);
+            }
+            finally { partialConflict.Close(); }
             foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse",
                 sourceText+";bu ölçüler geçerli değil",sourceText+";önceki ölçüleri kullanmayın",
                 sourceText+";ölçüler doğru değilmiş",sourceText+";ölçüleri kullanmayacağım",
@@ -129,6 +173,7 @@ internal static partial class DesktopVerification
             var designOnlyWindow=new ALinePanelPreviewWindow(owner,"Kumaş doğru değilmiş; önceki modeli kullanmayacağım",sourceText);
             try
             {
+                designOnlyWindow.UnitForVerification.SelectedIndex=1;
                 Check(designOnlyWindow.ProposalAgreementForVerification.IsEnabled,"Design-only negative inflections do not withdraw explicitly stated measurements",checks);
                 designOnlyWindow.ProposalAgreementForVerification.IsChecked=true;Click(designOnlyWindow.ProposalApplyForVerification);
                 designOnlyWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(designOnlyWindow);
@@ -154,6 +199,7 @@ internal static partial class DesktopVerification
                 var affirmativeWindow=new ALinePanelPreviewWindow(owner,affirmative,sourceText);
                 try
                 {
+                    affirmativeWindow.UnitForVerification.SelectedIndex=1;
                     Check(affirmativeWindow.ProposalAgreementForVerification.IsEnabled,"Documented whole-field affirmative phrase permits an explicit section proposal: "+affirmative,checks);
                     affirmativeWindow.ProposalAgreementForVerification.IsChecked=true;Click(affirmativeWindow.ProposalApplyForVerification);
                     affirmativeWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(affirmativeWindow);

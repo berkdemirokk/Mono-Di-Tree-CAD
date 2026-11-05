@@ -71,6 +71,8 @@ public static class ALineRequestMeasurements
             if(totals.Questions.Any(q=>q.StartsWith(label+":",StringComparison.Ordinal)&&!q.Contains("açık ölçü ve birim",StringComparison.Ordinal)))
                 issues.Add(label+": toplam beden ölçüsündeki belirsizliği düzeltin.");
             var total=totals.Measurements.FirstOrDefault(m=>m.Label==label);
+            if(total is not null && (values[a]>=total.Millimeters || values[b]>=total.Millimeters))
+                issues.Add(label+": tek ön/arka yay toplam beden çevresinden küçük olmalı; diğer yay sıfır varsayılamaz.");
             if(total is not null && values[a].HasValue && values[b].HasValue && values[a]!.Value+values[b]!.Value!=total.Millimeters)
                 issues.Add(label+": ön/arka yay toplamı belirtilen beden çevresiyle çelişiyor.");
         }

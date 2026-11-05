@@ -9,6 +9,16 @@ public sealed class ALineMeasurementReview
 {
     private ALinePanelInput? reviewed;
     private bool confirmed;
+    public static decimal ParseLengthMm(string? text,ALineLengthUnit? unit,int fieldIndex)
+    {
+        if(unit is not (ALineLengthUnit.Millimeter or ALineLengthUnit.Centimeter))throw new ArgumentException("Önce ölçü birimini seçin: cm veya mm.");
+        var raw=text?.Trim();var separator=raw?.LastIndexOfAny(['.',',']) ?? -1;
+        if(raw is not null && separator>=0 && raw.Length-separator-1==3 && raw[(separator+1)..].All(char.IsAsciiDigit))
+            throw new ArgumentException($"{fieldIndex+1}. alanda üç basamaklı ayırıcı belirsiz. Binlik ayırıcı kullanmayın; 1000 veya 1 gibi açık değer girin. Ondalık değeri gerekirse eşdeğer cm/mm biriminde gruplama olmadan yazın ve tüm alanların birimini kontrol edin.");
+        if(raw is null || !decimal.TryParse(raw.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))
+            throw new ArgumentException($"{fieldIndex+1}. alana seçilen birimde açık değer girin; bolluk için sıfır yazılabilir.");
+        return checked(value*(unit==ALineLengthUnit.Centimeter ? 10m : 1m));
+    }
     public static ALinePanelInput Normalize(IReadOnlyList<string> fields, ALineLengthUnit? unit)
     {
         ArgumentNullException.ThrowIfNull(fields);
@@ -18,13 +28,7 @@ public sealed class ALineMeasurementReview
         var values=new double[11];
         for(int i=0;i<values.Length;i++)
         {
-            var raw=fields[i]?.Trim();
-            var separator=raw?.LastIndexOfAny(['.',',']) ?? -1;
-            if(raw is not null && separator>=0 && raw.Length-separator-1==3 && raw[(separator+1)..].All(char.IsAsciiDigit))
-                throw new ArgumentException($"{i+1}. alanda üç basamaklı ayırıcı belirsiz. Binlik ayırıcı kullanmayın; 1000 veya 1 gibi açık değer girin. Ondalık değeri gerekirse eşdeğer cm/mm biriminde gruplama olmadan yazın ve tüm alanların birimini kontrol edin.");
-            if(fields[i] is null || !decimal.TryParse(fields[i].Trim().Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))
-                throw new ArgumentException($"{i+1}. alana seçilen birimde açık değer girin; bolluk için sıfır yazılabilir.");
-            values[i]=(double)checked(value*(unit==ALineLengthUnit.Centimeter ? 10m : 1m));
+            values[i]=(double)ParseLengthMm(fields[i],unit,i);
         }
         return new(values[0],values[1],values[2],values[3],values[4],values[5],values[6],values[7],values[8],values[9],values[10]);
     }
