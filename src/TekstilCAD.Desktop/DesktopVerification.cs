@@ -994,6 +994,7 @@ internal static partial class DesktopVerification
             VerifyDraftRemovalConfirmationRace(studio,checks);
             VerifyFitSelectedPiece(studio,checks);
             VerifyFitGrainlines(studio,checks);
+            VerifyGrainlineDirectionDisplay(studio,checks);
             VerifyFitPendingDrawing(studio,checks);
             VerifyDraftTranslationPrecision(studio,work,checks);
             VerifyDxfEncodingChoice(studio,work,reportPath,checks);

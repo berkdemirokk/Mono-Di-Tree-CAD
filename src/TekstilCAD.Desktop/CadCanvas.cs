@@ -146,7 +146,11 @@ public sealed class CadCanvas : FrameworkElement
     {
         protected override string GetClassNameCore() => nameof(CadCanvas);
         protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Custom;
+        protected override string GetHelpTextCore() => canvas.GrainlineAccessibilityDescription;
     }
+    internal string GrainlineAccessibilityDescription => KeyboardHelp+" "+
+        (owner.Selected?.Grainline is { } selectedLine ? "Seçili parça: "+GrainlineDisplay.Description(selectedLine) : "Seçili parçada iplik yönü yok.")+" "+
+        $"Projede kontrol bekleyen iplik yönü sayısı: {owner.Document.Pieces.Count(p=>p.Grainline?.NeedsReview==true)}.";
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
@@ -938,8 +942,19 @@ public sealed class CadCanvas : FrameworkElement
                 var grainBrush=grain.NeedsReview ? B("#FFC468") : B("#65CFFF");
                 var grainPen=new Pen(grainBrush,2) { DashStyle=grain.NeedsReview ? DashStyles.Dash : DashStyles.Solid };
                 var a=Screen(grain.Start);var b=Screen(grain.End);dc.DrawLine(grainPen,a,b);
-                dc.DrawEllipse(grainBrush,null,a,3,3);dc.DrawEllipse(grainBrush,null,b,3,3);
-                if(selected)Text(dc,grain.NeedsReview ? "İplik yönü · incele" : "İplik yönü",new Point(a.X+5,a.Y+5),grainBrush,11);
+                dc.DrawEllipse(grainBrush,null,a,3,3);
+                var directionVisible=true;
+                try
+                {
+                    var arrow=GrainlineDisplay.CreateArrow(new(a.X,a.Y),new(b.X,b.Y),10);
+                    var arrowPen=new Pen(grainBrush,2);
+                    dc.DrawLine(arrowPen,new Point(arrow.Left.X,arrow.Left.Y),b);
+                    dc.DrawLine(arrowPen,b,new Point(arrow.Right.X,arrow.Right.Y));
+                    directionVisible=Geometry.Distance(new(a.X,a.Y),new(b.X,b.Y))>=5;
+                }
+                catch(ArgumentException) { directionVisible=false; }
+                if(selected || grain.NeedsReview || !directionVisible)
+                    Text(dc,(!directionVisible ? "İplik oku için yakınlaştır · " : "")+(grain.NeedsReview ? "KONTROL BEKLİYOR" : "İplik yönü → bitiş"),new Point(a.X+5,a.Y+5),grainBrush,11);
             }
             var bounds=Geometry.Bounds(visible);var label=Screen(new(bounds.MinX,bounds.MinY)); Text(dc,CanvasPieceLabel(p.Name),new Point(label.X+7,label.Y-23),selected ? (selectedBrush ??= B("#FFCB70")) : (normalLabel ??= B("#B3D2D5")),12);
             if(selected)

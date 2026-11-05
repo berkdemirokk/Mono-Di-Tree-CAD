@@ -24,6 +24,15 @@ public static class PdfTiledFormat
         var points=copy.Pieces.SelectMany(p=>p.Grainline is { } line
             ? p.Points.Concat([line.Start,line.End]) : p.Points).ToArray();
         var hasGrainlines=copy.Pieces.Any(p=>p.Grainline is not null);
+        var reviewCount=copy.Pieces.Count(p=>p.Grainline?.NeedsReview==true);
+        // The arrowhead extends at most 0.7 mm sideways; the existing 1 mm
+        // perimeter covers it, including the 0.5 pt stroke. These are annotations.
+        var arrows=new Dictionary<Guid,GrainlineDisplay.Arrow>();
+        foreach(var piece in copy.Pieces.Where(p=>p.Grainline is not null))
+        {
+            try { arrows.Add(piece.Id,GrainlineDisplay.CreateArrow(piece.Grainline!.Start,piece.Grainline.End,2)); }
+            catch(ArgumentException ex) { throw new InvalidDataException("A4 PDF iplik yönü oku güvenilir gösterilemiyor; çıktı hazırlanmadı.",ex); }
+        }
         var markCount=copy.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0));
         // One millimetre clearance keeps exterior contours away from joins.
         var minX=points.Min(p=>p.X)-1;var minY=points.Min(p=>p.Y)-1;
@@ -32,7 +41,7 @@ public static class PdfTiledFormat
             throw new InvalidDataException("A4 PDF sınırları aşıldı; kalıpları daha küçük gruplar halinde dışa aktarın.");
         var cols=(int)Math.Ceiling(width/TileWidth);var rows=(int)Math.Ceiling(height/TileHeight);
         var pageCount=(long)cols*rows;
-        if(pageCount>MaximumPages || pageCount*(points.Length+4*markCount)>MaximumPointPages)
+        if(pageCount>MaximumPages || pageCount*(points.Length+4*markCount+3L*arrows.Count)>MaximumPointPages)
             throw new InvalidDataException("A4 PDF sayfa veya nokta sınırını aşıyor; kalıpları daha küçük gruplar halinde dışa aktarın.");
         var streams=new List<string>((int)pageCount);
         for(var row=0;row<rows;row++)for(var col=0;col<cols;col++)
@@ -49,6 +58,8 @@ public static class PdfTiledFormat
                 var legend=hasGrainlines && markCount>0 ? "KESIK:IPLIK  ARTI:ISARET KESIM DEGIL" : hasGrainlines ? "KESIK: IPLIK YONU" : "ARTI: GORSEL ISARET KESIM DEGIL";
                 body.Append($"BT /F1 8 Tf {F(110*Scale)} {F(14*Scale)} Td ({legend}) Tj ET\n");
             }
+            if(hasGrainlines)
+                body.Append($"BT /F1 8 Tf {F(10*Scale)} {F(10*Scale)} Td (OK: BASLANGICTAN BITISE. KONTROL BEKLEYEN: {reviewCount}. URETIM ONAYI DEGIL.) Tj ET\n");
             body.Append($"q {F(Margin*Scale)} {F(FrameY*Scale)} {F(TileWidth*Scale)} {F(TileHeight*Scale)} re W n 0 G 0.5 w 1 J 1 j\n");
             foreach(var piece in copy.Pieces)
             {
@@ -75,6 +86,17 @@ public static class PdfTiledFormat
                     var first=Map(line.Start);var last=Map(line.End);
                     if(first==last)throw new InvalidDataException("A4 PDF koordinat hassasiyeti iplik yönünü sıfıra indirdi; çıktı oluşturulmadı.");
                     body.Append(first).Append(" m ").Append(last).Append(" l S\n");
+                    var arrow=arrows[piece.Id];var left=Map(arrow.Left);var right=Map(arrow.Right);
+                    if(left==last || right==last || left==right)
+                        throw new InvalidDataException("A4 PDF iplik oku çıktı hassasiyetinde kayboluyor; dosya hazırlanmadı.");
+                    body.Append("[] 0 d ").Append(left).Append(" m ").Append(last).Append(" l ").Append(right).Append(" l S\n[4 2] 0 d\n");
+                    if(line.NeedsReview)
+                    {
+                        // Inside the same page clip. Every sheet also carries the
+                        // uncropped total above, even when this local label is clipped.
+                        var label=Map(line.Start);
+                        body.Append("BT /F1 8 Tf ").Append(label).Append(" Td (KONTROL BEKLIYOR) Tj ET\n");
+                    }
                 }
                 body.Append("[] 0 d\n");
             }
