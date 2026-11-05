@@ -2557,6 +2557,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var showMeasurementProposal = false
     @State private var measurementMessageStatus = ""
     @State private var showDesktopMeasurementWarning = false
+    @State private var desktopWarningSnapshot: ExperimentalDesignBrief.DesktopWarningSnapshot?
     @State private var confirmingExportDestination = false
     @State private var pendingExportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var choosingRequestVersion = false
@@ -2844,6 +2845,7 @@ private struct ExperimentalDesignBriefView: View {
             step = 0; return
         }
         if !confirmedDesktopWarning && desktopMeasurementRisk {
+            desktopWarningSnapshot = .init(draft: draft, version: requestExportVersion)
             showDesktopMeasurementWarning = true; return
         }
         do {
@@ -3243,9 +3245,17 @@ private struct ExperimentalDesignBriefView: View {
                 Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar; eski sürümler açamayabilir. Windows ve iPhone arasında V2 uyumluluğu henüz doğrulanmadı. Model ile tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Mevcut dosyanın üzerine yazılması uygulama tarafından engellenmez.")
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
-                Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }
-                Button("Tarif ve ölçüleri gözden geçir") { step = measurementReviewStartStep }
-                Button("Vazgeç", role: .cancel) { }
+                Button("Olduğu gibi kaydet") {
+                    let snapshot = desktopWarningSnapshot
+                    desktopWarningSnapshot = nil
+                    guard let snapshot, snapshot.matches(draft, version: requestExportVersion) else {
+                        message = "Taslak veya dosya biçimi değişti; ölçüleri tekrar inceleyip kaydetmeyi yeniden başlatın."
+                        return
+                    }
+                    prepareExport(confirmedDesktopWarning: true)
+                }
+                Button("Tarif ve ölçüleri gözden geçir") { desktopWarningSnapshot = nil; step = measurementReviewStartStep }
+                Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
             } message: { Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }

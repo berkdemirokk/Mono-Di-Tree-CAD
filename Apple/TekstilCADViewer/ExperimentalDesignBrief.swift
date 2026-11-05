@@ -350,6 +350,13 @@ enum ExperimentalDesignBrief {
             }
         }
     }
+    struct DesktopWarningSnapshot {
+        let draft: Draft
+        let version: Int
+        func matches(_ current: Draft, version: Int) -> Bool {
+            draft == current && self.version == version
+        }
+    }
     struct ExportAttempt: Identifiable {
         let id = UUID()
         let draft: Draft

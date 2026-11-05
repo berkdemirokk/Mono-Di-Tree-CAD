@@ -737,6 +737,9 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm olsun"))
         XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm, kalça çevresi 98 cm"))
         XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("eğer kumaş ipekse; bel çevresi 72 cm"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("şayet kumaş ipekse; bel çevresi 72 cm"))
+        XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk(["ŞAYET kumaş ipekse", "bel çevresi: 72 cm"]))
+        XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["müşayet kumaş", "bel çevresi: 72 cm"]))
         XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk(["eğer kumaş ipekse", "bel çevresi: 72 cm"]))
         XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["eğer kumaş ipekse", "uzun kollu"]))
         XCTAssertFalse(MeasurementMessageParser.hasConditionalMeasurementRisk(["değer", "bel çevresi: 72 cm"]))
@@ -746,6 +749,15 @@ final class DesignDraftStoreTests: XCTestCase {
         let restored = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: encoded)
         XCTAssertEqual(restored.prompt, "eğer kumaş ipekse")
         XCTAssertEqual(restored.measurements, "Bel çevresi: 72 cm")
+    }
+    func testDesktopWarningSnapshotRejectsChangedDraftOrExportVersion() {
+        func draft(_ notes: String) -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: "şayet kumaş ipekse", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        let original = draft(""), snapshot = ExperimentalDesignBrief.DesktopWarningSnapshot(draft: draft(""), version: 1)
+        XCTAssertTrue(snapshot.matches(original, version: 1))
+        XCTAssertFalse(snapshot.matches(draft("bel çevresi 90 cm"), version: 1))
+        XCTAssertFalse(snapshot.matches(original, version: 2))
     }
     func testMessageLabelsRejectUnknownTurkishICaseWithoutPartialProposal() throws {
         XCTAssertEqual(MeasurementMessageParser.canonicalLabel("BEL ÇEVRESİ"), "bel çevresi")

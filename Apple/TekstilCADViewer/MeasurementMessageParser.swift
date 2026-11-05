@@ -27,7 +27,7 @@ enum MeasurementMessageParser {
     /// This is only a narrow warning, not proof of downstream interpretation.
     static func hasConditionalMeasurementRisk(_ parts: [String]) -> Bool {
         guard parts.allSatisfy({ $0.utf16.count <= 16_384 }) else { return true }
-        let condition = #"(?i)(?<![\p{L}\p{N}_])eğer(?![\p{L}\p{N}_])"#
+        let condition = #"(?i)(?<![\p{L}\p{N}_])(?:eğer|şayet)(?![\p{L}\p{N}_])"#
         let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
         // A condition and a measurement in different segments or fields can
         // still be related; warn without claiming to interpret the sentence.
