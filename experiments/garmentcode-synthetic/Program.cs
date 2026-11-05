@@ -10,9 +10,8 @@ try
     Check(json.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31" && json.RootElement.GetProperty("unit").GetString()=="cm","fixture identity");
     foreach(var item in json.RootElement.GetProperty("cases").EnumerateArray())
     {
-        var b=item.GetProperty("body_cm"); var shirt=item.GetProperty("shirt"); var skirt=item.GetProperty("skirt");
-        double B(string n)=>b.GetProperty(n).GetDouble(); double S(string n)=>shirt.GetProperty(n).GetDouble();
-        var input=new Input(B("bust"),B("back_width"),B("waist"),B("waist_back_width"),B("waist_line"),B("_shoulder_incl"),S("width"),S("flare"),S("length"),skirt.GetProperty("length_cm").GetDouble(),skirt.GetProperty("flare_cm").GetDouble());
+        decimal scale=item.GetProperty("id").GetString() switch { "synthetic-base" => 1m, "synthetic-scaled" => 1.2m, _ => throw new Exception("Unknown fixture") };
+        var input=new Input(100m*scale,44m*scale,80m*scale,36m*scale,40m*scale,12m,1.1m,1m,1m,60m*scale,12m*scale);
         var slice=Engine.Create(item.GetProperty("id").GetString()!,input); Check(slice.Status=="unresolved"&&!slice.ProductionAllowed&&!slice.ExportAllowed,"gate");
         foreach(var panel in slice.Panels)
         {
@@ -29,7 +28,7 @@ try
             }
         }
         var references=item.GetProperty("panels");
-        foreach(var tuple in new[]{("front_half",(input.Waist-input.WaistBackWidth)/2), ("back_half",input.WaistBackWidth/2)})
+        foreach(var tuple in new[]{("front_half",(double)((input.Waist-input.WaistBackWidth)/2m)), ("back_half",(double)(input.WaistBackWidth/2m))})
         {
             var bottom=references.GetProperty(tuple.Item1).GetProperty("interfaces").GetProperty("bottom");
             Check(Math.Abs(bottom.GetProperty("projected_lengths")[0].GetDouble()-tuple.Item2)<1e-9,"gathered projection");
@@ -40,17 +39,25 @@ try
         {
             Check(stitches[i].GetProperty("a").GetString()==asides[i] && stitches[i].GetProperty("b").GetString()==bsides[i],"stitch identity");
             var lengths=stitches[i].GetProperty("projected_cm");
-            double computed=Math.Sqrt(input.SkirtLength*input.SkirtLength+input.SkirtFlare*input.SkirtFlare);
+            double computed=Math.Sqrt((double)(input.SkirtLength*input.SkirtLength+input.SkirtFlare*input.SkirtFlare));
             Check(Math.Abs(lengths[0].GetDouble()-computed)<1e-9 && Math.Abs(lengths[1].GetDouble()-computed)<1e-9,"skirt stitch lengths");
         }
         Check(slice.SourceSkirtStitches.Count==2 && item.GetProperty("source_stitches").GetArrayLength()==2 && item.GetProperty("upper_lower_stitches").GetString()=="not_generated","stitch scope");
     }
     void Reject(Input x) { try { Engine.Create("synthetic-base",x); } catch(ArgumentException) { return; } throw new Exception("Invalid input accepted"); }
-    var valid=new Input(100,44,80,36,40,12,1.1,1,1,60,12);
-    Reject(valid with { Bust=100.000000001 }); Reject(valid with { Bust=double.NaN }); Reject(valid with { BackWidth=100 }); Reject(valid with { WaistBackWidth=80 }); Reject(valid with { SkirtLength=0 }); Reject(valid with { ShoulderDegrees=90 });
+    var valid=new Input(100m,44m,80m,36m,40m,12m,1.1m,1m,1m,60m,12m);
+    decimal near=100.0000000000000001m; Check((double)near==(double)valid.Bust && near!=valid.Bust,"adversarial binary64 collision"); Reject(valid with { Bust=near }); Reject(valid with { Bust=100.000000001m }); Reject(valid with { BackWidth=100 }); Reject(valid with { WaistBackWidth=80 }); Reject(valid with { SkirtLength=0 }); Reject(valid with { ShoulderDegrees=90 });
+    Reject(valid with { BackWidth=44.0000000000000001m }); Reject(valid with { Waist=80.0000000000000001m });
+    Reject(valid with { WaistBackWidth=36.0000000000000001m }); Reject(valid with { WaistLine=40.0000000000000001m });
+    Reject(valid with { ShoulderDegrees=12.0000000000000001m }); Reject(valid with { ShirtWidth=1.1000000000000001m });
+    Reject(valid with { ShirtFlare=1.0000000000000001m }); Reject(valid with { ShirtLength=1.0000000000000001m });
+    Reject(valid with { SkirtLength=60.0000000000000001m }); Reject(valid with { SkirtFlare=12.0000000000000001m });
     try { Engine.Create("unknown",valid); throw new Exception("Unknown ID accepted"); } catch(ArgumentException) { }
     Console.WriteLine("PASS: two synthetic Python fixtures, four panels each, line vectors and lengths; invalid inputs rejected; production unresolved."); return 0;
 }
 catch(Exception ex) { Console.Error.WriteLine("FAIL: "+ex.Message); return 1; }
+
+
+
 
 

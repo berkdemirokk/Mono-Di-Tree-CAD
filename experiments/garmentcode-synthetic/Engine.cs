@@ -4,9 +4,9 @@ namespace GarmentCodeSlice;
 
 // Adapted from GarmentCode MIT, copyright (c) 2024 Maria Korosteleva.
 // Fixed straight-edge research subset; coordinates here are centimetres.
-public sealed record Input(double Bust, double BackWidth, double Waist, double WaistBackWidth,
-    double WaistLine, double ShoulderDegrees, double ShirtWidth, double ShirtFlare,
-    double ShirtLength, double SkirtLength, double SkirtFlare);
+public sealed record Input(decimal Bust, decimal BackWidth, decimal Waist, decimal WaistBackWidth,
+    decimal WaistLine, decimal ShoulderDegrees, decimal ShirtWidth, decimal ShirtFlare,
+    decimal ShirtLength, decimal SkirtLength, decimal SkirtFlare);
 public sealed record Panel(string Name, IReadOnlyList<Point2> Vertices);
 public sealed record Slice(IReadOnlyList<Panel> Panels, IReadOnlyList<string> SourceSkirtStitches)
 {
@@ -16,14 +16,17 @@ public sealed record Slice(IReadOnlyList<Panel> Panels, IReadOnlyList<string> So
 }
 public static class Engine
 {
-    public static Slice Create(string syntheticId, Input x)
+    private sealed record CalculatedInput(double Bust,double BackWidth,double Waist,double WaistBackWidth,double WaistLine,double ShoulderDegrees,double ShirtWidth,double ShirtFlare,double ShirtLength,double SkirtLength,double SkirtFlare);
+    public static Slice Create(string syntheticId, Input raw)
     {
-        ArgumentNullException.ThrowIfNull(x);
-        double scale=syntheticId switch { "synthetic-base" => 1.0, "synthetic-scaled" => 1.2, _ => throw new ArgumentException("Unknown synthetic fixture.",nameof(syntheticId)) };
-        var expected=new Input(100*scale,44*scale,80*scale,36*scale,40*scale,12,1.1,1.0,1.0,60*scale,12*scale);
-        if(x!=expected) throw new ArgumentException("Only the exact predefined synthetic fixture is supported.",nameof(x));
-        double[] positive=[x.Bust,x.BackWidth,x.Waist,x.WaistBackWidth,x.WaistLine,x.ShirtWidth,x.ShirtFlare,x.ShirtLength,x.SkirtLength];
-        if(positive.Any(v=>!double.IsFinite(v)||v<=0||v>1000) || !double.IsFinite(x.SkirtFlare)||x.SkirtFlare<0||x.SkirtFlare>1000 || !double.IsFinite(x.ShoulderDegrees)||x.ShoulderDegrees<0||x.ShoulderDegrees>=45 || x.BackWidth>=x.Bust || x.WaistBackWidth>=x.Waist) throw new ArgumentException("Invalid or unsupported numeric input.");
+        ArgumentNullException.ThrowIfNull(raw);
+        decimal scale=syntheticId switch { "synthetic-base" => 1m, "synthetic-scaled" => 1.2m, _ => throw new ArgumentException("Unknown synthetic fixture.",nameof(syntheticId)) };
+        var expected=new Input(100m*scale,44m*scale,80m*scale,36m*scale,40m*scale,12m,1.1m,1m,1m,60m*scale,12m*scale);
+        if(raw!=expected) throw new ArgumentException("Only the exact predefined synthetic fixture is supported.",nameof(raw));
+        // Conversion takes place only after all eleven decimal fields match.
+        var x=new CalculatedInput((double)raw.Bust,(double)raw.BackWidth,(double)raw.Waist,(double)raw.WaistBackWidth,
+            (double)raw.WaistLine,(double)raw.ShoulderDegrees,(double)raw.ShirtWidth,(double)raw.ShirtFlare,
+            (double)raw.ShirtLength,(double)raw.SkirtLength,(double)raw.SkirtFlare);
         double slope=Math.Tan(x.ShoulderDegrees*Math.PI/180);
         Panel Torso(string name,bool front)
         {
@@ -43,6 +46,7 @@ public static class Engine
         return new(Array.AsReadOnly(new[]{Torso("front_half",true),Torso("back_half",false),Skirt("skirt_front",x.Waist-x.WaistBackWidth),Skirt("skirt_back",x.WaistBackWidth)}),Array.AsReadOnly(new[]{"skirt_front:right=skirt_back:right","skirt_front:left=skirt_back:left"}));
     }
 }
+
 
 
 
