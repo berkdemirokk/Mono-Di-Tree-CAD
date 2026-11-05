@@ -28,9 +28,14 @@ internal static partial class DesktopVerification
                 {
                     var root=(FrameworkElement)window.Content;root.Measure(size);root.Arrange(new Rect(size));root.UpdateLayout();
                     var model=window.ModelForVerification;var position=model.TransformToAncestor(root).Transform(new Point());
+                    var comparison=window.ModelComparisonForVerification;
+                    var comparisonPosition=comparison.TransformToAncestor(root).Transform(new Point());
                     Check(model.ActualWidth>0 && model.ActualHeight>0 && position.Y>=0 && position.Y+model.ActualHeight<=size.Height &&
+                        comparison.Visibility==Visibility.Visible && comparison.Text.Contains("ikisi farklı olabilir") &&
+                        comparison.ActualWidth>0 && comparison.ActualHeight>0 && comparisonPosition.Y>=position.Y+model.ActualHeight &&
+                        comparisonPosition.Y+comparison.ActualHeight<=size.Height &&
                         window.DescriptionForVerification.ActualHeight>0 && window.MeasurementsForVerification.ActualHeight>0,
-                        $"Model identity and original text viewports remain available at {size.Width}x{size.Height}: {id}",checks);
+                        $"Model identity, visible mismatch explanation and original text viewports remain available at {size.Width}x{size.Height}: {id}",checks);
                 }
                 Check(!window.IsVisible,"Model note verification never shows a window: "+id,checks);
             }

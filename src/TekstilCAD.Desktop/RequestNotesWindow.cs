@@ -15,6 +15,7 @@ internal sealed class RequestNotesWindow : Window
     internal TextBox MeasurementsForVerification { get; }
     internal TextBox ReferenceForVerification { get; }
     internal TextBox ModelForVerification { get; }
+    internal TextBlock ModelComparisonForVerification { get; }
     internal Button PhotoButtonForVerification { get; }
     internal Button TraceButtonForVerification { get; }
     internal TextBlock TraceStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,6) };
@@ -66,6 +67,11 @@ internal sealed class RequestNotesWindow : Window
         ModelForVerification.ToolTip="Kaydedilmiş model kimliği ve tarif ayrı bilgilerdir. Birbirleriyle uyumunu kontrol edin; tarif değiştirilmedi. Model fikri hazır kalıp veya üretim onayı değildir.";
         AutomationProperties.SetHelpText(ModelForVerification,(string)ModelForVerification.ToolTip);
         DockPanel.SetDock(ModelForVerification,Dock.Top);root.Children.Add(ModelForVerification);
+        ModelComparisonForVerification=new TextBlock {
+            Text="Model ile tarifi karşılaştırın; ikisi farklı olabilir.",
+            TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,6)
+        };
+        DockPanel.SetDock(ModelComparisonForVerification,Dock.Top);root.Children.Add(ModelComparisonForVerification);
         var grid=new Grid();root.Children.Add(grid);
         for(var i=0;i<6;i++)grid.RowDefinitions.Add(new RowDefinition { Height=i is 1 or 3 ? new GridLength(1,GridUnitType.Star) : GridLength.Auto });
         TextBox ReadOnly(string name,string text)
