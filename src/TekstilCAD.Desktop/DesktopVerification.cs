@@ -9739,6 +9739,7 @@ internal static partial class DesktopVerification
                         var corrected=garmentProbe.CopyMaskForVerification()!;
                         VerifyRegionSavePaths(garmentProbe,checkpoint,checks);
                         Check(SaveCheckpoint(garmentProbe,checkpoint),"Garment region checkpoint can be saved as a new file",checks);
+                        VerifyRegionConfirmation(workspace,regionBitmap,checkpoint,checks);
                         var cancelledPath=checkpoint+".cancel.tdregion";
                         using(var enteredSave=new ManualResetEventSlim())using(var releaseSave=new ManualResetEventSlim())
                         {

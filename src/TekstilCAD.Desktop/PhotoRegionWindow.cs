@@ -22,6 +22,7 @@ internal sealed class PhotoRegionWindow : Window
     private bool changingRectangle,rectangleConfirmationActive;
     internal Func<bool>? ConfirmRectangleChangeForVerification { get; set; }
     internal Func<bool>? ConfirmCloseForVerification { get; set; }
+    internal Func<Window,string,string,MessageBoxButton,MessageBoxImage,MessageBoxResult,MessageBoxResult>? ShowDiscardDialogForVerification { get; set; }
     private MaskComponents? components;
     private RegionProposal.Snapshot? snapshot;
     private RegionProposal.Snapshot? undoSnapshot;
@@ -179,7 +180,7 @@ internal sealed class PhotoRegionWindow : Window
         var oldFields=new[] { left.Text,top.Text,width.Text,height.Text };
         rectangleConfirmationActive=true;bool accepted;
         try { accepted=confirmForVerification?.Invoke() ??
-            MessageBox.Show(this,message,title,MessageBoxButton.YesNo,MessageBoxImage.Warning)==MessageBoxResult.Yes; }
+            ShowDiscardDialog(message,title)==MessageBoxResult.Yes; }
         finally { rectangleConfirmationActive=false; }
         return accepted && !closed && ReferenceEquals(snapshot,oldSnapshot) && ReferenceEquals(components,oldComponents) &&
             ReferenceEquals(running,oldRunning) && ReferenceEquals(appliedMarks,oldApplied) && ReferenceEquals(undoSnapshot,oldUndo) &&
@@ -188,6 +189,12 @@ internal sealed class PhotoRegionWindow : Window
             ReferenceEquals(Regions.SelectedItem,oldSelection) && OmitHoles.IsChecked==oldOmitHoles && pendingMarks.Count==oldMarks.Length &&
             oldMarks.All(mark=>pendingMarks.TryGetValue(mark.Key,out var value) && value==mark.Value) &&
             oldFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text });
+    }
+    private MessageBoxResult ShowDiscardDialog(string message,string title)
+    {
+        // The same arguments reach the native dialog and the verification boundary.
+        var show=ShowDiscardDialogForVerification ?? new Func<Window,string,string,MessageBoxButton,MessageBoxImage,MessageBoxResult,MessageBoxResult>(MessageBox.Show);
+        return show(this,message,title,MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No);
     }
     private void InvalidateResult()
     {
