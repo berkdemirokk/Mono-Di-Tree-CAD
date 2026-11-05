@@ -2879,7 +2879,11 @@ private struct ExperimentalDesignBriefView: View {
             } catch {
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil; photoTicket = nil
-                if !(error is CancellationError) { message = "Fotoğraf okunamadı veya desteklenmiyor; tek kare ve 8 MiB sınırını, ayrıca piksel sınırını kontrol edin. Mevcut görsel korundu. JPEG veya PNG de seçebilirsiniz." }
+                if error is CancellationError {
+                    message = "Fotoğraf yüklemesi iptal edildi; mevcut görsel korundu."
+                } else {
+                    message = "Fotoğraf okunamadı veya desteklenmiyor; tek kare ve 8 MiB sınırını, ayrıca piksel sınırını kontrol edin. Mevcut görsel korundu. JPEG veya PNG de seçebilirsiniz."
+                }
             }
         }
     }
@@ -2919,7 +2923,11 @@ private struct ExperimentalDesignBriefView: View {
             } catch {
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil; filePickerTicket = nil
-                if !(error is CancellationError) { message = "Görsel okunamadı veya desteklenmiyor; mevcut görsel korundu." }
+                if error is CancellationError {
+                    message = "Görsel yüklemesi iptal edildi; mevcut görsel korundu."
+                } else {
+                    message = "Görsel okunamadı veya desteklenmiyor; mevcut görsel korundu."
+                }
             }
         }
     }
@@ -2946,7 +2954,7 @@ private struct ExperimentalDesignBriefView: View {
             let result = try change.apply(to: currentReference)
             referenceRevision.changed()
             image = result?.data; imageName = result?.name
-            message = result == nil ? "Görsel kaldırıldı." : "Görsel eklendi."
+            message = result == nil ? "Görsel kaldırıldı; cihazdaki taslak kayıt durumunu kontrol edin." : "Görsel eklendi; cihazdaki taslak kayıt durumunu kontrol edin."
         } catch { message = "Seçili görsel değişti; işlem uygulanmadı. Tekrar deneyin." }
     }
     private func openPhotoObservation() {
