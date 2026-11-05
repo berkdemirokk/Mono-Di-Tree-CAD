@@ -6762,7 +6762,8 @@ internal static partial class DesktopVerification
         var withGrain=mismatchDocument.Clone();withGrain.Pieces[0].Grainline=new Grainline { Start=new(10,10),End=new(90,90),NeedsReview=true };withGrain.Pieces[0].Notches=[new NotchMark { VertexIndex=1,Position=withGrain.Pieces[0].Points[1] }];
         studio.LoadDocument(withGrain);var tiledGrainPath=Path.Combine(work,"inspection-a4-grain.pdf");string? grainWarning=null;
         var grainTask=studio.StartExportAfterPreflight(studio.Document.Clone(),tiledGrainPath,5,ProjectStorage.CaptureVersion(tiledGrainPath),message=> { grainWarning=message;return true; });
-        Check(grainTask is not null && grainWarning is not null && grainWarning.Contains("kesikli") && grainWarning.Contains("kaynak projede") && grainWarning.Contains("fiziksel çentik"),
+        Check(grainTask is not null && grainWarning is not null && grainWarning.Contains("kesikli") && grainWarning.Contains("başlangıçtan bitişe okla") &&
+            grainWarning.Contains("KONTROL BEKLIYOR") && grainWarning.Contains("kaynak projeyle") && grainWarning.Contains("fiziksel çentik"),
             "A4 PDF explains the visual grainline and source review limits",checks);
         PumpUntil(()=>grainTask!.IsCompleted);grainTask!.GetAwaiter().GetResult();
         Check(studio.ExportError is null && File.ReadAllText(tiledGrainPath).Contains("KESIK:IPLIK  ARTI:ISARET KESIM DEGIL") && DocumentSession.ContentEquals(withGrain,studio.Document),
