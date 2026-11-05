@@ -857,6 +857,26 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNotEqual(request.id, PhotoObservation.Request(draft: original, explicitSelection: true, importedPortable: false, version: 2, revision: revision).id)
         XCTAssertEqual(original.image, Data([1]))
     }
+    func testSyntheticJPEGAndPNGOrientationPreviewObservation() throws {
+        let bundle = Bundle(for: Self.self)
+        for ext in ["jpg", "png"] {
+            let url = try XCTUnwrap(bundle.url(forResource: "synthetic-orientation-6", withExtension: ext))
+            let bytes = try Data(contentsOf: url), original = bytes
+            let source = try XCTUnwrap(CGImageSourceCreateWithData(bytes as CFData, nil))
+            let properties = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+            let orientation = properties[kCGImagePropertyOrientation] as? Int
+            let image = try PhotoObservation.thumbnail(bytes)
+            XCTAssertEqual(bytes, original)
+            if ext == "jpg" {
+                XCTAssertEqual(orientation, 6); XCTAssertEqual(image.width, 32); XCTAssertEqual(image.height, 64)
+            } else {
+                // PNG eXIf support varies by ImageIO version; report instead of guessing.
+                let observation = "PNG eXIf orientation=\(orientation.map(String.init) ?? "unavailable"), preview=\(image.width)x\(image.height)"
+                let attachment = XCTAttachment(string: observation); attachment.name = "PNG orientation observation"; attachment.lifetime = .keepAlways; add(attachment)
+                XCTAssertTrue((image.width == 32 && image.height == 64) || (image.width == 64 && image.height == 32), observation)
+            }
+        }
+    }
     func testPhotoObservationRejectsInvalidImageWithoutAlteringBytes() {
         let bytes = Data([0, 1, 2])
         XCTAssertThrowsError(try PhotoObservation.thumbnail(bytes))
