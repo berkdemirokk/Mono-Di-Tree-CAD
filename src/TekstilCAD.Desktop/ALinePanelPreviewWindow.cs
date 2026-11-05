@@ -318,7 +318,9 @@ internal sealed class ALinePanelPreviewWindow : Window
                     canvas.Children.Add(polygon);var text=new TextBlock { Text=label,Foreground=Brushes.Black };Canvas.SetLeft(text,x);Canvas.SetTop(text,5);canvas.Children.Add(text);
                 }
                 Draw(preview.Front,20,"Ön yarım · merkez sol",Brushes.DarkBlue);Draw(preview.Back,320,"Arka yarım · merkez sol",Brushes.DarkRed);
-                status.Text=$"Ön yan çizgi {preview.FrontSideLengthMm:F3} mm; arka {preview.BackSideLengthMm:F3} mm; fark {preview.SideMismatchMm:F3} mm. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
+                var difference=preview.SideMismatchMm;
+                var differenceText=difference==0 ? "hesaplanan fark 0 mm" : difference.ToString("F3")==0d.ToString("F3") ? "hesaplanan fark sıfırdan büyük (üç ondalığa yuvarlanınca 0,000 mm)" : $"hesaplanan fark yaklaşık {difference:F3} mm";
+                status.Text=$"Ön yan çizgi yaklaşık {preview.FrontSideLengthMm:F3} mm; arka yaklaşık {preview.BackSideLengthMm:F3} mm; {differenceText}. Uzunluklar ve fark gösterimde 0,001 mm'ye yuvarlanır. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
                 blockers.Text=string.Join(Environment.NewLine,preview.Unresolved);
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)

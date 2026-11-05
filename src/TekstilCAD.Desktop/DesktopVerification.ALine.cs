@@ -137,6 +137,19 @@ internal static partial class DesktopVerification
                 w.ConfirmationForVerification.IsChecked=true;Click(w.DrawForVerification);
                 Check(Polygons(w).Length==2,"Confirmed fields create two preview polygons",checks);
             }
+            var sideDisplay=new ALinePanelPreviewWindow(owner,"A kesim elbise","");
+            sideDisplay.ConfirmDiscardWorkForVerification=()=>true;
+            try
+            {
+                sideDisplay.UnitForVerification.SelectedIndex=1;Fill(sideDisplay,false);sideDisplay.AgreementForVerification.IsChecked=true;
+                ReviewAndDraw(sideDisplay);
+                Check(sideDisplay.StatusForVerification.Text.Contains("hesaplanan fark 0 mm") && sideDisplay.StatusForVerification.Text.Contains("yuvarlanır") && sideDisplay.StatusForVerification.Text.Contains("Dikiş eşleşmesi onaylanmadı"),"Equal side lengths report computed zero and rounding limits",checks);
+                sideDisplay.FieldsForVerification[3].Text="500.0010";ReviewAndDraw(sideDisplay);
+                Check(sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük") && sideDisplay.StatusForVerification.Text.Contains("yuvarlanınca"),"Small nonzero side difference is not presented as equality",checks);
+                sideDisplay.FieldsForVerification[3].Text="500.1";ReviewAndDraw(sideDisplay);
+                Check(sideDisplay.StatusForVerification.Text.Contains("fark yaklaşık") && !sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Difference above displayed rounding threshold is shown as approximate",checks);
+            }
+            finally { sideDisplay.Close(); }
             Check(window.UnitForVerification.SelectedIndex==-1 && window.AgreementForVerification.IsChecked!=true &&
                 !window.ConfirmationForVerification.IsEnabled,"Initial unit and assumptions are unset; confirmation unavailable",checks);
             Fill(window,true);Click(window.ReviewForVerification);Click(window.DrawForVerification);
