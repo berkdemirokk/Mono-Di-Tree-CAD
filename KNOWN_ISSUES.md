@@ -116,3 +116,5 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Fotoğraf yolunda isteğe bağlı geniş arama, 160.000 piksel sınırı içinde 32 piksel pay kullanır; sınır aşılırsa ilgili aralık 16 piksel paya döner ve durum bildirir. [Gri yol deneyi](docs/PHOTO_MARGIN32_EXPERIMENT.md) genel iyileşme kanıtlamadı; [renkli eşli deneyde](docs/PHOTO_WIDE_COLOR_EXPERIMENT.md) de yerel hatalar sürdü; gerçek kullanıcı ve üretim doğrulaması yapılmadı.
 
 - Fotoğraf incelemesindeki “Çizimi gizle”, işaret ve uyarıları geçici olarak gizler; bu sırada çizim ve uygulama araçları devre dışıdır. Yeniden gösterildiğinde taslak ve bekleyen öneri korunur. Görsel karşılaştırma fotoğraf sınırının doğruluğunu veya üretim uygunluğunu kanıtlamaz; gerçek kullanıcı ve ekran okuyucu kabul testi yapılmadı.
+
+- Deneysel [DXF daire örnekleyicisi](docs/DXF_CIRCLE_EXPERIMENT.md) yalnız doğrudan sayısal girdilerde test edildi ve içe aktarmaya bağlı değildir; DXF CIRCLE kayıtları mevcut aktarımda desteklenmez.
