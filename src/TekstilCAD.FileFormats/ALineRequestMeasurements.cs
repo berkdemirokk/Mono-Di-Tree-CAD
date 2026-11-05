@@ -34,7 +34,14 @@ public static class ALineRequestMeasurements
     private static readonly Regex AffirmativeField=new(@"\A\s*(?:bu\s+)?(?:ölçüler\s+geçerli|ölçüleri\s+kullanmak\s+istiyorum)\s*[.!]?\s*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // One complete model request and one complete future-intent sentence only.
     // It asserts no numerical measurement and never resolves another clause.
-    private static readonly Regex FutureMeasurementRequest=new(@"\A\s*a kesim elbise istiyorum\s*[,;]\s*ölçülerimi birazdan vereceğim\s*[.!]?\s*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex FutureMeasurementPhrase=new(@"\A\s*ölçüler(?:i|imi)\s+(?:sonra|birazdan|daha sonra)\s+(?:vereceğim|paylaşacağım)\s*[.!]?\s*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex ExplicitModelIntent=new(@"\A\s*(?:lütfen\s+)?(?:bana\s+)?(?:(?:modelim|model olarak|model seçimi)[: ]+)?a(?:[ -])kesim(?:\s+elbise)?\s+(?:istiyorum|seç|seçelim|olsun|hazırla|yap|oluştur)\s*\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static bool IsFutureMeasurementRequest(string text)
+    {
+        var parts=Regex.Split(Fold(text),@"[,;]",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        return parts.Length==2 && ExplicitModelIntent.IsMatch(parts[0]) && FutureMeasurementPhrase.IsMatch(parts[1])
+            && ChatModelChoice.Review(parts[0]).ModelId=="aline";
+    }
     private static readonly Regex AmbiguousNumber=new(@"(?<![0-9])[0-9]+[.,][0-9]{3}(?![0-9])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static bool TryRead(string text,out int index,out decimal mm)
     {
@@ -57,7 +64,7 @@ public static class ALineRequestMeasurements
         var measurementContext=totals.Measurements.Count>0 || foldedFields.Any(text=>Mention.IsMatch(text)||GeneralMeasurement.IsMatch(text));
         if(measurementContext && foldedFields.Any(text=>Referent.IsMatch(text)))
             issues.Add("Ölçü içeren istekte bunlar/hepsi/tümü gibi bir referans zamirinin neyi anlattığı açık değil. Önceki veya sonraki alandaki olumlu ifade bunu çözmez. Öneri ve kaynağa bağlı çizim durduruldu; istek metni korunur. İlgili ölçüyü veya kumaş/model adını açıkça belirterek açıklayın ve pencereyi yeniden açın.");
-        if(new[]{prompt,notes}.Any(text=>GeneralMeasurement.IsMatch(Fold(text))&&!AffirmativeField.IsMatch(Fold(text))&&!FutureMeasurementRequest.IsMatch(Fold(text))))
+        if(new[]{prompt,notes}.Any(text=>GeneralMeasurement.IsMatch(Fold(text))&&!AffirmativeField.IsMatch(Fold(text))&&!IsFutureMeasurementRequest(text)))
             issues.Add("İstekte desteklenmeyen serbest ölçü ifadesi var; olumlu, olumsuz veya geri çekme anlamı varsayılmadı. Kapsam netleşmeden ölçü önerisi ve kaynağa bağlı çizim yapılamaz. Açılış anındaki metin korunur; açık etiketli ölçüleri düzeltip pencereyi yeniden açın.");
         foreach(var text in new[]{prompt,notes})
         foreach(var segment in Regex.Split(text,@";|[\r\n\v\f\u0085\u2028\u2029]",RegexOptions.None,TimeSpan.FromMilliseconds(100)))

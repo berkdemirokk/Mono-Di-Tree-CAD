@@ -5,6 +5,16 @@ namespace TekstilCAD.Tests;
 public sealed class ALineRequestMeasurementsTests
 {
     [Theory]
+    [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim")]
+    [InlineData("Lütfen bana A kesim elbise hazırla; ölçüleri daha sonra paylaşacağım.")]
+    [InlineData("A-kesim olsun, ölçülerimi sonra vereceğim")]
+    [InlineData("Model olarak A kesim seçelim; ölçüleri birazdan paylaşacağım")]
+    public void ExplicitModelAndBoundedFutureIntentAllowExplicitLaterValues(string prompt)
+    {
+        var result=ALineRequestMeasurements.Review(prompt,"Ön bel yayı: 36 cm");
+        Assert.Empty(result.Issues);Assert.Equal(360m,result.Millimeters[0]);Assert.Null(result.Millimeters[1]);
+    }
+    [Theory]
     [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim ama vazgeçtim")]
     [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim; ölçüler geçersiz")]
     [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim. Ölçüleri kullanmayın")]
@@ -13,6 +23,10 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim; bel çevresi 72 cm")]
     [InlineData("Anvelop elbise istiyorum, ölçülerimi birazdan vereceğim")]
     [InlineData("A kesim elbise istemiyorum, ölçülerimi birazdan vereceğim")]
+    [InlineData("A kesim elbise istiyorum, ölçüleri sonra paylaşmayacağım")]
+    [InlineData("A kesim elbise istiyorum, ölçüleri sonra vereceğim; anvelop elbise olsun")]
+    [InlineData("A kesim elbise istiyorum 72 cm, ölçüleri sonra vereceğim")]
+    [InlineData("A kesim elbise istiyorum, ölçüleri sonra vereceğim, bel çevresi 72 cm")]
     public void FuturePhraseWithAdditionalOrContraryContentRemainsUnresolved(string prompt)
     {
         Assert.NotEmpty(ALineRequestMeasurements.Review(prompt,"Ön bel yayı: 36 cm").Issues);
