@@ -28,29 +28,49 @@ final class ViewerUITests: XCTestCase {
     }
     func testMeasurementGroupNavigationReturnsToFieldsAndKeepsInput() {
         let app = XCUIApplication(); app.launch()
+        func reveal(_ element: XCUIElement) -> Bool {
+            guard element.waitForExistence(timeout: 5) else { return false }
+            for _ in 0..<8 { if element.isHittable { return true }; app.swipeUp() }
+            for _ in 0..<8 { if element.isHittable { return true }; app.swipeDown() }
+            return element.isHittable
+        }
         let open = app.buttons["Elbise isteği oluştur"]
         XCTAssertTrue(open.waitForExistence(timeout: 15)); open.tap()
         let restore = app.buttons["Taslağı geri yükle"]
         if restore.waitForExistence(timeout: 2) { restore.tap() }
         let next = app.buttons["Ölçülere geç"]
-        XCTAssertTrue(next.waitForExistence(timeout: 5)); next.tap()
+        guard reveal(next) else { return XCTFail("Ölçü adımına geçiş görünmedi") }; next.tap()
         let form = app.buttons["15 beden ölçüsünü gir…"]
-        for _ in 0..<8 where !form.isHittable { app.swipeUp() }
-        XCTAssertTrue(form.waitForExistence(timeout: 5)); form.tap()
+        guard reveal(form) else { return XCTFail("Ölçü formu görünmedi") }; form.tap()
         let resume = app.buttons["Formu geri yükle"]
         if resume.waitForExistence(timeout: 2) { resume.tap() }
-        let first = app.textFields["üst kol çevresi, cm"]
-        for _ in 0..<8 where !first.isHittable { app.swipeUp() }
-        XCTAssertTrue(first.waitForExistence(timeout: 5)); first.tap(); first.typeText("12")
+        let first = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", "üst kol çevresi,")).firstMatch
+        guard reveal(first) else { return XCTFail("İlk ölçü alanı görünmedi") }; first.tap(); first.typeText("12")
         let hide = app.buttons["Klavyeyi kapat"]
         if hide.waitForExistence(timeout: 3) { hide.tap() }
         app.swipeUp()
         let nextGroup = app.buttons["Sonraki ölçüler"]
-        XCTAssertTrue(nextGroup.isHittable); nextGroup.tap()
-        let nextField = app.textFields["omuz üst noktasından göğse, cm"]
+        guard reveal(nextGroup) else { return XCTFail("Sonraki grup düğmesi görünmedi") }; nextGroup.tap()
+        let nextField = app.textFields.matching(NSPredicate(format: "label BEGINSWITH %@", "omuz üst noktasından göğse,")).firstMatch
         XCTAssertTrue(nextField.waitForExistence(timeout: 5)); XCTAssertTrue(nextField.isHittable)
-        app.buttons["Önceki"].tap()
-        XCTAssertTrue(first.waitForExistence(timeout: 5)); XCTAssertTrue(first.isHittable)
+        guard reveal(nextGroup) else { return XCTFail("Üçüncü gruba geçiş görünmedi") }; nextGroup.tap()
+        let angle = app.textFields["omuz eğimi, derece"]
+        guard reveal(angle) else { return XCTFail("Omuz açısı alanı görünmedi") }
+        angle.tap()
+        if let old = angle.value as? String, old != "Bilinmiyorsa boş bırakın", !old.isEmpty {
+            angle.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: old.count))
+        }
+        angle.typeText("-5")
+        XCTAssertEqual(angle.value as? String, "-5")
+        if hide.waitForExistence(timeout: 3) { hide.tap() }
+        let previous = app.buttons["Önceki"]
+        guard reveal(previous) else { return XCTFail("Önceki grup düğmesi görünmedi") }; previous.tap()
+        guard reveal(nextGroup) else { return XCTFail("Açı grubuna dönüş görünmedi") }; nextGroup.tap()
+        guard reveal(angle) else { return XCTFail("Kaydedilen açı alanı görünmedi") }
+        XCTAssertEqual(angle.value as? String, "-5")
+        guard reveal(previous) else { return XCTFail("Önceki grup düğmesi görünmedi") }; previous.tap()
+        guard reveal(previous) else { return XCTFail("İlk gruba dönüş görünmedi") }; previous.tap()
+        guard reveal(first) else { return XCTFail("İlk ölçüye dönüş görünmedi") }
         XCTAssertTrue((first.value as? String ?? "").contains("12"))
     }
     func testDressBriefModelAndMeasurementNavigation() {
