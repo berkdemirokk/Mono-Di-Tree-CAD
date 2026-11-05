@@ -527,10 +527,10 @@ internal sealed class PhotoRegionWindow : Window
     {
         SelectedContour=null;SelectedContourMaximumDeviation=null;ApproximateContourForVerification.Visibility=Visibility.Collapsed;overlay.Source=null;OmitHoles.IsChecked=false;AcknowledgeImageEdge.IsChecked=false;AcknowledgeImageEdge.Visibility=Visibility.Collapsed;BoundaryWarning.Visibility=Visibility.Collapsed;BoundaryWarning.Text="";
         if(components is null || Regions.SelectedItem is not Choice choice)return;
-        var touchesImageEdge=TouchesImageEdge(choice);var distanceToSearchEdge=SearchEdgeDistance(choice);var touchesSearchEdge=distanceToSearchEdge==0;var nearSearchEdge=distanceToSearchEdge is 1 or 2;
+        var touchesImageEdge=TouchesImageEdge(choice);var distanceToSearchEdge=SearchEdgeDistance(choice);var touchesSearchEdge=distanceToSearchEdge==0;var nearSearchEdge=distanceToSearchEdge is 1 or 2;var outsideSearch=OutsideSearchRectangle(choice);
         if(touchesImageEdge || touchesSearchEdge) { AcknowledgeImageEdge.Content=touchesImageEdge && touchesSearchEdge ? "Görüntü ve arama sınırında kırpılma olasılığını inceledim" : touchesImageEdge ? "Görüntü kenarındaki sınırın kırpılmış olabileceğini inceledim" : "Arama dikdörtgenindeki sınırın kırpılmış olabileceğini inceledim";AcknowledgeImageEdge.Visibility=Visibility.Visible; }
-        BoundaryWarning.Text=(touchesImageEdge ? "Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir. " : "")+(touchesSearchEdge ? "Bölge arama dikdörtgenine değiyor; sınır dışında kalmış olabilir." : nearSearchEdge ? $"Bölge arama dikdörtgeninin {distanceToSearchEdge} önizleme pikseli yakınında; sınırın devamını kontrol edin. Bu bir doğruluk ölçümü değildir." : "");
-        BoundaryWarning.Visibility=touchesImageEdge || touchesSearchEdge || nearSearchEdge ? Visibility.Visible : Visibility.Collapsed;
+        BoundaryWarning.Text=(touchesImageEdge ? "Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir. " : "")+(touchesSearchEdge ? "Bölge arama dikdörtgenine değiyor; sınır dışında kalmış olabilir." : nearSearchEdge ? $"Bölge arama dikdörtgeninin {distanceToSearchEdge} önizleme pikseli yakınında; sınırın devamını kontrol edin. Bu bir doğruluk ölçümü değildir." : "")+(outsideSearch ? " Bölge arama dikdörtgeninin dışında da var; dikdörtgen yalnız başlangıç içindir." : "");
+        BoundaryWarning.Visibility=touchesImageEdge || touchesSearchEdge || nearSearchEdge || outsideSearch ? Visibility.Visible : Visibility.Collapsed;
         var selected=components.CopySelection([choice.Id]);var pixels=new byte[checked(selected.Length*4)];
         for(var i=0;i<selected.Length;i++)if(selected[i]!=0) { var p=i*4;pixels[p]=210;pixels[p+1]=190;pixels[p+2]=0;pixels[p+3]=100; }
         var mask=BitmapSource.Create(image.PixelWidth,image.PixelHeight,image.DpiX,image.DpiY,PixelFormats.Bgra32,null,pixels,image.PixelWidth*4);mask.Freeze();overlay.Source=mask;
@@ -567,6 +567,15 @@ internal sealed class PhotoRegionWindow : Window
         var pixels=new byte[checked(bitmap.PixelWidth*bitmap.PixelHeight*4)];bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);return pixels;
     }
     private bool TouchesImageEdge(Choice choice)=>choice.Left==0 || choice.Top==0 || choice.Right==image.PixelWidth-1 || choice.Bottom==image.PixelHeight-1;
+    private bool OutsideSearchRectangle(Choice choice)
+    {
+        if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) ||
+           !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
+           !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) ||
+           !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h) ||
+           x<0 || y<0 || w<1 || h<1 || (long)x+w>image.PixelWidth || (long)y+h>image.PixelHeight)return false;
+        return choice.Left<x || choice.Top<y || choice.Right>=x+w || choice.Bottom>=y+h;
+    }
     // Only the first three inner pixel rings are needed for the advisory and
     // exact-contact check. Pixels outside the rectangle are not treated as an
     // interior distance, because correction marks can extend the mask outward.

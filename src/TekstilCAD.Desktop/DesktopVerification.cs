@@ -9981,7 +9981,7 @@ internal static partial class DesktopVerification
                                   flatRegion.Regions.SelectedIndex==-1 && flatRegion.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
                                   "Flat-pattern region restores the same verified photo without automatic selection or CAD changes",checks);
                             flatRegion.Regions.SelectedIndex=0;flatRegion.OmitHoles.IsChecked=true;
-                            Check(flatRegion.TrySelectContour() && flatRegion.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
+                            Check(SelectContourForVerification(flatRegion) && flatRegion.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
                                   "A restored flat-pattern region requires explicit selection before contour preview",checks);
                         } finally { flatRegion.Close(); }
                         var restoredRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
