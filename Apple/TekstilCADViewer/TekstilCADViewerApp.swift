@@ -3298,6 +3298,22 @@ private struct ExperimentalDesignBriefView: View {
             }
         }
     }
+    private var briefStepTitle: String {
+        switch step {
+        case 0: return "Model ve tarif"
+        case 1: return "Ölçüler"
+        case 2: return "Örnek görsel"
+        default: return "İstek kontrolü"
+        }
+    }
+    private var briefStepGuidance: String {
+        switch step {
+        case 0: return "Bir örnek siluet seçin veya elbiseyi tarif edin. Sonra ölçülere geçin."
+        case 1: return "Bildiğiniz ölçüleri birimleriyle girin; bilmediklerinizi boş bırakın. Sonra görsele geçin."
+        case 2: return "İsterseniz referans görseli seçin. Ardından isteğinizi gözden geçirin."
+        default: return "Tarif, ölçüler ve varsa görseli kontrol edin. Sonra istek dosyasını kaydedebilirsiniz."
+        }
+    }
     @ViewBuilder private var footerActions: some View {
         if step > 0 {
             Button("Geri") { if exportPreparationID != nil { cancelExportPreparation() }; step -= 1; message = ""; focusedInput = nil }
@@ -3348,6 +3364,16 @@ private struct ExperimentalDesignBriefView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    HStack {
+                        Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        Text("\(step + 1) / 4").font(.caption.weight(.semibold))
+                            .accessibilityLabel("Adım \(step + 1), toplam dört adım")
+                    }
+                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
+                    Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
+                }
                 if step == 0 {
                 Section {
                     let overview = ExperimentalDesignBrief.AtelierOverview(draft)
@@ -3513,12 +3539,6 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 }
                 Section {
-                    HStack {
-                        Text("ELBİSE İSTEĞİ").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(step + 1) / 4").font(.caption.weight(.semibold)).accessibilityLabel("Adım \(step + 1), toplam dört adım")
-                    }
-                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
                     Text(localStatus).font(.caption).foregroundStyle(.secondary)
                     if pendingLedger != "[]" || legacyUncertain || markerError {
                         Text("Bir kayıt sürüyor veya önceki kayıt tamamlanmamış olabilir. Son değişiklikleri ve kurtarma kopyasını kontrol edin.").font(.caption)
@@ -3914,7 +3934,7 @@ private struct ExperimentalDesignBriefView: View {
                     localStatus = "Önceki taslak korundu; otomatik kayıt kapalı. Bu isteği dosyaya kaydedin."
                 }
             } message: { Text("Bu cihazda saklanan tarif, ölçüler ve varsa görsel geri yüklenecek. Şimdi yüklemezseniz önceki kayıt korunur.") }
-            .navigationTitle(step == 1 ? "Ölçü düzenleme" : "Kalıp isteği")
+            .navigationTitle(briefStepTitle)
             .interactiveDismissDisabled(true)
             .toolbar { ToolbarItem(placement: .cancellationAction) {
                 Button("Kapat") { closeAfterSaving() }.disabled(draftTransition || referenceBlocksClose)
