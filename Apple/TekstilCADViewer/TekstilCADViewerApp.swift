@@ -2584,6 +2584,9 @@ private struct ExperimentalDesignBriefView: View {
     @State private var desktopWarningSnapshot: ExperimentalDesignBrief.DesktopWarningSnapshot?
     @State private var confirmingExportDestination = false
     @State private var pendingExportAttempt: ExperimentalDesignBrief.ExportAttempt?
+    @State private var pendingExportSnapshot: ExperimentalDesignBrief.ExportPreparationSnapshot?
+    @State private var exportPreparationID: UUID?
+    @State private var exportPreparationTask: Task<Data, Error>?
     @State private var choosingRequestVersion = false
     @State private var requestExportVersion = 1
     @State private var image: Data?
@@ -2976,6 +2979,7 @@ private struct ExperimentalDesignBriefView: View {
     private var requestPrompt: String { draft.prompt }
     private var requestMeasurements: String { draft.measurements }
     private func closeAfterSaving() {
+        if exportPreparationID != nil { cancelExportPreparation() }
         #if os(iOS)
         switch DesignRequestShareClose.decide(work: shareWorkID, cleanup: shareCleanupItem?.id, acknowledged: acknowledgedShareCopyID) {
         case .cancelPreparation: cancelSavedShare(); message = "Paylaşım hazırlığı iptal edildi; kapatmayı yeniden seçin."; return
@@ -3211,9 +3215,19 @@ private struct ExperimentalDesignBriefView: View {
         catch { message = "Geçici paylaşım kopyası temizlenemedi; yeniden temizlemeyi deneyin. Kayıtlı dosya ve taslak korunuyor." }
     }
     #endif
+    private func cancelExportPreparation() {
+        exportPreparationID = nil; exportPreparationTask?.cancel(); exportPreparationTask = nil
+        message = "İstek hazırlığı iptal edildi; taslak ve görsel korundu."
+    }
+    private func exportSnapshotIsCurrent(_ snapshot: ExperimentalDesignBrief.ExportPreparationSnapshot) -> Bool {
+        snapshot.matches(current: draft, version: requestExportVersion, revision: referenceRevision.token,
+                         explicitSelection: modelExplicitlySelected, imported: importedPortable,
+                         referencePending: referenceBlocksClose, transition: draftTransition)
+    }
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
+        guard exportPreparationID == nil else { message = "İstek hazırlığı sürüyor; tamamlanmasını bekleyin veya iptal edin."; return }
         guard !aLineInputPending else { message = "A kesim rehberindeki girişler henüz isteğe eklenmedi. Önce onaylayın veya açıkça temizleyin."; step = 1; return }
-        guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
+        guard !referenceBlocksClose else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
         guard measurementForm?.hasValues != true else {
             message = "Ölçü formunda onaylanmamış giriş var; yalnız boşluk içeren alanlar da buna dahildir. Formu inceleyin veya ayrı kurtarma kopyası kullanın."; step = 1; return
         }
@@ -3225,23 +3239,47 @@ private struct ExperimentalDesignBriefView: View {
             desktopWarningSnapshot = .init(draft: draft, version: requestExportVersion)
             showDesktopMeasurementWarning = true; return
         }
-        do {
-            let candidate = draft
-            let data: Data
-            if requestExportVersion == 2 { data = try ExperimentalDesignBrief.makeV2(candidate) }
-            else { data = try ExperimentalDesignBrief.make(candidate) }
-            pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data, version: requestExportVersion)
-            confirmingExportDestination = true
-        } catch ExperimentalDesignBrief.Error.invalidImage where requestExportVersion == 2 && image != nil {
-            message = ExperimentalDesignBrief.V2ImageReview.incompatible.explanation
-            step = 2
-        } catch {
-            message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
+        let snapshot = ExperimentalDesignBrief.ExportPreparationSnapshot(draft: draft, version: requestExportVersion,
+            revision: referenceRevision.token, explicitSelection: modelExplicitlySelected, imported: importedPortable)
+        let id = UUID(); exportPreparationID = id
+        message = "İstek hazırlanıyor; taslak ve görsel korunuyor."
+        let worker = Task.detached(priority: .userInitiated) { () throws -> Data in
+            try Task.checkCancellation()
+            let bytes: Data
+            if snapshot.version == 2 { bytes = try ExperimentalDesignBrief.makeV2(snapshot.draft) }
+            else { bytes = try ExperimentalDesignBrief.make(snapshot.draft) }
+            try Task.checkCancellation()
+            return bytes
+        }
+        exportPreparationTask = worker
+        Task { @MainActor in
+            do {
+                let bytes = try await worker.value
+                guard exportPreparationID == id else { return }
+                exportPreparationID = nil; exportPreparationTask = nil
+                guard exportSnapshotIsCurrent(snapshot) else {
+                    message = "İstek değişti; önceki hazırlık kullanılmadı. Yeniden kontrol edin."; return
+                }
+                pendingExportSnapshot = snapshot
+                pendingExportAttempt = .init(draft: snapshot.draft, bytes: bytes, version: snapshot.version)
+                confirmingExportDestination = true
+            } catch {
+                guard exportPreparationID == id else { return }
+                exportPreparationID = nil; exportPreparationTask = nil
+                guard exportSnapshotIsCurrent(snapshot) else { message = "İstek değişti; önceki hazırlık kullanılmadı."; return }
+                if error is CancellationError { message = "İstek hazırlığı iptal edildi; taslak ve görsel korundu." }
+                else if let issue = error as? ExperimentalDesignBrief.Error, case .invalidImage = issue,
+                        snapshot.version == 2 && snapshot.draft.image != nil {
+                    message = ExperimentalDesignBrief.V2ImageReview.incompatible.explanation; step = 2
+                } else {
+                    message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
+                }
+            }
         }
     }
     @ViewBuilder private var footerActions: some View {
         if step > 0 {
-            Button("Geri") { step -= 1; message = ""; focusedInput = nil }
+            Button("Geri") { if exportPreparationID != nil { cancelExportPreparation() }; step -= 1; message = ""; focusedInput = nil }
                 .buttonStyle(.bordered).controlSize(.large).frame(minHeight: 48)
         }
         if step < 3 {
@@ -3249,6 +3287,9 @@ private struct ExperimentalDesignBriefView: View {
                 step += 1; message = ""; focusedInput = nil
             }
                 .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
+        } else if exportPreparationID != nil {
+            ProgressView("İstek hazırlanıyor…")
+            Button("Hazırlığı iptal et") { cancelExportPreparation() }.buttonStyle(.bordered).controlSize(.large).frame(minHeight: 48)
         } else {
             Button("İstek dosyasını kaydet…") { choosingRequestVersion = true }
                 .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
@@ -3755,22 +3796,23 @@ private struct ExperimentalDesignBriefView: View {
             }
             .confirmationDialog("Dosya hedefini dikkatle seçin", isPresented: $confirmingExportDestination, titleVisibility: .visible) {
                 Button("Anladım, dosya konumunu seç") {
-                    guard let attempt = pendingExportAttempt, attempt.matchesCurrentDraft(draft), !referenceDecisionPending else {
-                        pendingExportAttempt = nil
+                    guard let attempt = pendingExportAttempt, let snapshot = pendingExportSnapshot,
+                          attempt.matchesCurrentDraft(draft), exportSnapshotIsCurrent(snapshot) else {
+                        pendingExportAttempt = nil; pendingExportSnapshot = nil
                         message = "Taslak değişti; içeriği kontrol edip kaydetmeyi yeniden başlatın."
                         return
                     }
-                    pendingExportAttempt = nil
+                    pendingExportAttempt = nil; pendingExportSnapshot = nil
                     exportAttempt = attempt
                     exportPresentation.begin(attempt.id)
                 }
-                Button("İptal", role: .cancel) { pendingExportAttempt = nil }
+                Button("İptal", role: .cancel) { pendingExportAttempt = nil; pendingExportSnapshot = nil }
             } message: {
                 Text("Yeni ve kullanılmamış bir dosya adı seçin. Aynı dosyanın farklı bir yolu veya sonradan oluşturulan bir hedef uygulama tarafından kesin olarak tespit edilmez; mevcut dosyanın üzerine yazılmasını engelleyemiyoruz. Emin değilseniz iptal edin.")
             }
             .confirmationDialog("İstek dosyası biçimi", isPresented: $choosingRequestVersion, titleVisibility: .visible) {
-                Button("V1: Windows ile uyumlu kopya") { requestExportVersion = 1; prepareExport() }
-                Button("V2: model kimliğini koru (deneysel)") { requestExportVersion = 2; prepareExport() }
+                Button("V1: Windows ile uyumlu kopya") { if requestExportVersion != 1 { referenceRevision.changed() }; requestExportVersion = 1; prepareExport() }
+                Button("V2: model kimliğini koru (deneysel)") { if requestExportVersion != 2 { referenceRevision.changed() }; requestExportVersion = 2; prepareExport() }
                 Button("Vazgeç", role: .cancel) { }
             } message: {
                 Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar; bu güncellemeden önceki Windows ve iPhone sürümleri tarifi veya görseli olmayan model isteklerini reddeder. Windows ve iPhone arasında gerçek dosya alışverişi henüz doğrulanmadı. Model ile tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Mevcut dosyanın üzerine yazılması uygulama tarafından engellenmez.")
@@ -3807,7 +3849,6 @@ private struct ExperimentalDesignBriefView: View {
             }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: requestExportVersion) { value in
-                referenceRevision.changed()
                 #if os(iOS)
                 if savedShareVersion != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif
@@ -3838,6 +3879,7 @@ private struct ExperimentalDesignBriefView: View {
             } }
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
                 Button("Kaydetmeden kapat", role: .destructive) {
+                    if exportPreparationID != nil { cancelExportPreparation() }
                     #if os(iOS)
                     switch DesignRequestShareClose.decide(work: shareWorkID, cleanup: shareCleanupItem?.id, acknowledged: acknowledgedShareCopyID) {
                     case .cancelPreparation: cancelSavedShare(); return

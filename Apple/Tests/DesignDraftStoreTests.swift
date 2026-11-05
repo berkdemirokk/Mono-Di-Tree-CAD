@@ -382,6 +382,40 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalDesignBrief.PortableSnapshot.validate(Data("{\"version\":1}".utf8)))
         XCTAssertThrowsError(try ExperimentalDesignBrief.PortableSnapshot.validate(Data(repeating: 0, count: 12 * 1024 * 1024 + 1)))
     }
+    func testBackgroundExportSnapshotRejectsChangedDraftAndStaleRevision() {
+        let original = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([1]), imageName: "foto.png")
+        let revision = UUID()
+        let snapshot = ExperimentalDesignBrief.ExportPreparationSnapshot(draft: original, version: 2, revision: revision, explicitSelection: true, imported: false)
+        func matches(_ draft: ExperimentalDesignBrief.Draft, version: Int = 2, revision: UUID? = nil, selected: Bool = true, imported: Bool = false, referencePending: Bool = false, transition: Bool = false) -> Bool {
+            snapshot.matches(current: draft, version: version, revision: revision ?? snapshot.revision, explicitSelection: selected, imported: imported, referencePending: referencePending, transition: transition)
+        }
+        XCTAssertTrue(matches(original))
+        XCTAssertFalse(matches(original, version: 1)); XCTAssertFalse(matches(original, revision: UUID()))
+        XCTAssertFalse(matches(original, selected: false)); XCTAssertFalse(matches(original, imported: true))
+        XCTAssertFalse(matches(original, referencePending: true)); XCTAssertFalse(matches(original, transition: true))
+        var pending = original; pending.measurementForm = .init(values: ["72"] + Array(repeating: "", count: 14), unit: "cm")
+        XCTAssertFalse(matches(pending))
+        var aLine = original; aLine.aLineGuideInput = .init(values: ["36"] + Array(repeating: "", count: 10), unit: "cm")
+        XCTAssertFalse(matches(aLine))
+        let changedImage = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([2]), imageName: "foto.png")
+        XCTAssertFalse(matches(changedImage))
+        var revisionToken = ExperimentalDesignBrief.ReferenceRevision(); let initial = revisionToken.token
+        let old = ExperimentalDesignBrief.ExportPreparationSnapshot(draft: original, version: 2, revision: initial, explicitSelection: true, imported: false)
+        revisionToken.changed(); revisionToken.changed()
+        XCTAssertFalse(old.matches(current: original, version: 2, revision: revisionToken.token, explicitSelection: true, imported: false, referencePending: false, transition: false))
+    }
+    func testRequestSerializationCanRunOffMainActor() async throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
+        for version in [1, 2] {
+            let worker = Task.detached { () throws -> Data in
+                if version == 2 { return try ExperimentalDesignBrief.makeV2(draft) }
+                return try ExperimentalDesignBrief.make(draft)
+            }
+            let bytes = try await worker.value
+            let reopened = try ExperimentalDesignBrief.portableDraft(bytes)
+            XCTAssertEqual(reopened.measurements, draft.measurements)
+        }
+    }
     func testShareUsesOnlyCurrentApprovedSavedSnapshot() throws {
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
         for bytes in [try ExperimentalDesignBrief.make(draft), try ExperimentalDesignBrief.makeV2(draft)] {

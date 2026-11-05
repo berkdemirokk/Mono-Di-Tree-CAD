@@ -452,6 +452,19 @@ enum ExperimentalDesignBrief {
             draft == current && self.version == version
         }
     }
+    struct ExportPreparationSnapshot {
+        let draft: Draft
+        let version: Int
+        let revision: UUID
+        let explicitSelection: Bool
+        let imported: Bool
+        func matches(current: Draft, version: Int, revision: UUID, explicitSelection: Bool, imported: Bool,
+                     referencePending: Bool, transition: Bool) -> Bool {
+            draft == current && self.version == version && self.revision == revision &&
+                self.explicitSelection == explicitSelection && self.imported == imported && !referencePending && !transition &&
+                current.aLineGuideInput == nil && current.measurementForm?.hasValues != true
+        }
+    }
     struct ExportAttempt: Identifiable {
         let id = UUID()
         let draft: Draft
