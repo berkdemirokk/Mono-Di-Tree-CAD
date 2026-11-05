@@ -3,7 +3,9 @@
   <ItemGroup>
     <Compile Include="../garmentcode-fitted-synthetic/*.cs" Exclude="../garmentcode-fitted-synthetic/Program.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="SafeResearchOutput.cs" />
     <ProjectReference Include="../../src/TekstilCAD.Core/TekstilCAD.Core.csproj" />
   </ItemGroup>
 </Project>
+
 

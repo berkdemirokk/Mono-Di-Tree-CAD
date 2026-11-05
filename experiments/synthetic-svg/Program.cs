@@ -24,12 +24,7 @@ try
     E T(BackSkirtCandidate.Edge e) => new(e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? [(c.X,c.Y)] : [],null);
     var panels = new (string Name,E[] Edges)[] { ("right_ftorso",fr.Edges.Select(F).ToArray()),("left_ftorso",fl.Edges.Select(F).ToArray()),("right_btorso",br.Edges.Select(B).ToArray()),("left_btorso",bl.Edges.Select(B).ToArray()),("skirt_front",sf.Edges.Select(S).ToArray()),("skirt_back",sb.Edges.Select(T).ToArray()) };
     string svg = Render(panels,args[0]);
-    // Dedicated test output under this experiment; never overwrite an existing file.
-    string directory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory,"..","..","..","test-output"));
-    Directory.CreateDirectory(directory);
-    string file = Path.Combine(directory,$"{args[0]}-{Guid.NewGuid():N}.svg");
-    using (var stream = new FileStream(file,FileMode.CreateNew,FileAccess.Write,FileShare.None))
-    using (var writer = new StreamWriter(stream,new UTF8Encoding(false))) writer.Write(svg);
+    string file = SafeResearchOutput.WriteNew(args[0], svg);
     Console.WriteLine($"SENTETIK / DOGRULANMAMIS; uretim ve plotter icin degildir: {file}");
     return 0;
 }
@@ -62,3 +57,4 @@ static string Render((string Name,E[] Edges)[] panels,string id)
     return s.Append("</svg>").ToString();
 }
 internal sealed record E(string Kind,double Ax,double Ay,double Bx,double By,(double X,double Y)[] Controls,double? ArcY);
+
