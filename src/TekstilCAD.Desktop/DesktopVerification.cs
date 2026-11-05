@@ -1584,6 +1584,19 @@ internal static partial class DesktopVerification
                 "DXF review identifies hidden negative-color entities even when ARC is also skipped",checks);
             var textiles = new TextileToolsWindow(studio);
             var verificationQueue = new SimulationQueue(Path.Combine(work, "spool"));
+            var dirtyMachine=new MachineCenterWindow(studio,verificationQueue);
+            var initialRevision=dirtyMachine.CalibrationRevisionForVerification;
+            dirtyMachine.MeasuredXForVerification.Text="99";
+            var changedRevision=dirtyMachine.CalibrationRevisionForVerification;
+            dirtyMachine.MeasuredXForVerification.Text="100";dirtyMachine.MeasuredXForVerification.Text="99";
+            Check(dirtyMachine.CalibrationDirtyForVerification && !dirtyMachine.CalibrationOperationCurrent(initialRevision) && !dirtyMachine.CalibrationOperationCurrent(changedRevision),
+                "Calibration edit and ABA invalidate a pending operation",checks);
+            dirtyMachine.ConfirmCalibrationDiscardForVerification=_=>false;dirtyMachine.Close();
+            Check(dirtyMachine.CalibrationDirtyForVerification && dirtyMachine.CalibrationOperationCurrent(dirtyMachine.CalibrationRevisionForVerification),
+                "Declining close preserves unsaved calibration fields",checks);
+            var beforeClose=dirtyMachine.CalibrationRevisionForVerification;
+            dirtyMachine.ConfirmCalibrationDiscardForVerification=_=>true;dirtyMachine.Close();
+            Check(!dirtyMachine.CalibrationOperationCurrent(beforeClose),"Closed calibration window rejects pending continuation",checks);
             var machine = new MachineCenterWindow(studio, verificationQueue);
             var machineRoot=(FrameworkElement)machine.Content;
             machineRoot.Measure(new Size(machine.Width,machine.Height));machineRoot.Arrange(new Rect(0,0,machine.Width,machine.Height));machineRoot.UpdateLayout();

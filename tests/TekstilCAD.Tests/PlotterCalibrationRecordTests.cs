@@ -41,4 +41,13 @@ public sealed class PlotterCalibrationRecordTests
         Assert.Throws<InvalidDataException>(()=>PlotterCalibrationRecordStorage.Create(path,reference.ContentSha256,40,false,100,100,140,null));
         Assert.Throws<InvalidDataException>(()=>PlotterCalibrationRecordStorage.Create(path,reference.ContentSha256,40,false,double.NaN,100,null,null));
     }
+
+    [Fact]
+    public void UntrustedNetworkReferenceIsNotOpened()
+    {
+        if(!OperatingSystem.IsWindows())return;
+        var reference=PlotterCalibrationSquare.Prepare(40,1);
+        var note=PlotterCalibrationRecordStorage.Create(@"\\unreachable.invalid\share\reference.plt",reference.ContentSha256,40,false,100,100,null,null);
+        Assert.False(PlotterCalibrationRecordStorage.ReferenceMatches(note));
+    }
 }

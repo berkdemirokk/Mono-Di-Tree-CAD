@@ -20,7 +20,30 @@ public static class PlotterCalibrationRecordStorage
         return new(path,hash,units,1,orientation,x,y,d1,d2,xy.XDeviationMillimeters,xy.YDeviationMillimeters,diagonal?.FirstDeviationMillimeters,diagonal?.SecondDeviationMillimeters,diagonal?.DifferenceMillimeters);
     }
     private static bool Valid(double n,double max)=>double.IsFinite(n) && n>0 && n<=max;
-    public static bool ReferenceMatches(PlotterCalibrationRecord record)=>ProjectStorage.CaptureVersion(record.ReferencePath).Sha256==record.Sha256;
+    // Untrusted notes must never cause automatic network/device or link traversal.
+    // Run this on a worker: even ordinary local storage can be slow.
+    public static bool ReferenceMatches(PlotterCalibrationRecord record)
+    {
+        var path=record.ReferencePath;
+        if(OperatingSystem.IsWindows())
+        {
+            if(path.Length<3 || !char.IsAsciiLetter(path[0]) || path[1]!=':' || path[2]!='\\' || path.StartsWith(@"\\",StringComparison.Ordinal))return false;
+            var drive=new DriveInfo(Path.GetPathRoot(path)!);
+            if(drive.DriveType!=DriveType.Fixed)return false;
+        }
+        var full=Path.GetFullPath(path);
+        var root=Path.GetPathRoot(full)!;
+        var current=root;
+        foreach(var part in full[root.Length..].Split(Path.DirectorySeparatorChar,Path.AltDirectorySeparatorChar))
+        {
+            if(part.Length==0)continue;
+            current=Path.Combine(current,part);
+            try { if((File.GetAttributes(current)&FileAttributes.ReparsePoint)!=0)return false; }
+            catch(FileNotFoundException) { return false; }
+            catch(DirectoryNotFoundException) { return false; }
+        }
+        return ProjectStorage.CaptureVersion(full).Sha256==record.Sha256;
+    }
     public static void SaveNew(string path,PlotterCalibrationRecord record)
     {
         Validate(record);
