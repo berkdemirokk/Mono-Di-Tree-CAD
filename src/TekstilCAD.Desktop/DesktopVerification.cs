@@ -11089,6 +11089,10 @@ internal static partial class DesktopVerification
                 try
                 {
                     var pending=selectionWindow.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>entered.IsSet);
+                    Check(!pending.IsCompleted && selectionWindow.ReferenceSummaryForVerification.Text.Contains(input.Reference!.Name) &&
+                        selectionWindow.CaptureForVerification().Reference!.Data.SequenceEqual(input.Reference.Data) &&
+                        selectionWindow.StatusForVerification.Text.Contains("önceki seçim korunuyor"),
+                        "Pending photo validation keeps the old summary and reference bytes until completion",checks);
                     var duplicate=selectionWindow.ChooseReferenceFileAsync(jpegPath);
                     typeof(DesignRequestWindow).GetMethod("Save",PrivateInstance)!.Invoke(selectionWindow,null);
                     Check(selectionWindow.StatusForVerification.Text.Contains("kaydetmeden önce") && duplicate.IsCompleted && !duplicate.GetAwaiter().GetResult() && selectionWindow.CreateDrawingNotes() is null &&
@@ -11163,6 +11167,17 @@ internal static partial class DesktopVerification
                 longNotes.ReferenceForVerification.Text.Contains("👗") && !longNotes.ReferenceForVerification.Text.Contains('\u202E'),
                 "Drawing notes preserve long source text and escape misleading filename controls",checks);
             longNotes.Close();
+            var longReferenceName="foto\u202E"+new string('x',100)+".png";
+            var longReference=new DesignRequest("Kompakt referans","",new DesignReference(longReferenceName,"image/png",validPng));
+            window.LoadForVerification(longReference);window.RequestDetailsForVerification.IsExpanded=false;
+            var longReferenceRoot=(FrameworkElement)window.Content;longReferenceRoot.Measure(new Size(480,420));longReferenceRoot.Arrange(new Rect(0,0,480,420));longReferenceRoot.UpdateLayout();
+            Check(FullyVisible(window.ReferenceSummaryForVerification,longReferenceRoot) && FullyVisible(window.ReferenceShortcutForVerification!,longReferenceRoot) &&
+                FullyVisible(window.ChatInputForVerification,longReferenceRoot) && FullyVisible(window.SendActionForVerification!,longReferenceRoot) &&
+                window.ReferenceSummaryForVerification.ActualWidth>0 && window.ReferenceSummaryForVerification.TextTrimming==TextTrimming.CharacterEllipsis &&
+                window.ReferenceSummaryForVerification.Text.Contains("\\u202E") && window.ReferenceSummaryForVerification.Text.Contains('…') &&
+                window.CaptureForVerification().Reference!.Name==longReferenceName,
+                "Long escaped reference name retains visible controls and bounded summary at 480 by 420 without changing the name",checks);
+            window.LoadForVerification(input);
             window.ReviewMeasurementsForVerification();
             Check(window.ReviewForVerification.Text.Contains("göğüs çevresi: 960 mm") && window.ReviewForVerification.Text.Contains("bel çevresi"),
                 "Dress request reports explicitly stated chest and asks for missing measurements",checks);
