@@ -18,7 +18,7 @@ internal sealed class PhotoRegionWindow : Window
     private readonly BitmapSource image;
     private CancellationTokenSource? running;
     private bool closed;
-    private long regionRevision;
+    private long regionRevision,reviewRevision;
     private bool changingRectangle,rectangleConfirmationActive;
     internal Func<bool>? ConfirmRectangleChangeForVerification { get; set; }
     internal Func<bool>? ConfirmCloseForVerification { get; set; }
@@ -102,9 +102,9 @@ internal sealed class PhotoRegionWindow : Window
                 if(closed || running is not null || pendingMarks.Count!=0 || regionRevision!=savedRevision || !ReferenceEquals(snapshot,savedSnapshot) || !ReferenceEquals(appliedMarks,savedApplied) ||
                    !savedFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text })) { Status.Text="Bölge seçim sırasında değişti; dosya kaydedilmedi.";return; }
                 await TrySaveSessionAsync(dialog.FileName); };
-            load.Click+=async (_,_)=> { if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return; }
+            load.Click+=async (_,_)=>await PickAndLoadSessionAsync(()=> {
                 var dialog=new OpenFileDialog { Filter="Fotoğraf bölgesi (*.tdregion)|*.tdregion",CheckFileExists=true };
-                if(dialog.ShowDialog(this)==true)await TryLoadSessionAsync(dialog.FileName); };
+                return dialog.ShowDialog(this)==true ? dialog.FileName : null; });
             actions.Children.Add(save);actions.Children.Add(load);
             AutomationProperties.SetName(CancelSessionForVerification,"Bölge dosyası işlemini iptal et");
             CancelSessionForVerification.Click+=(_,_)=>CancelSessionOperation();actions.Children.Add(CancelSessionForVerification);
@@ -153,7 +153,10 @@ internal sealed class PhotoRegionWindow : Window
             if(dragStart is not System.Windows.Point start)return;dragStart=null;view.ReleaseMouseCapture();
             TrySetRectangleFromView(start,e.GetPosition(view),view.RenderSize);e.Handled=true; };
         view.LostMouseCapture+=(_,_)=> { dragStart=null;activeStroke=null; };
-        Regions.SelectionChanged+=(_,_)=>ShowSelection();
+        Regions.SelectionChanged+=(_,_)=> { reviewRevision++;ShowSelection(); };
+        foreach(var box in new[] { OmitHoles,ShowAppliedMarks,ComparePrevious })
+        { box.Checked+=(_,_)=>reviewRevision++;box.Unchecked+=(_,_)=>reviewRevision++; }
+        MarkMode.SelectionChanged+=(_,_)=>reviewRevision++;BrushSize.SelectionChanged+=(_,_)=>reviewRevision++;
         foreach(var box in new[] { left,top,width,height })
         {
             box.Tag=box.Text;
@@ -183,12 +186,12 @@ internal sealed class PhotoRegionWindow : Window
         var oldUndo=undoSnapshot;var oldUndoComponents=undoComponents;var oldUndoApplied=undoAppliedMarks;
         var oldPendingUndo=pendingUndo;var oldSource=sourceBgr;var oldContour=SelectedContour;
         var oldMarks=pendingMarks.ToArray();var oldSelection=Regions.SelectedItem;var oldOmitHoles=OmitHoles.IsChecked;
-        var oldFields=new[] { left.Text,top.Text,width.Text,height.Text };
+        var oldFields=new[] { left.Text,top.Text,width.Text,height.Text };var oldReviewRevision=reviewRevision;
         rectangleConfirmationActive=true;bool accepted;
         try { accepted=confirmForVerification?.Invoke() ??
             ShowDiscardDialog(message,title)==MessageBoxResult.Yes; }
         finally { rectangleConfirmationActive=false; }
-        return accepted && !closed && ReferenceEquals(snapshot,oldSnapshot) && ReferenceEquals(components,oldComponents) &&
+        return accepted && !closed && reviewRevision==oldReviewRevision && ReferenceEquals(snapshot,oldSnapshot) && ReferenceEquals(components,oldComponents) &&
             ReferenceEquals(running,oldRunning) && ReferenceEquals(appliedMarks,oldApplied) && ReferenceEquals(undoSnapshot,oldUndo) &&
             ReferenceEquals(undoComponents,oldUndoComponents) && ReferenceEquals(undoAppliedMarks,oldUndoApplied) &&
             ReferenceEquals(pendingUndo,oldPendingUndo) && ReferenceEquals(sourceBgr,oldSource) && ReferenceEquals(SelectedContour,oldContour) &&
@@ -318,11 +321,35 @@ internal sealed class PhotoRegionWindow : Window
         { if(!closed && revision==regionRevision)Status.Text="Bölge kaydedilemedi: "+ex.Message;return false; }
         finally { EndSessionOperation(cts); }
     }
+    private sealed record SessionOpenState(RegionProposal.Snapshot? Snapshot,MaskComponents? Components,byte[]? Applied,
+        RegionProposal.Snapshot? Undo,MaskComponents? UndoComponents,byte[]? UndoApplied,object? Selection,
+        bool? Omit,bool? Show,bool? Compare,KeyValuePair<int,bool>[] Pending,Dictionary<int,bool?>? PendingUndo,
+        string[] Fields,long Revision,long ReviewRevision);
+    private SessionOpenState CaptureSessionOpenState()=>new(snapshot,components,appliedMarks,undoSnapshot,undoComponents,undoAppliedMarks,
+        Regions.SelectedItem,OmitHoles.IsChecked,ShowAppliedMarks.IsChecked,ComparePrevious.IsChecked,pendingMarks.ToArray(),pendingUndo,
+        [left.Text,top.Text,width.Text,height.Text],regionRevision,reviewRevision);
+    private bool SessionOpenStateMatches(SessionOpenState state,CancellationTokenSource? expected=null)=>!closed && ReferenceEquals(running,expected) && state.Revision==regionRevision && state.ReviewRevision==reviewRevision &&
+        ReferenceEquals(snapshot,state.Snapshot) && ReferenceEquals(components,state.Components) && ReferenceEquals(appliedMarks,state.Applied) &&
+        ReferenceEquals(undoSnapshot,state.Undo) && ReferenceEquals(undoComponents,state.UndoComponents) && ReferenceEquals(undoAppliedMarks,state.UndoApplied) &&
+        ReferenceEquals(Regions.SelectedItem,state.Selection) && OmitHoles.IsChecked==state.Omit && ShowAppliedMarks.IsChecked==state.Show &&
+        ComparePrevious.IsChecked==state.Compare && ReferenceEquals(pendingUndo,state.PendingUndo) && pendingMarks.Count==state.Pending.Length &&
+        state.Pending.All(p=>pendingMarks.TryGetValue(p.Key,out var value) && value==p.Value) &&
+        state.Fields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text });
+    internal async Task<bool> PickAndLoadSessionAsync(Func<string?> choose)
+    {
+        if(closed || running is not null) { if(!closed)Status.Text="Önce süren işlemi bitirin.";return false; }
+        var state=CaptureSessionOpenState();var path=choose();
+        if(path is null)return false;
+        if(!SessionOpenStateMatches(state)) { if(!closed)Status.Text="Dosya seçilirken çalışma değişti; dosya açılmadı.";return false; }
+        return await TryLoadSessionAsync(path);
+    }
     internal async Task<bool> TryLoadSessionAsync(string path)
     {
         if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return false; }
+        var beforeConfirmation=CaptureSessionOpenState();
         if(!ConfirmDiscard(ConfirmRectangleChangeForVerification,"Dosya açılırsa mevcut bölge ve işaretler değiştirilir. Devam edilsin mi?","Bölgeyi aç")) { Status.Text="Bölge açma iptal edildi; mevcut çalışma korundu.";return false; }
-        var oldSnapshot=snapshot;var oldMarks=appliedMarks;var oldSelection=Regions.SelectedItem;var oldOmit=OmitHoles.IsChecked;var oldShow=ShowAppliedMarks.IsChecked;var oldPending=pendingMarks.ToArray();var oldPendingUndo=pendingUndo;var revision=regionRevision;
+        if(!SessionOpenStateMatches(beforeConfirmation)) { if(!closed)Status.Text="Onay sırasında çalışma değişti; dosya açılmadı.";return false; }
+        var revision=regionRevision;
         var cts=new CancellationTokenSource();BeginSessionOperation(cts);Status.Text="Bölge dosyası açılıyor; mevcut çalışma korunuyor…";
         try {
             var result=await Task.Run(()=> {
@@ -335,9 +362,7 @@ internal sealed class PhotoRegionWindow : Window
                 return (Bgr:bgr,Data:data,Snapshot:restored,Components:found);
             },cts.Token);
             cts.Token.ThrowIfCancellationRequested();
-            if(closed || revision!=regionRevision || !ReferenceEquals(snapshot,oldSnapshot) || !ReferenceEquals(appliedMarks,oldMarks) ||
-               !ReferenceEquals(Regions.SelectedItem,oldSelection) || OmitHoles.IsChecked!=oldOmit || ShowAppliedMarks.IsChecked!=oldShow || !ReferenceEquals(pendingUndo,oldPendingUndo) || pendingMarks.Count!=oldPending.Length ||
-               oldPending.Any(mark=>!pendingMarks.TryGetValue(mark.Key,out var value) || value!=mark.Value))
+            if(!SessionOpenStateMatches(beforeConfirmation,cts))
             { if(!closed && revision==regionRevision)Status.Text="Çalışma değişti; dosya uygulanmadı.";return false; }
             var data=result.Data;var boxes=new[] { left,top,width,height };var values=new[] { data.X,data.Y,data.RectangleWidth,data.RectangleHeight };
             changingRectangle=true;try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=values[i].ToString(CultureInfo.InvariantCulture);boxes[i].Tag=boxes[i].Text; } } finally { changingRectangle=false; }
@@ -398,21 +423,21 @@ internal sealed class PhotoRegionWindow : Window
         }
         var undo=new Dictionary<int,bool?>(newPixels.Count);
         foreach(var index in newPixels) { undo[index]=pendingMarks.TryGetValue(index,out var old) ? old : null;pendingMarks[index]=MarkMode.SelectedIndex==1; }
-        pendingUndo=undo;
+        reviewRevision++;pendingUndo=undo;
         SelectedContour=null;UpdateMarksOverlay();
         Status.Text=$"{pendingMarks.Count} işaret bekliyor; İşaretleri uygula ile bölgeyi yeniden hesaplayın veya işaretleri silin.";return true;
     }
     internal void ClearMarks()
     {
         if(running is not null) { Status.Text="İşlem sürüyor; bitmesini bekleyin.";return; }
-        pendingMarks.Clear();pendingUndo=null;UpdateMarksOverlay();Status.Text="Bekleyen işaretler silindi; mevcut bölge korunuyor.";
+        reviewRevision++;pendingMarks.Clear();pendingUndo=null;UpdateMarksOverlay();Status.Text="Bekleyen işaretler silindi; mevcut bölge korunuyor.";
     }
     internal bool UndoPendingStroke()
     {
         if(running is not null || pendingUndo is null) { Status.Text="Geri alınacak bekleyen fırça hareketi yok.";return false; }
         foreach(var entry in pendingUndo)
             if(entry.Value is bool old)pendingMarks[entry.Key]=old;else pendingMarks.Remove(entry.Key);
-        pendingUndo=null;SelectedContour=null;UpdateMarksOverlay();
+        reviewRevision++;pendingUndo=null;SelectedContour=null;UpdateMarksOverlay();
         Status.Text=$"Son fırça hareketi geri alındı; {pendingMarks.Count} işaret bekliyor.";return true;
     }
     private void UpdateMarksOverlay()

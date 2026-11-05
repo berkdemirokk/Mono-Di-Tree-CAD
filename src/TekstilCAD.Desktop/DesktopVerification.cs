@@ -9771,6 +9771,39 @@ internal static partial class DesktopVerification
                         garmentProbe.MarkMode.SelectedIndex=1;Check(garmentProbe.TryAddMark(3,3) && !SaveCheckpoint(garmentProbe,checkpoint+".pending.tdregion"),
                               "Pending garment corrections cannot be silently omitted from checkpoint",checks);
                         garmentProbe.ClearMarks();
+                        garmentProbe.MarkMode.SelectedIndex=1;
+                        var stalePicker=garmentProbe.PickAndLoadSessionAsync(()=> { garmentProbe.TryAddMark(3,3);return checkpoint; });
+                        PumpUntil(()=>stalePicker.IsCompleted);
+                        Check(!stalePicker.GetAwaiter().GetResult() && garmentProbe.PendingMarkAtForVerification(3,3)==true && garmentProbe.Status.Text.Contains("seçilirken"),
+                              "A changed region during file selection rejects stale open and preserves the new mark",checks);
+                        garmentProbe.ClearMarks();
+                        garmentProbe.ConfirmRectangleChangeForVerification=()=> { garmentProbe.TryAddMark(3,3);return true; };
+                        var staleApproval=garmentProbe.TryLoadSessionAsync(checkpoint);PumpUntil(()=>staleApproval.IsCompleted);
+                        Check(!staleApproval.GetAwaiter().GetResult() && garmentProbe.PendingMarkAtForVerification(3,3)==true && garmentProbe.Status.Text.Contains("açma iptal edildi"),
+                              "A changed region during replacement confirmation rejects stale approval and preserves the new mark",checks);
+                        garmentProbe.ClearMarks();
+                        var abaPicker=garmentProbe.PickAndLoadSessionAsync(()=> { garmentProbe.ShowAppliedMarks.IsChecked=true;garmentProbe.ShowAppliedMarks.IsChecked=false;return checkpoint; });
+                        PumpUntil(()=>abaPicker.IsCompleted);
+                        Check(!abaPicker.GetAwaiter().GetResult() && garmentProbe.Status.Text.Contains("seçilirken"),"File selection rejects A-B-A review changes",checks);
+                        garmentProbe.Regions.SelectedIndex=0;
+                        var abaRegionPicker=garmentProbe.PickAndLoadSessionAsync(()=> { garmentProbe.Regions.SelectedIndex=-1;garmentProbe.Regions.SelectedIndex=0;return checkpoint; });
+                        PumpUntil(()=>abaRegionPicker.IsCompleted);
+                        Check(!abaRegionPicker.GetAwaiter().GetResult() && garmentProbe.Regions.SelectedIndex==0 && garmentProbe.Status.Text.Contains("seçilirken"),
+                              "File selection rejects region A-B-A changes while preserving the selection",checks);
+                        garmentProbe.ConfirmRectangleChangeForVerification=()=> { garmentProbe.ShowAppliedMarks.IsChecked=true;garmentProbe.ShowAppliedMarks.IsChecked=false;return true; };
+                        var abaApproval=garmentProbe.TryLoadSessionAsync(checkpoint);PumpUntil(()=>abaApproval.IsCompleted);
+                        Check(!abaApproval.GetAwaiter().GetResult() && garmentProbe.Status.Text.Contains("açma iptal edildi"),"Replacement confirmation rejects A-B-A review changes",checks);
+                        garmentProbe.ConfirmRectangleChangeForVerification=()=>true;
+                        using(var abaEntered=new ManualResetEventSlim())using(var abaRelease=new ManualResetEventSlim())
+                        {
+                            garmentProbe.BeforeSessionLoadForVerification=_=> { abaEntered.Set();abaRelease.Wait(); };
+                            try {
+                                var abaLoad=garmentProbe.TryLoadSessionAsync(checkpoint);PumpUntil(()=>abaEntered.IsSet);
+                                garmentProbe.ShowAppliedMarks.IsChecked=true;garmentProbe.ShowAppliedMarks.IsChecked=false;
+                                abaRelease.Set();PumpUntil(()=>abaLoad.IsCompleted);
+                                Check(!abaLoad.GetAwaiter().GetResult() && garmentProbe.Status.Text.Contains("çalışma değişti",StringComparison.OrdinalIgnoreCase),"Background read rejects A-B-A review changes",checks);
+                            } finally { abaRelease.Set();garmentProbe.BeforeSessionLoadForVerification=null; }
+                        }
                         var flatRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
                         try {
                             Render(flatRegion,Path.ChangeExtension(reportPath,".flat-region-session.png"),620,550);
