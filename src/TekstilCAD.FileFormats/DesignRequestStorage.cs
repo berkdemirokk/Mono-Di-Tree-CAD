@@ -5,7 +5,7 @@ namespace TekstilCAD.FileFormats;
 
 /// <summary>Portable offline design request; never a pattern or production approval.</summary>
 public sealed record DesignReference(string Name,string MediaType,byte[] Data);
-public sealed record DesignRequest(string Prompt,string Measurements,DesignReference? Reference);
+public sealed record DesignRequest(string Prompt,string Measurements,DesignReference? Reference, string? ModelId = null);
 
 public static class DesignRequestStorage
 {
@@ -13,6 +13,7 @@ public static class DesignRequestStorage
     public const int MaximumReferenceBytes=8*1024*1024;
     public const int MaximumFileBytes=12*1024*1024;
     public const string Format="tekstilcad.design-request";
+    private static readonly HashSet<string> ModelIds = new(StringComparer.Ordinal) { "wrap", "aline", "corset", "sheath", "straight", "shirt" };
 
     private static bool WellFormed(string value)
     {
@@ -26,6 +27,8 @@ public static class DesignRequestStorage
     public static void Validate(DesignRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if(request.ModelId is not null && !ModelIds.Contains(request.ModelId))
+            throw new InvalidDataException("Model kimliği desteklenmiyor.");
         if(request.Prompt is null || request.Measurements is null || request.Prompt.Length>MaximumTextLength || request.Measurements.Length>MaximumTextLength || !WellFormed(request.Prompt) || !WellFormed(request.Measurements))
             throw new InvalidDataException("İstek metni veya ölçüler sınırı aşıyor.");
         if(string.IsNullOrWhiteSpace(request.Prompt) && request.Reference is null)
@@ -66,9 +69,21 @@ public static class DesignRequestStorage
         try
         {
             using var parsed=JsonDocument.Parse(json,new JsonDocumentOptions { MaxDepth=8 });var root=parsed.RootElement;
-            Fields(root,"format","version","prompt","measurements","reference");
-            if(Text(root,"format")!=Format || root.GetProperty("version").ValueKind!=JsonValueKind.Number || !root.GetProperty("version").TryGetInt32(out var version) || version!=1)
+            if(root.ValueKind!=JsonValueKind.Object || !root.TryGetProperty("version",out var versionField) || versionField.ValueKind!=JsonValueKind.Number || !versionField.TryGetInt32(out var version) || version is not (1 or 2))
                 throw new InvalidDataException("İstek biçimi veya sürümü desteklenmiyor.");
+            if(version==1)Fields(root,"format","version","prompt","measurements","reference");
+            else Fields(root,"format","version","prompt","measurements","reference","model");
+            if(Text(root,"format")!=Format)throw new InvalidDataException("İstek biçimi veya sürümü desteklenmiyor.");
+            string? modelId=null;
+            if(version==2)
+            {
+                var model=root.GetProperty("model");
+                if(model.ValueKind!=JsonValueKind.Null)
+                {
+                    Fields(model,"id");modelId=Text(model,"id");
+                    if(!ModelIds.Contains(modelId))throw new InvalidDataException("Model kimliği desteklenmiyor.");
+                }
+            }
             var reference=root.GetProperty("reference");DesignReference? image=null;
             if(reference.ValueKind!=JsonValueKind.Null)
             {
@@ -76,7 +91,10 @@ public static class DesignRequestStorage
                 if(encoded.Length>((MaximumReferenceBytes+2)/3)*4)throw new InvalidDataException("Görsel çok büyük.");
                 image=new(Text(reference,"name"),Text(reference,"mediaType"),Convert.FromBase64String(encoded));
             }
-            var result=new DesignRequest(Text(root,"prompt"),Text(root,"measurements"),image);Validate(result);return result;
+            // This platform-independent library has no bounded image decoder.
+            // A signature alone cannot validate a V2 still image.
+            if(version==2 && image is not null)throw new InvalidDataException("V2 referans görseli bu sürümde doğrulanamıyor.");
+            var result=new DesignRequest(Text(root,"prompt"),Text(root,"measurements"),image,modelId);Validate(result);return result;
         }
         catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or KeyNotFoundException)
         { throw new InvalidDataException("İstek dosyası okunamadı.",e); }
