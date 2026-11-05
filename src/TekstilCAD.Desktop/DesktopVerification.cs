@@ -9731,6 +9731,45 @@ internal static partial class DesktopVerification
                     var garmentRefine=garmentProbe.RefineAsync();PumpUntil(()=>garmentRefine.IsCompleted);garmentRefine.GetAwaiter().GetResult();
                     Check(garmentProbe.AppliedMarkForVerification(40,30)==2 && garmentProbe.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
                           "Garment review refines the local mask without changing the project",checks);
+                    var checkpoint=Path.Combine(Path.GetDirectoryName(reportPath)!,"region-"+Guid.NewGuid().ToString("N")+".tdregion");
+                    var corruptCheckpoint=checkpoint+".bad";
+                    try {
+                        var corrected=garmentProbe.CopyMaskForVerification()!;
+                        Check(garmentProbe.TrySaveSession(checkpoint),"Garment region checkpoint can be saved as a new file",checks);
+                        var savedBytes=File.ReadAllBytes(checkpoint);
+                        Check(!garmentProbe.TrySaveSession(checkpoint) && File.ReadAllBytes(checkpoint).SequenceEqual(savedBytes),
+                              "Garment checkpoint does not overwrite an existing file",checks);
+                        garmentProbe.MarkMode.SelectedIndex=1;Check(garmentProbe.TryAddMark(3,3) && !garmentProbe.TrySaveSession(checkpoint+".pending"),
+                              "Pending garment corrections cannot be silently omitted from checkpoint",checks);
+                        garmentProbe.ClearMarks();
+                        var restoredRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
+                        try {
+                            Check(restoredRegion.TryLoadSession(checkpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(corrected) &&
+                                  restoredRegion.AppliedMarkForVerification(40,30)==2 && restoredRegion.Regions.SelectedIndex==-1 && restoredRegion.left.Text=="15",
+                                  "Garment checkpoint restores mask, marks and rectangle for the same photo",checks);
+                            restoredRegion.MarkMode.SelectedIndex=1;Check(restoredRegion.TryAddMark(3,3),"Restored garment region accepts another correction",checks);
+                            var restoredRefine=restoredRegion.RefineAsync();PumpUntil(()=>restoredRefine.IsCompleted);restoredRefine.GetAwaiter().GetResult();
+                            Check(restoredRegion.AppliedMarkForVerification(3,3)==1 && DocumentSession.ContentEquals(initial,workspace.Document),
+                                  "Restored garment mask can be refined without changing the project",checks);
+                            var beforeBad=restoredRegion.CopyMaskForVerification()!;
+                            File.WriteAllText(corruptCheckpoint,"{\"Version\":1,\"Version\":1}");
+                            Check(!restoredRegion.TryLoadSession(corruptCheckpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
+                                  "Malformed garment checkpoint preserves current mask",checks);
+                            restoredRegion.ConfirmRectangleChangeForVerification=()=> { restoredRegion.MarkMode.SelectedIndex=1;restoredRegion.TryAddMark(5,5);return true; };
+                            Check(!restoredRegion.TryLoadSession(checkpoint) && restoredRegion.PendingMarkCount==1 && restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
+                                  "Stale load confirmation preserves a newly added correction",checks);
+                            Check(restoredRegion.UndoPendingStroke() && restoredRegion.PendingMarkCount==0,"Stale load confirmation leaves new correction undoable",checks);
+                            restoredRegion.ConfirmRectangleChangeForVerification=()=>false;
+                            Check(!restoredRegion.TryLoadSession(checkpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(beforeBad),
+                                  "Declining checkpoint load preserves current mask",checks);
+                        } finally { restoredRegion.Close(); }
+                        var otherPixels=(byte[])regionPixels.Clone();otherPixels[0]++;
+                        var otherBitmap=BitmapSource.Create(96,72,96,96,PixelFormats.Bgra32,null,otherPixels,96*4);otherBitmap.Freeze();
+                        var otherRegion=new PhotoRegionWindow(workspace,otherBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
+                        try { Check(!otherRegion.TryLoadSession(checkpoint) && otherRegion.CopyMaskForVerification() is null,
+                                    "Garment checkpoint rejects a different photo",checks); }
+                        finally { otherRegion.Close(); }
+                    } finally { File.Delete(checkpoint);File.Delete(corruptCheckpoint); }
                 } finally { garmentProbe.Close(); }
                 regionDialog.MarkMode.SelectedIndex=3;
                 Check(regionDialog.TrySelectComponentAt(40,30) && regionDialog.Regions.SelectedIndex>=0,

@@ -1,3 +1,7 @@
+using Microsoft.Win32;
+using TekstilCAD.FileFormats;
+using System.IO;
+using System.Text.Json;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
@@ -75,6 +79,25 @@ internal sealed class PhotoRegionWindow : Window
         compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=(_,_)=> { if(TrySelectContour())DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
         actions.Children.Add(compute);if(!reviewOnly)actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
+        if(reviewOnly)
+        {
+            var save=new Button { Content="Bölgeyi kaydet…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
+            var load=new Button { Content="Bölgeyi aç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
+            AutomationProperties.SetHelpText(save,"Maskeyi ve uygulanmış işaretleri fotoğraf piksel özetiyle yeni dosyaya kaydeder. Fotoğraf veya kalıp içermez; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
+            AutomationProperties.SetHelpText(load,"Aynı çözülmüş fotoğrafa ait bölgeyi açar; CAD projesi değişmez.");
+            save.Click+=(_,_)=> { if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return; }
+                var savedSnapshot=snapshot;var savedApplied=appliedMarks;var savedRevision=regionRevision;
+                var savedFields=new[] { left.Text,top.Text,width.Text,height.Text };
+                var dialog=new SaveFileDialog { Filter="Fotoğraf bölgesi (*.tdregion)|*.tdregion",DefaultExt=".tdregion",AddExtension=true,OverwritePrompt=false };
+                if(dialog.ShowDialog(this)!=true)return;
+                if(closed || running is not null || pendingMarks.Count!=0 || regionRevision!=savedRevision || !ReferenceEquals(snapshot,savedSnapshot) || !ReferenceEquals(appliedMarks,savedApplied) ||
+                   !savedFields.SequenceEqual(new[] { left.Text,top.Text,width.Text,height.Text })) { Status.Text="Bölge seçim sırasında değişti; dosya kaydedilmedi.";return; }
+                TrySaveSession(dialog.FileName); };
+            load.Click+=(_,_)=> { if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return; }
+                var dialog=new OpenFileDialog { Filter="Fotoğraf bölgesi (*.tdregion)|*.tdregion",CheckFileExists=true };
+                if(dialog.ShowDialog(this)==true)TryLoadSession(dialog.FileName); };
+            actions.Children.Add(save);actions.Children.Add(load);
+        }
         var controls=new StackPanel();DockPanel.SetDock(controls,Dock.Top);root.Children.Add(controls);
         controls.Children.Add(new TextBlock { Text=reviewOnly ? "Giysi fotoğrafında bölge arayıp düzeltmeleri inceleyin. Bu yalnız renk tahminidir; ölçü, kalıp veya CAD aktarımı değildir." : "Dikdörtgen sürükleyin, bölge arayın; listeden veya fotoğraftan seçin. Ekle/çıkar fırçasıyla düzeltin; az işaret büyük gösterilir. Sonuç renk tahminidir.",TextWrapping=TextWrapping.Wrap });
         var rectangle=new WrapPanel { Margin=new Thickness(0,4,0,4) };controls.Children.Add(rectangle);
@@ -238,6 +261,35 @@ internal sealed class PhotoRegionWindow : Window
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or DllNotFoundException or BadImageFormatException or TypeInitializationException)
         { if(!closed && revision==regionRevision)Status.Text="Bölge önerisi hazırlanamadı; önceki bölge korundu: "+ex.Message; }
         finally { if(ReferenceEquals(running,cts))running=null;cts.Dispose(); }
+    }
+    internal bool TrySaveSession(string path)
+    {
+        if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return false; }
+        try {
+            if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) || !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
+               !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) || !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h))throw new InvalidDataException("Bölge dikdörtgeni geçersiz.");
+            var text=PhotoRegionSession.Encode(snapshot,appliedMarks,x,y,w,h);var full=Path.GetFullPath(path);
+            ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null));
+            Status.Text="Bölge yeni dosyaya kaydedildi; fotoğraf veya kalıp içermez.";return true;
+        } catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { Status.Text="Bölge kaydedilemedi: "+ex.Message;return false; }
+    }
+    internal bool TryLoadSession(string path)
+    {
+        if(running is not null) { Status.Text="Önce süren işlemi bitirin.";return false; }
+        if(!ConfirmDiscard(ConfirmRectangleChangeForVerification,"Dosya açılırsa mevcut bölge ve işaretler değiştirilir. Devam edilsin mi?","Bölgeyi aç")) { Status.Text="Bölge açma iptal edildi; mevcut çalışma korundu.";return false; }
+        try {
+            var bgr=PhotoRasterCapture.CaptureBgr(image,new Int32Rect(0,0,image.PixelWidth,image.PixelHeight),CancellationToken.None);
+            var data=PhotoRegionSession.Decode(path,bgr,image.PixelWidth,image.PixelHeight);
+            var restored=new RegionProposal.Snapshot(data.Width,data.Height,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bgr)),data.Labels);
+            var found=MaskComponents.Analyze(restored.CopyBinaryMask(),data.Width,data.Height);
+            if(found.Components.Count>512)throw new InvalidDataException("Bölge sayısı seçim sınırını aşıyor.");
+            var boxes=new[] { left,top,width,height };var values=new[] { data.X,data.Y,data.RectangleWidth,data.RectangleHeight };
+            changingRectangle=true;try { for(var i=0;i<boxes.Length;i++) { boxes[i].Text=values[i].ToString(CultureInfo.InvariantCulture);boxes[i].Tag=boxes[i].Text; } } finally { changingRectangle=false; }
+            regionRevision++;snapshot=restored;sourceBgr=bgr;appliedMarks=data.AppliedMarks;undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;pendingMarks.Clear();pendingUndo=null;
+            UpdateMarksOverlay();UpdateBoxOverlay();ShowComponents(found);Status.Text="Bölge aynı fotoğraf pikselleriyle açıldı; bölgeyi yeniden seçin. Kalıp veya ölçü doğrulanmadı.";return true;
+        } catch(Exception ex) when(ex is IOException or InvalidDataException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException or System.Security.SecurityException or JsonException)
+        { Status.Text="Bölge açılamadı; mevcut çalışma korundu: "+ex.Message;return false; }
     }
     private void ShowComponents(MaskComponents result)
     {
