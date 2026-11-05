@@ -63,9 +63,9 @@ try
     var (curveA,curveB)=parabola.SplitNative(.25);
     if(Math.Abs(curveA.End.X-.25)>1e-9 || Math.Abs(curveB.Controls[0].X-.5)>1e-9) throw new Exception("Curve arc-length split");
     try { parabola.SplitNative(0); throw new Exception("Zero split accepted"); } catch(ArgumentException) { }
-    try { InterfaceMatcher.Match([],[]); throw new Exception("Empty interface accepted"); } catch(ArgumentException) { }
+    try { InterfaceMatcher.Match("test",[],[]); throw new Exception("Empty interface accepted"); } catch(ArgumentException) { }
     var line=new InterfaceMatcher.Edge("test","Edge",new(0,0),new(10,0),[],true,false,1);
-    var matched=InterfaceMatcher.Match([line],[line with { End=new(4,0), Flipped=false },line with { Start=new(4,0),Flipped=false }]);
+    var matched=InterfaceMatcher.Match("test",[line],[line with { End=new(4,0), Flipped=false },line with { Start=new(4,0),Flipped=false }]);
     if(matched.Upper.Count!=2 || Math.Abs(matched.Upper[0].Start.X-6)>1e-8 || !matched.Upper.All(e=>e.Flipped)) throw new Exception("Flipped split orientation");
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
@@ -85,7 +85,7 @@ internal static class Validator
         foreach(var c in pre.RootElement.GetProperty("cases").EnumerateArray())
         {
             string id=c.GetProperty("id").GetString()!;
-            var match=InterfaceMatcher.Match(c.GetProperty("upper").EnumerateArray().Select(InterfaceMatcher.Read).ToArray(),c.GetProperty("lower").EnumerateArray().Select(InterfaceMatcher.Read).ToArray());
+            var match=InterfaceMatcher.Match(id,c.GetProperty("upper").EnumerateArray().Select(InterfaceMatcher.Read).ToArray(),c.GetProperty("lower").EnumerateArray().Select(InterfaceMatcher.Read).ToArray());
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
             void Side(IReadOnlyList<InterfaceMatcher.Edge> actual,JsonElement expected)
@@ -108,6 +108,24 @@ internal static class Validator
                 P a=Point(original.GetProperty("start")),b=Point(original.GetProperty("end"));
                 Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<2e-5 && (b-new P(edge.End.X,edge.End.Y)).Length()<2e-5,"matched front contour: "+edge.Id);
             }
+            try { BackSkirtCandidate.Create(id=="synthetic-base"?"synthetic-distinct":"synthetic-base",match); throw new InvalidDataException("Wrong snapshot accepted"); } catch(ArgumentException) { }
+            var backPath=BackSkirtCandidate.Create(id,match);
+            Need(backPath.Edges.Count==19 && backPath.Status=="unresolved" && !backPath.ProductionAllowed && !backPath.ExportAllowed,"back path gate");
+            foreach(var edge in backPath.Edges)
+            {
+                var original=reference.GetProperty("panels").GetProperty("skirt_back").GetProperty("edges")[edge.Id];
+                P a=Point(original.GetProperty("start")),b=Point(original.GetProperty("end"));
+                Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<2e-5 && (b-new P(edge.End.X,edge.End.Y)).Length()<2e-5,"matched back contour: "+edge.Id);
+                if(edge.Kind=="Q")
+                {
+                    var ctrl=edge.Control ?? throw new InvalidDataException("Missing back control candidate");
+                    P source=Point(original.GetProperty("relative_controls")[0]);
+                    Need((source-new P(ctrl.X,ctrl.Y)).Length()<.0002,"back tangent candidate");
+                }
+            }
+            var graph=backPath.Edges.Select(e=>new GeneratedGraph.Edge(id,"skirt_back",e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+            var status=GeneratedGraph.Inspect(id,graph,[],[]);
+            Need(status.Issues.Contains("incomplete-graph") && status.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")),"back graph must remain unresolved");
             Need(match.Status=="unresolved"&&!match.ExportAllowed,"matching gate");
         }
     }
@@ -259,6 +277,8 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
 
 
 

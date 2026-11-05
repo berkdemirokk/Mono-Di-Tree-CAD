@@ -49,7 +49,7 @@ internal static class InterfaceMatcher
             throw new ArgumentException("Unsupported curve");
         }
     }
-    internal sealed record Result(IReadOnlyList<Edge> Upper,IReadOnlyList<Edge> Lower)
+    internal sealed record Result(string Snapshot,IReadOnlyList<Edge> Upper,IReadOnlyList<Edge> Lower)
     {
         public string Status=>"unresolved"; public bool ExportAllowed=>false;
     }
@@ -74,8 +74,9 @@ internal static class InterfaceMatcher
         if(!double.IsFinite(sum)||sum<=0||lengths.Any(x=>!double.IsFinite(x)||x<=0))throw new ArgumentException("Invalid projected lengths");
         return lengths.Select(x=>x/sum).ToArray();
     }
-    internal static Result Match(IReadOnlyList<Edge> upper,IReadOnlyList<Edge> lower)
+    internal static Result Match(string snapshot,IReadOnlyList<Edge> upper,IReadOnlyList<Edge> lower)
     {
+        if(snapshot is not ("synthetic-base" or "synthetic-distinct" or "test")) throw new ArgumentException("Unsupported snapshot");
         var a=upper.ToList();var b=lower.ToList();var af=Fractions(a);var bf=Fractions(b);
         bool matching=af.Length==bf.Length && af.Zip(bf).All(p=>Math.Abs(p.First-p.Second)<=.05+1e-5*Math.Abs(p.Second));
         if(!matching)
@@ -83,7 +84,7 @@ internal static class InterfaceMatcher
             double tol=Math.Min(.01,Math.Min(af.Min(),bf.Min())/2);
             SplitAt(a,bf,tol); SplitAt(b,af,tol);
         }
-        return new(a.AsReadOnly(),b.AsReadOnly());
+        return new(snapshot,a.AsReadOnly(),b.AsReadOnly());
     }
     static void SplitAt(List<Edge> target,double[] other,double tol)
     {
@@ -107,3 +108,4 @@ internal static class InterfaceMatcher
         if(add!=other.Length)throw new InvalidOperationException("Incomplete interface match");
     }
 }
+

@@ -47,3 +47,9 @@ Kaynak `MetaGarment` bel arayüzü eşleştiricisinin oluşturduğu ön ortadaki
 Üst arayüzün ölçülerden C# üretimi eksik olduğundan eşleştirici girdileri Python kaynak fixture'ından gelir; bu **hibrit sentetik deneydir**, gerçek ölçüden bağımsız C# kalıp üretimi değildir. Analitik eğri örneği yay uzunluğu bölünmesinde `t=fraction` kullanılmadığını, ters yönlü çizgi bölmesi yönün korunduğunu sınar. Boş arayüz ve geçersiz bölme reddedilir. Önceki grafik uyarıları, üretim/dışa aktarma ve gerçek veri kapıları aynen sürer.
 
 Ayrı checkout'ta satır sonları değişebildiği için sentetik YAML özeti artık CRLF/LF'yi metin olarak normalize ederek kontrol edilir; içerik değişikliği hâlâ reddedilir. Bu kontrol bir imza veya eşzamanlı müdahale güvenlik sınırı değildir.
+
+## Arka etek adayına genişletme
+
+`BackSkirtCandidate`, C#'ta ölçü formüllerinden hesaplanan arka pens/dış kenarları ve aynı sentetik vaka kimliğindeki hibrit bel arayüzü eşleştirmesini kullanarak **19 sıralı kenarlı** kapalı yol adayı kurar. İki beden için bütün kenar uçları kaynak panel/kenar indeksleriyle `2e-5 cm` araştırma eşiğinde karşılaştırıldı; iki yan Q kontrolü daha önce açıklanan analitik yaklaşımdır. Ön ve arka aday, eşleştiricinin vaka kimliği farklıysa reddeder. Bu string kimlik tek başına verinin kriptografik kökenini veya bütünlüğünü ispatlamaz.
+
+Kaynak ön/arka etek konturlarının uç eşleşmesi, altı panelin veya 23 dikiş kuralının tümünün C#'ta üretildiği anlamına gelmez. Üst gövde eğrileri ve arayüzleri, C# kaynaklı tam dikiş grafiği ve eğri topolojisi henüz yoktur; bel eşleştiricisi hâlâ sentetik Python ön-arayüz verisi kullanır. Her iki etek adayı için grafik kontrolü dikiş eksikliği ve eğri topolojisinin ispatlanmaması nedeniyle sonuçları `unresolved` bırakır.

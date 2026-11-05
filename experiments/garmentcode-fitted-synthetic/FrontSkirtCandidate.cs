@@ -38,9 +38,11 @@ internal static class FrontSkirtCandidate
     // fixture, not from a complete C# bodice generator.
     internal static Candidate CreateFromMatchedInterface(string id,InterfaceMatcher.Result matched)
     {
+        if(id!=matched.Snapshot) throw new ArgumentException("Snapshot mismatch");
         var front=matched.Lower.Where(e=>e.Panel=="skirt_front").ToArray();
         if(front.Length!=4 || !front[1].Flipped || !front[2].Flipped || (front[1].Start-front[2].End).Norm()>1e-8) throw new ArgumentException("Unsupported front interface topology");
         return Create(id,front[1].Start.X);
     }
 }
+
 
