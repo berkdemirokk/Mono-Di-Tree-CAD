@@ -9926,6 +9926,13 @@ internal static partial class DesktopVerification
                 regionDialog.ShowAppliedMarks.IsChecked=false;
                 Check(!regionDialog.HasMarksOverlay,"Hiding applied photo marks preserves mask state",checks);
                 regionDialog.Regions.SelectedIndex=0;
+                regionDialog.ComparePrevious.IsChecked=true;
+                Check(regionDialog.TrySelectComponentAt(3,3) && regionDialog.Status.Text.Contains("maske farkı") && regionDialog.ComparisonPixelsForVerification() is not null,
+                    "Selecting an already selected component while comparing describes the visible difference",checks);
+                regionDialog.OmitHoles.IsChecked=true;regionDialog.ComparePrevious.IsChecked=false;
+                Check(regionDialog.Status.Text.Contains("mavi alan") && regionDialog.OmitHoles.IsChecked==true && regionDialog.Regions.SelectedIndex==0,
+                    "Closing comparison restores the selected-region explanation without changing selection or hole choice",checks);
+                regionDialog.OmitHoles.IsChecked=false;
                 var selectedBeforeFailure=regionDialog.Regions.SelectedIndex;
                 regionDialog.ConfirmRectangleChangeForVerification=()=>false;
                 var cancelledRecompute=regionDialog.ComputeAsync();PumpUntil(()=>cancelledRecompute.IsCompleted);cancelledRecompute.GetAwaiter().GetResult();

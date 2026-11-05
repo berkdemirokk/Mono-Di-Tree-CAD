@@ -360,7 +360,7 @@ internal sealed class PhotoRegionWindow : Window
         if(id==0) { Status.Text="Bu konum arka plan; mevcut bölge seçimi korunuyor.";return false; }
         var choice=Regions.Items.Cast<Choice>().FirstOrDefault(item=>item.Id==id);
         if(choice is null) { Status.Text="Bu bölge seçim listesinde bulunamadı.";return false; }
-        if(Equals(Regions.SelectedItem,choice)) { Status.Text="Bu bölge zaten seçili; mavi alanı inceleyin.";return true; }
+        if(Equals(Regions.SelectedItem,choice)) { Status.Text=ComparePrevious.IsChecked==true ? "Tüm maske farkı açık: yeşil eklenen, kırmızı çıkarılan piksellerdir." : "Bu bölge zaten seçili; mavi alanı inceleyin.";return true; }
         Regions.SelectedItem=choice;return true;
     }
     internal bool TryAddMark(int x,int y)=>TryAddStroke([new System.Windows.Point(x,y)]);
@@ -504,7 +504,11 @@ internal sealed class PhotoRegionWindow : Window
     private void UpdateComparison()
     {
         comparisonOverlay.Source=null;overlay.Visibility=Visibility.Visible;
-        if(ComparePrevious.IsChecked!=true || snapshot is null || undoSnapshot is null)return;
+        if(ComparePrevious.IsChecked!=true || snapshot is null || undoSnapshot is null)
+        {
+            Status.Text=Regions.SelectedItem is Choice ? "Karşılaştırma kapatıldı; mavi alan seçilen bölgedir." : "Karşılaştırma kapatıldı; incelemek için bir bölge seçin.";
+            return;
+        }
         var current=snapshot.CopyBinaryMask();var previous=undoSnapshot.CopyBinaryMask();
         var pixels=new byte[checked(current.Length*4)];
         for(var i=0;i<current.Length;i++)
@@ -520,7 +524,8 @@ internal sealed class PhotoRegionWindow : Window
     {
         if(comparisonOverlay.Source is not BitmapSource bitmap)return null;
         var pixels=new byte[checked(bitmap.PixelWidth*bitmap.PixelHeight*4)];bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);return pixels;
-    }    internal bool TrySelectContour()
+    }
+    internal bool TrySelectContour()
     {
         if(pendingMarks.Count>0) { Status.Text="Önce bekleyen işaretleri uygulayın veya silin.";return false; }
         if(running is not null || components is null || Regions.SelectedItem is not Choice choice) { Status.Text="Önce arama tamamlanınca bir bölge seçin.";return false; }
