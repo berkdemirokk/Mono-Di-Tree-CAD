@@ -48,6 +48,7 @@ public static class DesignRequestStorage
     public static string Serialize(DesignRequest request)
     {
         Validate(request);
+        if(request.ModelId is not null)throw new InvalidOperationException("V1 biçimi model kimliğini koruyamaz.");
         var reference=request.Reference is null ? null : new { name=request.Reference.Name,mediaType=request.Reference.MediaType,dataBase64=Convert.ToBase64String(request.Reference.Data) };
         return JsonSerializer.Serialize(new { format=Format,version=1,prompt=request.Prompt,measurements=request.Measurements,reference });
     }
