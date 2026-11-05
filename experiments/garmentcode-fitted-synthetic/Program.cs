@@ -113,8 +113,8 @@ try
     foreach(string id in new[]{"synthetic-base","synthetic-distinct"}) foreach(bool left in new[]{false,true})
     {
         var audit=FrontBezierAudit.Inspect(FrontBodiceCandidate.Create(id,left));
-        if(audit.Separated+audit.EndpointOnly+audit.Unresolved+audit.ArcPairs!=66 || audit.ArcPairs==0 || audit.Status!="unresolved" || audit.ExportAllowed) throw new Exception("Front Bezier audit coverage");
-        Console.WriteLine($"{id} {(left?"left":"right")} represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, arc-pairs={audit.ArcPairs}, nonmonotone={audit.NonMonotone}.");
+        if(audit.Separated+audit.EndpointOnly+audit.Unresolved+audit.ArcPairs!=66 || audit.ArcPairs==0 || audit.ArcSeparated+audit.ArcEndpointOnly+audit.ArcUnresolved!=audit.ArcPairs || audit.Status!="unresolved" || audit.ExportAllowed) throw new Exception("Front Bezier audit coverage");
+        Console.WriteLine($"{id} {(left?"left":"right")} represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, arc-pairs={audit.ArcPairs} (separate={audit.ArcSeparated}, endpoint={audit.ArcEndpointOnly}, unresolved={audit.ArcUnresolved}), nonmonotone={audit.NonMonotone}.");
     }
     var upper=UpperSeamGraph.Create("synthetic-base");var firstUpper=upper.Rules[0];
     var firstUpperSource=firstCase.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()==firstUpper.Owner && r.GetProperty("owner_type").GetString()==firstUpper.OwnerType && r.GetProperty("index").GetInt32()==firstUpper.Index);
@@ -122,6 +122,13 @@ try
     using(var wrongUpper=JsonDocument.Parse(badUpper.ToJsonString())) { try { UpperSeamGraph.Compare(firstUpper,wrongUpper.RootElement);throw new Exception("Wrong valid upper seam accepted"); } catch(InvalidDataException) { } }
     var flippedUpper=JsonNode.Parse(firstUpperSource.GetRawText())!;flippedUpper["b"]!["edges"]![0]!["flipped"]=true;
     using(var wrongUpperFlip=JsonDocument.Parse(flippedUpper.ToJsonString())) { try { UpperSeamGraph.Compare(firstUpper,wrongUpperFlip.RootElement);throw new Exception("Wrong upper orientation accepted"); } catch(InvalidDataException) { } }
+    var arcA=new CircleSeparation.Point(-1,0);var arcB=new CircleSeparation.Point(1,0);
+    if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,2),new(2,2)],false)!=CircleSeparation.Verdict.Separated)throw new Exception("Circle exterior separation");
+    if(CircleSeparation.Compare(arcA,arcB,-.5,[new(0,0),new(.5,0)],false)!=CircleSeparation.Verdict.Separated)throw new Exception("Circle interior separation");
+    if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-1,0),new(-2,0)],true)!=CircleSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Circle shared endpoint");
+    if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,-1),new(2,-1)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle tangent must remain unresolved");
+    if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,0),new(2,0)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing must remain unresolved");
+    try { CircleSeparation.Compare(arcA,arcB,0,[new(0,0),new(1,0)],false);throw new Exception("Degenerate circle accepted"); } catch(ArgumentException) { }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -260,6 +267,27 @@ internal static class Validator
                 }
             }
             Side(match.Upper,waist.GetProperty("a"));Side(match.Lower,waist.GetProperty("b"));
+            var fullGraph=SyntheticFullSeamGraph.Create(id,match);
+            Need(fullGraph.Rules.Count==23 && fullGraph.Status=="unresolved" && !fullGraph.ExportAllowed && !fullGraph.ProductionAllowed,"full seam candidate gate");
+            var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
+            foreach(var rule in fullGraph.Rules)
+            {
+                var actual=sourceGraph.Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("owner_type").GetString()==rule.Kind && r.GetProperty("index").GetInt32()==rule.Index);
+                SyntheticFullSeamGraph.Compare(rule,actual);
+            }
+            var sourceSide=sourceGraph.Single(r=>r.GetProperty("owner_type").GetString()=="PencilSkirt" && r.GetProperty("index").GetInt32()==0);
+            void RejectFullGraph(Action<JsonNode> change)
+            {
+                var mutated=JsonNode.Parse(sourceSide.GetRawText())!;change(mutated);
+                using var wrong=JsonDocument.Parse(mutated.ToJsonString());
+                try { SyntheticFullSeamGraph.Compare(fullGraph.Rules.Single(r=>r.Kind=="PencilSkirt" && r.Index==0),wrong.RootElement);throw new Exception("Invalid full seam accepted"); } catch(InvalidDataException) { }
+            }
+            RejectFullGraph(n=>n["a"]!["edges"]![0]!["edge"]=10);
+            RejectFullGraph(n=>n["a"]!["edges"]![1]!["flipped"]=false);
+            RejectFullGraph(n=>{ var list=n["a"]!["edges"]!.AsArray();var x=list[0]!.DeepClone();var y=list[1]!.DeepClone();list[0]=y;list[1]=x; });
+            var changedRule=JsonNode.Parse(sourceGraph.Single(r=>r.GetProperty("owner_type").GetString()=="PencilSkirt" && r.GetProperty("index").GetInt32()==0).GetRawText())!;
+            changedRule["b"]!["ruffle"]![1]!["coeff"]=1;
+            using(var corruptRule=JsonDocument.Parse(changedRule.ToJsonString())) { try { SyntheticFullSeamGraph.Compare(fullGraph.Rules.Single(r=>r.Kind=="PencilSkirt" && r.Index==0),corruptRule.RootElement);throw new Exception("Wrong ruffle accepted"); } catch(InvalidDataException) { } }
             var front=FrontSkirtCandidate.CreateFromMatchedInterface(id,match);
             foreach(var edge in front.Edges)
             {
