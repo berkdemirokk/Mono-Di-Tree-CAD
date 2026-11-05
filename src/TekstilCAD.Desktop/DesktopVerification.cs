@@ -15043,6 +15043,16 @@ internal static partial class DesktopVerification
             Control<ComboBox>(second,"Start").SelectedIndex=1;Control<ComboBox>(second,"End").SelectedIndex=0;otherDirection.SelectedIndex=1;
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("Aynı yol iki kez seçildi"),"Reversing a path still identifies the same seam",checks);
+            end.SelectedIndex=4;fullLoop.IsChecked=true;
+            Control<ComboBox>(second,"Start").SelectedIndex=1;Control<ComboBox>(second,"End").SelectedIndex=1;otherFullLoop.IsChecked=true;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Aynı yol iki kez seçildi") && result.Text.Contains("1. yol: 30 mm") && result.Text.Contains("2. yol: 30 mm"),
+                "Full loops with different starting points and directions identify the same seam",checks);
+            fullLoop.IsChecked=false;otherFullLoop.IsChecked=false;
+            Control<ComboBox>(second,"Start").SelectedIndex=4;Control<ComboBox>(second,"End").SelectedIndex=4;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Aynı yol iki kez seçildi") && result.Text.Contains("1. yol: 0 mm") && result.Text.Contains("2. yol: 0 mm"),
+                "Repeated closure aliases identify the same zero-length path",checks);
             Control<ComboBox>(second,"Piece").SelectedIndex=1;
             Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
