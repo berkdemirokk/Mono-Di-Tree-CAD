@@ -3076,7 +3076,7 @@ private struct ExperimentalDesignBriefView: View {
                             .font(.caption).foregroundStyle(plum)
                     }
                     if desktopMeasurementRisk {
-                        Text("Soru biçimindeki, sayı gösterimi belirsiz veya cümleyle birleştirilmiş ölçüleri kontrol edin. Özgün metin otomatik değiştirilmez; masaüstündeki yorumu ayrıca doğrulayın.").font(.caption).foregroundStyle(.secondary)
+                        Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüleri kontrol edin. Özgün metin otomatik değiştirilmez; masaüstündeki yorumu ayrıca doğrulayın.").font(.caption).foregroundStyle(.secondary)
                     }
                     if !summary.whitespaceMeasurementLabels.isEmpty {
                         Text("Yalnız boşluk içeren alanlar: \(summary.whitespaceMeasurementLabels.joined(separator: ", ")). Ölçüleri düzenleyin; ham metin korunuyor.").foregroundStyle(.secondary)
@@ -3239,7 +3239,7 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }
                 Button("Tarif ve ölçüleri gözden geçir") { step = MeasurementMessageParser.mayNeedDesktopReview(description) ? 0 : 1 }
                 Button("Vazgeç", role: .cancel) { }
-            } message: { Text("Soru biçimindeki, sayı gösterimi belirsiz veya cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
+            } message: { Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
             .onChange(of: draft) { value in modelSuggestionRevision = UUID(); if !draftTransition { saveLocalDraft(value) } }

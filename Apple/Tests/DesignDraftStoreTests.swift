@@ -719,6 +719,7 @@ final class DesignDraftStoreTests: XCTestCase {
         }
         for message in ["bel çevresi 72 cm?", "bel çevresi 72 cm mı?", "bel çevresi 72 cm olmasın", "eğer bel çevresi 72 cm ise"] {
             XCTAssertThrowsError(try MeasurementMessageParser.parse(message, existing: [:]))
+            XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview(message), message)
             let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
             XCTAssertEqual(draft.measurements, message)
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft))
@@ -731,6 +732,9 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("1,000 mm"))
         XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("1.000 cm"))
         XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("72,5 cm"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 mm değil"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm olursa"))
+        XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm olsun"))
     }
     func testMessageLabelsRejectUnknownTurkishICaseWithoutPartialProposal() throws {
         XCTAssertEqual(MeasurementMessageParser.canonicalLabel("BEL ÇEVRESİ"), "bel çevresi")
