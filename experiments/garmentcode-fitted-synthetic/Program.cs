@@ -116,6 +116,12 @@ try
         if(audit.Separated+audit.EndpointOnly+audit.Unresolved+audit.ArcPairs!=66 || audit.ArcPairs==0 || audit.Status!="unresolved" || audit.ExportAllowed) throw new Exception("Front Bezier audit coverage");
         Console.WriteLine($"{id} {(left?"left":"right")} represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, arc-pairs={audit.ArcPairs}, nonmonotone={audit.NonMonotone}.");
     }
+    var upper=UpperSeamGraph.Create("synthetic-base");var firstUpper=upper.Rules[0];
+    var firstUpperSource=firstCase.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()==firstUpper.Owner && r.GetProperty("owner_type").GetString()==firstUpper.OwnerType && r.GetProperty("index").GetInt32()==firstUpper.Index);
+    var badUpper=JsonNode.Parse(firstUpperSource.GetRawText())!;badUpper["a"]!["edges"]![0]!["edge"]=8;
+    using(var wrongUpper=JsonDocument.Parse(badUpper.ToJsonString())) { try { UpperSeamGraph.Compare(firstUpper,wrongUpper.RootElement);throw new Exception("Wrong valid upper seam accepted"); } catch(InvalidDataException) { } }
+    var flippedUpper=JsonNode.Parse(firstUpperSource.GetRawText())!;flippedUpper["b"]!["edges"]![0]!["flipped"]=true;
+    using(var wrongUpperFlip=JsonDocument.Parse(flippedUpper.ToJsonString())) { try { UpperSeamGraph.Compare(firstUpper,wrongUpperFlip.RootElement);throw new Exception("Wrong upper orientation accepted"); } catch(InvalidDataException) { } }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -168,10 +174,12 @@ internal static class Validator
             bool withinResearchBounds=baseControlError<.0004 && maximum<.001 && maxControl<.0002;
             if(id=="synthetic-small-difference")
             {
-                Need(!withinResearchBounds,"expected difficult case to remain unresolved");
+                Need(!withinResearchBounds && path.ReferenceAssessment==BackWaistCandidate.ReferenceState.KnownMismatch,"expected difficult case to remain unresolved");
+                try { path.RequireResearchComposition(); throw new InvalidDataException("Known mismatch composed"); } catch(InvalidOperationException) { }
+                try { BackBodiceCandidate.Create(id,false); throw new InvalidDataException("Known mismatch body composed"); } catch(InvalidOperationException) { }
                 Console.WriteLine($"{id}: source approximation exceeds research bounds (initial control difference={baseControlError:G6}); rejected.");
             }
-            else Need(withinResearchBounds,"back approximation outside research bound");
+            else Need(withinResearchBounds && path.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unassessed,"back approximation outside research bound");
             var sourceRules=item.GetProperty("stitches").EnumerateArray().Select(e=>new GeneratedGraph.Seam(id,"precut_back",e.GetProperty("a").GetInt32(),e.GetProperty("a_flip").GetBoolean(),"precut_back",e.GetProperty("b").GetInt32(),e.GetProperty("b_flip").GetBoolean())).ToArray();
             var graph=path.Edges.Select(e=>new GeneratedGraph.Edge(id,"precut_back",e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
             var diagnosis=GeneratedGraph.Inspect(id,graph,path.DartRules,sourceRules);
@@ -424,6 +432,18 @@ internal static class Validator
             var leftCenter=item.GetProperty("panels").GetProperty("left_ftorso").GetProperty("edges")[11];
             Need((Point(rightCenter.GetProperty("start"))-new P(0,0)).Length()<1e-8 && (Point(rightCenter.GetProperty("end"))-new P(neck.Right.Start.X,neck.Right.Start.Y)).Length()<1e-5 && (Point(leftCenter.GetProperty("start"))-new P(neck.Left.End.X,neck.Left.End.Y)).Length()<1e-5 && (Point(leftCenter.GetProperty("end"))-new P(0,0)).Length()<1e-8,"neck center lines");
             Need(neck.Status=="unresolved"&&!neck.ProductionAllowed&&!neck.ExportAllowed,"neck gate");
+            var upperGraph=UpperSeamGraph.Create(id);
+            Need(upperGraph.Rules.Count==6 && upperGraph.Snapshot==id && upperGraph.Status=="unresolved" && !upperGraph.ExportAllowed && !upperGraph.ProductionAllowed,"upper seam graph gate");
+            var seamLengths=UpperSeamGraph.Measure(upperGraph);
+            Need(seamLengths.Count==6 && seamLengths.All(x=>x.Status=="unresolved"),"upper seam length gate");
+            foreach(var rule in upperGraph.Rules)
+            {
+                var source=item.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner").GetString()==rule.Owner && r.GetProperty("owner_type").GetString()==rule.OwnerType && r.GetProperty("index").GetInt32()==rule.Index);
+                UpperSeamGraph.Compare(rule,source);
+                var length=seamLengths.Single(x=>x.Owner==rule.Owner && x.Index==rule.Index);
+                double SourceLength(string side)=>source.GetProperty(side).GetProperty("edges").EnumerateArray().Sum(e=>item.GetProperty("panels").GetProperty(e.GetProperty("panel").GetString()!).GetProperty("edges")[e.GetProperty("edge").GetInt32()].GetProperty("length").GetDouble());
+                Need(Math.Abs(length.SideA-SourceLength("a"))<.002 && Math.Abs(length.SideB-SourceLength("b"))<.002,"upper seam candidate lengths");
+            }
             var generated=PartialFittedEngine.Create(id);
             var dartRules=PartialDartRelations.Create(id);
             var expectedDarts=item.GetProperty("stitches").EnumerateArray().Where(r=>r.GetProperty("owner_type").GetString() is "BodiceFrontHalf" or "FittedSkirtPanel").ToArray();

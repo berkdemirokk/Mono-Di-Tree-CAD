@@ -13,8 +13,21 @@ internal static class BackWaistCandidate
     }
     internal sealed record Edge(int Id,string Kind,P Start,P End,P? RelativeControl);
     internal sealed record Trace(P BaseStart,P BaseEnd,P BaseRelativeControl,double DartWidth,double OuterOffset,double InnerOffset,double OuterLeg,double InnerLeg);
-    internal sealed record Path(string Snapshot,IReadOnlyList<Edge> Edges,IReadOnlyList<GeneratedGraph.Seam> DartRules,Trace SourceSteps)
+    internal enum ReferenceState { Unassessed, KnownMismatch }
+    internal sealed class Path
     {
+        public string Snapshot { get; }
+        public IReadOnlyList<Edge> Edges { get; }
+        public IReadOnlyList<GeneratedGraph.Seam> DartRules { get; }
+        public Trace SourceSteps { get; }
+        public ReferenceState ReferenceAssessment { get; }
+        internal Path(string snapshot,IReadOnlyList<Edge> edges,IReadOnlyList<GeneratedGraph.Seam> rules,Trace sourceSteps)
+        {
+            Snapshot=snapshot;Edges=edges;DartRules=rules;SourceSteps=sourceSteps;
+            ReferenceAssessment=snapshot=="synthetic-small-difference" ? ReferenceState.KnownMismatch : ReferenceState.Unassessed;
+        }
+        // Unassessed never means accepted, validated or suitable for production.
+        public void RequireResearchComposition() { if(ReferenceAssessment==ReferenceState.KnownMismatch) throw new InvalidOperationException("Known source reference mismatch; composition blocked."); }
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
     readonly record struct Quad(P A,P C,P B)

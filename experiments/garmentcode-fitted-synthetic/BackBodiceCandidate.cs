@@ -12,7 +12,7 @@ internal static class BackBodiceCandidate
     }
     internal static Path Create(string id,bool left)
     {
-        var waist=BackWaistCandidate.Create(id);var neck=BackNeckCut.Create(id);var arm=SyntheticArmholeCut.Create(id).Curves.Single(c=>c.Panel=="right_btorso");
+        var waist=BackWaistCandidate.Create(id);waist.RequireResearchComposition();var neck=BackNeckCut.Create(id);var arm=SyntheticArmholeCut.Create(id).Curves.Single(c=>c.Panel=="right_btorso");
         P W(BackWaistCandidate.P p)=>new(p.X,p.Y);P N(BackNeckCut.P p)=>new(p.X,p.Y);P A(SyntheticArmholeCut.P p)=>new(p.X,p.Y);
         Edge L(int i,P a,P b)=>new(i,"L",a,b,null,Array.Empty<P>());
         var right=new List<Edge>();
