@@ -364,11 +364,16 @@ internal sealed class DesignRequestWindow : Window
         { SetStatus("Mesaj korundu; model seçilmedi. Görsel işlemi tamamlanınca önce 'V2 model kimliğiyle çalış…' ile görseli ve biçim dönüşümünü doğrulayın, ardından model mesajını yeniden gönderin.");return; }
         var before=Capture();var index=Array.IndexOf(PortableModelIds,suggestion.ModelId);
         if(index<0)return;
+        var trackedModel=selectedModelText;var trackedLoaded=selectedModelFromLoaded;var trackedAmbiguous=modelAmbiguous;
+        var trackedStart=selectedModelStart;var trackedSnapshot=modelSnapshot;var trackedDirty=dirty;var trackedReferenceRevision=referenceRevision;
         var warning=$"{suggestion.Label} model fikri seçilsin mi? Önceki seçim değişebilir; önceki tarifler ve bu mesaj aynen korunur, çelişkileri kontrol edin. Kalıp oluşturulmaz."+
             (requestVersion==1 ? " Model kimliğini metni değiştirmeden tutmak için istek V2 biçimine geçecek. V1'e dışa aktarımda model kimliği kaybolur." : "");
         var accepted=ConfirmChatModelForVerification?.Invoke(warning) ?? MessageBox.Show(this,warning,"Sohbetten model seçimi",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
         if(!accepted) { SetStatus("Model seçimi iptal edildi; mesaj korundu.");return; }
-        if(closed || referenceLoadRunning || !SameRequest(before,Capture()) || !string.IsNullOrEmpty(chatInput.Text)) { SetStatus("İstek onay sırasında değişti; model seçilmedi. Mesaj korundu.");return; }
+        if(closed || referenceLoadRunning || !SameRequest(before,Capture()) || !string.IsNullOrEmpty(chatInput.Text) ||
+            trackedModel!=selectedModelText || trackedLoaded!=selectedModelFromLoaded || trackedAmbiguous!=modelAmbiguous ||
+            trackedStart!=selectedModelStart || trackedSnapshot!=modelSnapshot || trackedDirty!=dirty || trackedReferenceRevision!=referenceRevision)
+        { SetStatus("İstek onay sırasında değişti; model seçilmedi. Mesaj korundu.");return; }
         ClearModelTracking();requestVersion=2;portableModelId=suggestion.ModelId;dirty=true;SetLastModel(modelCards[index].Button);
         SetStatus($"{suggestion.Label} model fikri onayla seçildi. Metin korundu; V2 model kimliği etkin. Kalıp oluşturulmadı.");
     }

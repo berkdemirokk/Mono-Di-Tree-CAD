@@ -18,7 +18,7 @@ internal static partial class DesktopVerification
             var initial=new DesignRequest("","bel çevresi 72 cm",null);
             // Empty description is valid as a transient form, not persisted here.
             window.MeasurementsForVerification.Text=initial.Measurements;
-            string message="  A KESİM ELBİSE İSTİYORUM  ";int confirmations=0;
+            string message="  A KESİM ELBİSE İSTİYORUM, uzun kollu; bel çevresi 72 cm  ";int confirmations=0;
             window.ConfirmChatModelForVerification=warning=> { confirmations++;Check(warning.Contains("V2") && warning.Contains("Kalıp oluşturulmaz"),"V1 confirmation discloses V2 conversion and no pattern generation",checks);return false; };
             window.ChatInputForVerification.Text=message;window.SendMessageForVerification();
             var declined=window.CaptureForVerification();
@@ -37,7 +37,7 @@ internal static partial class DesktopVerification
             confirmations=0;window.ConfirmChatModelForVerification=_=> { confirmations++;return true; };
             window.ChatInputForVerification.Text="gömlek tipi elbise seç";window.SendMessageForVerification();
             Check(confirmations==1 && window.CaptureForVerification().ModelId=="shirt" && window.CaptureForVerification().Prompt.StartsWith("A kesim eski tarif",StringComparison.Ordinal),"V2 model replacement requires confirmation and preserves conflicting old prose",checks);
-            foreach(var text in new[]{"Anvelop değil","Anvelop veya A kesim","A kesim; bel çevresi 72 cm","gömlek elbise mi?"})
+            foreach(var text in new[]{"Anvelop değil","Anvelop veya A kesim","A kesim; bel çevresi 72 cm; bel çevresi 80 cm","gömlek elbise mi?","A kesim, uzun kollu, kısa kollu","A kesim, olursa uzun kollu"})
             {
                 var before=window.CaptureForVerification();confirmations=0;window.ChatInputForVerification.Text=text;window.SendMessageForVerification();
                 Check(confirmations==0 && window.CaptureForVerification().ModelId==before.ModelId && window.CaptureForVerification().Prompt.EndsWith(text,StringComparison.Ordinal),"Ambiguous/negative message retained without model confirmation: "+text,checks);
@@ -45,6 +45,15 @@ internal static partial class DesktopVerification
             window.ConfirmChatModelForVerification=_=> { window.MeasurementsForVerification.Text="bel çevresi 73 cm";return true; };
             window.ChatInputForVerification.Text="A kesim";window.SendMessageForVerification();
             Check(window.CaptureForVerification().ModelId=="shirt" && window.StatusForVerification.Text.Contains("onay sırasında değişti"),"Changing the request during confirmation invalidates model selection",checks);
+            window.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null));
+            window.ConfirmChatModelForVerification=_=>
+            {
+                var field=typeof(DesignRequestWindow).GetField("modelAmbiguous",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+                field.SetValue(window,!(bool)field.GetValue(window)!);return true;
+            };
+            window.ChatInputForVerification.Text="Gömlek elbise istiyorum";window.SendMessageForVerification();
+            Check(window.CaptureForVerification().Version==1 && window.CaptureForVerification().ModelId is null && window.StatusForVerification.Text.Contains("onay sırasında değişti"),
+                "Changing V1 tracking state without changing saved request fields invalidates approval",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

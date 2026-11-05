@@ -25,12 +25,41 @@ public static class ChatModelChoice
         if(found.Length==0)return new(null,null,"");
         if(found.Length!=1)return new(null,null,"Birden fazla model adı var; seçim yapılmadı. Tek model adını ayrı mesajda yazın.");
         var model=found[0];
-        // Anchored positive grammar intentionally excludes negations, questions,
-        // quotations, alternatives and model mentions inside a longer instruction.
+        // Each clause must be positively understood. Unknown text is not discarded:
+        // it prevents a suggestion while the caller retains the original message.
         var names=string.Join("|",model.Names.Select(n=>Regex.Escape(Fold(n))));
         var pattern=@"\A(?:lütfen )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?:(?: istiyorum)|(?: seç)|(?: seçelim)|(?: olsun))?[.!]?\z";
-        if(!Regex.IsMatch(folded,pattern,RegexOptions.None,TimeSpan.FromMilliseconds(100)))
-            return new(null,null,"Model ifadesi seçim için açık değil; seçim yapılmadı. Örneğin: A kesim elbise istiyorum. Ayrıntıları ayrı mesajda yazabilirsiniz.");
+        var clauses=Regex.Split(message,@";|\r\n|[\r\n]|,(?![0-9])",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Select(Fold).ToArray();
+        var attributes=new Dictionary<string,string>();var measurementClauses=new List<string>();int modelClauses=0;
+        bool clear=clauses.Length<=32 && clauses.All(c=>c.Length>0);
+        foreach(var clause in clauses)
+        {
+            if(!clear)break;
+            if(Regex.IsMatch(clause,pattern,RegexOptions.None,TimeSpan.FromMilliseconds(100))) { modelClauses++;continue; }
+            var detail=Regex.Replace(clause,@"(?: olsun| istiyorum)?[.!]?\z","",RegexOptions.None,TimeSpan.FromMilliseconds(100));
+            var category=detail switch {
+                "uzun kollu" or "kisa kollu" or "kolsuz" or "truvakar kollu"=>"kol",
+                "v yaka" or "yuvarlak yaka" or "bisiklet yaka" or "hakim yaka"=>"yaka",
+                "diz alti" or "diz üstü" or "midi boy" or "maksi boy" or "mini boy"=>"boy",
+                "kirmizi" or "mavi" or "siyah" or "beyaz" or "yeşil" or "bej"=>"renk",
+                "pamuklu" or "keten" or "saten" or "şifon"=>"kumaş",_=>null };
+            if(category is not null)
+            {
+                if(attributes.TryGetValue(category,out var prior) && prior!=detail) { clear=false;break; }
+                attributes[category]=detail;continue;
+            }
+            var measurements=DressMeasurementParser.Review("",clause);
+            if(measurements.Measurements.Count==1 && measurements.Unrecognized.Count==0)
+                measurementClauses.Add(clause);
+            else clear=false;
+        }
+        if(measurementClauses.Count>0)
+        {
+            var review=DressMeasurementParser.Review("",string.Join(";",measurementClauses));
+            if(review.Questions.Any(q=>q.Contains("çeliş") || q.Contains("belirsiz")))clear=false;
+        }
+        if(!clear || modelClauses!=1)
+            return new(null,null,"Model veya ayrıntılar seçim için açık değil; seçim yapılmadı. Örnek: A kesim elbise istiyorum, uzun kollu; bel çevresi 72 cm. Anlaşılmayan ayrıntılar için modeli ayrı mesajda seçebilirsiniz.");
         return new(model.Id,model.Label,"Model fikri tanındı; seçmek için onay gerekir. Kalıp oluşturulmaz.");
     }
 }
