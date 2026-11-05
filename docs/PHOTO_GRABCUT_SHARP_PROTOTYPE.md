@@ -93,3 +93,6 @@ Aynı deneyde her maskenin en çok noktalı dış konturu, hem ham hem azaltılm
 Aynı dikdörtgen için yeniden bölge arama, mevcut bölge ve uygulanmış düzeltmelerin başarılı sonuçta değişeceğini bildirir. Onaydan sonra hesap çalışırken eski maske, seçim ve geri alma durumu korunur; hesap başarısız olursa kullanılabilir kalır. Yeni dikdörtgenin kullanıcı tarafından onaylanması ise eski bölgeyi geçersizleştirir. Bu koruma bölgenin fotoğraftaki giysiye veya üretim kalıbına doğruluğunu kanıtlamaz.
 
 Başarılı yeniden aramadan sonra önceki maske ve uygulanmış işaretler, Düzeltmeyi geri al ile bir kez geri yüklenebilir. Bu işlem daha eski tek adımlık geri alma kaydının yerini alır; bölge yeniden seçilir.
+
+
+Giysi/model referansı seçiliyken de ‘Giysi bölgesini incele’ ile aynı yerel bölge ve fırça araçları açılabilir. Bu modda sınır aktarma ve boşlukları yok sayma kontrolleri gösterilmez; pencere kapanınca bölge ve işaretler kaydedilmez, CAD ve ölçüler değişmez. Düz serilmiş kalıp görseli modu ayrı çalışır. Etkileşimsiz sentetik test maske hesabı, seçim, düzeltme ve projenin korunmasını sınadı; gerçek kullanıcı veya fiziksel kalıp doğruluğu sınanmadı.

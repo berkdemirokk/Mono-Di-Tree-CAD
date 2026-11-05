@@ -32,6 +32,7 @@ internal sealed class PhotoTraceWindow : Window
     internal ComboBox SourcePurposeForVerification { get; } = new() { MinWidth=165,Height=32,VerticalContentAlignment=VerticalAlignment.Center,Padding=new Thickness(6,0,6,0),Margin=new Thickness(6,0,0,4) };
     internal PhotoSourcePurpose SourcePurpose { get; private set; }
     internal Button ApplyForVerification { get; private set; } = null!;
+    internal Button RegionForVerification { get; private set; } = null!;
     internal FrameworkElement ReferenceInputsForVerification { get; private set; } = null!;
     internal Func<string,bool>? ConfirmForVerification { get; set; }
     internal Action<Guid>? OpenClosureForVerification { get; set; }
@@ -55,8 +56,8 @@ internal sealed class PhotoTraceWindow : Window
         ApplyForVerification=apply;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         Action("Kapat",Close);
-        var region=Action("Bölge…",OpenRegionSuggestion);
-        AutomationProperties.SetHelpText(region,"Dikdörtgen içinden deneysel renk bölgesi önerir. Bölge ve sınır açıkça seçilir; sonuç önce önizlemedir ve üretim doğruluğu göstermez.");
+        var region=Action("Bölge…",OpenRegionSuggestion);RegionForVerification=region;
+        AutomationProperties.SetHelpText(region,"Dikdörtgen içinden deneysel renk bölgesi önerir. Giysi fotoğrafında yalnız inceleme yapılır; düz kalıp görselinde sınır ayrıca önizlenebilir. Üretim doğruluğu göstermez.");
         var sourceRow=new WrapPanel { Margin=new Thickness(0,0,0,4) };
         sourceRow.Children.Add(new Label { Content="Görsel türü",Target=SourcePurposeForVerification,Foreground=DesignRequestWindow.Ink,Padding=new Thickness(0,4,0,4) });
         SourcePurposeForVerification.ItemsSource=new[] { "Giysi/model referansı", "Düz serilmiş kalıp görseli" };
@@ -139,7 +140,7 @@ internal sealed class PhotoTraceWindow : Window
             CanvasForVerification.IsEnabled=SourcePurpose==PhotoSourcePurpose.FlatPattern && !CanvasForVerification.PhotoOnly;
             var editing=!CanvasForVerification.PhotoOnly;
             input.IsEnabled=editing;pathActions.IsEnabled=editing;suggest.IsEnabled=editing;applySuggestion.IsEnabled=editing;
-            undoPoint.IsEnabled=editing;clearPoints.IsEnabled=editing;apply.IsEnabled=editing;region.IsEnabled=editing;
+            undoPoint.IsEnabled=editing;clearPoints.IsEnabled=editing;apply.IsEnabled=editing;region.IsEnabled=SourcePurpose==PhotoSourcePurpose.GarmentReference || editing;
         }
         PhotoOnlyForVerification.Checked+=(_,_)=>UpdatePhotoOnly();PhotoOnlyForVerification.Unchecked+=(_,_)=>UpdatePhotoOnly();
         void UpdatePurpose()
@@ -148,7 +149,8 @@ internal sealed class PhotoTraceWindow : Window
             Title=flat ? "Fotoğrafta elle taslak çiz" : "Referans fotoğrafı";
             var visible=flat ? Visibility.Visible : Visibility.Collapsed;
             input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;WidePathForVerification.Visibility=visible;PhotoOnlyForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
-            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;region.Visibility=visible;UpdatePhotoOnly();
+            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;region.Visibility=SourcePurpose==PhotoSourcePurpose.Unspecified ? Visibility.Collapsed : Visibility.Visible;
+            region.Content=flat ? "Bölge…" : "Giysi bölgesini incele…";UpdatePhotoOnly();
             UpdateStatus();
         }
         SourcePurposeForVerification.SelectionChanged+=(_,_)=>
@@ -167,15 +169,25 @@ internal sealed class PhotoTraceWindow : Window
         if(CanvasForVerification.Points.Count<=CanvasForVerification.ReferencePointCount) { StatusForVerification.Text="Düzeltmek için önce bir çizgi noktası seçin.";return null; }
         return new PhotoTracePointEditWindow(this);
     }
+    internal PhotoRegionWindow? CreateRegionWindow()
+    {
+        if(SourcePurpose==PhotoSourcePurpose.Unspecified) { StatusForVerification.Text="Önce görsel türünü seçin.";return null; }
+        if(pathCancellation is not null) { StatusForVerification.Text="Önce süren yol araması veya denetimi bitirin.";return null; }
+        if(SourcePurpose==PhotoSourcePurpose.FlatPattern && CanvasForVerification.Points.Count!=CanvasForVerification.ReferencePointCount)
+        { StatusForVerification.Text="Önce referansları seçin; bölge önerisi için çizgi noktaları boş olmalı.";return null; }
+        if(image.PixelWidth<3 || image.PixelHeight<3)
+        { StatusForVerification.Text="Bölge önerisi için görsel en az 3 × 3 piksel olmalı.";return null; }
+        return new PhotoRegionWindow(this,image,reviewOnly:SourcePurpose==PhotoSourcePurpose.GarmentReference);
+    }
     private void OpenRegionSuggestion()
     {
-        if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="Bölge için düz serilmiş kalıp görselini seçin.";return; }
-        if(pathCancellation is not null) { StatusForVerification.Text="Önce süren yol araması veya denetimi bitirin.";return; }
-        if(CanvasForVerification.Points.Count!=CanvasForVerification.ReferencePointCount)
-        { StatusForVerification.Text="Önce referansları seçin; bölge önerisi için çizgi noktaları boş olmalı.";return; }
-        if(image.PixelWidth<3 || image.PixelHeight<3)
-        { StatusForVerification.Text="Bölge önerisi için görsel en az 3 × 3 piksel olmalı.";return; }
-        var revision=DraftRevision;var dialog=new PhotoRegionWindow(this,image);
+        var revision=DraftRevision;var purpose=SourcePurpose;var dialog=CreateRegionWindow();if(dialog is null)return;
+        if(purpose==PhotoSourcePurpose.GarmentReference)
+        {
+            dialog.ShowDialog();
+            if(!closed && revision==DraftRevision && SourcePurpose==purpose)StatusForVerification.Text="Giysi bölgesi yalnız incelendi; ölçü, kalıp veya CAD değişikliği yapılmadı.";
+            return;
+        }
         if(dialog.ShowDialog()!=true || dialog.SelectedContour is not { } contour)return;
         if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
         { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }

@@ -58,7 +58,7 @@ internal sealed class PhotoRegionWindow : Window
         public override string ToString()=>$"Bölge {Id} · {Pixels} piksel · ({Left},{Top})–({Right},{Bottom})";
     }
 
-    internal PhotoRegionWindow(Window owner,BitmapSource image)
+    internal PhotoRegionWindow(Window owner,BitmapSource image,bool reviewOnly=false)
     {
         if(!image.IsFrozen || image.PixelWidth<3 || image.PixelHeight<3 || image.PixelWidth>RegionProposal.MaxDimension ||
            image.PixelHeight>RegionProposal.MaxDimension || (long)image.PixelWidth*image.PixelHeight>RegionProposal.MaxPixels)
@@ -74,9 +74,9 @@ internal sealed class PhotoRegionWindow : Window
         var clearMarks=new Button { Content="İşaretleri sil",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
         compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=(_,_)=> { if(TrySelectContour())DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
-        actions.Children.Add(compute);actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
+        actions.Children.Add(compute);if(!reviewOnly)actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
         var controls=new StackPanel();DockPanel.SetDock(controls,Dock.Top);root.Children.Add(controls);
-        controls.Children.Add(new TextBlock { Text="Dikdörtgen sürükleyin, bölge arayın; listeden veya fotoğraftan seçin. Ekle/çıkar fırçasıyla düzeltin; az işaret büyük gösterilir. Sonuç renk tahminidir.",TextWrapping=TextWrapping.Wrap });
+        controls.Children.Add(new TextBlock { Text=reviewOnly ? "Giysi fotoğrafında bölge arayıp düzeltmeleri inceleyin. Bu yalnız renk tahminidir; ölçü, kalıp veya CAD aktarımı değildir." : "Dikdörtgen sürükleyin, bölge arayın; listeden veya fotoğraftan seçin. Ekle/çıkar fırçasıyla düzeltin; az işaret büyük gösterilir. Sonuç renk tahminidir.",TextWrapping=TextWrapping.Wrap });
         var rectangle=new WrapPanel { Margin=new Thickness(0,4,0,4) };controls.Children.Add(rectangle);
         void Input(string label,TextBox box,int value) { rectangle.Children.Add(new Label { Content=label,Target=box,Foreground=StudioTheme.Text,Padding=new Thickness(3) });box.Text=value.ToString(CultureInfo.InvariantCulture);AutomationProperties.SetName(box,"Bölge dikdörtgeni "+label);rectangle.Children.Add(box); }
         var x=Math.Max(1,image.PixelWidth/20);var y=Math.Max(1,image.PixelHeight/20);
@@ -94,7 +94,7 @@ internal sealed class PhotoRegionWindow : Window
         addMark.Click+=(_,_)=> { if(!int.TryParse(MarkX.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var mx) || !int.TryParse(MarkY.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var my)) { Status.Text="Görüntü içindeki tam sayı koordinatlarını girin.";return; }
             if(MarkMode.SelectedIndex==3)TrySelectComponentAt(mx,my);else TryAddMark(mx,my); };
         AutomationProperties.SetName(MarkX,"Seçim veya düzeltme X piksel");AutomationProperties.SetName(MarkY,"Seçim veya düzeltme Y piksel");AutomationProperties.SetName(MarkMode,"Dikdörtgen, düzeltme veya bölge seçimi");AutomationProperties.SetName(BrushSize,"Düzeltme fırçası çapı piksel");
-        var options=new WrapPanel();options.Children.Add(OmitHoles);
+        var options=new WrapPanel();if(!reviewOnly)options.Children.Add(OmitHoles);
         var undoRefinement=new Button { Content="Düzeltmeyi geri al",Padding=new Thickness(8,3,8,3),Margin=new Thickness(8,0,0,2) };
         AutomationProperties.SetHelpText(undoRefinement,"Son başarılı düzeltme veya yeniden aramadan önceki bölgeyi bir kez geri yükler; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
         undoRefinement.Click+=(_,_)=>UndoRefinement();options.Children.Add(undoRefinement);options.Children.Add(ShowAppliedMarks);controls.Children.Add(options);controls.Children.Add(Status);

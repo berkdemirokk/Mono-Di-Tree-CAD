@@ -9718,6 +9718,20 @@ internal static partial class DesktopVerification
                 regionDialog.left.Text="15";regionDialog.top.Text="10";regionDialog.width.Text="65";regionDialog.height.Text="55";
                 var regionComputeTask=regionDialog.ComputeAsync();PumpUntil(()=>regionComputeTask.IsCompleted);regionComputeTask.GetAwaiter().GetResult();
                 Check(regionDialog.Regions.Items.Count>0 && regionDialog.SelectedContour is null,"Photo region computation requires explicit component choice",checks);
+                var garmentProbe=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
+                try {
+                    garmentProbe.left.Text="15";garmentProbe.top.Text="10";garmentProbe.width.Text="65";garmentProbe.height.Text="55";
+                    var garmentCompute=garmentProbe.ComputeAsync();PumpUntil(()=>garmentCompute.IsCompleted);garmentCompute.GetAwaiter().GetResult();
+                    garmentProbe.MarkMode.SelectedIndex=3;
+                    Check(garmentProbe.TrySelectComponentAt(40,30) && garmentProbe.CopyMaskForVerification() is not null &&
+                          garmentProbe.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
+                          "Garment review computes and selects a local mask without transferring geometry",checks);
+                    garmentProbe.MarkMode.SelectedIndex=2;
+                    Check(garmentProbe.TryAddMark(40,30),"Garment review accepts a background correction",checks);
+                    var garmentRefine=garmentProbe.RefineAsync();PumpUntil(()=>garmentRefine.IsCompleted);garmentRefine.GetAwaiter().GetResult();
+                    Check(garmentProbe.AppliedMarkForVerification(40,30)==2 && garmentProbe.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
+                          "Garment review refines the local mask without changing the project",checks);
+                } finally { garmentProbe.Close(); }
                 regionDialog.MarkMode.SelectedIndex=3;
                 Check(regionDialog.TrySelectComponentAt(40,30) && regionDialog.Regions.SelectedIndex>=0,
                       "Photo region can be selected by its foreground pixel",checks);
@@ -9933,6 +9947,19 @@ internal static partial class DesktopVerification
                 trace.ApplyForVerification.Visibility==Visibility.Collapsed && !trace.CanvasForVerification.IsEnabled &&
                 trace.StatusForVerification.Text.Contains("giysi/model referansı kalıp değildir") && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Garment reference remains a visual reference and cannot be added as a scaled pattern",checks);
+            Check(trace.RegionForVerification.Visibility==Visibility.Visible && trace.RegionForVerification.IsEnabled,
+                "Garment reference offers a local region review without exposing scaled drawing",checks);
+            _=new WindowInteropHelper(trace).EnsureHandle();
+            var garmentRegion=trace.CreateRegionWindow() ?? throw new InvalidOperationException("Garment region review unavailable");
+            garmentRegion.ConfirmCloseForVerification=()=>true;
+            Render(garmentRegion,Path.ChangeExtension(reportPath,".garment-region-review.png"),620,550);
+            var garmentRoot=(FrameworkElement)garmentRegion.Content;
+            Check(Descendants<TextBlock>(garmentRoot).Any(t=>t.Text.Contains("ölçü, kalıp veya CAD aktarımı değildir")) &&
+                !Descendants<Button>(garmentRoot).Any(b=>Equals(b.Content,"Seçili sınırı önizle")) &&
+                garmentRegion.OmitHoles.Parent is null && garmentRegion.SelectedContour is null &&
+                trace.CanvasForVerification.Points.Count==0 && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Garment region review cannot transfer a contour or alter the project",checks);
+            garmentRegion.Close();
             trace.SourcePurposeForVerification.SelectedIndex=-1;
             Check(trace.SourcePurpose==PhotoSourcePurpose.Unspecified && DocumentSession.ContentEquals(initial,workspace.Document),
                 "Clearing the photo type does not change the project",checks);
