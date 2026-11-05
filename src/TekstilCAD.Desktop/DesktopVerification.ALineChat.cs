@@ -189,7 +189,7 @@ internal static partial class DesktopVerification
                 window.LoadForVerification(source with { ModelId="wrap" });window.ChatInputForVerification.Text=answer;
                 var original=window.ChatInputForVerification.Text;window.SendMessageForVerification();
                 var captured=window.CaptureForVerification();
-                Check(captured.Prompt.Contains(original.Replace("96", "göğüs çevresi: 96"),StringComparison.Ordinal) &&
+                Check(captured.Prompt.Contains(original.Insert(Math.Max(original.LastIndexOf('\r' ,Math.Max(0,original.IndexOf("96",StringComparison.Ordinal)-1)),original.LastIndexOf('\n',Math.Max(0,original.IndexOf("96",StringComparison.Ordinal)-1)))+1,"göğüs çevresi: "),StringComparison.Ordinal) &&
                     DressMeasurementParser.Review(captured.Prompt,captured.Measurements).Measurements.Any(m=>m.Label=="göğüs çevresi") && window.ChatInputForVerification.Text.Length==0,
                     "General answer recognizes surrounding line breaks and preserves message: "+answer,checks);
             }
@@ -202,7 +202,7 @@ internal static partial class DesktopVerification
                 window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;
                 var original=window.ChatInputForVerification.Text;window.SendMessageForVerification();
                 var captured=window.CaptureForVerification();
-                Check(captured.Prompt.Contains(original.Replace("36", "Ön bel yayı: 36"),StringComparison.Ordinal) &&
+                Check(captured.Prompt.Contains(original.Insert(Math.Max(original.LastIndexOf('\r',Math.Max(0,original.IndexOf("36",StringComparison.Ordinal)-1)),original.LastIndexOf('\n',Math.Max(0,original.IndexOf("36",StringComparison.Ordinal)-1)))+1,"Ön bel yayı: "),StringComparison.Ordinal) &&
                     ALineRequestMeasurements.Review(captured.Prompt,captured.Measurements).Millimeters[0]==360 && window.ChatInputForVerification.Text.Length==0,
                     "A-line answer recognizes whitespace on surrounding lines and preserves message: "+answer,checks);
             }

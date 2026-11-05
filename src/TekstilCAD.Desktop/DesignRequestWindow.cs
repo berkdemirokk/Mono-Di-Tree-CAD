@@ -589,7 +589,8 @@ internal sealed class DesignRequestWindow : Window
             catch(Exception ex) when(ex is ArgumentException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { SetStatus("Ölçü denetlenemedi; mesajınız korundu. "+ex.Message);return; }
         }
-        var labeledMessage=answerLabel is null ? message : message.Substring(0,answerStart)+answerLabel+": "+message.Substring(answerStart);
+        var labelPosition=0;for(var i=0;i<answerStart;i++)if(message[i] is '\r' or '\n')labelPosition=i+1;
+        var labeledMessage=answerLabel is null ? message : message.Substring(0,labelPosition)+answerLabel+": "+message.Substring(labelPosition);
         var addition=(prompt.Text.Length==0 ? "" : "\n")+labeledMessage;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
