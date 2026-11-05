@@ -270,6 +270,18 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(BodyMeasurementNotes.fields[index].angle, item.2, "Birim türü \(index)")
         }
     }
+    func testMeasurementFieldJumpLifetimeRejectsDismissedAndReopenedCallbacks() {
+        var lifetime = BodyMeasurementNotes.FieldJumpLifetime()
+        let beforeAppearance = lifetime.token
+        XCTAssertFalse(lifetime.permits(beforeAppearance))
+        lifetime.appear()
+        let first = lifetime.token
+        XCTAssertTrue(lifetime.permits(first)); XCTAssertFalse(lifetime.permits(beforeAppearance))
+        lifetime.disappear()
+        XCTAssertFalse(lifetime.permits(first)); XCTAssertFalse(lifetime.permits(lifetime.token))
+        lifetime.appear()
+        XCTAssertFalse(lifetime.permits(first)); XCTAssertTrue(lifetime.permits(lifetime.token))
+    }
     func testMeasurementFieldGroupLookupCoversEachFieldWithoutGuessing() {
         for (groupIndex, group) in BodyMeasurementNotes.groups.enumerated() {
             for field in group.indices { XCTAssertEqual(BodyMeasurementNotes.groupIndex(forField: field), groupIndex) }

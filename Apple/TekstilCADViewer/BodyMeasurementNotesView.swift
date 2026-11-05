@@ -59,6 +59,13 @@ enum BodyMeasurementNotes {
         .init(title: "Gövde ve bel", indices: 5..<10),
         .init(title: "Boyun, omuz ve kol", indices: 10..<15)
     ]
+    struct FieldJumpLifetime {
+        private(set) var token = UUID()
+        private(set) var active = false
+        mutating func appear() { token = UUID(); active = true }
+        mutating func disappear() { active = false; token = UUID() }
+        func permits(_ captured: UUID) -> Bool { active && token == captured }
+    }
     static func fieldScrollID(_ index: Int) -> String { "measurement-field-\(index)" }
     static func groupIndex(forField index: Int) -> Int? {
         groups.firstIndex { $0.indices.contains(index) }
@@ -192,6 +199,7 @@ struct BodyMeasurementNotesView: View {
     @AccessibilityFocusState private var accessibilityField: Int?
     @State private var pendingFieldJump: Int?
     @State private var fieldJumpRevision = UUID()
+    @State private var fieldJumpLifetime = BodyMeasurementNotes.FieldJumpLifetime()
     @State private var unit = "cm"
     @State private var groupIndex = 0
     @State private var revision = UUID()
@@ -315,12 +323,17 @@ struct BodyMeasurementNotesView: View {
             .interactiveDismissDisabled(true)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Kapat") { if values.contains(where: { !$0.isEmpty }) { discard = true } else { dismiss() } } } }
             .onAppear {
+                fieldJumpLifetime.appear()
                 initialNotes = notes
                 if let form = savedForm, form.values.count == BodyMeasurementNotes.fields.count { values = form.values; unit = form.unit }
                 readyToSaveForm = true
             }
-            .onDisappear { rememberForm() }
+            .onDisappear {
+                fieldJumpLifetime.disappear(); fieldJumpRevision = UUID(); pendingFieldJump = nil; accessibilityField = nil
+                rememberForm()
+            }
             .onChange(of: groupIndex) { index in
+                guard fieldJumpLifetime.active else { return }
                 if let target = pendingFieldJump, BodyMeasurementNotes.groupIndex(forField: target) == index {
                     pendingFieldJump = nil
                     scrollToField(target, group: index, proxy: proxy)
@@ -382,12 +395,12 @@ struct BodyMeasurementNotesView: View {
         }
     }
     private func scrollToField(_ index: Int, group: Int, proxy: ScrollViewProxy) {
-        let revision = fieldJumpRevision
+        let revision = fieldJumpRevision, lifetime = fieldJumpLifetime.token
         DispatchQueue.main.async {
-            guard fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
+            guard fieldJumpLifetime.permits(lifetime), fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
             proxy.scrollTo(BodyMeasurementNotes.fieldScrollID(index), anchor: .center)
             DispatchQueue.main.async {
-                guard fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
+                guard fieldJumpLifetime.permits(lifetime), fieldJumpRevision == revision, groupIndex == group, statusFieldIndex == index else { return }
                 accessibilityField = index
             }
         }
