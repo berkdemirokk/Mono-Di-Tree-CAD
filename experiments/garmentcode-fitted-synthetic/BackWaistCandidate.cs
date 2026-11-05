@@ -12,7 +12,8 @@ internal static class BackWaistCandidate
         public double Norm()=>Math.Sqrt(X*X+Y*Y);
     }
     internal sealed record Edge(int Id,string Kind,P Start,P End,P? RelativeControl);
-    internal sealed record Path(string Snapshot,IReadOnlyList<Edge> Edges,IReadOnlyList<GeneratedGraph.Seam> DartRules)
+    internal sealed record Trace(P BaseStart,P BaseEnd,P BaseRelativeControl,double DartWidth,double OuterOffset,double InnerOffset,double OuterLeg,double InnerLeg);
+    internal sealed record Path(string Snapshot,IReadOnlyList<Edge> Edges,IReadOnlyList<GeneratedGraph.Seam> DartRules,Trace SourceSteps)
     {
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
@@ -44,8 +45,8 @@ internal static class BackWaistCandidate
     static P Abs(P start,P end,P control) { P d=end-start;return start+d*control.X+new P(-d.Y,d.X)*control.Y; }
     internal static Path Create(string id)
     {
-        var body=id switch { "synthetic-base"=>(Back:48d,WaistBack:36d,WaistLine:37d),"synthetic-distinct"=>(Back:43d,WaistBack:34d,WaistLine:39d),_=>throw new ArgumentException("Unsupported synthetic case") };
-        const double shoulder=18,angle=22,bumPoints=18,vertBust=21,bust=26;
+        var body=id switch { "synthetic-base"=>(Back:48d,WaistBack:36d,WaistLine:37d,Angle:22d,Bum:18d,Vert:21d,Bust:26d),"synthetic-distinct"=>(Back:43d,WaistBack:34d,WaistLine:39d,Angle:22d,Bum:18d,Vert:21d,Bust:26d),"synthetic-third"=>(Back:50d,WaistBack:38d,WaistLine:38d,Angle:18d,Bum:19d,Vert:22d,Bust:25d),"synthetic-small-difference"=>(Back:44d,WaistBack:38d,WaistLine:40d,Angle:30d,Bum:18d,Vert:22d,Bust:24d),_=>throw new ArgumentException("Unsupported synthetic case") };
+        const double shoulder=18; double angle=body.Angle,bumPoints=body.Bum,vertBust=body.Vert,bust=body.Bust;
         double width=body.Back/2,waist=body.WaistBack/2,tan=Math.Tan(angle*Math.PI/180),h=tan*width/4;
         double diff=width-waist,side=diff<4?0:diff/6,dartWidth=(diff-side)/2;
         double length=body.WaistLine-tan*(width-shoulder),bustLine=2*vertBust/3+bust/3;
@@ -59,12 +60,24 @@ internal static class BackWaistCandidate
         (double lo,double hi,P tip) Cut(double offset,double sideLength,double maxT)
         {
             double limit=q.Length(0,maxT);if(offset<=0||offset>=limit||sideLength<=dartWidth/2)throw new ArgumentException("Invalid curved cut");
-            double center=q.ParamAtLength(offset,maxT),centerArc=q.Length(0,center),min=Math.Min(centerArc,limit-centerArc);
-            P AtArc(double l)=>q.Eval(q.ParamAtLength(l,maxT));
-            double left=0,right=min;
-            if((AtArc(centerArc-right)-AtArc(centerArc+right)).Norm()<dartWidth)throw new ArgumentException("Cut does not fit");
-            for(int i=0;i<48;i++) { double m=(left+right)/2; if((AtArc(centerArc-m)-AtArc(centerArc+m)).Norm()<dartWidth)left=m;else right=m; }
-            double delta=(left+right)/2,lo=q.ParamAtLength(centerArc-delta,maxT),hi=q.ParamAtLength(centerArc+delta,maxT);
+            double center=q.ParamAtLength(offset,maxT);P centerPoint=q.Eval(center);
+            double maxRadius=Math.Min((q.Eval(0)-centerPoint).Norm(),(q.Eval(maxT)-centerPoint).Norm());
+            double SideParameter(double radius,bool before)
+            {
+                double low=before?0:center,high=before?center:maxT;
+                for(int i=0;i<48;i++)
+                {
+                    double mid=(low+high)/2,distance=(q.Eval(mid)-centerPoint).Norm();
+                    if(before) { if(distance>radius)low=mid;else high=mid; }
+                    else { if(distance<radius)low=mid;else high=mid; }
+                }
+                return (low+high)/2;
+            }
+            double Chord(double radius)=>(q.Eval(SideParameter(radius,false))-q.Eval(SideParameter(radius,true))).Norm();
+            if(Chord(maxRadius)<dartWidth)throw new ArgumentException("Cut does not fit");
+            double left=0,right=maxRadius;
+            for(int i=0;i<48;i++) { double mid=(left+right)/2;if(Chord(mid)<dartWidth)left=mid;else right=mid; }
+            double selected=(left+right)/2,lo=SideParameter(selected,true),hi=SideParameter(selected,false);
             P a=q.Eval(lo),b=q.Eval(hi),chord=b-a;double chordLen=chord.Norm(),height=Math.Sqrt(sideLength*sideLength-dartWidth*dartWidth/4);
             P tip=(a+b)*.5+new P(chord.Y,-chord.X)*(height/chordLen);
             return(lo,hi,tip);
@@ -83,6 +96,6 @@ internal static class BackWaistCandidate
         P sideBottom=new(-width+side,0),sideMiddle=new(-width,body.WaistLine-bustLine),sideTop=new(-width,length),top=new(0,length+tan*width);
         L(7,sideBottom,sideMiddle);L(8,sideMiddle,sideTop);L(9,sideTop,top);L(10,top,start);
         var seams=new[]{new GeneratedGraph.Seam(id,"precut_back",4,false,"precut_back",5,false),new GeneratedGraph.Seam(id,"precut_back",1,false,"precut_back",2,false)};
-        return new(id,edges.AsReadOnly(),Array.AsReadOnly(seams));
+        return new(id,edges.AsReadOnly(),Array.AsReadOnly(seams),new(start,end,rel,dartWidth,outerOffset,innerOffset,.9*(length-bustLine),length-bustLine));
     }
 }

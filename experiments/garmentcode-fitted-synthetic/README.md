@@ -98,10 +98,25 @@ Analitik testlerde ayrık eğriler, ortak uç, teğet, kesişim, bindirme, bir b
 
 ## Arka bel eğrisi, pens ve gövde adayları
 
-`capture_back_waist.py` sabit kaynakta `BodiceBackHalf` oluşturulurken iki pens kesiminden önceki eğri/şekil/girdi aşamalarını ve yaka/kol evi öncesi paneli iki sentetik bedende kaydeder. Yerel fixture normalize edilmiş SHA-256 ile sabitlenir; bağımsız imza değildir. Kaynak optimizeri yerine `BackWaistCandidate`, türetilmiş beden değerlerinden yatay teğetli kuadratik bir başlangıç adayı kurar; sayısal yay uzunluğu araması ve simetrik kiriş kesimiyle iki pensi yerleştirir, üç kuadratik alt eğriyi ve 11 kenarlı kesim öncesi konturu üretir. SciPy BFGS ve kaynak kesim optimizeri birebir uygulanmadığı için sonuç kaynakla kesin eşit değil, sayısal adaydır.
+`capture_back_waist.py` sabit kaynakta `BodiceBackHalf` oluşturulurken iki pens kesiminden önceki eğri/şekil/girdi aşamalarını ve yaka/kol evi öncesi paneli iki sentetik bedende kaydeder. Yerel fixture normalize edilmiş SHA-256 ile sabitlenir; bağımsız imza değildir. Kaynak optimizeri yerine `BackWaistCandidate`, türetilmiş beden değerlerinden yatay teğetli kuadratik bir başlangıç adayı kurar; sayısal yay uzunluğu araması ve kesim merkezine Öklid uzaklıklarını eşitleyen kiriş kesimiyle iki pensi yerleştirir, üç kuadratik alt eğriyi ve 11 kenarlı kesim öncesi konturu üretir. SciPy BFGS ve kaynak kesim optimizeri birebir uygulanmadığı için sonuç kaynakla kesin eşit değil, sayısal adaydır.
 
 İki sentetik örnekte yaka/kol evi öncesi kaynak panelle en büyük uç farkı sırasıyla yaklaşık **0,00449 mm** ve **0,00545 mm**, en büyük boyutsuz göreli kontrol farkı yaklaşık **0,0000840** ve **0,0000810** oldu. Bunlar gözlenen fixture farklarıdır; garanti edilmiş hata sınırı, giysi toleransı veya fiziksel doğrulama değildir. İki pensin kaynak kenar kimliği/yönü karşılaştırılır; eğri topolojisi ve fiziksel kapanma `unresolved` kalır.
 
 `BackBodiceCandidate`, bu yaklaşık bel/pens adayıyla C# arka yaka ve kol evi hesaplarını birleştirerek her beden için sağ/sol 13 kenarlı arka gövde adayları kurar. Dört adayın bütün uçları ve kontrol tipleri Python kaynak panelleriyle karşılaştırıldı; araştırma eşikleri uçlarda `0,001 cm`, bel kontrollerinde `0,0002`, kaynak optimizerini taklit etmeyen diğer kontroller için ilgili önceki eşiklerdir. Bu sınırlar ürün veya dikiş toleransı değildir. Sıralı uç kapanması denetlendi; tüm dikiş ilişkileri üretilmediğinden ve eğri topolojisi kesinleştirilmediğinden dışa aktarma kapalıdır.
 
 Temsil edilen kontrol noktaları üzerinde, kesim öncesi arka adayın 55 çiftinden temel bedende 44 ayrık, 9 yalnız ortak uç, 2 belirsiz; diğer bedende 44 ayrık, 8 yalnız ortak uç, 3 belirsiz bulundu. Bu kontrolün yalnız temsil edilen sayılar ve yeterli ayırma koşulları için geçerli olması, kaynak hesap hatası ve fiziksel kumaşı kapsamadığı yönündeki sınırlamalar yukarıdaki Bézier bölümündekiyle aynıdır. Son yaka yayı/kollu veya kolsuz bütün kontur topolojisi ve tüm giysi dikiş grafiği bu sayılardan kanıtlanmaz. Gerçek ölçü, üretim ve plotter kapalıdır.
+
+## Dört sentetik arka bel ve kaynak işlemi karşılaştırması
+
+Arka bel araştırması farklı oran ve açılar içeren dört sabit sentetik bedenle genişletildi. `synthetic-third` 18° omuz eğimi ve farklı arka ölçüler kullanır; `synthetic-small-difference` 30° ile bel/genişlik farkı 4 cm altında kalan, kaynakta yan payı düzeltmesinin uygulanmadığı ayrı dalı çalıştırır. Girdi alanları kaynak fixture'ında bulunur; hesapta kullanılan alanlar tam ondalık olarak seçili sabitlerle kontrol edilir ve `_` alanları kullanıcı girdisi sayılmaz. İlk eğrinin uçları/kontrol adayı, iki kesim ofseti, pens genişliği/bacak uzunluğu, 11 kontur kenarı ve iki pens dikişinin panel/indeks/yön ilişkisi kaynak ara aşamalarıyla karşılaştırılır. Yanlış ama geçerli bir kenar ID'si negatif testte reddedilir.
+
+| Sentetik örnek | En büyük kaynak uç farkı | En büyük göreli kontrol farkı | Araştırma sonucu |
+|---|---:|---:|---|
+| temel | 0,00449 mm | 0,0000840 | Test eşiğinde; topoloji belirsiz |
+| farklı oran | 0,00545 mm | 0,0000810 | Test eşiğinde; topoloji belirsiz |
+| üçüncü, 18° | 0,00188 mm | 0,0000410 | Test eşiğinde; topoloji belirsiz |
+| küçük fark, 30° | 0,18819 mm | 0,0022530 | Araştırma eşiği dışında; reddedildi |
+
+Dördüncü örnekte kaynak başlangıç kontrolü ile C# teğet adayı farkı yaklaşık `0,006179` boyutsuzdur. Bu karşı örnek, önceki küçük farkların başka açılara genellenemeyeceğini gösterir. Test komutunun başarılı çıkması dördüncü örneğin doğru biçimde **reddedildiği** anlamına gelir; dört örneğin onaylandığı anlamına gelmez. Eşit uzaklıklı kesim araması kaynak amaç fonksiyonunu daha yakından ifade eder, fakat SciPy BFGS ve source optimizerinin bütün davranışı veya küresel hata sınırı uygulanmış/kanıtlanmış değildir.
+
+Arka adayların temsil edilen kontrol noktaları için üçüncü örnekte 55 çiftin 1'i, dördüncüde 4'ü belirsiz kaldı. Daireli son kontur ve fiziksel pens kapanışı hâlâ kanıtlanmadı. Dört örnek yalnız kesim öncesi arka bel araştırmasıdır; tam altı panel çalışması hâlâ iki sentetik fixture ile sınırlıdır. Hiçbiri üretim, gerçek ölçü, baskı veya plotter için onay değildir.

@@ -130,12 +130,31 @@ internal static class Validator
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back waist reference");
         using var reader=new StreamReader(stream);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
-        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="7407E4A1F33DBAD30210D7860AE76003DF9D677033660ED481A0BBE50DC5AE6A","back fixture hash");
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="EE68A43079A2791C1C32A4E2BC6905585E1FFF2EC0D30072C653B64EC223BD1E","back fixture hash");
         using var reference=JsonDocument.Parse(text);
         Need(reference.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","back source");
+        var caseIds=new HashSet<string>();
+        Need(reference.RootElement.GetProperty("cases").GetArrayLength()==4,"back case count");
         foreach(var item in reference.RootElement.GetProperty("cases").EnumerateArray())
         {
-            string id=item.GetProperty("id").GetString()!;var path=BackWaistCandidate.Create(id);var expected=item.GetProperty("edges");
+            string id=item.GetProperty("id").GetString()!;Need(caseIds.Add(id),"duplicate back fixture");var path=BackWaistCandidate.Create(id);var expected=item.GetProperty("edges");
+            var inputs=item.GetProperty("body_input_cm_degree");
+            var expectedInput=id switch {
+                "synthetic-base"=>(Back:48m,WaistBack:36m,WaistLine:37m,Angle:22m,Bum:18m,Vert:21m,Bust:26m),
+                "synthetic-distinct"=>(Back:43m,WaistBack:34m,WaistLine:39m,Angle:22m,Bum:18m,Vert:21m,Bust:26m),
+                "synthetic-third"=>(Back:50m,WaistBack:38m,WaistLine:38m,Angle:18m,Bum:19m,Vert:22m,Bust:25m),
+                "synthetic-small-difference"=>(Back:44m,WaistBack:38m,WaistLine:40m,Angle:30m,Bum:18m,Vert:22m,Bust:24m),
+                _=>throw new InvalidDataException("Unknown back fixture") };
+            foreach(var p in new[]{("back_width",expectedInput.Back),("waist_back_width",expectedInput.WaistBack),("waist_line",expectedInput.WaistLine),("shoulder_incl",expectedInput.Angle),("bum_points",expectedInput.Bum),("vert_bust_line",expectedInput.Vert),("bust_line",expectedInput.Bust)}) Need(ExactDecimalEqual(inputs.GetProperty(p.Item1),p.Item2),"back input mismatch: "+p.Item1);
+            Need(inputs.EnumerateObject().All(p=>!p.Name.StartsWith('_')),"derived field in body inputs");
+            var stages=item.GetProperty("calls");Need(stages.GetArrayLength()==2,"back dart source stages");
+            var trace=path.SourceSteps;var baseEdge=stages[0].GetProperty("base");
+            Need((Point(baseEdge.GetProperty("start"))-new P(trace.BaseStart.X,trace.BaseStart.Y)).Length()<1e-12 && (Point(baseEdge.GetProperty("end"))-new P(trace.BaseEnd.X,trace.BaseEnd.Y)).Length()<1e-12,"back base endpoints");
+            double baseControlError=(Point(baseEdge.GetProperty("relative_controls")[0])-new P(trace.BaseRelativeControl.X,trace.BaseRelativeControl.Y)).Length();
+            if(id!="synthetic-small-difference") Need(baseControlError<.0004,"back base control candidate");
+            Need(Math.Abs(stages[0].GetProperty("offset_cm").GetDouble()-trace.OuterOffset)<1e-12 && Math.Abs(stages[1].GetProperty("offset_cm").GetDouble()-trace.InnerOffset)<1e-12,"back cut offsets");
+            Need(Math.Abs(stages[0].GetProperty("shape")[1].GetProperty("end")[0].GetDouble()-trace.DartWidth)<1e-12 && Math.Abs(stages[1].GetProperty("shape")[1].GetProperty("end")[0].GetDouble()-trace.DartWidth)<1e-12,"back dart width");
+            Need(Math.Abs(stages[0].GetProperty("shape")[0].GetProperty("length_cm").GetDouble()-trace.OuterLeg)<1e-10 && Math.Abs(stages[1].GetProperty("shape")[0].GetProperty("length_cm").GetDouble()-trace.InnerLeg)<1e-10,"back dart leg source semantics");
             Need(path.Edges.Count==11 && expected.GetArrayLength()==11 && path.Status=="unresolved"&&!path.ExportAllowed&&!path.ProductionAllowed,"back candidate gate");
             double maximum=0,maxControl=0;
             for(int i=0;i<11;i++)
@@ -146,11 +165,26 @@ internal static class Validator
                 if(actual.Kind=="Q") { var control=actual.RelativeControl ?? throw new InvalidDataException("missing back control");maxControl=Math.Max(maxControl,(Point(edge.GetProperty("relative_controls")[0])-new P(control.X,control.Y)).Length()); }
             }
             Console.WriteLine($"{id} back candidate max endpoint error={maximum:G6} cm; max relative-control error={maxControl:G6}.");
-            Need(maximum<.001 && maxControl<.0002,"back approximation outside research bound");
+            bool withinResearchBounds=baseControlError<.0004 && maximum<.001 && maxControl<.0002;
+            if(id=="synthetic-small-difference")
+            {
+                Need(!withinResearchBounds,"expected difficult case to remain unresolved");
+                Console.WriteLine($"{id}: source approximation exceeds research bounds (initial control difference={baseControlError:G6}); rejected.");
+            }
+            else Need(withinResearchBounds,"back approximation outside research bound");
             var sourceRules=item.GetProperty("stitches").EnumerateArray().Select(e=>new GeneratedGraph.Seam(id,"precut_back",e.GetProperty("a").GetInt32(),e.GetProperty("a_flip").GetBoolean(),"precut_back",e.GetProperty("b").GetInt32(),e.GetProperty("b_flip").GetBoolean())).ToArray();
             var graph=path.Edges.Select(e=>new GeneratedGraph.Edge(id,"precut_back",e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
             var diagnosis=GeneratedGraph.Inspect(id,graph,path.DartRules,sourceRules);
             Need(path.DartRules.Count==2 && !diagnosis.Issues.Any(x=>x.StartsWith("open-contour:")) && !diagnosis.Issues.Contains("seam-identity-or-direction-mismatch") && diagnosis.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !diagnosis.ExportAllowed,"back graph unresolved");
+            foreach(var seam in path.DartRules)
+            {
+                var a=path.Edges[seam.EdgeA];var b=path.Edges[seam.EdgeB];
+                Need((new P(a.End.X,a.End.Y)-new P(b.Start.X,b.Start.Y)).Length()<1e-10,"back dart designated apex");
+                double la=(new P(a.End.X,a.End.Y)-new P(a.Start.X,a.Start.Y)).Length(),lb=(new P(b.End.X,b.End.Y)-new P(b.Start.X,b.Start.Y)).Length();
+                Need(Math.Abs(la-lb)<1e-9,"back dart numerical legs");
+            }
+            var altered=path.DartRules.ToArray();altered[0]=altered[0] with { EdgeA=3 };
+            Need(GeneratedGraph.Inspect(id,graph,altered,sourceRules).Issues.Contains("seam-identity-or-direction-mismatch"),"wrong valid back seam");
             var audit=BackBezierAudit.Inspect(path);
             Need(audit.Separated+audit.EndpointOnly+audit.Unresolved==55 && audit.Status=="unresolved"&&!audit.ExportAllowed,"back audit coverage");
             Console.WriteLine($"{id} back represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, nonmonotone={audit.NonMonotone}.");
