@@ -1590,10 +1590,11 @@ internal static partial class DesktopVerification
             var scaleReport=Descendants<TextBlock>(machineRoot).Single(t=>AutomationProperties.GetName(t)=="Ölçek kontrolü sonucu");
             var calibrationButton=(Button)typeof(MachineCenterWindow).GetField("calibrationSquare",PrivateInstance)!.GetValue(machine)!;
             var fileFormat=(ComboBox)typeof(MachineCenterWindow).GetField("format",PrivateInstance)!.GetValue(machine)!;
-            Check(!calibrationButton.IsEnabled && xMeasured.MaxLength==32 && yMeasured.MaxLength==32 && scaleReport.Text.Contains("cihaz doğrulaması değildir"),
+            var orientation=(CheckBox)typeof(MachineCenterWindow).GetField("calibrationOrientation",PrivateInstance)!.GetValue(machine)!;
+            Check(!calibrationButton.IsEnabled && !orientation.IsEnabled && orientation.IsChecked==false && xMeasured.MaxLength==32 && yMeasured.MaxLength==32 && scaleReport.Text.Contains("cihaz doğrulaması değildir"),
                 "Plotter reference requires HPGL and exposes bounded manual measurement fields",checks);
             fileFormat.SelectedIndex=1;xMeasured.Text="99,5";yMeasured.Text="100.25";
-            Check(calibrationButton.IsEnabled && scaleReport.Text.Contains("X -0.5 mm") && scaleReport.Text.Contains("Y +0.25 mm") &&
+            Check(calibrationButton.IsEnabled && orientation.IsEnabled && AutomationProperties.GetHelpText(orientation).Contains("pozitif X") && scaleReport.Text.Contains("X -0.5 mm") && scaleReport.Text.Contains("Y +0.25 mm") &&
                 scaleReport.Text.Contains("ayarlar otomatik değiştirilmez"),
                 "Plotter scale comparison accepts localized inputs without changing device settings",checks);
             xMeasured.Text="100.0000001";yMeasured.Text="100";

@@ -8,12 +8,20 @@ public static class PlotterCalibrationSquare
 {
     public sealed class Prepared
     {
-        internal Prepared(HpglPreparedOutput output, Guid pieceId) { Output = output; PieceId = pieceId; }
+        internal Prepared(HpglPreparedOutput output, Guid pieceId, Guid? markerPieceId) { Output = output; PieceId = pieceId; MarkerPieceId = markerPieceId; }
         public HpglPreparedOutput Output { get; }
         public Guid PieceId { get; }
+        public Guid? MarkerPieceId { get; }
     }
 
     public static Prepared Prepare(double unitsPerMillimeter, double scale, CancellationToken cancellationToken = default)
+        => PrepareCore(unitsPerMillimeter, scale, false, cancellationToken);
+
+    /// <summary>Adds a separate asymmetric outline inside the square for manual axis review.</summary>
+    public static Prepared PrepareWithOrientationMarker(double unitsPerMillimeter, double scale, CancellationToken cancellationToken = default)
+        => PrepareCore(unitsPerMillimeter, scale, true, cancellationToken);
+
+    private static Prepared PrepareCore(double unitsPerMillimeter, double scale, bool orientationMarker, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var profile = new MachineProfile("100 mm referans", unitsPerMillimeter, scale);
@@ -31,8 +39,16 @@ public static class PlotterCalibrationSquare
             throw new ArgumentOutOfRangeException(nameof(unitsPerMillimeter), "100 mm kenar seçilen birimde tam sayı olmalıdır.");
         var piece = new PatternPiece { Name = "100 mm referans", Closed = true,
             Points = [new(0, 0), new(100, 0), new(100, 100), new(0, 100)] };
-        var project = new ProjectDocument { Name = "100 mm referans", Pieces = [piece] };
-        return new Prepared(HpglFormat.Prepare(project, unitsPerMillimeter, cancellationToken), piece.Id);
+        PatternPiece? marker = null;
+        if (orientationMarker)
+        {
+            // At coarser grids the mark can collapse or become ambiguous.
+            if (unitsPerMillimeter < 0.1) throw new ArgumentOutOfRangeException(nameof(unitsPerMillimeter), "Yön işareti için birim/mm en az 0,1 olmalıdır.");
+            marker = new PatternPiece { Name = "Yön inceleme işareti", Closed = true,
+                Points = [new(20, 20), new(70, 20), new(20, 60)] };
+        }
+        var project = new ProjectDocument { Name = "100 mm referans", Pieces = marker is null ? [piece] : [piece, marker] };
+        return new Prepared(HpglFormat.Prepare(project, unitsPerMillimeter, cancellationToken), piece.Id, marker?.Id);
     }
 
     /// <summary>Creates a new .plt/.hpgl file only; existing files are never replaced.</summary>

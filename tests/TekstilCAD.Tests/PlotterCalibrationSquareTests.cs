@@ -24,6 +24,31 @@ public sealed class PlotterCalibrationSquareTests
     }
 
     [Theory]
+    [InlineData(0.1, 2, 7, 6)] [InlineData(1, 20, 70, 60)] [InlineData(40, 800, 2800, 2400)]
+    public void OptionalOrientationMarkerHasDistinctAxisEdgesInsideTheSquare(double units, int origin, int endX, int endY)
+    {
+        var prepared = PlotterCalibrationSquare.PrepareWithOrientationMarker(units, 1);
+        Assert.NotNull(prepared.MarkerPieceId);
+        var square=prepared.Output.GetPieceGeometry(prepared.PieceId);
+        var triangle=prepared.Output.GetPieceGeometry(prepared.MarkerPieceId.Value);
+        Assert.True(square.Closed); Assert.True(triangle.Closed); Assert.Equal(3, triangle.Points.Count);
+        Assert.Equal((origin,origin), (triangle.Points[0].PlotX,triangle.Points[0].PlotY));
+        Assert.Equal((endX,origin), (triangle.Points[1].PlotX,triangle.Points[1].PlotY));
+        Assert.Equal((origin,endY), (triangle.Points[2].PlotX,triangle.Points[2].PlotY));
+        Assert.True(endX-origin > endY-origin);
+        Assert.Equal(2,prepared.Output.Text.Split("PU;",StringSplitOptions.None).Length-1);
+        Assert.Contains($"PU{origin},{origin};PD{endX},{origin},{origin},{endY},{origin},{origin};PU;", prepared.Output.Text);
+        Assert.Null(PlotterCalibrationSquare.Prepare(units,1).MarkerPieceId);
+    }
+
+    [Fact]
+    public void OrientationMarkerRejectsGridTooCoarseToDistinguishItsEdges()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => PlotterCalibrationSquare.PrepareWithOrientationMarker(0.07,1));
+        Assert.NotNull(PlotterCalibrationSquare.Prepare(0.07,1));
+    }
+
+    [Theory]
     [InlineData(0)] [InlineData(-1)] [InlineData(10001)] [InlineData(double.NaN)]
     [InlineData(double.PositiveInfinity)] [InlineData(0.015)] [InlineData(0.070001)]
     public void InvalidOrNonIntegralReferenceUnitsAreRejected(double units)
