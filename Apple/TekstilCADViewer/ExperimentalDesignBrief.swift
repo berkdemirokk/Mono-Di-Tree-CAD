@@ -456,6 +456,7 @@ enum ExperimentalDesignBrief {
         let id = UUID()
         let draft: Draft
         let bytes: Data
+        var version: Int? = nil
         func matches(_ callbackID: UUID) -> Bool { id == callbackID }
         func matchesCurrentDraft(_ current: Draft) -> Bool { draft == current }
         func canPrepareShare(current: Draft, referencePending: Bool, measurementPending: Bool, transition: Bool) -> Bool {
@@ -647,7 +648,8 @@ enum ExperimentalDesignBrief {
         return result
     }
     /// Import a portable request without changing its text or reference bytes.
-    static func portableDraft(_ bytes: Data) throws -> Draft {
+    static func portableDraft(_ bytes: Data) throws -> Draft { try parsePortable(bytes).draft }
+    private static func parsePortable(_ bytes: Data) throws -> (draft: Draft, version: Int) {
         guard bytes.count <= 12 * 1024 * 1024 else { throw Error.invalidText }
         // Desktop rejects duplicates and unknown fields; never drop unrecognized data.
         var stream = ExperimentalJSONStream(maximumBytes: 12 * 1024 * 1024, maximumTokenBytes: 12 * 1024 * 1024, maximumDepth: 8, maximumKeysPerObject: 6)
@@ -681,13 +683,23 @@ enum ExperimentalDesignBrief {
         // Reject unsupported or inconsistent images before replacing any current draft.
         let verified = try validatedReference(prompt: doc.prompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name, hasV2Model: doc.version == 2 && style != .describe)
         guard verified?.mediaType == doc.reference?.mediaType else { throw Error.invalidImage }
-        return Draft(style: style, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name)
+        return (Draft(style: style, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name), doc.version)
     }
-    static func readPortable(_ url: URL) throws -> Draft {
+    struct PortableSnapshot {
+        let draft: Draft
+        let bytes: Data
+        let version: Int
+        static func validate(_ bytes: Data) throws -> PortableSnapshot {
+            let parsed = try ExperimentalDesignBrief.parsePortable(bytes)
+            return .init(draft: parsed.draft, bytes: bytes, version: parsed.version)
+        }
+    }
+    static func readPortable(_ url: URL) throws -> Draft { try readPortableSnapshot(url).draft }
+    static func readPortableSnapshot(_ url: URL) throws -> PortableSnapshot {
         let grant = url.startAccessingSecurityScopedResource()
         defer { if grant { url.stopAccessingSecurityScopedResource() } }
         var coordinationError: NSError?
-        var result: Result<Draft, Swift.Error>?
+        var result: Result<PortableSnapshot, Swift.Error>?
         NSFileCoordinator().coordinate(readingItemAt: url, options: [], error: &coordinationError) { path in
             result = Result {
                 let handle = try FileHandle(forReadingFrom: path); defer { try? handle.close() }
@@ -696,7 +708,7 @@ enum ExperimentalDesignBrief {
                     guard bytes.count <= 12 * 1024 * 1024 - part.count else { throw Error.invalidText }
                     bytes.append(part)
                 }
-                return try portableDraft(bytes)
+                return try PortableSnapshot.validate(bytes)
             }
         }
         if let coordinationError { throw coordinationError }

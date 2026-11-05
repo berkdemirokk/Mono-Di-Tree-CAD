@@ -256,6 +256,31 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(styles.count, Set(styles).count)
         XCTAssertEqual(Set(styles), Set(ExperimentalDesignBrief.DressStyle.allCases))
     }
+    func testPortableImportKeepsValidatedOriginalBytesForSharing() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let image = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX8AAAAASUVORK5CYII=")!
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "korunan not", image: image, imageName: "örnek.png")
+        let documents = [try ExperimentalDesignBrief.make(draft), try ExperimentalDesignBrief.makeV2(draft)]
+        for (index, document) in documents.enumerated() {
+            var original = document; original.append(0x0a)
+            let path = folder.appendingPathComponent("source\(index).tcad-request.json")
+            try original.write(to: path)
+            let imported = try ExperimentalDesignBrief.readPortableSnapshot(path)
+            XCTAssertEqual(imported.version, index + 1); XCTAssertEqual(imported.bytes, original)
+            XCTAssertEqual(imported.draft.image, image); XCTAssertEqual(imported.draft.otherMeasurements, draft.measurements)
+            let attempt = ExperimentalDesignBrief.ExportAttempt(draft: imported.draft, bytes: imported.bytes, version: imported.version)
+            XCTAssertTrue(attempt.canPrepareShare(current: imported.draft, referencePending: false, measurementPending: false, transition: false))
+            XCTAssertFalse(attempt.canPrepareShare(current: imported.draft, referencePending: true, measurementPending: false, transition: false))
+            let id = UUID(), copy = try DesignRequestShareFile.create(bytes: attempt.bytes, id: id, base: folder)
+            XCTAssertEqual(try Data(contentsOf: copy), original); XCTAssertTrue(copy.lastPathComponent.hasSuffix(".tcad-request.json"))
+            try DesignRequestShareFile.remove(copy, id: id, base: folder)
+            XCTAssertEqual(try Data(contentsOf: path), original)
+        }
+        XCTAssertThrowsError(try ExperimentalDesignBrief.PortableSnapshot.validate(Data("{\"version\":1}".utf8)))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.PortableSnapshot.validate(Data(repeating: 0, count: 12 * 1024 * 1024 + 1)))
+    }
     func testShareUsesOnlyCurrentApprovedSavedSnapshot() throws {
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
         for bytes in [try ExperimentalDesignBrief.make(draft), try ExperimentalDesignBrief.makeV2(draft)] {

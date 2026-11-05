@@ -2613,6 +2613,9 @@ private struct ExperimentalDesignBriefView: View {
     @State private var savedDraft: ExperimentalDesignBrief.Draft?
     #if os(iOS)
     @State private var savedShareAttempt: ExperimentalDesignBrief.ExportAttempt?
+    @State private var savedShareVersion: Int?
+    @State private var savedShareSelected: Bool?
+    @State private var savedShareImported: Bool?
     @State private var shareWorkID: UUID?
     @State private var shareCancelRequested = false
     @State private var shareTask: Task<URL, Error>?
@@ -2653,6 +2656,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var showingDraftCopyImport = false
     @State private var showingPortableRequestImport = false
     @State private var copyCandidate: ExperimentalDesignBrief.Draft?
+    @State private var portableCandidate: ExperimentalDesignBrief.PortableSnapshot?
     @State private var confirmCopyRestore = false
     @State private var draftTransition = false
     @State private var localStatus = "Taslak kontrol ediliyor."
@@ -3105,13 +3109,16 @@ private struct ExperimentalDesignBriefView: View {
     }
     #if os(iOS)
     private func startSavedShare() {
-        guard let attempt = savedShareAttempt,
+        guard let attempt = savedShareAttempt, savedShareVersion == requestExportVersion,
+              savedShareSelected == modelExplicitlySelected, savedShareImported == importedPortable,
               attempt.canPrepareShare(current: draft, referencePending: referenceBlocksClose,
                                       measurementPending: aLineInputPending || measurementForm?.hasValues == true, transition: draftTransition),
               shareWorkID == nil, shareCleanupItem == nil else {
             message = "Taslak veya seçim değişti. İsteği yeniden kaydedip kontrol edin."; return
         }
         let id = UUID(); shareWorkID = id; shareCancelRequested = false
+        let revision = modelSuggestionRevision, version = requestExportVersion
+        let selected = modelExplicitlySelected, imported = importedPortable
         message = "Paylaşım kopyası hazırlanıyor; kayıtlı dosya ve taslak korunuyor."
         let worker = Task.detached(priority: .userInitiated) { try DesignRequestShareFile.create(bytes: attempt.bytes, id: id) }
         shareTask = worker
@@ -3119,6 +3126,9 @@ private struct ExperimentalDesignBriefView: View {
             do {
                 let url = try await worker.value
                 guard shareWorkID == id, !shareCancelRequested, savedShareAttempt?.id == attempt.id,
+                      modelSuggestionRevision == revision, requestExportVersion == version, savedShareVersion == version,
+                      modelExplicitlySelected == selected, importedPortable == imported,
+                      savedShareSelected == selected, savedShareImported == imported,
                       attempt.canPrepareShare(current: draft, referencePending: referenceBlocksClose,
                                               measurementPending: aLineInputPending || measurementForm?.hasValues == true, transition: draftTransition) else {
                     var cleaned = true
@@ -3177,7 +3187,7 @@ private struct ExperimentalDesignBriefView: View {
             let data: Data
             if requestExportVersion == 2 { data = try ExperimentalDesignBrief.makeV2(candidate) }
             else { data = try ExperimentalDesignBrief.make(candidate) }
-            pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
+            pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data, version: requestExportVersion)
             confirmingExportDestination = true
         } catch ExperimentalDesignBrief.Error.invalidImage where requestExportVersion == 2 && image != nil {
             message = ExperimentalDesignBrief.V2ImageReview.incompatible.explanation
@@ -3492,10 +3502,10 @@ private struct ExperimentalDesignBriefView: View {
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
                 Text("Bu istek dosyası kalıp üretmez, baskıya göndermez veya otomatik gönderilmez.").font(.caption).foregroundStyle(.secondary)
                 #if os(iOS)
-                if savedShareAttempt?.matchesCurrentDraft(draft) == true || shareWorkID != nil || shareCleanupItem != nil {
+                if (savedShareAttempt?.matchesCurrentDraft(draft) == true && savedShareVersion == requestExportVersion) || shareWorkID != nil || shareCleanupItem != nil {
                     Section("Windows’a aktarım") {
                         Text("Kaydedilen isteğin kopyası; model ve tarif, ölçüler ve varsa konum bilgileri dahil seçilen görseli içerir. Kalıp dosyası değildir. Paylaşım yöntemini ve alıcıyı siz seçersiniz.").font(.caption)
-                        if savedShareAttempt?.matchesCurrentDraft(draft) == true {
+                        if savedShareAttempt?.matchesCurrentDraft(draft) == true && savedShareVersion == requestExportVersion {
                             Button("Kaydedilen isteği paylaş…") { startSavedShare() }
                                 .frame(minHeight: 44).disabled(shareWorkID != nil || shareCleanupItem != nil || referenceBlocksClose)
                         }
@@ -3580,11 +3590,14 @@ private struct ExperimentalDesignBriefView: View {
                                      edit: { request, plan in editPhotoObservation(request, plan: plan) })
             }
             .fileImporter(isPresented: $showingPortableRequestImport, allowedContentTypes: [.json]) { result in
-                do { copyCandidate = try ExperimentalDesignBrief.readPortable(result.get()); candidateIsPortable = true; confirmCopyRestore = true }
+                do {
+                    let snapshot = try ExperimentalDesignBrief.readPortableSnapshot(result.get())
+                    portableCandidate = snapshot; copyCandidate = snapshot.draft; candidateIsPortable = true; confirmCopyRestore = true
+                }
                 catch { if !isFilePickerCancellation(error) { localStatus = "İstek okunamadı veya desteklenmeyen görsel içeriyor; mevcut girişler ve yerel taslak korundu." } }
             }
             .fileImporter(isPresented: $showingDraftCopyImport, allowedContentTypes: [.json]) { result in
-                do { copyCandidate = try ExperimentalDesignBrief.DraftStore.readRecovery(result.get()); candidateIsPortable = false; confirmCopyRestore = true }
+                do { portableCandidate = nil; copyCandidate = try ExperimentalDesignBrief.DraftStore.readRecovery(result.get()); candidateIsPortable = false; confirmCopyRestore = true }
                 catch { if !isFilePickerCancellation(error) { localStatus = "Kurtarma kopyası okunamadı; ekrandaki bilgiler ve önceki yerel kayıt korundu." } }
             }
             .confirmationDialog("İstek veya kurtarma kopyası açılsın mı?", isPresented: $confirmCopyRestore, titleVisibility: .visible) {
@@ -3595,6 +3608,7 @@ private struct ExperimentalDesignBriefView: View {
                         draftTransition = true; saveRequest = UUID(); draftStorageReady = false
                         let stoppedMarkers = ownedPending
                         let isPortable = candidateIsPortable
+                        let portableSnapshot = isPortable ? portableCandidate : nil
                         draftWriter.pause {
                         draftTransition = false; backgroundLease.finish(); DraftPendingLedger.abandon(stoppedMarkers)
                         importedPortable = isPortable && candidate.style == .describe; modelExplicitlySelected = candidate.style != .describe
@@ -3602,13 +3616,23 @@ private struct ExperimentalDesignBriefView: View {
                         hips = candidate.hips; length = candidate.length; otherMeasurements = candidate.otherMeasurements
                         image = candidate.image; imageName = candidate.imageName; measurementForm = candidate.measurementForm
                         aLineGuideInput = candidate.aLineGuideInput ?? .init()
+                        #if os(iOS)
+                        if let snapshot = portableSnapshot, snapshot.draft == candidate {
+                            requestExportVersion = snapshot.version
+                            savedShareVersion = snapshot.version
+                            savedShareSelected = modelExplicitlySelected; savedShareImported = importedPortable
+                            savedShareAttempt = .init(draft: candidate, bytes: snapshot.bytes, version: snapshot.version)
+                        } else {
+                            savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil
+                        }
+                        #endif
                         draftRetryAvailable = false
                         localStatus = "Kopya açıldı. Önceki yazılar tamamlandı; otomatik kayıt kapalı. Değişiklikleri ayrı kopyaya kaydedin."
                         }
                     }
-                    copyCandidate = nil
+                    copyCandidate = nil; portableCandidate = nil
                 }
-                Button("Vazgeç", role: .cancel) { copyCandidate = nil }
+                Button("Vazgeç", role: .cancel) { copyCandidate = nil; portableCandidate = nil }
             } message: { Text("Ekrandaki mevcut girişler değiştirilecek. Önce onları ayrı kurtarma kopyasına kaydedin; yerel önceki taslak değiştirilmez.") }
             .confirmationDialog("Bozuk uyarı kaydı onarılsın mı?", isPresented: $confirmLedgerReset, titleVisibility: .visible) {
                 Button("Yedekle ve onar") {
@@ -3708,13 +3732,28 @@ private struct ExperimentalDesignBriefView: View {
             .onChange(of: image) { value in v2ImageReview.synchronize(current: value) }
             .onChange(of: draft) { value in
                 #if os(iOS)
-                if savedShareAttempt?.matchesCurrentDraft(value) == false { savedShareAttempt = nil }
+                if savedShareAttempt?.matchesCurrentDraft(value) == false { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
                 #endif
                 if !draftTransition { saveLocalDraft(value) }
             }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
-            .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
-            .onChange(of: importedPortable) { _ in modelSuggestionRevision = UUID() }
+            .onChange(of: requestExportVersion) { value in
+                #if os(iOS)
+                if savedShareVersion != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
+                #endif
+            }
+            .onChange(of: modelExplicitlySelected) { value in
+                modelSuggestionRevision = UUID()
+                #if os(iOS)
+                if savedShareAttempt != nil && savedShareSelected != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
+                #endif
+            }
+            .onChange(of: importedPortable) { value in
+                modelSuggestionRevision = UUID()
+                #if os(iOS)
+                if savedShareAttempt != nil && savedShareImported != value { savedShareAttempt = nil; savedShareVersion = nil; savedShareSelected = nil; savedShareImported = nil }
+                #endif
+            }
             .onChange(of: scenePhase) { phase in if phase != .active && !draftTransition { saveLocalDraft(draft, immediately: true) } }
             .confirmationDialog("Önceki taslak bulundu", isPresented: $offerRestore, titleVisibility: .visible) {
                 Button("Taslağı geri yükle") { if let previous = restoreCandidate { restore(previous) } }
@@ -3817,6 +3856,9 @@ private struct ExperimentalDesignBriefView: View {
                             savedDraft = current.draft
                             #if os(iOS)
                             savedShareAttempt = current.matchesCurrentDraft(draft) ? current : nil
+                            savedShareVersion = current.matchesCurrentDraft(draft) ? current.version : nil
+                            savedShareSelected = current.matchesCurrentDraft(draft) ? modelExplicitlySelected : nil
+                            savedShareImported = current.matchesCurrentDraft(draft) ? importedPortable : nil
                             #endif
                             message = current.draft == draft
                                 ? "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
