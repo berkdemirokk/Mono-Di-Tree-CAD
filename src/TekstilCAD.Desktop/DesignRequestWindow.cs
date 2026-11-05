@@ -241,6 +241,9 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetHelpText(referenceShortcut,"PNG/JPEG referansı mevcut görsel seçme ve doğrulama akışıyla ekler. Görselden ölçü veya kalıp çıkarmaz; özgün baytlar isteğe eklenir.");
         referenceShortcut.Click+=(_,_)=>ChooseReference();
         var referenceRow=new DockPanel { LastChildFill=true };DockPanel.SetDock(referenceShortcut,Dock.Left);referenceRow.Children.Add(referenceShortcut);referenceRow.Children.Add(referenceSummary);primaryChat.Children.Add(referenceRow);
+        var observe=new Button { Content="Fotoğrafa bakarak özellikleri belirt…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
+        AutomationProperties.SetHelpText(observe,"Fotoğrafı gösterir; yalnız elle seçip onayladığınız özellikler tarife eklenir. Otomatik analiz veya ölçüm yapılmaz.");
+        observe.Click+=async (_,_)=>await ObservePhotoAsync();primaryChat.Children.Add(observe);
         AutomationProperties.SetHelpText(referenceSummary,"Yalnız referans görselidir; fotoğraftan model, ölçü veya kalıp çıkarılmaz.");
         AutomationProperties.SetHelpText(RetryModelForVerification,"Son gönderilen mesaj hâlâ tarifin sonunda duruyorsa güncel ölçü ve görselle yeniden inceler; metni tekrar eklemez. Seçim ayrıca onay ister.");
         RetryModelForVerification.Click+=(_,_)=>RetryLastModelMessage();body.Children.Add(RetryModelForVerification);
@@ -793,6 +796,38 @@ internal sealed class DesignRequestWindow : Window
         try { var target=DesignRequestSavePath.Complete(path);if(before.Version==2)DesignRequestStorage.SaveNewV2(target,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(target,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
+    private async Task ObservePhotoAsync()
+    {
+        if(closed || referenceLoadRunning || referenceSelectionPending) { SetStatus("Önce görsel seçimi veya denetimini tamamlayın.");return; }
+        var before=Capture();if(before.Reference is null) { SetStatus("Önce referans görseli seçin.");return; }
+        var revision=referenceRevision;var chat=chatInput.Text;var wasDirty=dirty;var selected=selectedModelText;var modelState=modelSnapshot;var selectedStart=selectedModelStart;var ambiguous=modelAmbiguous;var loaded=selectedModelFromLoaded;ReferencePhotoPreview decoded;
+        bool ModelUnchanged()=>selected==selectedModelText && modelState==modelSnapshot && selectedStart==selectedModelStart && ambiguous==modelAmbiguous && loaded==selectedModelFromLoaded;
+        referenceLoadRunning=true;
+        try { var bytes=(byte[])before.Reference.Data.Clone();var decoder=ExistingReferenceDecoderForVerification;decoded=await Task.Run(()=>decoder is null ? ReferencePhotoDecoder.DecodeWithGeometry(bytes) : decoder(bytes)); }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
+        { if(!closed)SetStatus("Görsel açılamadı; istek ve özgün görsel korundu.");return; }
+        finally { referenceLoadRunning=false; }
+        if(closed || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; önceki gözlem kullanılmadı.");return; }
+        var window=new PhotoObservationWindow(this,decoded.Bitmap,portableModelId ?? selectedModelText ?? "Seçilmedi");
+        if(window.ShowDialog()!=true || window.Approved is not { } observations)return;
+        if(closed || referenceLoadRunning || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; gözlem eklenmedi.");return; }
+        try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi; model ve ölçü çıkarılmadı."); }
+        catch(ArgumentException ex) { SetStatus(ex.Message); }
+    }
+    internal static string AppendPhotoObservations(string original,IReadOnlyList<string> observations,int maxLength)
+    {
+        if(observations.Count==0)throw new ArgumentException("Seçili gözlem yok.");
+        foreach(var line in observations)
+        {
+            int separator=line.IndexOf(':');if(separator<0)throw new ArgumentException("Gözlem geçersiz.");
+            string prefix=line[..(separator+1)];
+            if(original.Split(['\r','\n'],StringSplitOptions.RemoveEmptyEntries).Any(x=>x.Trim().StartsWith(prefix,StringComparison.OrdinalIgnoreCase)))throw new ArgumentException("Bu özellik için önceki fotoğraf gözlemi var; çelişki veya tekrar eklenmedi.");
+        }
+        var result=original+(original.Length==0 || original.EndsWith('\n') ? "" : "\n")+string.Join("\n",observations);
+        if(result.Length>maxLength)throw new ArgumentException("Tarif sınırı aşılır; gözlemler eklenmedi.");return result;
+    }
+    internal static bool PhotoObservationSnapshotMatches(DesignRequest before,DesignRequest current,long expectedRevision,long currentRevision,string expectedChat,string currentChat,bool originalDirty,bool currentDirty,bool pending) =>
+        !pending && expectedRevision==currentRevision && expectedChat==currentChat && originalDirty==currentDirty && SameRequest(before,current);
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }

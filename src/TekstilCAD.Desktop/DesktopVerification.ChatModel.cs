@@ -16,6 +16,19 @@ internal static partial class DesktopVerification
         {
             VerifyPendingReferenceProtection(checks);
             _=new WindowInteropHelper(owner).EnsureHandle();window=new DesignRequestWindow(owner);
+            var emptyObservations=PhotoObservationWindow.Build(0,0,0);
+            var manualObservations=PhotoObservationWindow.Build(1,3,0);
+            Check(emptyObservations.Count==0 && manualObservations.Count==2 && !manualObservations.Any(x=>x.Contains("Yaka")),"Photo observations default to unknown and include only explicit user choices",checks);
+            var observationText=DesignRequestWindow.AppendPhotoObservations("Önceki tarif",manualObservations,1000);
+            Check(observationText.StartsWith("Önceki tarif\n",StringComparison.Ordinal) && observationText.Contains("Fotoğraf gözlemi · Kol: Uzun kollu"),"Photo observations append without replacing existing prose",checks);
+            bool conflictRejected=false;try { _=DesignRequestWindow.AppendPhotoObservations(observationText,PhotoObservationWindow.Build(0,1,0),1000); } catch(ArgumentException) { conflictRejected=true; }
+            Check(conflictRejected,"Repeated or conflicting labeled photo observation is rejected",checks);
+            var photoSnapshot=new DesignRequest("tarif","bel 72 cm",new DesignReference("a.png","image/png",[1,2]),"aline",2);
+            Check(DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,3,"", "",false,false,false) &&
+                !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot with { Reference=photoSnapshot.Reference! with { Data=[1,3] } },3,3,"","",false,false,false) &&
+                !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,4,"","",false,false,false) &&
+                !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,3,"","",false,false,true),
+                "Photo observation snapshot rejects changed bytes, revision or pending selection",checks);
             Check(!window.RequestDetailsForVerification.IsExpanded,"Saved request editing starts collapsed for the primary chat flow",checks);
             var modelOnly=new DesignRequest("","bel çevresi 72 cm",null,"aline",2);
             window.LoadForVerification(modelOnly);
