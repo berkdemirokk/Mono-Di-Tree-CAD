@@ -11069,6 +11069,7 @@ internal static partial class DesktopVerification
                 controls.EnabledForVerification.IsChecked=false;
             }
             finally { writeFailureEntry.RecoveryForVerification.FinishForVerification();PumpUntil(()=>writeFailureEntry.RecoveryForVerification.ReleaseForVerification.IsCompleted);writeFailureEntry.Close();SynchronizationContext.SetSynchronizationContext(writeFailureContext); }
+            VerifyMeasurementRecoveryErrors(window,reportPath,checks);
             var restoreContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
             var restoreEntry=new AtelierMeasurementEntryWindow(window) { ConfirmDiscardForVerification=()=>true };
             var recoveryFixture=new MeasurementFormRecoveryStore(MeasurementFormRecoveryStore.DirectoryPath,"basic");

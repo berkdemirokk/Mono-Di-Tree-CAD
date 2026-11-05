@@ -90,7 +90,7 @@ internal sealed class MeasurementRecoveryControls
             catch(InvalidOperationException) when(owner.Dispatcher.HasShutdownStarted) { }
         }
     }
-    private static bool IsExpected(Exception ex)=>ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Security.Cryptography.CryptographicException or System.Security.SecurityException or NotSupportedException;
+    private static bool IsExpected(Exception ex)=>ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Security.Cryptography.CryptographicException or System.Security.SecurityException or NotSupportedException;
     internal bool ReadyToClose()
     {
         bool Block(string message) { StatusForVerification.Text=message;StatusForVerification.BringIntoView();return false; }
