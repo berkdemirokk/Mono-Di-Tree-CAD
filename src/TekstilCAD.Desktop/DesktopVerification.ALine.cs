@@ -56,6 +56,7 @@ internal static partial class DesktopVerification
                 "Correction retains explicit decimal centimeter input when the source used millimeters",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             window.ConfirmDiscardWorkForVerification=()=>true;
+            window.ConfirmUnitConversionForVerification=()=>true;
             Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
                 window.KnownTotalsForVerification.Text.Contains("ön ve arka") && window.FieldsForVerification.All(f=>f.Text.Length==0),
                 "Existing waist and hip totals are shown initially without inventing or filling front/back arcs",checks);
@@ -110,12 +111,7 @@ internal static partial class DesktopVerification
             Check(Cleared(window),"Changing a measurement clears summary, confirmation and all old drawing",checks);
             Click(window.DrawForVerification);Check(window.CanvasForVerification.Children.Count==0,"Changed measurement cannot redraw without a new review",checks);
             window.FieldsForVerification[9].Text="70";ReviewAndDraw(window);
-            var beforeUnitChange=window.FieldsForVerification.Select(f=>f.Text).ToArray();
-            window.UnitForVerification.SelectedIndex=1;Check(Cleared(window) && window.UnitForVerification.SelectedIndex==0 && beforeUnitChange.SequenceEqual(window.FieldsForVerification.Select(f=>f.Text)) && window.StatusForVerification.Text.Contains("değiştirilmedi"),"Changing units with entered data is cancelled without reinterpretation and invalidates confirmation",checks);
-            window.FieldsForVerification[4].Text="0";window.FieldsForVerification[5].Text="geçersiz";
-            beforeUnitChange=window.FieldsForVerification.Select(f=>f.Text).ToArray();window.UnitForVerification.SelectedIndex=1;
-            Check(window.UnitForVerification.SelectedIndex==0 && beforeUnitChange.SequenceEqual(window.FieldsForVerification.Select(f=>f.Text)),"Zero ease and invalid entered values remain unchanged on cancelled unit change",checks);
-            foreach(var field in window.FieldsForVerification)field.Clear();window.UnitForVerification.SelectedIndex=1;
+            window.UnitForVerification.SelectedIndex=1;Check(Cleared(window) && window.UnitForVerification.SelectedIndex==1 && window.FieldsForVerification[0].Text=="360","Approved conversion changes units without reinterpretation and invalidates confirmation",checks);
             Fill(window,false);ReviewAndDraw(window);var mmPoints=Polygons(window);
             Check(cmPoints.Length==mmPoints.Length && cmPoints.Zip(mmPoints).All(pair=>pair.First.SequenceEqual(pair.Second)),"Equivalent cm and mm inputs create identical preview geometry",checks);
             window.AgreementForVerification.IsChecked=false;Check(Cleared(window),"Revoking symmetry assumptions clears previous confirmation and drawing",checks);
@@ -161,6 +157,7 @@ internal static partial class DesktopVerification
             finally { proposalWindow.Close(); }
             var partialWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise","ön bel yayı 36 cm;arka kalça yayı 500 mm;ön bel yayı bolluğu 0.0125 cm");
             partialWindow.ConfirmDiscardWorkForVerification=()=>true;
+            partialWindow.ConfirmUnitConversionForVerification=()=>true;
             try
             {
                 Check(!partialWindow.ProposalAgreementForVerification.IsEnabled && partialWindow.FieldsForVerification.All(f=>f.Text.Length==0),
@@ -175,11 +172,11 @@ internal static partial class DesktopVerification
                 Click(partialWindow.ProposalApplyForVerification);
                 Check(partialWindow.FieldsForVerification[0].Text=="","Stale field acceptance cannot copy a source value",checks);
                 partialWindow.ProposalAgreementForVerification.IsChecked=true;partialWindow.UnitForVerification.SelectedIndex=0;
-                Check(partialWindow.ProposalAgreementForVerification.IsChecked!=true && !partialWindow.ProposalApplyForVerification.IsEnabled && partialWindow.FieldsForVerification[1].Text==" 360 ",
-                    "Changing target units invalidates transfer approval while preserving typed text",checks);
+                Check(partialWindow.ProposalAgreementForVerification.IsChecked!=true && !partialWindow.ProposalApplyForVerification.IsEnabled && partialWindow.FieldsForVerification[1].Text=="36",
+                    "Changing target units invalidates transfer approval while converting the typed value",checks);
                 partialWindow.UnitForVerification.SelectedIndex=1;partialWindow.ProposalAgreementForVerification.IsChecked=true;Click(partialWindow.ProposalApplyForVerification);
                 Check(partialWindow.FieldsForVerification[0].Text=="360" && partialWindow.FieldsForVerification[3].Text=="500" && partialWindow.FieldsForVerification[4].Text=="0.1250" &&
-                    partialWindow.FieldsForVerification[1].Text==" 360 " && partialWindow.FieldsForVerification[8].Text=="200" && partialWindow.FieldsForVerification[5].Text=="",
+                    partialWindow.FieldsForVerification[1].Text=="360" && partialWindow.FieldsForVerification[8].Text=="200" && partialWindow.FieldsForVerification[5].Text=="",
                     "Confirmed partial transfer copies only known empty fields, preserving unknown ease and typed values",checks);
                 Check(partialWindow.AgreementForVerification.IsChecked!=true && !partialWindow.ConfirmationForVerification.IsEnabled && partialWindow.CanvasForVerification.Children.Count==0,
                     "Partial transfer cannot assume symmetry or enable final confirmation or drawing",checks);
@@ -267,6 +264,26 @@ internal static partial class DesktopVerification
             Check(window.CanvasForVerification.Children.Count==0 && !window.ConfirmationForVerification.IsEnabled && window.StatusForVerification.Text.Contains("üç basamaklı ayırıcı belirsiz"),
                 "Manual ambiguous number cannot bypass source proposal rejection or enable drawing",checks);
             window.FieldsForVerification[4].Text="0";ReviewAndDraw(window);
+            var unitWindow=new ALinePanelPreviewWindow(owner,"","") { ConfirmDiscardWorkForVerification=()=>true };
+            try
+            {
+                unitWindow.UnitForVerification.SelectedIndex=0;unitWindow.FieldsForVerification[0].Text="0.1250";unitWindow.FieldsForVerification[4].Text="0";
+                unitWindow.ConfirmUnitConversionForVerification=()=>false;unitWindow.UnitForVerification.SelectedIndex=1;
+                Check(unitWindow.UnitForVerification.SelectedIndex==0 && unitWindow.FieldsForVerification[0].Text=="0.1250" && unitWindow.FieldsForVerification[4].Text=="0", "Declined unit conversion preserves partial fields and zero ease",checks);
+                unitWindow.ConfirmUnitConversionForVerification=()=>true;unitWindow.UnitForVerification.SelectedIndex=1;
+                Check(unitWindow.UnitForVerification.SelectedIndex==1 && unitWindow.FieldsForVerification[0].Text=="1.25" && unitWindow.FieldsForVerification[1].Text=="" && unitWindow.FieldsForVerification[4].Text=="0", "Approved partial conversion retains empty and zero values",checks);
+                unitWindow.UnitForVerification.SelectedIndex=0;
+                Check(unitWindow.FieldsForVerification[0].Text=="0.1250", "Fractional conversion round-trips without ambiguous grouping",checks);
+                unitWindow.FieldsForVerification[2].Text="geçersiz";var unchanged=unitWindow.FieldsForVerification.Select(f=>f.Text).ToArray();unitWindow.UnitForVerification.SelectedIndex=1;
+                Check(unitWindow.UnitForVerification.SelectedIndex==0 && unchanged.SequenceEqual(unitWindow.FieldsForVerification.Select(f=>f.Text)), "Invalid value rejects the whole conversion without mutation",checks);
+                unitWindow.FieldsForVerification[2].Clear();unitWindow.ConfirmUnitConversionForVerification=()=> { unitWindow.FieldsForVerification[1].Text="10";return true; };
+                unitWindow.UnitForVerification.SelectedIndex=1;
+                Check(unitWindow.UnitForVerification.SelectedIndex==0 && unitWindow.FieldsForVerification[0].Text=="0.1250" && unitWindow.FieldsForVerification[1].Text=="10", "Edit during conversion approval aborts without overwriting the newer edit",checks);
+                unitWindow.ConfirmUnitConversionForVerification=()=> { unitWindow.UnitForVerification.SelectedIndex=1;return true; };
+                unitWindow.UnitForVerification.SelectedIndex=1;
+                Check(unitWindow.UnitForVerification.SelectedIndex==0 && unitWindow.FieldsForVerification[0].Text=="0.1250", "Reentrant unit selection aborts the outer conversion",checks);
+            }
+            finally { unitWindow.Close(); }
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
             VerifyALineWorkDraft(owner,reportPath,checks);
             VerifyALineEarlyTotals(owner,checks);

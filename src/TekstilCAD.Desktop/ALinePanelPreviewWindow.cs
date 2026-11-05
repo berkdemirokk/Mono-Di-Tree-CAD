@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.IO;
+using System.Globalization;
 using Microsoft.Win32;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
@@ -32,6 +33,23 @@ internal sealed class ALinePanelPreviewWindow : Window
     private Func<Func<string?>,bool> saveSelectedWork = null!;
     private Func<bool> canCloseWork = null!;
     internal Func<bool>? ConfirmDiscardWorkForVerification { get; set; }
+    internal Func<bool>? ConfirmUnitConversionForVerification { get; set; }
+    internal static string[] ConvertUnitFields(IReadOnlyList<string> fields,ALineLengthUnit oldUnit,ALineLengthUnit newUnit)
+    {
+        if(fields.Count!=11)throw new ArgumentException("On bir alan gerekli.");
+        var converted=new string[fields.Count];
+        for(int i=0;i<fields.Count;i++)
+        {
+            if(fields[i].Length==0) { converted[i]="";continue; }
+            decimal mm=ALineMeasurementReview.ParseLengthMm(fields[i],oldUnit,i);
+            var value=newUnit==ALineLengthUnit.Centimeter ? mm/10m : mm;
+            string text=value.ToString("0.############################",CultureInfo.InvariantCulture);
+            var dot=text.IndexOf('.');if(dot>=0 && text.Length-dot-1==3)text+="0";
+            if(text.Length>24 || ALineMeasurementReview.ParseLengthMm(text,newUnit,i)!=mm)throw new ArgumentException("Alan kayıpsız dönüştürülemiyor; birim ve değerler korunuyor.");
+            converted[i]=text;
+        }
+        return converted;
+    }
     internal void SaveWorkForVerification(string path)=>saveWork(path);
     internal bool SaveSelectedWorkForVerification(Func<string?> selectPath)=>saveSelectedWork(selectPath);
     internal bool CanCloseWorkForVerification()=>canCloseWork();
@@ -58,7 +76,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
-        long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false;int committedUnit=-1;
+        long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false,unitConfirmation=false;int committedUnit=-1;
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
         StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(16) };
@@ -212,7 +230,22 @@ internal sealed class ALinePanelPreviewWindow : Window
             {
                 restoringUnit=true;try { unit.SelectedIndex=committedUnit; } finally { restoringUnit=false; }
                 Clear();RefreshProposal();RefreshWaistComparison();
-                status.Text="Dolu alanların birimi değiştirilmedi; sayılar yeniden yorumlanmadı. Gerekirse ölçü çalışmasını kaydedin; birimi değiştirmek için alanları temizleyin.";
+                if(unitConfirmation || requested is not (0 or 1)) { status.Text="Birim değiştirilmedi; form korundu.";return; }
+                var before=fields.Select(f=>f.Text).ToArray();int old=committedUnit;long version=editVersion;
+                try
+                {
+                    var converted=ConvertUnitFields(before,old==0 ? ALineLengthUnit.Centimeter : ALineLengthUnit.Millimeter,requested==0 ? ALineLengthUnit.Centimeter : ALineLengthUnit.Millimeter);
+                    unitConfirmation=true;
+                    bool approved;
+                    try { approved=ConfirmUnitConversionForVerification?.Invoke() ?? MessageBox.Show(this,$"Dolu alanlar {(old==0?"cm":"mm")} biriminden {(requested==0?"cm":"mm")} birimine kayıpsız dönüştürülecek. Boş alanlar boş kalır. Önceki ölçü onayı ve önizleme sıfırlanır. Devam edilsin mi?","Birim dönüşümü",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes; }
+                    finally { unitConfirmation=false; }
+                    if(!approved || closed || editVersion!=version || committedUnit!=old || unit.SelectedIndex!=old || !before.SequenceEqual(fields.Select(f=>f.Text))) { status.Text="Dönüşüm iptal edildi veya form değişti; değerler korunuyor.";return; }
+                    restoringUnit=true;
+                    try { unit.SelectedIndex=requested;committedUnit=requested;for(int i=0;i<fields.Count;i++)fields[i].Text=converted[i]; }
+                    finally { restoringUnit=false; }
+                    Clear();RefreshProposal();RefreshWaistComparison();status.Text="Dolu alanlar kayıpsız dönüştürüldü; ölçüleri yeniden inceleyip onaylayın.";
+                }
+                catch(Exception ex) when(ex is ArgumentException or OverflowException) { status.Text="Birim değişmedi; alanlar korundu. "+ex.Message; }
                 return;
             }
             committedUnit=requested;Clear();RefreshProposal();RefreshWaistComparison();
