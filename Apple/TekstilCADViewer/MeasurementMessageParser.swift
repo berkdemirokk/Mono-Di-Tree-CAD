@@ -9,7 +9,7 @@ enum MeasurementMessageParser {
         number.range(of: #"\A[0-9]{1,3}[.,][0-9]{3}\z"#, options: .regularExpression) != nil
     }
     static func canonicalLabel(_ matched: String) -> String? {
-        let label = matched.lowercased(with: Locale(identifier: "tr_TR"))
+        let label = matched.lowercased(with: Locale(identifier: "tr_TR")).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         return supportedLabels.contains(label) ? label : nil
     }
     /// Only values already produced by parse are eligible for comparison.
@@ -34,7 +34,7 @@ enum MeasurementMessageParser {
     /// This is only a narrow warning, not proof of downstream interpretation.
     static func containsExplicitMeasurement(_ text: String) -> Bool {
         guard text.utf16.count <= 16_384 else { return true }
-        let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:cm|mm)(?![\p{L}\p{N}_])"#
         return text.range(of: measurement, options: .regularExpression) != nil
     }
     static func hasConditionalMeasurementRisk(_ parts: [String]) -> Bool {
@@ -47,17 +47,17 @@ enum MeasurementMessageParser {
     }
     static func mayNeedDesktopReview(_ message: String) -> Bool {
         guard message.utf16.count <= 16_384 else { return true }
-        let expression = #"(?i)(?:cm|mm)(?:[ \t]+olsun)?(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
-        let ambiguousNumber = #"(?i)(?<![0-9.,])[0-9]{1,3}[.,][0-9]{3}[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
-        let question = #"(?i)(?:cm|mm)(?:[ \t]+(?:olsun|mi|mı|mu|mü))?[ \t]*[?？]"#
-        let qualified = #"(?i)(?:cm|mm)(?:[ \t]+|[ \t]*,[ \t]*)(?:olma\p{L}*|değil\p{L}*|olursa|ise)(?![\p{L}\p{N}_])"#
+        let expression = #"(?i)(?:cm|mm)(?:[\t\p{Zs}]+olsun)?(?:[\t\p{Zs}]+ve[\t\p{Zs}]+|[\t\p{Zs}]*\.[\t\p{Zs}\r\n]*(?=\S))"#
+        let ambiguousNumber = #"(?i)(?<![0-9.,])[0-9]{1,3}[.,][0-9]{3}[\t\p{Zs}]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        let question = #"(?i)(?:cm|mm)(?:[\t\p{Zs}]+(?:olsun|mi|mı|mu|mü))?[\t\p{Zs}]*[?？]"#
+        let qualified = #"(?i)(?:cm|mm)(?:[\t\p{Zs}]+|[\t\p{Zs}]*,[\t\p{Zs}]*)(?:olma\p{L}*|değil\p{L}*|olursa|ise)(?![\p{L}\p{N}_])"#
         return [expression, ambiguousNumber, question, qualified].contains { message.range(of: $0, options: .regularExpression) != nil }
             || hasConditionalMeasurementRisk([message])
     }
     static func parse(_ message: String, existing: [String: String]) throws -> Proposal {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }
         guard message.utf16.count <= 16_384 else { throw Failure.unrecognized }
-        let expression = try NSRegularExpression(pattern: #"[ \t]*(göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)(?:[ \t]+olsun)?(?:[ \t]+(ve)(?=[ \t])|[ \t]*([,;.\n])[ \t]*(?:\n[ \t]*)?|[ \t]*$)"#, options: [.caseInsensitive])
+        let expression = try NSRegularExpression(pattern: #"[\t\p{Zs}]*(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)(?:[\t\p{Zs}]+olsun)?(?:[\t\p{Zs}]+(ve)(?=[\t\p{Zs}])|[\t\p{Zs}]*([,;.\n])[\t\p{Zs}]*(?:\n[\t\p{Zs}]*)?|[\t\p{Zs}]*$)"#, options: [.caseInsensitive])
         let normalized = message.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         let source = normalized as NSString
         var cursor = 0, found: [String: String] = [:]

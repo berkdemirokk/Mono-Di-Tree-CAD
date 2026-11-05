@@ -250,6 +250,44 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ExperimentalDesignBrief.make(restored))
         XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(restored))
     }
+    func testUnicodeHorizontalSpacingInExplicitMeasurementsPreservesSource() throws {
+        for space in ["\u{00A0}", "\u{202F}", "\u{2009}", "\t"] {
+            let message = "bel\(space)çevresi: 36\(space)cm"
+            let proposal = try MeasurementMessageParser.parse(message, existing: [:])
+            XCTAssertEqual(proposal.source, message); XCTAssertEqual(proposal.values["bel çevresi"], "36 cm")
+            XCTAssertTrue(MeasurementMessageParser.containsExplicitMeasurement(message))
+            let description = "A kesim elbise istiyorum, " + message
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: description, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft), .aline)
+            let described = try XCTUnwrap(ExperimentalDesignBrief.descriptionMeasurements(draft))
+            XCTAssertEqual(described.source, description); XCTAssertEqual(described.values["bel çevresi"], "36 cm")
+            XCTAssertEqual(draft.description, description)
+            let grouped = "bel çevresi 36\(space)cm\(space)ve\(space)kalça çevresi 90\(space)cm"
+            let groupResult = try MeasurementMessageParser.parse(grouped, existing: [:])
+            XCTAssertEqual(groupResult.values["kalça çevresi"], "90 cm"); XCTAssertEqual(groupResult.source, grouped)
+        }
+    }
+    func testUnicodeSpacingDoesNotPermitNegationBareValuesOrSplitUnits() {
+        for space in ["\u{00A0}", "\u{202F}"] {
+            for text in ["bel çevresi 36\(space)cm değil", "bel çevresi 36\(space)cm?", "36\(space)cm", "eğer bel çevresi 36\(space)cm ise"] {
+                XCTAssertThrowsError(try MeasurementMessageParser.parse(text, existing: [:]), text)
+            }
+            let description = "A kesim elbise istiyorum, 36\(space)cm"
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: description, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft)); XCTAssertEqual(draft.description, description)
+            let unresolved = "bu 36\(space)cm olmasın"
+            let mixed = ExperimentalDesignBrief.Draft(style: .describe, description: unresolved, bust: "", waist: "", hips: "", length: "", otherMeasurements: "bel çevresi 72\(space)cm", image: nil, imageName: nil)
+            XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(mixed))
+            XCTAssertEqual(mixed.description, unresolved); XCTAssertEqual(mixed.otherMeasurements, "bel çevresi 72\(space)cm")
+            XCTAssertTrue(MeasurementMessageParser.hasConditionalMeasurementRisk(["eğer kumaş uygunsa", mixed.otherMeasurements]))
+        }
+        for newline in ["\n", "\r", "\u{0085}", "\u{2028}", "\u{2029}"] {
+            XCTAssertThrowsError(try MeasurementMessageParser.parse("bel çevresi 36\(newline)cm", existing: [:]))
+            let description = "A kesim elbise istiyorum, bel çevresi 36\(newline)cm"
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: description, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft)); XCTAssertEqual(draft.description, description)
+        }
+    }
     func testModelPickerListsEveryChoiceExactlyOnce() {
         let styles = ExperimentalDesignBrief.selectableStyles
         XCTAssertEqual(styles, [.wrap, .aline, .corset, .sheath, .straight, .shirt, .describe])

@@ -103,7 +103,7 @@ enum ExperimentalDesignBrief {
         let standalone = description == name || notes == name
         let source = text as NSString
         let suffix = source.substring(from: NSMaxRange(match))
-        let intentPattern = #"\A[ \t]+(?:istiyorum|olsun)(?![\p{L}\p{N}_])"#
+        let intentPattern = #"\A[\t\p{Zs}]+(?:istiyorum|olsun)(?![\p{L}\p{N}_])"#
         let intent = try? NSRegularExpression(pattern: intentPattern)
         let intentMatch = intent?.firstMatch(in: suffix, range: NSRange(suffix.startIndex..., in: suffix))
         guard standalone || intentMatch != nil else { return nil }
@@ -127,8 +127,8 @@ enum ExperimentalDesignBrief {
             "midi": ("boy", "midi"), "sade": ("stil", "sade"),
             "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok")
         ]
-        guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[ \t]+kollu|kısa[ \t]+kollu|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız)"#),
-              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)"#) else { return false }
+        guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[\t\p{Zs}]+kollu|kısa[\t\p{Zs}]+kollu|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız)"#),
+              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)"#) else { return false }
         let source = text as NSString
         var cursor = 0, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
         let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;."))
@@ -177,7 +177,7 @@ enum ExperimentalDesignBrief {
     static func descriptionMeasurements(_ draft: Draft) -> MeasurementMessageParser.Proposal? {
         guard let suggested = suggestedModel(draft), draft.style == .describe || draft.style == suggested else { return nil }
         let original = draft.description.precomposedStringWithCanonicalMapping
-        let pattern = #"(?i)(?<![\p{L}\p{N}_])(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)(?![\p{L}\p{N}_])"#
+        let pattern = #"(?i)(?<![\p{L}\p{N}_])(göğüs[\t\p{Zs}]+çevresi|bel[\t\p{Zs}]+çevresi|kalça[\t\p{Zs}]+çevresi|elbise[\t\p{Zs}]+boyu)[\t\p{Zs}]*(?::|=)?[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(cm|mm)(?![\p{L}\p{N}_])"#
         guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
         let source = original as NSString
         let existing = ["göğüs çevresi": draft.bust, "bel çevresi": draft.waist, "kalça çevresi": draft.hips, "elbise boyu": draft.length]
@@ -206,11 +206,11 @@ enum ExperimentalDesignBrief {
         // whether they refer to the measurements or some other part of the request.
         let pluralReference = #"(?<![\p{L}\p{N}_])(?:(?:bunlar|şunlar|onlar)(?:ı|ın|a|da|dan|la)?|hepsi(?:ni|ne|nin|nden|yle)?|tümü(?:nü|ne|nün|nden|yle)?)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: pluralReference, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
-        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o)[ \t]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm))(?![\p{L}\p{N}_])"#
+        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o)[\t\p{Zs}]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:cm|mm))(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: unresolved, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         // Explicit limited possessives are unresolved references, not values
         // or inferred circumference measurements.
-        let reference = #"(?<![\p{L}\p{N}_])(?:göğüs|göğs(?:üm|ün|ü|ümüz|ünüz)|göğüsleri|bel(?:im|in|i|imiz|iniz)?|belleri|kalça(?:m|n|sı|mız|nız|ları)?|elbise[ \t]+boyu|ölçü\p{L}*|değer(?:ler(?:i|in|im|den)?|i|in|im|e|de|den)?)(?![\p{L}\p{N}_])"#
+        let reference = #"(?<![\p{L}\p{N}_])(?:göğüs|göğs(?:üm|ün|ü|ümüz|ünüz)|göğüsleri|bel(?:im|in|i|imiz|iniz)?|belleri|kalça(?:m|n|sı|mız|nız|ları)?|elbise[\t\p{Zs}]+boyu|ölçü\p{L}*|değer(?:ler(?:i|in|im|den)?|i|in|im|e|de|den)?)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return proposal }
         let qualifiers = #"(?i)(?<![\p{L}\p{N}_])(?:eğer|şayet|değil\p{L}*|olma\p{L}*|olursa|ise|istem\p{L}*)(?![\p{L}\p{N}_])|[?？]"#
         guard checkedDescription.range(of: qualifiers, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
