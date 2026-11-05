@@ -6,6 +6,10 @@ using TekstilCAD.FileFormats;
 namespace TekstilCAD.Desktop;
 internal static partial class DesktopVerification
 {
+    private static void WaitForOpen(DesignRequestWindow window)
+    {
+        var task=window.OpenForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+    }
     private static void VerifyPendingReferenceProtection(List<string> checks)
     {
         var owner=new Window();_=new WindowInteropHelper(owner).EnsureHandle();var window=new DesignRequestWindow(owner);
@@ -22,14 +26,14 @@ internal static partial class DesktopVerification
             pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
             var warning="";window.ConfirmDiscardForVerification=m=> { warning=m;return false; };
             Check(!window.ClosingAllowedForVerification() && warning.Contains("bekleyen görsel") && window.CaptureForVerification().Reference is null,"Pending image explicitly warns and declined closing preserves the operation",checks);
-            window.OpenPathChoiceForVerification=()=>path;window.OpenForVerification();
+            window.OpenPathChoiceForVerification=()=>path;WaitForOpen(window);
             Check(window.CaptureForVerification().Prompt=="Kaydedilmiş" && !pending.IsCompleted,"Declining open preserves draft and pending image work",checks);
             window.SaveForVerification();Check(window.StatusForVerification.Text.Contains("sürüyor"),"Save waits for pending image",checks);
             var verify=window.ValidateAndSaveForVerification();PumpUntil(()=>verify.IsCompleted);verify.GetAwaiter().GetResult();
             Check(window.StatusForVerification.Text.Contains("sürüyor") && window.CreateDrawingNotes() is null,"Validate-and-save and drawing notes wait for pending image",checks);
-            window.ConfirmDiscardForVerification=_=>true;window.OpenPathChoiceForVerification=()=>null;window.OpenForVerification();
+            window.ConfirmDiscardForVerification=_=>true;window.OpenPathChoiceForVerification=()=>null;WaitForOpen(window);
             Check(!pending.IsCompleted && window.CaptureForVerification().Prompt=="Kaydedilmiş","Cancelling file picker keeps approved pending operation",checks);
-            window.OpenPathChoiceForVerification=()=>path;window.OpenForVerification();
+            window.OpenPathChoiceForVerification=()=>path;WaitForOpen(window);
             Check(window.CaptureForVerification().Prompt=="Yeni istek","Approved open loads replacement while old image remains pending",checks);
             int replacementPrompts=0;window.ConfirmDiscardForVerification=_=> { replacementPrompts++;return false; };
             Check(window.ClosingAllowedForVerification() && replacementPrompts==0,"Clean replacement does not warn for the invalidated prior selection",checks);
@@ -62,7 +66,7 @@ internal static partial class DesktopVerification
             pending=window.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reached.IsSet);
             window.ConfirmDiscardForVerification=_=>true;
             window.OpenPathChoiceForVerification=()=> { release.Set();PumpUntil(()=>pending.IsCompleted);return path; };
-            window.OpenForVerification();
+            WaitForOpen(window);
             Check(pending.GetAwaiter().GetResult() && window.CaptureForVerification().Prompt=="Temiz" && window.CaptureForVerification().Reference is not null,
                 "Image completion while picker is open cancels replacement and preserves completed selection",checks);pending=null;
 
@@ -83,7 +87,7 @@ internal static partial class DesktopVerification
                 replacementWindow.LoadForVerification(new DesignRequest("Önce","",null));
                 replacementWindow.ReferenceLoaderForVerification=_=> { reachedReplacement.Set();releaseReplacement.Wait();return photo; };
                 replacementPending=replacementWindow.ChooseReferenceFileAsync("ignored");PumpUntil(()=>reachedReplacement.IsSet);
-                replacementWindow.ConfirmDiscardForVerification=_=>true;replacementWindow.OpenPathChoiceForVerification=()=>path;replacementWindow.OpenForVerification();
+                replacementWindow.ConfirmDiscardForVerification=_=>true;replacementWindow.OpenPathChoiceForVerification=()=>path;WaitForOpen(replacementWindow);
                 int extraPrompts=0;replacementWindow.ConfirmDiscardForVerification=_=> { extraPrompts++;return false; };
                 replacementWindow.Close();releaseReplacement.Set();PumpUntil(()=>replacementPending.IsCompleted);
                 Check(extraPrompts==0 && !replacementPending.GetAwaiter().GetResult(),"Closing clean replacement needs no stale warning and late worker cannot attach",checks);replacementPending=null;

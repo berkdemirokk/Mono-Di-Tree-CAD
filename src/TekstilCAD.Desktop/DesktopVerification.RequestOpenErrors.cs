@@ -38,21 +38,45 @@ internal static partial class DesktopVerification
                 var before=window.CaptureForVerification();var wasDirty=window.DirtyForVerification;var chat=window.ChatInputForVerification.Text;var conversation=window.ConversationForVerification.Text;
                 var bad=Path.Combine(folder,name+".tcad-request.json");File.WriteAllBytes(bad,bytes);var confirmations=0;
                 window.ConfirmDiscardForVerification=_=> { confirmations++;return true; };window.OpenPathChoiceForVerification=()=>bad;
-                window.OpenForVerification();
+                WaitForOpen(window);
                 Check(confirmations==1 && Same(before,window.CaptureForVerification()) && wasDirty && window.DirtyForVerification==wasDirty &&
                     window.ChatInputForVerification.Text==chat && window.ConversationForVerification.Text==conversation &&
                     window.StatusForVerification.Text.StartsWith("İstek açılamadı; mevcut alanlar korundu",StringComparison.Ordinal) && File.ReadAllBytes(bad).SequenceEqual(bytes),
                     "Real request Open contains invalid file and preserves draft, model, notes, image, dirty state and source bytes: "+name,checks);
-                window.OpenPathChoiceForVerification=()=>null;window.OpenForVerification();
+                window.OpenPathChoiceForVerification=()=>null;WaitForOpen(window);
                 Check(Same(before,window.CaptureForVerification()) && window.ChatInputForVerification.Text==chat && window.DirtyForVerification==wasDirty,
                     "Cancelling open after an error does not consume pending work: "+name,checks);
-                window.ConfirmDiscardForVerification=_=>false;window.OpenPathChoiceForVerification=()=>throw new InvalidOperationException("Declining discard must not open chooser");window.OpenForVerification();
+                window.ConfirmDiscardForVerification=_=>false;window.OpenPathChoiceForVerification=()=>throw new InvalidOperationException("Declining discard must not open chooser");WaitForOpen(window);
                 Check(Same(before,window.CaptureForVerification()) && window.ChatInputForVerification.Text==chat,"Declining replacement keeps the failed-open draft intact: "+name,checks);
-                window.ConfirmDiscardForVerification=_=>true;window.OpenPathChoiceForVerification=()=>good;window.OpenForVerification();
+                window.ConfirmDiscardForVerification=_=>true;window.OpenPathChoiceForVerification=()=>good;WaitForOpen(window);
                 Check(Same(valid,window.CaptureForVerification()) && !window.DirtyForVerification && window.ChatInputForVerification.Text.Length==0 &&
                     window.StatusForVerification.Text.StartsWith("İstek açıldı",StringComparison.Ordinal) && File.ReadAllBytes(good).SequenceEqual(goodBytes) && File.ReadAllBytes(bad).SequenceEqual(bytes),
                     "Explicit valid open succeeds after error without rewriting either source file: "+name,checks);
             }
+            // Hold the worker to verify responsiveness, stale edits, supersession and close.
+            var reached=new ManualResetEventSlim();var release=new ManualResetEventSlim();
+            try
+            {
+                window.LoadForVerification(original);window.ConfirmDiscardForVerification=_=>true;window.OpenPathChoiceForVerification=()=>good;
+                window.RequestLoaderForVerification=_=> { reached.Set();release.Wait();return valid; };
+                var pending=window.OpenForVerification();PumpUntil(()=>reached.IsSet);
+                Check(!pending.IsCompleted && Same(original,window.CaptureForVerification()),"Request loading runs without blocking the dispatcher or replacing the draft",checks);
+                window.PromptForVerification.Text="changed";window.PromptForVerification.Text=original.Prompt;
+                release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(Same(original,window.CaptureForVerification()) && window.StatusForVerification.Text.Contains("iptal"),"Reverted edits invalidate the pending request import",checks);
+
+                reached.Reset();release.Reset();window.LoadForVerification(original);
+                pending=window.OpenForVerification();PumpUntil(()=>reached.IsSet);
+                window.RequestLoaderForVerification=_=>valid;var newer=window.OpenForVerification();PumpUntil(()=>newer.IsCompleted);newer.GetAwaiter().GetResult();
+                release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(Same(valid,window.CaptureForVerification()),"Late older import cannot replace a newer result",checks);
+
+                reached.Reset();release.Reset();var closingWindow=new DesignRequestWindow(owner);closingWindow.LoadForVerification(original);
+                closingWindow.OpenPathChoiceForVerification=()=>good;closingWindow.RequestLoaderForVerification=_=> { reached.Set();release.Wait();return valid; };
+                pending=closingWindow.OpenForVerification();PumpUntil(()=>reached.IsSet);closingWindow.Close();release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
+                Check(Same(original,closingWindow.CaptureForVerification()),"Closing the window prevents a late import",checks);
+            }
+            finally { release.Set();window.RequestLoaderForVerification=null; }
             Check(!window.IsVisible && !owner.IsVisible,"Request open error checks never display windows",checks);
         }
         finally { window.ConfirmDiscardForVerification=_=>true;window.Close();Directory.Delete(folder,true); }

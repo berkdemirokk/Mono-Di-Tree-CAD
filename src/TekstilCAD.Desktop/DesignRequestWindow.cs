@@ -26,7 +26,7 @@ internal sealed class DesignRequestWindow : Window
     internal Button EditALinePromptForVerification { get; }=new() { Content="Tarifteki ölçü ifadelerini düzenle",Margin=new Thickness(0,2,6,2) };
     internal Button EditALineNotesForVerification { get; }=new() { Content="Ölçü notlarını düzenle",Margin=new Thickness(0,2,0,2) };
     private sealed record AnswerContext(string Prompt,string Measurements,string? Label,bool ALine,long ReferenceRevision,long QuestionRevision);
-    private long questionRevision;
+    private long questionRevision,chatRevision,openRevision;
     private AnswerContext? answerContext;
     private bool chatHadText;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
@@ -44,7 +44,8 @@ internal sealed class DesignRequestWindow : Window
     internal bool ConfirmDiscardForTest()=>ConfirmDiscard();
     internal bool ClosingAllowedForVerification() { var e=new CancelEventArgs();OnClosing(this,e);return !e.Cancel; }
     internal Func<string?>? OpenPathChoiceForVerification { get; set; }
-    internal void OpenForVerification()=>Open();
+    internal Task OpenForVerification()=>OpenAsync();
+    internal Func<string,DesignRequest>? RequestLoaderForVerification { get; set; }
     internal void SaveForVerification()=>Save();
     internal Func<string?>? SavePathChoiceForVerification { get; set; }
     internal Task ValidateAndSaveForVerification()=>ValidateAndSaveAsync();
@@ -96,7 +97,7 @@ internal sealed class DesignRequestWindow : Window
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,8,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string text,Action action) { var b=new Button { Content=text,Padding=new Thickness(12,7,12,7),Margin=new Thickness(0,0,8,4) };b.Click+=(_,_)=>action();actions.Children.Add(b);return b; }
-        var openAction=Action("İstek aç…",Open);var saveAction=Action("Yeni istek dosyası kaydet…",Save);Action("Çizim araçlarına geç",Close);
+        var openAction=Action("İstek aç…",()=>_ = OpenAsync());var saveAction=Action("Yeni istek dosyası kaydet…",Save);Action("Çizim araçlarına geç",Close);
         var reviewAction=Action("Ölçüleri incele",()=> { ReviewMeasurements();FocusRequestEditor(measurementReview);SetStatus(string.IsNullOrWhiteSpace(chatInput.Text) ? "Açık ölçüler incelendi; kalıp oluşturulmadı." : "Gönderilmemiş mesaj ölçü incelemesine dahil edilmedi; mesaj korundu."); });
         ReviewActionForVerification=reviewAction;
         reviewAction.Background=Accent;reviewAction.Foreground=Surface;reviewAction.BorderBrush=Accent;reviewAction.FontWeight=FontWeights.SemiBold;AutomationProperties.SetHelpText(reviewAction,"Açıkça yazılmış ölçüleri inceler ve sonuca gider; kalıp oluşturmaz.");
@@ -335,6 +336,7 @@ internal sealed class DesignRequestWindow : Window
 
         chatInput.TextChanged+=(_,_)=>
         {
+            chatRevision++;
             var hasText=chatInput.Text.Length>0;
             if(hasText && !chatHadText)answerContext=new(prompt.Text,measurements.Text,suggestedMeasurement,CanPreviewALineForVerification,referenceRevision,questionRevision);
             if(!hasText)answerContext=null;
@@ -758,12 +760,12 @@ internal sealed class DesignRequestWindow : Window
     {
         var pending=referenceSelectionPending;var hasEdits=dirty || !string.IsNullOrEmpty(chatInput.Text);
         if(!pending && !hasEdits)return true;
-        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var wasDirty=dirty;
+        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var question=questionRevision;var chatVersion=chatRevision;var wasDirty=dirty;
         var message=(hasEdits?"Kaydedilmemiş istek değişiklikleri kaybolacak. ":"")+
             (pending?"Seçilen görselin denetimi sürüyor; devam ederseniz bekleyen görsel bu isteğe eklenmeyecek. ":"")+"Devam edilsin mi?";
         var accepted=ConfirmDiscardForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
         if(!accepted)return false;
-        if(closed || pending!=referenceSelectionPending || revision!=referenceRevision || wasDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()))
+        if(closed || pending!=referenceSelectionPending || revision!=referenceRevision || question!=questionRevision || chatVersion!=chatRevision || wasDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()))
         { SetStatus("İstek veya görsel onay sırasında değişti; işlemi yeniden başlatın.");return false; }
         return true;
     }
@@ -831,17 +833,37 @@ internal sealed class DesignRequestWindow : Window
         { if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; bekleyen görsel eklenmedi." : "Görsel açılamadı. PNG/JPEG için 8 MiB, 12.000 piksel ve 24 milyon piksel sınırlarını kontrol edin; bu sınırları aşan görsel otomatik küçültülmez. Önceki görsel korundu.");return false; }
         finally { referenceSelectionPending=false;referenceLoadRunning=false; }
     }
-    private void Open()
+    private async Task OpenAsync()
     {
-        if(!ConfirmDiscard())return;
-        var before=Capture();var beforeChat=chatInput.Text;var beforeRevision=referenceRevision;var beforeDirty=dirty;
+        if(closed)return;
+        var operation=++openRevision;
+        if(!ConfirmDiscard() || closed || operation!=openRevision)return;
+        var before=Capture();var beforeChat=chatInput.Text;var beforeReference=referenceRevision;var beforeQuestion=questionRevision;
+        var beforeChatRevision=chatRevision;var beforeDirty=dirty;var beforePending=referenceSelectionPending;var beforeDecoded=referenceDecoded;
+        var selected=selectedModelText;var tracked=modelSnapshot;var start=selectedModelStart;var ambiguous=modelAmbiguous;var loadedModel=selectedModelFromLoaded;
+        bool Unchanged()=>!closed && beforeReference==referenceRevision && beforeQuestion==questionRevision && beforeChatRevision==chatRevision &&
+            beforeDirty==dirty && beforePending==referenceSelectionPending && beforeDecoded==referenceDecoded && beforeChat==chatInput.Text && SameRequest(before,Capture()) &&
+            selected==selectedModelText && tracked==modelSnapshot && start==selectedModelStart && ambiguous==modelAmbiguous && loadedModel==selectedModelFromLoaded;
         string? path;
         if(OpenPathChoiceForVerification is { } choose)path=choose();
         else { var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };path=dialog.ShowDialog(this)==true ? dialog.FileName : null; }
-        if(path is null)return;
-        if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || beforeDirty!=dirty || closed) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
-        try { OpenPath(path); }
-        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
+        if(path is null || operation!=openRevision)return;
+        if(!Unchanged()) { if(!closed)SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
+        SetStatus("İstek açılıyor; mevcut taslak korunuyor.");
+        try
+        {
+            var loader=RequestLoaderForVerification;
+            var candidate=await Task.Run(()=>loader is null ? DesignRequestStorage.Load(path,ReferencePhotoDecoder.ValidateV2) : loader(path));
+            if(closed || operation!=openRevision)return;
+            if(!Unchanged()) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
+            Apply(candidate);
+            SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."+(candidate.Version==2 && candidate.ModelId is not null ? " Model kimliği ile serbest tarifin uyumunu kontrol edin." : ""));
+        }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException or NotSupportedException or System.Runtime.InteropServices.COMException)
+        {
+            if(closed || operation!=openRevision)return;
+            SetStatus(!Unchanged() ? "İstek değişti; açma işlemi iptal edildi." : "İstek açılamadı; mevcut alanlar korundu: "+ex.Message);
+        }
     }
     private void OpenPath(string path)
     {
