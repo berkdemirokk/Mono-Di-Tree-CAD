@@ -20,11 +20,11 @@ internal static class Contract
         if(model!=Model||unit is not ("mm" or "cm")||!confirmed||!symmetry||source is null)throw new InvalidOperationException("Girdi tamamlanmadı.");
         var fields=new Dictionary<string,string>(source,StringComparer.Ordinal);var defs=BreannaMeasurementGate.Definitions;
         if(fields.Count!=defs.Count+LowerKeys.Length||fields.Keys.Any(k=>!defs.Any(d=>k=="upper."+d.Key)&&!LowerKeys.Any(x=>k=="lower."+x)))throw new InvalidOperationException("Ölçü alanları eksik veya fazla.");
-        var entries=new List<BreannaMeasurementInput>();foreach(var def in defs){if(!fields.TryGetValue("upper."+def.Key,out var text)||text.Length>24||!decimal.TryParse(text.Replace(',','.'),NumberStyles.AllowLeadingSign|NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var n))throw new InvalidOperationException("Üst ölçü geçersiz.");entries.Add(new(def.Key,n,def.IsAngle?BreannaUnit.Degree:unit=="mm"?BreannaUnit.Millimeter:BreannaUnit.Centimeter));}
+        var entries=new List<BreannaMeasurementInput>();foreach(var def in defs){if(!fields.TryGetValue("upper."+def.Key,out var text)||!ExplicitNumber.TryParse(text,out var n))throw new InvalidOperationException("Üst ölçü geçersiz veya belirsiz.");entries.Add(new(def.Key,n,def.IsAngle?BreannaUnit.Degree:unit=="mm"?BreannaUnit.Millimeter:BreannaUnit.Centimeter));}
         var reviewed=BreannaMeasurementGate.Review(entries);if(!reviewed.IsValid)throw new InvalidOperationException("Üst ölçü ilişkisi geçersiz.");
-        var lowerStrings=LowerKeys.Select(k=>fields.TryGetValue("lower."+k,out var s)&&s.Length<=24?s:throw new InvalidOperationException("Alt ölçü geçersiz.")).ToArray();
-        var lower=ALineMeasurementReview.Normalize(lowerStrings,unit=="mm"?ALineLengthUnit.Millimeter:ALineLengthUnit.Centimeter);var result=ALinePanelPreview.Create(lower);
-        var decimals=lowerStrings.Select(s=>checked(decimal.Parse(s.Trim().Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture)*(unit=="cm"?10m:1m))).ToArray();
+        var raw=LowerKeys.Select(k=>fields.TryGetValue("lower."+k,out var s)&&ExplicitNumber.TryParse(s,out var n)&&n>=0?n:throw new InvalidOperationException("Alt ölçü geçersiz veya belirsiz.")).ToArray();
+        var lower=ALineMeasurementReview.Normalize(raw.Select(ExplicitNumber.Format).ToArray(),unit=="mm"?ALineLengthUnit.Millimeter:ALineLengthUnit.Centimeter);var result=ALinePanelPreview.Create(lower);
+        var decimals=raw.Select(n=>checked(n*(unit=="cm"?10m:1m))).ToArray();
         return new(reviewed.Values!,decimals,lower,result);
     }
     internal static (string Id,ALinePanelPreview Lower) Validate(string? model,string? unit,bool confirmed,bool symmetry,IReadOnlyDictionary<string,string> source)
