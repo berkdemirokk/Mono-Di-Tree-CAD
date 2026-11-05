@@ -3700,6 +3700,13 @@ internal static partial class DesktopVerification
             Check(circle?.ImportParameters?.CircleApproximationEnabled==true && circle.Project.Pieces.Count==1 && circle.Project.Pieces[0].Closed &&
                 circle.Warnings.Any(w=>w.Contains("CIRCLE örneklendi")) && DocumentSession.ContentEquals(original,studio.Document),
                 "Opt-in DXF preparation samples a 2D circle without changing the open project",checks);
+            var arcPath=Path.Combine(work,"async-arc.dxf");
+            File.WriteAllText(arcPath,"0\nSECTION\n2\nENTITIES\n0\nARC\n8\nCUT\n10\n10\n20\n20\n40\n5\n50\n350\n51\n10\n0\nENDSEC\n0\nEOF\n");
+            var arcTask=studio.StartDxfPreparationWithBulgeAsync(arcPath,1,DxfTextEncoding.Utf8,0.1);PumpUntil(()=>arcTask.IsCompleted);
+            var arc=arcTask.GetAwaiter().GetResult();
+            Check(arc?.ImportParameters?.ArcApproximationEnabled==true && arc.Project.Pieces.Count==1 && !arc.Project.Pieces[0].Closed &&
+                arc.Warnings.Any(w=>w.Contains("ARC örneklendi")) && DocumentSession.ContentEquals(original,studio.Document),
+                "Opt-in DXF preparation samples a wraparound ARC without changing the open project",checks);
             var legacy=studio.StartDxfPreparationAsync(path,1,DxfTextEncoding.Utf8);PumpUntil(()=>legacy.IsCompleted);
             var ordinary=legacy.GetAwaiter().GetResult() ?? throw new InvalidOperationException("Legacy fixture was not prepared.");
             Check(ordinary.ImportParameters?.BulgeToleranceMm is null && ordinary.Project.Pieces.Count==1 && ordinary.Project.Pieces[0].Name=="STRAIGHT" && ordinary.Warnings.Any(w=>w.Contains("bulge",StringComparison.OrdinalIgnoreCase)),
@@ -7934,7 +7941,7 @@ internal static partial class DesktopVerification
                 && AutomationProperties.GetHelpText(window.ToleranceInput).Contains("üretim toleransı değildir"),
                 "DXF bulge controls and validation expose accessible names and warning",checks);
             Check(Descendants<TextBlock>(root).Any(text=>text.Text.Contains("parametrik eğri saklanmaz") && text.Text.Contains("kesin geometrik hata sınırı"))
-                && Descendants<TextBlock>(root).Any(text=>text.Text.Contains("BLOCK/INSERT") && text.Text.Contains("3B") && text.Text.Contains("ARC") && text.Text.Contains("CIRCLE")),
+                && Descendants<TextBlock>(root).Any(text=>text.Text.Contains("BLOCK/INSERT") && text.Text.Contains("3B") && text.Text.Contains("ARC/CIRCLE")),
                 "DXF bulge option explains approximation and unsupported geometry",checks);
             window.EnableApproximation.IsChecked=true;
             Check(window.ToleranceInput.IsEnabled,"Opting in enables the tolerance input",checks);

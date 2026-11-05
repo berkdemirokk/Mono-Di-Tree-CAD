@@ -47,20 +47,20 @@ public static class DxfTextileGrainlineMapping
         var parameters=import.ImportParameters;
         if(parameters.BulgeToleranceMm is double bulgeTolerance && (!double.IsFinite(bulgeTolerance) || bulgeTolerance<=0))
             throw new InvalidDataException("DXF yay örnekleme toleransı geçersiz; inceleme yeniden yapılmalıdır.");
-        if(parameters.CircleApproximationEnabled && parameters.BulgeToleranceMm is null)
+        if((parameters.CircleApproximationEnabled || parameters.ArcApproximationEnabled) && parameters.BulgeToleranceMm is null)
             throw new InvalidDataException("DXF daire örnekleme toleransı eksik; inceleme yeniden yapılmalıdır.");
         var layout=NestingSnapshot.ComputeLayoutFingerprint(import.Project,cancellationToken);
         using var sha=SHA256.Create();
         using var hashStream=new CryptoStream(Stream.Null,sha,CryptoStreamMode.Write,leaveOpen:true);
         using var writer=new BinaryWriter(hashStream,Encoding.UTF8,leaveOpen:true);
-        writer.Write("TekstilCAD.dxf-textile-review.v4");writer.Write(sourceHash.ToUpperInvariant());
+        writer.Write("TekstilCAD.dxf-textile-review.v5");writer.Write(sourceHash.ToUpperInvariant());
         writer.Write(import.AnnotationSnapshotByteLength.Value);writer.Write(layout);
         writer.Write((int)parameters.Encoding);writer.Write(BitConverter.DoubleToInt64Bits(parameters.MillimetersPerUnit));
         writer.Write((int)parameters.Mode);writer.Write(parameters.ComponentToleranceMm.HasValue);
         if(parameters.ComponentToleranceMm is double tolerance)writer.Write(BitConverter.DoubleToInt64Bits(tolerance));
         writer.Write(parameters.BulgeToleranceMm.HasValue);
         if(parameters.BulgeToleranceMm is double bulge)writer.Write(BitConverter.DoubleToInt64Bits(bulge));
-        writer.Write(parameters.CircleApproximationEnabled);
+        writer.Write(parameters.CircleApproximationEnabled);writer.Write(parameters.ArcApproximationEnabled);
         writer.Write(parameters.ApprovedLayers.Length);
         foreach(var layer in parameters.ApprovedLayers.OrderBy(name=>name,StringComparer.Ordinal))
         {

@@ -11,7 +11,7 @@ public enum DxfImportMode { General, Controlled }
 /// <summary>Choices used to interpret a completed import. Layer names are approval inputs, not evidence of textile meaning.</summary>
 public sealed record DxfImportParameters(DxfTextEncoding Encoding, double MillimetersPerUnit, DxfImportMode Mode,
     double? ComponentToleranceMm, ImmutableArray<string> ApprovedLayers)
-{ public double? BulgeToleranceMm { get; init; } public bool CircleApproximationEnabled { get; init; } }
+{ public double? BulgeToleranceMm { get; init; } public bool CircleApproximationEnabled { get; init; } public bool ArcApproximationEnabled { get; init; } }
 public sealed record DxfLayerMapping(Guid PieceId, string OriginalName, string LayerName)
 {
     public bool Changed => !string.Equals(OriginalName, LayerName, StringComparison.Ordinal);
@@ -356,6 +356,14 @@ public static class DxfFormat
         return ImportCore(input, projectName, millimetersPerUnit, encoding, null, cancellationToken, null, toleranceMm, true);
     }
 
+    /// <summary>Explicit experimental 2D ARC, CIRCLE and polyline-bulge sampling.</summary>
+    public static DxfImportResult ImportWithCircularCurvesApproximation(Stream input, string projectName, double millimetersPerUnit,
+        DxfTextEncoding encoding, double toleranceMm, CancellationToken cancellationToken = default)
+    {
+        if (!double.IsFinite(toleranceMm) || toleranceMm <= 0) throw new ArgumentOutOfRangeException(nameof(toleranceMm));
+        return ImportCore(input, projectName, millimetersPerUnit, encoding, null, cancellationToken, null, toleranceMm, true, true);
+    }
+
     /// <summary>
     /// Opts into the restricted model-space and INSERT importer. The caller explicitly approves
     /// the cutting meaning of each named layer and an absolute, per-coordinate
@@ -436,7 +444,7 @@ public static class DxfFormat
     private sealed record StrictInsertOptions(double ComponentToleranceMm, HashSet<string> ApprovedLayers, string? ExpectedSha256=null, long? ExpectedByteLength=null);
     private static DxfImportResult ImportCore(Stream input, string projectName, double millimetersPerUnit,
         DxfTextEncoding encoding, StrictInsertOptions? strict, CancellationToken cancellationToken,
-        Action<DxfBlockPlacementInspection>? inspectionSink=null, double? bulgeToleranceMm=null, bool approximateCircles=false)
+        Action<DxfBlockPlacementInspection>? inspectionSink=null, double? bulgeToleranceMm=null, bool approximateCircles=false, bool approximateArcs=false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if(!Enum.IsDefined(encoding))throw new ArgumentOutOfRangeException(nameof(encoding));
@@ -777,7 +785,7 @@ public static class DxfFormat
             if(item.Type=="ENDSEC") { rawSection="";rawBlock="";rawBlockHeader=null;continue; }
             if(rawSection=="BLOCKS" && item.Type=="BLOCK") { rawBlock=item.Text(2);rawBlockHeader=ordinal;continue; }
             if(item.Type=="ENDBLK") { rawBlock="";rawBlockHeader=null;continue; }
-            if(rawSection is not ("ENTITIES" or "BLOCKS") || item.Type is not ("LINE" or "LWPOLYLINE" or "POLYLINE" or "VERTEX" or "SEQEND" or "INSERT") && !(approximateCircles && item.Type=="CIRCLE"))continue;
+            if(rawSection is not ("ENTITIES" or "BLOCKS") || item.Type is not ("LINE" or "LWPOLYLINE" or "POLYLINE" or "VERTEX" or "SEQEND" or "INSERT") && !((approximateCircles && item.Type=="CIRCLE") || (approximateArcs && item.Type=="ARC")))continue;
             if(rawGeometry.Count>=maxSourceGeometryRecords || item.Data.Count>maxSourceGeometryGroups-rawGeometryGroups)
             { rawGeometryTruncated=true;break; }
             var characters=0;
@@ -849,24 +857,24 @@ public static class DxfFormat
                     { ChildSourceOrdinals=childOrdinals?.ToImmutableArray() ?? ImmutableArray<int>.Empty,BlockHeaderOrdinal=blockHeaderOrdinal });
         }
         Dictionary<string,string>? circleBlockOwners=null;
-        static string CircleHandle(string value)
+        static string CurveHandle(string value)
         {
             if(value.Length is <1 or >16 || value.Any(c=>!Uri.IsHexDigit(c)))
-                throw new InvalidDataException("CIRCLE veya BLOCK_RECORD tanıtıcısı geçersiz.");
+                throw new InvalidDataException("Eğri veya BLOCK_RECORD tanıtıcısı geçersiz.");
             var canonical=value.TrimStart('0').ToUpperInvariant();
-            if(canonical.Length==0)throw new InvalidDataException("CIRCLE veya BLOCK_RECORD tanıtıcısı sıfır olamaz.");
+            if(canonical.Length==0)throw new InvalidDataException("Eğri veya BLOCK_RECORD tanıtıcısı sıfır olamaz.");
             return canonical;
         }
-        void ValidateCircleOwner(Entity circle)
+        void ValidateCurveOwner(Entity circle)
         {
             var ids=circle.Data.Where(g=>g.Code==5).ToArray();
-            if(ids.Length>1)throw new InvalidDataException("CIRCLE tanıtıcısı yinelenmiş.");
-            if(ids.Length==1)_=CircleHandle(ids[0].Value);
+            if(ids.Length>1)throw new InvalidDataException("Eğri tanıtıcısı yinelenmiş.");
+            if(ids.Length==1)_=CurveHandle(ids[0].Value);
             var owners=circle.Data.Where(g=>g.Code==330).ToArray();
-            if(owners.Length>1)throw new InvalidDataException("CIRCLE sahiplik tanıtıcısı yinelenmiş.");
+            if(owners.Length>1)throw new InvalidDataException("Eğri sahiplik tanıtıcısı yinelenmiş.");
             if(owners.Length==0)return; // Legacy DXF may not declare a handle.
-            var owner=CircleHandle(owners[0].Value);
-            if(ids.Length==1 && CircleHandle(ids[0].Value)==owner)throw new InvalidDataException("CIRCLE kendi sahibini gösteremez.");
+            var owner=CurveHandle(owners[0].Value);
+            if(ids.Length==1 && CurveHandle(ids[0].Value)==owner)throw new InvalidDataException("Eğri kendi sahibini gösteremez.");
             if(circleBlockOwners is null)
             {
                 var index=new Dictionary<string,string>(StringComparer.Ordinal);string currentSection="";bool inTable=false,foundTable=false;
@@ -888,19 +896,19 @@ public static class DxfFormat
                     if(names.Length!=1 || string.IsNullOrWhiteSpace(names[0].Value) || handles.Length!=1)
                         throw new InvalidDataException("BLOCK_RECORD adı veya tanıtıcısı eksik ya da yinelenmiş.");
                     if(index.Count>=10_000)throw new InvalidDataException("BLOCK_RECORD tablosu inceleme sınırını aşıyor.");
-                    var handle=CircleHandle(handles[0].Value);
+                    var handle=CurveHandle(handles[0].Value);
                     if(!index.TryAdd(handle,names[0].Value))throw new InvalidDataException("BLOCK_RECORD tanıtıcısı yinelenmiş.");
                 }
                 if(inTable)throw new InvalidDataException("BLOCK_RECORD tablosu kapatılmamış.");
                 if(!foundTable || index.Count(pair=>pair.Value.Equals("*Model_Space",StringComparison.OrdinalIgnoreCase))!=1)
-                    throw new InvalidDataException("CIRCLE model alanı sahipliği doğrulanamadı.");
+                    throw new InvalidDataException("Eğri model alanı sahipliği doğrulanamadı.");
                 circleBlockOwners=index;
             }
             if(!circleBlockOwners.TryGetValue(owner,out var blockName) || !blockName.Equals("*Model_Space",StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("CIRCLE sahipliği model alanıyla eşleşmiyor.");
+                throw new InvalidDataException("Eğri sahipliği model alanıyla eşleşmiyor.");
         }
         long bulgeValidationComparisons = 0;
-        int convertedBulgeSegments = 0, convertedBulgeContours = 0, convertedCircles = 0;
+        int convertedBulgeSegments = 0, convertedBulgeContours = 0, convertedCircles = 0, convertedArcs = 0;
         List<Point2> ApproximateBulge(List<DxfBulgeVertex> vertices, bool closed, List<Point2> originalEndpoints)
         {
             if (bulgeToleranceMm is not double tolerance) throw new InvalidDataException("Bulge toleransı eksik.");
@@ -1099,7 +1107,7 @@ public static class DxfFormat
                     (entityExcludedReason is not null || (excludedBlockReason is not null && excludedBlockCertain));
                 if(!definitelyExcluded)skippedRelevantInsertEntities=true;
             }
-            if(excludedReason is null && section=="ENTITIES" && (e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || (approximateCircles && e.Type=="CIRCLE")))
+            if(excludedReason is null && section=="ENTITIES" && (e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || ((approximateCircles && e.Type=="CIRCLE") || (approximateArcs && e.Type=="ARC"))))
             {
                 modelLayerExamined=true;
                 if(!layerStates.TryGetValue(layer,out var state))unknownLayerUsed=true;
@@ -1126,7 +1134,7 @@ public static class DxfFormat
                 continue;
             }
             var name = (block.Length > 0 ? block + " / " : "") + layer;
-            if (e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || (approximateCircles && e.Type=="CIRCLE"))
+            if (e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || ((approximateCircles && e.Type=="CIRCLE") || (approximateArcs && e.Type=="ARC")))
             {
                 if (HasUnsupportedPlane(e))
                 {
@@ -1140,7 +1148,7 @@ public static class DxfFormat
                 }
             }
             var lineTypeKey="";
-            if(e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || (approximateCircles && e.Type=="CIRCLE"))
+            if(e.Type is "LINE" or "LWPOLYLINE" or "POLYLINE" || ((approximateCircles && e.Type=="CIRCLE") || (approximateArcs && e.Type=="ARC")))
             {
                 var values=e.Data.Where(p=>p.Code==6).ToArray();
                 if(values.Length>1 || (values.Length==1 && string.IsNullOrWhiteSpace(values[0].Value)))
@@ -1200,36 +1208,49 @@ public static class DxfFormat
                 list.Add((start,end,sourceOrdinal));
                 blockGeometry |= section == "BLOCKS";
             }
-            else if (e.Type == "CIRCLE" && approximateCircles)
+            else if ((e.Type == "CIRCLE" && approximateCircles) || (e.Type == "ARC" && approximateArcs))
             {
+                var isArc=e.Type=="ARC";
                 if(section!="ENTITIES" || bulgeToleranceMm is not double tolerance || e.HasOpaqueMetadata)
-                    throw new InvalidDataException("CIRCLE kapsamı veya meta verisi doğrulanamadı.");
+                    throw new InvalidDataException($"{e.Type} kapsamı veya meta verisi doğrulanamadı.");
                 // This experimental path accepts only explicitly understood fields.
                 // Unknown attributes may carry manufacturing semantics and are not discarded.
-                if(e.Data.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 39 or 40 or 60 or 62 or 67 or 100 or 210 or 220 or 230 or 330 or 410 or 6)))
-                    throw new InvalidDataException("CIRCLE desteklenmeyen alan içeriyor.");
-                ValidateCircleOwner(e);
+                if(e.Data.Any(g=>g.Code is not (5 or 8 or 10 or 20 or 30 or 39 or 40 or 60 or 62 or 67 or 100 or 210 or 220 or 230 or 330 or 410 or 6) && !(isArc && g.Code is 50 or 51)))
+                    throw new InvalidDataException($"{e.Type} desteklenmeyen alan içeriyor.");
+                ValidateCurveOwner(e);
                 var subclasses=e.Data.Where(g=>g.Code==100).Select(g=>g.Value).ToArray();
-                if(subclasses.Any(v=>v is not ("AcDbEntity" or "AcDbCircle")) || subclasses.Distinct(StringComparer.Ordinal).Count()!=subclasses.Length)
-                    throw new InvalidDataException("CIRCLE alt sınıfı belirsiz.");
+                if(subclasses.Any(v=>v is not ("AcDbEntity" or "AcDbCircle") && !(isArc && v=="AcDbArc")) || subclasses.Distinct(StringComparer.Ordinal).Count()!=subclasses.Length)
+                    throw new InvalidDataException($"{e.Type} alt sınıfı belirsiz.");
                 var normalCount=e.Data.Count(g=>g.Code is 210 or 220 or 230);
-                if(normalCount is not (0 or 3))throw new InvalidDataException("CIRCLE normal vektörü eksik veya yinelenmiş.");
+                if(normalCount is not (0 or 3))throw new InvalidDataException($"{e.Type} normal vektörü eksik veya yinelenmiş.");
                 var x=e.RequiredCoordinate(10);var y=e.RequiredCoordinate(20);var radius=e.RequiredCoordinate(40);
                 if((x.Value==0 && IsNonzeroDecimal(x.Text)) || (y.Value==0 && IsNonzeroDecimal(y.Text)) ||
                     (radius.Value==0 && IsNonzeroDecimal(radius.Text)) || radius.Value<=0)
-                    throw new InvalidDataException("CIRCLE merkezi veya yarıçapı güvenle çözülemedi.");
+                    throw new InvalidDataException($"{e.Type} merkezi veya yarıçapı güvenle çözülemedi.");
                 _=ResolveEntityColor(e,section,layer,layerStates,out var unknownColor);
                 colorsUsed=true;unknownColorUsed|=unknownColor;
                 var remaining=ProjectStorage.MaximumTotalPoints-acceptedPoints;
-                if(remaining<1)throw new InvalidDataException("CIRCLE toplam nokta sınırını aşıyor.");
-                var points=DxfCircleApproximation.Approximate(new Point2(x.Value,y.Value),radius.Value,millimetersPerUnit,tolerance,remaining,cancellationToken).Points.ToList();
-                if(points.Count>Geometry.MaxValidatedContourVertices)throw new InvalidDataException("CIRCLE kontur doğrulama sınırını aşıyor.");
+                if(remaining<1)throw new InvalidDataException($"{e.Type} toplam nokta sınırını aşıyor.");
+                List<Point2> points;
+                if(isArc)
+                {
+                    var start=e.RequiredCoordinate(50);var end=e.RequiredCoordinate(51);
+                    if((start.Value==0 && IsNonzeroDecimal(start.Text)) || (end.Value==0 && IsNonzeroDecimal(end.Text)))
+                        throw new InvalidDataException("ARC açıları sayısal dönüşümde kayboldu.");
+                    points=DxfArcApproximation.Approximate(new Point2(x.Value,y.Value),radius.Value,start.Value,end.Value,millimetersPerUnit,tolerance,remaining,cancellationToken).Points.ToList();
+                }
+                else points=DxfCircleApproximation.Approximate(new Point2(x.Value,y.Value),radius.Value,millimetersPerUnit,tolerance,remaining,cancellationToken).Points.ToList();
+                if(points.Count>Geometry.MaxValidatedContourVertices)throw new InvalidDataException("Eğri kontur doğrulama sınırını aşıyor.");
                 bulgeValidationComparisons+=(long)points.Count*(points.Count-1)/2;
                 if(bulgeValidationComparisons>50_000_000)throw new InvalidDataException("Eğri toplam doğrulama iş sınırını aşıyor.");
-                try { Geometry.ValidateContour(points,cancellationToken); }
-                catch(ArgumentException ex) { throw new InvalidDataException("CIRCLE konturu doğrulanamadı.",ex); }
-                AddPiece(name,points,true,section,null,layer,e.Type,[sourceOrdinal]);
-                convertedCircles++;
+                try
+                {
+                    if(isArc) { if(Geometry.HasSelfIntersections(points,false,cancellationToken))throw new InvalidDataException("ARC konturu kesişiyor veya sıfır kenar içeriyor."); }
+                    else Geometry.ValidateContour(points,cancellationToken);
+                }
+                catch(ArgumentException ex) { throw new InvalidDataException("Eğri konturu doğrulanamadı.",ex); }
+                AddPiece(name,points,!isArc,section,null,layer,e.Type,[sourceOrdinal]);
+                if(isArc)convertedArcs++;else convertedCircles++;
             }
             else if (e.Type == "LWPOLYLINE")
             {
@@ -1461,8 +1482,9 @@ public static class DxfFormat
                 ? $"Bulge eğrileri örneklendi: {convertedBulgeContours} kontur, {convertedBulgeSegments} yay; istenen nominal sapma {DisplayFactor(sampledTolerance)} mm. Sayısal/üretim doğruluğu garanti edilmez; kaynağı kontrol edin."
                 : $"Bulge seçeneği etkin; dönüştürülen yay yok. Seçilen nominal sapma {DisplayFactor(sampledTolerance)} mm; kaynağı kontrol edin.");
         if(convertedCircles>0)warnings.Add($"CIRCLE örneklendi: {convertedCircles} daire; parametrik eğri saklanmaz. Nominal tolerans toplam sayısal veya üretim doğruluğu garantisi değildir.");
+        if(convertedArcs>0)warnings.Add($"ARC örneklendi: {convertedArcs} açık yay; parametrik eğri saklanmaz. Nominal tolerans toplam sayısal veya üretim doğruluğu garantisi değildir.");
         var importParameters=new DxfImportParameters(encoding,millimetersPerUnit,strictImport ? DxfImportMode.Controlled : DxfImportMode.General,
-            strict?.ComponentToleranceMm,approvedLayers) { BulgeToleranceMm = bulgeToleranceMm, CircleApproximationEnabled=approximateCircles };
+            strict?.ComponentToleranceMm,approvedLayers) { BulgeToleranceMm = bulgeToleranceMm, CircleApproximationEnabled=approximateCircles, ArcApproximationEnabled=approximateArcs };
         return new DxfImportResult(doc, warnings) { Units = units, SourceSha256=sourceSha256, SourceByteLength=sourceByteLength, ImportParameters=importParameters, BlockEntityInventory=new(blockInventory.ToImmutable(),blockInventoryTruncated),
             SkippedInsertEntities=skippedInsertEntities, SkippedRelevantInsertEntities=skippedRelevantInsertEntities, ImportedBlockDefinitions=blockGeometry, MetadataLoss=metadataLoss, MetadataSources=metadataSources, OpaqueMetadata=opaqueMetadata, Annotations=annotations, SupplementalGeometry=supplementalGeometry,
             AnnotationSnapshotSha256=sourceSha256, AnnotationSnapshotByteLength=sourceByteLength,
