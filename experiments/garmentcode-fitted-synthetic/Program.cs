@@ -143,7 +143,29 @@ internal static class Validator
             VerifySeams(id,item.GetProperty("stitches"));
             var generated=PartialFittedEngine.Create(id);
             Need(generated.Status=="unresolved" && !generated.ProductionAllowed && !generated.ExportAllowed,"partial output gate");
+            var frontPath=FrontSkirtCandidate.Create(id);
+            Need(frontPath.Edges.Count==13 && frontPath.Status=="unresolved" && !frontPath.ProductionAllowed && !frontPath.ExportAllowed,"front path gate");
             var panels=item.GetProperty("panels");
+            var frontReference=panels.GetProperty("skirt_front").GetProperty("edges");
+            int different=0;
+            foreach(var candidateEdge in frontPath.Edges)
+            {
+                var reference=frontReference[candidateEdge.Id];
+                var refStart=Point(reference.GetProperty("start")); var refEnd=Point(reference.GetProperty("end"));
+                double err=Math.Max((refStart-new P(candidateEdge.Start.X,candidateEdge.Start.Y)).Length(),(refEnd-new P(candidateEdge.End.X,candidateEdge.End.Y)).Length());
+                if(err>1e-5) { different++; Need(candidateEdge.Id is 6 or 7 && err<0.12,"unexpected front candidate mismatch"); }
+                if(candidateEdge.Kind=="Q")
+                {
+                    Need(reference.GetProperty("kind").GetString()=="CurveEdge" && candidateEdge.Control is not null,"curve role");
+                    var ctl=Point(reference.GetProperty("relative_controls")[0]); var cand=candidateEdge.Control ?? throw new InvalidDataException("missing candidate control");
+                    Need((ctl-new P(cand.X,cand.Y)).Length()<0.0002,"candidate curve control mismatch");
+                }
+                else Need(reference.GetProperty("kind").GetString()=="Edge","line role");
+            }
+            Need(different==2,"expected unresolved interface split discrepancy");
+            var frontGraph=frontPath.Edges.Select(e=>new GeneratedGraph.Edge(id,"skirt_front",e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+            var frontVerdict=GeneratedGraph.Inspect(id,frontGraph,[],[]);
+            Need(frontVerdict.Issues.Contains("incomplete-graph") && frontVerdict.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !frontVerdict.ExportAllowed,"front path remains unresolved");
             foreach(var segment in generated.Segments)
             {
                 var actual=panels.GetProperty(segment.Panel).GetProperty("edges")[segment.Edge];
@@ -194,6 +216,8 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
 
 
 
