@@ -38,6 +38,7 @@ enum DesignRequestShareClose {
         if let cleanup, cleanup != acknowledged { return .reviewCleanup(cleanup) }
         return .proceed
     }
+    static func cancelClose(acknowledged: inout UUID?) { acknowledged = nil }
 }
 enum DesignRequestShareOutcome: Equatable {
     case completed, cancelled, failed

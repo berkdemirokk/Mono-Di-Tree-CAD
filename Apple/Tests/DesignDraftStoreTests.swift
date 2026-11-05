@@ -295,6 +295,13 @@ final class DesignDraftStoreTests: XCTestCase {
         try DesignRequestShareFile.remove(file, id: first, base: base)
         XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: nil, acknowledged: nil), .proceed)
         XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: first), .proceed)
+        var permission: UUID? = first
+        // Leaving the second (unsaved-draft) confirmation cancels the entire close.
+        DesignRequestShareClose.cancelClose(acknowledged: &permission)
+        XCTAssertNil(permission)
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: permission), .reviewCleanup(first))
+        permission = first // The user explicitly chooses to leave the copy again.
+        XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: first, acknowledged: permission), .proceed)
         XCTAssertEqual(DesignRequestShareClose.decide(work: nil, cleanup: second, acknowledged: first), .reviewCleanup(second))
         XCTAssertEqual(try Data(contentsOf: other), data)
         try DesignRequestShareFile.remove(other, id: second, base: base)

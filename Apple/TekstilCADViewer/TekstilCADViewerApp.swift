@@ -2943,14 +2943,25 @@ private struct ExperimentalDesignBriefView: View {
         }
         #endif
         guard !aLineInputPending else {
+            #if os(iOS)
+            DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+            #endif
             message = "A kesim rehberinde notlara eklenmemiş girişler var. Rehberi tamamlayın veya girişleri açıkça temizleyin."
             step = 1; return
         }
         guard !referenceBlocksClose else {
+            #if os(iOS)
+            DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+            #endif
             message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
             return
         }
-        guard !draftTransition else { return }
+        guard !draftTransition else {
+            #if os(iOS)
+            DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+            #endif
+            return
+        }
         guard draftStorageReady else { confirmClose = true; return }
         draftTransition = true; saveRequest = UUID()
         let marker = saveRequest.uuidString; ownedPending.insert(marker)
@@ -2965,11 +2976,17 @@ private struct ExperimentalDesignBriefView: View {
             case .success:
                 DraftPendingLedger.complete(coveredMarkers); ownedPending.subtract(coveredMarkers); markerError = false
                 guard ExperimentalDesignBrief.canFinishDraftClose(saved: closingDraft, current: draft, referencePending: referenceBlocksClose) else {
+                    #if os(iOS)
+                    DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+                    #endif
                     localStatus = "Kayıt sırasında taslak veya görsel seçimi değişti; ekran açık. Son içeriği kontrol edip yeniden kapatın."
                     return
                 }
                 dismiss()
             case .failure(let error):
+                #if os(iOS)
+                DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+                #endif
                 DraftPendingLedger.abandon(coveredMarkers)
                 if error is ExperimentalDesignBrief.DraftStore.Conflict { draftStorageReady = false }
                 draftRetryAvailable = draftStorageReady
@@ -3720,18 +3737,31 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     #endif
                     guard !aLineInputPending else {
+                        #if os(iOS)
+                        DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+                        #endif
                         message = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; step = 1
                         return
                     }
                     guard !referenceBlocksClose else {
+                        #if os(iOS)
+                        DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+                        #endif
                         message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
                         return
                     }
                     dismiss()
                 }
-                Button("Düzenlemeye devam et", role: .cancel) { }
+                Button("Düzenlemeye devam et", role: .cancel) {
+                    #if os(iOS)
+                    DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID)
+                    #endif
+                }
             } message: { Text("Ekrandaki kaydedilmemiş değişiklikler kaybolabilir. Varsa cihazdaki önceki taslak korunur.") }
             #if os(iOS)
+            .onChange(of: confirmClose) { shown in
+                if !shown { DesignRequestShareClose.cancelClose(acknowledged: &acknowledgedShareCopyID) }
+            }
             .confirmationDialog("Geçici paylaşım kopyası duruyor", isPresented: $confirmCloseWithShareCopy, titleVisibility: .visible) {
                 Button("Temizlemeyi yeniden dene") {
                     guard closeShareCopyID == shareCleanupItem?.id else { closeShareCopyID = nil; message = "Geçici kopya değişti; yeniden kontrol edin."; return }
