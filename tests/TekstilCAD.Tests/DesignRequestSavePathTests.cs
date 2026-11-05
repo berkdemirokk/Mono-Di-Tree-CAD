@@ -33,7 +33,8 @@ public class DesignRequestSavePathTests
         try
         {
             File.WriteAllText(target,"existing sentinel");
-            Assert.Throws<ProjectConflictException>(()=>DesignRequestStorage.SaveNewV2(target,new("","",null,"aline",2)));
+            Assert.Throws<ProjectConflictException>(()=>DesignRequestStorage.SaveNewV2(target,new("","",null,"aline",2),
+                _=>throw new InvalidOperationException("This synthetic fixture contains no image; image validation must not be requested.")));
             Assert.Equal("existing sentinel",File.ReadAllText(target));Assert.False(File.Exists(input));
         }
         finally { if(File.Exists(target))File.Delete(target); }
