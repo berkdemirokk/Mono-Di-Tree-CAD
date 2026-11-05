@@ -84,7 +84,11 @@ final class DesignDraftStoreTests: XCTestCase {
             let converted = try HEICPhotoConversion.convert(encoded as Data)
             let resultSource = try XCTUnwrap(CGImageSourceCreateWithData(converted as CFData, nil))
             let result = try XCTUnwrap(CGImageSourceCreateImageAtIndex(resultSource, 0, nil))
-            let size = CGSize(width: CGFloat(result.width), height: CGFloat(result.height))
+            let expectedWidth = index < 4 ? 64 : 32
+            let expectedHeight = index < 4 ? 32 : 64
+            XCTAssertEqual(result.width, expectedWidth, "Orientation \(index + 1) width")
+            XCTAssertEqual(result.height, expectedHeight, "Orientation \(index + 1) height")
+            let size = CGSize(width: CGFloat(expectedWidth), height: CGFloat(expectedHeight))
             let reference = UIImage(cgImage: sourceImage, scale: 1, orientation: orientation)
             let expected = try samples(reference, size: size), actual = try samples(UIImage(cgImage: result), size: size)
             for (a, b) in zip(expected.flatMap({ $0 }), actual.flatMap({ $0 })) {
