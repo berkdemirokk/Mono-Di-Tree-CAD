@@ -20,6 +20,20 @@ public static partial class DressMeasurementParser
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Narrow clarification grammar: no "olsun", qualifier, negation or joined group.
     private static readonly Regex Clarification=new(@"\A\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:(?<question>\?)|[.!])?\s*\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex ModelMeasurement=new(@"\A(?<model>.+? (?:istiyorum|olsun)) (?<measurement>.+)\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    // Returns an offset into the original segment; never rewrites stored input.
+    internal static bool TrySplitModelMeasurement(string segment,out int measurementOffset)
+    {
+        measurementOffset=0;
+        var match=ModelMeasurement.Match(FoldCase(segment));
+        if(!match.Success)return false;
+        var offset=match.Groups["measurement"].Index;
+        var measurement=Exact.Match(FoldCase(segment[offset..]));
+        if(!measurement.Success || !decimal.TryParse(measurement.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var value))return false;
+        if(measurement.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))value*=10m;
+        if(value<=0 || value>10_000m || ChatModelChoice.Review(segment[..match.Groups["model"].Length]).ModelId is null)return false;
+        measurementOffset=offset;return true;
+    }
     private sealed record ClauseEvidence(int Field,int Offset,int Order,decimal? Value,bool Question);
     // These distinct experimental measurements mention "göğüs" but are not
     // chest circumference. Only an entire, explicit field is excluded from
@@ -72,10 +86,12 @@ public static partial class DressMeasurementParser
             var segment=text[start..end].Trim();start=separator.Success ? separator.Index+separator.Length : text.Length;
             if(segment.Length==0)continue;
             order++;
-            var search=FoldCase(segment);
+            var combined=TrySplitModelMeasurement(segment,out var measurementOffset);
+            var measurementSegment=combined ? segment[measurementOffset..] : segment;
+            var search=FoldCase(measurementSegment);
             if(OtherChestMeasurement.IsMatch(search)) { other.Add(segment);continue; }
             var clarification=Clarification.Match(search);decimal? explicitValue=null;
-            if(clarification.Success&&decimal.TryParse(clarification.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var number))
+            if(!combined&&clarification.Success&&decimal.TryParse(clarification.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var number))
             {
                 if(clarification.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))number*=10m;
                 if(number>0&&number<=10_000m)explicitValue=number;
@@ -92,8 +108,8 @@ public static partial class DressMeasurementParser
             // original segment remains unrecognized and all its labels are unclear.
             var parts=new List<string>();var partStart=0;
             foreach(Match conjunction in Conjunction.Matches(search))
-            { parts.Add(segment[partStart..conjunction.Index].Trim());partStart=conjunction.Index+conjunction.Length; }
-            parts.Add(segment[partStart..].Trim());
+            { parts.Add(measurementSegment[partStart..conjunction.Index].Trim());partStart=conjunction.Index+conjunction.Length; }
+            parts.Add(measurementSegment[partStart..].Trim());
             var parsed=new List<(string Key,decimal Value,string Source)>();
             foreach(var part in parts)
             {
@@ -103,7 +119,7 @@ public static partial class DressMeasurementParser
                 var key=Canonical(match.Groups["label"].Value);
                 if(match.Groups["unit"].Value.Equals("cm",StringComparison.OrdinalIgnoreCase))value*=10m;
                 if(value<=0 || value>10_000m)break;
-                parsed.Add((key,value,part));
+                parsed.Add((key,value,combined ? segment : part));
             }
             if(parsed.Count!=parts.Count || parsed.GroupBy(p=>p.Key).Any(g=>g.Any(p=>p.Value!=g.First().Value)))
             {

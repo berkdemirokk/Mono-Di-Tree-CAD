@@ -43,6 +43,8 @@ public static class ChatModelChoice
         {
             if(!clear)break;
             if(Regex.IsMatch(clause,pattern,RegexOptions.None,TimeSpan.FromMilliseconds(100))) { modelClauses++;continue; }
+            if(DressMeasurementParser.TrySplitModelMeasurement(clause,out var offset))
+            { modelClauses++;measurementClauses.Add(clause[offset..]);continue; }
             var combined=Regex.Match(clause,combinedPattern,RegexOptions.None,TimeSpan.FromMilliseconds(100));
             var detail=Regex.Replace(combined.Success?combined.Groups["detail"].Value:clause,@"(?: olsun| istiyorum)?[.!]?\z","",RegexOptions.None,TimeSpan.FromMilliseconds(100));
             var category=detail switch {

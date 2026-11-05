@@ -30,6 +30,16 @@ internal static partial class DesktopVerification
             Check(accepted.Version==2 && accepted.ModelId=="aline" && accepted.Prompt.StartsWith("Önceki serbest tarif",StringComparison.Ordinal) && accepted.Prompt.EndsWith(message,StringComparison.Ordinal) && accepted.Measurements==initial.Measurements,
                 "Explicit V1 approval selects A-line in V2 while retaining prior prose and exact new message",checks);
             Check(window.CanPreviewALineForVerification,"Chat selection reaches the existing A-line preview eligibility",checks);
+            window.LoadForVerification(new DesignRequest("Önceki not","bel çevresi 90 cm",null));
+            const string combinedMessage="A kesim elbise istiyorum bel çevresi 72 cm";
+            window.ConfirmChatModelForVerification=_=>false;window.ChatInputForVerification.Text=combinedMessage;window.SendMessageForVerification();
+            Check(window.CaptureForVerification().ModelId is null && window.CaptureForVerification().Prompt.EndsWith(combinedMessage,StringComparison.Ordinal) && window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin",
+                "Combined message preserves declined model and conflicting prior measurement",checks);
+            window.LoadForVerification(new DesignRequest("Önceki not","",null));
+            window.ConfirmChatModelForVerification=_=>true;window.ChatInputForVerification.Text=combinedMessage;window.SendMessageForVerification();
+            Check(window.CaptureForVerification().ModelId=="aline" && window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm" && window.CaptureForVerification().Prompt.EndsWith(combinedMessage,StringComparison.Ordinal),
+                "Confirmed combined message selects model and displays explicit measurement without rewriting",checks);
+            window.LoadForVerification(accepted);
             Check(DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(accepted))==accepted,"V2 serialization roundtrip retains confirmed identity and prose",checks);
             var root=(FrameworkElement)window.Content;root.Measure(new Size(900,700));root.Arrange(new Rect(0,0,900,700));root.UpdateLayout();
             Check(Descendants<Button>(root).Any(b=>AutomationProperties.GetName(b)=="A kesim elbise" && AutomationProperties.GetItemStatus(b)=="Seçili"),"Confirmed chat choice highlights the matching existing model card",checks);
