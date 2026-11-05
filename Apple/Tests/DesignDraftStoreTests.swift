@@ -762,7 +762,13 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(original.description, description)
             XCTAssertEqual(original.otherMeasurements, "bel çevresi 72 cm")
         }
-        for description in ["İpek olmasın", "Keten değil, pamuklu olsun", "Bu kumaş olmasın", "Bu kumaşları kullanmayın", "Değerli kumaş", "Bu model olmasın", "Hepsiburada desenli kumaş"] {
+        for description in ["Belim 90 cm", "BELİM 90 cm", "Kalçam 100 cm", "Göğsüm 92 cm", "Beliniz 90 cm"] {
+            let original = draft(description)
+            XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(original), description)
+            XCTAssertEqual(original.description, description)
+            XCTAssertEqual(original.otherMeasurements, "bel çevresi 72 cm")
+        }
+        for description in ["İpek olmasın", "Keten değil, pamuklu olsun", "Bu kumaş olmasın", "Bu kumaşları kullanmayın", "Değerli kumaş", "Bu model olmasın", "Hepsiburada desenli kumaş", "Belirgin dikiş", "Belimsi desen", "Kalçamsı desen"] {
             XCTAssertEqual(try ExperimentalDesignBrief.measurementMessageProposal(draft(description)).values["bel çevresi"], "72 cm", description)
         }
         XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("ELBİSE BOYU 120 cm", notes: "elbise boyu 110 cm")))
@@ -774,6 +780,7 @@ final class DesignDraftStoreTests: XCTestCase {
             explicitSelection: false, importedPortable: false, version: 1, revision: revision)
         XCTAssertTrue(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 1, revision: revision))
         XCTAssertFalse(snapshot.matches(draft("bel çevresi 90 cm"), explicitSelection: false, importedPortable: false, version: 1, revision: revision))
+        XCTAssertFalse(snapshot.matches(draft("Belim 90 cm"), explicitSelection: false, importedPortable: false, version: 1, revision: revision))
         XCTAssertFalse(snapshot.matches(normal, explicitSelection: true, importedPortable: false, version: 1, revision: revision))
         XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 2, revision: revision))
         XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 1, revision: UUID()))
