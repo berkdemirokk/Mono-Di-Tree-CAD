@@ -3305,7 +3305,7 @@ private struct ExperimentalDesignBriefView: View {
                             pendingReferenceChange = .init(original: currentReference, replacement: nil); confirmReferenceChange = true
                         }.disabled(referenceLoading)
                     }
-                    Text("Seçilen görsel özgün baytlarıyla, içerebileceği konum ve diğer bilgiler dahil dosyaya eklenir. PNG veya JPEG, en fazla 8 MiB.").font(.caption)
+                    Text("Seçicinin sunduğu JPEG/PNG dosyası değiştirilmeden, içerebileceği konum ve diğer bilgiler dahil isteğe eklenir. En fazla 8 MiB.").font(.caption)
                 }
                 }
                 if step == 3 {
