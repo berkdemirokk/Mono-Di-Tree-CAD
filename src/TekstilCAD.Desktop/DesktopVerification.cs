@@ -9734,6 +9734,22 @@ internal static partial class DesktopVerification
                 Check(boxEdgeRegion.TrySelectContour() && boxEdgeRegion.SelectedContour is { Length:>=3 },"Reviewed search-edge contour can be previewed",checks);
             }
             finally { boxEdgeRegion.Close(); }
+            var nearBoxRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
+            try
+            {
+                nearBoxRegion.left.Text="30";nearBoxRegion.top.Text="30";nearBoxRegion.width.Text="20";nearBoxRegion.height.Text="20";
+                for(var distance=1;distance<=3;distance++)
+                {
+                    var mask=new byte[96*72];for(var y=35;y<39;y++)for(var x=30+distance;x<34+distance;x++)mask[y*96+x]=1;
+                    typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(nearBoxRegion,[PhotoRegionSharpPrototype.MaskComponents.Analyze(mask,96,72)]);
+                    nearBoxRegion.Regions.SelectedIndex=0;
+                    Check((nearBoxRegion.BoundaryWarning.Visibility==Visibility.Visible)==(distance<=2) &&
+                        (distance>2 || nearBoxRegion.BoundaryWarning.Text.Contains($"{distance} önizleme pikseli")) &&
+                        nearBoxRegion.AcknowledgeImageEdge.Visibility==Visibility.Collapsed && nearBoxRegion.TrySelectContour(),
+                        $"Near search boundary at {distance} pixels is advisory and preserves contour preview",checks);
+                }
+            }
+            finally { nearBoxRegion.Close(); }
             var reviewEdgeRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
             try
             {

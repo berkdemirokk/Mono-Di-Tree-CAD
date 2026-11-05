@@ -521,10 +521,10 @@ internal sealed class PhotoRegionWindow : Window
     {
         SelectedContour=null;overlay.Source=null;OmitHoles.IsChecked=false;AcknowledgeImageEdge.IsChecked=false;AcknowledgeImageEdge.Visibility=Visibility.Collapsed;BoundaryWarning.Visibility=Visibility.Collapsed;BoundaryWarning.Text="";
         if(components is null || Regions.SelectedItem is not Choice choice)return;
-        var touchesImageEdge=TouchesImageEdge(choice);var touchesSearchEdge=TouchesSearchRectangle(choice);
+        var touchesImageEdge=TouchesImageEdge(choice);var distanceToSearchEdge=SearchEdgeDistance(choice);var touchesSearchEdge=distanceToSearchEdge==0;var nearSearchEdge=distanceToSearchEdge is 1 or 2;
         if(touchesImageEdge || touchesSearchEdge) { AcknowledgeImageEdge.Content=touchesImageEdge && touchesSearchEdge ? "Görüntü ve arama sınırında kırpılma olasılığını inceledim" : touchesImageEdge ? "Görüntü kenarındaki sınırın kırpılmış olabileceğini inceledim" : "Arama dikdörtgenindeki sınırın kırpılmış olabileceğini inceledim";AcknowledgeImageEdge.Visibility=Visibility.Visible; }
-        BoundaryWarning.Text=(touchesImageEdge ? "Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir. " : "")+(touchesSearchEdge ? "Bölge arama dikdörtgenine değiyor; sınır dışında kalmış olabilir." : "");
-        BoundaryWarning.Visibility=touchesImageEdge || touchesSearchEdge ? Visibility.Visible : Visibility.Collapsed;
+        BoundaryWarning.Text=(touchesImageEdge ? "Bölge görüntü kenarına değiyor; gerçek sınır kırpılmış olabilir. " : "")+(touchesSearchEdge ? "Bölge arama dikdörtgenine değiyor; sınır dışında kalmış olabilir." : nearSearchEdge ? $"Bölge arama dikdörtgeninin {distanceToSearchEdge} önizleme pikseli yakınında; sınırın devamını kontrol edin. Bu bir doğruluk ölçümü değildir." : "");
+        BoundaryWarning.Visibility=touchesImageEdge || touchesSearchEdge || nearSearchEdge ? Visibility.Visible : Visibility.Collapsed;
         var selected=components.CopySelection([choice.Id]);var pixels=new byte[checked(selected.Length*4)];
         for(var i=0;i<selected.Length;i++)if(selected[i]!=0) { var p=i*4;pixels[p]=210;pixels[p+1]=190;pixels[p+2]=0;pixels[p+3]=100; }
         var mask=BitmapSource.Create(image.PixelWidth,image.PixelHeight,image.DpiX,image.DpiY,PixelFormats.Bgra32,null,pixels,image.PixelWidth*4);mask.Freeze();overlay.Source=mask;
@@ -561,17 +561,23 @@ internal sealed class PhotoRegionWindow : Window
         var pixels=new byte[checked(bitmap.PixelWidth*bitmap.PixelHeight*4)];bitmap.CopyPixels(pixels,bitmap.PixelWidth*4,0);return pixels;
     }
     private bool TouchesImageEdge(Choice choice)=>choice.Left==0 || choice.Top==0 || choice.Right==image.PixelWidth-1 || choice.Bottom==image.PixelHeight-1;
-    private bool TouchesSearchRectangle(Choice choice)
+    // Only the first three inner pixel rings are needed for the advisory and
+    // exact-contact check. Pixels outside the rectangle are not treated as an
+    // interior distance, because correction marks can extend the mask outward.
+    private int? SearchEdgeDistance(Choice choice)
     {
         if(components is null || !int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) ||
            !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
            !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) ||
            !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h) ||
-           x<0 || y<0 || w<1 || h<1 || (long)x+w>image.PixelWidth || (long)y+h>image.PixelHeight)return false;
-        var right=x+w-1;var bottom=y+h-1;
-        for(var px=x;px<=right;px++)if(components.ComponentAt(px,y)==choice.Id || components.ComponentAt(px,bottom)==choice.Id)return true;
-        for(var py=y+1;py<bottom;py++)if(components.ComponentAt(x,py)==choice.Id || components.ComponentAt(right,py)==choice.Id)return true;
-        return false;
+           x<0 || y<0 || w<1 || h<1 || (long)x+w>image.PixelWidth || (long)y+h>image.PixelHeight)return null;
+        for(var d=0;d<=2 && 2*d<w && 2*d<h;d++)
+        {
+            var x0=x+d;var x1=x+w-1-d;var y0=y+d;var y1=y+h-1-d;
+            for(var px=x0;px<=x1;px++)if(components.ComponentAt(px,y0)==choice.Id || components.ComponentAt(px,y1)==choice.Id)return d;
+            for(var py=y0+1;py<y1;py++)if(components.ComponentAt(x0,py)==choice.Id || components.ComponentAt(x1,py)==choice.Id)return d;
+        }
+        return null;
     }
     internal bool TrySelectContour()
     {
@@ -579,7 +585,7 @@ internal sealed class PhotoRegionWindow : Window
         if(running is not null || components is null || Regions.SelectedItem is not Choice choice) { Status.Text="Önce arama tamamlanınca bir bölge seçin.";return false; }
         try
         {
-            if((TouchesImageEdge(choice) || TouchesSearchRectangle(choice)) && AcknowledgeImageEdge.IsChecked!=true) { Status.Text="Bölge görüntü veya arama dikdörtgeni sınırına değiyor; gerçek sınır kırpılmış olabilir. İnceledikten sonra seçimi onaylayın.";return false; }
+            if((TouchesImageEdge(choice) || SearchEdgeDistance(choice)==0) && AcknowledgeImageEdge.IsChecked!=true) { Status.Text="Bölge görüntü veya arama dikdörtgeni sınırına değiyor; gerçek sınır kırpılmış olabilir. İnceledikten sonra seçimi onaylayın.";return false; }
             var contours=MaskContours.Extract(components.CopySelection([choice.Id]),image.PixelWidth,image.PixelHeight);
             var outer=contours.Loops.Where(l=>!l.IsHole).ToArray();var holes=contours.Loops.Count(l=>l.IsHole);
             if(outer.Length!=1) { Status.Text="Seçilen bölgenin birden fazla dış sınırı var; otomatik seçim yapılmadı.";return false; }
