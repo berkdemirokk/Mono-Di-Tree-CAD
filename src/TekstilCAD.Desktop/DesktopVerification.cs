@@ -15036,6 +15036,13 @@ internal static partial class DesktopVerification
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("İki yol aynı parçadan seçildi") && result.Text.Contains("2. yol: 10 mm") && AutomationProperties.GetName(result).Contains("İki yol aynı parçadan seçildi"),
                 "Seam comparison warns when both paths come from the same piece",checks);
+            end.SelectedIndex=1;direction.SelectedIndex=0;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Aynı yol iki kez seçildi") && AutomationProperties.GetName(result).Contains("Aynı yol iki kez seçildi"),
+                "Seam comparison identifies the same selected path",checks);
+            Control<ComboBox>(second,"Start").SelectedIndex=1;Control<ComboBox>(second,"End").SelectedIndex=0;otherDirection.SelectedIndex=1;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("Aynı yol iki kez seçildi"),"Reversing a path still identifies the same seam",checks);
             Control<ComboBox>(second,"Piece").SelectedIndex=1;
             Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));

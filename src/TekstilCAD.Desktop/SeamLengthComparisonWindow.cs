@@ -123,11 +123,29 @@ internal sealed class SeamLengthComparisonWindow : Window
             var assessment=ContourMeasurement.AssessEase(value,target,allowed);
             first.Preview.Set(a);second.Preview.Set(b);
             var samePiece=((PieceChoice)first.Piece.SelectedItem).Piece.Id==((PieceChoice)second.Piece.SelectedItem).Piece.Id;
-            var samePieceNotice=samePiece ? "İki yol aynı parçadan seçildi; parça ve kenarları kontrol edin.\n" : "";
+            var samePieceNotice=samePiece ? (SameUndirectedPath(a,b) ? "Aynı yol iki kez seçildi; bu sonuç iki ayrı dikiş kenarını doğrulamaz.\n" : "İki yol aynı parçadan seçildi; parça ve kenarları kontrol edin.\n") : "";
             SetResult($"{samePieceNotice}1. yol: {MeasurementInput.Format(value.FirstLength)} mm\n2. yol: {MeasurementInput.Format(value.SecondLength)} mm\nİşaretli fark (2 − 1): {MeasurementInput.Format(value.SignedDifference)} mm\nMutlak fark: {MeasurementInput.Format(value.AbsoluteDifference)} mm\nHedeften sapma: {MeasurementInput.Format(assessment.Deviation)} mm\nTolerans: {(assessment.WithinTolerance ? "içinde" : "dışında")} (±{MeasurementInput.Format(allowed)} mm)\nYol uzunlukları ve gösterilen sapma yaklaşık sayısal değerlerdir. Tolerans kararı, gösterilen sapmanın yuvarlanmasından önce bilgisayarda temsil edilen iki yol uzunluğu, hedef ve tolerans değerleriyle verilir; sınırda değerler aynı görünse de sonuç tolerans dışında olabilir. Geometrik karşılaştırmadır; fiziksel ölçüm veya üretim kabulü değildir.");
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException)
         { RefreshPreview(first);RefreshPreview(second);SetResult("Karşılaştırma yapılamadı: "+ex.Message); }
+    }
+    private static bool SameUndirectedPath(ContourPath first,ContourPath second)
+    {
+        static int[] Indices(ContourPath path)
+        {
+            int count=path.Points.Count;
+            if(path.Closed && count>1 && path.Points[0]==path.Points[count-1])count--;
+            int start=path.StartIndex==count?0:path.StartIndex,end=path.EndIndex==count?0:path.EndIndex;
+            var result=new List<int> { start };
+            if(start==end && !path.FullLoop)return result.ToArray();
+            int step=path.Closed ? path.Direction==ContourDirection.Forward ? 1 : -1 : end>start ? 1 : -1;
+            int current=start;
+            do { current=path.Closed ? (current+step+count)%count : current+step;result.Add(current); } while(current!=end);
+            return result.ToArray();
+        }
+        if(first.FullLoop && second.FullLoop)return true;
+        var a=Indices(first);var b=Indices(second);
+        return a.SequenceEqual(b) || a.SequenceEqual(b.Reverse());
     }
     private void SetResult(string text)
     {
