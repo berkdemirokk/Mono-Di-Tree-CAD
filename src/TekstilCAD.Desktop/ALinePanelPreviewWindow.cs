@@ -2,13 +2,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.IO;
+using Microsoft.Win32;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 using TekstilCAD.Patterns;
 
 namespace TekstilCAD.Desktop;
 
-/// <summary>Isolated snapshot. No CAD document, persistence, printer, or export reference.</summary>
+/// <summary>Isolated snapshot with explicit unconfirmed form-draft persistence; no CAD or production output.</summary>
 internal sealed class ALinePanelPreviewWindow : Window
 {
     internal ComboBox UnitForVerification { get; }
@@ -24,6 +26,10 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal CheckBox ProposalAgreementForVerification { get; }
     internal Button ProposalApplyForVerification { get; }
     internal TextBlock ProposalForVerification { get; }
+    private Action<string> saveWork = null!;
+    private Func<string,Func<bool>,bool> loadWork = null!;
+    internal void SaveWorkForVerification(string path)=>saveWork(path);
+    internal bool LoadWorkForVerification(string path,Func<bool> confirm)=>loadWork(path,confirm);
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
@@ -39,7 +45,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         }
         catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { KnownTotalsForVerification.Text="İstek ölçüleri zaman aşımı nedeniyle okunamadı; hiçbir alan doldurulmadı."; }
         body.Children.Add(KnownTotalsForVerification);
-        body.Children.Add(new TextBlock { Text="Tam elbise kalıbı değildir. Sağ/sol simetri varsayılır: ön ve arka yaylar ikiye bölünür; sağ/sol asimetri desteklenmez. Ön/arka yayları BEDEN üzerinde, amaçlanan yan dikiş konumları arasında ayrı ölçün; bu yaylara bolluk dahil etmeyin. Bollukları ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür; bolluk dahildir. Elbise boyu yerine BELDEN etek boyunu girin. Pencere kapanınca girdiler saklanmaz.",TextWrapping=TextWrapping.Wrap });
+        body.Children.Add(new TextBlock { Text="Tam elbise kalıbı değildir. Sağ/sol simetri varsayılır: ön ve arka yaylar ikiye bölünür; sağ/sol asimetri desteklenmez. Ön/arka yayları BEDEN üzerinde, amaçlanan yan dikiş konumları arasında ayrı ölçün; bu yaylara bolluk dahil etmeyin. Bollukları ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür; bolluk dahildir. Elbise boyu yerine BELDEN etek boyunu girin. Otomatik kayıt yoktur; pencere kapanınca yalnız açıkça dosyaya kaydettiğiniz çalışma geri açılabilir.",TextWrapping=TextWrapping.Wrap });
         var unit=new ComboBox { ItemsSource=new[]{"cm — santimetre","mm — milimetre"},SelectedIndex=-1,Margin=new Thickness(0,4,0,8) };
         body.Children.Add(new Label { Content="Tüm alanlar için birim seçin (zorunlu)",Target=unit });body.Children.Add(unit);
         string[] labels=["Ön bel yayı","Arka bel yayı","Ön kalça yayı","Arka kalça yayı","Ön bel yayı bolluğu","Arka bel yayı bolluğu","Ön kalça yayı bolluğu","Arka kalça yayı bolluğu","Belden kalçaya düşüklük","Belden etek boyu","Bitmiş etek çevresi (bolluk dahil)"];
@@ -131,11 +137,16 @@ internal sealed class ALinePanelPreviewWindow : Window
             for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && Math.Abs(current[i]-(double)value)>0.000001)
                 throw new ArgumentException(ALineRequestMeasurements.Labels[i]+": form değeri açık istek ölçüsüyle çelişiyor; önce kaynağı düzeltin.");
         }
-        void Clear() { reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
+        long editVersion=0;bool closed=false;
+        Closed+=(_,_)=>closed=true;
+        void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal(); };
         unit.SelectionChanged+=(_,_)=> { Clear();RefreshProposal(); };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();
-        confirm.Unchecked+=(_,_)=> { canvas.Children.Clear();blockers.Text=""; };
+        confirm.Unchecked+=(_,_)=> { editVersion++;canvas.Children.Clear();blockers.Text=""; };
+        confirm.Checked+=(_,_)=>editVersion++;
+        proposalAgreement.Checked+=(_,_)=>editVersion++;
+        proposalAgreement.Unchecked+=(_,_)=>editVersion++;
         RefreshProposal();
         reviewButton.Click+=(_,_)=>
         {
@@ -154,6 +165,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         };
         button.Click+=(_,_)=>
         {
+            editVersion++;
             canvas.Children.Clear();blockers.Text="";
             try
             {
@@ -183,6 +195,52 @@ internal sealed class ALinePanelPreviewWindow : Window
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { status.Text=ex.Message; }
+        };
+        ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray());
+        saveWork=path=>ALineWorkDraftStorage.SaveNew(path,CaptureWork());
+        loadWork=(path,approve)=>
+        {
+            // Parse and validate everything before asking to replace the form.
+            // A changed form during the modal confirmation must not be overwritten.
+            var draft=ALineWorkDraftStorage.Load(path);var before=CaptureWork();var version=editVersion;
+            if(!approve())return false;
+            var current=CaptureWork();
+            if(closed || version!=editVersion || current.Unit!=before.Unit || !current.Fields.SequenceEqual(before.Fields))
+                throw new InvalidOperationException("Form onay sırasında değişti; dosya uygulanmadı. Güncel çalışmayı koruyarak yeniden açın.");
+            Clear();agreement.IsChecked=false;
+            unit.SelectedIndex=draft.Unit switch { "cm"=>0,"mm"=>1,_=>-1 };
+            for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i];
+            Clear();RefreshProposal();
+            status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı.";
+            return true;
+        };
+        var draftTools=new WrapPanel { Margin=new Thickness(0,0,0,6) };
+        var saveDraft=new Button { Content="Ölçü çalışmasını kaydet…",Padding=new Thickness(8),Margin=new Thickness(0,0,8,0) };
+        var openDraft=new Button { Content="Ölçü çalışmasını aç…",Padding=new Thickness(8) };
+        draftTools.Children.Add(saveDraft);draftTools.Children.Add(openDraft);body.Children.Insert(0,draftTools);
+        body.Children.Insert(1,new TextBlock { Text="Çalışma dosyası 11 alanı ve birimi açık metin olarak içerir; kişisel ölçüler şifrelenmez. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        saveDraft.Click+=(_,_)=>
+        {
+            try
+            {
+                var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,
+                    FileName="A kesim çalışma"+ALineWorkDraftStorage.Extension,DefaultExt=ALineWorkDraftStorage.Extension,AddExtension=true,OverwritePrompt=false };
+                if(dialog.ShowDialog(this)!=true)return;
+                saveWork(dialog.FileName);status.Text="Ölçü çalışması yeni dosyaya kaydedildi. Ölçüler ve model varsayımları onaylanmadı; çıktı kapalı.";
+            }
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+            { status.Text="Çalışma kaydedilemedi; form korundu. Yeni bir dosya adı kullanın. "+ex.Message; }
+        };
+        openDraft.Click+=(_,_)=>
+        {
+            try
+            {
+                var dialog=new OpenFileDialog { Title="A kesim ölçü çalışmasını aç",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,CheckFileExists=true,Multiselect=false };
+                if(dialog.ShowDialog(this)!=true)return;
+                loadWork(dialog.FileName,()=>MessageBox.Show(this,"Dosyadaki 11 alan ve birim bu formun mevcut değerlerinin yerini alacak. Kaydetmediğiniz alanlar kaybolabilir. Ana istek değişmeyecek; simetri ve ölçü onayları sıfırlanacak. Devam edilsin mi?","Çalışma alanlarını değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            }
+            catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
+            { status.Text="Çalışma açılamadı; mevcut form korundu. "+ex.Message; }
         };
     }
 }

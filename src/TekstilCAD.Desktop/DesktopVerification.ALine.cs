@@ -212,6 +212,7 @@ internal static partial class DesktopVerification
                 "Manual ambiguous number cannot bypass source proposal rejection or enable drawing",checks);
             window.FieldsForVerification[4].Text="0";ReviewAndDraw(window);
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
+            VerifyALineWorkDraft(owner,reportPath,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
         finally { request?.Close();conflict?.Close();window?.Close();owner.Close(); }
