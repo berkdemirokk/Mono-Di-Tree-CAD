@@ -14,6 +14,7 @@ internal sealed class RequestNotesWindow : Window
     internal TextBox DescriptionForVerification { get; }
     internal TextBox MeasurementsForVerification { get; }
     internal TextBox ReferenceForVerification { get; }
+    internal TextBox ModelForVerification { get; }
     internal Button PhotoButtonForVerification { get; }
     internal Button TraceButtonForVerification { get; }
     internal TextBlock TraceStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,6) };
@@ -52,6 +53,19 @@ internal sealed class RequestNotesWindow : Window
         DockPanel.SetDock(TraceStatusForVerification,Dock.Top);root.Children.Add(TraceStatusForVerification);
         var notice=new TextBlock { Text="Açılış anındaki istek notlarıdır; otomatik güncellenmez. Çizim elle yapılır; kalıp oluşturulmadı ve ölçüler doğrulanmadı.",TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Muted,Margin=new Thickness(0,0,0,8) };
         DockPanel.SetDock(notice,Dock.Top);root.Children.Add(notice);
+        // V2 identity is separate from the unchanged prose: do not infer it
+        // from an old V1 template or silently reconcile contradictory prose.
+        var modelLabel=request.Version==2 ? request.ModelId switch {
+            "wrap"=>"Anvelop elbise", "aline"=>"A kesim elbise", "corset"=>"Balenli korpus",
+            "sheath"=>"Minimal kılıf elbise", "straight"=>"Düz elbise", "shirt"=>"Gömlek elbise", _=>null
+        } : null;
+        ModelForVerification=ReadOnly("Kaydedilmiş model kimliği",modelLabel is null
+            ? $"Ayrı model kimliği kayıtlı değil (V{request.Version}); tariften tahmin edilmedi."
+            : $"Seçilen model fikri: {modelLabel} ({request.ModelId})");
+        ModelForVerification.MaxHeight=48;ModelForVerification.Margin=new Thickness(0,0,0,6);
+        ModelForVerification.ToolTip="Kaydedilmiş model kimliği ve tarif ayrı bilgilerdir. Birbirleriyle uyumunu kontrol edin; tarif değiştirilmedi. Model fikri hazır kalıp veya üretim onayı değildir.";
+        AutomationProperties.SetHelpText(ModelForVerification,(string)ModelForVerification.ToolTip);
+        DockPanel.SetDock(ModelForVerification,Dock.Top);root.Children.Add(ModelForVerification);
         var grid=new Grid();root.Children.Add(grid);
         for(var i=0;i<6;i++)grid.RowDefinitions.Add(new RowDefinition { Height=i is 1 or 3 ? new GridLength(1,GridUnitType.Star) : GridLength.Auto });
         TextBox ReadOnly(string name,string text)
