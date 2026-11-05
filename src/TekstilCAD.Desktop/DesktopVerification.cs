@@ -10552,7 +10552,7 @@ internal static partial class DesktopVerification
                 window.BodyScrollerForVerification.ViewportHeight>0 && window.BodyScrollerForVerification.ScrollableHeight>0,
                 "Compact save-error state retains keyboard model selection and a usable scrolling body",checks);
             var firstTitle=((StackPanel)firstModel.Content).Children.OfType<TextBlock>().Single(t=>t.Text=="Anvelop elbise");
-            var firstArt=((StackPanel)firstModel.Content).Children.OfType<Viewbox>().Single();
+            var firstArt=Descendants<Viewbox>((FrameworkElement)firstModel.Content).Single();
             foreach(var modelPart in new FrameworkElement[] { firstArt,firstTitle,firstCaption })
             {
                 modelPart.BringIntoView();blankRoot.UpdateLayout();
