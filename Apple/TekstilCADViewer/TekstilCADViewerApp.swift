@@ -3288,12 +3288,29 @@ private struct ExperimentalDesignBriefView: View {
                 guard exportPreparationID == id else { return }
                 exportPreparationID = nil; exportPreparationTask = nil
                 guard exportSnapshotIsCurrent(snapshot) else { message = "İstek değişti; önceki hazırlık kullanılmadı."; return }
-                if error is CancellationError { message = "İstek hazırlığı iptal edildi; taslak ve görsel korundu." }
-                else if let issue = error as? ExperimentalDesignBrief.Error, case .invalidImage = issue,
-                        snapshot.version == 2 && snapshot.draft.image != nil {
-                    message = ExperimentalDesignBrief.V2ImageReview.incompatible.explanation; step = 2
+                if error is CancellationError {
+                    message = "İstek hazırlığı iptal edildi; taslak ve görsel korundu."
+                } else if let issue = error as? ExperimentalDesignBrief.Error {
+                    switch issue {
+                    case .missingContent:
+                        message = "Yalnız ölçü içeren istek kaydedilemiyor. Bir model seçin, elbiseyi tarif edin veya örnek görsel ekleyin; girdiğiniz ölçüler korundu."
+                        step = 0
+                    case .invalidImage:
+                        message = snapshot.version == 2 && snapshot.draft.image != nil
+                            ? ExperimentalDesignBrief.V2ImageReview.incompatible.explanation
+                            : "Görsel bu istek için kullanılamadı. Görseli gözden geçirin; taslak korundu."
+                        step = 2
+                    case .pendingALineGuide:
+                        message = "A kesim rehberindeki girişleri önce onaylayın veya açıkça temizleyin; taslak korundu."
+                        step = 1
+                    case .pendingMeasurementForm:
+                        message = "Ölçü formundaki girişleri önce inceleyin; taslak korundu."
+                        step = 1
+                    case .invalidText:
+                        message = "İstek metni veya dosya boyutu sınırı aşıldı ya da seçilen biçim desteklenmiyor. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi olabilir; V1 model satırı da sınıra dahildir. Metin kesilmedi ve taslak korundu."
+                    }
                 } else {
-                    message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
+                    message = "İstek dosyası hazırlanamadı. Taslak ve görsel korundu; yeniden deneyin."
                 }
             }
         }
