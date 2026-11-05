@@ -105,11 +105,58 @@ enum ExperimentalDesignBrief {
         guard standalone || intentMatch != nil else { return nil }
         let intentLength = standalone ? 0 : (intentMatch?.range.length ?? 0)
         let remainder = source.substring(to: match.location) + " " + source.substring(from: NSMaxRange(match) + intentLength)
-        // Unknown remaining words are refused rather than guessed. This small
-        // vocabulary permits common details and measurement notes only.
-        let safeRemainder = #"\A(?:\s+|[,.;:]+|[0-9]+(?:[.,][0-9]+)?|(?<![\p{L}\p{N}_])(?:uzun|kısa|kollu|kol|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız|göğüs|bel|kalça|çevresi|elbise|boyu|cm|mm)(?![\p{L}\p{N}_]))*\z"#
-        guard remainder.range(of: safeRemainder, options: .regularExpression) != nil else { return nil }
+        guard draft.measurementForm?.hasValues != true else { return nil }
+        var remainderWithFields = remainder
+        for (label, value) in [("göğüs çevresi", draft.bust), ("bel çevresi", draft.waist), ("kalça çevresi", draft.hips), ("elbise boyu", draft.length)] where !value.isEmpty {
+            guard value.utf16.count <= 128 else { return nil }
+            remainderWithFields += "\n" + label + " " + value.lowercased(with: Locale(identifier: "tr_TR"))
+        }
+        guard modelSuggestionDetailsAreConsistent(remainderWithFields) else { return nil }
         return result
+    }
+    /// Parse only complete, separated details and bounded explicit measurements.
+    /// Unknown phrases and conflicting repeated values are rejected.
+    private static func modelSuggestionDetailsAreConsistent(_ text: String) -> Bool {
+        let details: [String: (String, String)] = [
+            "uzun kollu": ("kol", "uzun"), "kısa kollu": ("kol", "kısa"), "kolsuz": ("kol", "yok"),
+            "ipek": ("kumaş", "ipek"), "pamuklu": ("kumaş", "pamuklu"), "keten": ("kumaş", "keten"),
+            "midi": ("boy", "midi"), "sade": ("stil", "sade"),
+            "yakalı": ("yaka", "var"), "yakasız": ("yaka", "yok")
+        ]
+        guard let detailPattern = try? NSRegularExpression(pattern: #"(?:uzun[ \t]+kollu|kısa[ \t]+kollu|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız)"#),
+              let measurePattern = try? NSRegularExpression(pattern: #"(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu|bel)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)"#) else { return false }
+        let source = text as NSString
+        var cursor = 0, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
+        let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;."))
+        while cursor < source.length {
+            while cursor < source.length, let scalar = UnicodeScalar(source.character(at: cursor)), separators.contains(scalar) { cursor += 1 }
+            if cursor == source.length { break }
+            let region = NSRange(location: cursor, length: source.length - cursor)
+            if let match = measurePattern.firstMatch(in: text, options: .anchored, range: region) {
+                let rawLabel = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+                let label = rawLabel == "bel" ? "bel çevresi" : rawLabel
+                let number = source.substring(with: match.range(at: 2)).replacingOccurrences(of: ",", with: ".")
+                let unit = source.substring(with: match.range(at: 3))
+                guard let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= (unit == "cm" ? 1000 : 10000) else { return false }
+                let millimeters = unit == "cm" ? value * 10 : value
+                if let previous = observedMeasures[label], previous != millimeters { return false }
+                observedMeasures[label] = millimeters; cursor = NSMaxRange(match.range)
+            } else if let match = detailPattern.firstMatch(in: text, options: .anchored, range: region) {
+                let key = source.substring(with: match.range).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+                guard let (category, value) = details[key] else { return false }
+                if let previous = observedDetails[category], previous != value { return false }
+                observedDetails[category] = value; cursor = NSMaxRange(match.range)
+            } else { return false }
+            // Require a separator between complete phrases; do not accept a
+            // recognized prefix of an unknown or contradictory expression.
+            var next = cursor
+            while next < source.length, source.character(at: next) == 32 || source.character(at: next) == 9 { next += 1 }
+            if next < source.length {
+                guard let scalar = UnicodeScalar(source.character(at: next)), CharacterSet(charactersIn: ",;.\n\r").contains(scalar) else { return false }
+            }
+            cursor = next
+        }
+        return true
     }
     struct ModelSuggestion: Equatable {
         let draft: Draft

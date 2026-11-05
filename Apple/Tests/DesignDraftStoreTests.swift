@@ -502,6 +502,22 @@ final class DesignDraftStoreTests: XCTestCase {
         let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(selected))
         XCTAssertEqual(v2.style, .wrap); XCTAssertEqual(v2.description, draft.description); XCTAssertEqual(v2.measurements, selected.measurements); XCTAssertEqual(v2.image, image)
     }
+    func testModelSuggestionRequiresConsistentParsedDetailsAndMeasurements() {
+        func draft(_ description: String, notes: String = "", waist: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kısa kollu")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu, kısa kollu")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, yakalı; yakasız")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, ipek; keten")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, bel çevresi 72 cm; bel çevresi 90 cm")))
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel çevresi 72 cm", waist: "90 cm")))
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel 72 cm; bel çevresi 720 mm", waist: "72,0 cm")), .wrap)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, uzun kollu", notes: "göğüs çevresi 92 cm")), .aline)
+        for notes in ["bel çevresi 0 cm", "bel çevresi 1001 cm", "bel çevresi 72", "bel çevresi 72 in", "bel çevresi 72 cm bel çevresi 72 cm", "bel çevresi 72,123456789 cm", "uzun kolluluk"] {
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: notes)), notes)
+        }
+    }
     func testPortableV2ModelRoundTripAndRejectsAmbiguity() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
         let original = ExperimentalDesignBrief.Draft(style: .aline, description: "İpek 👗", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "bel çevresi 72 cm olmasın", image: image, imageName: "örnek.png")
