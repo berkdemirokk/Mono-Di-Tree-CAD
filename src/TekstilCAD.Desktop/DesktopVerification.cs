@@ -9771,6 +9771,18 @@ internal static partial class DesktopVerification
                         garmentProbe.MarkMode.SelectedIndex=1;Check(garmentProbe.TryAddMark(3,3) && !SaveCheckpoint(garmentProbe,checkpoint+".pending.tdregion"),
                               "Pending garment corrections cannot be silently omitted from checkpoint",checks);
                         garmentProbe.ClearMarks();
+                        var flatRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
+                        try {
+                            Render(flatRegion,Path.ChangeExtension(reportPath,".flat-region-session.png"),620,550);
+                            Check(FullyVisible(flatRegion.SaveSessionForVerification,(FrameworkElement)flatRegion.Content) && FullyVisible(flatRegion.LoadSessionForVerification,(FrameworkElement)flatRegion.Content),
+                                  "Flat-pattern region checkpoint actions are visible at minimum window size",checks);
+                            Check(LoadCheckpoint(flatRegion,checkpoint) && flatRegion.CopyMaskForVerification()!.SequenceEqual(corrected) &&
+                                  flatRegion.Regions.SelectedIndex==-1 && flatRegion.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
+                                  "Flat-pattern region restores the same verified photo without automatic selection or CAD changes",checks);
+                            flatRegion.Regions.SelectedIndex=0;flatRegion.OmitHoles.IsChecked=true;
+                            Check(flatRegion.TrySelectContour() && flatRegion.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
+                                  "A restored flat-pattern region requires explicit selection before contour preview",checks);
+                        } finally { flatRegion.Close(); }
                         var restoredRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
                         try {
                             Check(LoadCheckpoint(restoredRegion,checkpoint) && restoredRegion.CopyMaskForVerification()!.SequenceEqual(corrected) &&

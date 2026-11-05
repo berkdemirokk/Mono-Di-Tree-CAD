@@ -48,6 +48,8 @@ internal sealed class PhotoRegionWindow : Window
     internal TextBox MarkX { get; }=new() { Width=56,MaxLength=6 };
     internal TextBox MarkY { get; }=new() { Width=56,MaxLength=6 };
     internal CheckBox OmitHoles { get; }=new() { Content="İç boşlukların aktarılmayacağını anlıyorum",Margin=new Thickness(0,4,0,4) };
+    internal Button SaveSessionForVerification { get; private set; }=null!;
+    internal Button LoadSessionForVerification { get; private set; }=null!;
     internal CheckBox ComparePrevious { get; }=new() { Content="Öncekiyle farkı göster",Margin=new Thickness(8,4,0,4),IsEnabled=false };
     internal CheckBox ShowAppliedMarks { get; }=new() { Content="Uygulananları göster",Margin=new Thickness(8,4,0,4) };
     internal TextBlock Status { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) };
@@ -86,10 +88,10 @@ internal sealed class PhotoRegionWindow : Window
         compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=(_,_)=> { if(TrySelectContour())DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
         actions.Children.Add(compute);if(!reviewOnly)actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
-        if(reviewOnly)
         {
             var save=new Button { Content="Bölgeyi kaydet…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
             var load=new Button { Content="Bölgeyi aç…",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
+            SaveSessionForVerification=save;LoadSessionForVerification=load;
             AutomationProperties.SetHelpText(save,"Maskeyi ve uygulanmış işaretleri fotoğraf piksel özetiyle yeni dosyaya kaydeder. Fotoğraf veya kalıp içermez; bekleyen işaretler önce uygulanmalı veya silinmelidir.");
             AutomationProperties.SetHelpText(load,"Aynı çözülmüş fotoğrafa ait bölgeyi açar; CAD projesi değişmez.");
             save.Click+=async (_,_)=> { if(running is not null || snapshot is null || pendingMarks.Count>0) { Status.Text="Önce bölge arayın, süren işlemi bitirin ve bekleyen işaretleri uygulayın veya silin.";return; }
@@ -135,7 +137,7 @@ internal sealed class PhotoRegionWindow : Window
         ComparePrevious.Checked+=(_,_)=>UpdateComparison();ComparePrevious.Unchecked+=(_,_)=>UpdateComparison();
         ShowAppliedMarks.Checked+=(_,_)=>UpdateMarksOverlay();ShowAppliedMarks.Unchecked+=(_,_)=>UpdateMarksOverlay();
         AutomationProperties.SetName(Regions,"Önerilen bölgeler");AutomationProperties.SetName(Status,"Bölge önerisi durumu");AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);
-        var view=new Grid { ClipToBounds=true,MinHeight=200,Background=Brushes.Transparent };view.Children.Add(new Image { Source=image,Stretch=Stretch.Uniform });view.Children.Add(overlay);view.Children.Add(comparisonOverlay);view.Children.Add(boxOverlay);view.Children.Add(marksOverlay);root.Children.Add(view);
+        var view=new Grid { ClipToBounds=true,MinHeight=100,Background=Brushes.Transparent };view.Children.Add(new Image { Source=image,Stretch=Stretch.Uniform });view.Children.Add(overlay);view.Children.Add(comparisonOverlay);view.Children.Add(boxOverlay);view.Children.Add(marksOverlay);root.Children.Add(view);
         AutomationProperties.SetName(view,"Bölge dikdörtgeni seçimi");
         AutomationProperties.SetHelpText(view,"Dikdörtgen modunda sürükleyerek alanı belirleyin; bölge seç modunda bölgeye tıklayın; ekle veya çıkar modunda sürükleyerek düzeltin. Koordinatlar klavyeyle de girilebilir.");
         view.MouseLeftButtonDown+=(_,e)=> { var p=e.GetPosition(view);if(!TryMapViewPixel(p,view.RenderSize,false,out var pixel))return;
