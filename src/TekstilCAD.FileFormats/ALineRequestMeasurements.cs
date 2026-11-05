@@ -27,7 +27,7 @@ public static class ALineRequestMeasurements
         return plain.Replace('ı','i').Normalize(NormalizationForm.FormC);
     }
     private static readonly Regex ApproximateMention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+
-        string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Approximate(s))))+
+        string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[ \t]+",Approximate(s).Split(' ').Select(Regex.Escape))))+
         ")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Fold(s))));
     private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
