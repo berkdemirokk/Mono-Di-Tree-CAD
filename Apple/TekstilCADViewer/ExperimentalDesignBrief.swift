@@ -134,7 +134,9 @@ enum ExperimentalDesignBrief {
             let region = NSRange(location: cursor, length: source.length - cursor)
             if let match = measurePattern.firstMatch(in: text, options: .anchored, range: region) {
                 let label = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
-                let number = source.substring(with: match.range(at: 2)).replacingOccurrences(of: ",", with: ".")
+                let rawNumber = source.substring(with: match.range(at: 2))
+                guard !MeasurementMessageParser.isAmbiguousNumber(rawNumber) else { return false }
+                let number = rawNumber.replacingOccurrences(of: ",", with: ".")
                 let unit = source.substring(with: match.range(at: 3))
                 guard let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= (unit == "cm" ? 1000 : 10000) else { return false }
                 let millimeters = unit == "cm" ? value * 10 : value

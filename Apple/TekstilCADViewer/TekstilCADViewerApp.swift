@@ -2799,6 +2799,8 @@ private struct ExperimentalDesignBriefView: View {
             measurementMessageStatus = "Aynı ölçü mesajda birden fazla kez geçiyor. Çelişkiyi önce düzeltin; hiçbir alan değiştirilmedi."
         } catch MeasurementMessageParser.Failure.existing {
             measurementMessageStatus = "Mesajdaki ölçülerden biri ilgili alanda zaten var. Önce değerleri karşılaştırın; mevcut alanlar değiştirilmedi."
+        } catch MeasurementMessageParser.Failure.ambiguousNumber {
+            measurementMessageStatus = "Sayı hem ondalık hem binlik olarak okunabilir. Örneğin 1,000 yerine neyi kastettiğinize göre 1000 mm veya 1 mm yazın; hiçbir alan değiştirilmedi."
         } catch {
             measurementMessageStatus = "Mesaj okunamadı. Yalnız açık etiketli pozitif sayıları cm veya mm ile yazın; diğer metinleri ayrı notta saklayın. Hiçbir alan değiştirilmedi."
         }
@@ -2823,7 +2825,7 @@ private struct ExperimentalDesignBriefView: View {
         } catch { localStatus = "Kurtarma kopyası hazırlanamadı; alanları ve boyut sınırlarını kontrol edin." }
     }
     private var desktopMeasurementRisk: Bool {
-        MeasurementMessageParser.mayNeedDesktopReview(description) || MeasurementMessageParser.mayNeedDesktopReview(otherMeasurements)
+        [description, bust, waist, hips, length, otherMeasurements].contains { MeasurementMessageParser.mayNeedDesktopReview($0) }
     }
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
@@ -3074,7 +3076,7 @@ private struct ExperimentalDesignBriefView: View {
                             .font(.caption).foregroundStyle(plum)
                     }
                     if desktopMeasurementRisk {
-                        Text("Masaüstü, ve bağlacı veya cümle noktasıyla birleştirilmiş ölçüleri belirsiz yorumlayabilir. İsterseniz ölçüleri ayrı satırlarda yazın; özgün mesaj otomatik değiştirilmez.").font(.caption).foregroundStyle(.secondary)
+                        Text("Soru biçimindeki, sayı gösterimi belirsiz veya cümleyle birleştirilmiş ölçüleri kontrol edin. Özgün metin otomatik değiştirilmez; masaüstündeki yorumu ayrıca doğrulayın.").font(.caption).foregroundStyle(.secondary)
                     }
                     if !summary.whitespaceMeasurementLabels.isEmpty {
                         Text("Yalnız boşluk içeren alanlar: \(summary.whitespaceMeasurementLabels.joined(separator: ", ")). Ölçüleri düzenleyin; ham metin korunuyor.").foregroundStyle(.secondary)
@@ -3237,7 +3239,7 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }
                 Button("Tarif ve ölçüleri gözden geçir") { step = MeasurementMessageParser.mayNeedDesktopReview(description) ? 0 : 1 }
                 Button("Vazgeç", role: .cancel) { }
-            } message: { Text("Masaüstü tarif veya ölçü notlarında ve bağlacı ya da cümle noktasıyla birleştirilmiş ölçüleri belirsiz değerlendirebilir. Metin değiştirilmez. Dilerseniz ayrı satırlar kullanın ve masaüstünde doğrulayın.") }
+            } message: { Text("Soru biçimindeki, sayı gösterimi belirsiz veya cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
             .onChange(of: draft) { value in modelSuggestionRevision = UUID(); if !draftTransition { saveLocalDraft(value) } }

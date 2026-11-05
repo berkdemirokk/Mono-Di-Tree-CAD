@@ -705,6 +705,33 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try MeasurementMessageParser.parse("göğüs çevresi 92 cm, bel 72 cm", existing: [:]))
         XCTAssertThrowsError(try MeasurementMessageParser.parse("", existing: [:]))
     }
+    func testAmbiguousNumbersAndQuestionsNeverProduceMeasurementProposals() throws {
+        for number in ["1,000", "1.000", "72,000", "72.000"] {
+            let message = "göğüs çevresi 92 cm; bel çevresi \(number) mm"
+            XCTAssertThrowsError(try MeasurementMessageParser.parse(message, existing: [:])) { error in
+                XCTAssertEqual(error as? MeasurementMessageParser.Failure, .ambiguousNumber)
+            }
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
+            XCTAssertEqual(draft.measurements, message)
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft))
+            let data = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+            XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data).measurements, message)
+        }
+        for message in ["bel çevresi 72 cm?", "bel çevresi 72 cm mı?", "bel çevresi 72 cm olmasın", "eğer bel çevresi 72 cm ise"] {
+            XCTAssertThrowsError(try MeasurementMessageParser.parse(message, existing: [:]))
+            let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Anvelop elbise istiyorum", bust: "", waist: "", hips: "", length: "", otherMeasurements: message, image: nil, imageName: nil)
+            XCTAssertEqual(draft.measurements, message)
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft))
+            let data = try ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil)
+            XCTAssertEqual(try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data).measurements, message)
+        }
+        XCTAssertEqual(try MeasurementMessageParser.parse("bel çevresi 72,5 cm", existing: [:]).values["bel çevresi"], "72,5 cm")
+        XCTAssertEqual(try MeasurementMessageParser.parse("bel çevresi 1000 mm", existing: [:]).values["bel çevresi"], "1000 mm")
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("bel çevresi 72 cm?"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("1,000 mm"))
+        XCTAssertTrue(MeasurementMessageParser.mayNeedDesktopReview("1.000 cm"))
+        XCTAssertFalse(MeasurementMessageParser.mayNeedDesktopReview("72,5 cm"))
+    }
     func testMessageLabelsRejectUnknownTurkishICaseWithoutPartialProposal() throws {
         XCTAssertEqual(MeasurementMessageParser.canonicalLabel("BEL ÇEVRESİ"), "bel çevresi")
         XCTAssertNil(MeasurementMessageParser.canonicalLabel("BEL ÇEVRESI"))

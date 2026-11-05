@@ -2,8 +2,12 @@ import Foundation
 
 /// Narrow, explicit syntax only; original message remains untouched.
 enum MeasurementMessageParser {
-    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, outOfRange }
+    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, outOfRange, ambiguousNumber }
     static let supportedLabels: Set<String> = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
+    /// A three-digit suffix can be a decimal or thousands grouping. Do not guess.
+    static func isAmbiguousNumber(_ number: String) -> Bool {
+        number.range(of: #"\A[0-9]{1,3}[.,][0-9]{3}\z"#, options: .regularExpression) != nil
+    }
     static func canonicalLabel(_ matched: String) -> String? {
         let label = matched.lowercased(with: Locale(identifier: "tr_TR"))
         return supportedLabels.contains(label) ? label : nil
@@ -24,7 +28,9 @@ enum MeasurementMessageParser {
     static func mayNeedDesktopReview(_ message: String) -> Bool {
         guard message.utf16.count <= 16_384 else { return true }
         let expression = #"(?i)(?:cm|mm)(?:[ \t]+olsun)?(?:[ \t]+ve[ \t]+|[ \t]*\.[ \t\r\n]*(?=\S))"#
-        return message.range(of: expression, options: .regularExpression) != nil
+        let ambiguousNumber = #"(?i)(?<![0-9.,])[0-9]{1,3}[.,][0-9]{3}[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        let question = #"(?i)(?:cm|mm)(?:[ \t]+(?:olsun|mi|mı|mu|mü))?[ \t]*[?？]"#
+        return [expression, ambiguousNumber, question].contains { message.range(of: $0, options: .regularExpression) != nil }
     }
     static func parse(_ message: String, existing: [String: String]) throws -> Proposal {
         guard !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw Failure.empty }
@@ -49,6 +55,7 @@ enum MeasurementMessageParser {
             }
             let number = source.substring(with: match.range(at: 2))
             let unit = source.substring(with: match.range(at: 3)).lowercased()
+            guard !isAmbiguousNumber(number) else { throw Failure.ambiguousNumber }
             guard found[label] == nil else { throw Failure.duplicate }
             guard (existing[label] ?? "").isEmpty else { throw Failure.existing }
             guard let value = Decimal(string: number.replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= (unit == "cm" ? 1000 : 10000) else { throw Failure.outOfRange }
