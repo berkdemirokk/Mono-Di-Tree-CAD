@@ -10287,6 +10287,33 @@ internal static class DesktopVerification
             var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));
             using var stream=new MemoryStream();encoder.Save(stream);var png=stream.ToArray();
             var reference=new DesignReference("örnek.png","image/png",png);
+            window.LoadForVerification(new DesignRequest("Yeni taslak", "bel 72 cm",reference));
+            var root=(FrameworkElement)window.Content;
+            var card=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
+            var convert=Descendants<Button>(root).Single(b=>Equals(b.Content,"V2 model kimliğiyle çalış…"));
+            card.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));var v1Choice=window.CaptureForVerification();
+            window.ConfirmV2ConversionForVerification=_=>false;convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var cancelled=window.CaptureForVerification();
+            Check(cancelled.Version==1 && cancelled.Prompt==v1Choice.Prompt && cancelled.Reference!.Data.SequenceEqual(png),"Cancelled V2 conversion preserves the V1 draft",checks);
+            window.ConfirmV2ConversionForVerification=_=>true;convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var converted=window.CaptureForVerification();
+            Check(converted.Version==2 && converted.ModelId=="wrap" && converted.Prompt==v1Choice.Prompt && converted.Measurements==v1Choice.Measurements && converted.Reference!.Data.SequenceEqual(png),
+                "Explicit V1 card converts to V2 identity without changing text or image",checks);
+            var convertedPath=Path.Combine(directory,"converted.tcad-request.json");
+            DesignRequestStorage.SaveNewV2(convertedPath,converted,ReferencePhotoDecoder.ValidateV2);
+            window.OpenPathForVerification(convertedPath);var convertedOpened=window.CaptureForVerification();
+            Check(convertedOpened.Version==2 && convertedOpened.ModelId=="wrap" && convertedOpened.Prompt==v1Choice.Prompt && convertedOpened.Reference!.Data.SequenceEqual(png),
+                "A new V1 draft converted by the user saves and opens as V2",checks);
+            window.LoadForVerification(new DesignRequest("Anvelop elbise; detaylar: ","",null));
+            convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().Version==2 && window.CaptureForVerification().ModelId is null,
+                "A V1 model template found in loaded text does not become an inferred V2 identity",checks);
+            window.LoadForVerification(new DesignRequest("önce", "",null));
+            window.ConfirmV2ConversionForVerification=_=> { window.PromptForVerification.Text="sonra";return true; };
+            convert.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(window.CaptureForVerification().Version==1 && window.CaptureForVerification().Prompt=="sonra",
+                "A changed draft is not converted after a stale confirmation",checks);
+            window.ConfirmV2ConversionForVerification=null;
             var request=new DesignRequest("Özgün tarif", "bel 72 cm",reference,"aline",2);
             var path=Path.Combine(directory,"roundtrip.tcad-request.json");
             DesignRequestStorage.SaveNewV2(path,request,ReferencePhotoDecoder.ValidateV2);
@@ -10294,8 +10321,6 @@ internal static class DesktopVerification
             var opened=window.CaptureForVerification();
             Check(opened.Version==2 && opened.ModelId=="aline" && opened.Prompt==request.Prompt && opened.Measurements==request.Measurements && opened.Reference!.Data.SequenceEqual(png),
                 "V2 file open retains model identity, text and original validated PNG bytes",checks);
-            var root=(FrameworkElement)window.Content;
-            var card=Descendants<Button>(root).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
             card.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var changed=window.CaptureForVerification();
             Check(changed.ModelId=="wrap" && changed.Version==2 && changed.Prompt==request.Prompt,
@@ -10311,7 +10336,9 @@ internal static class DesktopVerification
             byte[] animationChunk=[0,0,0,8,97,99,84,76,0,0,0,1,0,0,0,0,0,0,0,0];
             var apng=png[..8].Concat(animationChunk).Concat(png[8..]).ToArray();
             var cases=new[] { (Name:"truncated PNG",Bytes:new byte[] {137,80,78,71,13,10,26,10},Type:"image/png"),
-                (Name:"truncated JPEG",Bytes:new byte[] {255,216,255},Type:"image/jpeg"), (Name:"PNG with acTL",Bytes:apng,Type:"image/png") };
+                (Name:"truncated JPEG",Bytes:new byte[] {255,216,255},Type:"image/jpeg"), (Name:"PNG with acTL",Bytes:apng,Type:"image/png"),
+                (Name:"PNG with acTL after IEND",Bytes:png.Concat(animationChunk).ToArray(),Type:"image/png"),
+                (Name:"PNG with trailing byte",Bytes:png.Concat(new byte[] {0}).ToArray(),Type:"image/png") };
             foreach(var item in cases)
             {
                 var invalidPath=Path.Combine(directory,Guid.NewGuid().ToString("N")+".tcad-request.json");

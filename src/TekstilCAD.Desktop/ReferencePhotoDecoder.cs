@@ -34,7 +34,11 @@ internal static class ReferencePhotoDecoder
                 if(length>(uint)(data.Length-offset-12))throw new InvalidDataException("PNG parçası eksik.");
                 var type=data.AsSpan(offset+4,4);
                 if(type.SequenceEqual("acTL"u8))throw new InvalidDataException("Hareketli PNG desteklenmiyor.");
-                if(type.SequenceEqual("IEND"u8)) { ended=true;break; }
+                if(type.SequenceEqual("IEND"u8))
+                {
+                    if(length!=0 || offset+12!=data.Length)throw new InvalidDataException("PNG sonundan sonra veri var veya son parça geçersiz.");
+                    ended=true;break;
+                }
                 offset+=checked((int)length+12);
             }
             if(!ended)throw new InvalidDataException("PNG sonu eksik.");

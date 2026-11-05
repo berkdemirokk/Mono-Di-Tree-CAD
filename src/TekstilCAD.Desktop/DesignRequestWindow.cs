@@ -39,6 +39,7 @@ internal sealed class DesignRequestWindow : Window
     private string? selectedModelText;private string modelSnapshot="";private int selectedModelStart;
     private bool modelAmbiguous,selectedModelFromLoaded;
     internal Func<string,bool>? ConfirmModelChangeForVerification { get; set; }
+    internal Func<string,bool>? ConfirmV2ConversionForVerification { get; set; }
     private readonly List<(Button Button,TextBlock Caption,string Label,string Template)> modelCards=[];
     private readonly Dictionary<string,TextBlock> measurementTiles=new(StringComparer.Ordinal);
     internal TextBox PromptForVerification=>prompt;
@@ -156,6 +157,8 @@ internal sealed class DesignRequestWindow : Window
         ModelChoice("Minimal kılıf","Düz form · Kolsuz hat","Minimal kılıf elbise; detaylar: ","M46,18 Q60,22 74,18 M46,18 L38,22 36,36 42,36 43,62 40,148 80,148 77,62 78,36 84,36 82,22 74,18","M50,48 L50,72 M70,48 L70,72 M60,20 L60,148 M40,140 L40,148","S-07");
         ModelChoice("Düz elbise","Düz siluet","Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Gömlek elbise","Yakalı ön · Bel hattı","Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
+        var convertV2=new Button { Content="V2 model kimliğiyle çalış…",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8) };
+        convertV2.Click+=(_,_)=>ConvertToV2();body.Children.Add(convertV2);
         var clearPortableModel=new Button { Content="V2 model seçimini kaldır",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8) };
         clearPortableModel.Click+=(_,_)=> { if(requestVersion==2 && portableModelId is not null) { portableModelId=null;dirty=true;SetLastModel(null);SetStatus("Model kimliği kaldırıldı; tarif korundu."); } };
         body.Children.Add(clearPortableModel);
@@ -257,6 +260,25 @@ internal sealed class DesignRequestWindow : Window
         _=owner.Dispatcher.BeginInvoke(new Action(()=> { if(owner.IsLoaded)notes.Show(); }));
     }
     private void ClearModelTracking() { selectedModelText=null;modelSnapshot="";selectedModelStart=0;modelAmbiguous=false;selectedModelFromLoaded=false;SetLastModel(null); }
+    private void ConvertToV2()
+    {
+        if(requestVersion==2) { SetStatus("İstek zaten V2 biçiminde.");return; }
+        if(referenceLoadRunning) { SetStatus("Önce görsel denetimini tamamlayın.");return; }
+        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var oldDirty=dirty;
+        var selected=selectedModelText;var fromLoaded=selectedModelFromLoaded;var ambiguous=modelAmbiguous;var start=selectedModelStart;var snapshot=modelSnapshot;
+        var message="V2, model kimliğini ayrı saklar. Tarif, ölçüler ve görsel değiştirilmez. Önceki V1 model satırı tarifte kalabilir; kimlik ile tarifin uyumunu kontrol edin. Eski sürümler V2 dosyasını açamayabilir. Devam edilsin mi?";
+        var confirmed=ConfirmV2ConversionForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"V2 istek",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes);
+        if(!confirmed)return;
+        if(closed || referenceLoadRunning || revision!=referenceRevision || oldDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()) || selected!=selectedModelText || fromLoaded!=selectedModelFromLoaded || ambiguous!=modelAmbiguous || start!=selectedModelStart || snapshot!=modelSnapshot)
+        { SetStatus("İstek değişti; V2 dönüşümü uygulanmadı.");return; }
+        // Only an explicit current-session choice is carried forward. A V1 text
+        // match loaded from disk is a suggestion, not a portable identity.
+        var index=!fromLoaded && !ambiguous && selected is not null ? modelCards.FindIndex(card=>card.Template==selected) : -1;
+        var id=index>=0 && index<PortableModelIds.Length ? PortableModelIds[index] : null;
+        ClearModelTracking();requestVersion=2;portableModelId=id;dirty=true;
+        if(index>=0 && id is not null)SetLastModel(modelCards[index].Button);
+        SetStatus(id is null ? "V2 seçildi; isterseniz model kartı seçin. Tarif ve görsel korundu." : "V2 seçildi; model kimliği ve özgün tarif korundu. İkisinin uyumunu kontrol edin.");
+    }
     private void UpdateModelTracking()
     {
         if(selectedModelText is null)return;
