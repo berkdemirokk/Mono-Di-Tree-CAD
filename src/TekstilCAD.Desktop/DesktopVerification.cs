@@ -10565,12 +10565,12 @@ internal static partial class DesktopVerification
             var requestRoot=(FrameworkElement)window.Content;
             window.ChatInputForVerification.Text="henüz gönderilmedi";
             var chatShortcut=Descendants<Button>(requestRoot).Single(b=>Equals(b.Content,"Ölçülerle konuş"));
-            window.BodyScrollerForVerification.ScrollToTop();requestRoot.UpdateLayout();
+            window.RequestDetailsForVerification.IsExpanded=true;requestRoot.UpdateLayout();chatShortcut.BringIntoView();requestRoot.UpdateLayout();
             Check(FullyVisible(chatShortcut,requestRoot) && chatShortcut.Focusable && KeyboardNavigation.GetIsTabStop(chatShortcut),
-                "Conversation shortcut is visible and keyboard reachable at minimum size",checks);
+                "Expanded-details conversation shortcut is scrollable and keyboard reachable at minimum size",checks);
             chatShortcut.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));requestRoot.UpdateLayout();
             Check(window.ChatInputForVerification.Text=="henüz gönderilmedi" && window.PromptForVerification.Text==input.Prompt &&
-                window.MeasurementsForVerification.Text==input.Measurements && window.BodyScrollerForVerification.VerticalOffset>0 &&
+                window.MeasurementsForVerification.Text==input.Measurements && FullyVisible(window.ChatInputForVerification,requestRoot) && ReferenceEquals(FocusManager.GetFocusedElement(window),window.ChatInputForVerification) &&
                 AutomationProperties.GetHelpText(chatShortcut).Contains("koruyarak"),
                 "Measurement conversation shortcut navigates without altering a pending message or request",checks);
             Render(window,Path.ChangeExtension(reportPath,".atelier-chat-shortcut.png"),900,700);
@@ -11160,19 +11160,30 @@ internal static partial class DesktopVerification
                 var requestBody=(StackPanel)window.BodyScrollerForVerification.Content;
                 var advanced=(StackPanel)details.Content;
                 var composer=(DockPanel)LogicalTreeHelper.GetParent(window.ChatInputForVerification);
-                var conversationContainer=(Border)LogicalTreeHelper.GetParent(window.ConversationForVerification);
+                var primaryChat=(StackPanel)LogicalTreeHelper.GetParent(composer);
                 Check(requestBody.Children.OfType<Expander>().Single()==details && !details.IsExpanded &&
-                    requestBody.Children.IndexOf(conversationContainer)>=0 && requestBody.Children.IndexOf(composer)>requestBody.Children.IndexOf(conversationContainer) &&
-                    requestBody.Children.IndexOf(details)>requestBody.Children.IndexOf(composer) && composer.Children.Contains(window.SendActionForVerification!),
-                    "Primary conversation and real Send composer precede collapsed saved-request editing at "+size,checks);
+                    DockPanel.GetDock(primaryChat)==Dock.Top && ((DockPanel)themeRoot).Children.IndexOf(primaryChat)<((DockPanel)themeRoot).Children.IndexOf(window.BodyScrollerForVerification) &&
+                    requestBody.Children.Contains(details) && !requestBody.Children.Contains(composer) && composer.Children.Contains(window.SendActionForVerification!),
+                    "Fixed primary composer precedes scrolling models and collapsed saved-request editing at "+size,checks);
                 Check(AutomationProperties.GetName(details)=="İstek ayrıntılarını düzenle" && AutomationProperties.GetHelpText(details).Contains("Kapatmak metinleri silmez") &&
                     AutomationProperties.GetName(window.ChatInputForVerification)=="Elbise isteği veya ölçü mesajı" && window.SendActionForVerification!.Focusable,
                     "Collapsible request editor and primary composer retain accessible names and keyboard action at "+size,checks);
-                window.ChatInputForVerification.BringIntoView();themeRoot.UpdateLayout();
-                Check(FullyVisible(window.ChatInputForVerification,themeRoot) && FullyVisible(window.SendActionForVerification!,themeRoot),
-                    "Primary chat and Send can be brought fully into the viewport with details closed at "+size,checks);
+                window.BodyScrollerForVerification.ScrollToTop();themeRoot.UpdateLayout();
+                Check(FullyVisible(window.ChatInputForVerification,themeRoot) && FullyVisible(window.SendActionForVerification!,themeRoot) && FullyVisible(window.ReferenceShortcutForVerification!,themeRoot),
+                    "Chat, Send and reference action are fully visible without BringIntoView with details closed at "+size,checks);
                 details.IsExpanded=true;themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
-                var labels=requestBody.Children.OfType<Label>().Concat(Descendants<Label>(advanced)).ToArray();
+                Check(window.BodyScrollerForVerification.ViewportHeight>=64 && window.BodyScrollerForVerification.ViewportWidth>=200 && window.BodyScrollerForVerification.ScrollableHeight>0,
+                    "Fixed composer leaves a usable scroll viewport for models and expanded details at "+size,checks);
+                foreach(var actionName in new[] { "İstek aç…","Yeni istek dosyası kaydet…" })
+                {
+                    var fileAction=Descendants<Button>(advanced).Single(b=>Equals(b.Content,actionName));
+                    fileAction.BringIntoView();themeRoot.UpdateLayout();
+                    Check(FullyVisible(fileAction,themeRoot) && fileAction.Focusable && KeyboardNavigation.GetIsTabStop(fileAction),
+                        "Request file action remains scrollable and keyboard reachable in expanded details: "+actionName+" at "+size,checks);
+                    Check(FullyVisible(window.ChatInputForVerification,themeRoot) && FullyVisible(window.ReferenceShortcutForVerification!,themeRoot),
+                        "Scrolling to file actions keeps primary input and reference action visible at "+size,checks);
+                }
+                var labels=primaryChat.Children.OfType<Label>().Concat(requestBody.Children.OfType<Label>()).Concat(Descendants<Label>(advanced)).ToArray();
                 Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,DesignRequestWindow.Ink)),
                     "All design request labels use the readable theme text brush at "+size,checks);
                 Check(advanced.Children.Contains(window.MeasurementsForVerification) && Descendants<TextBox>(advanced).Contains(window.PromptForVerification) &&
@@ -11236,9 +11247,8 @@ internal static partial class DesktopVerification
             var minimumSend=Descendants<Button>(root).Single(b=>Equals(b.Content,"Gönder"));
             foreach(var control in new FrameworkElement[] { window.ChatInputForVerification,minimumSend })
             {
-                var y=control.TransformToAncestor(modelScroller).Transform(new Point(0,0)).Y+modelScroller.VerticalOffset;
-                modelScroller.ScrollToVerticalOffset(Math.Max(0,y-8));root.UpdateLayout();
-                Check(FullyVisible(control,root) && control.Focusable,"Chat input and send are reachable at minimum window size",checks);
+                modelScroller.ScrollToBottom();root.UpdateLayout();
+                Check(FullyVisible(control,root) && control.Focusable,"Fixed chat input and send remain visible while detail content is scrolled to bottom at minimum size",checks);
             }
             modelScroller.ScrollToVerticalOffset(0);root.Measure(new Size(680,680));root.Arrange(new Rect(0,0,680,680));root.UpdateLayout();
             Check(straight.Focusable && aline.Focusable && AutomationProperties.GetHelpText(straight).Contains("mevcut metin korunur") &&

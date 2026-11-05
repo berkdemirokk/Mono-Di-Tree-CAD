@@ -208,7 +208,9 @@ internal static partial class DesktopVerification
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm","Elbise does not trigger suffix detection; nonconditional clarification stays functional",checks);
             var layoutBody=(StackPanel)window.BodyScrollerForVerification.Content;
             var composeParent=(UIElement)LogicalTreeHelper.GetParent(window.ChatInputForVerification);
-            Check(layoutBody.Children.IndexOf(composeParent)>=0&&layoutBody.Children.IndexOf(composeParent)<layoutBody.Children.IndexOf(window.RequestDetailsForVerification),"Real chat composer precedes collapsible request editing in logical layout",checks);
+            var primaryChat=(StackPanel)LogicalTreeHelper.GetParent(composeParent);
+            var layoutRoot=(DockPanel)window.Content;
+            Check(DockPanel.GetDock(primaryChat)==Dock.Top&&layoutRoot.Children.IndexOf(primaryChat)<layoutRoot.Children.IndexOf(window.BodyScrollerForVerification)&&!layoutBody.Children.Contains(composeParent),"Real chat composer is fixed above scrolling models and collapsible editing",checks);
             bool InDetails(DependencyObject element)
             {
                 for(DependencyObject? current=element;current is not null;current=LogicalTreeHelper.GetParent(current))if(ReferenceEquals(current,window.RequestDetailsForVerification))return true;
@@ -229,7 +231,7 @@ internal static partial class DesktopVerification
             window.ChatInputForVerification.Text="bel çevresi 72 cm";window.SendActionForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&!window.RequestDetailsForVerification.IsExpanded&&window.ChatInputForVerification.Text.Length==0,"Chat measurement still updates hidden detail fields without forcing them open",checks);
             var photoShortcut=window.ReferenceShortcutForVerification!;
-            Check(layoutBody.Children.IndexOf(photoShortcut)>layoutBody.Children.IndexOf(composeParent)&&layoutBody.Children.IndexOf(photoShortcut)<layoutBody.Children.IndexOf(window.RequestDetailsForVerification)&&!InDetails(photoShortcut),"Photo shortcut is next to chat outside collapsed request details",checks);
+            Check(primaryChat.Children.IndexOf(photoShortcut)>primaryChat.Children.IndexOf(composeParent)&&!InDetails(photoShortcut),"Photo shortcut is next to chat outside collapsed request details",checks);
             Check(AutomationProperties.GetHelpText(photoShortcut).Contains("Görselden ölçü veya kalıp çıkarmaz")&&photoShortcut.Focusable,"Photo shortcut is accessible without implying image-to-pattern generation",checks);
             window.LoadForVerification(new DesignRequest("Fotoğrafı koru","bel çevresi 72 cm",new DesignReference("sentetik.png","image/png",imageBytes)));window.ChatInputForVerification.Text="Bekleyen mesaj";
             int chooserCalls=0;window.ReferencePathForVerification=()=> { chooserCalls++;return null; };
