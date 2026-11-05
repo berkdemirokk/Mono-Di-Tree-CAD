@@ -651,10 +651,10 @@ final class DesignDraftStoreTests: XCTestCase {
         func fixture(_ name: String) throws -> Data {
             try Data(contentsOf: XCTUnwrap(bundle.url(forResource: name, withExtension: "json")))
         }
-        for name in ["v2-empty-model", "v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng", "v2-one-frame-apng", "v2-jpeg-orientation-9"] {
+        for name in ["v2-invalid-signature-png", "v2-invalid-signature-jpeg", "v2-large-6000x5000", "v2-two-frame-apng", "v2-one-frame-apng", "v2-jpeg-orientation-9"] {
             XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(fixture(name)), name)
         }
-        for name in ["v2-model-matching", "v2-model-conflicting"] {
+        for name in ["v2-empty-model", "v2-model-measurements-only", "v2-model-matching", "v2-model-conflicting"] {
             let raw = try fixture(name)
             let parsed = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: raw)
             let draft = try ExperimentalDesignBrief.portableDraft(raw)
@@ -667,12 +667,33 @@ final class DesignDraftStoreTests: XCTestCase {
     }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
-        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(empty))
+        let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))
+        XCTAssertEqual(emptyResult.style, .aline); XCTAssertEqual(emptyResult.description, "")
+        let whitespace = ExperimentalDesignBrief.Draft(style: .wrap, description: "  \n", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let whitespaceResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(whitespace))
+        XCTAssertEqual(whitespaceResult.description, whitespace.description); XCTAssertEqual(whitespaceResult.measurements, whitespace.measurements)
+        let noModel = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(noModel))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(prompt: "", measurements: "Bel çevresi: 72 cm", image: nil, imageName: nil))
         for text in ["Seçilen elbise modeli: A kesim elbise", "Seçilen elbise modeli: Düz elbise"] {
             let draft = ExperimentalDesignBrief.Draft(style: .aline, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
             let reopened = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
             XCTAssertEqual(reopened.style, .aline)
             XCTAssertEqual(reopened.description, text)
+        }
+    }
+    func testV2ModelAndMeasurementsWithoutDescriptionRoundTripAndV1Conversion() throws {
+        let source = try Data(contentsOf: XCTUnwrap(Bundle(for: Self.self).url(forResource: "v2-model-measurements-only", withExtension: "json")))
+        let draft = try ExperimentalDesignBrief.portableDraft(source)
+        XCTAssertEqual(draft.style, .aline); XCTAssertEqual(draft.description, "")
+        XCTAssertEqual(draft.measurements, "Bel çevresi: 72 cm\nKalça çevresi: 100 cm")
+        let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(draft))
+        XCTAssertEqual(v2.style, draft.style); XCTAssertEqual(v2.description, draft.description); XCTAssertEqual(v2.measurements, draft.measurements)
+        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
+        XCTAssertEqual(v1.style, .describe); XCTAssertEqual(v1.description, draft.prompt); XCTAssertEqual(v1.measurements, draft.measurements)
+        for model in ["null", "{\"id\":\"unknown\"}", "{\"id\":\"\"}"] {
+            let raw = "{\"format\":\"tekstilcad.design-request\",\"version\":2,\"prompt\":\"\",\"measurements\":\"bel çevresi 72 cm\",\"reference\":null,\"model\":\(model)}"
+            XCTAssertThrowsError(try ExperimentalDesignBrief.portableDraft(Data(raw.utf8)))
         }
     }
     func testV2ToV1RejectsOverLimitWithoutTruncatingEmoji() throws {

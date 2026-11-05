@@ -483,9 +483,9 @@ enum ExperimentalDesignBrief {
         if !other.isEmpty { lines.append(other) }
         return lines.joined(separator: "\n")
     }
-    static func make(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
+    private static func validatedReference(prompt: String, measurements: String, image: Data?, imageName: String?, hasV2Model: Bool) throws -> Image? {
         guard prompt.utf16.count <= maxTextUnits, measurements.utf16.count <= maxTextUnits else { throw Error.invalidText }
-        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil else { throw Error.missingContent }
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || image != nil || hasV2Model else { throw Error.missingContent }
         let reference: Image?
         if let image {
             guard !image.isEmpty, image.count <= maxImageBytes,
@@ -504,6 +504,11 @@ enum ExperimentalDesignBrief {
             }
             reference = Image(name: name, mediaType: mediaType, dataBase64: image.base64EncodedString())
         } else { reference = nil }
+        return reference
+    }
+
+    static func make(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
+        let reference = try validatedReference(prompt: prompt, measurements: measurements, image: image, imageName: imageName, hasV2Model: false)
         let document = Document(format: "tekstilcad.design-request", version: 1, prompt: prompt,
                                 measurements: measurements, reference: reference)
         let encoded = try JSONEncoder().encode(document)
@@ -577,9 +582,8 @@ enum ExperimentalDesignBrief {
         if let image = draft.image { try validateV2Image(image) }
         let id = portableStyleIDs.first(where: { $0.value == draft.style })?.key
         guard draft.style == .describe || id != nil else { throw Error.invalidText }
-        let validated = try JSONDecoder().decode(Document.self, from: make(prompt: draft.description, measurements: draft.measurements, image: draft.image, imageName: draft.imageName))
-        guard draft.description.utf16.count <= maxTextUnits else { throw Error.invalidText }
-        let result = try JSONEncoder().encode(DocumentV2(prompt: draft.description, measurements: draft.measurements, reference: validated.reference, model: id.map { ModelIdentity(id: $0) }))
+        let reference = try validatedReference(prompt: draft.description, measurements: draft.measurements, image: draft.image, imageName: draft.imageName, hasV2Model: id != nil)
+        let result = try JSONEncoder().encode(DocumentV2(prompt: draft.description, measurements: draft.measurements, reference: reference, model: id.map { ModelIdentity(id: $0) }))
         guard result.count <= 12 * 1024 * 1024 else { throw Error.invalidText }
         return result
     }
@@ -616,9 +620,8 @@ enum ExperimentalDesignBrief {
         } else { image = nil }
         if doc.version == 2, let image { try validateV2Image(image) }
         // Reject unsupported or inconsistent images before replacing any current draft.
-        let verified = try JSONDecoder().decode(Document.self, from: make(prompt: doc.prompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name))
-        guard doc.prompt.utf16.count <= maxTextUnits else { throw Error.invalidText }
-        guard verified.reference?.mediaType == doc.reference?.mediaType else { throw Error.invalidImage }
+        let verified = try validatedReference(prompt: doc.prompt, measurements: doc.measurements, image: image, imageName: doc.reference?.name, hasV2Model: doc.version == 2 && style != .describe)
+        guard verified?.mediaType == doc.reference?.mediaType else { throw Error.invalidImage }
         return Draft(style: style, description: doc.prompt, bust: "", waist: "", hips: "", length: "", otherMeasurements: doc.measurements, image: image, imageName: doc.reference?.name)
     }
     static func readPortable(_ url: URL) throws -> Draft {

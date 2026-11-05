@@ -4,6 +4,8 @@ Model adı önerisi tarif ve ölçü mesajında sınırlı sayıdaki açık Tür
 
 Tasarım isteği V2 deneysel olarak seçilebilir; V1 kaydetme seçeneği korunur. V2 ayrı model kimliği saklar, ancak bu iPhone değişiklikleri Xcode, simülatör veya gerçek cihazda henüz denenmedi. Windows ile iki yönlü dosya ve görsel uyumluluğu doğrulanmış değildir; eski uygulama sürümleri V2 açamayabilir. V1'e aktarım model kimliğini ayrı korumaz. Dosya seçici mevcut hedefin üzerine yazmayı uygulama düzeyinde engellemez; yeni bir ad seçin.
 
+V2'de bilinen bir model seçilmişse tarif ve görsel boş olsa bile kullanıcıya ait ölçülerle veya ölçü olmadan istek oluşturulabilir; bu seçim kalıp üretmez. Model seçilmediyse yalnız ölçü girilmesi yeterli değildir. V1 için tarif veya görsel şartı değişmemiştir. Bu V2 genişletmesi, tarif veya görsel isteyen mevcut Windows okuyucusuyla uyumsuzdur; Windows tarafında eşzamanlı güncelleme ve gerçek dosya alışverişi testi gereklidir.
+
 Bu bağımsız SwiftUI başlangıcı iPhone, iPad ve macOS için yerel `.tcad` dosyası seçip parça konturlarını gösterir. Eski JSON nesnesi ile 1–5 sürümlü `[sürüm, proje]` zarfındaki `Name`, `Pieces`, `Points`, `Closed` alanlarını okur. Modeli telefonun kütüphanesine veya adı değiştirilmiş bir kopya olarak kaydedebilir. Dosya seçiciden iCloud Drive dahil erişilebilir dosyalar açılabilir.
 
 ## Xcode'da oluşturma
