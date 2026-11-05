@@ -9711,7 +9711,7 @@ internal static partial class DesktopVerification
                 typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(edgeRegion,[edgeComponents]);
                 edgeRegion.Regions.SelectedIndex=0;
                 Render(edgeRegion,Path.ChangeExtension(reportPath,".photo-region-image-edge.png"),620,550);
-                Check(edgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && edgeRegion.Status.Text.Contains("kırpılmış") &&
+                Check(edgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && edgeRegion.BoundaryWarning.Text.Contains("kırpılmış") &&
                     FullyVisible(edgeRegion.AcknowledgeImageEdge,(FrameworkElement)edgeRegion.Content) && !edgeRegion.TrySelectContour() && edgeRegion.SelectedContour is null,
                     "Image-edge region warns and requires an explicit visible acknowledgement before contour preview",checks);
                 edgeRegion.AcknowledgeImageEdge.IsChecked=true;
@@ -9720,6 +9720,34 @@ internal static partial class DesktopVerification
                 Check(edgeRegion.AcknowledgeImageEdge.IsChecked!=true && !edgeRegion.TrySelectContour(),"Image-edge acknowledgement does not carry to a new region selection",checks);
             }
             finally { edgeRegion.Close(); }
+            var boxEdgeRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
+            try
+            {
+                boxEdgeRegion.left.Text="30";boxEdgeRegion.top.Text="30";boxEdgeRegion.width.Text="10";boxEdgeRegion.height.Text="10";
+                var boxMask=new byte[96*72];for(var y=32;y<38;y++)for(var x=30;x<35;x++)boxMask[y*96+x]=1;
+                typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(boxEdgeRegion,[PhotoRegionSharpPrototype.MaskComponents.Analyze(boxMask,96,72)]);
+                boxEdgeRegion.Regions.SelectedIndex=0;
+                Check(boxEdgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && boxEdgeRegion.BoundaryWarning.Text.Contains("arama dikdörtgenine") &&
+                    !boxEdgeRegion.TrySelectContour() && boxEdgeRegion.SelectedContour is null,
+                    "Region touching the search rectangle requires explicit review even away from image borders",checks);
+                boxEdgeRegion.AcknowledgeImageEdge.IsChecked=true;
+                Check(boxEdgeRegion.TrySelectContour() && boxEdgeRegion.SelectedContour is { Length:>=3 },"Reviewed search-edge contour can be previewed",checks);
+            }
+            finally { boxEdgeRegion.Close(); }
+            var reviewEdgeRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
+            try
+            {
+                var edgeMasks=new[] { (0,20),(95,20),(40,0),(40,71) };
+                foreach(var (x,y) in edgeMasks)
+                {
+                    var mask=new byte[96*72];mask[y*96+x]=1;
+                    typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(reviewEdgeRegion,[PhotoRegionSharpPrototype.MaskComponents.Analyze(mask,96,72)]);
+                    reviewEdgeRegion.Regions.SelectedIndex=0;reviewEdgeRegion.ComparePrevious.IsChecked=true;reviewEdgeRegion.ComparePrevious.IsChecked=false;
+                    Check(reviewEdgeRegion.BoundaryWarning.Visibility==Visibility.Visible && reviewEdgeRegion.BoundaryWarning.Text.Contains("görüntü kenarına"),
+                        $"Review-only image boundary warning survives comparison changes at ({x},{y})",checks);
+                }
+            }
+            finally { reviewEdgeRegion.Close(); }
             var regionDialog=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmRectangleChangeForVerification=()=>true,ConfirmCloseForVerification=()=>true };
             var regionDialogContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(regionDialog.Dispatcher));
             try
@@ -9938,6 +9966,12 @@ internal static partial class DesktopVerification
                 regionDialog.MarkMode.SelectedIndex=3;
                 Check(regionDialog.TrySelectComponentAt(40,30) && regionDialog.Regions.SelectedIndex>=0,
                       "Photo region can be selected by its foreground pixel",checks);
+                var beforeEdgeAba=regionDialog.CopyMaskForVerification()!;var edgeAbaLeft=regionDialog.left.Text;
+                regionDialog.ConfirmRectangleChangeForVerification=()=> { regionDialog.AcknowledgeImageEdge.IsChecked=true;regionDialog.AcknowledgeImageEdge.IsChecked=false;return true; };
+                regionDialog.left.Text="16";
+                Check(regionDialog.left.Text==edgeAbaLeft && regionDialog.CopyMaskForVerification()!.SequenceEqual(beforeEdgeAba),
+                    "Image boundary acknowledgement changed and restored during confirmation cannot discard region",checks);
+                regionDialog.ConfirmRectangleChangeForVerification=()=>true;
                 var selectedRegionIndex=regionDialog.Regions.SelectedIndex;
                 Check(!regionDialog.TrySelectComponentAt(3,3) && regionDialog.Regions.SelectedIndex==selectedRegionIndex && !regionDialog.TrySelectComponentAt(-1,0),
                       "Background or invalid region click preserves the previous selection",checks);
