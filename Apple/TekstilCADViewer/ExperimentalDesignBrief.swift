@@ -615,6 +615,9 @@ enum ExperimentalDesignBrief {
     struct V2ImageReviewState {
         private var reviewed: Data?
         private var result: V2ImageReview?
+        mutating func synchronize(current: Data?) {
+            if reviewed != current { reviewed = nil; result = nil }
+        }
         mutating func publish(_ result: V2ImageReview, for bytes: Data, current: Data?) {
             guard current == bytes else { return }
             reviewed = bytes; self.result = result

@@ -866,12 +866,19 @@ final class DesignDraftStoreTests: XCTestCase {
         // The filename is intentionally not part of this pixel-data validation identity.
         let sameBytesDifferentName = Data(a)
         XCTAssertTrue(state.hasResult(for: sameBytesDifferentName))
+        state.synchronize(current: sameBytesDifferentName)
+        XCTAssertTrue(state.hasResult(for: a))
+        state.synchronize(current: b)
+        XCTAssertFalse(state.hasResult(for: a))
         let lateA = Task { () -> ExperimentalDesignBrief.V2ImageReview in await Task.yield(); return .compatible }
         state.publish(.incompatible, for: b, current: b)
         let resultA = await lateA.value
         state.publish(resultA, for: a, current: b)
         XCTAssertEqual(state.status(for: b), ExperimentalDesignBrief.V2ImageReview.incompatible.explanation)
+        state.synchronize(current: nil)
+        XCTAssertFalse(state.hasResult(for: b))
         state.publish(resultA, for: a, current: nil)
+        XCTAssertFalse(state.hasResult(for: a))
         XCTAssertEqual(state.status(for: nil), "")
     }
     func testPhotoObservationThumbnailDoesNotChangeSourceBytes() throws {

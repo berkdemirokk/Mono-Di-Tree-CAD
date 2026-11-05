@@ -3566,6 +3566,7 @@ private struct ExperimentalDesignBriefView: View {
                     #endif
                 }
             }
+            .onChange(of: image) { value in v2ImageReview.synchronize(current: value) }
             .onChange(of: draft) { value in if !draftTransition { saveLocalDraft(value) } }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
