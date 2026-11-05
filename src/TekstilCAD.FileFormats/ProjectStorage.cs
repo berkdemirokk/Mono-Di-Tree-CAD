@@ -441,28 +441,26 @@ public static class ProjectStorage
         AtomicWriteCoreWithMode(full, text, cancellationToken, beforeFinalCancellationCheck:CheckImmediatelyBeforeCommit, failIfExists:expectedVersion.Sha256 is null);
         return new(full, Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))));
     }
+    /// <summary>Returns the format selected when this project is saved; 0 is the unwrapped legacy format.</summary>
+    public static int GetProjectFormatVersion(ProjectDocument project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        return project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true ? 9
+            : project.PhotoTraceHistory is not null ? 8
+            : project.NestingSnapshot?.RotationTrace is not null ? 7
+            : project.Pieces.Any(p=>p.Notches is not null) ? 6
+            : project.ImportProvenance is not null ? 5
+            : project.Pieces.Any(p=>p.Grainline is not null) ? 4
+            : project.NestingSnapshot is not null ? 3
+            : project.Pieces.Any(p=>p.Metadata is not null) ? 2
+            : project.GradingRules.Count==0 ? 0 : 1;
+    }
     // Array shape makes old ProjectDocument readers reject rather than drop rules.
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var text = project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true
-            ? JsonSerializer.Serialize<object[]>([9, project], Options)
-            : project.PhotoTraceHistory is not null
-            ? JsonSerializer.Serialize<object[]>([8, project], Options)
-            : project.NestingSnapshot?.RotationTrace is not null
-            ? JsonSerializer.Serialize<object[]>([7, project], Options)
-            : project.Pieces.Any(p=>p.Notches is not null)
-            ? JsonSerializer.Serialize<object[]>([6, project], Options)
-            : project.ImportProvenance is not null
-            ? JsonSerializer.Serialize<object[]>([5, project], Options)
-            : project.Pieces.Any(p => p.Grainline is not null)
-            ? JsonSerializer.Serialize<object[]>([4, project], Options)
-            : project.NestingSnapshot is not null
-            ? JsonSerializer.Serialize<object[]>([3, project], Options)
-            : project.Pieces.Any(p => p.Metadata is not null)
-            ? JsonSerializer.Serialize<object[]>([2, project], Options)
-            : project.GradingRules.Count == 0 ? JsonSerializer.Serialize(project, Options)
-            : JsonSerializer.Serialize<object[]>([1, project], Options);
+        var version=GetProjectFormatVersion(project);
+        var text=version==0 ? JsonSerializer.Serialize(project,Options) : JsonSerializer.Serialize<object[]>([version,project],Options);
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");

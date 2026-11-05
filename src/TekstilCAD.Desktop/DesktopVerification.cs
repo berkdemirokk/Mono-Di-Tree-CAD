@@ -13123,6 +13123,11 @@ internal static partial class DesktopVerification
             SourceWidth=100,SourceHeight=100,PreviewWidth=100,PreviewHeight=100,ReferenceStart=corners[0],ReferenceEnd=corners[1],ReferenceLengthMm=200,
             PlaneCalibration=new PhotoPlaneCalibration { Corners=[..corners],WidthMm=200,HeightMm=150 },TracePixels=[..pixels],
             GeneratedPoints=PhotoPlaneRectification.Convert(100,100,corners,200,150,pixels).ToList() };
+        var planeLayout=new ProjectDocument { Pieces=[piece.Clone()],PhotoTraceHistory=[plane.Clone()] };
+        var planeLayoutPath=Path.Combine(work,"photo-plane-layout-version.tcad");ProjectStorage.Save(planeLayout,planeLayoutPath);
+        using(var planeJson=JsonDocument.Parse(File.ReadAllBytes(planeLayoutPath)))
+            Check(planeJson.RootElement[0].GetInt32()==9 && ProductionNestingWindow.FormatLayoutSaveConfirmation(planeLayout).Contains("sürüm 9 biçimindedir"),
+                "Plane photo history layout confirmation matches stored version nine",checks);
         studio.Commit("Düzlem geçmişi",()=>studio.Document.PhotoTraceHistory!.Add(plane));
         var history=new PhotoTraceHistoryWindow(studio,studio.Document);
         try
