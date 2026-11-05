@@ -84,9 +84,12 @@ internal static partial class DesktopVerification
             {
                 window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
                 var result=window.CaptureForVerification();
-                Check(result.Prompt==source.Prompt+Environment.NewLine+answer && result.Measurements==source.Measurements &&
-                    ALineRequestMeasurements.Review(result.Prompt,result.Measurements).Millimeters[0] is null,
-                    "Question, repeated punctuation and mixed clauses remain verbatim without a definite arc: "+answer,checks);
+                // AppendText receives LF; WPF may retain it rather than using the OS CRLF.
+                // Permit only that separator difference, never normalize the user's message.
+                Check((result.Prompt==source.Prompt+"\n"+answer || result.Prompt==source.Prompt+"\r\n"+answer) && result.Measurements==source.Measurements,
+                    "Question, repeated punctuation and mixed clauses remain verbatim: "+answer,checks);
+                Check(ALineRequestMeasurements.Review(result.Prompt,result.Measurements).Millimeters[0] is null,
+                    "Question, repeated punctuation and mixed clauses never become a definite arc: "+answer,checks);
             }
             foreach(var answer in new[]{"0 cm.","0 mm!"})
             {
@@ -100,7 +103,8 @@ internal static partial class DesktopVerification
             window.LoadForVerification(source with { ModelId="wrap" });
             Check(!window.ConversationForVerification.Text.Contains("Sıradaki alan ("),"Other models retain the existing general questions",checks);
             window.ChatInputForVerification.Text="96 cm.";window.SendMessageForVerification();
-            Check(window.CaptureForVerification().Prompt==source.Prompt+Environment.NewLine+"96 cm.",
+            var genericPrompt=window.CaptureForVerification().Prompt;
+            Check(genericPrompt==source.Prompt+"\n96 cm." || genericPrompt==source.Prompt+"\r\n96 cm.",
                 "Punctuation extension does not alter general model answer labeling",checks);
             Check(!window.IsVisible && !owner.IsVisible,"A-line question checks never show windows",checks);
         }
