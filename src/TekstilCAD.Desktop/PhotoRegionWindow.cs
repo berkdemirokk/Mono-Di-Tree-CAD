@@ -14,6 +14,7 @@ internal sealed class PhotoRegionWindow : Window
     private readonly BitmapSource image;
     private CancellationTokenSource? running;
     private bool closed;
+    private long regionRevision;
     private bool changingRectangle,rectangleConfirmationActive;
     internal Func<bool>? ConfirmRectangleChangeForVerification { get; set; }
     internal Func<bool>? ConfirmCloseForVerification { get; set; }
@@ -51,6 +52,7 @@ internal sealed class PhotoRegionWindow : Window
     internal byte AppliedMarkForVerification(int x,int y)=>appliedMarks?[y*image.PixelWidth+x] ?? 0;
     internal bool? PendingMarkAtForVerification(int x,int y)=>pendingMarks.TryGetValue(y*image.PixelWidth+x,out var value) ? value : null;
     internal Action<CancellationToken>? BeforeRefineForVerification { get; set; }
+    internal Action<CancellationToken>? BeforeComputeForVerification { get; set; }
     private sealed record Choice(int Id,int Pixels,int Left,int Top,int Right,int Bottom)
     {
         public override string ToString()=>$"Bölge {Id} · {Pixels} piksel · ({Left},{Top})–({Right},{Bottom})";
@@ -160,7 +162,7 @@ internal sealed class PhotoRegionWindow : Window
     }
     private void InvalidateResult()
     {
-        running?.Cancel();components=null;snapshot=null;undoSnapshot=null;undoComponents=null;appliedMarks=null;undoAppliedMarks=null;sourceBgr=null;pendingMarks.Clear();pendingUndo=null;marksOverlay.Source=null;SelectedContour=null;Regions.Items.Clear();overlay.Source=null;OmitHoles.IsChecked=false;
+        regionRevision++;running?.Cancel();components=null;snapshot=null;undoSnapshot=null;undoComponents=null;appliedMarks=null;undoAppliedMarks=null;sourceBgr=null;pendingMarks.Clear();pendingUndo=null;marksOverlay.Source=null;SelectedContour=null;Regions.Items.Clear();overlay.Source=null;OmitHoles.IsChecked=false;
         UpdateBoxOverlay();
         Status.Text="Dikdörtgen değişti; yeniden bölge arayın.";
     }
@@ -211,26 +213,29 @@ internal sealed class PhotoRegionWindow : Window
         if(!int.TryParse(left.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var x) || !int.TryParse(top.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var y) ||
            !int.TryParse(width.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var w) || !int.TryParse(height.Text,NumberStyles.None,CultureInfo.InvariantCulture,out var h))
         { Status.Text="Dikdörtgen için tam sayı piksel değerleri girin.";return; }
-        InvalidateResult();var cts=new CancellationTokenSource();running=cts;Status.Text="Bölge aranıyor; pencereyi kapatarak iptal isteyebilirsiniz.";
+        if(snapshot is not null && !ConfirmDiscard(ConfirmRectangleChangeForVerification,"Yeni arama başarılı olursa mevcut bölge ve uygulanmış düzeltmeler değiştirilir. Devam edilsin mi?","Bölgeyi yeniden ara")) { Status.Text="Yeniden arama iptal edildi; mevcut bölge korundu.";return; }
+        var revision=regionRevision;var cts=new CancellationTokenSource();running=cts;Status.Text="Bölge aranıyor; önceki bölge işlem bitene kadar korunur.";
         try
         {
             var result=await Task.Run(()=> {
+                BeforeComputeForVerification?.Invoke(cts.Token);cts.Token.ThrowIfCancellationRequested();
                 var bgr=PhotoRasterCapture.CaptureBgr(image,new Int32Rect(0,0,image.PixelWidth,image.PixelHeight),cts.Token);
                 var proposal=RegionProposal.Start(bgr,image.PixelWidth,image.PixelHeight,new OpenCvSharp.Rect(x,y,w,h),cts.Token);
                 var found=MaskComponents.Analyze(proposal.CopyBinaryMask(),image.PixelWidth,image.PixelHeight,cts.Token);
                 return (Bgr:bgr,Snapshot:proposal,Components:found);
             },cts.Token);
-            cts.Token.ThrowIfCancellationRequested();if(closed)return;
-            if(result.Components.Components.Count>512) { Status.Text=$"{result.Components.Components.Count} bölge bulundu; seçim listesi sınırı aşıldı. Dikdörtgeni değiştirip yeniden deneyin.";return; }
+            cts.Token.ThrowIfCancellationRequested();if(closed || revision!=regionRevision)return;
+            if(result.Components.Components.Count>512) { Status.Text=$"{result.Components.Components.Count} bölge bulundu; seçim listesi sınırı aşıldı. Önceki bölge korundu.";return; }
+            undoSnapshot=null;undoComponents=null;undoAppliedMarks=null;appliedMarks=null;pendingUndo=null;marksOverlay.Source=null;
             sourceBgr=result.Bgr;snapshot=result.Snapshot;ShowComponents(result.Components);
         }
-        catch(OperationCanceledException) { if(!closed)Status.Text="Arama iptal edildi; önceki çizim değişmedi."; }
+        catch(OperationCanceledException) { if(!closed && revision==regionRevision)Status.Text="Arama iptal edildi; önceki bölge korundu."; }
         catch(TypeInitializationException ex) when(ex.GetBaseException() is DllNotFoundException or BadImageFormatException)
-        { if(!closed)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
+        { if(!closed && revision==regionRevision)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
         catch(Exception ex) when(ex is DllNotFoundException or BadImageFormatException)
-        { if(!closed)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
+        { if(!closed && revision==regionRevision)Status.Text="Görüntü işleme bileşeni yüklenemedi. Uygulama dosyalarını ve Windows sürümünü kontrol edin; mevcut çizim değişmedi."; }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or DllNotFoundException or BadImageFormatException or TypeInitializationException)
-        { if(!closed)Status.Text="Bölge önerisi hazırlanamadı: "+ex.Message; }
+        { if(!closed && revision==regionRevision)Status.Text="Bölge önerisi hazırlanamadı; önceki bölge korundu: "+ex.Message; }
         finally { if(ReferenceEquals(running,cts))running=null;cts.Dispose(); }
     }
     private void ShowComponents(MaskComponents result)

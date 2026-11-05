@@ -9761,6 +9761,19 @@ internal static partial class DesktopVerification
                       "Showing applied photo marks does not change the mask",checks);
                 regionDialog.ShowAppliedMarks.IsChecked=false;
                 Check(!regionDialog.HasMarksOverlay,"Hiding applied photo marks preserves mask state",checks);
+                regionDialog.Regions.SelectedIndex=0;
+                var selectedBeforeFailure=regionDialog.Regions.SelectedIndex;
+                regionDialog.ConfirmRectangleChangeForVerification=()=>false;
+                var cancelledRecompute=regionDialog.ComputeAsync();PumpUntil(()=>cancelledRecompute.IsCompleted);cancelledRecompute.GetAwaiter().GetResult();
+                Check(regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!) && regionDialog.Regions.SelectedIndex==selectedBeforeFailure &&
+                      regionDialog.AppliedMarkForVerification(3,3)==1 && regionDialog.Status.Text.Contains("Yeniden arama iptal edildi"),
+                      "Cancelled recomputation preserves corrected mask and selection",checks);
+                regionDialog.ConfirmRectangleChangeForVerification=()=>true;
+                regionDialog.BeforeComputeForVerification=_=>throw new InvalidOperationException("synthetic recompute failure");
+                var failedRecompute=regionDialog.ComputeAsync();PumpUntil(()=>failedRecompute.IsCompleted);failedRecompute.GetAwaiter().GetResult();regionDialog.BeforeComputeForVerification=null;
+                Check(regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!) && regionDialog.Regions.SelectedIndex==selectedBeforeFailure &&
+                      regionDialog.AppliedMarkForVerification(3,3)==1 && regionDialog.AppliedMarkForVerification(40,30)==2 && regionDialog.Status.Text.Contains("önceki bölge korundu"),
+                      "Failed photo region recomputation preserves corrected mask, selection and marks",checks);
                 regionDialog.MarkMode.SelectedIndex=1;Check(regionDialog.TryAddMark(5,5),"New mark can follow successful region refinement",checks);
                 var oldRectangle=regionDialog.left.Text;var beforeCancelledChange=regionDialog.CopyMaskForVerification()!;
                 regionDialog.ConfirmRectangleChangeForVerification=()=>false;
