@@ -2550,6 +2550,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var length = ""
     @State private var otherMeasurements = ""
     @State private var measurementProposal: MeasurementMessageParser.Proposal?
+    @State private var messageMeasurementSnapshot: ExperimentalDesignBrief.MessageMeasurementSuggestion?
     @State private var descriptionMeasurementSuggestion: ExperimentalDesignBrief.DescriptionMeasurementSuggestion?
     @State private var showDescriptionMeasurements = false
     @State private var modelSuggestion: ExperimentalDesignBrief.ModelSuggestion?
@@ -2790,9 +2791,7 @@ private struct ExperimentalDesignBriefView: View {
         modelSuggestionStatus = "Model seçildi; özgün metin ve görsel korundu. Tarif ve modelin uyumunu kontrol edin."
     }
     private func parseMeasurementMessage() throws -> MeasurementMessageParser.Proposal {
-        try MeasurementMessageParser.parse(otherMeasurements, existing: [
-            "göğüs çevresi": bust, "bel çevresi": waist, "kalça çevresi": hips, "elbise boyu": length
-        ])
+        try ExperimentalDesignBrief.measurementMessageProposal(draft)
     }
     private func proposeDescriptionMeasurements() {
         guard !draftTransition, !referenceDecisionPending,
@@ -2823,7 +2822,11 @@ private struct ExperimentalDesignBriefView: View {
     }
     private func proposeMeasurementMessage() {
         do {
-            measurementProposal = try parseMeasurementMessage()
+            guard !draftTransition, !referenceDecisionPending else { throw MeasurementMessageParser.Failure.descriptionUncertain }
+            let proposal = try parseMeasurementMessage()
+            measurementProposal = proposal
+            messageMeasurementSnapshot = .init(draft: draft, proposal: proposal, explicitSelection: modelExplicitlySelected,
+                importedPortable: importedPortable, version: requestExportVersion, revision: modelSuggestionRevision)
             measurementMessageStatus = ""; showMeasurementProposal = true
         } catch MeasurementMessageParser.Failure.duplicate {
             measurementMessageStatus = "Aynı ölçü mesajda birden fazla kez geçiyor. Çelişkiyi önce düzeltin; hiçbir alan değiştirilmedi."
@@ -2831,14 +2834,24 @@ private struct ExperimentalDesignBriefView: View {
             measurementMessageStatus = "Mesajdaki ölçülerden biri ilgili alanda zaten var. Önce değerleri karşılaştırın; mevcut alanlar değiştirilmedi."
         } catch MeasurementMessageParser.Failure.ambiguousNumber {
             measurementMessageStatus = "Sayı hem ondalık hem binlik olarak okunabilir. Örneğin 1,000 yerine neyi kastettiğinize göre 1000 mm veya 1 mm yazın; hiçbir alan değiştirilmedi."
+        } catch MeasurementMessageParser.Failure.descriptionConflict {
+            measurementMessageStatus = "Tarifteki ve ölçü mesajındaki değerler çelişiyor. İkisini karşılaştırıp düzeltin; hiçbir alan değiştirilmedi."
+        } catch MeasurementMessageParser.Failure.descriptionUncertain {
+            measurementMessageStatus = "Tarifte ölçüyle çelişen, belirsiz veya koşullu bir ifade olabilir. Tarifi ve ölçü mesajını birlikte inceleyin; hiçbir alan değiştirilmedi."
         } catch {
             measurementMessageStatus = "Mesaj okunamadı. Yalnız açık etiketli pozitif sayıları cm veya mm ile yazın; diğer metinleri ayrı notta saklayın. Hiçbir alan değiştirilmedi."
         }
     }
     private func applyMeasurementProposal() {
-        guard let proposal = measurementProposal else { return }
+        guard let proposal = measurementProposal, let snapshot = messageMeasurementSnapshot else { return }
+        messageMeasurementSnapshot = nil
         do {
-            guard proposal.isApplicable, try parseMeasurementMessage() == proposal else { throw MeasurementMessageParser.Failure.unrecognized }
+            guard !draftTransition, !referenceDecisionPending,
+                  snapshot.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                                   version: requestExportVersion, revision: modelSuggestionRevision),
+                  snapshot.proposal == proposal, proposal.isApplicable, try parseMeasurementMessage() == proposal else {
+                throw MeasurementMessageParser.Failure.unrecognized
+            }
             if let value = proposal.values["göğüs çevresi"] { bust = value }
             if let value = proposal.values["bel çevresi"] { waist = value }
             if let value = proposal.values["kalça çevresi"] { hips = value }
@@ -3256,7 +3269,7 @@ private struct ExperimentalDesignBriefView: View {
             } message: { Text("Geçerli istekteki önceki görsel değişir. Vazgeçerseniz mevcut görsel korunur; kaynak dosyalar değiştirilmez.") }
             .confirmationDialog("Bu ölçüler alanlara eklensin mi?", isPresented: $showMeasurementProposal, titleVisibility: .visible) {
                 Button("Ölçüleri alanlara ekle") { applyMeasurementProposal() }
-                Button("Vazgeç", role: .cancel) { measurementProposal = nil }
+                Button("Vazgeç", role: .cancel) { measurementProposal = nil; messageMeasurementSnapshot = nil }
             } message: {
                 Text(measurementProposal?.preview ?? "Ölçü bulunamadı.")
                 Text("Özgün mesaj korunur. Aynı bilgiler alanlarda ve mesajda görünebilir; eklenmeyen ölçüleri kontrol edin.")

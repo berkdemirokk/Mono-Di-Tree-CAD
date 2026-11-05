@@ -741,6 +741,39 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try MeasurementMessageParser.parse("göğüs çevresi 92 cm, bel 72 cm", existing: [:]))
         XCTAssertThrowsError(try MeasurementMessageParser.parse("", existing: [:]))
     }
+    func testMeasurementMessageChecksDescriptionAndProtectsWholeSnapshot() throws {
+        func draft(_ description: String, waist: String = "", notes: String = "bel çevresi 72 cm") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        let conflict = draft("bel çevresi 90 cm")
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(conflict)) { error in
+            XCTAssertEqual(error as? MeasurementMessageParser.Failure, .descriptionConflict)
+        }
+        XCTAssertEqual(conflict.description, "bel çevresi 90 cm")
+        XCTAssertEqual(conflict.otherMeasurements, "bel çevresi 72 cm")
+        let same = draft("bel çevresi 720 mm")
+        XCTAssertEqual(try ExperimentalDesignBrief.measurementMessageProposal(same).values["bel çevresi"], "72 cm")
+        for description in ["A kesim elbise istiyorum bel çevresi 90 cm", "eğer bel çevresi 90 cm ise", "bel çevresi 90 cm?", "bel çevresi 90 cm olmasın", "bel 90 cm"] {
+            XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft(description)), description)
+        }
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("ELBİSE BOYU 120 cm", notes: "elbise boyu 110 cm")))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("ELBISE BOYU 120 cm", notes: "elbise boyu 110 cm")))
+        let normal = draft("Mavi elbise")
+        let proposal = try ExperimentalDesignBrief.measurementMessageProposal(normal)
+        let revision = UUID()
+        let snapshot = ExperimentalDesignBrief.MessageMeasurementSuggestion(draft: normal, proposal: proposal,
+            explicitSelection: false, importedPortable: false, version: 1, revision: revision)
+        XCTAssertTrue(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 1, revision: revision))
+        XCTAssertFalse(snapshot.matches(draft("bel çevresi 90 cm"), explicitSelection: false, importedPortable: false, version: 1, revision: revision))
+        XCTAssertFalse(snapshot.matches(normal, explicitSelection: true, importedPortable: false, version: 1, revision: revision))
+        XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 2, revision: revision))
+        XCTAssertFalse(snapshot.matches(normal, explicitSelection: false, importedPortable: false, version: 1, revision: UUID()))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("Mavi elbise", waist: "70 cm")))
+        let data = try ExperimentalDesignBrief.make(prompt: conflict.prompt, measurements: conflict.measurements, image: nil, imageName: nil)
+        let saved = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: data)
+        XCTAssertEqual(saved.prompt, conflict.description)
+        XCTAssertEqual(saved.measurements, conflict.measurements)
+    }
     func testAmbiguousNumbersAndQuestionsNeverProduceMeasurementProposals() throws {
         for number in ["1,000", "1.000", "72,000", "72.000"] {
             let message = "göğüs çevresi 92 cm; bel çevresi \(number) mm"

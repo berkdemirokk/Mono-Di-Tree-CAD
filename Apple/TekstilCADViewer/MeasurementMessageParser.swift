@@ -2,7 +2,7 @@ import Foundation
 
 /// Narrow, explicit syntax only; original message remains untouched.
 enum MeasurementMessageParser {
-    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, outOfRange, ambiguousNumber }
+    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, outOfRange, ambiguousNumber, descriptionConflict, descriptionUncertain }
     static let supportedLabels: Set<String> = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
     /// A three-digit suffix can be a decimal or thousands grouping. Do not guess.
     static func isAmbiguousNumber(_ number: String) -> Bool {
@@ -11,6 +11,13 @@ enum MeasurementMessageParser {
     static func canonicalLabel(_ matched: String) -> String? {
         let label = matched.lowercased(with: Locale(identifier: "tr_TR"))
         return supportedLabels.contains(label) ? label : nil
+    }
+    /// Only values already produced by parse are eligible for comparison.
+    static func millimeters(_ value: String) -> Decimal? {
+        let parts = value.split(separator: " ")
+        guard parts.count == 2, let number = Decimal(string: String(parts[0]).replacingOccurrences(of: ",", with: "."), locale: Locale(identifier: "en_US_POSIX")),
+              parts[1] == "cm" || parts[1] == "mm" else { return nil }
+        return parts[1] == "cm" ? number * 10 : number
     }
     struct Proposal: Equatable {
         let source: String

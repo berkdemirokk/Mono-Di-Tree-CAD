@@ -188,6 +188,47 @@ enum ExperimentalDesignBrief {
         guard !values.isEmpty else { return nil }
         return MeasurementMessageParser.Proposal(source: draft.description, values: values)
     }
+    /// Cross-check a proposed message with the description; unknown or qualified
+    /// references are rejected rather than interpreted as body measurements.
+    static func measurementMessageProposal(_ draft: Draft) throws -> MeasurementMessageParser.Proposal {
+        let existing = ["göğüs çevresi": draft.bust, "bel çevresi": draft.waist, "kalça çevresi": draft.hips, "elbise boyu": draft.length]
+        let proposal = try MeasurementMessageParser.parse(draft.otherMeasurements, existing: existing)
+        let description = draft.description.precomposedStringWithCanonicalMapping
+        guard description.utf16.count <= maxTextUnits else { throw MeasurementMessageParser.Failure.descriptionUncertain }
+        let checkedDescription = description.replacingOccurrences(of: "İ", with: "i").lowercased()
+        let qualifiers = #"(?i)(?<![\p{L}\p{N}_])(?:eğer|şayet|değil\p{L}*|olma\p{L}*|olursa|ise|istem\p{L}*)(?![\p{L}\p{N}_])|[?？]"#
+        guard checkedDescription.range(of: qualifiers, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
+        let reference = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs|bel|kalça|elbise[ \t]+boyu)(?![\p{L}\p{N}_])"#
+        guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return proposal }
+        if let explicit = try? MeasurementMessageParser.parse(description, existing: [:]) {
+            for (label, value) in explicit.values {
+                guard let proposed = proposal.values[label] else { continue }
+                guard let a = MeasurementMessageParser.millimeters(value), let b = MeasurementMessageParser.millimeters(proposed) else {
+                    throw MeasurementMessageParser.Failure.descriptionUncertain
+                }
+                guard a == b else { throw MeasurementMessageParser.Failure.descriptionConflict }
+            }
+        } else {
+            // The model recognizer consumes every known phrase and checks all
+            // draft fields. It does not infer from partially recognized prose.
+            guard let suggested = suggestedModel(draft), draft.style == .describe || draft.style == suggested else {
+                throw MeasurementMessageParser.Failure.descriptionUncertain
+            }
+        }
+        return proposal
+    }
+    struct MessageMeasurementSuggestion {
+        let draft: Draft
+        let proposal: MeasurementMessageParser.Proposal
+        let explicitSelection: Bool
+        let importedPortable: Bool
+        let version: Int
+        let revision: UUID
+        func matches(_ current: Draft, explicitSelection: Bool, importedPortable: Bool, version: Int, revision: UUID) -> Bool {
+            draft == current && self.explicitSelection == explicitSelection && self.importedPortable == importedPortable
+                && self.version == version && self.revision == revision
+        }
+    }
     struct DescriptionMeasurementSuggestion {
         let draft: Draft
         let proposal: MeasurementMessageParser.Proposal
