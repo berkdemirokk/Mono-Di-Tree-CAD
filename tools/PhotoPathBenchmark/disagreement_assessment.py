@@ -24,6 +24,23 @@ aj, bj = read(a, 'jobs.json'), read(b, 'jobs.json')
 ar, br = read(a, 'results.json'), read(b, 'results.json')
 am, bm = read(a, 'measurements.json'), read(b, 'measurements.json')
 asum, bsum = read(a, 'summary.json'), read(b, 'summary.json')
+# Results, measurements, jobs and images must originate from their recorded run.
+# Older summaries without bindings cannot establish that connection.
+def verify_binding(folder, summary, jobs):
+    binding = summary.get('pairing')
+    if not isinstance(binding, dict) or binding.get('version') != 1:
+        raise SystemExit('Unbound legacy inputs: rerun this experiment with the current benchmark.')
+    for name in ('jobs', 'results', 'measurements'):
+        digest = hashlib.sha256((folder / (name + '.json')).read_bytes()).hexdigest()
+        if digest != binding.get(name + '_sha256'):
+            raise SystemExit('Run binding does not match ' + name + '.')
+    image_paths = list(dict.fromkeys(job['Image'] for job in jobs))
+    digests = [hashlib.sha256(Path(path).read_bytes()).hexdigest() for path in image_paths]
+    if len(digests) != 80 or digests != binding.get('images_sha256'):
+        raise SystemExit('Run binding does not match the image files.')
+
+verify_binding(a, asum, aj)
+verify_binding(b, bsum, bj)
 if len(aj) != 960 or len(bj) != 960 or len(am) != 80 or len(bm) != 80:
     raise SystemExit('Expected 80 complete 12-anchor contours.')
 if asum['archive_sha256'] != bsum['archive_sha256'] or asum.get('selection', {}).get('name', 'development') != bsum.get('selection', {}).get('name', 'development') or asum.get('jitter_pixels', 0) != bsum.get('jitter_pixels', 0):
@@ -100,7 +117,7 @@ for radius in (1,2,3,5):
         stn=sum(not w and not e for w,e in zip(segment_marked,segment_errors))
         results[str(radius)]['segments']={'warned_and_path_vertex_over_5px':stp,'warned_without_path_vertex_over_5px':sfp,
                                            'unwarned_and_path_vertex_over_5px':sfn,'unwarned_without_path_vertex_over_5px':stn}
-report = {'archive_sha256':asum['archive_sha256'], 'baseline_method':asum['method'],
+report = {'run_bindings_verified':True, 'archive_sha256':asum['archive_sha256'], 'baseline_method':asum['method'],
           'alternative_method':bsum['method'], 'jitter_pixels':asum.get('jitter_pixels',0),
           'method':'Any segment with symmetric raster-point disagreement exceeding a fixed radius; scored against baseline sampled local error over 5 px. Ground-truth-derived anchors; exploratory, not user or physical validation.',
           'contours':80,'bad_baseline':sum(m['proposal_max']>5 for m in am),'thresholds_pixels':results}
