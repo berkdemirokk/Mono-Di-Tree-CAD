@@ -53,6 +53,14 @@ internal sealed class DesignRequestWindow : Window
     internal Task ValidateAndSaveForVerification()=>ValidateAndSaveAsync();
     private string? lastSentModelMessage;
     private CancellationTokenSource? modelValidationCancellation;
+    private static readonly object modelWorkerGate=new();
+    private static Task? sharedModelValidationWorker;
+    private Task? modelValidationWorker;
+    private long modelRevision;
+    internal Action<DesignRequest>? ModelValidatorForVerification { get; set; }
+    internal Task ModelSuggestionForVerification { get; private set; }=Task.CompletedTask;
+    internal Task? ModelWorkerForVerification => modelValidationWorker;
+    internal Button ModelCardForVerification(int index)=>modelCards[index].Button;
     internal Button RetryModelForVerification { get; } = new() { Content="Son mesajın model önerisini yeniden değerlendir",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,6) };
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     internal Func<byte[],ReferencePhotoPreview>? ExistingReferenceDecoderForVerification { get; set; }
@@ -602,7 +610,7 @@ internal sealed class DesignRequestWindow : Window
         prompt.AppendText(addition);
         lastSentModelMessage=message;RetryModelForVerification.IsEnabled=true;
         chatInput.Clear();chatInput.Focus();SetStatus(answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.");
-        _=SuggestChatModelAsync(message);
+        ModelSuggestionForVerification=SuggestChatModelAsync(message);
     }
     internal Func<string,bool>? ConfirmChatModelForVerification { get; set; }
     internal void SendMessageForVerification()=>SendMessage();
@@ -612,7 +620,7 @@ internal sealed class DesignRequestWindow : Window
         if(!ChatModelChoice.CanReevaluate(message,prompt.Text,""))
         { SetStatus("Son mesaj değişmiş, kaldırılmış veya birden fazla yerde bulunuyor; eski öneri uygulanmadı. Mevcut metin korundu.");return; }
         if(chatInput.Text.Length!=0) { SetStatus("Gönderilmemiş mesaj var; önce onu gönderin veya temizleyin. Metin tekrar eklenmedi.");return; }
-        _=SuggestChatModelAsync(message!);
+        ModelSuggestionForVerification=SuggestChatModelAsync(message!);
     }
     private async Task SuggestChatModelAsync(string message)
     {
@@ -627,16 +635,25 @@ internal sealed class DesignRequestWindow : Window
         if(requestVersion==1 && reference is not null)
         {
             var original=Capture();
-            var expected=new ModelValidationRevision(questionRevision,referenceRevision,chatRevision);
+            var expected=new ModelValidationRevision(questionRevision,referenceRevision,chatRevision,modelRevision);
             var trackedModel=selectedModelText;var trackedLoaded=selectedModelFromLoaded;var trackedAmbiguous=modelAmbiguous;
             var trackedStart=selectedModelStart;var trackedSnapshot=modelSnapshot;var trackedDirty=dirty;
-            bool Current()=>ModelValidationRevision.IsCurrent(expected,new(questionRevision,referenceRevision,chatRevision),closed,
+            bool Current()=>ModelValidationRevision.IsCurrent(expected,new(questionRevision,referenceRevision,chatRevision,modelRevision),closed,
                 referenceLoadRunning || referenceSelectionPending,cancellation.IsCancellationRequested) &&
                 ReferenceEquals(modelValidationCancellation,cancellation) && SameRequest(original,Capture()) && chatInput.Text.Length==0 &&
                 trackedModel==selectedModelText && trackedLoaded==selectedModelFromLoaded && trackedAmbiguous==modelAmbiguous &&
                 trackedStart==selectedModelStart && trackedSnapshot==modelSnapshot && trackedDirty==dirty;
+            var validator=ModelValidatorForVerification;
+            lock(modelWorkerGate)
+            {
+                if(sharedModelValidationWorker is { IsCompleted:false })
+                { SetStatus("Önceki görsel denetimi sürüyor; tamamlandığında son mesajın model önerisini yeniden değerlendirin. Mesajınız korundu.");return; }
+                modelValidationWorker=Task.Run(()=> { if(validator is null)_=DesignRequestStorage.SerializeV2(original with { Version=2,ModelId=null },ReferencePhotoDecoder.ValidateV2);else validator(original); });
+                sharedModelValidationWorker=modelValidationWorker;
+                _=modelValidationWorker.ContinueWith(t=> { _=t.Exception; },TaskContinuationOptions.OnlyOnFaulted);
+            }
             SetStatus("Görsel V2 için arka planda denetleniyor; mesaj ve görsel korunuyor.");
-            try { await ModelValidationRevision.ValidateAsync(()=>DesignRequestStorage.SerializeV2(original with { Version=2,ModelId=null },ReferencePhotoDecoder.ValidateV2),cancellation.Token); }
+            try { await modelValidationWorker.WaitAsync(cancellation.Token); }
             catch(OperationCanceledException) { return; }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or InvalidDataException or IOException or NotSupportedException or System.Runtime.InteropServices.COMException)
             { if(Current())SetStatus("Mesaj ve görsel korundu; V2 görsel doğrulaması başarısız, model seçilmedi: "+ex.Message);return; }
@@ -652,12 +669,12 @@ internal sealed class DesignRequestWindow : Window
         var before=Capture();var index=Array.IndexOf(PortableModelIds,suggestion.ModelId);
         if(index<0)return;
         var trackedModel=selectedModelText;var trackedLoaded=selectedModelFromLoaded;var trackedAmbiguous=modelAmbiguous;
-        var trackedStart=selectedModelStart;var trackedSnapshot=modelSnapshot;var trackedDirty=dirty;var trackedReferenceRevision=referenceRevision;var trackedQuestionRevision=questionRevision;var trackedChatRevision=chatRevision;
+        var trackedStart=selectedModelStart;var trackedSnapshot=modelSnapshot;var trackedDirty=dirty;var trackedReferenceRevision=referenceRevision;var trackedQuestionRevision=questionRevision;var trackedChatRevision=chatRevision;var trackedModelRevision=modelRevision;
         var warning=$"{suggestion.Label} model fikri seçilsin mi? Önceki seçim değişebilir; önceki tarifler ve bu mesaj aynen korunur, çelişkileri kontrol edin. Kalıp oluşturulmaz."+
             (requestVersion==1 ? " Model kimliğini metni değiştirmeden tutmak için istek V2 biçimine geçecek. V1'e dışa aktarımda model kimliği kaybolur." : "");
         var accepted=ConfirmChatModelForVerification?.Invoke(warning) ?? MessageBox.Show(this,warning,"Sohbetten model seçimi",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
         if(!accepted) { SetStatus("Model seçimi iptal edildi; mesaj korundu.");return; }
-        if(closed || cancellation.IsCancellationRequested || !ReferenceEquals(modelValidationCancellation,cancellation) || referenceLoadRunning || referenceSelectionPending || trackedQuestionRevision!=questionRevision || trackedChatRevision!=chatRevision || !SameRequest(before,Capture()) || !string.IsNullOrEmpty(chatInput.Text) ||
+        if(closed || cancellation.IsCancellationRequested || !ReferenceEquals(modelValidationCancellation,cancellation) || referenceLoadRunning || referenceSelectionPending || trackedQuestionRevision!=questionRevision || trackedChatRevision!=chatRevision || trackedModelRevision!=modelRevision || !SameRequest(before,Capture()) || !string.IsNullOrEmpty(chatInput.Text) ||
             trackedModel!=selectedModelText || trackedLoaded!=selectedModelFromLoaded || trackedAmbiguous!=modelAmbiguous ||
             trackedStart!=selectedModelStart || trackedSnapshot!=modelSnapshot || trackedDirty!=dirty || trackedReferenceRevision!=referenceRevision)
         { SetStatus("İstek onay sırasında değişti; model seçilmedi. Mesaj korundu.");return; }

@@ -132,12 +132,69 @@ internal static partial class DesktopVerification
             using var imageStream=new MemoryStream();encoder.Save(imageStream);var imageBytes=imageStream.ToArray();
             DesignRequest ImageRequest()=>new("Görselli başlangıç","bel çevresi 72 cm",new DesignReference("sentetik.png","image/png",(byte[])imageBytes.Clone()));
             const string imageMessage="A kesim elbise istiyorum, uzun kollu";
-            void SendImageMessage(string text=imageMessage) { window!.ChatInputForVerification.Text=text;window.SendMessageForVerification(); }
+            void WaitModel() => PumpUntil(()=>window!.ModelSuggestionForVerification.IsCompleted);
+            void SendImageMessage(string text=imageMessage) { window!.ChatInputForVerification.Text=text;window.SendMessageForVerification();WaitModel(); }
+            void RetryImageMessage() { window!.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));WaitModel(); }
             void CheckImage(string name)
             {
                 var captured=window!.CaptureForVerification();
                 Check(captured.Reference!.Data.SequenceEqual(imageBytes) && captured.Measurements=="bel çevresi 72 cm" &&
                     captured.Prompt.Split(imageMessage,StringSplitOptions.None).Length==2,name,checks);
+            }
+            // Exercise the real WPF flow while a synchronous validator is deliberately held.
+            using(var entered=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                window.LoadForVerification(ImageRequest());
+                window.ModelCardForVerification(0).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.ModelValidatorForVerification=_=> { entered.Set();release.Wait(); };
+                int approvals=0;window.ConfirmV2ConversionForVerification=_=> { approvals++;return true; };
+                window.ChatInputForVerification.Text=imageMessage;window.SendMessageForVerification();
+                PumpUntil(()=>entered.IsSet);
+                var originalPrompt=window.PromptForVerification.Text;
+                window.ModelCardForVerification(1).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                window.ModelCardForVerification(0).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(window.PromptForVerification.Text==originalPrompt,"Model ABA returns to the same text",checks);
+                release.Set();WaitModel();
+                Check(approvals==0 && window.CaptureForVerification().Version==1,"Model ABA invalidates the in-flight photo suggestion",checks);
+            }
+            using(var entered=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                window.LoadForVerification(ImageRequest());int calls=0;int approvals=0;
+                window.ModelValidatorForVerification=_=> { Interlocked.Increment(ref calls);entered.Set();release.Wait(); };
+                window.ConfirmV2ConversionForVerification=_=> { approvals++;return false; };
+                window.ChatInputForVerification.Text=imageMessage;window.SendMessageForVerification();PumpUntil(()=>entered.IsSet);
+                var first=window.ModelSuggestionForVerification;
+                RetryImageMessage();PumpUntil(()=>first.IsCompleted);
+                Check(calls==1 && approvals==0 && window.StatusForVerification.Text.Contains("sürüyor"),"Retry cancels the old result without starting a concurrent worker",checks);
+                release.Set();PumpUntil(()=>window.ModelWorkerForVerification!.IsCompleted);
+                RetryImageMessage();
+                Check(calls==2 && approvals==1 && window.CaptureForVerification().Version==1,"Retry after worker exits validates again and requires consent",checks);
+            }
+            window.ModelValidatorForVerification=null;
+            // Exercise the production decoder on the same MTA thread-pool path for both formats.
+            var jpegEncoder=new JpegBitmapEncoder();jpegEncoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using var jpegStream=new MemoryStream();jpegEncoder.Save(jpegStream);var jpegBytes=jpegStream.ToArray();
+            var codecCheck=Task.Run(()=> {
+                var apartment=Thread.CurrentThread.GetApartmentState();
+                ReferencePhotoDecoder.ValidateV2(new DesignReference("test.png","image/png",imageBytes));
+                ReferencePhotoDecoder.ValidateV2(new DesignReference("test.jpg","image/jpeg",jpegBytes));
+                return apartment;
+            });
+            PumpUntil(()=>codecCheck.IsCompleted);
+            Check(codecCheck.GetAwaiter().GetResult()==ApartmentState.MTA,"Production PNG and JPEG WIC validation succeeds on an MTA worker",checks);
+            using(var entered=new ManualResetEventSlim())
+            using(var release=new ManualResetEventSlim())
+            {
+                var closingWindow=new DesignRequestWindow(owner);
+                closingWindow.LoadForVerification(ImageRequest());closingWindow.ConfirmDiscardForVerification=_=>true;
+                int approvals=0;closingWindow.ConfirmV2ConversionForVerification=_=> { approvals++;return true; };
+                closingWindow.ModelValidatorForVerification=_=> { entered.Set();release.Wait(); };
+                closingWindow.ChatInputForVerification.Text=imageMessage;closingWindow.SendMessageForVerification();PumpUntil(()=>entered.IsSet);
+                closingWindow.Close();PumpUntil(()=>closingWindow.ModelSuggestionForVerification.IsCompleted);
+                release.Set();PumpUntil(()=>closingWindow.ModelWorkerForVerification!.IsCompleted);
+                Check(approvals==0 && closingWindow.CaptureForVerification().Version==1,"Closing during photo validation cancels the pending result",checks);
             }
             window.LoadForVerification(ImageRequest());var conversions=0;var choices=0;
             window.ConfirmV2ConversionForVerification=_=> { conversions++;return true; };
@@ -181,10 +238,10 @@ internal static partial class DesktopVerification
             busyField.SetValue(window,false);
             imageField.SetValue(window,new DesignReference("changed.png","image/png",trailingBytes));
             revisionField.SetValue(window,(long)revisionField.GetValue(window)!+1);
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions==0 && choices==0 && window.CaptureForVerification().Prompt==retained && window.StatusForVerification.Text.Contains("doğrulaması başarısız"),
                 "Retry validates changed image bytes rather than trusting the old revision",checks);
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(trailingBytes) && window.CaptureForVerification().Prompt==retained &&
                 window.CaptureForVerification().Measurements=="bel çevresi 72 cm" && window.RetryModelForVerification.IsEnabled,
@@ -193,20 +250,20 @@ internal static partial class DesktopVerification
             revisionField.SetValue(window,(long)revisionField.GetValue(window)!+1);
             window.MeasurementsForVerification.Text="bel çevresi 73 cm";
             window.ConfirmV2ConversionForVerification=_=> { conversions++;return false; };
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions==1 && choices==0 && window.CaptureForVerification().Version==1 && window.CaptureForVerification().Prompt==retained &&
                 window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
                 "Cancelling valid retry after a failed PNG validation still preserves current image and message",checks);
             conversions=0;window.ConfirmV2ConversionForVerification=_=> { conversions++;return true; };
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions==1 && choices==1 && window.CaptureForVerification().ModelId=="aline" && window.CaptureForVerification().Prompt==retained &&
                 window.CaptureForVerification().Measurements=="bel çevresi 73 cm" && window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
                 "Explicit retry after loading uses current notes and image with separate approvals and no duplicate text",checks);
             var counts=conversions+choices;window.ChatInputForVerification.Text="Yeni mesaj";
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions+choices==counts && window.CaptureForVerification().Prompt==retained,"Unsent new message blocks retry without appending text",checks);
             window.ChatInputForVerification.Clear();window.PromptForVerification.Text="Değiştirilmiş tarif";
-            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            RetryImageMessage();
             Check(conversions+choices==counts && window.CaptureForVerification().Prompt=="Değiştirilmiş tarif","Removed original message cannot be resurrected by retry",checks);
             window.LoadForVerification(new DesignRequest("Görselli başlangıç","",new DesignReference("sentetik.png","image/png",trailingBytes)));
             conversions=0;choices=0;SendImageMessage();

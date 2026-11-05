@@ -1,7 +1,7 @@
 namespace TekstilCAD.Desktop;
 
 // Revision equality prevents an edit followed by an undo from reviving an old result.
-internal readonly record struct ModelValidationRevision(long Question,long Reference,long Chat)
+internal readonly record struct ModelValidationRevision(long Question,long Reference,long Chat,long Model)
 {
     internal static bool IsCurrent(ModelValidationRevision expected,ModelValidationRevision current,bool closed,bool photoBusy,bool canceled) =>
         !closed && !photoBusy && !canceled && expected==current;
