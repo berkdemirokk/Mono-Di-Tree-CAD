@@ -46,7 +46,17 @@ internal static class FittedSyntheticVerification
                 // unfilled. Check its stroked bounds and the actual flattened arc instead.
                 var flattened=geometry.GetFlattenedPathGeometry(.0001,ToleranceType.Absolute);
                 var bounds=flattened.GetRenderBounds(new Pen(Brushes.Black,.01));
-                if(geometry.Transform.Value.M22!=-1 || bounds.IsEmpty || bounds.Width<=0 || bounds.Height<=0) throw new InvalidOperationException("Y reflection or stroked arc bounds missing.");
+                if(geometry.Transform.Value.M22!=-1 || bounds.IsEmpty || bounds.Width<=0 || bounds.Height<=0) {
+                    string F(double value)=>value.ToString("R",System.Globalization.CultureInfo.InvariantCulture);
+                    string PointText(Point p)=>$"({F(p.X)},{F(p.Y)})";
+                    string figures=string.Join("; ",flattened.Figures.Select((f,i)=>$"figure {i} start={PointText(f.StartPoint)} filled={f.IsFilled} closed={f.IsClosed} segments=["+string.Join(", ",f.Segments.Select(seg=>seg switch {
+                        PolyLineSegment poly=>"PolyLine "+string.Join(" ",poly.Points.Select(PointText)),
+                        LineSegment line=>"Line "+PointText(line.Point),
+                        _=>seg.GetType().Name
+                    }))+"]"));
+                    var m=geometry.Transform.Value;
+                    throw new InvalidOperationException($"Y reflection or stroked arc bounds missing: M22={F(m.M22)}, matrix={m}, empty={bounds.IsEmpty}, x={F(bounds.X)}, y={F(bounds.Y)}, width={F(bounds.Width)}, height={F(bounds.Height)}; flattened transform={flattened.Transform.Value}; {figures}");
+                }
                 // Relative arc control y is the signed chord-normal sagitta. The SVG
                 // reference applies the same final Y reflection as this WPF geometry.
                 var expectedMidpoint=new Point(3-3*y,-(3.5+4*y));
