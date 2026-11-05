@@ -814,9 +814,9 @@ internal sealed class DesignRequestWindow : Window
             modelCards.FirstOrDefault(c=>c.Template==selectedModelText).Label ?? "Seçilmedi";
         var window=new PhotoObservationWindow(this,decoded.Bitmap,modelName,before.Prompt,prompt.MaxLength,
             ()=>!closed && !referenceLoadRunning && ModelUnchanged() && PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending));
-        if(window.ShowDialog()!=true || window.Approved is not { } observations)return;
+        if(window.ShowDialog()!=true || window.ApprovedDescription is not { } approvedDescription)return;
         if(closed || referenceLoadRunning || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; gözlem eklenmedi.");return; }
-        try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi. Mevcut tarif ve seçili modelle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı. Model ve ölçü çıkarılmadı."); }
+        try { prompt.Text=approvedDescription;SetStatus("Onayladığınız fotoğraf gözlemi işlemi tarife uygulandı. Mevcut tarif ve seçili modelle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı. Model ve ölçü çıkarılmadı."); }
         catch(ArgumentException ex) { SetStatus(ex.Message); }
     }
     internal static string AppendPhotoObservations(string original,IReadOnlyList<string> observations,int maxLength)
