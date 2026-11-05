@@ -5,16 +5,22 @@ namespace TekstilCAD.Tests;
 public sealed class ALineRequestMeasurementsTests
 {
     [Theory]
-    [InlineData("ön  bel yayı 36 cm")]
-    [InlineData("ön\tbel yayı 36 cm")]
-    [InlineData("ön bel  yayı 36 cm")]
-    [InlineData("ön  bel yayı bolluğu 2 cm")]
+    [InlineData("ön  bel yayı 36 cm",0,360)]
+    [InlineData("ön\tbel yayı 36 cm",0,360)]
+    [InlineData("ön bel  yayı 36 cm",0,360)]
+    [InlineData("ön  bel yayı bolluğu 2 cm",4,20)]
+    public void HorizontalWhitespaceBetweenExactLabelWordsIsAccepted(string text,int index,int expected)
+    {
+        var review=ALineRequestMeasurements.Review(text, "");
+        Assert.Empty(review.Issues);Assert.Equal((decimal)expected,review.Millimeters[index]);
+    }
+    [Theory]
     [InlineData("ön bel yayi 36 cm")]
     [InlineData("on bel yayi 36 cm")]
     [InlineData("ÖN BEL YAYİ 36 CM")]
     [InlineData("arka kalca yayi 50 cm")]
     [InlineData("ön bel YAYİ BOLLUĞU 2 cm")]
-    public void SimilarAsciiAndWhitespaceLabelsAreReportedButNeverParsed(string text)
+    public void SimilarAsciiLabelsAreReportedButNeverParsed(string text)
     {
         var review=ALineRequestMeasurements.Review(text, "");
         Assert.NotEmpty(review.Issues);

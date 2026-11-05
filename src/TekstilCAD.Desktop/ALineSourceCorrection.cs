@@ -1,4 +1,6 @@
 using System.Text.RegularExpressions;
+using System.Globalization;
+using System.Text;
 using TekstilCAD.FileFormats;
 using TekstilCAD.Patterns;
 
@@ -7,6 +9,7 @@ namespace TekstilCAD.Desktop;
 internal sealed record ALineCorrectionPlan(string Prompt,string Notes,string Place,string Label,string OldText,string NewText);
 internal static class ALineSourceCorrection
 {
+    private static string NormalizeLabel(string text)=>Regex.Replace(text.Trim().Normalize(NormalizationForm.FormC).ToLower(CultureInfo.GetCultureInfo("tr-TR")),@"[ \t]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     internal static ALineCorrectionPlan Create(string prompt,string notes,int index,string formText,ALineLengthUnit? unit)
     {
         if(index<0||index>=ALineRequestMeasurements.Labels.Count || unit is not (ALineLengthUnit.Centimeter or ALineLengthUnit.Millimeter))throw new ArgumentException("Alan ve birim seçin.");
@@ -22,7 +25,7 @@ internal static class ALineSourceCorrection
         foreach(var (text,field) in new[]{(prompt,0),(notes,1)})
         foreach(Match part in Regex.Matches(text,@"[^;\r\n\v\f\u0085\u2028\u2029]+",RegexOptions.None,TimeSpan.FromMilliseconds(100)))
         {
-            var m=pattern.Match(part.Value);if(!m.Success || !string.Equals(m.Groups["label"].Value.Trim(),label,StringComparison.OrdinalIgnoreCase))continue;
+            var m=pattern.Match(part.Value);if(!m.Success || !string.Equals(NormalizeLabel(m.Groups["label"].Value),NormalizeLabel(label),StringComparison.Ordinal))continue;
             var v=m.Groups["value"];matches.Add((field,part.Index+v.Index,v.Length,v.Value));
         }
         if(matches.Count!=1)throw new ArgumentException("Tek bir güvenli kaynak konumu bulunamadı; istek değiştirilmedi.");

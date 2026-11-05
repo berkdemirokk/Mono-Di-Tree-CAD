@@ -29,7 +29,7 @@ public static class ALineRequestMeasurements
     private static readonly Regex ApproximateMention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+
         string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[ \t]+",Approximate(s).Split(' ').Select(Regex.Escape))))+
         ")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-    private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Fold(s))));
+    private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>string.Join(@"[ \t]+",Fold(s).Split(' ').Select(Regex.Escape))));
     private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Exact=new("\\A\\s*(?<label>"+Names+")\\s*(?::|=|\\s)\\s*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\\s*(?<unit>cm|mm)\\s*[.!]?\\s*\\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Unknown assertions about measurements are not affirmative evidence.
@@ -58,7 +58,8 @@ public static class ALineRequestMeasurements
     {
         index=-1;mm=0;var match=Exact.Match(Fold(text));
         if(!match.Success || AmbiguousNumber.IsMatch(match.Groups["value"].Value))return false;
-        index=Enumerable.Range(0,Labels.Count).Single(i=>Fold(Labels[i])==match.Groups["label"].Value);
+        var normalizedLabel=Regex.Replace(match.Groups["label"].Value,@"[ \t]+"," ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        index=Enumerable.Range(0,Labels.Count).Single(i=>Fold(Labels[i])==normalizedLabel);
         if(!decimal.TryParse(match.Groups["value"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out mm))return false;
         if(match.Groups["unit"].Value=="cm")mm*=10m;
         return mm<=10_000m && (index is >=4 and <=7 ? mm>=0 : mm>0);

@@ -15,6 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\src\TekstilCAD.Desktop\ALineSourceCorrection.cs" Link="Desktop\ALineSourceCorrection.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 
