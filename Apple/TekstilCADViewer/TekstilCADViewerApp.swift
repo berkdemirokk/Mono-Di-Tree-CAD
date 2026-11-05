@@ -2550,6 +2550,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var length = ""
     @State private var otherMeasurements = ""
     @State private var measurementProposal: MeasurementMessageParser.Proposal?
+    @State private var descriptionMeasurementSuggestion: ExperimentalDesignBrief.DescriptionMeasurementSuggestion?
+    @State private var showDescriptionMeasurements = false
     @State private var modelSuggestion: ExperimentalDesignBrief.ModelSuggestion?
     @State private var showModelSuggestion = false
     @State private var modelSuggestionRevision = UUID()
@@ -2792,6 +2794,33 @@ private struct ExperimentalDesignBriefView: View {
             "göğüs çevresi": bust, "bel çevresi": waist, "kalça çevresi": hips, "elbise boyu": length
         ])
     }
+    private func proposeDescriptionMeasurements() {
+        guard !draftTransition, !referenceDecisionPending,
+              let proposal = ExperimentalDesignBrief.descriptionMeasurements(draft) else {
+            measurementMessageStatus = "Tarifteki ölçüler güvenle önerilemedi. Modeli, ölçüleri ve birimleri gözden geçirin; metin ve alanlar korunuyor."
+            return
+        }
+        descriptionMeasurementSuggestion = .init(draft: draft, proposal: proposal, explicitSelection: modelExplicitlySelected,
+            importedPortable: importedPortable, version: requestExportVersion, revision: modelSuggestionRevision)
+        measurementMessageStatus = ""; showDescriptionMeasurements = true
+    }
+    private func applyDescriptionMeasurements() {
+        guard let suggestion = descriptionMeasurementSuggestion else { return }
+        descriptionMeasurementSuggestion = nil
+        guard !draftTransition, !referenceDecisionPending,
+              suggestion.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                                 version: requestExportVersion, revision: modelSuggestionRevision),
+              ExperimentalDesignBrief.descriptionMeasurements(draft) == suggestion.proposal else {
+            measurementMessageStatus = "Taslak veya seçim değişti; hiçbir ölçü alanı değiştirilmedi. Tarifi yeniden inceleyin."
+            return
+        }
+        let values = suggestion.proposal.values
+        if let value = values["göğüs çevresi"] { bust = value }
+        if let value = values["bel çevresi"] { waist = value }
+        if let value = values["kalça çevresi"] { hips = value }
+        if let value = values["elbise boyu"] { length = value }
+        measurementMessageStatus = "Onaylanan ölçüler alanlara eklendi; özgün tarif de korundu. Çelişki olup olmadığını gözden geçirin."
+    }
     private func proposeMeasurementMessage() {
         do {
             measurementProposal = try parseMeasurementMessage()
@@ -2828,11 +2857,12 @@ private struct ExperimentalDesignBriefView: View {
     private var desktopMeasurementRisk: Bool {
         let fields = [description, draft.measurements]
         return fields.contains { MeasurementMessageParser.mayNeedDesktopReview($0) }
+            || MeasurementMessageParser.containsExplicitMeasurement(description)
             || MeasurementMessageParser.hasConditionalMeasurementRisk(fields)
     }
     private var measurementReviewStartStep: Int {
         let fields = [description, draft.measurements]
-        return MeasurementMessageParser.mayNeedDesktopReview(description)
+        return MeasurementMessageParser.mayNeedDesktopReview(description) || MeasurementMessageParser.containsExplicitMeasurement(description)
             || MeasurementMessageParser.hasConditionalMeasurementRisk(fields) ? 0 : 1
     }
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
@@ -2947,6 +2977,9 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: $description).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
+                    Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
+                    Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
+                    if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
                     Text("Tek bir model adı veya ‘A kesim elbise istiyorum, uzun kollu’ gibi açık bir ifade aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin.").font(.caption)
                     if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
                     ScrollView(.horizontal) {
@@ -3085,12 +3118,18 @@ private struct ExperimentalDesignBriefView: View {
                             .font(.caption).foregroundStyle(plum)
                     }
                     if desktopMeasurementRisk {
-                        Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüleri kontrol edin. Özgün metin otomatik değiştirilmez; masaüstündeki yorumu ayrıca doğrulayın.").font(.caption).foregroundStyle(.secondary)
+                        Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüleri kontrol edin. Özgün metin otomatik değiştirilmez; masaüstündeki yorumu ayrıca doğrulayın.").font(.caption).foregroundStyle(.secondary)
                     }
                     if !summary.whitespaceMeasurementLabels.isEmpty {
                         Text("Yalnız boşluk içeren alanlar: \(summary.whitespaceMeasurementLabels.joined(separator: ", ")). Ölçüleri düzenleyin; ham metin korunuyor.").foregroundStyle(.secondary)
                     }
-                    Text(summary.measurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Görünür ölçü girilmedi." : summary.measurements).textSelection(.enabled)
+                    if summary.measurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Ölçü alanı veya notu girilmedi; tarifteki ölçüler bu özete otomatik aktarılmaz.")
+                    } else { Text(summary.measurements).textSelection(.enabled) }
+                    if ExperimentalDesignBrief.descriptionMeasurements(draft) != nil {
+                        Text("Tarifte incelenebilecek açık ölçüler bulundu; alanlara eklenmeleri için onay gerekir.").font(.caption)
+                        Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
+                    }
                     if summary.hasPendingMeasurements {
                         Text("Ölçü formunda henüz onaylanmamış giriş var; bu girişler yukarıdaki ölçülere dahil değil.").foregroundStyle(.secondary)
                     }
@@ -3222,6 +3261,13 @@ private struct ExperimentalDesignBriefView: View {
                 Text(measurementProposal?.preview ?? "Ölçü bulunamadı.")
                 Text("Özgün mesaj korunur. Aynı bilgiler alanlarda ve mesajda görünebilir; eklenmeyen ölçüleri kontrol edin.")
             }
+            .confirmationDialog("Tarifteki ölçüler alanlara eklensin mi?", isPresented: $showDescriptionMeasurements, titleVisibility: .visible) {
+                Button("Ölçüleri alanlara ekle") { applyDescriptionMeasurements() }
+                Button("Vazgeç", role: .cancel) { descriptionMeasurementSuggestion = nil }
+            } message: {
+                Text(descriptionMeasurementSuggestion?.proposal.preview ?? "Ölçü bulunamadı.")
+                Text("Özgün tarif korunur. Seçili modeli, ölçüleri ve birimleri kontrol edin; bu işlem kalıp oluşturmaz.")
+            }
             .confirmationDialog("Dosya hedefini dikkatle seçin", isPresented: $confirmingExportDestination, titleVisibility: .visible) {
                 Button("Anladım, dosya konumunu seç") {
                     guard let attempt = pendingExportAttempt, attempt.matchesCurrentDraft(draft), !referenceDecisionPending else {
@@ -3256,7 +3302,7 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 Button("Tarif ve ölçüleri gözden geçir") { desktopWarningSnapshot = nil; step = measurementReviewStartStep }
                 Button("Vazgeç", role: .cancel) { desktopWarningSnapshot = nil }
-            } message: { Text("Soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler yanlış yorumlanabilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
+            } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
             .onChange(of: draft) { value in modelSuggestionRevision = UUID(); if !draftTransition { saveLocalDraft(value) } }

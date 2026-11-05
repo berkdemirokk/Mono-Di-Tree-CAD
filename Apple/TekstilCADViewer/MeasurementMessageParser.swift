@@ -25,14 +25,18 @@ enum MeasurementMessageParser {
     }
     /// Desktop v1 splits comma/semicolon/newline, but not conjunctions or sentence periods.
     /// This is only a narrow warning, not proof of downstream interpretation.
+    static func containsExplicitMeasurement(_ text: String) -> Bool {
+        guard text.utf16.count <= 16_384 else { return true }
+        let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
+        return text.range(of: measurement, options: .regularExpression) != nil
+    }
     static func hasConditionalMeasurementRisk(_ parts: [String]) -> Bool {
         guard parts.allSatisfy({ $0.utf16.count <= 16_384 }) else { return true }
         let condition = #"(?i)(?<![\p{L}\p{N}_])(?:eğer|şayet)(?![\p{L}\p{N}_])"#
-        let measurement = #"(?i)(?<![\p{L}\p{N}_])(?:göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)(?![\p{L}\p{N}_])"#
         // A condition and a measurement in different segments or fields can
         // still be related; warn without claiming to interpret the sentence.
         return parts.contains { $0.range(of: condition, options: .regularExpression) != nil }
-            && parts.contains { $0.range(of: measurement, options: .regularExpression) != nil }
+            && parts.contains { containsExplicitMeasurement($0) }
     }
     static func mayNeedDesktopReview(_ message: String) -> Bool {
         guard message.utf16.count <= 16_384 else { return true }

@@ -129,8 +129,11 @@ enum ExperimentalDesignBrief {
         var cursor = 0, observedDetails: [String: String] = [:], observedMeasures: [String: Decimal] = [:]
         let separators = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ",;."))
         while cursor < source.length {
+            let separatorStart = cursor
             while cursor < source.length, let scalar = UnicodeScalar(source.character(at: cursor)), separators.contains(scalar) { cursor += 1 }
             if cursor == source.length { break }
+            let separator = source.substring(with: NSRange(location: separatorStart, length: cursor - separatorStart))
+            let separatedExplicitly = separator.rangeOfCharacter(from: CharacterSet(charactersIn: ",;.\n\r")) != nil
             let region = NSRange(location: cursor, length: source.length - cursor)
             if let match = measurePattern.firstMatch(in: text, options: .anchored, range: region) {
                 let label = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
@@ -140,7 +143,7 @@ enum ExperimentalDesignBrief {
                 let unit = source.substring(with: match.range(at: 3))
                 guard let value = Decimal(string: number, locale: Locale(identifier: "en_US_POSIX")), value > 0, value <= (unit == "cm" ? 1000 : 10000) else { return false }
                 let millimeters = unit == "cm" ? value * 10 : value
-                if let previous = observedMeasures[label], previous != millimeters { return false }
+                if let previous = observedMeasures[label], previous != millimeters || !separatedExplicitly { return false }
                 observedMeasures[label] = millimeters; cursor = NSMaxRange(match.range)
             } else if let match = detailPattern.firstMatch(in: text, options: .anchored, range: region) {
                 let key = source.substring(with: match.range).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
@@ -150,12 +153,9 @@ enum ExperimentalDesignBrief {
             } else { return false }
             // Require a separator between complete phrases; do not accept a
             // recognized prefix of an unknown or contradictory expression.
-            var next = cursor
-            while next < source.length, source.character(at: next) == 32 || source.character(at: next) == 9 { next += 1 }
-            if next < source.length {
-                guard let scalar = UnicodeScalar(source.character(at: next)), CharacterSet(charactersIn: ",;.\n\r").contains(scalar) else { return false }
+            if cursor < source.length {
+                guard let scalar = UnicodeScalar(source.character(at: cursor)), separators.contains(scalar) else { return false }
             }
-            cursor = next
         }
         return true
     }
@@ -167,6 +167,37 @@ enum ExperimentalDesignBrief {
         let revision: UUID
         func matches(_ current: Draft, explicitSelection: Bool, importedPortable: Bool, revision: UUID) -> Bool {
             draft == current && self.explicitSelection == explicitSelection && self.importedPortable == importedPortable && self.revision == revision
+        }
+    }
+    /// Proposal only for a completely recognized description; no text or fields are changed.
+    static func descriptionMeasurements(_ draft: Draft) -> MeasurementMessageParser.Proposal? {
+        guard let suggested = suggestedModel(draft), draft.style == .describe || draft.style == suggested else { return nil }
+        let original = draft.description.precomposedStringWithCanonicalMapping
+        let pattern = #"(?i)(?<![\p{L}\p{N}_])(göğüs[ \t]+çevresi|bel[ \t]+çevresi|kalça[ \t]+çevresi|elbise[ \t]+boyu)[ \t]*(?::|=)?[ \t]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[ \t]*(cm|mm)(?![\p{L}\p{N}_])"#
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let source = original as NSString
+        let existing = ["göğüs çevresi": draft.bust, "bel çevresi": draft.waist, "kalça çevresi": draft.hips, "elbise boyu": draft.length]
+        var values: [String: String] = [:]
+        for match in expression.matches(in: original, range: NSRange(original.startIndex..., in: original)) {
+            let label = source.substring(with: match.range(at: 1)).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
+            let number = source.substring(with: match.range(at: 2)), unit = source.substring(with: match.range(at: 3))
+            guard let found = try? MeasurementMessageParser.parse("\(label): \(number) \(unit)", existing: existing),
+                  let pair = found.values.first, values[pair.key] == nil else { return nil }
+            values[pair.key] = pair.value
+        }
+        guard !values.isEmpty else { return nil }
+        return MeasurementMessageParser.Proposal(source: draft.description, values: values)
+    }
+    struct DescriptionMeasurementSuggestion {
+        let draft: Draft
+        let proposal: MeasurementMessageParser.Proposal
+        let explicitSelection: Bool
+        let importedPortable: Bool
+        let version: Int
+        let revision: UUID
+        func matches(_ current: Draft, explicitSelection: Bool, importedPortable: Bool, version: Int, revision: UUID) -> Bool {
+            draft == current && self.explicitSelection == explicitSelection && self.importedPortable == importedPortable
+                && self.version == version && self.revision == revision
         }
     }
     /// Values shown for review are derived directly from the snapshot being exported.
