@@ -3393,6 +3393,19 @@ private struct ExperimentalDesignBriefView: View {
                         .accessibilityLabel("İşlem durumu: " + message)
                 }
                 .frame(maxHeight: 110)
+                #if os(iOS)
+                if step == 3, savedShareAttempt?.matchesCurrentDraft(draft) == true,
+                   savedShareVersion == requestExportVersion,
+                   savedShareSelected == modelExplicitlySelected, savedShareImported == importedPortable,
+                   shareWorkID == nil, shareCleanupItem == nil,
+                   !referenceBlocksClose, !draftTransition, !aLineInputPending, measurementForm?.hasValues != true {
+                    Button { startSavedShare() } label: {
+                        Image(systemName: "square.and.arrow.up").frame(minWidth: 44, minHeight: 44)
+                    }
+                    .accessibilityLabel("Kaydedilen isteği paylaş")
+                    .accessibilityHint("Sistem paylaşım seçeneklerini açar; alıcıyı siz seçersiniz.")
+                }
+                #endif
                 Button { message = "" } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }
                     .accessibilityLabel("Durum mesajını kapat")
             }
@@ -4125,9 +4138,19 @@ private struct ExperimentalDesignBriefView: View {
                             savedShareSelected = current.matchesCurrentDraft(draft) ? modelExplicitlySelected : nil
                             savedShareImported = current.matchesCurrentDraft(draft) ? importedPortable : nil
                             #endif
+                            #if os(iOS)
+                            if current.draft == draft && savedShareVersion == requestExportVersion {
+                                message = "İstek dosyası kaydedildi. Paylaş düğmesiyle aktarabilirsiniz; masaüstünde ayrıca incelenmesi gerekir."
+                            } else {
+                                message = current.draft == draft
+                                    ? "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
+                                    : "Önceki içerik kaydedildi; sonraki değişiklikler henüz kaydedilmedi."
+                            }
+                            #else
                             message = current.draft == draft
                                 ? "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
                                 : "Önceki içerik kaydedildi; sonraki değişiklikler henüz kaydedilmedi."
+                            #endif
                         case .failure(let error):
                             if !isFilePickerCancellation(error) { message = "İstek dosyası kaydedilemedi; içerik burada korunuyor." }
                         }
