@@ -45,6 +45,15 @@ internal static partial class DesktopVerification
                 bool rejected=false;try { _=ALineSourceCorrection.Create("",ambiguous,0,"36",ALineLengthUnit.Centimeter); } catch(ArgumentException) { rejected=true; }
                 Check(rejected,"Ambiguous or repeated source is never rewritten: "+ambiguous,checks);
             }
+            var sourcePrompt="Önceki tasarım\r\nÖn bel yayı: 35.25 cm; kumaş notu\r\nSon satır";
+            var sourceNotes="Korunacak not";
+            var millimeterCorrection=ALineSourceCorrection.Create(sourcePrompt,sourceNotes,0,"352.5001",ALineLengthUnit.Millimeter);
+            Check(millimeterCorrection.Place=="Tarif" && millimeterCorrection.OldText=="35.25 cm" && millimeterCorrection.NewText=="352.5001 mm" &&
+                millimeterCorrection.Prompt=="Önceki tasarım\r\nÖn bel yayı: 352.5001 mm; kumaş notu\r\nSon satır" && millimeterCorrection.Notes==sourceNotes,
+                "Prompt correction preserves CRLF and surrounding text while retaining precise mm input",checks);
+            var centimeterCorrection=ALineSourceCorrection.Create("Ön bel yayı: 350 mm","diğer",0,"35.01",ALineLengthUnit.Centimeter);
+            Check(centimeterCorrection.OldText=="350 mm" && centimeterCorrection.NewText=="35.01 cm" && centimeterCorrection.Prompt=="Ön bel yayı: 35.01 cm" && centimeterCorrection.Notes=="diğer",
+                "Correction retains explicit decimal centimeter input when the source used millimeters",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             window.ConfirmDiscardWorkForVerification=()=>true;
             Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
