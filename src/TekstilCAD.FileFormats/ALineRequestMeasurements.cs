@@ -54,7 +54,19 @@ public static class ALineRequestMeasurements
     }
     // Only a whole affirmative, explicitly unit-bearing clause is isolated from
     // total-circumference parsing. Questions/conditions/mixed clauses stay guarded.
-    internal static bool IsExplicitSeparateField(string text)=>TryRead(text,out _,out _);
+    private static bool TryReadGroup(string text,out List<(int Index,decimal Mm)> fields)
+    {
+        fields=[];
+        var parts=Regex.Split(Fold(text),@"[ \t]+ve[ \t]+",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        if(parts.Length is <1 or >8)return false;
+        foreach(var part in parts)
+        {
+            if(!TryRead(part,out var index,out var value)) { fields.Clear();return false; }
+            fields.Add((index,value));
+        }
+        return true;
+    }
+    internal static bool IsExplicitSeparateField(string text)=>TryReadGroup(text,out _);
 
     public static ALineRequestMeasurementReview Review(string prompt,string notes)
     {
@@ -71,9 +83,10 @@ public static class ALineRequestMeasurements
         {
             if(!Mention.IsMatch(Fold(segment)))continue;
             if(AmbiguousNumber.IsMatch(segment)) { issues.Add("A kesim sayısında üç basamaklı ayırıcı belirsiz: "+segment+". Binlik ayırıcı kullanmayın; 1000 mm veya 1 mm gibi açık yazın. Ondalık hassasiyet için eşdeğer cm/mm değerini üç basamaklı gruplama olmadan belirtin.");continue; }
-            if(!TryRead(segment,out var index,out var value)) { issues.Add("A kesim alanı açık, tek ve birimli değil: "+segment);continue; }
-            if(values[index] is decimal prior && prior!=value)issues.Add(Labels[index]+": farklı değerler çelişiyor.");
-            else values[index]=value;
+            if(!TryReadGroup(segment,out var group)) { issues.Add("A kesim alanları açık, tam etiketli ve birimli değil: "+segment);continue; }
+            foreach(var (index,value) in group)
+                if(values[index] is decimal prior && prior!=value)issues.Add(Labels[index]+": farklı değerler çelişiyor.");
+                else values[index]=value;
         }
         if(totals.Questions.Any(q=>q.Contains("koşullu",StringComparison.Ordinal)))issues.Add("İstekteki koşulun kapsamı belirsiz; A kesim ölçüleri kesin kabul edilmedi.");
         foreach(var (label,a,b) in new[]{("bel çevresi",0,1),("kalça çevresi",2,3)})

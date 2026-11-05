@@ -4,6 +4,25 @@ namespace TekstilCAD.Tests;
 
 public sealed class ALineRequestMeasurementsTests
 {
+    [Fact] public void ExplicitConjoinedFieldsAreConsumedTogetherAndPreserveDistinctEase()
+    {
+        const string original="Ön bel yayı 36 cm ve arka bel yayı 360 mm ve ön bel yayı bolluğu 0 mm";
+        var source=ALineRequestMeasurements.Review(original,"");
+        Assert.Empty(source.Issues);Assert.Equal(360m,source.Millimeters[0]);Assert.Equal(360m,source.Millimeters[1]);Assert.Equal(0m,source.Millimeters[4]);Assert.Null(source.Millimeters[5]);
+        Assert.Empty(ALineRequestMeasurements.Review("ön bel yayı 36 cm ve ön bel yayı 360 mm","").Issues);
+        Assert.NotEmpty(ALineRequestMeasurements.Review("ön bel yayı 36 cm ve ön bel yayı 37 cm","").Issues);
+    }
+    [Theory]
+    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36 cm değil")]
+    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36 cm?")]
+    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36 cm eğer uygunsa")]
+    [InlineData("ön bel yayı 36 cm ve kumaş yumuşak")]
+    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36")]
+    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36 cm ve")]
+    public void IncompleteOrAmbiguousGroupNeverPublishesPartialValues(string text)
+    {
+        var source=ALineRequestMeasurements.Review(text,"");Assert.NotEmpty(source.Issues);Assert.Null(source.Millimeters[0]);Assert.Null(source.Millimeters[1]);
+    }
     [Theory]
     [InlineData("A kesim elbise istiyorum, ölçülerimi birazdan vereceğim")]
     [InlineData("Lütfen bana A kesim elbise hazırla; ölçüleri daha sonra paylaşacağım.")]
@@ -54,7 +73,6 @@ public sealed class ALineRequestMeasurementsTests
     [InlineData("ön bel yayı 36 cm?")]
     [InlineData("ön bel yayı yaklaşık 36 cm")]
     [InlineData("ön bel yayı 36 cm değil")]
-    [InlineData("ön bel yayı 36 cm ve arka bel yayı 36 cm")]
     [InlineData("ön bel yayı 36")]
     [InlineData("ön bel yayı 0 cm")]
     [InlineData("ön bel yayı 10001 mm")]

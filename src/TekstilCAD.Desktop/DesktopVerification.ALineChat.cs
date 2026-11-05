@@ -18,6 +18,14 @@ internal static partial class DesktopVerification
             Check(window.ConversationForVerification.Text.Contains("Sıradaki alan (1/11): Ön bel yayı") &&
                 !window.ConversationForVerification.Text.Contains("göğüs çevresi: açık ölçü"),
                 "Explicit A-line starts its own measured-arc questions rather than the general dress checklist",checks);
+            const string combined="Ön bel yayı 36 cm ve arka bel yayı 360 mm";
+            window.ChatInputForVerification.Text=combined;window.SendMessageForVerification();
+            var combinedRequest=window.CaptureForVerification();var combinedSource=ALineRequestMeasurements.Review(combinedRequest.Prompt,combinedRequest.Measurements);
+            Check(combinedRequest.Prompt.EndsWith(combined,StringComparison.Ordinal) && combinedRequest.Measurements==source.Measurements && combinedSource.Issues.Count==0 && combinedSource.Millimeters[0]==360 && combinedSource.Millimeters[1]==360 && window.ConversationForVerification.Text.Contains("Sıradaki alan (3/11)"),"Conjoined explicit chat values remain verbatim and advance to the next missing field",checks);
+            var combinedPlan=TekstilCAD.Patterns.ALineTransferPlan.Create(combinedSource.Millimeters,combinedSource.Issues,Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
+            var combinedFields=combinedPlan.ApplyTo(Enumerable.Repeat("",11).ToArray(),TekstilCAD.Patterns.ALineLengthUnit.Millimeter);
+            Check(combinedFields[0]=="360" && combinedFields[1]=="360" && combinedFields[2]=="","Conjoined chat values transfer without deriving missing fields",checks);
+            window.LoadForVerification(source);
             string[] answers=["36 cm.","360 mm!","50 cm","500 mm","0 cm.","0 mm!","2 cm","20 mm","20 cm.","70 cm!","160 cm"];
             for(var i=0;i<answers.Length;i++)
             {
