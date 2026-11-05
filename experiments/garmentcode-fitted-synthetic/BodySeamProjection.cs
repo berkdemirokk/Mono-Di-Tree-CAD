@@ -11,17 +11,32 @@ internal static class BodySeamProjection
     }
     internal sealed class UnverifiedResult
     {
-        internal UnverifiedResult(IReadOnlyList<Lengths> rules) { Rules=rules; }
+        internal UnverifiedResult(IReadOnlyList<Lengths> rules,IReadOnlyList<ProjectedLengthBounds.Interval> waistParts) { Rules=rules;WaistParts=waistParts; }
         public IReadOnlyList<Lengths> Rules { get; }
+        // Order: upper front, lower front, upper back, lower back.
+        public IReadOnlyList<ProjectedLengthBounds.Interval> WaistParts { get; }
         public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified seam lengths; composition blocked.");
     }
     internal static UnverifiedResult Calculate(IResearchPatternBody body,ResearchDesign design)
+        =>CalculateCore(body,design,null,null,null);
+    internal static UnverifiedResult CalculateChanged(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph graph,IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left)
+        =>CalculateCore(body,design,graph,right,left);
+    static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left)
     {
         ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var graph=BodySeamStudy.Calculate(body,design);
+        if(supplied is not null) {
+            bool Same(SyntheticFullSeamGraph.Side a,SyntheticFullSeamGraph.Side b)=>a.Edges.SequenceEqual(b.Edges)&&a.Ruffles.SequenceEqual(b.Ruffles);
+            if(supplied.Snapshot!=graph.Snapshot || supplied.Rules.Count!=23 || !supplied.Rules.Zip(graph.Rules).All(p=>p.First.Owner==p.Second.Owner&&p.First.Kind==p.Second.Kind&&p.First.Index==p.Second.Index&&Same(p.First.A,p.Second.A)&&Same(p.First.B,p.Second.B)))throw new ArgumentException("Changed graph identity or connection");
+            if(right is null||left is null)throw new ArgumentException("Missing changed panels");
+            foreach(var (panel,edges) in new[]{("right_btorso",right),("left_btorso",left)}) {
+                var t=BodyCurveStudy.Inspect(panel,edges,13);
+                if(t.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented||t.Unresolved!=0||t.NonMonotone!=0)throw new ArgumentException("Changed panel topology not established");
+            }
+        } else if(right is not null || left is not null)throw new ArgumentException("Changed panel requires graph");
         var fr=FrontBodiceCandidate.CreateFromBody(body,design);var fl=FrontBodiceCandidate.CreateLeftFromBody(body,design);
         var br=BackBodiceCandidate.CreateFromBody(body,design,false);var bl=BackBodiceCandidate.CreateFromBody(body,design,true);
         var sf=FrontSkirtCandidate.CreateFromMatchedBody(body,design);var sb=BackSkirtCandidate.CreateFromBody(body,design);
@@ -38,8 +53,10 @@ internal static class BodySeamProjection
         }
         foreach(var e in fr.Edges)Register("right_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
         foreach(var e in fl.Edges)Register("left_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
-        foreach(var e in br.Edges)Register("right_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
-        foreach(var e in bl.Edges)Register("left_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+        if(right is null)foreach(var e in br.Edges)Register("right_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+        else foreach(var e in right)Register(e.Panel,e.Id,e.Kind,e.Ax,e.Ay,e.Bx,e.By,e.RelativeControls);
+        if(left is null)foreach(var e in bl.Edges)Register("left_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+        else foreach(var e in left)Register(e.Panel,e.Id,e.Kind,e.Ax,e.Ay,e.Bx,e.By,e.RelativeControls);
         foreach(var e in sf.Edges)Register("skirt_front",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is {} c?new[]{(c.X,c.Y)}:[]);
         foreach(var e in sb.Edges)Register("skirt_back",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is {} c?new[]{(c.X,c.Y)}:[]);
         var cache=new Dictionary<(string,int),BezierLengthBounds.Bounds>();
@@ -60,6 +77,13 @@ internal static class BodySeamProjection
             }
             return total;
         }
-        return new(Array.AsReadOnly(graph.Rules.Select(r=>new Lengths(r.Owner,r.Kind,r.Index,Side(r.A),Side(r.B))).ToArray()));
+        var full=graph.Rules.Single(r=>r.Kind=="MetaGarment"&&r.Index==0);
+        if(full.A.Edges.Count!=10||full.B.Edges.Count!=10||full.A.Ruffles.Any(r=>r.Coefficient!=1)||full.B.Ruffles.Any(r=>r.Coefficient!=1))throw new ArgumentException("Unsupported waist sections");
+        ProjectedLengthBounds.Interval Part(SyntheticFullSeamGraph.Side side,int start,int count) {
+            var edges=side.Edges.Skip(start).Take(count).ToArray();
+            return Side(new SyntheticFullSeamGraph.Side(Array.AsReadOnly(edges),Array.AsReadOnly(new[]{new SyntheticFullSeamGraph.Ruffle(0,count,1)})));
+        }
+        var parts=new[]{Part(full.A,0,4),Part(full.B,0,4),Part(full.A,4,6),Part(full.B,4,6)};
+        return new(Array.AsReadOnly(graph.Rules.Select(r=>new Lengths(r.Owner,r.Kind,r.Index,Side(r.A),Side(r.B))).ToArray()),Array.AsReadOnly(parts));
     }
 }

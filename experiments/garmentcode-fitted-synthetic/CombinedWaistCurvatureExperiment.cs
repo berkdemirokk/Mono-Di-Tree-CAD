@@ -4,7 +4,7 @@ namespace FittedResearch;
 // The result is not a garment graph and cannot be exported or manufactured.
 internal static class CombinedWaistCurvatureExperiment
 {
-    internal sealed record Result(string Id,double WaistTarget,BezierLengthBounds.Bounds WaistBefore,BezierLengthBounds.Bounds WaistAfter,BezierLengthBounds.Bounds FrontSide,BezierLengthBounds.Bounds BackBefore,BezierLengthBounds.Bounds BackAfter,double WaistShift,double WaistShapeBound,double SideLowerShapeBound,double SideUpperShapeBound,BodyCurveStudy.Result FrontBeforeTopology,BodyCurveStudy.Result FrontAfterTopology,BodyCurveStudy.Result BackBeforeTopology,BodyCurveStudy.Result BackAfterTopology)
+    internal sealed record Result(string Id,double WaistTarget,BezierLengthBounds.Bounds WaistBefore,BezierLengthBounds.Bounds WaistAfter,BezierLengthBounds.Bounds FrontSide,BezierLengthBounds.Bounds BackBefore,BezierLengthBounds.Bounds BackAfter,double WaistShift,double WaistShapeBound,double SideLowerShapeBound,double SideUpperShapeBound,BodyCurveStudy.Result FrontBeforeTopology,BodyCurveStudy.Result FrontAfterTopology,BodyCurveStudy.Result BackBeforeTopology,BodyCurveStudy.Result BackAfterTopology,IReadOnlyList<BodyCurveStudy.Edge> RightAfter)
     {
         public string Status=>"unresolved"; public bool ProductionAllowed=>false; public bool ExportAllowed=>false;
         public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
@@ -63,6 +63,6 @@ internal static class CombinedWaistCurvatureExperiment
         if(!double.IsFinite(waistShape)||!double.IsFinite(lowerShape)||!double.IsFinite(upperShape)||waistShape>waistLimitCm+1e-12||lowerShape>waistLimitCm+1e-12||upperShape>curvatureLimitCm+1e-12)throw new ArgumentException("Assumed represented shape limit exceeded");
         var frontAfter=BodyCurveStudy.Inspect("right_ftorso",front,12);var backAfter=BodyCurveStudy.Inspect("right_btorso",changed,13);
         if(!Good(frontAfter)||!Good(backAfter))throw new ArgumentException("Combined contour topology not established");
-        return new(id,waistTarget,waistBefore,waistAfter,frontSide,beforeSide,afterSide,waist.ShiftCm,waistShape,lowerShape,upperShape,frontBefore,frontAfter,backBefore,backAfter);
+        return new(id,waistTarget,waistBefore,waistAfter,frontSide,beforeSide,afterSide,waist.ShiftCm,waistShape,lowerShape,upperShape,frontBefore,frontAfter,backBefore,backAfter,Array.AsReadOnly(changed));
     }
 }
