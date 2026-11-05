@@ -9606,6 +9606,37 @@ internal static partial class DesktopVerification
         var beyondBoundary=(OpenCvSharp.Point[])exactBoundary.Clone();beyondBoundary[1]=new(3,16);
         Check(!PhotoContourApproximation.CorrespondingWithinOnePixel(beyondBoundary,exactBoundaryCandidate,CancellationToken.None),
             "Exact integer threshold rejects a point genuinely beyond one pixel",checks);
+        // Each omitted vertex belongs to one ordered chord, including across closure.
+        // Endpoint cases exercise clamping rather than distance to the infinite line.
+        (string Name,OpenCvSharp.Point A,OpenCvSharp.Point P,OpenCvSharp.Point B,bool Expected)[] pixelCases=
+        [
+            ("before start at one",new(2,2),new(1,2),new(6,3),true),
+            ("before start beyond one",new(2,2),new(1,1),new(6,3),false),
+            ("after end at one",new(2,2),new(7,3),new(6,3),true),
+            ("after end beyond one",new(2,2),new(7,4),new(6,3),false),
+            ("interior at one",new(2,2),new(4,3),new(6,2),true),
+            ("interior beyond one",new(2,2),new(4,4),new(6,2),false)
+        ];
+        foreach(var pixelCase in pixelCases)
+        foreach(var highCorner in new[] { false,true })
+        foreach(var reverse in new[] { false,true })
+        {
+            OpenCvSharp.Point Corner(OpenCvSharp.Point point)=>highCorner ? new(2047-point.X,2047-point.Y) : point;
+            var points=new[] { Corner(pixelCase.A),Corner(pixelCase.P),Corner(pixelCase.B),Corner(new(6,0)),Corner(new(2,0)) };
+            if(reverse)Array.Reverse(points);
+            // Rotate both independently so the replaced chord also crosses the implicit closing edge.
+            for(var sourceStart=0;sourceStart<points.Length;sourceStart++)
+            {
+                var rotated=points.Skip(sourceStart).Concat(points.Take(sourceStart)).ToArray();
+                var retained=rotated.Where(point=>point!=Corner(pixelCase.P)).ToArray();
+                for(var candidateStart=0;candidateStart<retained.Length;candidateStart++)
+                {
+                    var rotatedCandidate=retained.Skip(candidateStart).Concat(retained.Take(candidateStart)).ToArray();
+                    Check(PhotoContourApproximation.CorrespondingWithinOnePixel(rotated,rotatedCandidate,CancellationToken.None)==pixelCase.Expected,
+                        $"Exact contour threshold {pixelCase.Name}, corner {(highCorner ? "2047" : "0")}, reverse {reverse}, source start {sourceStart}, candidate start {candidateStart}",checks);
+                }
+            }
+        }
         try { PhotoContourApproximation.CorrespondingWithinOnePixel(extremeSource,extremeCandidate,CancellationToken.None);throw new InvalidOperationException("Unbounded exact coordinates accepted."); }
         catch(InvalidDataException) { Check(true,"Exact pixel threshold rejects coordinates outside its overflow-safe image range",checks); }
         OpenCvSharp.Point[] narrowU=[new(0,0),new(10,0),new(10,10),new(8,10),new(8,1),new(2,1),new(2,10),new(0,10)];
