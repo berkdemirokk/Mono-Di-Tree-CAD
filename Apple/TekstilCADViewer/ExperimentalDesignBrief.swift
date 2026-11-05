@@ -574,7 +574,7 @@ enum ExperimentalDesignBrief {
         }
         throw Error.invalidImage
     }
-    private static func validateV2Image(_ data: Data) throws {
+    static func validateV2Image(_ data: Data) throws {
         guard !data.isEmpty, data.count <= maxImageBytes,
               let source = CGImageSourceCreateWithData(data as CFData, nil),
               let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],

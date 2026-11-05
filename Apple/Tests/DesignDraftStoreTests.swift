@@ -398,6 +398,71 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(try remove.apply(to: original))
         XCTAssertThrowsError(try remove.apply(to: changedElsewhere))
     }
+    func testPhotoObservationsRequireExplicitChoicesAndPreserveExistingText() throws {
+        let empty = PhotoObservation.Selection()
+        XCTAssertTrue(empty.lines.isEmpty)
+        XCTAssertThrowsError(try PhotoObservation.append(empty, description: "Tarif", notes: ""))
+        let selected = PhotoObservation.Selection(silhouette: .aline, sleeve: .long, neck: .unknown)
+        XCTAssertEqual(selected.lines, ["Fotoğraf gözlemi · Siluet: A kesim", "Fotoğraf gözlemi · Kol: Uzun kollu"])
+        let original = "Kolsuz model 👗"
+        let result = try PhotoObservation.append(selected, description: original, notes: "Bel çevresi: 72 cm")
+        XCTAssertEqual(result, original + "\n" + selected.lines.joined(separator: "\n"))
+        XCTAssertEqual(original, "Kolsuz model 👗") // Contradictions remain visible for manual review.
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: result, notes: ""))
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: original, notes: "Fotoğraf gözlemi · Kol: Kolsuz"))
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: "Not; Fotoğraf gözlemi · Kol: Kolsuz", notes: ""))
+        XCTAssertThrowsError(try PhotoObservation.append(selected, description: String(repeating: "x", count: ExperimentalDesignBrief.maxTextUnits), notes: ""))
+    }
+    func testPhotoObservationSnapshotRejectsStaleInputsAndPendingWork() {
+        func draft(_ text: String = "Tarif", bytes: Data = Data([1]), notes: String = "", waist: String = "72 cm", style: ExperimentalDesignBrief.DressStyle = .aline) -> ExperimentalDesignBrief.Draft {
+            .init(style: style, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: bytes, imageName: "foto.png")
+        }
+        let original = draft(), revision = UUID()
+        let request = PhotoObservation.Request(draft: original, explicitSelection: true, importedPortable: false, version: 2, revision: revision)
+        func matches(_ value: ExperimentalDesignBrief.Draft, explicit: Bool = true, imported: Bool = false, version: Int = 2, revision: UUID? = nil, activeID: UUID? = nil, pending: Bool = false, transition: Bool = false) -> Bool {
+            request.matches(value, explicitSelection: explicit, importedPortable: imported, version: version,
+                            revision: revision ?? request.revision, activeID: activeID ?? request.id, referencePending: pending, transition: transition)
+        }
+        XCTAssertTrue(matches(original)); XCTAssertFalse(matches(draft("Değişti")))
+        XCTAssertFalse(matches(draft(bytes: Data([2])))); XCTAssertFalse(matches(draft(notes: "yeni not")))
+        XCTAssertFalse(matches(draft(waist: "80 cm"))); XCTAssertFalse(matches(draft(style: .wrap)))
+        XCTAssertFalse(matches(original, explicit: false)); XCTAssertFalse(matches(original, imported: true))
+        XCTAssertFalse(matches(original, version: 1)); XCTAssertFalse(matches(original, revision: UUID()))
+        XCTAssertFalse(matches(original, activeID: UUID()))
+        XCTAssertFalse(request.matches(original, explicitSelection: true, importedPortable: false, version: 2, revision: revision, activeID: nil, referencePending: false, transition: false))
+        XCTAssertFalse(matches(original, pending: true)); XCTAssertFalse(matches(original, transition: true))
+        XCTAssertNotEqual(request.id, PhotoObservation.Request(draft: original, explicitSelection: true, importedPortable: false, version: 2, revision: revision).id)
+        XCTAssertEqual(original.image, Data([1]))
+    }
+    func testPhotoObservationRejectsInvalidImageWithoutAlteringBytes() {
+        let bytes = Data([0, 1, 2])
+        XCTAssertThrowsError(try PhotoObservation.thumbnail(bytes))
+        XCTAssertEqual(bytes, Data([0, 1, 2]))
+    }
+    func testPhotoObservationThumbnailDoesNotChangeSourceBytes() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
+        let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
+        let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(doc.reference).dataBase64))
+        let original = bytes
+        let thumbnail = try PhotoObservation.thumbnail(bytes)
+        XCTAssertEqual(thumbnail.width, 1); XCTAssertEqual(thumbnail.height, 1)
+        XCTAssertEqual(bytes, original)
+    }
+    func testApprovedPhotoObservationsKeepImageAndMeasurementsInBothFormats() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
+        let source = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
+        let reference = try XCTUnwrap(source.reference)
+        let image = try XCTUnwrap(Data(base64Encoded: reference.dataBase64))
+        let selection = PhotoObservation.Selection(silhouette: .unknown, sleeve: .short, neck: .round)
+        let description = try PhotoObservation.append(selection, description: "Özgün tarif", notes: "Diğer not")
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: description, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "Diğer not", image: image, imageName: reference.name)
+        let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: image, imageName: reference.name))
+        let v2 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.makeV2(draft))
+        XCTAssertEqual(v1.measurements, draft.measurements); XCTAssertEqual(v2.measurements, draft.measurements)
+        XCTAssertTrue(v1.prompt.contains(description)); XCTAssertEqual(v2.prompt, description)
+        XCTAssertEqual(v1.reference?.dataBase64, image.base64EncodedString()); XCTAssertEqual(v2.reference?.dataBase64, image.base64EncodedString())
+        XCTAssertEqual(draft.style, .aline); XCTAssertEqual(draft.image, image); XCTAssertEqual(draft.otherMeasurements, "Diğer not")
+    }
     func testCoordinatedImageReadAndLimit() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

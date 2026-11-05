@@ -2556,6 +2556,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var modelSuggestion: ExperimentalDesignBrief.ModelSuggestion?
     @State private var showModelSuggestion = false
     @State private var modelSuggestionRevision = UUID()
+    @State private var photoObservationRequest: PhotoObservation.Request?
     @State private var modelSuggestionStatus = ""
     @State private var showMeasurementProposal = false
     @State private var measurementMessageStatus = ""
@@ -2746,6 +2747,31 @@ private struct ExperimentalDesignBriefView: View {
             image = result?.data; imageName = result?.name
             message = result == nil ? "Görsel kaldırıldı." : "Görsel eklendi."
         } catch { message = "Seçili görsel değişti; işlem uygulanmadı. Tekrar deneyin." }
+    }
+    private func openPhotoObservation() {
+        guard !draftTransition, !referenceBlocksClose, currentReference != nil else {
+            message = "Önce görsel seçimini tamamlayın; ardından fotoğrafı inceleyebilirsiniz."
+            return
+        }
+        photoObservationRequest = .init(draft: draft, explicitSelection: modelExplicitlySelected,
+            importedPortable: importedPortable, version: requestExportVersion, revision: modelSuggestionRevision)
+    }
+    private func applyPhotoObservation(_ request: PhotoObservation.Request, selection: PhotoObservation.Selection) -> String? {
+        guard request.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                              version: requestExportVersion, revision: modelSuggestionRevision,
+                              activeID: photoObservationRequest?.id, referencePending: referenceBlocksClose, transition: draftTransition) else {
+            return "İstek, model veya görsel değişti; önceki gözlem eklenmedi. Ekranı kapatıp tekrar inceleyin."
+        }
+        do {
+            let updated = try PhotoObservation.append(selection, description: request.draft.description, notes: request.draft.otherMeasurements)
+            description = updated
+            message = "Kendi fotoğraf gözlemleriniz tarife eklendi. Model ve tarifle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı."
+            return nil
+        } catch PhotoObservation.Failure.duplicate {
+            return "Bu özellik için önceki bir fotoğraf gözlemi var. Çelişki veya tekrar eklenmedi; önceki metni kontrol edin."
+        } catch PhotoObservation.Failure.tooLong {
+            return "Tarif sınırı aşılacağı için gözlemler eklenmedi; mevcut metin ve görsel korundu."
+        } catch { return "Gözlem eklenemedi; mevcut istek ve görsel korundu." }
     }
     private var draft: ExperimentalDesignBrief.Draft {
         .init(style: style, description: description, bust: bust, waist: waist, hips: hips, length: length,
@@ -3119,6 +3145,8 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     if let imageName {
                         Text("Seçilen: \(ModelStore.safeLabel(imageName))")
+                        Button("Fotoğrafa bakarak özellikleri belirt…") { openPhotoObservation() }
+                            .disabled(draftTransition || referenceBlocksClose)
                         Button("Görseli kaldır…") {
                             pendingReferenceChange = .init(original: currentReference, replacement: nil); confirmReferenceChange = true
                         }.disabled(referenceLoading)
@@ -3242,6 +3270,9 @@ private struct ExperimentalDesignBriefView: View {
                 }
             }
             .sheet(isPresented: $showingBodyMeasurements) { BodyMeasurementNotesView(notes: $otherMeasurements, savedForm: $measurementForm, measurementsWithNotes: { ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: $0) }, localSaveStatus: { localStatus }) }
+            .sheet(item: $photoObservationRequest) { request in
+                PhotoObservationView(request: request) { request, selection in applyPhotoObservation(request, selection: selection) }
+            }
             .fileImporter(isPresented: $showingPortableRequestImport, allowedContentTypes: [.json]) { result in
                 do { copyCandidate = try ExperimentalDesignBrief.readPortable(result.get()); candidateIsPortable = true; confirmCopyRestore = true }
                 catch { if !isFilePickerCancellation(error) { localStatus = "İstek okunamadı veya desteklenmeyen görsel içeriyor; mevcut girişler ve yerel taslak korundu." } }
