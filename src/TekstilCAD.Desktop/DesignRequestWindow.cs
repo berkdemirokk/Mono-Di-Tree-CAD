@@ -350,6 +350,27 @@ internal sealed class DesignRequestWindow : Window
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
         prompt.AppendText(addition);
         chatInput.Clear();chatInput.Focus();SetStatus(answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.");
+        SuggestChatModel(message);
+    }
+    internal Func<string,bool>? ConfirmChatModelForVerification { get; set; }
+    internal void SendMessageForVerification()=>SendMessage();
+    private void SuggestChatModel(string message)
+    {
+        ChatModelSuggestion suggestion;
+        try { suggestion=ChatModelChoice.Review(message); }
+        catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { SetStatus("Model ifadesi incelenemedi; mesaj korundu, seçim yapılmadı.");return; }
+        if(suggestion.ModelId is null) { if(suggestion.Explanation.Length>0)SetStatus(suggestion.Explanation+" Mesajınız aynen korundu.");return; }
+        if(referenceLoadRunning || (requestVersion==1 && reference is not null))
+        { SetStatus("Mesaj korundu; model seçilmedi. Görsel işlemi tamamlanınca önce 'V2 model kimliğiyle çalış…' ile görseli ve biçim dönüşümünü doğrulayın, ardından model mesajını yeniden gönderin.");return; }
+        var before=Capture();var index=Array.IndexOf(PortableModelIds,suggestion.ModelId);
+        if(index<0)return;
+        var warning=$"{suggestion.Label} model fikri seçilsin mi? Önceki seçim değişebilir; önceki tarifler ve bu mesaj aynen korunur, çelişkileri kontrol edin. Kalıp oluşturulmaz."+
+            (requestVersion==1 ? " Model kimliğini metni değiştirmeden tutmak için istek V2 biçimine geçecek. V1'e dışa aktarımda model kimliği kaybolur." : "");
+        var accepted=ConfirmChatModelForVerification?.Invoke(warning) ?? MessageBox.Show(this,warning,"Sohbetten model seçimi",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
+        if(!accepted) { SetStatus("Model seçimi iptal edildi; mesaj korundu.");return; }
+        if(closed || referenceLoadRunning || !SameRequest(before,Capture()) || !string.IsNullOrEmpty(chatInput.Text)) { SetStatus("İstek onay sırasında değişti; model seçilmedi. Mesaj korundu.");return; }
+        ClearModelTracking();requestVersion=2;portableModelId=suggestion.ModelId;dirty=true;SetLastModel(modelCards[index].Button);
+        SetStatus($"{suggestion.Label} model fikri onayla seçildi. Metin korundu; V2 model kimliği etkin. Kalıp oluşturulmadı.");
     }
     private void InsertMeasurementLabel()
     {
@@ -395,6 +416,7 @@ internal sealed class DesignRequestWindow : Window
         var lines=new List<string> { "Siz:",string.IsNullOrEmpty(prompt.Text) ? "Henüz istek yazılmadı." : prompt.Text };
         if(!string.IsNullOrEmpty(measurements.Text)) { lines.Add("Ölçü notlarınız:");lines.Add(measurements.Text); }
         lines.Add("Yardımcı:");
+        lines.Add("Model seçmek için ayrı mesaj yazabilirsiniz: A kesim elbise istiyorum. Desteklenenler: anvelop, A kesim, balenli korpus, kılıf elbise, düz elbise, gömlek elbise. Seçim için ayrıca onay sorulur; bu bir model fikridir, kalıp üretilmez.");
         if(review.Measurements.Count>0)lines.Add("Açıkça bulunanlar: "+string.Join(", ",review.Measurements.Select(m=>$"{m.Label}: {m.Millimeters.ToString(System.Globalization.CultureInfo.InvariantCulture)} mm"))+".");
         if(review.Questions.Count>0)
         {
