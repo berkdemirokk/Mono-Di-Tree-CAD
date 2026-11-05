@@ -1,4 +1,5 @@
 import CoreFoundation
+import ImageIO
 import CryptoKit
 import Darwin
 import SwiftUI
@@ -14,8 +15,11 @@ import UIKit
 struct PhotoLibraryReference: Transferable {
     let selection: ExperimentalDesignBrief.ReferenceSelection
     static func read(_ url: URL) throws -> PhotoLibraryReference {
-        let data = try ExperimentalDesignBrief.readImage(url)
+        let original = try ExperimentalDesignBrief.readImage(url)
         try Task.checkCancellation()
+        guard let source = CGImageSourceCreateWithData(original as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
+              let type = CGImageSourceGetType(source) as String? else { throw ExperimentalDesignBrief.Error.invalidImage }
+        let data = (type == "public.heic" || type == "public.heif") ? try HEICPhotoConversion.convert(original) : original
         let png = data.starts(with: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
         let name = png ? "Fotoğraf.png" : "Fotoğraf.jpg"
         _ = try ExperimentalDesignBrief.make(.init(style: .describe, description: "kontrol", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: data, imageName: name))
@@ -2800,7 +2804,7 @@ private struct ExperimentalDesignBriefView: View {
             } catch {
                 guard ticket.id == referenceLoadID else { return }
                 referenceLoading = false; referenceTask = nil; referenceLoadID = nil; photoTicket = nil
-                if !(error is CancellationError) { message = "Fotoğraf okunamadı, HEIC veya başka bir desteklenmeyen biçimde ya da 8 MiB sınırından büyük olabilir. Mevcut görsel korundu. Fotoğraflar veya Dosyalar’dan en fazla 8 MiB boyutunda JPEG veya PNG seçin." }
+                if !(error is CancellationError) { message = "Fotoğraf okunamadı veya desteklenmiyor; tek kare ve 8 MiB sınırını, ayrıca piksel sınırını kontrol edin. Mevcut görsel korundu. JPEG veya PNG de seçebilirsiniz." }
             }
         }
     }
@@ -3291,7 +3295,7 @@ private struct ExperimentalDesignBriefView: View {
                         photoTicket = .init(draft: draft, revision: modelSuggestionRevision)
                         selectingPhoto = true
                     }.disabled(draftTransition || referenceDecisionPending || selectingImage)
-                    Text("HEIC desteklenmez; Fotoğraflar veya Dosyalar’dan JPEG/PNG seçin. iCloud’daki fotoğraflar için cihazınızın indirme yapması gerekebilir. Özgün fotoğraf değiştirilmez.").font(.caption)
+                    Text("Tek kare HEIC yerelde PNG’ye dönüştürülür; konum ve fotoğraf bilgileri aktarılmaz. Renk ve görünüm değişebilir; şeffaflık korunmaya çalışılır. Giriş ve çıktı en fazla 8 MiB, görsel en fazla 24 milyon piksel ve kenarı 12.000 piksel olabilir. iCloud için indirme gerekebilir. Kaynak fotoğraf değiştirilmez.").font(.caption)
                     #endif
                     if referenceLoading {
                         ProgressView("Görsel yükleniyor…")
@@ -3305,7 +3309,7 @@ private struct ExperimentalDesignBriefView: View {
                             pendingReferenceChange = .init(original: currentReference, replacement: nil); confirmReferenceChange = true
                         }.disabled(referenceLoading)
                     }
-                    Text("Seçicinin sunduğu JPEG/PNG dosyası değiştirilmeden, içerebileceği konum ve diğer bilgiler dahil isteğe eklenir. En fazla 8 MiB.").font(.caption)
+                    Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. HEIC dönüştürülür ve fotoğraf üst bilgileri aktarılmaz. En fazla 8 MiB.").font(.caption)
                 }
                 }
                 if step == 3 {

@@ -1,4 +1,6 @@
 import XCTest
+import ImageIO
+import CoreGraphics
 @testable import TekstilCADViewer_iOS
 
 private func makeTestRequest(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
@@ -18,6 +20,38 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(ticket.matches(id: ticket.id, draft: original, revision: UUID()))
         let changed = ExperimentalDesignBrief.Draft(style: .aline, description: "değişti", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
         XCTAssertFalse(ticket.matches(id: ticket.id, draft: changed, revision: revision))
+    }
+    func testHEICConversionAppliesOrientationAndOmitsPersonalMetadata() throws {
+        guard let context = CGContext(data: nil, width: 64, height: 32, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let image = context.makeImage() else { return XCTFail("Test image creation failed") }
+        let encoded = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(encoded as CFMutableData, "public.heic" as CFString, 1, nil) else { throw XCTSkip("HEIC encoder unavailable") }
+        let metadata: [CFString: Any] = [kCGImagePropertyOrientation: 6,
+            kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 41.0, kCGImagePropertyGPSLongitude: 29.0]]
+        CGImageDestinationAddImage(destination, image, metadata as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw XCTSkip("HEIC encoder unavailable") }
+        let source = encoded as Data
+        let output = try HEICPhotoConversion.convert(source)
+        XCTAssertLessThanOrEqual(output.count, ExperimentalDesignBrief.maxImageBytes)
+        let decoded = try XCTUnwrap(CGImageSourceCreateWithData(output as CFData, nil))
+        XCTAssertEqual(CGImageSourceGetType(decoded) as String?, "public.png")
+        let props = try XCTUnwrap(CGImageSourceCopyPropertiesAtIndex(decoded, 0, nil) as? [CFString: Any])
+        XCTAssertEqual(props[kCGImagePropertyPixelWidth] as? Int, 32)
+        XCTAssertEqual(props[kCGImagePropertyPixelHeight] as? Int, 64)
+        XCTAssertNil(props[kCGImagePropertyGPSDictionary])
+        XCTAssertNil(props[kCGImagePropertyExifDictionary])
+        XCTAssertNoThrow(try ExperimentalDesignBrief.validateV2Image(output))
+        XCTAssertEqual(encoded as Data, source)
+    }
+    func testHEICConversionRejectsInvalidAndOversizedInput() {
+        XCTAssertThrowsError(try HEICPhotoConversion.convert(Data([0, 1, 2])))
+        XCTAssertThrowsError(try HEICPhotoConversion.convert(Data(count: ExperimentalDesignBrief.maxImageBytes + 1)))
+        let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aX8AAAAASUVORK5CYII=")!
+        XCTAssertThrowsError(try HEICPhotoConversion.convert(png))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 12_001, height: 1, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 6_000, height: 5_000, frames: 1))
+        XCTAssertFalse(ExperimentalDesignBrief.v2ImageGeometryAllowed(width: 1, height: 1, frames: 2))
     }
     func testPhotoTransferPreservesBytesAndRejectsInvalidOrOversizedFiles() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
