@@ -110,7 +110,12 @@ internal static partial class DesktopVerification
             Check(Cleared(window),"Changing a measurement clears summary, confirmation and all old drawing",checks);
             Click(window.DrawForVerification);Check(window.CanvasForVerification.Children.Count==0,"Changed measurement cannot redraw without a new review",checks);
             window.FieldsForVerification[9].Text="70";ReviewAndDraw(window);
-            window.UnitForVerification.SelectedIndex=1;Check(Cleared(window),"Changing units invalidates previous confirmation and drawing",checks);
+            var beforeUnitChange=window.FieldsForVerification.Select(f=>f.Text).ToArray();
+            window.UnitForVerification.SelectedIndex=1;Check(Cleared(window) && window.UnitForVerification.SelectedIndex==0 && beforeUnitChange.SequenceEqual(window.FieldsForVerification.Select(f=>f.Text)) && window.StatusForVerification.Text.Contains("değiştirilmedi"),"Changing units with entered data is cancelled without reinterpretation and invalidates confirmation",checks);
+            window.FieldsForVerification[4].Text="0";window.FieldsForVerification[5].Text="geçersiz";
+            beforeUnitChange=window.FieldsForVerification.Select(f=>f.Text).ToArray();window.UnitForVerification.SelectedIndex=1;
+            Check(window.UnitForVerification.SelectedIndex==0 && beforeUnitChange.SequenceEqual(window.FieldsForVerification.Select(f=>f.Text)),"Zero ease and invalid entered values remain unchanged on cancelled unit change",checks);
+            foreach(var field in window.FieldsForVerification)field.Clear();window.UnitForVerification.SelectedIndex=1;
             Fill(window,false);ReviewAndDraw(window);var mmPoints=Polygons(window);
             Check(cmPoints.Length==mmPoints.Length && cmPoints.Zip(mmPoints).All(pair=>pair.First.SequenceEqual(pair.Second)),"Equivalent cm and mm inputs create identical preview geometry",checks);
             window.AgreementForVerification.IsChecked=false;Check(Cleared(window),"Revoking symmetry assumptions clears previous confirmation and drawing",checks);
@@ -257,7 +262,7 @@ internal static partial class DesktopVerification
                 }
                 finally { affirmativeWindow.Close(); }
             }
-            Fill(window,true);window.UnitForVerification.SelectedIndex=0;window.AgreementForVerification.IsChecked=true;
+            foreach(var field in window.FieldsForVerification)field.Clear();window.UnitForVerification.SelectedIndex=0;Fill(window,true);window.AgreementForVerification.IsChecked=true;
             window.FieldsForVerification[4].Text="1,000";Click(window.ReviewForVerification);Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count==0 && !window.ConfirmationForVerification.IsEnabled && window.StatusForVerification.Text.Contains("üç basamaklı ayırıcı belirsiz"),
                 "Manual ambiguous number cannot bypass source proposal rejection or enable drawing",checks);

@@ -58,7 +58,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
-        long editVersion=0;bool closed=false;
+        long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false;int committedUnit=-1;
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
         StudioTheme.Apply(this);
         var body=new StackPanel { Margin=new Thickness(16) };
@@ -204,7 +204,19 @@ internal sealed class ALinePanelPreviewWindow : Window
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
         };
         foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
-        unit.SelectionChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
+        unit.SelectionChanged+=(_,_)=>
+        {
+            if(restoringUnit)return;
+            var requested=unit.SelectedIndex;
+            if(!loadingWork && committedUnit>=0 && requested!=committedUnit && fields.Any(f=>f.Text.Length>0))
+            {
+                restoringUnit=true;try { unit.SelectedIndex=committedUnit; } finally { restoringUnit=false; }
+                Clear();RefreshProposal();RefreshWaistComparison();
+                status.Text="Dolu alanların birimi değiştirilmedi; sayılar yeniden yorumlanmadı. Gerekirse ölçü çalışmasını kaydedin; birimi değiştirmek için alanları temizleyin.";
+                return;
+            }
+            committedUnit=requested;Clear();RefreshProposal();RefreshWaistComparison();
+        };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();
         confirm.Unchecked+=(_,_)=> { editVersion++;canvas.Children.Clear();blockers.Text=""; };
         confirm.Checked+=(_,_)=>editVersion++;
@@ -291,8 +303,10 @@ internal sealed class ALinePanelPreviewWindow : Window
             if(closed || version!=editVersion || current.Unit!=before.Unit || !current.Fields.SequenceEqual(before.Fields))
                 throw new InvalidOperationException("Form onay sırasında değişti; dosya uygulanmadı. Güncel çalışmayı koruyarak yeniden açın.");
             Clear();agreement.IsChecked=false;
-            unit.SelectedIndex=draft.Unit switch { "cm"=>0,"mm"=>1,_=>-1 };
-            for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i];
+            loadingWork=true;
+            try { unit.SelectedIndex=draft.Unit switch { "cm"=>0,"mm"=>1,_=>-1 };committedUnit=unit.SelectedIndex;
+                for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i]; }
+            finally { loadingWork=false; }
             Clear();RefreshProposal();
             durableWork=CaptureWork();
             status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı.";
