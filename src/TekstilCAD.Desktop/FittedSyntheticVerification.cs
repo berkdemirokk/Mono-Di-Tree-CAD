@@ -74,7 +74,20 @@ internal static class FittedSyntheticVerification
                 }
                 var bitmap=new RenderTargetBitmap(120,100,96,96,PixelFormats.Pbgra32); bitmap.Render(visual);
                 var pixels=new byte[120*100*4]; bitmap.CopyPixels(pixels,120*4,0);
-                if(!Enumerable.Range(0,120*100).Any(i=>pixels[i*4]<200 && pixels[i*4+1]<200 && pixels[i*4+2]<200)) throw new InvalidOperationException("Original unfilled arc did not render.");
+                bool DarkNear(Point point,int radius) {
+                    int cx=(int)Math.Round(point.X*10+40),cy=(int)Math.Round(point.Y*10+75);
+                    for(int py=Math.Max(0,cy-radius);py<=Math.Min(99,cy+radius);py++)
+                        for(int px=Math.Max(0,cx-radius);px<=Math.Min(119,cx+radius);px++) {
+                            int offset=(py*120+px)*4;
+                            if(pixels[offset]<200 && pixels[offset+1]<200 && pixels[offset+2]<200)return true;
+                        }
+                    return false;
+                }
+                // Probe the predicted bulge and its reflection across the chord. The
+                // closing line lies between these points and cannot pass either probe.
+                var oppositeMidpoint=new Point(3+3*y,-(3.5-4*y));
+                if(!DarkNear(expectedMidpoint,2))throw new InvalidOperationException($"Arc midpoint did not render for {y}: {expectedMidpoint}.");
+                if(DarkNear(oppositeMidpoint,1))throw new InvalidOperationException($"Unexpected stroke on opposite side for {y}: {oppositeMidpoint}.");
             }
             stage="arka plan";
             var threaded=Task.Run(()=>FittedSyntheticAdapter.Create("synthetic-base")).GetAwaiter().GetResult();
