@@ -40,6 +40,12 @@ internal static partial class DesktopVerification
                 "Declining a different source preserves the form",checks);
             window.ConfirmSourceMismatchForVerification=_=>true;
             Check(window.LoadWorkForVerification(differentPath,()=>true) && window.StatusForVerification.Text.Contains(differentId),"Explicit approval opens the different source with identity visible",checks);
+            Check(window.SourceIdentityForVerification.Text.Contains(expectedId) && window.SourceIdentityForVerification.Text.Contains(differentId) && window.SourceIdentityForVerification.Text.Contains("farklı"),
+                "Current and different draft source identities remain separately visible",checks);
+            window.FieldsForVerification[0].Text="37";
+            Check(window.SourceIdentityForVerification.Text.Contains(differentId) && window.SourceIdentityForVerification.Text.Contains("farklı"),
+                "Editing the form does not erase the persistent different-source warning",checks);
+            window.FieldsForVerification[0].Text="36";
             var retainedPath=Path.Combine(folder,"retained"+ALineWorkDraftStorage.Extension);window.SaveWorkForVerification(retainedPath);
             Check(ALineWorkDraftStorage.Load(retainedPath).SourceHash==differentId,"Resaving an approved different source retains its original identity",checks);
             window.LoadWorkForVerification(path,()=>true);
@@ -93,6 +99,9 @@ internal static partial class DesktopVerification
             var mm=Path.Combine(folder,"mm"+ALineWorkDraftStorage.Extension);ALineWorkDraftStorage.SaveNew(mm,incompatible);
             window.LoadWorkForVerification(mm,()=>true);
             Check(window.UnitForVerification.SelectedIndex==1 && window.FieldsForVerification[0].Text=="360" && window.StatusForVerification.Text.Contains("kaynak kimliği yok"),"Legacy draft preserves raw values and warns that source identity is absent",checks);
+            window.FieldsForVerification[0].Text="361";
+            Check(window.SourceIdentityForVerification.Text.Contains("kaynağı bilinmiyor"),"Legacy unknown origin stays visible after editing",checks);
+            window.FieldsForVerification[0].Text="360";
             var conflict=Path.Combine(folder,"conflict"+ALineWorkDraftStorage.Extension);
             var changed=incompatible.Fields.ToArray();changed[0]="400";ALineWorkDraftStorage.SaveNew(conflict,new("mm",changed));
             window.LoadWorkForVerification(conflict,()=>true);window.AgreementForVerification.IsChecked=true;Click(window.ReviewForVerification);

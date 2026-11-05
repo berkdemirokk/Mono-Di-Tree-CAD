@@ -39,6 +39,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal Func<bool>? ConfirmSourceCorrectionForVerification { get; set; }
     internal ComboBox CorrectionFieldsForVerification { get; private set; }=null!;
     internal Button CorrectSourceForVerification { get; private set; }=null!;
+    internal TextBlock SourceIdentityForVerification { get; private set; }=null!;
     private Func<bool> canCloseWork = null!;
     internal Func<bool>? ConfirmDiscardWorkForVerification { get; set; }
     internal Func<bool>? ConfirmUnitConversionForVerification { get; set; }
@@ -90,7 +91,8 @@ internal sealed class ALinePanelPreviewWindow : Window
         bool SourceAvailable()=>owner is not DesignRequestWindow requestOwner || requestOwner.ALineSourceAvailable;
         var sourceIdentity=CurrentSource();string? workOrigin=sourceIdentity;
         var sourceLabel=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };
-        void RefreshSourceLabel()=>sourceLabel.Text="Kaynak istek özeti: "+sourceIdentity+" ("+ALineWorkDraftStorage.SourceAlgorithm+"). Bu özet şifreleme değildir; kaynak metni ve görseli dosyaya eklenmez.";
+        SourceIdentityForVerification=sourceLabel;
+        void RefreshSourceLabel()=>sourceLabel.Text="Mevcut istek özeti: "+sourceIdentity+"\nÇalışmanın kaynak özeti: "+(workOrigin ?? "Yok — eski dosyanın kaynağı bilinmiyor")+(workOrigin is not null && workOrigin!=sourceIdentity ? " — mevcut istekten farklı" : "")+"\nAlgoritma: "+ALineWorkDraftStorage.SourceAlgorithm+". Özet şifreleme değildir; kaynak metni ve görseli çalışma dosyasına eklenmez.";
         void AdoptAuthorizedSourceChange() { var previous=sourceIdentity;sourceIdentity=CurrentSource();if(workOrigin==previous)workOrigin=sourceIdentity;RefreshSourceLabel(); }
         RefreshSourceLabel();
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
@@ -396,7 +398,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                 for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i]; }
             finally { loadingWork=false; }
             Clear();RefreshProposal();
-            workOrigin=draft.SourceHash;durableWork=CaptureWork();
+            workOrigin=draft.SourceHash;RefreshSourceLabel();durableWork=CaptureWork();
             status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı."+(draft.SourceHash is null ? " Eski dosyada kaynak kimliği yok; hangi isteğe ait olduğu doğrulanamaz." : " Dosya kaynak kimliği: "+draft.SourceHash+"; mevcut istek kimliği: "+sourceIdentity+".");
             return true;
         };
