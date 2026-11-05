@@ -83,13 +83,32 @@ enum ExperimentalDesignBrief {
         let names: [(String, DressStyle)] = [("düz elbise", .straight), ("a kesim elbise", .aline),
             ("anvelop elbise", .wrap), ("gömlek elbise", .shirt), ("balenli korpus", .corset), ("minimal kılıf", .sheath)]
         var result: DressStyle?
+        var resultRange: NSRange?
+        var resultName: String?
         for (name, style) in names {
             let pattern = #"(?<![\p{L}\p{N}_])"# + NSRegularExpression.escapedPattern(for: name) + #"(?![\p{L}\p{N}_])"#
             guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
-            let count = expression.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+            let matches = expression.matches(in: text, range: NSRange(text.startIndex..., in: text))
+            let count = matches.count
             if count > 1 || (count == 1 && result != nil) { return nil }
-            if count == 1 { result = style }
+            if count == 1 { result = style; resultRange = matches[0].range; resultName = name }
         }
+        guard let result, let match = resultRange, let name = resultName else { return nil }
+        let description = draft.description.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR")).trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = draft.otherMeasurements.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR")).trimmingCharacters(in: .whitespacesAndNewlines)
+        let standalone = description == name || notes == name
+        let source = text as NSString
+        let suffix = source.substring(from: NSMaxRange(match))
+        let intentPattern = #"\A[ \t]+(?:istiyorum|olsun)(?![\p{L}\p{N}_])"#
+        let intent = try? NSRegularExpression(pattern: intentPattern)
+        let intentMatch = intent?.firstMatch(in: suffix, range: NSRange(suffix.startIndex..., in: suffix))
+        guard standalone || intentMatch != nil else { return nil }
+        let intentLength = standalone ? 0 : (intentMatch?.range.length ?? 0)
+        let remainder = source.substring(to: match.location) + " " + source.substring(from: NSMaxRange(match) + intentLength)
+        // Unknown remaining words are refused rather than guessed. This small
+        // vocabulary permits common details and measurement notes only.
+        let safeRemainder = #"\A(?:\s+|[,.;:]+|[0-9]+(?:[.,][0-9]+)?|(?<![\p{L}\p{N}_])(?:uzun|kısa|kollu|kol|kolsuz|ipek|pamuklu|keten|midi|sade|yakalı|yakasız|göğüs|bel|kalça|çevresi|elbise|boyu|cm|mm)(?![\p{L}\p{N}_]))*\z"#
+        guard remainder.range(of: safeRemainder, options: .regularExpression) != nil else { return nil }
         return result
     }
     struct ModelSuggestion: Equatable {

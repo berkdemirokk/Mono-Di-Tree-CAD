@@ -2936,7 +2936,7 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: $description).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
-                    Text("Tarifte veya mesajda tek ve açık bir model adı aranır; öneriyi siz onaylarsınız. İfadenizin tamamını kontrol edin.").font(.caption)
+                    Text("Tek bir model adı veya ‘A kesim elbise istiyorum, uzun kollu’ gibi açık bir ifade aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin.").font(.caption)
                     if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
                     ScrollView(.horizontal) {
                         HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in

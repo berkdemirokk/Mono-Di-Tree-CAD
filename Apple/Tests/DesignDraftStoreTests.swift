@@ -472,6 +472,14 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
         }
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("anvelop elbise", notes: "düz elbise değil")))
+        for text in ["Anvelop elbise tercih etmiyorum", "Anvelop elbise düşünmüyorum", "Anvelop elbise uygun mudur",
+                     "Anvelop elbise istiyorum ama tercih etmiyorum", "Anvelop elbise istiyorum, düşünmüyorum",
+                     "Anvelop elbise istiyorum, uygun mudur", "Anvelop elbise istiyorum, olmayacak",
+                     "Anvelop elbise istiyorum, olabilir", "Anvelop elbise istiyorum, başka model seçersem",
+                     "Anvelop elbise istiyorum, gömlek elbise olsun", "Anvelop elbise istiyorum, ‘uzun kollu’"] {
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
+        }
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise", notes: "tercih etmiyorum")))
     }
     func testModelSuggestionSnapshotAndPortableExports() throws {
         let image = try XCTUnwrap(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/aO0AAAAASUVORK5CYII="))
