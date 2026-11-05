@@ -3,7 +3,7 @@ import ImageIO
 
 /// A user-authored request for manual review, not a generated pattern.
 enum ExperimentalDesignBrief {
-    enum Error: Swift.Error { case missingContent, invalidText, invalidImage, pendingALineGuide }
+    enum Error: Swift.Error { case missingContent, invalidText, invalidImage, pendingALineGuide, pendingMeasurementForm }
     static let maxTextUnits = 16_384
     static let maxImageBytes = 8 * 1024 * 1024
     struct Image: Codable {
@@ -517,8 +517,12 @@ enum ExperimentalDesignBrief {
         return reference
     }
 
-    static func make(_ draft: Draft) throws -> Data {
+    private static func validatePortableExport(_ draft: Draft) throws {
         guard draft.aLineGuideInput == nil else { throw Error.pendingALineGuide }
+        guard draft.measurementForm?.hasValues != true else { throw Error.pendingMeasurementForm }
+    }
+    static func make(_ draft: Draft) throws -> Data {
+        try validatePortableExport(draft)
         return try encodeV1(prompt: draft.prompt, measurements: draft.measurements, image: draft.image, imageName: draft.imageName)
     }
     private static func encodeV1(prompt: String, measurements: String, image: Data?, imageName: String?) throws -> Data {
@@ -596,7 +600,7 @@ enum ExperimentalDesignBrief {
         if (CGImageSourceGetType(source) as String?) == "public.png", try v2PNGHasAnimationControl(data) { throw Error.invalidImage }
     }
     static func makeV2(_ draft: Draft) throws -> Data {
-        guard draft.aLineGuideInput == nil else { throw Error.pendingALineGuide }
+        try validatePortableExport(draft)
         if let image = draft.image { try validateV2Image(image) }
         let id = portableModelID(for: draft.style)
         guard draft.style == .describe || id != nil else { throw Error.invalidText }

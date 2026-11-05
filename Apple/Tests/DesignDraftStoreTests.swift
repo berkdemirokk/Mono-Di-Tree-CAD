@@ -455,6 +455,29 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(base)).measurements, base.measurements)
         XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(base)).measurements, base.measurements)
     }
+    func testPortableExportRejectsPendingFifteenFieldFormWithoutChangingRecovery() throws {
+        let base = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "eski not", image: nil, imageName: nil)
+        let exporters: [(ExperimentalDesignBrief.Draft) throws -> Data] = [ExperimentalDesignBrief.make, ExperimentalDesignBrief.makeV2]
+        for entry in ["72", "0", " ", "\t"] {
+            var fields = Array(repeating: "", count: 15); fields[8] = entry
+            var pending = base; pending.measurementForm = .pending(values: fields, unit: "cm")
+            XCTAssertNotNil(pending.measurementForm)
+            for export in exporters {
+                XCTAssertThrowsError(try export(pending)) { error in
+                    guard let issue = error as? ExperimentalDesignBrief.Error, case .pendingMeasurementForm = issue else { return XCTFail("Unexpected error: \(error)") }
+                }
+            }
+            let restored = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(pending))
+            XCTAssertEqual(restored, pending); XCTAssertEqual(restored.measurements, base.measurements)
+            XCTAssertEqual(restored.otherMeasurements, "eski not")
+        }
+        var empty = base; empty.measurementForm = .init(values: Array(repeating: "", count: 15), unit: "cm")
+        for export in exporters {
+            XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(export(empty)).measurements, base.measurements)
+            XCTAssertEqual(try ExperimentalDesignBrief.portableDraft(export(base)).measurements, base.measurements)
+        }
+        XCTAssertNil(ExperimentalDesignBrief.MeasurementForm.pending(values: Array(repeating: "", count: 15), unit: "cm"))
+    }
     func testPendingALineGuideSurvivesLocalAndRecoveryWithoutApplying() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
