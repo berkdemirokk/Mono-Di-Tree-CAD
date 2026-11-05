@@ -20,6 +20,8 @@
         buildPhase: resources
       - path: Tests/Fixtures/v2-model-measurements-only.json
         buildPhase: resources
+      - path: Tests/Fixtures/ios-aline-11.tcad-request.json
+        buildPhase: resources
       - path: Tests/Fixtures/v2-model-matching.json
         buildPhase: resources
       - path: Tests/Fixtures/v2-model-conflicting.json

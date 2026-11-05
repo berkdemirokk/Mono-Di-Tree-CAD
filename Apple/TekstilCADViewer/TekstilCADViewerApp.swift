@@ -2575,6 +2575,10 @@ private struct ExperimentalDesignBriefView: View {
     @State private var pendingReferenceChange: ExperimentalDesignBrief.ReferenceChange?
     @State private var confirmReferenceChange = false
     @State private var showingBodyMeasurements = false
+    @State private var aLineGuideRequest: ALineMeasurementGuide.Request?
+    @State private var aLineGuideInput = ALineMeasurementGuide.Input()
+    @State private var confirmDiscardALineInput = false
+    @State private var discardALineInputSnapshot: ALineMeasurementGuide.Input?
     @State private var measurementForm: ExperimentalDesignBrief.MeasurementForm?
     @State private var offerMeasurementForm = false
     @State private var exportPresentation = ExperimentalDesignBrief.ExportPresentation()
@@ -2706,6 +2710,31 @@ private struct ExperimentalDesignBriefView: View {
         guard let image, let imageName else { return nil }
         return .init(data: image, name: imageName)
     }
+    private var aLineInputPending: Bool { !aLineGuideInput.unit.isEmpty || aLineGuideInput.values.contains { !$0.isEmpty } }
+    private func openALineGuide() {
+        guard style == .aline, modelExplicitlySelected, !draftTransition, !referenceBlocksClose, measurementForm?.hasValues != true else {
+            message = "Önce A kesim modelini seçin ve bekleyen görsel veya ölçü formu işlemini tamamlayın."
+            return
+        }
+        aLineGuideRequest = .init(draft: draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                                  version: requestExportVersion, revision: modelSuggestionRevision)
+    }
+    private func applyALineGuide(_ request: ALineMeasurementGuide.Request, input: ALineMeasurementGuide.Input, notes: String) -> String? {
+        guard request.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                              version: requestExportVersion, revision: modelSuggestionRevision, activeID: aLineGuideRequest?.id,
+                              pending: draftTransition || referenceBlocksClose || measurementForm?.hasValues == true) else {
+            return "İstek, seçim veya görsel değişti; ölçüler eklenmedi. Ekranı kapatıp yeniden inceleyin."
+        }
+        do {
+            guard try ALineMeasurementGuide.prepare(input, draft: draft) == notes else {
+                return "Ölçüler veya kaynak değişti; hiçbir değer eklenmedi."
+            }
+            otherMeasurements = notes
+            aLineGuideInput = .init()
+            message = "Onaylanan A kesim değerleri notlara eklendi. Bu bir kalıp veya üretim onayı değildir."
+            return nil
+        } catch { return "Mevcut ölçü, çelişki veya sınır nedeniyle değerler eklenmedi; girişler ve önceki notlar korundu." }
+    }
     private func cancelReferenceLoad() {
         referenceLoadID = nil; referenceTask?.cancel(); referenceTask = nil; referenceLoading = false
     }
@@ -2799,6 +2828,10 @@ private struct ExperimentalDesignBriefView: View {
     private var requestPrompt: String { draft.prompt }
     private var requestMeasurements: String { draft.measurements }
     private func closeAfterSaving() {
+        guard !aLineInputPending else {
+            message = "A kesim rehberinde notlara eklenmemiş girişler var. Rehberi tamamlayın veya girişleri açıkça temizleyin."
+            step = 1; return
+        }
         guard !referenceBlocksClose else {
             message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
             return
@@ -2922,6 +2955,7 @@ private struct ExperimentalDesignBriefView: View {
         } catch { measurementMessageStatus = "Mesaj veya ölçü alanları değişti; hiçbir alan değiştirilmedi. Yeniden inceleyin."; measurementProposal = nil }
     }
     private func prepareRecoveryCopy() {
+        guard !aLineInputPending else { message = "A kesim rehberindeki girişler kurtarma kopyasına dahil değil. Önce ekleyin veya açıkça temizleyin."; step = 1; return }
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
         do {
             recoveryCopy = ProjectExportDocument(data: try ExperimentalDesignBrief.DraftStore.recoveryData(draft))
@@ -2940,6 +2974,7 @@ private struct ExperimentalDesignBriefView: View {
             || MeasurementMessageParser.hasConditionalMeasurementRisk(fields) ? 0 : 1
     }
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
+        guard !aLineInputPending else { message = "A kesim rehberindeki girişler henüz isteğe eklenmedi. Önce onaylayın veya açıkça temizleyin."; step = 1; return }
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
         guard measurementForm?.hasValues != true else {
             message = "Ölçü formunda onaylanmamış giriş var; yalnız boşluk içeren alanlar da buna dahildir. Formu inceleyin veya ayrı kurtarma kopyası kullanın."; step = 1; return
@@ -3111,6 +3146,14 @@ private struct ExperimentalDesignBriefView: View {
                         if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
                     }
                     Button("15 beden ölçüsünü gir…") { if measurementForm?.hasValues == true { offerMeasurementForm = true } else { showingBodyMeasurements = true } }.frame(minHeight: 44)
+                    if style == .aline && modelExplicitlySelected {
+                        Button("A kesim için 11 ölçüyü gir…") { openALineGuide() }.frame(minHeight: 44)
+                        Text("Ön/arka beden yayları, ayrı bolluklar ve etek ölçülerini elle girin; değerler türetilmez.").font(.caption)
+                    }
+                    if aLineInputPending {
+                        Text("A kesim rehberinde notlara eklenmemiş girişler var. Bunlar yalnız bu istek ekranı açıkken tutulur.").font(.caption)
+                        Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
+                    }
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
                     TextField("Göğüs çevresi · ör. 92 cm", text: $bust).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
                     TextField("Bel çevresi · ör. 72 cm", text: $waist).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
@@ -3143,8 +3186,8 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     DisclosureGroup("İstek ve kurtarma dosyaları") {
                     Button("Bu taslağın ayrı kurtarma kopyasını kaydet…") { prepareRecoveryCopy() }.disabled(referenceDecisionPending)
-                    Button("Kurtarma kopyası aç…") { showingDraftCopyImport = true }.disabled(referenceDecisionPending)
-                    Button("İstek dosyası aç…") { showingPortableRequestImport = true }.disabled(referenceDecisionPending)
+                    Button("Kurtarma kopyası aç…") { showingDraftCopyImport = true }.disabled(referenceDecisionPending || aLineInputPending)
+                    Button("İstek dosyası aç…") { showingPortableRequestImport = true }.disabled(referenceDecisionPending || aLineInputPending)
                     Text("İstek metni Unicode olarak korunur. PNG/JPEG görselinin iPhone tarafından okunabilir olması gerekir; uyumsuz dosya mevcut taslağı değiştirmez.").font(.caption)
                     Text("Kopya ölçüleri ve varsa görselin tümünü içerir. Alan başına 1.000.000 UTF-16 birimi, toplam 32 MiB ve görsel için 8 MiB sınırı vardır. Güvenli konum ve yeni dosya adı seçin. Yerel önceki taslak değiştirilmez.").font(.caption)
                     }
@@ -3288,6 +3331,9 @@ private struct ExperimentalDesignBriefView: View {
                 }
             }
             .sheet(isPresented: $showingBodyMeasurements) { BodyMeasurementNotesView(notes: $otherMeasurements, savedForm: $measurementForm, measurementsWithNotes: { ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: $0) }, localSaveStatus: { localStatus }) }
+            .sheet(item: $aLineGuideRequest) { request in
+                ALineMeasurementGuideView(request: request, input: $aLineGuideInput) { request, input, notes in applyALineGuide(request, input: input, notes: notes) }
+            }
             .sheet(item: $photoObservationRequest) { request in
                 PhotoObservationView(request: request, apply: { request, selection in applyPhotoObservation(request, selection: selection) },
                                      edit: { request, plan in editPhotoObservation(request, plan: plan) })
@@ -3302,6 +3348,7 @@ private struct ExperimentalDesignBriefView: View {
             }
             .confirmationDialog("İstek veya kurtarma kopyası açılsın mı?", isPresented: $confirmCopyRestore, titleVisibility: .visible) {
                 Button("Kopyayı aç", role: .destructive) {
+                    guard !aLineInputPending else { localStatus = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; return }
                     if let candidate = copyCandidate {
                         cancelReferenceLoad()
                         draftTransition = true; saveRequest = UUID(); draftStorageReady = false
@@ -3345,6 +3392,15 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Formu geri yükle") { showingBodyMeasurements = true }
                 Button("Şimdilik açma", role: .cancel) { }
             } message: { Text("Önceki girilen değerler ve birim notlara henüz eklenmedi. Açıp inceleyebilir veya daha sonra devam edebilirsiniz.") }
+            .confirmationDialog("Bekleyen A kesim girişleri temizlensin mi?", isPresented: $confirmDiscardALineInput, titleVisibility: .visible) {
+                Button("Girişleri temizle", role: .destructive) {
+                    guard let snapshot = discardALineInputSnapshot, snapshot == aLineGuideInput else {
+                        discardALineInputSnapshot = nil; message = "Girişler değişti; hiçbir değer temizlenmedi."; return
+                    }
+                    aLineGuideInput = .init(); discardALineInputSnapshot = nil
+                }
+                Button("Koru", role: .cancel) { discardALineInputSnapshot = nil }
+            } message: { Text("Yalnız rehbere girilen ve henüz notlara eklenmemiş değerler temizlenir; mevcut tarif ve ölçüler değişmez.") }
             .confirmationDialog("Seçili görsel değiştirilsin mi?", isPresented: $confirmReferenceChange, titleVisibility: .visible) {
                 Button(pendingReferenceChange?.replacement == nil ? "Görseli kaldır" : "Görseli değiştir", role: .destructive) { applyReferenceChange() }
                 Button("Mevcut görseli koru", role: .cancel) { pendingReferenceChange = nil }
@@ -3417,6 +3473,10 @@ private struct ExperimentalDesignBriefView: View {
             } }
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
                 Button("Kaydetmeden kapat", role: .destructive) {
+                    guard !aLineInputPending else {
+                        message = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; step = 1
+                        return
+                    }
                     guard !referenceBlocksClose else {
                         message = "Görsel seçimini tamamlayın veya yüklemeyi açıkça iptal edin; ardından kapatabilirsiniz."
                         return
