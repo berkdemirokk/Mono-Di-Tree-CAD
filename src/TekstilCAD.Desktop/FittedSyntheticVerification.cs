@@ -42,7 +42,17 @@ internal static class FittedSyntheticVerification
                 var geometry=FittedSyntheticAdapter.Geometry(skewArc);
                 var segment=(ArcSegment)geometry.Figures[0].Segments[0]; double radius=5*(.25+y*y)/(2*Math.Abs(y));
                 if(Math.Abs(segment.Size.Width-radius)>1e-12||segment.Point!=new Point(5,5)||segment.IsLargeArc!=(Math.Abs(y)>.5)||segment.SweepDirection!=(y>0?SweepDirection.Counterclockwise:SweepDirection.Clockwise)) throw new InvalidOperationException("Skewed arc flags failed.");
-                if(geometry.Transform.Value.M22!=-1 || geometry.GetFlattenedPathGeometry().Bounds.IsEmpty) throw new InvalidOperationException("Y reflection or rendered arc missing.");
+                // Geometry.Bounds describes filled area; this diagnostic path is deliberately
+                // unfilled. Check its stroked bounds and the actual flattened arc instead.
+                var flattened=geometry.GetFlattenedPathGeometry(.0001,ToleranceType.Absolute);
+                var bounds=flattened.GetRenderBounds(new Pen(Brushes.Black,.01));
+                if(geometry.Transform.Value.M22!=-1 || bounds.IsEmpty || bounds.Width<=0 || bounds.Height<=0) throw new InvalidOperationException("Y reflection or stroked arc bounds missing.");
+                // Relative arc control y is the signed chord-normal sagitta. The SVG
+                // reference applies the same final Y reflection as this WPF geometry.
+                var expectedMidpoint=new Point(3-3*y,-(3.5+4*y));
+                var samples=flattened.Figures.SelectMany(f=>new[]{f.StartPoint}.Concat(f.Segments.SelectMany(seg=>seg switch {
+                    PolyLineSegment poly=>poly.Points.AsEnumerable(), LineSegment line=>new[]{line.Point}, _=>Array.Empty<Point>() })));
+                if(!samples.Any(p=>(p-expectedMidpoint).Length<.01))throw new InvalidOperationException($"Arc midpoint missing for {y}: expected {expectedMidpoint}.");
             }
             stage="arka plan";
             var threaded=Task.Run(()=>FittedSyntheticAdapter.Create("synthetic-base")).GetAwaiter().GetResult();
