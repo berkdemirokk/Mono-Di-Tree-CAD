@@ -2588,6 +2588,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var requestExportVersion = 1
     @State private var image: Data?
     @State private var imageName: String?
+    @State private var v2ImageStatus = ""
     @State private var selectingImage = false
     #if os(iOS)
     @State private var selectingPhoto = false
@@ -3076,6 +3077,9 @@ private struct ExperimentalDesignBriefView: View {
             else { data = try ExperimentalDesignBrief.make(candidate) }
             pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
             confirmingExportDestination = true
+        } catch ExperimentalDesignBrief.Error.invalidImage where requestExportVersion == 2 && image != nil {
+            message = ExperimentalDesignBrief.V2ImageReview.incompatible.explanation
+            step = 2
         } catch {
             message = "Dosya hazırlanamadı. Tarif ve ölçüler en fazla 16.384 UTF-16 birimi, görsel 8 MiB olabilir. V1 model satırı eklenince sınır aşılabilir; metin kesilmedi ve taslak korundu."
         }
@@ -3296,6 +3300,7 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     if let imageName {
                         Text("Seçilen: \(ModelStore.safeLabel(imageName))")
+                        if !v2ImageStatus.isEmpty { Text(v2ImageStatus).font(.caption) }
                         Button("Fotoğrafa bakarak özellikleri belirt…") { openPhotoObservation() }
                             .disabled(draftTransition || referenceBlocksClose)
                         Button("Görseli kaldır…") {
@@ -3303,6 +3308,14 @@ private struct ExperimentalDesignBriefView: View {
                         }.disabled(referenceLoading)
                     }
                     Text("JPEG/PNG seçicinin sunduğu biçimde, konum bilgileri dahil isteğe eklenir. HEIC her iki seçim yolunda dönüştürülür ve fotoğraf üst bilgileri aktarılmaz. En fazla 8 MiB.").font(.caption)
+                }
+                .task(id: image) {
+                    guard let bytes = image else { v2ImageStatus = ""; return }
+                    v2ImageStatus = "V2 görsel denetimi sürüyor…"
+                    let worker = Task.detached(priority: .userInitiated) { ExperimentalDesignBrief.V2ImageReview.inspect(bytes) }
+                    let result = await withTaskCancellationHandler(operation: { await worker.value }, onCancel: { worker.cancel() })
+                    guard !Task.isCancelled, image == bytes else { return }
+                    v2ImageStatus = result.explanation
                 }
                 }
                 if step == 3 {

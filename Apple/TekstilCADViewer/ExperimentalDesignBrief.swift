@@ -599,6 +599,19 @@ enum ExperimentalDesignBrief {
               CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else { throw Error.invalidImage }
         if (CGImageSourceGetType(source) as String?) == "public.png", try v2PNGHasAnimationControl(data) { throw Error.invalidImage }
     }
+    enum V2ImageReview: Equatable {
+        case compatible, incompatible
+        static func inspect(_ data: Data) -> V2ImageReview {
+            do { try ExperimentalDesignBrief.validateV2Image(data); return .compatible }
+            catch { return .incompatible }
+        }
+        var explanation: String {
+            switch self {
+            case .compatible: return "Görsel bu iPhone'da V2 görsel denetimini geçti. Windows ile gerçek aktarım henüz doğrulanmadı."
+            case .incompatible: return "Görsel V2 denetimini geçmedi. V2 tek kare PNG/JPEG, en fazla 8 MiB, 12.000 piksel kenar ve 24 milyon piksel ister; animasyonlu PNG ve bozuk görseller kabul edilmez. Farklı bir görsel seçin veya V1'i inceleyin. Mevcut görsel korunuyor."
+            }
+        }
+    }
     static func makeV2(_ draft: Draft) throws -> Data {
         try validatePortableExport(draft)
         if let image = draft.image { try validateV2Image(image) }

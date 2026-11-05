@@ -840,6 +840,22 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try PhotoObservation.thumbnail(bytes))
         XCTAssertEqual(bytes, Data([0, 1, 2]))
     }
+    func testV2ImageReviewUsesExportValidationAndPreservesBytes() throws {
+        let bundle = Bundle(for: Self.self)
+        let validURL = try XCTUnwrap(bundle.url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
+        let valid = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: validURL))
+        let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(valid.reference).dataBase64))
+        let original = bytes
+        XCTAssertEqual(ExperimentalDesignBrief.V2ImageReview.inspect(bytes), .compatible)
+        XCTAssertNoThrow(try ExperimentalDesignBrief.validateV2Image(bytes))
+        XCTAssertEqual(bytes, original)
+        let invalidURL = try XCTUnwrap(bundle.url(forResource: "v2-one-frame-apng", withExtension: "json"))
+        let invalid = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: invalidURL))
+        let animated = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(invalid.reference).dataBase64))
+        XCTAssertEqual(ExperimentalDesignBrief.V2ImageReview.inspect(animated), .incompatible)
+        XCTAssertThrowsError(try ExperimentalDesignBrief.validateV2Image(animated))
+        XCTAssertEqual(ExperimentalDesignBrief.V2ImageReview.inspect(Data([0, 1])), .incompatible)
+    }
     func testPhotoObservationThumbnailDoesNotChangeSourceBytes() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
         let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
