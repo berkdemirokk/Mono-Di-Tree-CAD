@@ -55,7 +55,7 @@ internal static class FittedSyntheticVerification
                         _=>seg.GetType().Name
                     }))+"]"));
                     var m=geometry.Transform.Value;
-                    throw new InvalidOperationException($"Y reflection or stroked arc bounds missing: M22={F(m.M22)}, matrix={m}, empty={bounds.IsEmpty}, x={F(bounds.X)}, y={F(bounds.Y)}, width={F(bounds.Width)}, height={F(bounds.Height)}; flattened transform={flattened.Transform.Value}; {figures}");
+                    throw new InvalidOperationException($"Y reflection or stroked arc bounds missing: M22={F(m.M22)}, matrix={m}, empty={bounds.IsEmpty}, x={F(bounds.X)}, y={F(bounds.Y)}, width={F(bounds.Width)}, height={F(bounds.Height)}; flattened transform={flattened.Transform?.Value.ToString() ?? "null"}; {figures}");
                 }
                 // Relative arc control y is the signed chord-normal sagitta. The SVG
                 // reference applies the same final Y reflection as this WPF geometry.
