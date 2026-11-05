@@ -27,7 +27,8 @@ internal sealed class DesignRequestWindow : Window
     internal Button EditALinePromptForVerification { get; }=new() { Content="Tarifteki ölçü ifadelerini düzenle",Margin=new Thickness(0,2,6,2) };
     internal Button EditALineNotesForVerification { get; }=new() { Content="Ölçü notlarını düzenle",Margin=new Thickness(0,2,0,2) };
     private sealed record AnswerContext(string Prompt,string Measurements,string? Label,bool ALine,long ReferenceRevision,long QuestionRevision);
-    private long questionRevision,chatRevision,openRevision;
+    private long questionRevision,chatRevision,openRevision,aLineSessionRevision;
+    private int requestLoadsRunning,aLineSessions;
     private AnswerContext? answerContext;
     private bool chatHadText;
     private readonly TextBlock referenceLabel=new() { TextWrapping=TextWrapping.Wrap };
@@ -507,10 +508,15 @@ internal sealed class DesignRequestWindow : Window
     private void RefreshALinePreviewEntry()=>ALinePreviewEntryForVerification.Visibility=CanPreviewALineForVerification ? Visibility.Visible : Visibility.Collapsed;
     internal ALinePanelPreviewWindow? CreateALinePreview()
     {
+        if(closed || requestLoadsRunning>0)
+        { if(!closed)SetStatus("İstek yükleniyor; A kesim çalışmasını açmadan önce tamamlanmasını bekleyin.");return null; }
         if(!CanPreviewALineForVerification)
         { SetStatus("Önce A kesim model fikrini açıkça seçin; kayıtlı V1 tarifinde bulunan metin tek başına seçim onayı değildir. Mevcut tarif korundu.");return null; }
         if(!string.IsNullOrWhiteSpace(chatInput.Text)) { SetStatus("Önce bekleyen mesajı gönderin; ölçü notları önizlemeye anlık kopyalanacak.");return null; }
-        return new ALinePanelPreviewWindow(this,prompt.Text,measurements.Text);
+        var session=new ALinePanelPreviewWindow(this,prompt.Text,measurements.Text);
+        aLineSessions++;aLineSessionRevision++;
+        session.Closed+=(_,_)=>aLineSessions--;
+        return session;
     }
     private void SendMessage()
     {
@@ -881,12 +887,14 @@ internal sealed class DesignRequestWindow : Window
     private async Task OpenAsync()
     {
         if(closed)return;
-        var operation=++openRevision;
+        if(aLineSessions>0) { SetStatus("Önce açık A kesim çalışmasını tamamlayın veya kapatın; istek korunuyor.");return; }
+        var operation=++openRevision;var sessionRevision=aLineSessionRevision;
         if(!ConfirmDiscard() || closed || operation!=openRevision)return;
+        if(aLineSessions>0 || sessionRevision!=aLineSessionRevision) { SetStatus("A kesim çalışması değişti; istek açılmadı.");return; }
         var before=Capture();var beforeChat=chatInput.Text;var beforeReference=referenceRevision;var beforeQuestion=questionRevision;
         var beforeChatRevision=chatRevision;var beforeDirty=dirty;var beforePending=referenceSelectionPending;var beforeDecoded=referenceDecoded;
         var selected=selectedModelText;var tracked=modelSnapshot;var start=selectedModelStart;var ambiguous=modelAmbiguous;var loadedModel=selectedModelFromLoaded;
-        bool Unchanged()=>!closed && beforeReference==referenceRevision && beforeQuestion==questionRevision && beforeChatRevision==chatRevision &&
+        bool Unchanged()=>!closed && aLineSessions==0 && sessionRevision==aLineSessionRevision && beforeReference==referenceRevision && beforeQuestion==questionRevision && beforeChatRevision==chatRevision &&
             beforeDirty==dirty && beforePending==referenceSelectionPending && beforeDecoded==referenceDecoded && beforeChat==chatInput.Text && SameRequest(before,Capture()) &&
             selected==selectedModelText && tracked==modelSnapshot && start==selectedModelStart && ambiguous==modelAmbiguous && loadedModel==selectedModelFromLoaded;
         string? path;
@@ -894,6 +902,7 @@ internal sealed class DesignRequestWindow : Window
         else { var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };path=dialog.ShowDialog(this)==true ? dialog.FileName : null; }
         if(path is null || operation!=openRevision)return;
         if(!Unchanged()) { if(!closed)SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
+        requestLoadsRunning++;
         SetStatus("İstek açılıyor; mevcut taslak korunuyor.");
         try
         {
@@ -909,6 +918,7 @@ internal sealed class DesignRequestWindow : Window
             if(closed || operation!=openRevision)return;
             SetStatus(!Unchanged() ? "İstek değişti; açma işlemi iptal edildi." : "İstek açılamadı; mevcut alanlar korundu: "+ex.Message);
         }
+        finally { requestLoadsRunning--; }
     }
     private void OpenPath(string path)
     {

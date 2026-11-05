@@ -64,6 +64,8 @@ internal static partial class DesktopVerification
                 window.RequestLoaderForVerification=_=> { reached.Set();release.Wait();return valid; };
                 var pending=window.OpenForVerification();PumpUntil(()=>reached.IsSet);
                 Check(!pending.IsCompleted && Same(original,window.CaptureForVerification()),"Request loading runs without blocking the dispatcher or replacing the draft",checks);
+                Check(window.CreateALinePreview() is null && Same(original,window.CaptureForVerification()),
+                    "Pending request load blocks A-line session and preserves the source",checks);
                 window.PromptForVerification.Text="changed";window.PromptForVerification.Text=original.Prompt;
                 release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
                 Check(Same(original,window.CaptureForVerification()) && window.StatusForVerification.Text.Contains("iptal"),"Reverted edits invalidate the pending request import",checks);
@@ -73,6 +75,31 @@ internal static partial class DesktopVerification
                 window.RequestLoaderForVerification=_=>valid;var newer=window.OpenForVerification();PumpUntil(()=>newer.IsCompleted);newer.GetAwaiter().GetResult();
                 release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
                 Check(Same(valid,window.CaptureForVerification()),"Late older import cannot replace a newer result",checks);
+
+                window.LoadForVerification(original);var activeSession=window.CreateALinePreview();
+                Check(activeSession is not null,"A-line session can start after the request load ends",checks);
+                if(activeSession is not null)
+                {
+                    activeSession.ConfirmDiscardWorkForVerification=()=>true;
+                    activeSession.FieldsForVerification[0].Text="36";
+                    window.OpenPathChoiceForVerification=()=>throw new InvalidOperationException("An active session must block the chooser");
+                    WaitForOpen(window);
+                    Check(Same(original,window.CaptureForVerification()) && activeSession.FieldsForVerification[0].Text=="36",
+                        "Open is blocked while an A-line session holds edited work",checks);
+                    activeSession.Close();
+                }
+                window.OpenPathChoiceForVerification=()=>
+                {
+                    var transient=window.CreateALinePreview();
+                    if(transient is null)throw new InvalidOperationException("Expected session during picker callback");
+                    transient.Close();return good;
+                };
+                WaitForOpen(window);
+                Check(Same(original,window.CaptureForVerification()) && window.StatusForVerification.Text.Contains("iptal"),
+                    "A session started and closed during the chooser invalidates the old open",checks);
+                window.OpenPathChoiceForVerification=()=>good;
+                WaitForOpen(window);
+                Check(Same(valid,window.CaptureForVerification()),"A fresh open succeeds after the A-line session closes",checks);
 
                 reached.Reset();release.Reset();var closingWindow=new DesignRequestWindow(owner);closingWindow.LoadForVerification(original);
                 closingWindow.OpenPathChoiceForVerification=()=>good;closingWindow.RequestLoaderForVerification=_=> { reached.Set();release.Wait();return valid; };
