@@ -79,6 +79,47 @@ internal static partial class DesktopVerification
             Click(conflict.ReviewForVerification);conflict.ConfirmationForVerification.IsChecked=true;Click(conflict.DrawForVerification);
             Check(conflict.CanvasForVerification.Children.Count==0 && conflict.StatusForVerification.Text.Contains("kayıtlı istek ölçüsünden farklı"),
                 "Existing request waist conflict blocks drawing even after field confirmation",checks);
+            var explicitSections=string.Join(";",ALineRequestMeasurements.Labels.Zip(new[]{"36","36","50","50","2","2","2","2","20","70","160"},(label,value)=>label+" "+value+" cm"));
+            var sourceText="bel çevresi 72 cm;kalça çevresi 100 cm;"+explicitSections;
+            request.LoadForVerification(new DesignRequest("A kesim elbise",sourceText,null,"aline",2));
+            var requestBeforeProposal=request.CaptureForVerification();
+            var proposalWindow=new ALinePanelPreviewWindow(owner,requestBeforeProposal.Prompt,requestBeforeProposal.Measurements);
+            try
+            {
+                Check(proposalWindow.KnownTotalsForVerification.Text.Contains("72 cm") && proposalWindow.KnownTotalsForVerification.Text.Contains("100 cm") &&
+                    proposalWindow.FieldsForVerification.All(f=>f.Text.Length==0) && !proposalWindow.ProposalApplyForVerification.IsEnabled && proposalWindow.ProposalAgreementForVerification.IsEnabled,
+                    "Explicit front/back clauses retain totals and show an opt-in proposal without filling fields",checks);
+                Check(proposalWindow.ProposalForVerification.Text.Contains("360 mm = 36 cm") && proposalWindow.ProposalForVerification.Text.Contains("Ön bel yayı bolluğu"),
+                    "Request proposal exposes normalized source values and explicit ease before acceptance",checks);
+                Click(proposalWindow.ProposalApplyForVerification);
+                Check(proposalWindow.FieldsForVerification.All(f=>f.Text.Length==0),"Unconfirmed proposal cannot populate experimental fields",checks);
+                proposalWindow.ProposalAgreementForVerification.IsChecked=true;Click(proposalWindow.ProposalApplyForVerification);
+                Check(proposalWindow.UnitForVerification.SelectedIndex==1 && proposalWindow.FieldsForVerification[0].Text=="360" && proposalWindow.FieldsForVerification[4].Text=="20" &&
+                    proposalWindow.CanvasForVerification.Children.Count==0 && proposalWindow.AgreementForVerification.IsChecked!=true && !proposalWindow.ConfirmationForVerification.IsEnabled,
+                    "Accepted proposal transfers explicit mm values but cannot accept symmetry, confirm geometry or draw",checks);
+                proposalWindow.AgreementForVerification.IsChecked=true;ReviewAndDraw(proposalWindow);
+                proposalWindow.FieldsForVerification[0].Text="370";Click(proposalWindow.ReviewForVerification);Click(proposalWindow.DrawForVerification);
+                Check(proposalWindow.CanvasForVerification.Children.Count==0 && proposalWindow.StatusForVerification.Text.Contains("açık istek ölçüsüyle çelişiyor"),
+                    "Editing a proposed arc invalidates drawing and cannot contradict its source",checks);
+                Click(proposalWindow.ProposalApplyForVerification);
+                Check(proposalWindow.FieldsForVerification[0].Text=="370","Retrying transfer never overwrites a manually edited field",checks);
+                Check(request.CaptureForVerification()==requestBeforeProposal && !request.DirtyForVerification && !proposalWindow.IsVisible,
+                    "Proposal verification remains unshown and leaves its request text unchanged",checks);
+            }
+            finally { proposalWindow.Close(); }
+            foreach(var unsafeNotes in new[]{sourceText+";ön bel yayı 37 cm",sourceText+";ön bel yayı 36 cm?",sourceText+";eğer kumaş ipekse"})
+            {
+                var refusedWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise",unsafeNotes);
+                try
+                {
+                    Check(!refusedWindow.ProposalAgreementForVerification.IsEnabled && !refusedWindow.ProposalApplyForVerification.IsEnabled,
+                        "Conflicting, questioned or conditional section source cannot offer a proposal",checks);
+                    Fill(refusedWindow,true);refusedWindow.UnitForVerification.SelectedIndex=0;refusedWindow.AgreementForVerification.IsChecked=true;
+                    Click(refusedWindow.ReviewForVerification);refusedWindow.ConfirmationForVerification.IsChecked=true;Click(refusedWindow.DrawForVerification);
+                    Check(refusedWindow.CanvasForVerification.Children.Count==0,"Manual fields cannot bypass an ambiguous section source",checks);
+                }
+                finally { refusedWindow.Close(); }
+            }
             Check(!owner.IsVisible && !window.IsVisible && !conflict.IsVisible,"All verification windows remain unshown",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }

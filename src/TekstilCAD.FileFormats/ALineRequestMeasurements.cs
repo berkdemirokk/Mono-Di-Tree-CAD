@@ -1,0 +1,60 @@
+using System.Globalization;
+using System.Text;
+using System.Text.RegularExpressions;
+
+namespace TekstilCAD.FileFormats;
+
+/// <summary>Explicit experimental section fields, distinct from total body circumferences.</summary>
+public sealed record ALineRequestMeasurementReview(IReadOnlyList<decimal?> Millimeters,IReadOnlyList<string> Issues)
+{
+    public bool Complete => Issues.Count==0 && Millimeters.All(v=>v.HasValue);
+}
+
+public static class ALineRequestMeasurements
+{
+    public static IReadOnlyList<string> Labels { get; }=Array.AsReadOnly(new[] {
+        "Ön bel yayı","Arka bel yayı","Ön kalça yayı","Arka kalça yayı",
+        "Ön bel yayı bolluğu","Arka bel yayı bolluğu","Ön kalça yayı bolluğu","Arka kalça yayı bolluğu",
+        "Belden kalçaya düşüklük","Belden etek boyu","Bitmiş etek çevresi (bolluk dahil)"
+    });
+    private static string Fold(string text)=>text.Normalize(NormalizationForm.FormC).ToLower(CultureInfo.GetCultureInfo("tr-TR"));
+    private static readonly string Names=string.Join("|",Labels.OrderByDescending(s=>s.Length).Select(s=>Regex.Escape(Fold(s))));
+    private static readonly Regex Mention=new("(?<![\\p{L}\\p{M}\\p{N}_])(?:"+Names+")(?![\\p{L}\\p{M}\\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Exact=new("\\A\\s*(?<label>"+Names+")\\s*(?::|=|\\s)\\s*(?<value>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\\s*(?<unit>cm|mm)\\s*[.!]?\\s*\\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static bool TryRead(string text,out int index,out decimal mm)
+    {
+        index=-1;mm=0;var match=Exact.Match(Fold(text));
+        if(!match.Success)return false;
+        index=Enumerable.Range(0,Labels.Count).Single(i=>Fold(Labels[i])==match.Groups["label"].Value);
+        if(!decimal.TryParse(match.Groups["value"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out mm))return false;
+        if(match.Groups["unit"].Value=="cm")mm*=10m;
+        return mm<=10_000m && (index is >=4 and <=7 ? mm>=0 : mm>0);
+    }
+    // Only a whole affirmative, explicitly unit-bearing clause is isolated from
+    // total-circumference parsing. Questions/conditions/mixed clauses stay guarded.
+    internal static bool IsExplicitSeparateField(string text)=>TryRead(text,out _,out _);
+
+    public static ALineRequestMeasurementReview Review(string prompt,string notes)
+    {
+        var totals=DressMeasurementParser.Review(prompt,notes); // Also validates input size and global conditions.
+        var values=new decimal?[Labels.Count];var issues=new List<string>();
+        foreach(var text in new[]{prompt,notes})
+        foreach(var segment in Regex.Split(text,@";|[\r\n\v\f\u0085\u2028\u2029]",RegexOptions.None,TimeSpan.FromMilliseconds(100)))
+        {
+            if(!Mention.IsMatch(Fold(segment)))continue;
+            if(!TryRead(segment,out var index,out var value)) { issues.Add("A kesim alanı açık, tek ve birimli değil: "+segment);continue; }
+            if(values[index] is decimal prior && prior!=value)issues.Add(Labels[index]+": farklı değerler çelişiyor.");
+            else values[index]=value;
+        }
+        if(totals.Questions.Any(q=>q.Contains("koşullu",StringComparison.Ordinal)))issues.Add("İstekteki koşulun kapsamı belirsiz; A kesim ölçüleri kesin kabul edilmedi.");
+        foreach(var (label,a,b) in new[]{("bel çevresi",0,1),("kalça çevresi",2,3)})
+        {
+            if(totals.Questions.Any(q=>q.StartsWith(label+":",StringComparison.Ordinal)&&!q.Contains("açık ölçü ve birim",StringComparison.Ordinal)))
+                issues.Add(label+": toplam beden ölçüsündeki belirsizliği düzeltin.");
+            var total=totals.Measurements.FirstOrDefault(m=>m.Label==label);
+            if(total is not null && values[a].HasValue && values[b].HasValue && values[a]!.Value+values[b]!.Value!=total.Millimeters)
+                issues.Add(label+": ön/arka yay toplamı belirtilen beden çevresiyle çelişiyor.");
+        }
+        return new(Array.AsReadOnly(values),issues.AsReadOnly());
+    }
+}

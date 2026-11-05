@@ -110,7 +110,7 @@ public static partial class DressMeasurementParser
             var combined=TrySplitModelMeasurement(segment,out var measurementOffset);
             var measurementSegment=combined ? segment[measurementOffset..] : segment;
             var search=FoldCase(measurementSegment);
-            if(OtherChestMeasurement.IsMatch(search)) { other.Add(segment);continue; }
+            if(OtherChestMeasurement.IsMatch(search) || ALineRequestMeasurements.IsExplicitSeparateField(measurementSegment)) { other.Add(segment);continue; }
             var clarification=Clarification.Match(search);decimal? explicitValue=null;
             if(!combined&&clarification.Success&&decimal.TryParse(clarification.Groups["number"].Value.Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture,out var number))
             {

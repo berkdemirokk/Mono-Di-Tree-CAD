@@ -21,6 +21,9 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal TextBlock StatusForVerification { get; }
     internal Canvas CanvasForVerification { get; }
     internal TextBlock KnownTotalsForVerification { get; }
+    internal CheckBox ProposalAgreementForVerification { get; }
+    internal Button ProposalApplyForVerification { get; }
+    internal TextBlock ProposalForVerification { get; }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
@@ -60,7 +63,45 @@ internal sealed class ALinePanelPreviewWindow : Window
         UnitForVerification=unit;FieldsForVerification=fields.AsReadOnly();AgreementForVerification=agreement;
         ConfirmationForVerification=confirm;ReviewForVerification=reviewButton;DrawForVerification=button;
         SummaryForVerification=summary;StatusForVerification=status;CanvasForVerification=canvas;
+        var proposal=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
+        var proposalAgreement=new CheckBox { Content=new TextBlock { Text="İstekteki 11 açık ölçünün yukarıdaki cm/mm özetini kontrol ettim; geçici forma mm olarak aktarılmasını onaylıyorum.",TextWrapping=TextWrapping.Wrap },IsEnabled=false };
+        var proposalApply=new Button { Content="Onaylanan istek ölçülerini geçici forma aktar",IsEnabled=false,Padding=new Thickness(8) };
+        body.Children.Insert(2,proposal);body.Children.Insert(3,proposalAgreement);body.Children.Insert(4,proposalApply);
+        ProposalForVerification=proposal;ProposalAgreementForVerification=proposalAgreement;ProposalApplyForVerification=proposalApply;
+        ALineRequestMeasurementReview? requestFields=null;
+        try
+        {
+            requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);
+            if(requestFields.Complete)
+            {
+                var suggested=ALineMeasurementReview.Normalize(requestFields.Millimeters.Select(v=>v!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)).ToArray(),ALineLengthUnit.Millimeter);
+                _=ALinePanelPreview.Create(suggested);
+                proposal.Text="İstekte açıkça belirtilen ölçü önerisi; hiçbir eksik ölçü veya bolluk türetilmedi:\n"+
+                    string.Join(Environment.NewLine,ALineRequestMeasurements.Labels.Select((label,i)=>$"{label}: {requestFields.Millimeters[i]:G} mm = {requestFields.Millimeters[i]/10m:G} cm"));
+                proposalAgreement.IsEnabled=true;
+            }
+            else proposal.Text=requestFields.Issues.Count>0 ? string.Join(Environment.NewLine,requestFields.Issues) : "İstek 11 ayrı A kesim alanını tamamlamıyor; otomatik dağılım yapılmadı. Eksik alanları kendiniz ölçün. Her açık alanı ayrı satırda veya noktalı virgülle, cm/mm birimiyle yazabilirsiniz.";
+        }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { proposal.Text="İstekten ölçü önerilemedi: "+ex.Message; }
+        proposalAgreement.Checked+=(_,_)=>proposalApply.IsEnabled=proposalAgreement.IsEnabled;
+        proposalAgreement.Unchecked+=(_,_)=>proposalApply.IsEnabled=false;
+        proposalApply.Click+=(_,_)=>
+        {
+            if(proposalAgreement.IsChecked!=true || !proposalAgreement.IsEnabled || requestFields?.Complete!=true)return;
+            if(fields.Any(f=>f.Text.Length>0)) { status.Text="Formda girilmiş değerler var; üzerlerine yazılmadı. Aktarım için alanları önce kendiniz temizleyin.";return; }
+            unit.SelectedIndex=1;
+            for(int i=0;i<fields.Count;i++)fields[i].Text=requestFields.Millimeters[i]!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            status.Text="Yalnız açık istek ölçüleri mm olarak aktarıldı. Simetriyi ve form özetini ayrıca inceleyip onaylayın. İstek değişmedi; çıktı kapalı.";
+        };
         ALinePanelInput ReadInput()=>ALineMeasurementReview.Normalize(fields.Select(f=>f.Text).ToArray(),unit.SelectedIndex switch { 0=>ALineLengthUnit.Centimeter,1=>ALineLengthUnit.Millimeter,_=>(ALineLengthUnit?)null });
+        void ValidateRequestFields(ALinePanelInput input)
+        {
+            var source=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);
+            if(source.Issues.Count>0)throw new ArgumentException(string.Join(Environment.NewLine,source.Issues));
+            double[] current=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
+            for(int i=0;i<current.Length;i++)if(source.Millimeters[i] is decimal value && Math.Abs(current[i]-(double)value)>0.000001)
+                throw new ArgumentException(ALineRequestMeasurements.Labels[i]+": form değeri açık istek ölçüsüyle çelişiyor; önce kaynağı düzeltin.");
+        }
         void Clear() { reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         foreach(var field in fields)field.TextChanged+=(_,_)=>Clear();
         unit.SelectionChanged+=(_,_)=>Clear();
@@ -72,14 +113,14 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Önce simetri ve kesit varsayımlarını inceleyin.");
-                var input=ReadInput();reviewGate.Stage(input);
+                var input=ReadInput();ValidateRequestFields(input);reviewGate.Stage(input);
                 double[] normalized=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
                 string Both(double mm)=>$"{mm:G9} mm = {mm/10:G9} cm";
                 summary.Text=string.Join(Environment.NewLine,labels.Select((label,i)=>label+": "+Both(normalized[i])))+
                     $"\nBEDEN bel toplamı (bolluksuz): {Both(input.FrontWaistArc+input.BackWaistArc)}\nBEDEN kalça toplamı (bolluksuz): {Both(input.FrontHipArc+input.BackHipArc)}\nÖrneğin 72 mm yalnız 7,2 cm'dir. Bu kontrol beden ölçülerinin doğruluğunu veya makul olduğunu kanıtlamaz; yanlış birimi düzeltin.";
                 confirm.IsEnabled=true;status.Text="Özetin tamamını ölçü kaynağınızla karşılaştırıp onaylayın; henüz çizim yok.";
             }
-            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException) { status.Text=ex.Message; }
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
         };
         button.Click+=(_,_)=>
         {
@@ -87,7 +128,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Gösterim varsayımını okuyup seçin.");
-                var input=ReadInput();
+                var input=ReadInput();ValidateRequestFields(input);
                 if(confirm.IsChecked!=true)throw new ArgumentException("Önce cm/mm özetini inceleyip ölçüleri onaylayın.");
                 reviewGate.Confirm();reviewGate.RequireConfirmed(input);
                 var review=DressMeasurementParser.Review(promptSnapshot,measurementSnapshot);
