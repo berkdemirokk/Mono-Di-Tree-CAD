@@ -452,6 +452,20 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: fields, unit: "mm"), draft: updated))
         XCTAssertEqual(updated.otherMeasurements, first)
     }
+    func testALineGuideShowsAddedAndPreservedAndNamesConflict() throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "Özgün tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "Ön bel yayı: 360 mm\nÖzgün not", image: nil, imageName: nil)
+        var fields = Array(repeating: "", count: 11); fields[0] = "36"; fields[1] = "36"
+        let input = ALineMeasurementGuide.Input(values: fields, unit: "cm")
+        let result = try ALineMeasurementGuide.prepare(input, draft: draft)
+        let review = ALineMeasurementGuide.reviewLines(input: input, notes: result, draft: draft)
+        XCTAssertEqual(review, ["Ön bel yayı: 36 cm — mevcut değer korunacak", "Arka bel yayı: 36 cm — eklenecek"])
+        XCTAssertTrue(result.hasPrefix(draft.otherMeasurements)); XCTAssertEqual(draft.description, "Özgün tarif")
+        fields[0] = "35"
+        XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: fields, unit: "cm"), draft: draft)) { error in
+            guard let failure = error as? ALineMeasurementGuide.Failure, case .fieldConflict(let index) = failure else { return XCTFail("Expected field conflict") }
+            XCTAssertEqual(index, 0)
+        }
+    }
     func testALineGuideUnitConversionIsExactAndRejectsAmbiguity() throws {
         var values = Array(repeating: "", count: 11); values[0] = "36"; values[1] = "35,25"; values[4] = "0"
         let original = ALineMeasurementGuide.Input(values: values, unit: "cm")

@@ -6,7 +6,7 @@ enum ALineMeasurementGuide {
     static let labels = ["Ön bel yayı", "Arka bel yayı", "Ön kalça yayı", "Arka kalça yayı",
                          "Ön bel yayı bolluğu", "Arka bel yayı bolluğu", "Ön kalça yayı bolluğu", "Arka kalça yayı bolluğu",
                          "Belden kalçaya düşüklük", "Belden etek boyu", "Bitmiş etek çevresi (bolluk dahil)"]
-    enum Failure: Error { case incomplete, invalid(Int), existing, uncertain, conflict, tooLong }
+    enum Failure: Error { case incomplete, invalid(Int), existing, uncertain, conflict, fieldConflict(Int), tooLong }
     struct Input: Equatable, Codable { var values = Array(repeating: "", count: 11); var unit = "" }
     struct Request: Identifiable {
         let id = UUID()
@@ -83,7 +83,7 @@ enum ALineMeasurementGuide {
             }
         }
         for index in labels.indices {
-            if let old = existing[index], let entered = mm[index], old != entered { throw Failure.conflict }
+            if let old = existing[index], let entered = mm[index], old != entered { throw Failure.fieldConflict(index) }
         }
         let effective = labels.indices.map { mm[$0] ?? existing[$0] }
         var totals: [String: Decimal] = [:]
@@ -123,6 +123,15 @@ enum ALineMeasurementGuide {
         guard whole.utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw Failure.tooLong }
         return updated
     }
+    static func reviewLines(input: Input, notes: String, draft: ExperimentalDesignBrief.Draft) -> [String] {
+        let original = ExperimentalDesignBrief.measurements(bust: draft.bust, waist: draft.waist, hips: draft.hips, length: draft.length, other: draft.otherMeasurements)
+        let newLines = Set(notes.components(separatedBy: .newlines)).subtracting(original.components(separatedBy: .newlines))
+        return labels.indices.compactMap { index in
+            guard !input.values[index].isEmpty else { return nil }
+            let line = "\(labels[index]): \(input.values[index].trimmingCharacters(in: .whitespacesAndNewlines)) \(input.unit)"
+            return line + (newLines.contains(line) ? " — eklenecek" : " — mevcut değer korunacak")
+        }
+    }
 }
 
 struct ALineMeasurementGuideView: View {
@@ -158,11 +167,21 @@ struct ALineMeasurementGuideView: View {
                         }
                     }
                 }
+                Section("Mevcut kaynak · düzeltmek için istek ekranına dönün") {
+                    Text("Önceki değerler değiştirilmez. Çelişen satırı ana ekrandaki tarif veya ölçü mesajında kendiniz düzenleyin; sonra rehberi yeniden açın.").font(.caption)
+                    Text("Tarif").font(.headline)
+                    Text(verbatim: request.draft.description.isEmpty ? "Tarif boş." : request.draft.description).textSelection(.enabled)
+                    Text("Ölçü kaynakları").font(.headline)
+                    let source = request.draft.measurements
+                    Text(verbatim: source.isEmpty ? "Önceki ölçü yok." : source).textSelection(.enabled)
+                }
                 if !status.isEmpty { Text(status).foregroundStyle(.secondary) }
                 Button("Girilen değerleri gözden geçir") {
                     do {
                         pendingNotes = try ALineMeasurementGuide.prepare(input, draft: request.draft)
                         pendingInput = input; pendingRevision = revision; status = ""; confirming = true
+                    } catch ALineMeasurementGuide.Failure.fieldConflict(let index) {
+                        status = "\(ALineMeasurementGuide.labels[index]): girilen değer mevcut kaynakla farklı. İstek ekranındaki tarif veya ölçü mesajında ilgili satırı düzeltin; rehber girişleri korunur."
                     } catch { status = "Değerler eklenemedi. Girilen alanları ve birimi kontrol edin; mevcut ölçü satırları veya çelişkiler varsa önce bunları inceleyin. Girişler korunuyor." }
                 }
             }
@@ -191,7 +210,7 @@ struct ALineMeasurementGuideView: View {
                 }
                 Button("Düzenlemeye devam et", role: .cancel) { pendingInput = nil; pendingNotes = nil; pendingRevision = nil }
             } message: {
-                if let saved = pendingInput { Text(zip(ALineMeasurementGuide.labels, saved.values).filter { !$0.1.isEmpty }.map { "\($0.0): \($0.1) \(saved.unit)" }.joined(separator: "\n")) }
+                if let saved = pendingInput, let notes = pendingNotes { Text(ALineMeasurementGuide.reviewLines(input: saved, notes: notes, draft: request.draft).joined(separator: "\n")) }
                 Text("Değerler sizin girişlerinizdir. Sağ/sol simetri varsayılır; asimetri desteklenmez. Mevcut tarif ve ölçüler korunur; bu işlem kalıp veya üretim onayı değildir.")
             }
         }
