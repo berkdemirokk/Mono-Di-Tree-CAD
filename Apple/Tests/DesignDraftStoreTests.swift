@@ -286,6 +286,20 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(result.utf16.count, ExperimentalDesignBrief.maxTextUnits)
         XCTAssertThrowsError(try BodyMeasurementNotes.append(values: values, unit: "cm", current: base + "x", existingNotes: base))
     }
+    func testUnlabeledSegmentsRemainAmbiguousUntilNextKnownLabel() throws {
+        var values = Array(repeating: "", count: BodyMeasurementNotes.fields.count); values[8] = "72"
+        for note in ["bel çevresi ölçülmedi; yaklaşık; 70 cm", "bel çevresi ölçülmedi;;; 70", "bel çevresi ölçülmedi\n\nacaba?", "bel çevresi ölçülmedi; şayet; kalça çevresi 100 cm", "bel çevresi ölçülmedi; açıklama; 70 cm; kalça çevresi 100 cm"] {
+            XCTAssertThrowsError(try BodyMeasurementNotes.append(values: values, unit: "cm", current: note, existingNotes: note)) { error in
+                guard let validation = error as? BodyMeasurementNotes.ValidationError, case .ambiguous(let label) = validation else { return XCTFail("Expected ambiguity: \(error)") }
+                XCTAssertEqual(label, "bel çevresi")
+            }
+            XCTAssertEqual(values[8], "72")
+        }
+        for note in ["bel çevresi ölçülmedi; kalça çevresi 100 cm", "bel çevresi ölçülmedi;;; kalça çevresi 100 cm", "bel çevresi ölçülmedi; not; kalça çevresi 100 cm; başka 70 cm"] {
+            XCTAssertEqual(try BodyMeasurementNotes.append(values: values, unit: "cm", current: note, existingNotes: note), note + "\nbel çevresi 72 cm")
+        }
+        XCTAssertThrowsError(try BodyMeasurementNotes.append(values: values, unit: "cm", current: "", existingNotes: String(repeating: ";", count: ExperimentalDesignBrief.maxTextUnits + 1)))
+    }
     func testMeasurementConflictAndAmbiguousNoteRequireReview() throws {
         var values = Array(repeating: "", count: 15); values[8] = "72"
         for old in ["bel çevresi yaklaşık 70 cm", "bel çevresi = 70 cm", "Not: bel çevresi 70 cm"] {

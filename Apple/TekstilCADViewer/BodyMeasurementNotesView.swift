@@ -28,10 +28,16 @@ enum BodyMeasurementNotes {
         return cleaned
     }
     static func append(values: [String], unit: String, current: String, existingNotes: String, allowAmbiguous: Bool = false) throws -> String {
-        guard values.count == fields.count, unit == "cm" || unit == "mm" else { throw ValidationError.tooLong }
+        guard values.count == fields.count, unit == "cm" || unit == "mm",
+              existingNotes.utf16.count <= ExperimentalDesignBrief.maxTextUnits,
+              current.utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw ValidationError.tooLong }
         let separators = CharacterSet.newlines.union(CharacterSet(charactersIn: ";"))
         let segments = existingNotes.components(separatedBy: separators)
         let knownLabels = fields.map(\.label) + ["göğüs çevresi", "kalça çevresi", "elbise boyu"]
+        let labelsPattern = knownLabels.map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+        guard let heading = try? NSRegularExpression(pattern: #"\A[ \t]*(?:"# + labelsPattern + #")(?![\p{L}\p{N}_])"#, options: .caseInsensitive),
+              let exact = try? NSRegularExpression(pattern: #"\A[ \t]*(?:"# + labelsPattern + #")[ \t]*(?::|=)?[ \t]*[0-9]+(?:[.,][0-9]+)?[ \t]*(?:cm|mm|derece)[ \t]*[.!]?[ \t]*\z"#, options: .caseInsensitive),
+              let conditional = try? NSRegularExpression(pattern: #"[?？]|(?<![\p{L}\p{N}_])(?:eğer|şayet|ise|olursa|olma\p{L}*|değil\p{L}*|belki|varsay\p{L}*)(?![\p{L}\p{N}_])"#, options: .caseInsensitive) else { throw ValidationError.tooLong }
         var lines: [String] = []
         for (field, raw) in zip(fields, values) {
             let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -51,14 +57,17 @@ enum BodyMeasurementNotes {
                 let prefix = segment[..<match.lowerBound].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
                 let suffix = segment[match.upperBound...].trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
                 if prefix.isEmpty && suffix.localizedCaseInsensitiveCompare("ölçülmedi") == .orderedSame {
-                    if index + 1 < segments.count {
-                        let next = segments[index + 1]
-                        let numericMeasurement = next.range(of: #"(?i)(?<![\p{L}\p{N}_])[0-9]+(?:[.,][0-9]+)?[ \t]*(?:cm|mm|derece)(?![\p{L}\p{N}_])"#, options: .regularExpression) != nil
-                        let hasKnownExplicitMeasurement = knownLabels.contains { label in
-                            let pattern = #"(?i)\A[ \t]*"# + NSRegularExpression.escapedPattern(for: label) + #"[ \t]*(?::|=)?[ \t]*[0-9]+(?:[.,][0-9]+)?[ \t]*(?:cm|mm|derece)[ \t]*[.!]?[ \t]*\z"#
-                            return next.range(of: pattern, options: .regularExpression) != nil
+                    for next in segments.dropFirst(index + 1) {
+                        if next.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { continue }
+                        let range = NSRange(next.startIndex..., in: next)
+                        let hasQuestionOrCondition = conditional.firstMatch(in: next, range: range) != nil
+                        let hasKnownLabel = heading.firstMatch(in: next, range: range) != nil
+                        let hasKnownExplicitMeasurement = exact.firstMatch(in: next, range: range) != nil
+                        let hasNumber = next.contains { $0.isNumber }
+                        if !allowAmbiguous && (hasQuestionOrCondition || (hasNumber && !hasKnownExplicitMeasurement)) {
+                            throw ValidationError.ambiguous(field.label)
                         }
-                        if numericMeasurement && !hasKnownExplicitMeasurement && !allowAmbiguous { throw ValidationError.ambiguous(field.label) }
+                        if hasKnownLabel { break }
                     }
                     continue
                 }
