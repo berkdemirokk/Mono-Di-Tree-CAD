@@ -31,7 +31,14 @@ internal sealed class DesignRequestWindow : Window
     private readonly ScrollViewer modelScroller=new() { HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
     private DesignReference? reference;
     private long referenceRevision;
-    private bool referenceLoadRunning,closed,referenceDecoded;
+    private bool referenceLoadRunning,referenceSelectionPending,closed,referenceDecoded;
+    internal Func<string,bool>? ConfirmDiscardForVerification { get; set; }
+    internal bool ConfirmDiscardForTest()=>ConfirmDiscard();
+    internal bool ClosingAllowedForVerification() { var e=new CancelEventArgs();OnClosing(this,e);return !e.Cancel; }
+    internal Func<string?>? OpenPathChoiceForVerification { get; set; }
+    internal void OpenForVerification()=>Open();
+    internal void SaveForVerification()=>Save();
+    internal Task ValidateAndSaveForVerification()=>ValidateAndSaveAsync();
     private string? lastSentModelMessage;
     internal Button RetryModelForVerification { get; } = new() { Content="Son mesajın model önerisini yeniden değerlendir",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,6) };
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
@@ -546,7 +553,19 @@ internal sealed class DesignRequestWindow : Window
         try { ClearModelTracking();requestVersion=value.Version;portableModelId=value.ModelId;prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=value.Version==2 && value.Reference is not null;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;if(value.Version==1)RecoverLoadedModelCandidate();else if(value.ModelId is not null) { var index=Array.IndexOf(PortableModelIds,value.ModelId);if(index>=0)SetLastModel(modelCards[index].Button); }RefreshConversation(); }
         finally { loading=false; }
     }
-    private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
+    private bool ConfirmDiscard()
+    {
+        var pending=referenceSelectionPending;var hasEdits=dirty || !string.IsNullOrEmpty(chatInput.Text);
+        if(!pending && !hasEdits)return true;
+        var before=Capture();var chat=chatInput.Text;var revision=referenceRevision;var wasDirty=dirty;
+        var message=(hasEdits?"Kaydedilmemiş istek değişiklikleri kaybolacak. ":"")+
+            (pending?"Seçilen görselin denetimi sürüyor; devam ederseniz bekleyen görsel bu isteğe eklenmeyecek. ":"")+"Devam edilsin mi?";
+        var accepted=ConfirmDiscardForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+        if(!accepted)return false;
+        if(closed || pending!=referenceSelectionPending || revision!=referenceRevision || wasDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()))
+        { SetStatus("İstek veya görsel onay sırasında değişti; işlemi yeniden başlatın.");return false; }
+        return true;
+    }
     private void OnClosing(object? sender,CancelEventArgs e) { if(!ConfirmDiscard())e.Cancel=true; }
     private void RemoveReference()
     {
@@ -596,7 +615,7 @@ internal sealed class DesignRequestWindow : Window
     internal async Task<bool> ChooseReferenceFileAsync(string path)
     {
         if(closed || referenceLoadRunning)return false;
-        var revision=referenceRevision;referenceLoadRunning=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
+        var revision=referenceRevision;referenceLoadRunning=true;referenceSelectionPending=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
         try
         {
             var loader=ReferenceLoaderForVerification;
@@ -607,16 +626,18 @@ internal sealed class DesignRequestWindow : Window
         }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         { if(!closed)SetStatus(referenceRevision!=revision ? "Referans değişti; bekleyen görsel eklenmedi." : "Görsel açılamadı. PNG/JPEG için 8 MiB, 12.000 piksel ve 24 milyon piksel sınırlarını kontrol edin; bu sınırları aşan görsel otomatik küçültülmez. Önceki görsel korundu.");return false; }
-        finally { referenceLoadRunning=false; }
+        finally { referenceSelectionPending=false;referenceLoadRunning=false; }
     }
     private void Open()
     {
         if(!ConfirmDiscard())return;
         var before=Capture();var beforeChat=chatInput.Text;var beforeRevision=referenceRevision;var beforeDirty=dirty;
-        var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };
-        if(dialog.ShowDialog(this)!=true)return;
+        string? path;
+        if(OpenPathChoiceForVerification is { } choose)path=choose();
+        else { var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };path=dialog.ShowDialog(this)==true ? dialog.FileName : null; }
+        if(path is null)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || beforeDirty!=dirty || closed) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
-        try { OpenPath(dialog.FileName); }
+        try { OpenPath(path); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
     }
     private void OpenPath(string path)

@@ -14,6 +14,7 @@ internal static partial class DesktopVerification
         var checks=new List<string>();string? failure=null;var owner=new Window();DesignRequestWindow? window=null;
         try
         {
+            VerifyPendingReferenceProtection(checks);
             _=new WindowInteropHelper(owner).EnsureHandle();window=new DesignRequestWindow(owner);
             Check(!window.RequestDetailsForVerification.IsExpanded,"Saved request editing starts collapsed for the primary chat flow",checks);
             var initial=new DesignRequest("","bel çevresi 72 cm",null);
