@@ -3211,11 +3211,13 @@ private struct ExperimentalDesignBriefView: View {
     }
     @ViewBuilder private var footerActions: some View {
         if step > 0 {
-            Button("Geri") { step = step == 2 ? 0 : step - 1; message = "" }
+            Button("Geri") { step -= 1; message = ""; focusedInput = nil }
                 .buttonStyle(.bordered).controlSize(.large).frame(minHeight: 48)
         }
         if step < 3 {
-            Button(step < 2 ? "Görsele devam" : "İsteği gözden geçir") { step = step < 2 ? 2 : 3; message = ""; focusedInput = nil }
+            Button(step == 0 ? "Ölçülere geç" : (step == 1 ? "Görsele devam" : "İsteği gözden geçir")) {
+                step += 1; message = ""; focusedInput = nil
+            }
                 .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
         } else {
             Button("İstek dosyasını kaydet…") { choosingRequestVersion = true }
@@ -3350,7 +3352,7 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Bu ekran yalnız istek hazırlar; kalıp veya baskı oluşturmaz.").font(.caption).foregroundStyle(.secondary)
                 }
                 }
-                if step == 0 || step == 1 {
+                if step == 1 {
                 Section("Bildiğiniz ölçüler neler?") {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Ölçülerinizi mesaj gibi yazın", systemImage: "text.bubble")
@@ -3389,9 +3391,9 @@ private struct ExperimentalDesignBriefView: View {
                     HStack {
                         Text("ELBİSE İSTEĞİ").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         Spacer()
-                        Text(step == 1 ? "Ölçü düzenleme · 1 / 3" : "\(step < 2 ? 1 : step) / 3").font(.caption.weight(.semibold)).accessibilityLabel(step == 1 ? "Ölçü düzenleme, birinci adım, toplam üç adım" : "Adım \(step < 2 ? 1 : step), toplam 3")
+                        Text("\(step + 1) / 4").font(.caption.weight(.semibold)).accessibilityLabel("Adım \(step + 1), toplam dört adım")
                     }
-                    ProgressView(value: Double(step < 2 ? 1 : step), total: 3).accessibilityHidden(true)
+                    ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
                     Text(localStatus).font(.caption).foregroundStyle(.secondary)
                     if pendingLedger != "[]" || legacyUncertain || markerError {
                         Text("Bir kayıt sürüyor veya önceki kayıt tamamlanmamış olabilir. Son değişiklikleri ve kurtarma kopyasını kontrol edin.").font(.caption)

@@ -13,6 +13,9 @@ final class ViewerUITests: XCTestCase {
         for _ in 0..<12 where !description.isHittable { app.swipeUp() }
         XCTAssertTrue(description.waitForExistence(timeout: 5)); XCTAssertTrue(description.isHittable)
         description.tap(); description.typeText("sentetik")
+        let measurements = app.buttons["Ölçülere geç"]
+        XCTAssertTrue(measurements.waitForExistence(timeout: 5)); XCTAssertTrue(measurements.isHittable); measurements.tap()
+        XCTAssertTrue(app.textViews["Ölçü mesajınız"].waitForExistence(timeout: 5))
         let next = app.buttons["Görsele devam"]
         XCTAssertTrue(next.waitForExistence(timeout: 5)); XCTAssertTrue(next.isHittable); next.tap()
         let back = app.buttons["Geri"], review = app.buttons["İsteği gözden geçir"]
@@ -51,6 +54,12 @@ final class ViewerUITests: XCTestCase {
         let hide = app.buttons["Klavyeyi kapat"]
         XCTAssertTrue(hide.waitForExistence(timeout: 5)); hide.tap()
         XCTAssertTrue((bust.value as? String ?? "").contains("92 cm"))
+        let toPhoto = app.buttons["Görsele devam"]
+        XCTAssertTrue(toPhoto.waitForExistence(timeout: 5)); toPhoto.tap()
+        XCTAssertTrue(app.buttons["Dosyalardan görsel seç"].waitForExistence(timeout: 5))
+        app.buttons["Geri"].tap()
+        XCTAssertTrue((app.textViews["Ölçü mesajınız"].value as? String ?? "").contains("Bel çevresi 72 cm"))
+        XCTAssertTrue((app.textFields["Göğüs çevresi, birimiyle"].value as? String ?? "").contains("92 cm"))
         XCTAssertTrue(app.buttons["Geri"].exists)
         app.buttons["Geri"].tap()
         XCTAssertTrue(app.buttons["A kesim elbise"].waitForExistence(timeout: 5))
