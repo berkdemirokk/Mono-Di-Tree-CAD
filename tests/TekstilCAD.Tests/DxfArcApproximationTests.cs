@@ -28,6 +28,23 @@ public sealed class DxfArcApproximationTests
         Assert.InRange(Math.Abs(last.Y-(center.Y+radius*Math.Sin(end*Math.PI/180))),0,1e-7);
         Assert.False(Geometry.HasSelfIntersections(result.Points,false));
     }
+    [Theory]
+    [InlineData(0,90,0,10)] [InlineData(90,180,-10,0)]
+    [InlineData(180,270,0,-10)] [InlineData(270,360,10,0)]
+    [InlineData(-180,-90,0,-10)]
+    public void CardinalEndpointsAreExactlyAxisAligned(double start,double end,double expectedX,double expectedY)
+    {
+        var arc=DxfArcApproximation.Approximate(new(0,0),10,start,end,1,0.01,1000);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(expectedX),BitConverter.DoubleToInt64Bits(arc.Points[^1].X));
+        Assert.Equal(BitConverter.DoubleToInt64Bits(expectedY),BitConverter.DoubleToInt64Bits(arc.Points[^1].Y));
+    }
+
+    [Fact] public void NearbyNonCardinalAngleIsNotSnapped()
+    {
+        var arc=DxfArcApproximation.Approximate(new(0,0),10,0,90.000001,1,0.01,1000);
+        Assert.True(arc.Points[^1].X<0);Assert.NotEqual(0,arc.Points[^1].X);
+    }
+
     [Fact] public void RejectsAmbiguousDegenerateAndUnrepresentableInputs()
     {
         Assert.Throws<InvalidDataException>(()=>DxfArcApproximation.Approximate(new(0,0),1,0,360,1,0.1,100));

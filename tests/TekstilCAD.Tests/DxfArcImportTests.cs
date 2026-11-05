@@ -1,5 +1,6 @@
 using System.Text;
 using TekstilCAD.FileFormats;
+using TekstilCAD.Patterns;
 
 namespace TekstilCAD.Tests;
 public sealed class DxfArcImportTests
@@ -17,6 +18,21 @@ public sealed class DxfArcImportTests
         Assert.Contains(result.PieceSources!.Value,s=>s.EntityType=="ARC" && s.PieceId==piece.Id);
         Assert.Contains(result.SourceGeometry!.Records,s=>s.EntityType=="ARC");
         input.Position=0;Assert.Throws<InvalidDataException>(()=>DxfFormat.ImportWithCircleAndBulgeApproximation(input,"old",1,DxfTextEncoding.Utf8,0.1));
+    }
+
+    [Fact] public void CardinalArcAndLineCanJoinAtZeroToleranceWithoutTinyBridge()
+    {
+        const string source="0\nARC\n8\nCUT\n10\n0\n20\n0\n40\n10\n50\n0\n51\n90\n"+
+            "0\nLINE\n8\nCUT\n10\n0\n20\n10\n11\n-5\n21\n10\n";
+        using var input=Stream(source);var import=Import(input);
+        var arcLink=Assert.Single(import.PieceSources!.Value,p=>p.EntityType=="ARC");
+        var lineLink=Assert.Single(import.PieceSources!.Value,p=>p.EntityType=="LINE");
+        var arc=Assert.Single(import.Project.Pieces,p=>p.Id==arcLink.PieceId);
+        var line=Assert.Single(import.Project.Pieces,p=>p.Id==lineLink.PieceId);
+        var beforeArc=arc.Points.ToArray();var beforeLine=line.Points.ToArray();
+        var joined=OpenPathJoin.Join(arc,line,0);
+        Assert.Equal(0,joined.BridgeLength);Assert.Equal(beforeArc.Length+beforeLine.Length-1,joined.Piece.Points.Count);
+        Assert.Equal(beforeArc,arc.Points);Assert.Equal(beforeLine,line.Points);
     }
 
     [Theory]

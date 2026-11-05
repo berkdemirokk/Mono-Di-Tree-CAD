@@ -32,8 +32,19 @@ public static class DxfArcApproximation
         {
             cancellationToken.ThrowIfCancellationRequested();
             var degrees=i==segmentCount ? end : Normalize(start+segmentSweep*i);
-            var radians=degrees*Math.PI/180;
-            var px=center.X+radius*Math.Cos(radians);var py=center.Y+radius*Math.Sin(radians);
+            // Exact cardinal angles have exact axis-aligned endpoints. Computing
+            // cos(90°) in binary floating point introduces a spurious tiny edge
+            // when this ARC meets a LINE at the same mathematical point.
+            double px,py;
+            if(degrees==0) { px=center.X+radius;py=center.Y; }
+            else if(degrees==90) { px=center.X;py=center.Y+radius; }
+            else if(degrees==180) { px=center.X-radius;py=center.Y; }
+            else if(degrees==270) { px=center.X;py=center.Y-radius; }
+            else
+            {
+                var radians=degrees*Math.PI/180;
+                px=center.X+radius*Math.Cos(radians);py=center.Y+radius*Math.Sin(radians);
+            }
             var dx=px-center.X;var dy=py-center.Y;
             var representedRadius=Math.Sqrt(dx*dx+dy*dy);
             var error=Math.Abs(representedRadius-radius)*millimetersPerUnit;
