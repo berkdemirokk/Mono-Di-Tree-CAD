@@ -36,6 +36,7 @@ internal sealed class DesignRequestWindow : Window
     private readonly ScrollViewer statusViewport=new() { MaxHeight=72,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Visibility=Visibility.Collapsed,Focusable=true };
     private readonly ScrollViewer bodyScroller=new() { VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
     private readonly ScrollViewer modelScroller=new() { HorizontalScrollBarVisibility=ScrollBarVisibility.Auto,VerticalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
+    private readonly TextBlock gallerySelection=new() { Text="6 model fikri · Galeride seçim yok",Foreground=Muted,FontSize=12,TextWrapping=TextWrapping.Wrap,VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,10,0) };
     private DesignReference? reference;
     private long referenceRevision;
     private bool referenceLoadRunning,referenceSelectionPending,closed,referenceDecoded;
@@ -127,6 +128,25 @@ internal sealed class DesignRequestWindow : Window
         var galleryHelp=new TextBlock { Text="Kartlar bir model fikri seçer; hazır kalıp değildir.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) };body.Children.Add(galleryHelp);
         var models=new StackPanel { Orientation=Orientation.Horizontal,Margin=new Thickness(0,0,0,6) };modelScroller.Content=models;body.Children.Add(modelScroller);
         AutomationProperties.SetName(modelScroller,"Model fikirleri galerisi");AutomationProperties.SetHelpText(modelScroller,"Diğer model fikirlerini görmek için yatay kaydırın veya kartlar arasında klavyeyle ilerleyin.");
+        // Keep navigation in the scrolling body: compact message entry retains its space.
+        var galleryNavigation=new DockPanel { LastChildFill=true,Margin=new Thickness(0,0,0,10) };
+        var galleryArrows=new StackPanel { Orientation=Orientation.Horizontal };
+        var previousModels=new Button { Content="‹",MinWidth=36,MinHeight=36,Padding=new Thickness(8,2,8,2),Margin=new Thickness(0,0,6,0),ToolTip="Önceki model fikirleri" };
+        var nextModels=new Button { Content="›",MinWidth=36,MinHeight=36,Padding=new Thickness(8,2,8,2),ToolTip="Sonraki model fikirleri" };
+        AutomationProperties.SetName(previousModels,"Önceki model fikirlerini göster");AutomationProperties.SetName(nextModels,"Sonraki model fikirlerini göster");
+        foreach(var arrow in new[] { previousModels,nextModels })AutomationProperties.SetHelpText(arrow,"Yalnız galeriyi kaydırır; modeli, tarifi ve bekleyen mesajı değiştirmez.");
+        previousModels.Click+=(_,_)=>modelScroller.ScrollToHorizontalOffset(Math.Max(0,modelScroller.HorizontalOffset-Math.Max(190,modelScroller.ViewportWidth-190)));
+        nextModels.Click+=(_,_)=>modelScroller.ScrollToHorizontalOffset(Math.Min(modelScroller.ScrollableWidth,modelScroller.HorizontalOffset+Math.Max(190,modelScroller.ViewportWidth-190)));
+        void RefreshGalleryNavigation()
+        {
+            previousModels.IsEnabled=modelScroller.HorizontalOffset>0.5;
+            nextModels.IsEnabled=modelScroller.HorizontalOffset+0.5<modelScroller.ScrollableWidth;
+        }
+        modelScroller.ScrollChanged+=(_,_)=>RefreshGalleryNavigation();modelScroller.Loaded+=(_,_)=>RefreshGalleryNavigation();
+        previousModels.IsEnabled=false;nextModels.IsEnabled=false;
+        galleryArrows.Children.Add(previousModels);galleryArrows.Children.Add(nextModels);DockPanel.SetDock(galleryArrows,Dock.Right);
+        galleryNavigation.Children.Add(galleryArrows);galleryNavigation.Children.Add(gallerySelection);body.Children.Add(galleryNavigation);
+        AutomationProperties.SetName(gallerySelection,"Model galerisi seçimi");AutomationProperties.SetLiveSetting(gallerySelection,AutomationLiveSetting.Polite);
         var modelImages=new List<Viewbox>();var modelTitles=new List<TextBlock>();var modelDescriptions=new List<TextBlock>();
         root.SizeChanged+=(_,_)=>
         {
@@ -461,6 +481,9 @@ internal sealed class DesignRequestWindow : Window
     private void SetLastModel(Button? selected)
     {
         questionRevision++;
+        var selectedCard=modelCards.FirstOrDefault(card=>ReferenceEquals(card.Button,selected));
+        gallerySelection.Text=selectedCard.Button is null ? "6 model fikri · Galeride seçim yok" :
+            (selectedModelFromLoaded ? "Tarifte bulunan fikir: " : "Seçili model fikri: ")+selectedCard.Label;
         foreach(var (button,caption,_,_) in modelCards)
         {
             var active=ReferenceEquals(button,selected);
