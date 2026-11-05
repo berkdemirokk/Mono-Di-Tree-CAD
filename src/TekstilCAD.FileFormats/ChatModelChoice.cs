@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace TekstilCAD.FileFormats;
 
@@ -15,12 +16,14 @@ public static class ChatModelChoice
         ("straight","Düz elbise",["düz elbise","düz kesim elbise"]),
         ("shirt","Gömlek elbise",["gömlek elbise","gömlek tipi elbise"])
     ];
-    private static string Fold(string value)=>Regex.Replace(value.ToLowerInvariant().Replace('İ','i').Replace('ı','i'),@"\s+"," ",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Trim();
+    private static string Fold(string value)=>Regex.Replace(value.Normalize(NormalizationForm.FormC).ToLowerInvariant().Replace('İ','i').Replace('ı','i'),@"\s+"," ",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Trim();
     public static ChatModelSuggestion Review(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
         if(message.Length>DesignRequestStorage.MaximumTextLength)throw new ArgumentException("Mesaj çok uzun.");
-        var folded=Fold(message);
+        string folded;
+        try { folded=Fold(message); }
+        catch(ArgumentException) { return new(null,null,"Mesaj geçerli Unicode değil; model önerilmedi, özgün metin korunur."); }
         var found=Models.Where(m=>m.Names.Any(n=>Regex.IsMatch(folded,@"(?<!\p{L})"+Regex.Escape(Fold(n))+@"(?!\p{L})",RegexOptions.None,TimeSpan.FromMilliseconds(100)))).ToArray();
         if(found.Length==0)return new(null,null,"");
         if(found.Length!=1)return new(null,null,"Birden fazla model adı var; seçim yapılmadı. Tek model adını ayrı mesajda yazın.");

@@ -3,6 +3,26 @@ namespace TekstilCAD.Tests;
 public sealed class ChatModelChoiceTests
 {
     [Theory]
+    [InlineData("du\u0308z elbise","straight")]
+    [InlineData("go\u0308mlek elbise","shirt")]
+    [InlineData("A KESI\u0307M ELBI\u0307SE I\u0307STI\u0307YORUM","aline")]
+    [InlineData("A kesim, kirmizi","aline")]
+    public void AnalysisAcceptsCanonicalEquivalentsWithoutRewritingInput(string text,string id)
+    {
+        var original=text.ToCharArray();
+        Assert.Equal(id,ChatModelChoice.Review(text).ModelId);
+        Assert.Equal(original,text.ToCharArray());
+    }
+    [Fact] public void MalformedUnicodeDoesNotThrowOrSuggest()
+    {
+        var result=ChatModelChoice.Review("düz elbise\uD800");
+        Assert.Null(result.ModelId);Assert.Contains("Unicode",result.Explanation);
+    }
+    [Theory]
+    [InlineData("du\u0308z elbise değil")]
+    [InlineData("go\u0308mlek elbisesiz")]
+    public void NormalizationDoesNotRemoveNegationOrWordBoundaries(string text)=>Assert.Null(ChatModelChoice.Review(text).ModelId);
+    [Theory]
     [InlineData("A KESİM ELBİSE İSTİYORUM","aline")]
     [InlineData("A KESIM ELBISE ISTIYORUM","aline")]
     [InlineData("  Lütfen a-kesim olsun.  ","aline")]

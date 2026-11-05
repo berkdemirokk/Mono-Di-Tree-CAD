@@ -33,6 +33,12 @@ internal static partial class DesktopVerification
             Check(DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(accepted))==accepted,"V2 serialization roundtrip retains confirmed identity and prose",checks);
             var root=(FrameworkElement)window.Content;root.Measure(new Size(900,700));root.Arrange(new Rect(0,0,900,700));root.UpdateLayout();
             Check(Descendants<Button>(root).Any(b=>AutomationProperties.GetName(b)=="A kesim elbise" && AutomationProperties.GetItemStatus(b)=="Seçili"),"Confirmed chat choice highlights the matching existing model card",checks);
+            var decomposed="du\u0308z elbise istiyorum";
+            window.ChatInputForVerification.Text=decomposed;window.SendMessageForVerification();
+            var unicodeRequest=window.CaptureForVerification();
+            Check(unicodeRequest.ModelId=="straight" && unicodeRequest.Prompt.EndsWith(decomposed,StringComparison.Ordinal) &&
+                DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(unicodeRequest)).Prompt==unicodeRequest.Prompt,
+                "Decomposed Unicode selects the model while original code units survive message and V2 roundtrip",checks);
             window.LoadForVerification(new DesignRequest("A kesim eski tarif","",null,"aline",2));
             confirmations=0;window.ConfirmChatModelForVerification=_=> { confirmations++;return true; };
             window.ChatInputForVerification.Text="gömlek tipi elbise seç";window.SendMessageForVerification();
