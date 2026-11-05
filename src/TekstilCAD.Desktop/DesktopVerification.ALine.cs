@@ -29,6 +29,7 @@ internal static partial class DesktopVerification
             request.LoadForVerification(new DesignRequest("A kesim elbise; detaylar: ","",null,null,2));
             Check(!request.CanPreviewALineForVerification,"Missing V2 identity does not infer an A-line model from text",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
+            window.ConfirmDiscardWorkForVerification=()=>true;
             Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
                 window.KnownTotalsForVerification.Text.Contains("ön ve arka") && window.FieldsForVerification.All(f=>f.Text.Length==0),
                 "Existing waist and hip totals are shown initially without inventing or filling front/back arcs",checks);
@@ -75,6 +76,7 @@ internal static partial class DesktopVerification
             ReviewAndDraw(window);window.ConfirmationForVerification.IsChecked=false;
             Check(window.CanvasForVerification.Children.Count==0,"Revoking measurement confirmation removes the drawing",checks);
             conflict=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 80 cm; kalça çevresi 100 cm");
+            conflict.ConfirmDiscardWorkForVerification=()=>true;
             Fill(conflict,true);conflict.UnitForVerification.SelectedIndex=0;conflict.AgreementForVerification.IsChecked=true;
             Click(conflict.ReviewForVerification);conflict.ConfirmationForVerification.IsChecked=true;Click(conflict.DrawForVerification);
             Check(conflict.CanvasForVerification.Children.Count==0 && conflict.StatusForVerification.Text.Contains("kayıtlı istek ölçüsünden farklı"),
@@ -84,6 +86,7 @@ internal static partial class DesktopVerification
             request.LoadForVerification(new DesignRequest("A kesim elbise",sourceText,null,"aline",2));
             var requestBeforeProposal=request.CaptureForVerification();
             var proposalWindow=new ALinePanelPreviewWindow(owner,requestBeforeProposal.Prompt,requestBeforeProposal.Measurements);
+            proposalWindow.ConfirmDiscardWorkForVerification=()=>true;
             try
             {
                 Check(proposalWindow.KnownTotalsForVerification.Text.Contains("72 cm") && proposalWindow.KnownTotalsForVerification.Text.Contains("100 cm") &&
@@ -110,6 +113,7 @@ internal static partial class DesktopVerification
             }
             finally { proposalWindow.Close(); }
             var partialWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise","ön bel yayı 36 cm;arka kalça yayı 500 mm;ön bel yayı bolluğu 0.0125 cm");
+            partialWindow.ConfirmDiscardWorkForVerification=()=>true;
             try
             {
                 Check(!partialWindow.ProposalAgreementForVerification.IsEnabled && partialWindow.FieldsForVerification.All(f=>f.Text.Length==0),
@@ -141,6 +145,7 @@ internal static partial class DesktopVerification
             }
             finally { partialWindow.Close(); }
             var partialConflict=new ALinePanelPreviewWindow(owner,"ön bel yayı 36 cm","bel çevresi 72 cm");
+            partialConflict.ConfirmDiscardWorkForVerification=()=>true;
             try
             {
                 partialConflict.UnitForVerification.SelectedIndex=0;partialConflict.FieldsForVerification[1].Text="37";
@@ -160,6 +165,7 @@ internal static partial class DesktopVerification
                 sourceText.Replace("Ön bel yayı bolluğu 2 cm","Ön bel yayı bolluğu 1.000 mm")})
             {
                 var refusedWindow=new ALinePanelPreviewWindow(owner,"A kesim elbise",unsafeNotes);
+            refusedWindow.ConfirmDiscardWorkForVerification=()=>true;
                 try
                 {
                     Check(!refusedWindow.ProposalAgreementForVerification.IsEnabled && !refusedWindow.ProposalApplyForVerification.IsEnabled,
@@ -171,6 +177,7 @@ internal static partial class DesktopVerification
                 finally { refusedWindow.Close(); }
             }
             var designOnlyWindow=new ALinePanelPreviewWindow(owner,"Kumaş doğru değilmiş; önceki modeli kullanmayacağım",sourceText);
+            designOnlyWindow.ConfirmDiscardWorkForVerification=()=>true;
             try
             {
                 designOnlyWindow.UnitForVerification.SelectedIndex=1;
@@ -183,6 +190,7 @@ internal static partial class DesktopVerification
                 ("ölçüler geçerli",sourceText+";bunları kullanmayın"),(sourceText+";tümünü kullanmayın","ölçüleri kullanmak istiyorum")})
             {
                 var referentWindow=new ALinePanelPreviewWindow(owner,pronounPrompt,pronounNotes);
+            referentWindow.ConfirmDiscardWorkForVerification=()=>true;
                 try
                 {
                     Check(!referentWindow.ProposalAgreementForVerification.IsEnabled && referentWindow.ProposalForVerification.Text.Contains("referans zamirinin"),
@@ -197,6 +205,7 @@ internal static partial class DesktopVerification
             foreach(var affirmative in new[]{"ölçüler geçerli","ölçüleri kullanmak istiyorum"})
             {
                 var affirmativeWindow=new ALinePanelPreviewWindow(owner,affirmative,sourceText);
+            affirmativeWindow.ConfirmDiscardWorkForVerification=()=>true;
                 try
                 {
                     affirmativeWindow.UnitForVerification.SelectedIndex=1;

@@ -28,7 +28,12 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal TextBlock ProposalForVerification { get; }
     private Action<string> saveWork = null!;
     private Func<string,Func<bool>,bool> loadWork = null!;
+    private Func<Func<string?>,bool> saveSelectedWork = null!;
+    private Func<bool> canCloseWork = null!;
+    internal Func<bool>? ConfirmDiscardWorkForVerification { get; set; }
     internal void SaveWorkForVerification(string path)=>saveWork(path);
+    internal bool SaveSelectedWorkForVerification(Func<string?> selectPath)=>saveSelectedWork(selectPath);
+    internal bool CanCloseWorkForVerification()=>canCloseWork();
     internal bool LoadWorkForVerification(string path,Func<bool> confirm)=>loadWork(path,confirm);
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
@@ -197,7 +202,36 @@ internal sealed class ALinePanelPreviewWindow : Window
             { status.Text=ex.Message; }
         };
         ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray());
-        saveWork=path=>ALineWorkDraftStorage.SaveNew(path,CaptureWork());
+        static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)=>a.Unit==b.Unit && a.Fields.SequenceEqual(b.Fields);
+        var durableWork=CaptureWork();bool closingPrompt=false;
+        canCloseWork=()=>
+        {
+            if(closingPrompt)return false;
+            var before=CaptureWork();if(SameWork(before,durableWork))return true;
+            var version=editVersion;closingPrompt=true;
+            try
+            {
+                var accepted=ConfirmDiscardWorkForVerification?.Invoke() ?? MessageBox.Show(this,
+                    "Bu ölçü çalışmasında dosyaya kaydedilmemiş alan veya birim değişiklikleri var. Kaydetmeden kapatırsanız kaybolacak. Kaydetmek için İptal'i seçin. Kaydetmeden kapatılsın mı?",
+                    "Kaydedilmemiş ölçü çalışması",MessageBoxButton.OKCancel,MessageBoxImage.Warning,MessageBoxResult.Cancel)==MessageBoxResult.OK;
+                if(!accepted)return false;
+                if(closed || editVersion!=version || !SameWork(before,CaptureWork()))
+                { status.Text="Çalışma kapatma onayı sırasında değişti; pencere açık tutuldu. Güncel alanları yeniden inceleyin.";return false; }
+                return true;
+            }
+            finally { closingPrompt=false; }
+        };
+        Closing+=(_,e)=> { if(!canCloseWork())e.Cancel=true; };
+        saveSelectedWork=selectPath=>
+        {
+            var before=CaptureWork();var version=editVersion;
+            var path=selectPath();if(path is null)return false;
+            if(closed || editVersion!=version || !SameWork(before,CaptureWork()))
+                throw new InvalidOperationException("Dosya seçilirken çalışma değişti; hiçbir dosya yazılmadı. Güncel çalışmayı yeniden kaydedin.");
+            ALineWorkDraftStorage.SaveNew(path,before);
+            durableWork=before;return true;
+        };
+        saveWork=path=>saveSelectedWork(()=>path);
         loadWork=(path,approve)=>
         {
             // Parse and validate everything before asking to replace the form.
@@ -211,6 +245,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             unit.SelectedIndex=draft.Unit switch { "cm"=>0,"mm"=>1,_=>-1 };
             for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i];
             Clear();RefreshProposal();
+            durableWork=CaptureWork();
             status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı.";
             return true;
         };
@@ -225,8 +260,8 @@ internal sealed class ALinePanelPreviewWindow : Window
             {
                 var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,
                     FileName="A kesim çalışma"+ALineWorkDraftStorage.Extension,DefaultExt=ALineWorkDraftStorage.Extension,AddExtension=true,OverwritePrompt=false };
-                if(dialog.ShowDialog(this)!=true)return;
-                saveWork(dialog.FileName);status.Text="Ölçü çalışması yeni dosyaya kaydedildi. Ölçüler ve model varsayımları onaylanmadı; çıktı kapalı.";
+                if(!saveSelectedWork(()=>dialog.ShowDialog(this)==true ? dialog.FileName : null))return;
+                status.Text="Ölçü çalışması yeni dosyaya kaydedildi. Ölçüler ve model varsayımları onaylanmadı; çıktı kapalı.";
             }
             catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
             { status.Text="Çalışma kaydedilemedi; form korundu. Yeni bir dosya adı kullanın. "+ex.Message; }
