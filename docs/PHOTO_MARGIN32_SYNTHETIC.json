@@ -1,0 +1,27 @@
+{
+  "method": "Artificial sinusoidal boundary; horizontal point-to-function error, not nearest-boundary or garment error; separate 160000-pixel search-budget fixture",
+  "curved": {
+    "16": {
+      "points": 101,
+      "mean_horizontal_pixels": 2.9282929400798894,
+      "max_horizontal_pixels": 8.0
+    },
+    "32": {
+      "points": 101,
+      "mean_horizontal_pixels": 0.3494026859340465,
+      "max_horizontal_pixels": 1.0
+    }
+  },
+  "budget": {
+    "16": {
+      "search_pixels": 146689,
+      "found": true,
+      "points": 352
+    },
+    "32": {
+      "search_pixels": 172225,
+      "found": false,
+      "points": 0
+    }
+  }
+}
