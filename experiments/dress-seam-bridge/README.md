@@ -1,0 +1,7 @@
+# Four-piece seam research bridge
+
+Standalone research project; not wired into the app, CAD documents, exports, or devices. It calls the existing `ALinePanelPreview.Create` using eleven explicitly confirmed millimeter values and records its front/back waist and ordered side segments in local coordinates. It retains a declared lower source and snapshot ID; it does not verify the declared hash or compute a hash of inputs. Confirmation and symmetry acceptance are caller declarations, not proof of measurement. The snapshot equality check prevents accidental reuse of confirmation with changed numeric inputs in this call; the caller owns snapshot lifecycle.
+
+The body waist total is separately labelled as derived. A separately supplied total has its own source, must exactly equal the derived double value and is otherwise rejected; exact floating-point equality can reject equivalent rounded values, and is not a physical tolerance. Empty upper candidates mean unknown. Each upper candidate must be declared synthetic and carries its own source/version/hash/draft/part/edge identity. These strings and candidate meaning are not independently verified; no cross-source pairing or dart transformation is inferred. Relationships always remain unresolved, and all geometry export, production and device gates remain closed. Lengths are floating-point diagnostics, not certified intervals, sewing or fit evidence. No user data is included.
+
+Tests: `dotnet test experiments/dress-seam-bridge/tests/DressSeamBridge.Tests.csproj`.

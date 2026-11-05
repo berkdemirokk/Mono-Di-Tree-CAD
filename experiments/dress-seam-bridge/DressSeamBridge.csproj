@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><EnableDefaultCompileItems>false</EnableDefaultCompileItems></PropertyGroup>
+  <ItemGroup><Compile Include="DressSeamReport.cs" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/TekstilCAD.Patterns/TekstilCAD.Patterns.csproj" /></ItemGroup>
+</Project>
