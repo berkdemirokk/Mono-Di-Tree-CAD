@@ -46,6 +46,18 @@ internal static class FrontSkirtCandidate
         }
         return new(body.Snapshot(design),edges.AsReadOnly());
     }
+    internal static UnverifiedCandidate CreateFromMatchedBody(ResearchBody body,ResearchDesign design)
+    {
+        var skirt=CreateFromBody(body,design);var match=BodyWaistStudy.Calculate(body,design);
+        if(skirt.Snapshot!=match.Snapshot)throw new ArgumentException("Body snapshot mismatch");
+        var front=match.Lower.Where(e=>e.Panel=="skirt_front").ToArray();
+        if(front.Length!=4 || !front[1].Flipped || !front[2].Flipped || (front[1].Start-front[2].End).Norm()>1e-8)throw new ArgumentException("Unsupported front waist match");
+        double x=front[1].Start.X;var edges=skirt.Edges.ToArray();
+        if(!double.IsFinite(x) || x>=edges[6].Start.X || x<=edges[7].End.X)throw new ArgumentException("Invalid waist split");
+        var middle=new PartialFittedEngine.P(x,edges[6].Start.Y);
+        edges[6]=edges[6] with { End=middle };edges[7]=edges[7] with { Start=middle };
+        return new(skirt.Snapshot,Array.AsReadOnly(edges));
+    }
     internal static Candidate Create(string id) => CreateCore(id,null);
     private static Candidate CreateCore(string id,double? splitX)
     {

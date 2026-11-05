@@ -189,7 +189,12 @@ try
     var skirtBase=FrontSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
     var skirtChangedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="hips"?new KeyValuePair<string,decimal>(p.Key,105):p),"cm","degree");
     var skirtChanged=FrontSkirtCandidate.CreateFromBody(skirtChangedBody,ResearchDesign.PinnedFitted);
+    var waistBaseline=BodyWaistStudy.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var waistChanged=BodyWaistStudy.Calculate(skirtChangedBody,ResearchDesign.PinnedFitted);
+    NeedLocal(waistChanged.Snapshot!=waistBaseline.Snapshot && !waistChanged.Lower.SequenceEqual(waistBaseline.Lower),"waist match must depend on body values");
     NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
+    var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
+    try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
     var invalidSkirt=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { FrontSkirtCandidate.CreateFromBody(invalidSkirt,ResearchDesign.PinnedFitted);throw new Exception("Invalid skirt accepted"); } catch(ArgumentException) { }
     var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
@@ -370,6 +375,20 @@ internal static class Validator
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
             var independent=InterfaceMatcher.MatchDerived(id);
+            var typedMatch=BodyWaistStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(typedMatch.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedMatch.ExportAllowed && !typedMatch.ProductionAllowed && !typeof(InterfaceMatcher.Result).IsAssignableFrom(typedMatch.GetType()),"typed waist gate");
+            try { typedMatch.RequireResearchComposition();throw new InvalidDataException("Unverified waist composed"); } catch(InvalidOperationException) { }
+            Need(typedMatch.Lower.Length==independent.Lower.Length && typedMatch.Upper.Length==independent.Upper.Length,"typed waist topology");
+            Need(typedMatch.Lower.Zip(independent.Lower).All(p=>p.First.Panel==p.Second.Panel && (p.First.Start-p.Second.Start).Norm()<1e-8 && (p.First.End-p.Second.End).Norm()<1e-8),"typed waist differs from C# fixture result");
+            var typedSkirt=FrontSkirtCandidate.CreateFromMatchedBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            var sourceSplit=Point(reference.GetProperty("panels").GetProperty("skirt_front").GetProperty("edges")[6].GetProperty("end"));
+            var candidateSplit=new P(typedSkirt.Edges[6].End.X,typedSkirt.Edges[6].End.Y);
+            var symmetric=FrontSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted).Edges[6].End;
+            var symmetricError=(new P(symmetric.X,symmetric.Y)-sourceSplit).Length();var matchedError=(candidateSplit-sourceSplit).Length();
+            Console.WriteLine($"{id} front waist split source error: symmetric={symmetricError:G6} cm, body-matched={matchedError:G6} cm");
+            Need(matchedError<symmetricError && matchedError<.001 && typedSkirt.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedSkirt.ExportAllowed && !typedSkirt.ProductionAllowed,"typed waist split versus source");
+            try { typedSkirt.RequireResearchComposition();throw new InvalidDataException("Unverified matched skirt composed"); } catch(InvalidOperationException) { }
+
             var independentReport=DerivedWaistAudit.Inspect(independent,reference);
             Console.WriteLine($"{id} C#-derived waist: max endpoint={independentReport.MaxEndpointCm:G6} cm, control={independentReport.MaxControlCm:G6} cm, length={independentReport.MaxLengthDifferenceCm:G6} cm, numerical disagreement={independentReport.MaxIntegrationDisagreementCm:G6} cm, enclosure max width≈{independentReport.MaxEnclosureWidthCm:G6} cm, source lengths inside={independentReport.SourceValuesInside}/{independentReport.EdgeCount}.");
             Console.WriteLine($"{id} candidate waist length upper≈[{independentReport.UpperLength.ApproximateLowerCm:G12},{independentReport.UpperLength.ApproximateUpperCm:G12}] cm; lower≈[{independentReport.LowerLength.ApproximateLowerCm:G12},{independentReport.LowerLength.ApproximateUpperCm:G12}] cm (display rounded).");

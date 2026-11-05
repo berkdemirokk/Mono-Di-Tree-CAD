@@ -96,6 +96,11 @@ internal static class InterfaceMatcher
         var inputs=DerivedWaistInputs.Create(snapshot);
         return MatchCore(snapshot,inputs.Upper.ToList(),inputs.Lower.ToList());
     }
+    internal static BodyWaistStudy.UnverifiedMatch MatchUnverified(string snapshot,List<Edge> a,List<Edge> b)
+    {
+        var result=MatchCore(snapshot,a,b);
+        return new(snapshot,result.Upper,result.Lower);
+    }
     static Result MatchCore(string snapshot,List<Edge> a,List<Edge> b)
     {
         var af=Fractions(a);var bf=Fractions(b);
