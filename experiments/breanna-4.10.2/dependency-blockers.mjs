@@ -6,6 +6,7 @@ import {createDiagnosticManifest} from './distribution-manifest.mjs';
 // Research only: these historical records are assertions, never authentication.
 export function parseLockedPackages(text) {
  if(typeof text!=='string'||Buffer.byteLength(text)>2_000_000||!text.startsWith("lockfileVersion: '9.0'"))throw Error('unsupported lock');
+ text=text.replaceAll('\r\n','\n');
  const block=text.split('\npackages:\n')[1]?.split('\nsnapshots:\n')[0];if(!block)throw Error('missing package block');
  const rows=[...block.matchAll(/^  (?:'([^']+)'|([^:\s]+)):\s*\r?\n\s+resolution: \{integrity: (sha512-[A-Za-z0-9+/=]+)\}/gm)];
  const result=rows.map(m=>{const key=m[1]||m[2],i=key.lastIndexOf('@'),name=key.slice(0,i),version=key.slice(i+1);if(i<=0||!/^(@[a-z0-9._-]+\/)?[a-z0-9._-]+$/.test(name)||!/^\d+\.\d+\.\d+$/.test(version))throw Error('unsupported package key');return {name,version,integrity:m[3]};});
@@ -30,12 +31,13 @@ export async function inspectPackage(root,entry,provenance=[],tarballs=[]) {
   if(!noticeFiles.some(x=>/^(license|licence|copying)(?:[._-].*)?$/i.test(path.posix.basename(x.path))))issues.push('package license text absent');
  } catch { issues.push('installed package missing, unstable, unsafe or unreadable'); }
  const prov=provenance.filter(p=>p.name===entry.name&&p.version===entry.version);
- const tar=tarballs.filter(p=>p.name===entry.name);
+ const tar=tarballs.filter(p=>p.name===entry.name && (p.version===undefined || p.version===entry.version));
  if(prov.length!==1 || prov[0].integrity!==entry.integrity)issues.push('registry provenance absent, ambiguous or differs from lock');
  if(tar.length!==1||tar[0].match!==true)issues.push('historical tarball match not recorded');
+ if(tar.length===1 && tar[0].version!==entry.version)issues.push('historical tarball record does not establish version');
  issues.push('installed files not compared against authenticated archive');
  issues.push('notice completeness and source authority not established');
- return {name:entry.name,version:entry.version,lockIntegrity:entry.integrity,historicalRegistry:prov.length===1?{integrity:prov[0].integrity,license:prov[0].license??null}:null,historicalTarball:tar.length===1?{declaredMatch:tar[0].match}:null,installedManifest:manifest,installedName:packageMetadata?.name??null,installedVersion:packageMetadata?.version??null,declaredLicense:packageMetadata?.license??null,noticeFiles,issues,status:'unresolved'};
+ return {name:entry.name,version:entry.version,lockIntegrity:entry.integrity,historicalRegistry:prov.length===1?{integrity:prov[0].integrity,license:prov[0].license??null}:null,historicalTarball:tar.length===1?{declaredMatch:tar[0].match,declaredVersion:tar[0].version??null,versionVerified:false}:null,installedManifest:manifest,installedName:packageMetadata?.name??null,installedVersion:packageMetadata?.version??null,declaredLicense:packageMetadata?.license??null,noticeFiles,issues,status:'unresolved'};
 }
 export async function report({lockText,packageRoot,provenance=[],tarballs=[],runtimePath=null,runtimeNoticePath=null,expectedCount=20}) {
  const locked=parseLockedPackages(lockText);if(locked.length!==expectedCount)throw Error('unexpected locked package count');

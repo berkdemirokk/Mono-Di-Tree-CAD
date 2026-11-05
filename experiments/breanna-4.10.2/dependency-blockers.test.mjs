@@ -4,7 +4,7 @@ import {parseLockedPackages,inspectPackage,report} from './dependency-blockers.m
 const lock="lockfileVersion: '9.0'\n\npackages:\n\n  example@1.0.0:\n    resolution: {integrity: sha512-YWJj}\n\nsnapshots:\n";
 const entry={name:'example',version:'1.0.0',integrity:'sha512-YWJj'};
 test('lock parser rejects missing, duplicate and unsupported entries',()=>{
- assert.deepEqual(parseLockedPackages(lock),[entry]);assert.throws(()=>parseLockedPackages(lock.replace('sha512-YWJj','sha1-bad')));assert.throws(()=>parseLockedPackages(lock.replace('snapshots:',"  example@1.0.0:\n    resolution: {integrity: sha512-YWJj}\n\nsnapshots:")));
+ assert.deepEqual(parseLockedPackages(lock),[entry]);assert.deepEqual(parseLockedPackages(lock.replaceAll('\n','\r\n')),[entry]);assert.throws(()=>parseLockedPackages(lock.replace('sha512-YWJj','sha1-bad')));assert.throws(()=>parseLockedPackages(lock.replace('snapshots:',"  example@1.0.0:\n    resolution: {integrity: sha512-YWJj}\n\nsnapshots:")));
 });
 test('20 actual lock packages and historical records stay unresolved without claiming authorization',async()=>{
  const lockText=await readFile(new URL('./pnpm-lock.yaml',import.meta.url),'utf8');assert.equal(parseLockedPackages(lockText).length,20);
@@ -15,6 +15,8 @@ test('synthetic package identifies missing notice, wrong version and observed fi
   const dir=path.join(root,'example');await mkdir(dir);await writeFile(path.join(dir,'package.json'),JSON.stringify({name:'example',version:'9.0.0',license:'MIT'}));await writeFile(path.join(dir,'data.txt'),'synthetic');
   const p=await inspectPackage(root,entry,[{name:'example',version:'1.0.0',integrity:'sha512-YWJj',license:'MIT'}],[{name:'example',match:true}]);
   assert.ok(p.issues.includes('installed identity differs from lock'));assert.ok(p.issues.includes('package license text absent'));assert.ok(p.installedManifest.entries.some(e=>e.path==='data.txt'&&e.sha256.length===64));assert.equal(p.status,'unresolved');
+  assert.equal(p.historicalTarball.versionVerified,false);assert.ok(p.issues.includes('historical tarball record does not establish version'));
+  const wrong=await inspectPackage(root,entry,[],[{name:'example',version:'9.0.0',match:true}]);assert.equal(wrong.historicalTarball,null);assert.ok(wrong.issues.includes('historical tarball match not recorded'));
   await writeFile(path.join(dir,'LICENSE'),'synthetic notice, not legal evidence');const q=await inspectPackage(root,entry);assert.equal(q.noticeFiles.length,1);assert.equal(q.status,'unresolved');
  }finally{await rm(root,{recursive:true,force:true});}
 });
