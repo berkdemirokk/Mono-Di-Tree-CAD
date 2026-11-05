@@ -705,7 +705,7 @@ internal sealed class DesignRequestWindow : Window
         if(path is null)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || closed) { SetStatus("İstek değişti; kaydetme iptal edildi.");return; }
         try { var target=DesignRequestSavePath.Complete(path);if(before.Version==2)DesignRequestStorage.SaveNewV2(target,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(target,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
-        catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
+        catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
