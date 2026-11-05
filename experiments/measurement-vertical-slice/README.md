@@ -2,6 +2,8 @@
 
 Bu, ana uygulamaya bağlanmamış bağımsız WPF geliştirici araştırmasıdır. Model seçimi, açık mm/cm birimi, 15 üst beden ölçüsü, alt panel için 11 ayrı yay/bolluk/boy girdisi, alt panel simetri kabulü ve açık onay ister. Bütün alanlar ve seçimler boş başlar. Kullanıcı isterse açık bir butonla üç **uydurma** test kümesinden birini doldurabilir; gerçek kişi verisi girilmemelidir. Üst ölçü açıklamaları mevcut `BreannaMeasurementGate` tanımlarından gelir ve henüz uzman tarafından doğrulanmamıştır. Alt ön/arka yayları ve bollukları üst motorun toplam/ön ölçü sözleşmesiyle aynı anlama zorlanmaz.
 
+Form ayrıca worker başlatmayan C# yerel bel girdisi kontrolü içerir. Ayrıntılar ve bu kontrolün dikiş uygunluğu anlamına gelmediği sınırları `LOCAL_WAIST_REVIEW.md` dosyasındadır.
+
 Sentetik doldurma düğmesi, herhangi bir ölçü alanı doluysa bunların değiştirileceğine dair açık onay ister; ret halinde alanlara dokunmaz. Onay penceresi açıkken alan, model, birim, örnek seçimi veya onay/simetri durumu değişirse işlem iptal edilir. Değişip eski değere dönme de yeni onay gerektirir. Boş forma yüklemede değiştirilmiş alan olmadığı için değiştirme onayı istenmez; daha sonra ölçü ve simetri onayları ayrıca gerekir.
 
 `Contract.Validate` önce form değerlerinin kopyasını alır; alan adlarını ve sayısını, modeli, birimi ve onayları kontrol eder. Üst 15 ölçüyü mevcut `BreannaMeasurementGate.Review` ile, alt 11 değeri mevcut `ALineMeasurementReview.Normalize` ve gerçek `ALinePanelPreview.Create` ile değerlendirir. Santimetre uzunlukları mm'ye çevrilir; omuz eğimi derecedir. Üst ve altın aynı beden veya belde birleştiği varsayılmaz; ön göğüs pensi 06:00, ikincil pens yok, arka bel ve omuz pensleri kapalıdır.

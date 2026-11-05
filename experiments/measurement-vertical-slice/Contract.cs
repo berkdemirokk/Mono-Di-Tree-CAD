@@ -14,7 +14,8 @@ internal static class Contract
     internal static Dictionary<string,decimal> UpperSample(string id){var values=Scenario.Get(id).UpperDeclaration.Split(',').Select(x=>decimal.Parse(x.Trim(),CultureInfo.InvariantCulture)).ToArray();var defs=BreannaMeasurementGate.Definitions;if(values.Length!=defs.Count)throw new InvalidOperationException();return defs.Select((d,i)=>(d.Key,values[i])).ToDictionary(x=>x.Key,x=>x.Item2,StringComparer.Ordinal);}
     internal static decimal[] LowerSample(string id){var p=Scenario.Get(id).Lower;return new[]{p.FrontWaistArc,p.BackWaistArc,p.FrontHipArc,p.BackHipArc,p.FrontWaistEase,p.BackWaistEase,p.FrontHipEase,p.BackHipEase,p.HipDepth,p.WaistToHem,p.FinishedHemCircumference}.Select(Convert.ToDecimal).ToArray();}
     internal static Dictionary<string,string> SampleInput(string id,string unit){if(unit is not ("mm" or "cm"))throw new InvalidOperationException();var d=new Dictionary<string,string>(StringComparer.Ordinal);foreach(var def in BreannaMeasurementGate.Definitions){var n=UpperSample(id)[def.Key];d.Add("upper."+def.Key,(def.IsAngle||unit=="mm"?n:n/10).ToString(CultureInfo.InvariantCulture));}var l=LowerSample(id);for(int i=0;i<l.Length;i++)d.Add("lower."+LowerKeys[i],(unit=="mm"?l[i]:l[i]/10).ToString(CultureInfo.InvariantCulture));return d;}
-    internal static (string Id,ALinePanelPreview Lower) Validate(string? model,string? unit,bool confirmed,bool symmetry,IReadOnlyDictionary<string,string> source)
+    internal sealed record Normalized(IReadOnlyDictionary<string,decimal> Upper,decimal[] LowerValues,ALinePanelInput LowerInput,ALinePanelPreview Lower);
+    internal static Normalized Normalize(string? model,string? unit,bool confirmed,bool symmetry,IReadOnlyDictionary<string,string> source)
     {
         if(model!=Model||unit is not ("mm" or "cm")||!confirmed||!symmetry||source is null)throw new InvalidOperationException("Girdi tamamlanmadı.");
         var fields=new Dictionary<string,string>(source,StringComparer.Ordinal);var defs=BreannaMeasurementGate.Definitions;
@@ -23,7 +24,13 @@ internal static class Contract
         var reviewed=BreannaMeasurementGate.Review(entries);if(!reviewed.IsValid)throw new InvalidOperationException("Üst ölçü ilişkisi geçersiz.");
         var lowerStrings=LowerKeys.Select(k=>fields.TryGetValue("lower."+k,out var s)&&s.Length<=24?s:throw new InvalidOperationException("Alt ölçü geçersiz.")).ToArray();
         var lower=ALineMeasurementReview.Normalize(lowerStrings,unit=="mm"?ALineLengthUnit.Millimeter:ALineLengthUnit.Centimeter);var result=ALinePanelPreview.Create(lower);
-        foreach(var id in new[]{"synthetic-base","synthetic-scaled","synthetic-distinct"}){var expected=UpperSample(id);if(reviewed.Values!.Count==expected.Count&&expected.All(k=>reviewed.Values.TryGetValue(k.Key,out var v)&&v==k.Value)&&lower==Scenario.Get(id).Lower)return (id,result);}
+        var decimals=lowerStrings.Select(s=>checked(decimal.Parse(s.Trim().Replace(',','.'),NumberStyles.AllowDecimalPoint,CultureInfo.InvariantCulture)*(unit=="cm"?10m:1m))).ToArray();
+        return new(reviewed.Values!,decimals,lower,result);
+    }
+    internal static (string Id,ALinePanelPreview Lower) Validate(string? model,string? unit,bool confirmed,bool symmetry,IReadOnlyDictionary<string,string> source)
+    {
+        var normalized=Normalize(model,unit,confirmed,symmetry,source);
+        foreach(var id in new[]{"synthetic-base","synthetic-scaled","synthetic-distinct"}){var expected=UpperSample(id);if(normalized.Upper.Count==expected.Count&&expected.All(k=>normalized.Upper.TryGetValue(k.Key,out var v)&&v==k.Value)&&normalized.LowerInput==Scenario.Get(id).Lower)return (id,normalized.Lower);}
         throw new InvalidOperationException("Yalnız sabit uydurma örnekler destekleniyor; gerçek kişi verisi girmeyin.");
     }
 }
