@@ -33,6 +33,9 @@ internal sealed class DesignRequestWindow : Window
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     internal Func<byte[],ReferencePhotoPreview>? ExistingReferenceDecoderForVerification { get; set; }
     private bool dirty,loading,changingModel,hasSavedRequest;
+    private int requestVersion=1;
+    private string? portableModelId;
+    private static readonly string[] PortableModelIds=["wrap","aline","corset","sheath","straight","shirt"];
     private string? selectedModelText;private string modelSnapshot="";private int selectedModelStart;
     private bool modelAmbiguous,selectedModelFromLoaded;
     internal Func<string,bool>? ConfirmModelChangeForVerification { get; set; }
@@ -113,6 +116,13 @@ internal sealed class DesignRequestWindow : Window
             AutomationProperties.SetHelpText(button,"Model fikrini seçer veya değiştirir; mevcut metin korunur ve kalıp oluşturulmaz.");
             button.Click+=(_,_)=>
             {
+                if(requestVersion==2)
+                {
+                    var index=modelCards.FindIndex(card=>ReferenceEquals(card.Button,button));
+                    if(index<0 || index>=PortableModelIds.Length)return;
+                    portableModelId=PortableModelIds[index];dirty=true;SetLastModel(button);
+                    SetStatus("Model kimliği seçildi; tarif korunuyor. Model ile tarifin uyumunu kontrol edin.");return;
+                }
                 if(selectedModelText==template) { SetStatus("Bu model zaten seçili; mevcut tarif korundu.");return; }
                 if(modelAmbiguous || selectedModelFromLoaded)
                 {
@@ -145,6 +155,9 @@ internal sealed class DesignRequestWindow : Window
         ModelChoice("Minimal kılıf","Düz form · Kolsuz hat","Minimal kılıf elbise; detaylar: ","M46,18 Q60,22 74,18 M46,18 L38,22 36,36 42,36 43,62 40,148 80,148 77,62 78,36 84,36 82,22 74,18","M50,48 L50,72 M70,48 L70,72 M60,20 L60,148 M40,140 L40,148","S-07");
         ModelChoice("Düz elbise","Düz siluet","Düz elbise; detaylar: ","M 34,5 L 25,10 20,22 27,26 29,39 25,73 55,73 51,39 53,26 60,22 55,10 46,5 Q 40,14 34,5 Z",null);
         ModelChoice("Gömlek elbise","Yakalı ön · Bel hattı","Gömlek elbise; detaylar: ","M 34,5 L 25,10 19,22 27,27 29,40 23,73 57,73 51,40 53,27 61,22 55,10 46,5 L 40,10 Z","M 34,5 L 34,15 40,10 46,15 46,5 M 40,10 L 40,73 M 30,40 L 50,40");
+        var clearPortableModel=new Button { Content="V2 model seçimini kaldır",HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8) };
+        clearPortableModel.Click+=(_,_)=> { if(requestVersion==2 && portableModelId is not null) { portableModelId=null;dirty=true;SetLastModel(null);SetStatus("Model kimliği kaldırıldı; tarif korundu."); } };
+        body.Children.Add(clearPortableModel);
         body.Children.Add(new TextBlock { Text="Nasıl bir elbise istiyorsun?",FontFamily=new FontFamily("Georgia"),FontSize=21,Foreground=Accent,Margin=new Thickness(0,14,0,4) });
         body.Children.Add(new TextBlock { Text="Kumaşı, yakayı, boyu ve diğer model ayrıntılarını tarif edin.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         var editBody=new StackPanel();body.Children.Add(editBody);
@@ -372,11 +385,11 @@ internal sealed class DesignRequestWindow : Window
     }
     private void UpdateReference()=>referenceLabel.Text=reference is null ? "Görsel seçilmedi." : $"{reference.Name} · {reference.MediaType} · {reference.Data.Length} bayt"+
         (referenceDecoded ? "\nWindows görsel denetiminden geçti; telefon uyumluluğu ayrıca doğrulanmalıdır." : "\nBu kayıttaki görsel açılabilirlik açısından yeniden denetlenmedi; telefonda açılamayabilir. Özgün istek dosyasını saklayın; gerekirse yeni bir PNG/JPEG görsel seçip isteği ayrı bir dosyaya kaydedin. Mevcut görsel baytları değiştirilmedi.");
-    private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() });
+    private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() },portableModelId,requestVersion);
     private void Apply(DesignRequest value)
     {
         DesignRequestStorage.Validate(value);loading=true;
-        try { ClearModelTracking();prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=false;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;RecoverLoadedModelCandidate();RefreshConversation(); }
+        try { ClearModelTracking();requestVersion=value.Version;portableModelId=value.ModelId;prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=value.Version==2 && value.Reference is not null;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;if(value.Version==1)RecoverLoadedModelCandidate();else if(value.ModelId is not null) { var index=Array.IndexOf(PortableModelIds,value.ModelId);if(index>=0)SetLastModel(modelCards[index].Button); }RefreshConversation(); }
         finally { loading=false; }
     }
     private bool ConfirmDiscard()=>!dirty && string.IsNullOrEmpty(chatInput.Text) || MessageBox.Show(this,"Kaydedilmemiş istek değişiklikleri kaybolacak. Devam edilsin mi?","İstek",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes;
@@ -441,9 +454,11 @@ internal sealed class DesignRequestWindow : Window
     private void Open()
     {
         if(!ConfirmDiscard())return;
+        var before=Capture();var beforeChat=chatInput.Text;var beforeRevision=referenceRevision;var beforeDirty=dirty;
         var dialog=new OpenFileDialog { Title="Kalıp isteği aç",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",Multiselect=false };
         if(dialog.ShowDialog(this)!=true)return;
-        try { var loaded=DesignRequestStorage.Load(dialog.FileName);Apply(loaded);SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."); }
+        if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || beforeDirty!=dirty || closed) { SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
+        try { var loaded=DesignRequestStorage.Load(dialog.FileName,ReferencePhotoDecoder.ValidateV2);Apply(loaded);SetStatus("İstek açıldı; proje ve çizim değiştirilmedi."+(loaded.Version==2 && loaded.ModelId is not null ? " Model kimliği ile serbest tarifin uyumunu kontrol edin." : "")); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or System.Text.DecoderFallbackException) { SetStatus("İstek açılamadı; mevcut alanlar korundu: "+ex.Message); }
     }
     private void Save()
@@ -452,10 +467,14 @@ internal sealed class DesignRequestWindow : Window
         if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Kaydetmeden önce mesajı gönderin veya silin; mevcut mesaj korunuyor.");return; }
         try { DesignRequestStorage.Validate(Capture()); }
         catch(InvalidDataException ex) { SetStatus(ex.Message);return; }
+        var before=Capture();var beforeChat=chatInput.Text;var beforeRevision=referenceRevision;
         var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
-        try { DesignRequestStorage.SaveNew(dialog.FileName,Capture());dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
+        if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || closed) { SetStatus("İstek değişti; kaydetme iptal edildi.");return; }
+        try { if(before.Version==2)DesignRequestStorage.SaveNewV2(dialog.FileName,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(dialog.FileName,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
+    private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
+        (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }
 
