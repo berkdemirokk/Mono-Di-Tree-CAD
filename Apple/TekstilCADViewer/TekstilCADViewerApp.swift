@@ -3295,6 +3295,35 @@ private struct ExperimentalDesignBriefView: View {
                 .buttonStyle(.borderedProminent).controlSize(.large).frame(minHeight: 48)
         }
     }
+    @ViewBuilder private var briefFooter: some View {
+        if !message.isEmpty {
+            HStack(alignment: .top, spacing: 8) {
+                ScrollView {
+                    Text(message).font(.subheadline).foregroundStyle(.primary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityLabel("İşlem durumu: " + message)
+                }
+                .frame(maxHeight: 110)
+                Button { message = "" } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }
+                    .accessibilityLabel("Durum mesajını kapat")
+            }
+            .padding(.horizontal).padding(.vertical, 6)
+            .background(Color.secondary.opacity(0.10))
+        }
+        Group {
+            if typeSize.isAccessibilitySize {
+                VStack(spacing: 8) { footerActions }.frame(maxWidth: .infinity)
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { footerActions }.fixedSize(horizontal: true, vertical: false)
+                    VStack(spacing: 8) { footerActions }
+                }
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .disabled(draftTransition || referenceDecisionPending)
+        .padding(.horizontal).padding(.vertical, 10)
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -3451,10 +3480,22 @@ private struct ExperimentalDesignBriefView: View {
                         Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
                     }
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
-                    TextField("Göğüs çevresi · ör. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
-                    TextField("Bel çevresi · ör. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
-                    TextField("Kalça çevresi · ör. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
-                    TextField("Elbise boyu · ör. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Göğüs çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Bel çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Kalça çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
+                    }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Elbise boyu").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
+                        TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
+                    }
 
                 }
                 }
@@ -3639,33 +3680,18 @@ private struct ExperimentalDesignBriefView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
-                if !message.isEmpty {
-                    HStack(alignment: .top, spacing: 8) {
-                        ScrollView {
-                            Text(message).font(.subheadline).foregroundStyle(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .accessibilityLabel("İşlem durumu: " + message)
-                        }
-                        .frame(maxHeight: 110)
-                        Button { message = "" } label: { Image(systemName: "xmark.circle.fill").frame(minWidth: 44, minHeight: 44) }
-                            .accessibilityLabel("Durum mesajını kapat")
-                    }
-                    .padding(.horizontal).padding(.vertical, 6)
-                    .background(Color.secondary.opacity(0.10))
+                #if os(iOS)
+                if focusedInput != nil {
+                    Button("Düzenlemeyi bitir") { focusedInput = nil }
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .padding(.horizontal, 12)
+                        .accessibilityHint("Klavyeyi kapatır ve gezinme düğmelerini gösterir.")
+                } else {
+                    briefFooter
                 }
-                Group {
-                    if typeSize.isAccessibilitySize {
-                        VStack(spacing: 8) { footerActions }.frame(maxWidth: .infinity)
-                    } else {
-                        ViewThatFits(in: .horizontal) {
-                            HStack(spacing: 12) { footerActions }.fixedSize(horizontal: true, vertical: false)
-                            VStack(spacing: 8) { footerActions }
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                }
-                .disabled(draftTransition || referenceDecisionPending)
-                .padding(.horizontal).padding(.vertical, 10)
+                #else
+                briefFooter
+                #endif
                 }
                 .background(ivory)
             }
