@@ -2611,6 +2611,14 @@ private struct ExperimentalDesignBriefView: View {
     @State private var exportPresentation = ExperimentalDesignBrief.ExportPresentation()
     @State private var exportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var savedDraft: ExperimentalDesignBrief.Draft?
+    #if os(iOS)
+    @State private var savedShareAttempt: ExperimentalDesignBrief.ExportAttempt?
+    @State private var shareWorkID: UUID?
+    @State private var shareCancelRequested = false
+    @State private var shareTask: Task<URL, Error>?
+    @State private var shareItem: DesignRequestShareItem?
+    @State private var shareCleanupItem: DesignRequestShareItem?
+    #endif
     @State private var statusMessage = ""
     private var message: String {
         get { statusMessage }
@@ -2921,6 +2929,9 @@ private struct ExperimentalDesignBriefView: View {
     private var requestPrompt: String { draft.prompt }
     private var requestMeasurements: String { draft.measurements }
     private func closeAfterSaving() {
+        #if os(iOS)
+        if shareWorkID != nil { cancelSavedShare(); message = "Paylaşım hazırlığı iptal edildi; kapatmayı yeniden seçin."; return }
+        #endif
         guard !aLineInputPending else {
             message = "A kesim rehberinde notlara eklenmemiş girişler var. Rehberi tamamlayın veya girişleri açıkça temizleyin."
             step = 1; return
@@ -3065,6 +3076,61 @@ private struct ExperimentalDesignBriefView: View {
         return MeasurementMessageParser.mayNeedDesktopReview(description) || MeasurementMessageParser.containsExplicitMeasurement(description)
             || MeasurementMessageParser.hasConditionalMeasurementRisk(fields) ? 0 : 1
     }
+    #if os(iOS)
+    private func startSavedShare() {
+        guard let attempt = savedShareAttempt,
+              attempt.canPrepareShare(current: draft, referencePending: referenceBlocksClose,
+                                      measurementPending: aLineInputPending || measurementForm?.hasValues == true, transition: draftTransition),
+              shareWorkID == nil, shareCleanupItem == nil else {
+            message = "Taslak veya seçim değişti. İsteği yeniden kaydedip kontrol edin."; return
+        }
+        let id = UUID(); shareWorkID = id; shareCancelRequested = false
+        message = "Paylaşım kopyası hazırlanıyor; kayıtlı dosya ve taslak korunuyor."
+        let worker = Task.detached(priority: .userInitiated) { try DesignRequestShareFile.create(bytes: attempt.bytes, id: id) }
+        shareTask = worker
+        Task { @MainActor in
+            do {
+                let url = try await worker.value
+                guard shareWorkID == id, !shareCancelRequested, savedShareAttempt?.id == attempt.id,
+                      attempt.canPrepareShare(current: draft, referencePending: referenceBlocksClose,
+                                              measurementPending: aLineInputPending || measurementForm?.hasValues == true, transition: draftTransition) else {
+                    var cleaned = true
+                    do { try DesignRequestShareFile.remove(url, id: id) }
+                    catch { cleaned = false; shareCleanupItem = .init(id: id, url: url) }
+                    if shareWorkID == id {
+                        let cancelled = shareCancelRequested
+                        shareWorkID = nil; shareTask = nil; shareCancelRequested = false
+                        message = cleaned ? (cancelled ? "Paylaşım iptal edildi; kayıtlı dosya ve taslak korundu." : "Taslak değişti; paylaşım açılmadı.") : "Geçici kopya temizlenemedi; yeniden temizlemeyi deneyin."
+                    }
+                    return
+                }
+                shareWorkID = nil; shareTask = nil; shareCancelRequested = false
+                let item = DesignRequestShareItem(id: id, url: url)
+                shareCleanupItem = item; shareItem = item
+            } catch {
+                guard shareWorkID == id else { return }
+                let cancelled = shareCancelRequested || error is CancellationError
+                shareWorkID = nil; shareTask = nil; shareCancelRequested = false
+                if let shareError = error as? DesignRequestShareFile.Failure, case .cleanupFailed(let url) = shareError {
+                    shareCleanupItem = .init(id: id, url: url)
+                    message = "Geçici kopya temizlenemedi; yeniden temizlemeyi deneyin."
+                } else {
+                    message = cancelled ? "Paylaşım iptal edildi; kayıtlı dosya ve taslak korundu." : "Paylaşım kopyası hazırlanamadı; taslak ve kayıtlı dosya korundu."
+                }
+            }
+        }
+    }
+    private func cancelSavedShare() {
+        guard shareWorkID != nil else { return }
+        shareCancelRequested = true; shareTask?.cancel()
+        message = "Paylaşım hazırlığı iptal ediliyor; taslak ve kayıtlı dosya korunuyor."
+    }
+    private func cleanupSavedShare() {
+        guard let item = shareCleanupItem else { return }
+        do { try DesignRequestShareFile.remove(item.url, id: item.id); shareCleanupItem = nil }
+        catch { message = "Geçici paylaşım kopyası temizlenemedi; yeniden temizlemeyi deneyin. Kayıtlı dosya ve taslak korunuyor." }
+    }
+    #endif
     private func prepareExport(confirmedDesktopWarning: Bool = false) {
         guard !aLineInputPending else { message = "A kesim rehberindeki girişler henüz isteğe eklenmedi. Önce onaylayın veya açıkça temizleyin."; step = 1; return }
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
@@ -3398,6 +3464,20 @@ private struct ExperimentalDesignBriefView: View {
                 }
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)
                 Text("Bu istek dosyası kalıp üretmez, baskıya göndermez veya otomatik gönderilmez.").font(.caption).foregroundStyle(.secondary)
+                #if os(iOS)
+                if savedShareAttempt?.matchesCurrentDraft(draft) == true || shareWorkID != nil || shareCleanupItem != nil {
+                    Section("Windows’a aktarım") {
+                        Text("Kaydedilen isteğin kopyası; model ve tarif, ölçüler ve varsa konum bilgileri dahil seçilen görseli içerir. Kalıp dosyası değildir. Paylaşım yöntemini ve alıcıyı siz seçersiniz.").font(.caption)
+                        if savedShareAttempt?.matchesCurrentDraft(draft) == true {
+                            Button("Kaydedilen isteği paylaş…") { startSavedShare() }
+                                .frame(minHeight: 44).disabled(shareWorkID != nil || shareCleanupItem != nil || referenceBlocksClose)
+                        }
+                        if shareWorkID != nil { ProgressView("Paylaşım kopyası hazırlanıyor…"); Button("Paylaşım hazırlığını iptal et") { cancelSavedShare() }.frame(minHeight: 44).disabled(shareCancelRequested) }
+                        if shareCleanupItem != nil && shareItem == nil { Button("Geçici kopyayı temizlemeyi yeniden dene") { cleanupSavedShare() }.frame(minHeight: 44) }
+                        Text("Sistem paylaşımından bir yöntem seçin ve Windows uygulamasında istek dosyasını açın. Teslimat doğrulanmaz. Geçici kopya paylaşım bitince silinmeye çalışılır; ani kapanışta sistemin geçici alanında kalabilir.").font(.caption)
+                    }
+                }
+                #endif
                 }
             }
             .disabled(draftTransition)
@@ -3599,7 +3679,12 @@ private struct ExperimentalDesignBriefView: View {
                 }
             }
             .onChange(of: image) { value in v2ImageReview.synchronize(current: value) }
-            .onChange(of: draft) { value in if !draftTransition { saveLocalDraft(value) } }
+            .onChange(of: draft) { value in
+                #if os(iOS)
+                if savedShareAttempt?.matchesCurrentDraft(value) == false { savedShareAttempt = nil }
+                #endif
+                if !draftTransition { saveLocalDraft(value) }
+            }
             .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: importedPortable) { _ in modelSuggestionRevision = UUID() }
@@ -3617,6 +3702,9 @@ private struct ExperimentalDesignBriefView: View {
             } }
             .confirmationDialog("İstek kapatılsın mı?", isPresented: $confirmClose, titleVisibility: .visible) {
                 Button("Kaydetmeden kapat", role: .destructive) {
+                    #if os(iOS)
+                    if shareWorkID != nil { cancelSavedShare(); return }
+                    #endif
                     guard !aLineInputPending else {
                         message = "A kesim rehberindeki girişler bekliyor; önce tamamlayın veya açıkça temizleyin."; step = 1
                         return
@@ -3642,6 +3730,19 @@ private struct ExperimentalDesignBriefView: View {
                 catch { if !isFilePickerCancellation(error) { message = "Görsel seçilemedi; mevcut görsel korundu." } }
             }
             .background {
+                #if os(iOS)
+                Color.clear.sheet(item: $shareItem, onDismiss: { cleanupSavedShare() }) { item in
+                    DesignRequestShareSheet(item: item) { id, completed, error in
+                        guard shareItem?.id == id else { return }
+                        shareItem = nil
+                        if error != nil { message = "Paylaşım tamamlanamadı; kayıtlı dosya ve taslak korundu." }
+                        else if completed { message = "Paylaşım seçimi tamamlandı; Windows’a ulaştığını ayrıca kontrol edin." }
+                        else { message = "Paylaşım iptal edildi; kayıtlı dosya ve taslak korundu." }
+                    }
+                }
+                #endif
+            }
+            .background {
                 if let attempt = exportAttempt {
                     DesignBriefExportBridge(attempt: attempt, isPresented: Binding(
                         get: { exportPresentation.isPresented(for: attempt.id) },
@@ -3651,6 +3752,9 @@ private struct ExperimentalDesignBriefView: View {
                         switch result {
                         case .success:
                             savedDraft = current.draft
+                            #if os(iOS)
+                            savedShareAttempt = current.matchesCurrentDraft(draft) ? current : nil
+                            #endif
                             message = current.draft == draft
                                 ? "İstek dosyası kaydedildi; masaüstünde ayrıca incelenmesi gerekir."
                                 : "Önceki içerik kaydedildi; sonraki değişiklikler henüz kaydedilmedi."

@@ -458,6 +458,10 @@ enum ExperimentalDesignBrief {
         let bytes: Data
         func matches(_ callbackID: UUID) -> Bool { id == callbackID }
         func matchesCurrentDraft(_ current: Draft) -> Bool { draft == current }
+        func canPrepareShare(current: Draft, referencePending: Bool, measurementPending: Bool, transition: Bool) -> Bool {
+            draft == current && !referencePending && !measurementPending && !transition &&
+                current.aLineGuideInput == nil && current.measurementForm?.hasValues != true
+        }
     }
     struct ExportPresentation {
         private(set) var currentID: UUID?

@@ -256,6 +256,46 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(styles.count, Set(styles).count)
         XCTAssertEqual(Set(styles), Set(ExperimentalDesignBrief.DressStyle.allCases))
     }
+    func testShareUsesOnlyCurrentApprovedSavedSnapshot() throws {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
+        for bytes in [try ExperimentalDesignBrief.make(draft), try ExperimentalDesignBrief.makeV2(draft)] {
+            let attempt = ExperimentalDesignBrief.ExportAttempt(draft: draft, bytes: bytes)
+            XCTAssertTrue(attempt.canPrepareShare(current: draft, referencePending: false, measurementPending: false, transition: false))
+            XCTAssertFalse(attempt.canPrepareShare(current: draft, referencePending: true, measurementPending: false, transition: false))
+            XCTAssertFalse(attempt.canPrepareShare(current: draft, referencePending: false, measurementPending: true, transition: false))
+            XCTAssertFalse(attempt.canPrepareShare(current: draft, referencePending: false, measurementPending: false, transition: true))
+            let changed = ExperimentalDesignBrief.Draft(style: .aline, description: "değişti", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: nil, imageName: nil)
+            XCTAssertFalse(attempt.canPrepareShare(current: changed, referencePending: false, measurementPending: false, transition: false))
+            var pending = draft; pending.measurementForm = .init(values: ["1"] + Array(repeating: "", count: 14), unit: "cm")
+            XCTAssertFalse(attempt.canPrepareShare(current: pending, referencePending: false, measurementPending: false, transition: false))
+        }
+    }
+    func testShareTemporaryCopyIsBoundedAndCleanupCannotRemoveOtherFiles() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let id = UUID(), bytes = Data("{\"synthetic\":true}".utf8)
+        let file = try DesignRequestShareFile.create(bytes: bytes, id: id, base: base)
+        XCTAssertEqual(try Data(contentsOf: file), bytes)
+        let unrelated = base.appendingPathComponent("other.json"); try bytes.write(to: unrelated)
+        XCTAssertThrowsError(try DesignRequestShareFile.remove(unrelated, id: id, base: base))
+        XCTAssertThrowsError(try DesignRequestShareFile.create(bytes: bytes, id: id, base: base))
+        XCTAssertThrowsError(try DesignRequestShareFile.create(bytes: Data(count: 12 * 1024 * 1024 + 1), id: UUID(), base: base))
+        try DesignRequestShareFile.remove(file, id: id, base: base)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file.path)); XCTAssertEqual(try Data(contentsOf: unrelated), bytes)
+    }
+    func testCancelledSharePreparationDoesNotLeaveTemporaryCopy() async throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: base) }
+        let id = UUID()
+        let task = Task { @MainActor in try DesignRequestShareFile.create(bytes: Data("{}".utf8), id: id, base: base) }
+        task.cancel()
+        do { _ = try await task.value; XCTFail("Cancelled preparation should fail") }
+        catch is CancellationError { }
+        let folder = base.appendingPathComponent("TekstilCAD-share-" + id.uuidString, isDirectory: true)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    }
     func testRoundTripAndFailedWritePreservesPrevious() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
