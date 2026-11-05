@@ -11,16 +11,16 @@ internal static class ResearchViewSummary
     }
     internal sealed class Summary
     {
-        internal Summary(IReadOnlyList<PanelStatus> panels,int ruleCount) { Panels=panels;RuleCount=ruleCount; }
-        public IReadOnlyList<PanelStatus> Panels { get; } public int RuleCount { get; }
+        internal Summary(IReadOnlyList<PanelStatus> panels,int ruleCount,int disjointSeams) { Panels=panels;RuleCount=ruleCount;DisjointRepresentedSeamIntervals=disjointSeams; }
+        public IReadOnlyList<PanelStatus> Panels { get; } public int RuleCount { get; } public int DisjointRepresentedSeamIntervals { get; }
         public string Status=>"unresolved"; public string ReferenceAssessment=>"Unverified";
         public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
     }
     internal static PanelStatus ToPanelStatus(BodyCurveStudy.Result t)=>new(t.Panel,t.Closure,t.Pairs,t.Unresolved,t.NonMonotone);
     internal static Summary Calculate(ResearchBody body,ResearchDesign design)
     {
-        var graph=BodySeamStudy.Calculate(body,design);var topology=BodyCurveStudy.Calculate(body,design);
+        var lengths=BodySeamProjection.Calculate(body,design);var topology=BodyCurveStudy.Calculate(body,design);
         var panels=topology.Select(ToPanelStatus).ToArray();
-        return new(Array.AsReadOnly(panels),graph.Rules.Count);
+        return new(Array.AsReadOnly(panels),lengths.Rules.Count,lengths.Rules.Count(r=>r.RepresentedIntervalsDisjoint));
     }
 }

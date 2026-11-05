@@ -125,6 +125,12 @@ try
     if(separate!=ExactBezierSeparation.Verdict.Separated) throw new Exception("Bezier disjoint certificate");
     var touch=ExactBezierSeparation.Compare([new(0,0),new(1,1),new(2,0)],[new(2,0),new(3,-1),new(4,0)],true);
     if(touch!=ExactBezierSeparation.Verdict.OnlySharedEndpoint) throw new Exception("Bezier endpoint certificate");
+    var cornerA=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,0)};
+    var cornerB=new[]{new ExactBezierSeparation.Point(2,0),new ExactBezierSeparation.Point(2,2)};
+    if(ExactBezierSeparation.Compare(cornerA,cornerB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Orthogonal endpoint proof");
+    var loopA=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(-1,0),new ExactBezierSeparation.Point(0,1)};
+    var loopB=new[]{new ExactBezierSeparation.Point(0,1),new ExactBezierSeparation.Point(1,0),new ExactBezierSeparation.Point(0,0)};
+    if(ExactBezierSeparation.Compare(loopA,loopB,true)==ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Two shared endpoints falsely certified");
     var tangent=ExactBezierSeparation.Compare([new(0,1),new(1,-1),new(2,1)],[new(0,0),new(2,0)],false,8,1000);
     if(tangent!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier tangency must stay unresolved");
     var overlap=ExactBezierSeparation.Compare([new(0,0),new(2,0)],[new(1,0),new(3,0)],false,8,1000);
@@ -155,6 +161,8 @@ try
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,-1),new(2,-1)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle tangent must remain unresolved");
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,0),new(2,0)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing must remain unresolved");
     try { CircleSeparation.Compare(arcA,arcB,0,[new(0,0),new(1,0)],false);throw new Exception("Degenerate circle accepted"); } catch(ArgumentException) { }
+    var separateA=new ProjectedLengthBounds.Interval(1,2,1);var separateB=new ProjectedLengthBounds.Interval(3,4,1);var overlapInterval=new ProjectedLengthBounds.Interval(2,3,1);
+    if(!separateA.Disjoint(separateB) || separateA.Disjoint(overlapInterval))throw new Exception("Seam interval separation");
     var projectionBase=BezierLengthBounds.Enclose([new(0,0),new(3,4)],0);
     var projectionUnit=ProjectedLengthBounds.Project(projectionBase,1);
     var projectionNonUnit=ProjectedLengthBounds.Project(projectionBase,1.25);
@@ -234,6 +242,7 @@ try
     var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
     try { BodySeamStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid typed graph accepted"); } catch(ArgumentException) { }
+    try { BodySeamProjection.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid seam lengths accepted"); } catch(ArgumentException) { }
     try { ResearchViewSummary.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid preview accepted"); } catch(ArgumentException) { }
     try { BackSkirtCandidate.CreateFromBody(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid back skirt accepted"); } catch(ArgumentException) { }
     var invalidSkirt=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
@@ -509,6 +518,18 @@ internal static class Validator
             var fullGraph=SyntheticFullSeamGraph.Create(id,match);
             Need(fullGraph.Rules.Count==23 && fullGraph.Status=="unresolved" && !fullGraph.ExportAllowed && !fullGraph.ProductionAllowed,"full seam candidate gate");
             var projections=DerivedGraphProjection.Calculate(derivedGraph,independent);
+            var typedLengths=BodySeamProjection.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(typedLengths.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && typedLengths.Rules.Count==23 && typedLengths.Status=="unresolved" && !typedLengths.ExportAllowed && !typedLengths.ProductionAllowed,"typed seam length gate");
+            foreach(var rule in typedLengths.Rules) {
+                var fixedRule=projections.Single(p=>p.Kind==rule.Kind && p.Index==rule.Index && (rule.Kind=="MetaGarment" || p.Owner==rule.Owner));
+                Need(Math.Abs(rule.A.ApproximateLower-fixedRule.A.ApproximateLower)<1e-7 && Math.Abs(rule.A.ApproximateUpper-fixedRule.A.ApproximateUpper)<1e-7 && Math.Abs(rule.B.ApproximateLower-fixedRule.B.ApproximateLower)<1e-7 && Math.Abs(rule.B.ApproximateUpper-fixedRule.B.ApproximateUpper)<1e-7,"typed projected lengths differ from C# fixture");
+            }
+            var waistLengths=typedLengths.Rules.Single(r=>r.Kind=="MetaGarment");
+            Console.WriteLine($"{id} represented waist sides cm: A=[{waistLengths.A.ApproximateLower:G12},{waistLengths.A.ApproximateUpper:G12}], B=[{waistLengths.B.ApproximateLower:G12},{waistLengths.B.ApproximateUpper:G12}]");
+            var separated=typedLengths.Rules.Where(r=>r.RepresentedIntervalsDisjoint).Select(r=>r.Kind+":"+r.Index).ToArray();
+            Console.WriteLine($"{id} represented seam intervals disjoint={separated.Length}: {string.Join(",",separated)}; not a physical fit verdict");
+            try { typedLengths.RequireResearchComposition();throw new InvalidDataException("Unverified lengths composed"); } catch(InvalidOperationException) { }
+
             Need(projections.Count==23 && projections.All(p=>p.Status=="unresolved"&&!p.ExportAllowed),"projected graph gate");
             var projectedSide=projections.Single(p=>p.Kind=="PencilSkirt"&&p.Index==0);
             Console.WriteLine($"{id} skirt side projected bounds: front≈[{projectedSide.A.ApproximateLower:G10},{projectedSide.A.ApproximateUpper:G10}] cm, back≈[{projectedSide.B.ApproximateLower:G10},{projectedSide.B.ApproximateUpper:G10}] cm; disjoint={projectedSide.A.Disjoint(projectedSide.B)} (display rounded, no fit verdict).");
@@ -519,8 +540,8 @@ internal static class Validator
             try { DerivedGraphProjection.Calculate(alteredGraph,independent);throw new Exception("Altered derived ruffle graph accepted"); } catch(ArgumentException) { }
             var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
             var topology=BodyCurveStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
-            Need(topology.Count==6 && topology.All(t=>t.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
-            foreach(var t in topology)Console.WriteLine($"{id} {t.Panel} represented curve pairs: separated={t.Separated}, endpoint={t.EndpointOnly}, unresolved={t.Unresolved}, nonmonotone={t.NonMonotone}");
+            Need(topology.Count==6 && topology.All(t=>t.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && t.UnresolvedEdges.Count==t.Unresolved && t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
+            foreach(var t in topology)Console.WriteLine($"{id} {t.Panel} represented curve pairs: separated={t.Separated}, endpoint={t.EndpointOnly}, unresolved={t.Unresolved}, nonmonotone={t.NonMonotone}, unresolved edge IDs={string.Join(";",t.UnresolvedEdges.Select(p=>$"{p.A}-{p.B}"))}");
             var typedGraph=BodySeamStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(typedGraph.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedGraph.ExportAllowed && !typedGraph.ProductionAllowed && typedGraph.Rules.Count==23 && !typeof(SyntheticFullSeamGraph.Graph).IsAssignableFrom(typedGraph.GetType()),"typed seam graph gate");
             foreach(var rule in typedGraph.Rules) {

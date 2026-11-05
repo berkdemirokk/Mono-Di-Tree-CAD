@@ -53,15 +53,25 @@ internal static class ExactBezierSeparation
         }
         return Axis(p=>p.X)||Axis(p=>p.Y);
     }
-    // Allowed endpoint means a.End == b.Start in represented coordinates.
-    // Strict axis separation of both interiors proves only that common point.
+    // Exact represented-coordinate proof. Each curve must leave the shared
+    // point strictly along some monotone control axis, so neither can return
+    // to it at a different parameter. A separating axis may have one curve
+    // entirely on the boundary provided the other is strictly away from it.
     static bool EndpointOnly(Curve a,Curve b)
     {
         var p=a.C[^1];if(p.X.CompareTo(b.C[0].X)!=0||p.Y.CompareTo(b.C[0].Y)!=0)return false;
+        bool Away(Curve curve,bool sharedAtEnd,Func<V,Q> axis)
+        {
+            var controls=sharedAtEnd?curve.C[..^1]:curve.C[1..];var value=axis(p);
+            var signs=controls.Select(v=>axis(v).CompareTo(value)).ToArray();
+            int far=sharedAtEnd?signs[0]:signs[^1];
+            return far<0&&signs.All(x=>x<=0) || far>0&&signs.All(x=>x>=0);
+        }
+        if(!(Away(a,true,v=>v.X)||Away(a,true,v=>v.Y)) || !(Away(b,false,v=>v.X)||Away(b,false,v=>v.Y)))return false;
         bool Axis(Func<V,Q> axis)
         {
             Q value=axis(p);var l=a.C[..^1].Select(axis).Select(x=>x.CompareTo(value)).ToArray();var r=b.C[1..].Select(axis).Select(x=>x.CompareTo(value)).ToArray();
-            return l.All(x=>x<=0)&&l.Any(x=>x<0)&&r.All(x=>x>=0)&&r.Any(x=>x>0) || l.All(x=>x>=0)&&l.Any(x=>x>0)&&r.All(x=>x<=0)&&r.Any(x=>x<0);
+            return l.All(x=>x<=0)&&r.All(x=>x>=0)&&(l[0]<0||r[^1]>0) || l.All(x=>x>=0)&&r.All(x=>x<=0)&&(l[0]>0||r[^1]<0);
         }
         return Axis(v=>v.X)||Axis(v=>v.Y);
     }
