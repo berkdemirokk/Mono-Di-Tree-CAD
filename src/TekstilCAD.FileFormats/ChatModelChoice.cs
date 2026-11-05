@@ -35,6 +35,7 @@ public static class ChatModelChoice
         // it prevents a suggestion while the caller retains the original message.
         var names=string.Join("|",model.Names.Select(n=>Regex.Escape(Fold(n))));
         var pattern=@"\A(?:lütfen )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?:(?: istiyorum)|(?: seç)|(?: seçelim)|(?: olsun))?[.!]?\z";
+        var combinedPattern=@"\A(?:lütfen )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?: istiyorum| olsun) (?<detail>.+)\z";
         var clauses=Regex.Split(message,@";|\r\n|[\r\n]|,(?![0-9])",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Select(Fold).ToArray();
         var attributes=new Dictionary<string,string>();var measurementClauses=new List<string>();int modelClauses=0;
         bool clear=clauses.Length<=32 && clauses.All(c=>c.Length>0);
@@ -42,7 +43,8 @@ public static class ChatModelChoice
         {
             if(!clear)break;
             if(Regex.IsMatch(clause,pattern,RegexOptions.None,TimeSpan.FromMilliseconds(100))) { modelClauses++;continue; }
-            var detail=Regex.Replace(clause,@"(?: olsun| istiyorum)?[.!]?\z","",RegexOptions.None,TimeSpan.FromMilliseconds(100));
+            var combined=Regex.Match(clause,combinedPattern,RegexOptions.None,TimeSpan.FromMilliseconds(100));
+            var detail=Regex.Replace(combined.Success?combined.Groups["detail"].Value:clause,@"(?: olsun| istiyorum)?[.!]?\z","",RegexOptions.None,TimeSpan.FromMilliseconds(100));
             var category=detail switch {
                 "uzun kollu" or "kisa kollu" or "kolsuz" or "truvakar kollu"=>"kol",
                 "v yaka" or "yuvarlak yaka" or "bisiklet yaka" or "hakim yaka"=>"yaka",
@@ -51,9 +53,11 @@ public static class ChatModelChoice
                 "pamuklu" or "keten" or "saten" or "şifon"=>"kumaş",_=>null };
             if(category is not null)
             {
+                if(combined.Success)modelClauses++;
                 if(attributes.TryGetValue(category,out var prior) && prior!=detail) { clear=false;break; }
                 attributes[category]=detail;continue;
             }
+            if(combined.Success) { clear=false;break; }
             var measurements=DressMeasurementParser.Review("",clause);
             if(measurements.Measurements.Count==1 && measurements.Unrecognized.Count==0)
                 measurementClauses.Add(clause);

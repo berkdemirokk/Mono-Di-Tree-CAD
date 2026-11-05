@@ -53,6 +53,33 @@ public sealed class ChatModelChoiceTests
     [InlineData("A-kesim olsun, v yaka, kırmızı, keten, diz altı")]
     public void SingleExplicitModelCanAccompanyKnownAffirmativeDetailsAndMeasurements(string text)=>Assert.Equal("aline",ChatModelChoice.Review(text).ModelId);
     [Theory]
+    [InlineData("A kesim elbise istiyorum uzun kollu","aline")]
+    [InlineData("Lütfen anvelop elbise olsun v yaka","wrap")]
+    [InlineData("Balenli korsaj istiyorum saten","corset")]
+    [InlineData("Kılıf elbise istiyorum siyah","sheath")]
+    [InlineData("Düz elbise olsun midi boy","straight")]
+    [InlineData("Gömlek elbise istiyorum kolsuz; bel çevresi 72 cm","shirt")]
+    [InlineData("A kesim istiyorum uzun kollu, uzun kollu","aline")]
+    public void AffirmativeModelAndOneUnpunctuatedKnownDetailAreSuggested(string text,string id)
+    {
+        var result=ChatModelChoice.Review(text);
+        Assert.Equal(id,result.ModelId);
+        Assert.Contains("onay",result.Explanation);
+    }
+    [Theory]
+    [InlineData("A kesim elbise istemiyorum uzun kollu")]
+    [InlineData("A kesim elbise istiyorum uzun kollu değil")]
+    [InlineData("A kesim elbise istiyorum uzun kollu mu?")]
+    [InlineData("A kesim elbise istiyorum uzun kollu olursa")]
+    [InlineData("A kesim elbise istiyorum uzun kollu belki")]
+    [InlineData("A kesim elbise istiyorum uzun kollu kısa kollu")]
+    [InlineData("A kesim elbise istiyorum uzun kollu, kısa kollu")]
+    [InlineData("A kesim elbise istiyorum uzun kollu anvelop elbise")]
+    [InlineData("A kesim elbise istiyorum 'uzun kollu'")]
+    [InlineData("A kesim elbise istiyorum bel çevresi 72 cm")]
+    [InlineData("A kesim elbise uzun kollu")]
+    public void UnpunctuatedCombinationRejectsUnclearOrConflictingText(string text)=>Assert.Null(ChatModelChoice.Review(text).ModelId);
+    [Theory]
     [InlineData("A kesim istiyorum, uzun kollu değil")]
     [InlineData("A kesim istiyorum, uzun kollu mu?")]
     [InlineData("A kesim istiyorum, olursa uzun kollu")]
