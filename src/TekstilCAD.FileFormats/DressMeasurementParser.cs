@@ -20,7 +20,7 @@ public static partial class DressMeasurementParser
     private static readonly Regex Exact=new(@"^\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:olsun)?\s*[.!]?\s*$",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Narrow clarification grammar: no "olsun", qualifier, negation or joined group.
     private static readonly Regex Clarification=new(@"\A\s*(?<label>"+ExactLabels+@")\s*(?::|=|\s)\s*(?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?)\s*(?<unit>mm|cm)\s*(?:(?<question>\?)|[.!])?\s*\z",RegexOptions.IgnoreCase|RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
-    private static readonly Regex ModelMeasurement=new(@"\A(?<model>.+? (?:istiyorum|olsun)) (?<measurement>.+)\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex ModelMeasurement=new(@"\A(?<model>.+? (?:istiyorum|olsun|hazırla|yap|oluştur)) (?<measurement>.+)\z",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     // Returns an offset into the original segment; never rewrites stored input.
     internal static bool TrySplitModelMeasurement(string segment,out int measurementOffset)
     {

@@ -36,8 +36,8 @@ public static class ChatModelChoice
         // Each clause must be positively understood. Unknown text is not discarded:
         // it prevents a suggestion while the caller retains the original message.
         var names=string.Join("|",model.Names.Select(n=>Regex.Escape(Fold(n))));
-        var pattern=@"\A(?:lütfen )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?:(?: istiyorum)|(?: seç)|(?: seçelim)|(?: olsun))?[.!]?\z";
-        var combinedPattern=@"\A(?:lütfen )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?: istiyorum| olsun) (?<detail>.+)\z";
+        var pattern=@"\A(?:lütfen )?(?:bana )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?:(?: istiyorum)|(?: seç)|(?: seçelim)|(?: olsun)|(?: hazirla)|(?: yap)|(?: oluştur))?[.!]?\z";
+        var combinedPattern=@"\A(?:lütfen )?(?:bana )?(?:(?:modelim|model olarak|model seçimi)[: ]+)?(?:"+names+@")(?: istiyorum| olsun| hazirla| yap| oluştur) (?<detail>.+)\z";
         var clauses=Regex.Split(message,@";|\r\n|[\r\n]|,(?![0-9])",RegexOptions.None,TimeSpan.FromMilliseconds(100)).Select(Fold).ToArray();
         var attributes=new Dictionary<string,string>();var measurementClauses=new List<string>();int modelClauses=0;
         bool clear=clauses.Length<=32 && clauses.All(c=>c.Length>0);

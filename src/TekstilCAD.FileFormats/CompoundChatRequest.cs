@@ -8,7 +8,7 @@ internal static class CompoundChatRequest
 {
     internal sealed record Atom(int Start,int Length,string? Category,string? Label,decimal? Millimeters);
     internal sealed record Result(string ModelId,IReadOnlyList<Atom> Measurements);
-    private static readonly Regex Head=new(@"\A(?<model>.+? (?:istiyorum|olsun)) ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+    private static readonly Regex Head=new(@"\A(?<model>.+? (?:istiyorum|olsun|hazırla|yap|oluştur)) ",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly Regex Measurement=new(@"\G(?<label>göğüs çevresi|bel çevresi|kalça çevresi|elbise boyu|kol boyu) (?<number>[0-9]{1,5}(?:[.,][0-9]{1,8})?) ?(?<unit>cm|mm)(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private static readonly (string Text,string Category)[] Details=[
         ("uzun kollu","kol"),("kısa kollu","kol"),("kisa kollu","kol"),("kolsuz","kol"),("truvakar kollu","kol"),

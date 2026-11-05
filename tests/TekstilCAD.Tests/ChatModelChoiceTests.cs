@@ -127,6 +127,33 @@ public sealed class ChatModelChoiceTests
         Assert.Contains(text,measurement.SourceExpressions);
     }
     [Theory]
+    [InlineData("Bana A kesim elbise hazırla","aline")]
+    [InlineData("Lütfen bana gömlek elbise yap","shirt")]
+    [InlineData("Anvelop elbise oluştur; uzun kollu","wrap")]
+    [InlineData("Bana A kesim elbise hazırla uzun kollu bel çevresi 72 cm","aline")]
+    public void DirectModelRequestsOfferExplicitConfirmation(string text,string model)
+    {
+        var result=ChatModelChoice.Review(text);
+        Assert.Equal(model,result.ModelId);
+        Assert.Contains("onay",result.Explanation);
+    }
+    [Fact]
+    public void DirectRequestPreservesExactMeasurementEvidence()
+    {
+        const string text="Bana A kesim elbise hazırla bel çevresi 72 cm";
+        var measurement=Assert.Single(DressMeasurementParser.Review(text,"").Measurements);
+        Assert.Equal(720,measurement.Millimeters);
+        Assert.Contains(text,measurement.SourceExpressions);
+    }
+    [Theory]
+    [InlineData("Bana A kesim elbise hazırlama")]
+    [InlineData("Bana A kesim elbise yapma")]
+    [InlineData("Bana A kesim elbise hazırla ama anvelop olmasın")]
+    [InlineData("Bana A kesim elbise hazırla bel çevresi 72 cm?")]
+    [InlineData("Bana A kesim elbise hazırla bel çevresi 72 cm bel çevresi 80 cm")]
+    public void DirectRequestsRejectNegationAndAmbiguousMeasurements(string text)
+        =>Assert.Null(ChatModelChoice.Review(text).ModelId);
+    [Theory]
     [InlineData("A kesim elbise istemiyorum bel çevresi 72 cm")]
     [InlineData("A kesim elbise istiyorum bel çevresi 72 cm?")]
     [InlineData("A kesim elbise istiyorum bel çevresi 72 cm değil")]
