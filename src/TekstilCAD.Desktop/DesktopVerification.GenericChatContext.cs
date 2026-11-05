@@ -5,6 +5,35 @@ internal static partial class DesktopVerification
     private static void VerifyGenericChatContext(DesignRequestWindow window,List<string> checks)
     {
         var source=new DesignRequest("Düz elbise istiyorum","",null,"straight",2);
+        foreach(var answer in new[]{"96","\u00a096,5\u202f"})
+        {
+            window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text==answer && window.StatusForVerification.Text.Contains("cm veya mm"),
+                "Generic unitless answer remains editable and requests a unit",checks);
+        }
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96";window.SendMessageForVerification();
+        window.ChatInputForVerification.Text+=" cm";window.SendMessageForVerification();
+        Check(window.CaptureForVerification().Prompt.EndsWith("göğüs çevresi: 96 cm",StringComparison.Ordinal),
+            "Generic answer attaches after adding the requested unit",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96\u00a0cm";window.SendMessageForVerification();
+        var unicodeAnswer=window.CaptureForVerification();
+        Check(unicodeAnswer.Prompt.EndsWith("göğüs çevresi: 96\u00a0cm",StringComparison.Ordinal) &&
+              DressMeasurementParser.Review(unicodeAnswer.Prompt,unicodeAnswer.Measurements).Measurements.Any(m=>m.Label=="göğüs çevresi" && m.Millimeters==960),
+              "Generic Unicode-spaced measurement retains text and attaches to its current question",checks);
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96\u202fcm";window.MeasurementsForVerification.Text="göğüs çevresi 90 cm";
+        var staleUnicode=window.CaptureForVerification();window.SendMessageForVerification();
+        Check(window.CaptureForVerification()==staleUnicode && window.ChatInputForVerification.Text=="96\u202fcm",
+              "Generic Unicode-spaced answer cannot attach after its question changes",checks);
+        foreach(var answer in new[]{"0 cm","1001 cm"})
+        {
+            window.LoadForVerification(source);window.ChatInputForVerification.Text=answer;window.SendMessageForVerification();
+            Check(window.CaptureForVerification()==source && window.ChatInputForVerification.Text==answer && window.StatusForVerification.Text.Contains("geçersiz"),
+                "Out-of-range generic short answer is preserved rather than appended",checks);
+        }
+        window.LoadForVerification(source);window.ChatInputForVerification.Text="96";window.MeasurementsForVerification.Text="göğüs çevresi 90 cm";
+        var staleUnitless=window.CaptureForVerification();window.SendMessageForVerification();
+        Check(window.CaptureForVerification()==staleUnitless && window.ChatInputForVerification.Text=="96" && window.StatusForVerification.Text.Contains("Soru veya kaynak değişti"),
+            "Generic unitless answer for a stale question is preserved without guessing a unit",checks);
         window.LoadForVerification(source);window.ChatInputForVerification.Text="96 cm";window.SendMessageForVerification();
         Check(window.CaptureForVerification().Prompt.EndsWith("göğüs çevresi: 96 cm",StringComparison.Ordinal) && window.ChatInputForVerification.Text=="",
               "Current generic short answer attaches to its original question",checks);

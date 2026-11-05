@@ -528,8 +528,18 @@ internal sealed class DesignRequestWindow : Window
             { SetStatus("Soru veya kaynak değişti; yanıt korunuyor. Ölçüyü güncel etiketi ve birimiyle yeniden yazın.");return; }
             SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return;
         }
+        if(!CanPreviewALineForVerification && answerContext?.ALine!=true && (answerContext?.Label is not null || suggestedMeasurement is not null) &&
+           System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*[.!]?[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100)))
+        {
+            var context=answerContext;
+            if(context is null || context.Label is null || context.Label!=suggestedMeasurement || context.Prompt!=prompt.Text ||
+               context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision || context.QuestionRevision!=questionRevision ||
+               referenceLoadRunning || referenceSelectionPending || closed)
+            { SetStatus("Soru veya kaynak değişti; yanıt korunuyor. Ölçüyü güncel etiketi ve birimiyle yeniden yazın.");return; }
+            SetStatus("Ölçüye cm veya mm birimini ekleyin; mesajınız korunuyor ve değer tahmin edilmedi.");return;
+        }
         // Only an entire, unambiguous value with an explicit supported unit answers the current question.
-        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:mm|cm)[ \t]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
+        var shortAnswer=System.Text.RegularExpressions.Regex.IsMatch(message,@"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*(?:mm|cm)[\t\p{Zs}]*\z",System.Text.RegularExpressions.RegexOptions.IgnoreCase|System.Text.RegularExpressions.RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
         // A-line also accepts Unicode horizontal spacing and at most one affirmative terminal punctuation mark.
         // Retain the original question context here so a model change cannot bypass stale checks.
         if(!shortAnswer && (CanPreviewALineForVerification || answerContext?.ALine==true))
@@ -561,6 +571,14 @@ internal sealed class DesignRequestWindow : Window
                context.Prompt!=prompt.Text || context.Measurements!=measurements.Text || context.ReferenceRevision!=referenceRevision ||
                context.QuestionRevision!=questionRevision || referenceLoadRunning || referenceSelectionPending || closed)
             { SetStatus("Soru veya kaynak değişti; yanıt korunuyor. Ölçüyü güncel etiketi ve birimiyle yeniden yazın.");return; }
+            try
+            {
+                var candidate=DressMeasurementParser.Review(context.Label+": "+message,"");
+                if(candidate.Measurements.Count!=1 || candidate.Measurements[0].Label!=context.Label)
+                { SetStatus("Ölçü geçersiz veya sınır dışında; pozitif değeri ve cm/mm birimini kontrol edin. Mesajınız korundu.");return; }
+            }
+            catch(Exception ex) when(ex is ArgumentException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
+            { SetStatus("Ölçü denetlenemedi; mesajınız korundu. "+ex.Message);return; }
         }
         var addition=(prompt.Text.Length==0 ? "" : "\n")+(answerLabel is null ? "" : answerLabel+": ")+message;
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
