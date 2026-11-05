@@ -537,6 +537,11 @@ final class DesignDraftStoreTests: XCTestCase {
             }
             XCTAssertEqual(draft.otherMeasurements, example.text)
         }
+        for uncertain in ["ön bel yayi 36 cm", "on bel yayi 36 cm"] {
+            let source = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "", hips: "", length: "", otherMeasurements: uncertain, image: nil, imageName: nil)
+            XCTAssertThrowsError(try ALineMeasurementGuide.prepare(input, draft: source), uncertain)
+            XCTAssertEqual(source.otherMeasurements, uncertain)
+        }
         let source = "Ön bel yayı 36 cm ve arka bel yayı 36 cm"
         let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: source, image: nil, imageName: nil)
         var conflict = input; conflict.values[0] = "37"

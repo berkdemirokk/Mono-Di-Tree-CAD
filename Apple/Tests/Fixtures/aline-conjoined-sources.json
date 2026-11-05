@@ -1,5 +1,25 @@
 [
   {
+    "text": "ÖN BEL YAYI 36 CM VE ARKA BEL YAYI 36 CM",
+    "valid": true
+  },
+  {
+    "text": "ÖN BEL YAYI BOLLUĞU 2 CM VE ARKA BEL YAYI BOLLUĞU 2 CM",
+    "valid": true
+  },
+  {
+    "text": "ön bel yayi 36 cm ve arka bel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ÖN BEL YAYİ 36 CM VE ARKA BEL YAYI 36 CM",
+    "valid": false
+  },
+  {
+    "text": "ON BEL YAYI 36 CM VE ARKA BEL YAYI 36 CM",
+    "valid": false
+  },
+  {
     "text": "Ön bel yayı 36 cm ve arka bel yayı 360 mm",
     "valid": true
   },

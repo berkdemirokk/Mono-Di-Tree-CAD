@@ -22,7 +22,7 @@ enum ALineMeasurementGuide {
         }
     }
     private static func fold(_ text: String) -> String {
-        text.precomposedStringWithCanonicalMapping.replacingOccurrences(of: "İ", with: "i").lowercased().replacingOccurrences(of: "ı", with: "i")
+        text.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR"))
     }
     private static func number(_ raw: String, unit: String, zeroAllowed: Bool) -> Decimal? {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -61,7 +61,7 @@ enum ALineMeasurementGuide {
         }
         let sources = [draft.description, draft.otherMeasurements]
         guard sources.allSatisfy({ $0.utf16.count <= ExperimentalDesignBrief.maxTextUnits }) else { throw Failure.tooLong }
-        let guarded = #"(?<![\p{L}\p{M}\p{N}_])(?:eğer|şayet|gerekirse|koşuluyla|şartiyla|takdirde|ise|olursa|olma[\p{L}\p{M}]*|değil[\p{L}\p{M}]*|bunlar[\p{L}\p{M}]*|şunlar[\p{L}\p{M}]*|onlar(?:i|in|a|da|dan|la)?|bunun[\p{L}\p{M}]*|şunun[\p{L}\p{M}]*|onun(?:la|ki)?|bunu|buna|bunda|bundan|şunu|şuna|şunda|şundan|onu|ona|onda|ondan|hepsi[\p{L}\p{M}]*|tümü[\p{L}\p{M}]*|ölçü[\p{L}\p{M}]*)(?![\p{L}\p{M}\p{N}_])|[?？]"#
+        let guarded = #"(?<![\p{L}\p{M}\p{N}_])(?:eğer|şayet|gerekirse|koşuluyla|şartıyla|şartiyla|takdirde|ise|olursa|olma[\p{L}\p{M}]*|değil[\p{L}\p{M}]*|bunlar[\p{L}\p{M}]*|şunlar[\p{L}\p{M}]*|onlar(?:ı|ın|i|in|a|da|dan|la)?|bunun[\p{L}\p{M}]*|şunun[\p{L}\p{M}]*|onun(?:la|ki)?|bunu|buna|bunda|bundan|şunu|şuna|şunda|şundan|onu|ona|onda|ondan|hepsi[\p{L}\p{M}]*|tümü[\p{L}\p{M}]*|ölçü[\p{L}\p{M}]*)(?![\p{L}\p{M}\p{N}_])|[?？]"#
         guard sources.allSatisfy({ fold($0).range(of: guarded, options: .regularExpression) == nil }) else { throw Failure.uncertain }
         var existing = Array<Decimal?>(repeating: nil, count: labels.count)
         for source in sources {
@@ -73,7 +73,17 @@ enum ALineMeasurementGuide {
                 let mentions = patterns.contains { pattern in
                     normalized.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
                 }
-                if !mentions { continue }
+                if !mentions {
+                    // Similar ASCII spellings can otherwise hide an existing measurement.
+                    let approximate = normalized.folding(options: .diacriticInsensitive, locale: Locale(identifier: "tr_TR")).replacingOccurrences(of: "ı", with: "i")
+                    let closeMention = labels.contains { label in
+                        let approximateLabel = fold(label).folding(options: .diacriticInsensitive, locale: Locale(identifier: "tr_TR")).replacingOccurrences(of: "ı", with: "i")
+                        let pattern = approximateLabel.split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: #"[ \t]+"#)
+                        return approximate.range(of: #"(?<![\p{L}\p{M}\p{N}_])"# + pattern + #"(?![\p{L}\p{M}\p{N}_])"#, options: .regularExpression) != nil
+                    }
+                    if closeMention { throw Failure.existing }
+                    continue
+                }
                 guard !normalized.contains("\u{1F}") else { throw Failure.existing }
                 let parts = normalized.replacingOccurrences(of: #"[ \t]+ve[ \t]+"#, with: "\u{1F}", options: .regularExpression).components(separatedBy: "\u{1F}")
                 guard (1...8).contains(parts.count) else { throw Failure.existing }
