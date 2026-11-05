@@ -15031,6 +15031,16 @@ internal static partial class DesktopVerification
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("1. yol: 0 mm") && !otherFullLoop.IsEnabled,
                 "Repeated endpoints retain zero-length behavior outside full-loop mode and open paths cannot enable it",checks);
+            Control<ComboBox>(second,"Piece").SelectedIndex=0;
+            Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;otherDirection.SelectedIndex=0;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(result.Text.Contains("İki yol aynı parçadan seçildi") && result.Text.Contains("2. yol: 10 mm") && AutomationProperties.GetName(result).Contains("İki yol aynı parçadan seçildi"),
+                "Seam comparison warns when both paths come from the same piece",checks);
+            Control<ComboBox>(second,"Piece").SelectedIndex=1;
+            Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;
+            compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(!result.Text.Contains("İki yol aynı parçadan seçildi") && result.Text.Contains("2. yol: 7 mm"),
+                "Seam comparison clears same-piece warning for different pieces",checks);
             var root=(FrameworkElement)window.Content;
             root.Measure(new Size(650,500));root.Arrange(new Rect(0,0,650,500));root.UpdateLayout();
             var scroller=Descendants<ScrollViewer>(root).Single(v=>v.IsAncestorOf(fullLoop));
