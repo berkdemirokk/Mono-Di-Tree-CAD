@@ -1,6 +1,6 @@
 # Mono Di Tree CAD Apple kontur görüntüleyici — başlangıç
 
-Model adı önerisi yalnız tek bir alandaki sınırlı ve açık Türkçe ifadeleri tanır; kullanıcı onayı olmadan model seçmez. Metni anlamaya veya kalıp üretmeye çalışmaz. Bu yeni akış Xcode, simülatör ve gerçek cihazda henüz doğrulanmadı.
+Model adı önerisi tarif ve ölçü mesajında sınırlı sayıdaki açık Türkçe model adını arar; belirsizlik göstergeleri bulunursa öneri sunmaz ve kullanıcı onayı olmadan model seçmez. Bu kurallar tüm doğal dildeki belirsizlikleri veya olumsuzlukları tanımaz; kullanıcı öneriyi kendi ifadesiyle karşılaştırmalıdır. Kalıp üretmez. Bu yeni akış Xcode, simülatör ve gerçek cihazda henüz doğrulanmadı.
 
 Tasarım isteği V2 deneysel olarak seçilebilir; V1 kaydetme seçeneği korunur. V2 ayrı model kimliği saklar, ancak bu iPhone değişiklikleri Xcode, simülatör veya gerçek cihazda henüz denenmedi. Windows ile iki yönlü dosya ve görsel uyumluluğu doğrulanmış değildir; eski uygulama sürümleri V2 açamayabilir. V1'e aktarım model kimliğini ayrı korumaz. Dosya seçici mevcut hedefin üzerine yazmayı uygulama düzeyinde engellemez; yeni bir ad seçin.
 

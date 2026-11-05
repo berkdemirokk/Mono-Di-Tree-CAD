@@ -455,7 +455,7 @@ final class DesignDraftStoreTests: XCTestCase {
         let entered = ExperimentalDesignBrief.measurements(bust: "92 cm", waist: "  ", hips: "", length: "", other: "bel çevresi yaklaşık 72 cm olsun; kalça çevresi 98 cm olmasın")
         XCTAssertEqual(entered, original.measurements)
     }
-    func testModelSuggestionAcceptsOnlyExplicitCompletePhrases() {
+    func testModelSuggestionUsesOnlyUnambiguousExplicitModelNames() {
         func draft(_ text: String, notes: String = "") -> ExperimentalDesignBrief.Draft {
             .init(style: .describe, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
         }
@@ -465,7 +465,10 @@ final class DesignDraftStoreTests: XCTestCase {
         ]
         for (text, expected) in examples { XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft(text)), expected) }
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("", notes: "anvelop elbise")), .wrap)
-        for text in ["anvelop elbise değil", "düz elbise mi?", "‘anvelop elbise’", "anvelop elbise veya düz elbise", "anvelop elbiseli", "düz", "anvelop elbise istemiyorum", "belki anvelop elbise", "anvelop elbise. düz olmasın"] {
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, uzun kollu", notes: "göğüs çevresi 92 cm")), .aline)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Uzun kollu, GÖMLEK ELBİSE istiyorum")), .shirt)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("İpek", notes: "Anvelop elbise olsun; bel 72 cm")), .wrap)
+        for text in ["anvelop elbise değil", "düz elbise mi?", "düz elbise mi", "‘anvelop elbise’", "anvelop elbise veya düz elbise", "anvelop elbise düz elbise", "anvelop elbise anvelop elbise", "anvelop elbiseli", "düz", "anvelop elbise istemiyorum", "anvelop elbise istemem", "belki anvelop elbise", "eğer anvelop elbise olursa", "anvelop elbise. düz olmasın", "anvelop elbise yerine gömlek", "anvelop elbiseden vazgeçtim", "anvelop elbise yasak"] {
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
         }
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("anvelop elbise", notes: "düz elbise değil")))

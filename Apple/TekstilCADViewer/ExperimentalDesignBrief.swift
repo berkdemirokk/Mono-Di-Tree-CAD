@@ -69,21 +69,28 @@ enum ExperimentalDesignBrief {
             ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: otherMeasurements)
         }
     }
-    /// Deliberately accepts only a complete, unambiguous short phrase.
-    /// It is a suggestion for review, not a natural-language interpreter.
+    /// Narrow exact-name matching with conservative ambiguity guards; this is
+    /// a suggestion for review, not a natural-language interpreter.
     static func suggestedModel(_ draft: Draft) -> DressStyle? {
-        let description = draft.description.trimmingCharacters(in: .whitespacesAndNewlines)
-        let notes = draft.otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard description.isEmpty != notes.isEmpty else { return nil }
-        let source = description.isEmpty ? notes : description
-        guard source.utf16.count <= 128 else { return nil }
-        let text = source.precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR"))
-        let names: [String: DressStyle] = ["düz elbise": .straight, "a kesim elbise": .aline,
-            "anvelop elbise": .wrap, "gömlek elbise": .shirt, "balenli korpus": .corset, "minimal kılıf": .sheath]
+        guard draft.description.utf16.count <= maxTextUnits, draft.otherMeasurements.utf16.count <= maxTextUnits else { return nil }
+        let text = (draft.description + "\n" + draft.otherMeasurements)
+            .precomposedStringWithCanonicalMapping.lowercased(with: Locale(identifier: "tr_TR"))
+        // Refuse quotes, questions, alternatives, negations and conditional
+        // wording anywhere in the input, including the other text field.
+        guard text.rangeOfCharacter(from: CharacterSet(charactersIn: "?？\"'‘’“”«»`")) == nil else { return nil }
+        let boundary = #"(?<![\p{L}\p{N}_])(?:değil\p{L}*|iste(?:mi|me)\p{L}*|olma\p{L}*|olsa\p{L}*|olursa|eğer|şayet|ise|veya|yahut|ya\s+da|yoksa|ama|fakat|ancak|yerine|hariç|dışında|yok\p{L}*|yasak\p{L}*|vazgeç\p{L}*|acaba|belki|hangi|nasıl|neden|(?:mi|mı|mu|mü)(?:dir|ydi|ydı|ydü|ydu)?)(?![\p{L}\p{N}_])"#
+        guard text.range(of: boundary, options: .regularExpression) == nil else { return nil }
+        let names: [(String, DressStyle)] = [("düz elbise", .straight), ("a kesim elbise", .aline),
+            ("anvelop elbise", .wrap), ("gömlek elbise", .shirt), ("balenli korpus", .corset), ("minimal kılıf", .sheath)]
+        var result: DressStyle?
         for (name, style) in names {
-            if text == name || text == name + " istiyorum" || text == name + " olsun" { return style }
+            let pattern = #"(?<![\p{L}\p{N}_])"# + NSRegularExpression.escapedPattern(for: name) + #"(?![\p{L}\p{N}_])"#
+            guard let expression = try? NSRegularExpression(pattern: pattern) else { return nil }
+            let count = expression.numberOfMatches(in: text, range: NSRange(text.startIndex..., in: text))
+            if count > 1 || (count == 1 && result != nil) { return nil }
+            if count == 1 { result = style }
         }
-        return nil
+        return result
     }
     struct ModelSuggestion: Equatable {
         let draft: Draft
