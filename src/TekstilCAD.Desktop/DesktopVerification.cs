@@ -9848,6 +9848,22 @@ internal static partial class DesktopVerification
                 regionDialog.left.Text="15";regionDialog.top.Text="10";regionDialog.width.Text="65";regionDialog.height.Text="55";
                 var regionComputeTask=regionDialog.ComputeAsync();PumpUntil(()=>regionComputeTask.IsCompleted);regionComputeTask.GetAwaiter().GetResult();
                 Check(regionDialog.Regions.Items.Count>0 && regionDialog.SelectedContour is null,"Photo region computation requires explicit component choice",checks);
+                var flatSave=Descendants<Button>((FrameworkElement)regionDialog.Content).Single(b=>Equals(b.Content,"Bölgeyi kaydet…"));
+                var flatLoad=Descendants<Button>((FrameworkElement)regionDialog.Content).Single(b=>Equals(b.Content,"Bölgeyi aç…"));
+                Check(flatSave.Focusable && flatLoad.Focusable && FullyVisible(flatSave,(FrameworkElement)regionDialog.Content) && FullyVisible(flatLoad,(FrameworkElement)regionDialog.Content),
+                    "Flat-pattern region exposes save and reopen actions at compact size",checks);
+                var flatCheckpoint=Path.Combine(Path.GetDirectoryName(reportPath)!,"flat-region-"+Guid.NewGuid().ToString("N")+".tdregion");
+                try
+                {
+                    var flatMask=regionDialog.CopyMaskForVerification()!;
+                    var flatSaved=regionDialog.TrySaveSessionAsync(flatCheckpoint);PumpUntil(()=>flatSaved.IsCompleted);
+                    Check(flatSaved.GetAwaiter().GetResult() && File.Exists(flatCheckpoint),"Flat-pattern region saves a separate checkpoint",checks);
+                    var flatOpened=regionDialog.TryLoadSessionAsync(flatCheckpoint);PumpUntil(()=>flatOpened.IsCompleted);
+                    Check(flatOpened.GetAwaiter().GetResult() && regionDialog.CopyMaskForVerification()!.SequenceEqual(flatMask) &&
+                        regionDialog.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
+                        "Flat-pattern region reopens the same mask without changing the CAD project or auto-selecting a contour",checks);
+                }
+                finally { if(File.Exists(flatCheckpoint))File.Delete(flatCheckpoint); }
                 var garmentProbe=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
                 try {
                     garmentProbe.left.Text="15";garmentProbe.top.Text="10";garmentProbe.width.Text="65";garmentProbe.height.Text="55";
@@ -10100,6 +10116,19 @@ internal static partial class DesktopVerification
                       DocumentSession.ContentEquals(initial,workspace.Document),"Explicit photo region corrections update mask and require a new selection",checks);
                 Check(regionDialog.AppliedMarkForVerification(3,3)==1 && regionDialog.AppliedMarkForVerification(40,30)==2 && !regionDialog.HasMarksOverlay,
                       "Applied photo correction marks remain tracked but are initially hidden",checks);
+                var correctedFlatPath=Path.Combine(Path.GetDirectoryName(reportPath)!,"flat-corrected-"+Guid.NewGuid().ToString("N")+".tdregion");
+                var reopenedFlat=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
+                try
+                {
+                    var saveCorrected=regionDialog.TrySaveSessionAsync(correctedFlatPath);PumpUntil(()=>saveCorrected.IsCompleted);
+                    Check(saveCorrected.GetAwaiter().GetResult(),"Flat-pattern checkpoint saves applied foreground and background corrections",checks);
+                    var openCorrected=reopenedFlat.TryLoadSessionAsync(correctedFlatPath);PumpUntil(()=>openCorrected.IsCompleted);
+                    Check(openCorrected.GetAwaiter().GetResult() && reopenedFlat.CopyMaskForVerification()!.SequenceEqual(correctedMask!) &&
+                        reopenedFlat.AppliedMarkForVerification(3,3)==1 && reopenedFlat.AppliedMarkForVerification(40,30)==2 &&
+                        reopenedFlat.SelectedContour is null && DocumentSession.ContentEquals(initial,workspace.Document),
+                        "A new flat-pattern window restores mask and applied marks without changing CAD",checks);
+                }
+                finally { reopenedFlat.Close();if(File.Exists(correctedFlatPath))File.Delete(correctedFlatPath); }
                 regionDialog.ShowAppliedMarks.IsChecked=true;
                 Render(regionDialog,Path.ChangeExtension(reportPath,".photo-region-applied.png"),620,550);
                 Check(regionDialog.HasMarksOverlay && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),
