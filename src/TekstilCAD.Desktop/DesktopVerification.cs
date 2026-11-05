@@ -9423,6 +9423,29 @@ internal static class DesktopVerification
         var largeEdgeBitmap=BitmapSource.Create(500,500,96,96,PixelFormats.Bgra32,null,new byte[500*500*4],500*4);
         Check(!PhotoEdgePath.TryFind(largeEdgeBitmap,new Point(0,0),new Point(499,499),out _),
             "Experimental photo path rejects a search outside its work budget",checks);
+        // Both opaque colours have the same integer grayscale value (45).
+        var equalGrayPixels=new byte[64*64*4];
+        static double ReferenceBoundary(double y)=>16+Math.Max(0,(y-4)*(56-y))/80d;
+        for(var y=0;y<64;y++)for(var x=0;x<64;x++)
+        {
+            var i=(y*64+x)*4;var left=x<ReferenceBoundary(y);
+            equalGrayPixels[i]=0;equalGrayPixels[i+1]=left ? (byte)0 : (byte)77;equalGrayPixels[i+2]=left ? (byte)150 : (byte)0;equalGrayPixels[i+3]=255;
+        }
+        var equalGray=BitmapSource.Create(64,64,96,96,PixelFormats.Bgra32,null,equalGrayPixels,256);equalGray.Freeze();
+        Check(PhotoEdgePath.TryFind(equalGray,new Point(16,4),new Point(16,56),out var grayPath) &&
+            PhotoColorEdgePath.TryFind(equalGray,new Point(16,4),new Point(16,56),out var colorPath) &&
+            grayPath.Average(p=>Math.Abs(p.X-ReferenceBoundary(p.Y)))>4 && colorPath.Average(p=>Math.Abs(p.X-ReferenceBoundary(p.Y)))<1 &&
+            colorPath[0]==new Point(16,4) && colorPath[^1]==new Point(16,56),
+            "Optional RGB path follows a synthetic equal-luminance boundary more closely than grayscale",checks);
+        Check(!PhotoColorEdgePath.TryFind(largeEdgeBitmap,new Point(0,0),new Point(499,499),out _) &&
+            !PhotoColorEdgePath.TryFind(equalGray,new Point(16,4),new Point(16,4),out _),"RGB path enforces the same work and endpoint limits",checks);
+        try { PhotoColorEdgePath.TryFind(equalGray,new Point(16,4),new Point(16,56),out _,new CancellationToken(true));throw new InvalidOperationException("RGB photo path ignored cancellation."); }
+        catch(OperationCanceledException) { Check(true,"RGB path honors cancellation",checks); }
+        var transparentPixels=new byte[20*20*4];for(var i=0;i<400;i++) { transparentPixels[i*4]=(byte)(i%256);transparentPixels[i*4+1]=(byte)((i*7)%256);transparentPixels[i*4+2]=(byte)((i*13)%256); }
+        var transparent=BitmapSource.Create(20,20,96,96,PixelFormats.Bgra32,null,transparentPixels,80);transparent.Freeze();
+        Check(PhotoColorEdgePath.TryFind(transparent,new Point(2,2),new Point(17,17),out var transparentColor) &&
+            PhotoEdgePath.TryFind(transparent,new Point(2,2),new Point(17,17),out var transparentGray) && transparentColor.SequenceEqual(transparentGray),
+            "Transparent RGB pixels are composited on white and do not invent a color edge",checks);
         Check(PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(7,10),out var edge) && edge==new Point(9,10) &&
             !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(0,0),out _) && !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(double.NaN,0),out _),
             "Photo edge suggestion finds nearby synthetic contrast and declines absent or invalid input",checks);
@@ -9471,6 +9494,19 @@ internal static class DesktopVerification
         PhotoTraceWindow? trace=null;
         try
         {
+            var colorTrace=new PhotoTraceWindow(workspace,equalGray,workspace.CapturePhotoTrace()!);
+            var colorContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(colorTrace.Dispatcher));
+            try
+            {
+                colorTrace.SourcePurposeForVerification.SelectedIndex=1;colorTrace.ColorPathForVerification.IsChecked=true;
+                foreach(var p in new[] { new Point(1,1),new Point(10,1),new Point(16,4),new Point(16,56) })colorTrace.CanvasForVerification.TryAddPixelPoint(p);
+                var originalColorPoints=colorTrace.CanvasForVerification.Points.ToArray();
+                var rgbSearch=colorTrace.StartPathSuggestionAsync();PumpUntil(()=>rgbSearch.IsCompleted);rgbSearch.GetAwaiter().GetResult();
+                Check(colorTrace.CanvasForVerification.PathSuggestion is { Count:>2 } proposed && proposed.Any(p=>p.X>20) &&
+                    colorTrace.CanvasForVerification.Points.SequenceEqual(originalColorPoints) && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Selecting RGB mode uses the color boundary for a detached user-reviewable proposal",checks);
+            }
+            finally { colorTrace.CanvasForVerification.ClearPoints();colorTrace.Close();SynchronizationContext.SetSynchronizationContext(colorContext); }
             var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
             trace=new PhotoTraceWindow(workspace,bitmap,stamp,100,50,photoHash,encodedPhoto.Length);trace.ConfirmForVerification=_=>false;
             Render(trace,Path.ChangeExtension(reportPath,".photo-purpose-unselected.png"),560,480);
@@ -9497,6 +9533,9 @@ internal static class DesktopVerification
             Check(canvas.Focusable && FullyVisible(canvas,root) && FullyVisible(trace.LengthForVerification,root) &&
                 AutomationProperties.GetHelpText(canvas).Contains("otomatik kalıp değildir"),
                 "Photo tracing canvas and calibration input are accessible at minimum size",checks);
+            Check(trace.ColorPathForVerification.IsChecked==false && trace.ColorPathForVerification.Focusable && FullyVisible(trace.ColorPathForVerification,root) &&
+                AutomationProperties.GetHelpText(trace.ColorPathForVerification).Contains("giysi sınırı olmayabilir"),
+                "Optional RGB path is initially off, visible and explains its limitations",checks);
             Check(!canvas.TryMapViewToPixel(new Point(100,10),new Size(200,200),out _) &&
                 canvas.TryMapViewToPixel(new Point(100,100),new Size(200,200),out var center) && Math.Abs(center.X-49.5)<1e-9 && Math.Abs(center.Y-24.5)<1e-9 &&
                 canvas.TryMapPixelToView(center,new Size(200,200),out var roundtrip) && Math.Abs(roundtrip.X-100)<1e-9 && Math.Abs(roundtrip.Y-100)<1e-9,
@@ -9781,6 +9820,15 @@ internal static class DesktopVerification
                     finally { rangeRelease.Set(); }
                 }
                 canvas.UndoPath();canvas.UndoPoint();
+                using(var colorReached=new ManualResetEventSlim())
+                {
+                    trace.ComputePathForVerification=(_,_,_,token)=> { colorReached.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested();return null; };
+                    var staleColor=trace.StartPathSuggestionAsync();PumpUntil(()=>colorReached.IsSet);trace.ColorPathForVerification.IsChecked=true;
+                    PumpUntil(()=>staleColor.IsCompleted);staleColor.GetAwaiter().GetResult();
+                    Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("kontrastı değişti"),
+                        "Changing color mode cancels the in-flight path and preserves the selected points",checks);
+                    trace.ColorPathForVerification.IsChecked=false;
+                }
                 var calls=0;
                 trace.ComputePathForVerification=(_,start,end,_)=> { calls++;return start.Y==end.Y
                     ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) }
@@ -9893,6 +9941,12 @@ internal static class DesktopVerification
                 Descendants<Button>(root).Single(b=>Equals(b.Content,"Yolu uygula")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(canvas.PathSuggestion is null && canvas.TopologyWarningEdgesForVerification is { Length:4 } retained && retained.SequenceEqual(warningEdges!) &&
                     trace.StatusForVerification.Text.Contains("Turuncu kenarlar"),"Applied photo path retains its crossing highlight and warning",checks);
+                var crossingPoints=canvas.Points.ToArray();trace.ColorPathForVerification.IsChecked=true;
+                Check(canvas.Points.SequenceEqual(crossingPoints) && canvas.TopologyWarningEdgesForVerification is { Length:4 } stillHighlighted && stillHighlighted.SequenceEqual(warningEdges!) &&
+                    trace.StatusForVerification.Text.Contains("Turuncu kenarlar"),"Changing color mode retains an applied crossing warning and its geometry",checks);
+                trace.ColorPathForVerification.IsChecked=false;
+                Check(canvas.TopologyWarningEdgesForVerification is { Length:4 } && trace.StatusForVerification.Text.Contains("Turuncu kenarlar"),
+                    "Restoring grayscale also retains an applied crossing warning",checks);
                 Descendants<Button>(root).Single(b=>Equals(b.Content,"Yakınlaştır")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(trace.StatusForVerification.Text.Contains("Turuncu kenarlar") && canvas.TopologyWarningEdgesForVerification is { Length:4 },
                     "Zooming an applied crossing retains its warning",checks);

@@ -26,6 +26,7 @@ internal sealed class PhotoTraceWindow : Window
     internal TextBox LengthForVerification { get; } = new() { Width=85,MaxLength=32 };
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };
     internal CheckBox ReviewClosureForVerification { get; } = new() { Content="Kapatmayı incele",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
+    internal CheckBox ColorPathForVerification { get; } = new() { Content="Renk kontrastı ile yol",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
     internal ComboBox SourcePurposeForVerification { get; } = new() { MinWidth=260,Height=32,VerticalContentAlignment=VerticalAlignment.Center,Padding=new Thickness(6,0,6,0),Margin=new Thickness(6,0,0,4) };
     internal PhotoSourcePurpose SourcePurpose { get; private set; }
     internal Button ApplyForVerification { get; private set; } = null!;
@@ -57,7 +58,7 @@ internal sealed class PhotoTraceWindow : Window
         SourcePurposeForVerification.ItemsSource=new[] { "Giysi/model referansı", "Düz serilmiş kalıp görseli" };
         AutomationProperties.SetName(SourcePurposeForVerification,"Görsel türü seçimi");
         AutomationProperties.SetHelpText(SourcePurposeForVerification,"Görsel otomatik sınıflandırılmaz. Giysi/model yalnız görsel referanstır; düz serilmiş kalıp seçilirse ölçek ve çizim araçları açılır.");
-        sourceRow.Children.Add(SourcePurposeForVerification);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
+        sourceRow.Children.Add(SourcePurposeForVerification);sourceRow.Children.Add(ColorPathForVerification);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
         var input=new WrapPanel();DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
         ReferenceInputsForVerification=input;
         referenceLabel.Content="İki uç arası bilinen mesafe (mm)";referenceLabel.Target=LengthForVerification;input.Children.Add(referenceLabel);AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
@@ -98,6 +99,8 @@ internal sealed class PhotoTraceWindow : Window
         PathAction("Denetle","Geçerli çizgiyi veya varsa yol önerisini piksel geometrisinde denetler; kapanış seçiliyse son kenarı da kontrol eder.",()=>_ = StartTraceTopologyReviewAsync());
         PathAction("İptal et","Süren yol araması veya piksel denetimine iptal isteği gönderir.",CancelPathSuggestion);
         AutomationProperties.SetHelpText(ReviewClosureForVerification,"Seçiliyken toplu yol önerisi kapanış yolunu da arar; taslak eklendikten sonra ayrı kapanış incelemesi açılır. Kapalı parça otomatik eklenmez; fotoğraf geçmişi açık kaynakta kalır.");pathActions.Children.Add(ReviewClosureForVerification);
+        AutomationProperties.SetHelpText(ColorPathForVerification,"Seçiliyken yol önerisi gri parlaklık yerine renk kanallarının kontrastını kullanır. Renk, desen veya gölge giysi sınırı olmayabilir; öneriyi kontrol edin. Kenar önerisi düğmesini değiştirmez.");
+        ColorPathForVerification.ToolTip="Yol için renk kontrastı kullanır; desen veya gölge izlenebilir. Sonucu inceleyin.";
         AutomationProperties.SetName(StatusForVerification,"Fotoğraf taslağı durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         var statusViewport=new ScrollViewer { Content=StatusForVerification,MaxHeight=36,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled,Focusable=true };
         AutomationProperties.SetName(statusViewport,"Fotoğraf taslağı durum metni");AutomationProperties.SetHelpText(statusViewport,"Uzun durum metnini yön tuşlarıyla kaydırın.");
@@ -107,12 +110,20 @@ internal sealed class PhotoTraceWindow : Window
         LengthForVerification.TextChanged+=(_,_)=>DraftRevision++;xInput.TextChanged+=(_,_)=>DraftRevision++;yInput.TextChanged+=(_,_)=>DraftRevision++;
         void ClosureChoiceChanged() { DraftRevision++;CanvasForVerification.ClearPathSuggestion();allPaths.Content=ReviewClosureForVerification.IsChecked==true ? "Çizgi + kapanış öner" : "Tüm çizgiyi öner"; }
         ReviewClosureForVerification.Checked+=(_,_)=>ClosureChoiceChanged();ReviewClosureForVerification.Unchecked+=(_,_)=>ClosureChoiceChanged();
+        void ColorChoiceChanged()
+        {
+            DraftRevision++;pathCancellation?.Cancel();
+            if(CanvasForVerification.PathSuggestion is not null)CanvasForVerification.ClearPathSuggestion();
+            if(CanvasForVerification.HasTopologyWarning) { UpdateStatus();StatusForVerification.Text+=" Yol kontrastı değişti; çizgi uyarısı korunuyor."; }
+            else StatusForVerification.Text="Yol kontrastı değişti; önceki yol önerisi kaldırıldı. Yeni öneriyi inceleyin.";
+        }
+        ColorPathForVerification.Checked+=(_,_)=>ColorChoiceChanged();ColorPathForVerification.Unchecked+=(_,_)=>ColorChoiceChanged();
         void UpdatePurpose()
         {
             var flat=SourcePurpose==PhotoSourcePurpose.FlatPattern;
             Title=flat ? "Fotoğrafta elle taslak çiz" : "Referans fotoğrafı";
             var visible=flat ? Visibility.Visible : Visibility.Collapsed;
-            input.Visibility=visible;pathActions.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
+            input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
             undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;CanvasForVerification.IsEnabled=flat;
             UpdateStatus();
         }
@@ -238,12 +249,12 @@ internal sealed class PhotoTraceWindow : Window
         if(DraftRevision!=expectedRevision || first<CanvasForVerification.ReferencePointCount || first>=points.Count || last<=first || last>=points.Count ||
             points[first]==points[last] || CanvasForVerification.Image is not BitmapSource source)
         { StatusForVerification.Text="Taslak veya seçili aralık değişti; yol aranmadı.";return; }
-        var start=points[first];var end=points[last];var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
+        var start=points[first];var end=points[last];var revision=DraftRevision;var color=ColorPathForVerification.IsChecked==true;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
         StatusForVerification.Text="Seçili aralık için yol aranıyor; iptal edebilirsiniz.";
         try
         {
             var compute=ComputePathForVerification;
-            var candidate=await Task.Run(()=>compute is null ? (PhotoEdgePath.TryFind(source,start,end,out var found,cts.Token) ? found : null) : compute(source,start,end,cts.Token),cts.Token);
+            var candidate=await Task.Run(()=>compute is null ? FindPath(source,start,end,color,cts.Token) : compute(source,start,end,cts.Token),cts.Token);
             cts.Token.ThrowIfCancellationRequested();if(closed)return;
             if(DraftRevision!=revision) { StatusForVerification.Text="Taslak arama sırasında değişti; öneri kullanılmadı.";return; }
             var previewed=candidate is not null && CanvasForVerification.SetReplacementPath(first,last,candidate);
@@ -267,7 +278,7 @@ internal sealed class PhotoTraceWindow : Window
         if(anchors.Length>17) { CanvasForVerification.ClearPathSuggestion();StatusForVerification.Text="Tüm çizgi için en fazla 17 çizgi noktası seçin; mevcut noktalar korundu.";return; }
         var includeClosing=allSegments && ReviewClosureForVerification.IsChecked==true;
         if(includeClosing && anchors.Length<3) { CanvasForVerification.ClearPathSuggestion();StatusForVerification.Text="Kapanış yolu için en az üç çizgi noktası seçin.";return; }
-        var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
+        var revision=DraftRevision;var color=ColorPathForVerification.IsChecked==true;var cts=new CancellationTokenSource();pathCancellation=cts;CanvasForVerification.ClearPathSuggestion();
         StatusForVerification.Text=includeClosing ? "Çizgi ve kapanış yolları aranıyor; iptal edebilirsiniz." : allSegments ? "Çizgi noktaları arasındaki yollar aranıyor; iptal edebilirsiniz." : "Son iki nokta arasında yol aranıyor; iptal edebilirsiniz.";
         try
         {
@@ -280,7 +291,7 @@ internal sealed class PhotoTraceWindow : Window
                 {
                     cts.Token.ThrowIfCancellationRequested();
                     var start=anchors[i];var end=i+1==anchors.Length ? anchors[0] : anchors[i+1];
-                    var candidate=compute is null ? (PhotoEdgePath.TryFind(source,start,end,out var found,cts.Token) ? found : null) : compute(source,start,end,cts.Token);
+                    var candidate=compute is null ? FindPath(source,start,end,color,cts.Token) : compute(source,start,end,cts.Token);
                     if(candidate is null)return null;paths.Add(candidate);
                 }
                 return paths;
@@ -298,6 +309,9 @@ internal sealed class PhotoTraceWindow : Window
         { if(!closed)StatusForVerification.Text="Yol önerisi hazırlanamadı: "+ex.Message; }
         finally { if(ReferenceEquals(pathCancellation,cts))pathCancellation=null;cts.Dispose(); }
     }
+    private static IReadOnlyList<Point>? FindPath(BitmapSource source,Point start,Point end,bool color,CancellationToken token)
+        =>color ? (PhotoColorEdgePath.TryFind(source,start,end,out var colored,token) ? colored : null)
+                 : (PhotoEdgePath.TryFind(source,start,end,out var gray,token) ? gray : null);
     private void UpdateStatus()
     {
         if(SourcePurpose==PhotoSourcePurpose.Unspecified) { StatusForVerification.Text="Önce görsel türünü kendiniz seçin; otomatik sınıflandırma yapılmaz.";return; }

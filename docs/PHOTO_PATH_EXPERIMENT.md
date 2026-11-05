@@ -41,3 +41,9 @@ python tools/PhotoPathBenchmark/benchmark.py <veri.zip> <dotnet.exe> <boş-çal�
 ```
 
 Araç gerçek prototip kaynak dosyasını derler; seçilen görselleri sadece çalışma klasörüne çıkarır, denemeleri ve `summary.json` çıktısını oraya yazar. Veriler depoya eklenmemelidir.
+
+## İsteğe bağlı renk kontrastı
+
+Fotoğraf taslağındaki **Renk kontrastı ile yol** seçeneği, son aralık, tüm çizgi ve seçili aralığı yeniden önerme işlemlerinde gri parlaklık gradyanı yerine RGB kanal gradyanlarını kullanır. Seçim varsayılan olarak kapalıdır; ayrı **Kenar öner** noktasal aracı değişmez. Mod değiştirilince bekleyen yol önerisi kaldırılır ve süren aramaya iptal isteği gönderilir; seçili noktalar değişmez. Uygulanmış çizgideki mevcut geometri uyarısı korunur. Sonuç yine açık kullanıcı uygulaması ve geometri kontrolü gerektiren bir öneridir. Mod ve öneri kökeni proje geçmişinde ayrıca saklanmaz.
+
+Eş parlaklıklı sentetik sınır ve daha önce kaydedilmiş ayrılmış görüntü deneyi için [renk gradyanı değerlendirmesine](PHOTO_COLOR_GRADIENT_EXPERIMENT.md) bakın. Renk yöntemi o örneklerde bazı ortalamaları iyileştirse de 5 pikseli aşan yerel hataları ve bazı kötüleşmeleri ortadan kaldırmadı. Desen, doku ve gölgeler izlenebilir; kullanıcı iki yöntemi inceleyebilir ama herhangi birinin doğru sınırı bulduğu, gerçek ölçü veya üretim uygunluğu doğrulanmış değildir. Gerçek kullanıcılarla denenmedi.

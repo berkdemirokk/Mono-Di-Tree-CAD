@@ -110,3 +110,5 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Deneysel fiziksel kontur dalı da sürüm 8 kullanmıştır; bu dalın fotoğraf geçmişli sürüm 8 biçimiyle aynı şema değildir. Mevcut masaüstü `PhysicalFeatures` alanı bulunan dosyayı açıklamayla reddeder; dosyayı veya açık çalışmayı değiştirmez. Bu bir dönüştürücü veya iki yönlü uyumluluk değildir; farklı şema dalları birleştirilmeden önce sürümleme ve geçiş ayrıca çözülmelidir.
 
 - Fotoğraf ölçü karşılaştırmasındaki çizgi boyunca seçenek, iki taslak noktası arasındaki çok parçalı çizgi uzunluğunu bağımsız kullanıcı ölçüsüyle karşılaştırır. Sürekli gerçek eğriyi, kapanış kenarını veya üretim uygunluğunu doğrulamaz; karma rapor sürüm 2 kullanır. Kullanıcı ve fiziksel kabul testi yapılmadı.
+
+- Fotoğraf yolunda isteğe bağlı renk kontrastı, gri yöntemin alternatifi olarak kullanılabilir. [Sınırlı deneyler](docs/PHOTO_COLOR_GRADIENT_EXPERIMENT.md) yerel hataların sürdüğünü gösterir; renk, desen veya gölge doğru sınır olmak zorunda değildir. Üretim ve gerçek kullanıcı doğrulaması yapılmadı.
