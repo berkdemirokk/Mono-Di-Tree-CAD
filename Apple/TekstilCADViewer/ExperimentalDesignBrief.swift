@@ -634,7 +634,7 @@ enum ExperimentalDesignBrief {
         var explanation: String {
             switch self {
             case .compatible: return "Görsel bu iPhone'da V2 görsel denetimini geçti. Windows ile gerçek aktarım henüz doğrulanmadı."
-            case .incompatible: return "Görsel V2 denetimini geçmedi. V2 tek kare PNG/JPEG, en fazla 8 MiB, 12.000 piksel kenar ve 24 milyon piksel ister; animasyonlu PNG ve bozuk görseller kabul edilmez. Farklı bir görsel seçin veya V1'i inceleyin. Mevcut görsel korunuyor."
+            case .incompatible: return "Görsel V2 denetimini geçmedi. V2 tek kare PNG/JPEG, en fazla 8 MiB, 12.000 piksel kenar ve 24 milyon piksel ister; animasyonlu PNG ve bozuk görseller kabul edilmez. Farklı bir görsel seçebilirsiniz. V1 kaydedilebilir, ancak Windows'ta görsel açılmayabilir. Mevcut görsel korunuyor."
             }
         }
     }
@@ -652,6 +652,19 @@ enum ExperimentalDesignBrief {
             guard let current else { return "" }
             guard reviewed == current, let result else { return "V2 görsel denetimi sürüyor…" }
             return result.explanation
+        }
+        /// This iPhone check is a conservative signal, not a Windows decoder result.
+        func v1WindowsPreviewNotice(for current: Data?) -> String? {
+            guard let current else { return nil }
+            guard reviewed == current, let result else {
+                return "Bu görsel için iPhone denetimi henüz tamamlanmadı. Windows V1 isteğini açsa bile görseli gösteremeyebilir; tek kare, en fazla 12.000 piksel kenar ve 24 milyon piksel sınırını kontrol edin. Görsel korunur."
+            }
+            switch result {
+            case .incompatible:
+                return "Bu görsel iPhone'un V2 görsel denetimini geçmedi. Windows V1 isteğini açsa bile görseli göstermeyebilir; tek kare, en fazla 12.000 piksel kenar ve 24 milyon piksel sınırını kontrol edin. Denetimler farklı olabilir. Görsel değiştirilmez."
+            case .compatible:
+                return "Görsel iPhone denetimini geçti; Windows'ta görüntülenmesi ve gerçek aktarım ayrıca doğrulanmadı. Görsel değiştirilmez."
+            }
         }
         func hasResult(for bytes: Data) -> Bool { reviewed == bytes && result != nil }
     }

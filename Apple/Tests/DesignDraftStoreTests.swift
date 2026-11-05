@@ -1321,6 +1321,31 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertFalse(state.hasResult(for: a))
         XCTAssertEqual(state.status(for: nil), "")
     }
+    func testV1LargeReferenceRemainsUnchangedDespiteV2PreviewWarning() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "v2-large-6000x5000", withExtension: "json"))
+        let fixture = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))
+        let bytes = try XCTUnwrap(Data(base64Encoded: try XCTUnwrap(fixture.reference).dataBase64))
+        let draft = ExperimentalDesignBrief.Draft(style: .describe, description: "Fotoğraflı istek", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: bytes, imageName: "foto.png")
+        XCTAssertEqual(ExperimentalDesignBrief.V2ImageReview.inspect(bytes), .incompatible)
+        let saved = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.make(draft))
+        XCTAssertEqual(Data(base64Encoded: try XCTUnwrap(saved.reference).dataBase64), bytes)
+        XCTAssertEqual(saved.prompt, draft.prompt)
+        XCTAssertEqual(saved.measurements, draft.measurements)
+    }
+    func testV1WindowsImageNoticeTracksExactBytesWithoutClaimingCompatibility() {
+        let first = Data([1]), second = Data([2])
+        var state = ExperimentalDesignBrief.V2ImageReviewState()
+        XCTAssertNil(state.v1WindowsPreviewNotice(for: nil))
+        XCTAssertTrue(state.v1WindowsPreviewNotice(for: first)?.contains("henüz tamamlanmadı") == true)
+        state.publish(.incompatible, for: first, current: first)
+        XCTAssertTrue(state.v1WindowsPreviewNotice(for: first)?.contains("göstermeyebilir") == true)
+        XCTAssertTrue(state.v1WindowsPreviewNotice(for: second)?.contains("henüz tamamlanmadı") == true)
+        state.publish(.compatible, for: second, current: second)
+        XCTAssertTrue(state.v1WindowsPreviewNotice(for: second)?.contains("ayrıca doğrulanmadı") == true)
+        state.publish(.incompatible, for: first, current: second)
+        XCTAssertTrue(state.v1WindowsPreviewNotice(for: second)?.contains("ayrıca doğrulanmadı") == true)
+        XCTAssertEqual(first, Data([1])); XCTAssertEqual(second, Data([2]))
+    }
     func testPhotoObservationThumbnailDoesNotChangeSourceBytes() throws {
         let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "ios-unicode-photo.tcad-request", withExtension: "json"))
         let doc = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: Data(contentsOf: url))

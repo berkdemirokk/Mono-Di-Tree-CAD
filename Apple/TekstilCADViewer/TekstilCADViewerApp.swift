@@ -2628,6 +2628,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var savedShareVersion: Int?
     @State private var savedShareSelected: Bool?
     @State private var savedShareImported: Bool?
+    @State private var confirmV1ImageShare = false
+    @State private var pendingV1ImageShareID: UUID?
     @State private var shareWorkID: UUID?
     @State private var shareCancelRequested = false
     @State private var shareTask: Task<URL, Error>?
@@ -3190,6 +3192,15 @@ private struct ExperimentalDesignBriefView: View {
             || MeasurementMessageParser.hasConditionalMeasurementRisk(fields) ? 0 : 1
     }
     #if os(iOS)
+    private func requestSavedShare() {
+        guard let attempt = savedShareAttempt else { message = "Paylaşılacak kayıt bulunamadı; isteği yeniden kaydedin."; return }
+        if savedShareVersion == 1 && attempt.draft.image != nil {
+            pendingV1ImageShareID = attempt.id
+            confirmV1ImageShare = true
+        } else {
+            startSavedShare()
+        }
+    }
     private func startSavedShare() {
         guard let attempt = savedShareAttempt, savedShareVersion == requestExportVersion,
               savedShareSelected == modelExplicitlySelected, savedShareImported == importedPortable,
@@ -3407,7 +3418,7 @@ private struct ExperimentalDesignBriefView: View {
                    savedShareSelected == modelExplicitlySelected, savedShareImported == importedPortable,
                    shareWorkID == nil, shareCleanupItem == nil,
                    !referenceBlocksClose, !draftTransition, !aLineInputPending, measurementForm?.hasValues != true {
-                    Button { startSavedShare() } label: {
+                    Button { requestSavedShare() } label: {
                         Image(systemName: "square.and.arrow.up").frame(minWidth: 44, minHeight: 44)
                     }
                     .accessibilityLabel("Kaydedilen isteği paylaş")
@@ -3783,7 +3794,7 @@ private struct ExperimentalDesignBriefView: View {
                     Section("Windows’a aktarım") {
                         Text("Kaydedilen isteğin kopyası; model ve tarif, ölçüler ve varsa konum bilgileri dahil seçilen görseli içerir. Kalıp dosyası değildir. Paylaşım yöntemini ve alıcıyı siz seçersiniz.").font(.caption)
                         if savedShareAttempt?.matchesCurrentDraft(draft) == true && savedShareVersion == requestExportVersion {
-                            Button("Kaydedilen isteği paylaş…") { startSavedShare() }
+                            Button("Kaydedilen isteği paylaş…") { requestSavedShare() }
                                 .frame(minHeight: 44).disabled(shareWorkID != nil || shareCleanupItem != nil || referenceBlocksClose)
                         }
                         if shareWorkID != nil { ProgressView("Paylaşım kopyası hazırlanıyor…"); Button("Paylaşım hazırlığını iptal et") { cancelSavedShare() }.frame(minHeight: 44).disabled(shareCancelRequested) }
@@ -3983,7 +3994,25 @@ private struct ExperimentalDesignBriefView: View {
                 Button("İptal", role: .cancel) { pendingExportAttempt = nil; pendingExportSnapshot = nil }
             } message: {
                 Text("Yeni ve kullanılmamış bir dosya adı seçin. Aynı dosyanın farklı bir yolu veya sonradan oluşturulan bir hedef uygulama tarafından kesin olarak tespit edilmez; mevcut dosyanın üzerine yazılmasını engelleyemiyoruz. Emin değilseniz iptal edin.")
+                if let snapshot = pendingExportSnapshot, snapshot.version == 1,
+                   let notice = v2ImageReview.v1WindowsPreviewNotice(for: snapshot.draft.image) {
+                    Text(notice)
+                }
             }
+            #if os(iOS)
+            .confirmationDialog("Windows'ta görsel önizlemesi", isPresented: $confirmV1ImageShare, titleVisibility: .visible) {
+                Button("Yine de paylaş") {
+                    guard let id = pendingV1ImageShareID, savedShareAttempt?.id == id else {
+                        pendingV1ImageShareID = nil; message = "Kayıt değişti; paylaşımı yeniden başlatın."; return
+                    }
+                    pendingV1ImageShareID = nil; startSavedShare()
+                }
+                Button("Vazgeç", role: .cancel) { pendingV1ImageShareID = nil }
+            } message: {
+                Text(v2ImageReview.v1WindowsPreviewNotice(for: savedShareAttempt?.draft.image)
+                    ?? "Kayıt değişti; paylaşımı yeniden kontrol edin.")
+            }
+            #endif
             .confirmationDialog("İstek dosyası biçimi", isPresented: $choosingRequestVersion, titleVisibility: .visible) {
                 Button("V1: Windows ile uyumlu kopya") { if requestExportVersion != 1 { referenceRevision.changed() }; requestExportVersion = 1; prepareExport() }
                 Button("V2: model kimliğini koru (deneysel)") { if requestExportVersion != 2 { referenceRevision.changed() }; requestExportVersion = 2; prepareExport() }
