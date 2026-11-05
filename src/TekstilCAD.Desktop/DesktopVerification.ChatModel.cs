@@ -22,7 +22,8 @@ internal static partial class DesktopVerification
             var captured=window.CaptureForVerification();
             Check(captured==modelOnly && DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(captured))==modelOnly,
                 "V2 model and measurement draft remains intact without description or image",checks);
-            window.LoadForVerification(new DesignRequest("","",null));
+            window.LoadForVerification(new DesignRequest("Başlangıç","",null));
+            window.PromptForVerification.Text="";
             var initial=new DesignRequest("","bel çevresi 72 cm",null);
             // Empty description is valid as a transient form, not persisted here.
             window.MeasurementsForVerification.Text=initial.Measurements;
