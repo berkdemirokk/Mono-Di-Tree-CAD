@@ -10,7 +10,7 @@ manifest['assets/design_params/default.yaml']='2ebe2f5dc848e72788530f878239f3dd2
 for rel,digest in manifest.items():
     path=(root/rel).resolve(strict=True)
     if not path.is_relative_to(root) or hashlib.sha256(path.read_bytes()).hexdigest()!=digest: raise RuntimeError('Source hash mismatch: '+rel)
-if hashlib.sha256((here/'synthetic.yaml').read_bytes()).hexdigest()!='d7699234ee32a7fabaa753031115106e059af2efc85e088036a7d2bcc77a1389': raise RuntimeError('Synthetic input mismatch')
+if hashlib.sha256((here/'synthetic.yaml').read_text(encoding='utf8').encode('utf8')).hexdigest()!='14d96d4fcbff44d6e99791c7a07ce6c6f4fbed574aea5afbfaa317100a91c0c4': raise RuntimeError('Synthetic input mismatch')
 def blocked(*args,**kwargs): raise RuntimeError('Network disabled for synthetic probe')
 socket.socket.connect=blocked; socket.socket.connect_ex=blocked; socket.create_connection=blocked
 sys.path.insert(0,str(root))
@@ -72,4 +72,5 @@ def run(case):
             rules.append({'owner':comp.name,'owner_type':type(comp).__name__,'index':index,'a':side(rule.int1),'b':side(rule.int2)})
     return {'id':case,'body_input_cm_degree':values,'derived':{k:float(v) for k,v in body.params.items() if k.startswith('_')},'panels':outpanels,'stitches':rules}
 print(json.dumps({'source_commit':pin,'unit':'cm','design':'default FittedShirt + PencilSkirt, no waistband','cases':[run('synthetic-base'),run('synthetic-distinct')]},indent=2,allow_nan=False))
+
 

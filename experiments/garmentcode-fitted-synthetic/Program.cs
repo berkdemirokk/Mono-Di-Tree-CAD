@@ -12,7 +12,7 @@ try
 {
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement);
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement);
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -58,7 +58,16 @@ try
     if(!GeneratedGraph.Inspect("s",curved,[seam],[seam]).Issues.Any(x=>x.StartsWith("curve-topology-unproven:"))) throw new Exception("Graph curve gate");
     var incomplete=baseParts.Segments.Select(e=>new GeneratedGraph.Edge("s",e.Panel,e.Edge,e.SourceKind=="Edge"?"L":"Q",new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
     if(!GeneratedGraph.Inspect("s",incomplete,[],[]).Issues.Contains("incomplete-graph")) throw new Exception("Partial output graph gate");
-    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines including dart legs and 8 curve endpoint pairs; production unresolved.");
+    // Quadratic x=t²: quarter arc length occurs at t=0.5, not t=0.25.
+    var parabola=new InterfaceMatcher.Edge("test","CurveEdge",new(0,0),new(1,0),[new(0,0)],false,false,1);
+    var (curveA,curveB)=parabola.SplitNative(.25);
+    if(Math.Abs(curveA.End.X-.25)>1e-9 || Math.Abs(curveB.Controls[0].X-.5)>1e-9) throw new Exception("Curve arc-length split");
+    try { parabola.SplitNative(0); throw new Exception("Zero split accepted"); } catch(ArgumentException) { }
+    try { InterfaceMatcher.Match([],[]); throw new Exception("Empty interface accepted"); } catch(ArgumentException) { }
+    var line=new InterfaceMatcher.Edge("test","Edge",new(0,0),new(10,0),[],true,false,1);
+    var matched=InterfaceMatcher.Match([line],[line with { End=new(4,0), Flipped=false },line with { Start=new(4,0),Flipped=false }]);
+    if(matched.Upper.Count!=2 || Math.Abs(matched.Upper[0].Start.X-6)>1e-8 || !matched.Upper.All(e=>e.Flipped)) throw new Exception("Flipped split orientation");
+    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
 catch(Exception e) { Console.Error.WriteLine("FAIL: "+e.Message); return 1; }
@@ -68,6 +77,40 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckInterfaceMatching(JsonElement golden)
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.pre-seam.json") ?? throw new InvalidDataException("Missing pre-seam fixture");
+        using var reader=new StreamReader(stream); using var pre=JsonDocument.Parse(reader.ReadToEnd().TrimStart('\uFEFF'));
+        Need(pre.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","pre-seam source");
+        foreach(var c in pre.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            string id=c.GetProperty("id").GetString()!;
+            var match=InterfaceMatcher.Match(c.GetProperty("upper").EnumerateArray().Select(InterfaceMatcher.Read).ToArray(),c.GetProperty("lower").EnumerateArray().Select(InterfaceMatcher.Read).ToArray());
+            var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
+            var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
+            void Side(IReadOnlyList<InterfaceMatcher.Edge> actual,JsonElement expected)
+            {
+                var ids=expected.GetProperty("edges").EnumerateArray().ToArray(); Need(actual.Count==ids.Length,"matched edge count");
+                for(int i=0;i<ids.Length;i++)
+                {
+                    var entry=ids[i];var edge=actual[i];string panel=entry.GetProperty("panel").GetString()!;int index=entry.GetProperty("edge").GetInt32();
+                    Need(edge.Panel==panel && edge.Flipped==entry.GetProperty("flipped").GetBoolean() && edge.RightWrong==entry.GetProperty("right_wrong").GetBoolean(),"matched edge identity/orientation");
+                    var referenceEdge=reference.GetProperty("panels").GetProperty(panel).GetProperty("edges")[index];
+                    P a=Point(referenceEdge.GetProperty("start")),b=Point(referenceEdge.GetProperty("end"));
+                    Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<2e-5 && (b-new P(edge.End.X,edge.End.Y)).Length()<2e-5,"matched edge coordinates: "+panel+":"+index);
+                }
+            }
+            Side(match.Upper,waist.GetProperty("a"));Side(match.Lower,waist.GetProperty("b"));
+            var front=FrontSkirtCandidate.CreateFromMatchedInterface(id,match);
+            foreach(var edge in front.Edges)
+            {
+                var original=reference.GetProperty("panels").GetProperty("skirt_front").GetProperty("edges")[edge.Id];
+                P a=Point(original.GetProperty("start")),b=Point(original.GetProperty("end"));
+                Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<2e-5 && (b-new P(edge.End.X,edge.End.Y)).Length()<2e-5,"matched front contour: "+edge.Id);
+            }
+            Need(match.Status=="unresolved"&&!match.ExportAllowed,"matching gate");
+        }
+    }
     static bool ExactDecimalEqual(JsonElement value,decimal expected)
     {
         if(value.ValueKind!=JsonValueKind.Number || expected!=decimal.Truncate(expected)) return false;
@@ -216,6 +259,9 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
+
 
 
 
