@@ -62,12 +62,13 @@ internal sealed class PhotoRegionWindow : Window
     internal bool HasMarksOverlay => marksOverlay.Source is not null;
     internal byte AppliedMarkForVerification(int x,int y)=>appliedMarks?[y*image.PixelWidth+x] ?? 0;
     internal bool? PendingMarkAtForVerification(int x,int y)=>pendingMarks.TryGetValue(y*image.PixelWidth+x,out var value) ? value : null;
+    internal Action<CancellationToken>? BeforeContourForVerification { get; set; }
     internal Action<CancellationToken>? BeforeRefineForVerification { get; set; }
     internal Action<CancellationToken>? BeforeComputeForVerification { get; set; }
     internal Action<CancellationToken>? BeforeSessionSaveForVerification { get; set; }
     internal Action<CancellationToken>? BeforeSessionLoadForVerification { get; set; }
     internal Button CancelSessionForVerification { get; }=new() { Content="Dosya işlemini iptal et",Visibility=Visibility.Collapsed,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
-    private bool sessionOperation;
+    private bool sessionOperation,contourOperation;
     private sealed record Choice(int Id,int Pixels,int Left,int Top,int Right,int Bottom)
     {
         public override string ToString()=>$"Bölge {Id} · {Pixels} piksel · ({Left},{Top})–({Right},{Bottom})";
@@ -87,7 +88,7 @@ internal sealed class PhotoRegionWindow : Window
         var cancel=new Button { Content="Kapat",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
         var refine=new Button { Content="İşaretleri uygula",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
         var clearMarks=new Button { Content="İşaretleri sil",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
-        compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=(_,_)=> { if(TrySelectContour())DialogResult=true; };cancel.Click+=(_,_)=>Close();
+        compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=async (_,_)=> { if(await TrySelectContourAsync() && !closed)DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
         actions.Children.Add(compute);if(!reviewOnly)actions.Children.Add(accept);actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
         {
@@ -136,6 +137,7 @@ internal sealed class PhotoRegionWindow : Window
         undoRefinement.Click+=(_,_)=>UndoRefinement();options.Children.Add(undoRefinement);options.Children.Add(ShowAppliedMarks);options.Children.Add(ComparePrevious);controls.Children.Add(options);controls.Children.Add(BoundaryWarning);controls.Children.Add(Status);
         AutomationProperties.SetName(BoundaryWarning,"Bölge sınırı uyarısı");AutomationProperties.SetLiveSetting(BoundaryWarning,AutomationLiveSetting.Polite);
         AcknowledgeImageEdge.Checked+=(_,_)=>reviewRevision++;AcknowledgeImageEdge.Unchecked+=(_,_)=>reviewRevision++;
+        OmitHoles.Checked+=(_,_)=>reviewRevision++;OmitHoles.Unchecked+=(_,_)=>reviewRevision++;
         AutomationProperties.SetHelpText(ShowAppliedMarks,"Önceki düzeltmelerde uygulanan işaretleri soluk, bekleyen işaretleri parlak gösterir; maskeyi değiştirmez.");
         AutomationProperties.SetHelpText(ComparePrevious,"Tüm maskelerde eklenen pikseller yeşil, çıkarılanlar kırmızıdır. Değişmeyen alanlar gösterilmez; doğruluk ölçümü değildir.");
         ComparePrevious.Checked+=(_,_)=>UpdateComparison();ComparePrevious.Unchecked+=(_,_)=>UpdateComparison();
@@ -158,7 +160,7 @@ internal sealed class PhotoRegionWindow : Window
             TrySetRectangleFromView(start,e.GetPosition(view),view.RenderSize);e.Handled=true; };
         view.LostMouseCapture+=(_,_)=> { dragStart=null;activeStroke=null; };
         Regions.SelectionChanged+=(_,_)=> { reviewRevision++;ShowSelection(); };
-        foreach(var box in new[] { OmitHoles,ShowAppliedMarks,ComparePrevious })
+        foreach(var box in new[] { ShowAppliedMarks,ComparePrevious })
         { box.Checked+=(_,_)=>reviewRevision++;box.Unchecked+=(_,_)=>reviewRevision++; }
         MarkMode.SelectionChanged+=(_,_)=>reviewRevision++;BrushSize.SelectionChanged+=(_,_)=>reviewRevision++;
         foreach(var box in new[] { left,top,width,height })
@@ -290,9 +292,9 @@ internal sealed class PhotoRegionWindow : Window
     }
     internal void CancelSessionOperation()
     {
-        if(!sessionOperation || running is null || running.IsCancellationRequested)return;
+        if((!sessionOperation && !contourOperation) || running is null || running.IsCancellationRequested)return;
         running.Cancel();CancelSessionForVerification.IsEnabled=false;
-        Status.Text="İptal istendi; süren dosya okuma veya yazma adımı bitince duracak. Tamamlanmış kayıt geri alınmaz.";
+        Status.Text=contourOperation ? "İptal istendi; sınır hesaplama adımı bitince duracak." : "İptal istendi; süren dosya okuma veya yazma adımı bitince duracak. Tamamlanmış kayıt geri alınmaz.";
     }
     private void BeginSessionOperation(CancellationTokenSource cts)
     {
@@ -579,22 +581,35 @@ internal sealed class PhotoRegionWindow : Window
         }
         return null;
     }
-    internal bool TrySelectContour()
+    internal async Task<bool> TrySelectContourAsync()
     {
         if(pendingMarks.Count>0) { Status.Text="Önce bekleyen işaretleri uygulayın veya silin.";return false; }
         if(running is not null || components is null || Regions.SelectedItem is not Choice choice) { Status.Text="Önce arama tamamlanınca bir bölge seçin.";return false; }
+        if((TouchesImageEdge(choice) || SearchEdgeDistance(choice)==0) && AcknowledgeImageEdge.IsChecked!=true)
+        { Status.Text="Bölge görüntü veya arama dikdörtgeni sınırına değiyor; gerçek sınır kırpılmış olabilir. İnceledikten sonra seçimi onaylayın.";return false; }
+        var original=components;var regionVersion=regionRevision;var reviewVersion=reviewRevision;var omit=OmitHoles.IsChecked==true;
+        var cts=new CancellationTokenSource();running=cts;contourOperation=true;CancelSessionForVerification.Content="Sınır işlemini iptal et";AutomationProperties.SetName(CancelSessionForVerification,"Sınır işlemini iptal et");CancelSessionForVerification.IsEnabled=true;CancelSessionForVerification.Visibility=Visibility.Visible;
+        Status.Text="Seçili sınır hazırlanıyor; mevcut bölge korunuyor…";
         try
         {
-            if((TouchesImageEdge(choice) || SearchEdgeDistance(choice)==0) && AcknowledgeImageEdge.IsChecked!=true) { Status.Text="Bölge görüntü veya arama dikdörtgeni sınırına değiyor; gerçek sınır kırpılmış olabilir. İnceledikten sonra seçimi onaylayın.";return false; }
-            var contours=MaskContours.Extract(components.CopySelection([choice.Id]),image.PixelWidth,image.PixelHeight);
-            var outer=contours.Loops.Where(l=>!l.IsHole).ToArray();var holes=contours.Loops.Count(l=>l.IsHole);
-            if(outer.Length!=1) { Status.Text="Seçilen bölgenin birden fazla dış sınırı var; otomatik seçim yapılmadı.";return false; }
-            if(holes>0 && OmitHoles.IsChecked!=true) { Status.Text=$"Bölgede {holes} iç boşluk var. Bunlar çizgiye aktarılmayacak; devam için seçimi onaylayın.";return false; }
-            var reduced=ContourCollinearReduction.Reduce(outer[0].CopyPoints());
-            if(reduced.Length<3 || reduced.Length>PhotoTraceCanvas.MaximumPoints-4) { Status.Text="Sınırın nokta sayısı desteklenen aralıkta değil; mevcut çizim korunuyor.";return false; }
-            SelectedContour=reduced.Select(p=>new System.Windows.Point(p.X,p.Y)).ToArray();return true;
+            var reduced=await Task.Run(()=> {
+                BeforeContourForVerification?.Invoke(cts.Token);cts.Token.ThrowIfCancellationRequested();
+                var contours=MaskContours.Extract(original.CopySelection([choice.Id],cts.Token),image.PixelWidth,image.PixelHeight,cts.Token);
+                var outer=contours.Loops.Where(l=>!l.IsHole).ToArray();var holes=contours.Loops.Count(l=>l.IsHole);
+                if(outer.Length!=1)throw new InvalidDataException("Seçilen bölgenin birden fazla dış sınırı var; otomatik seçim yapılmadı.");
+                if(holes>0 && !omit)throw new InvalidDataException($"Bölgede {holes} iç boşluk var. Bunlar çizgiye aktarılmayacak; devam için seçimi onaylayın.");
+                var points=ContourCollinearReduction.Reduce(outer[0].CopyPoints(),cts.Token);
+                if(points.Length<3 || points.Length>PhotoTraceCanvas.MaximumPoints-4)throw new InvalidDataException("Sınırın nokta sayısı desteklenen aralıkta değil; mevcut çizim korunuyor.");
+                return points.Select(p=>new System.Windows.Point(p.X,p.Y)).ToArray();
+            },cts.Token);
+            cts.Token.ThrowIfCancellationRequested();
+            if(closed || regionVersion!=regionRevision || reviewVersion!=reviewRevision || !ReferenceEquals(original,components) || !ReferenceEquals(choice,Regions.SelectedItem))
+            { if(!closed)Status.Text="Bölge veya inceleme seçimi değişti; sınır uygulanmadı.";return false; }
+            SelectedContour=reduced;return true;
         }
-        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or DllNotFoundException or BadImageFormatException or TypeInitializationException)
-        { Status.Text="Sınır çıkarılamadı: "+ex.Message;return false; }
+        catch(OperationCanceledException) { if(!closed)Status.Text="Sınır hazırlama iptal edildi; mevcut bölge korundu.";return false; }
+        catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OpenCvSharp.OpenCVException or System.IO.IOException or InvalidDataException or DllNotFoundException or BadImageFormatException or TypeInitializationException)
+        { if(!closed)Status.Text="Sınır çıkarılamadı: "+ex.Message;return false; }
+        finally { if(ReferenceEquals(running,cts)) { running=null;contourOperation=false;if(!closed) { CancelSessionForVerification.Visibility=Visibility.Collapsed;CancelSessionForVerification.Content="Dosya işlemini iptal et";AutomationProperties.SetName(CancelSessionForVerification,"Bölge dosyası işlemini iptal et"); } }cts.Dispose(); }
     }
 }

@@ -9780,12 +9780,12 @@ internal static partial class DesktopVerification
                 edgeRegion.Regions.SelectedIndex=0;
                 Render(edgeRegion,Path.ChangeExtension(reportPath,".photo-region-image-edge.png"),620,550);
                 Check(edgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && edgeRegion.BoundaryWarning.Text.Contains("kırpılmış") &&
-                    FullyVisible(edgeRegion.AcknowledgeImageEdge,(FrameworkElement)edgeRegion.Content) && !edgeRegion.TrySelectContour() && edgeRegion.SelectedContour is null,
+                    FullyVisible(edgeRegion.AcknowledgeImageEdge,(FrameworkElement)edgeRegion.Content) && !SelectContourForVerification(edgeRegion) && edgeRegion.SelectedContour is null,
                     "Image-edge region warns and requires an explicit visible acknowledgement before contour preview",checks);
                 edgeRegion.AcknowledgeImageEdge.IsChecked=true;
-                Check(edgeRegion.TrySelectContour() && edgeRegion.SelectedContour is { Length:>=3 },"Acknowledged image-edge contour remains an explicit preview",checks);
+                Check(SelectContourForVerification(edgeRegion) && edgeRegion.SelectedContour is { Length:>=3 },"Acknowledged image-edge contour remains an explicit preview",checks);
                 edgeRegion.Regions.SelectedIndex=1;edgeRegion.Regions.SelectedIndex=0;
-                Check(edgeRegion.AcknowledgeImageEdge.IsChecked!=true && !edgeRegion.TrySelectContour(),"Image-edge acknowledgement does not carry to a new region selection",checks);
+                Check(edgeRegion.AcknowledgeImageEdge.IsChecked!=true && !SelectContourForVerification(edgeRegion),"Image-edge acknowledgement does not carry to a new region selection",checks);
             }
             finally { edgeRegion.Close(); }
             var boxEdgeRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
@@ -9796,10 +9796,10 @@ internal static partial class DesktopVerification
                 typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(boxEdgeRegion,[PhotoRegionSharpPrototype.MaskComponents.Analyze(boxMask,96,72)]);
                 boxEdgeRegion.Regions.SelectedIndex=0;
                 Check(boxEdgeRegion.AcknowledgeImageEdge.Visibility==Visibility.Visible && boxEdgeRegion.BoundaryWarning.Text.Contains("arama dikdörtgenine") &&
-                    !boxEdgeRegion.TrySelectContour() && boxEdgeRegion.SelectedContour is null,
+                    !SelectContourForVerification(boxEdgeRegion) && boxEdgeRegion.SelectedContour is null,
                     "Region touching the search rectangle requires explicit review even away from image borders",checks);
                 boxEdgeRegion.AcknowledgeImageEdge.IsChecked=true;
-                Check(boxEdgeRegion.TrySelectContour() && boxEdgeRegion.SelectedContour is { Length:>=3 },"Reviewed search-edge contour can be previewed",checks);
+                Check(SelectContourForVerification(boxEdgeRegion) && boxEdgeRegion.SelectedContour is { Length:>=3 },"Reviewed search-edge contour can be previewed",checks);
             }
             finally { boxEdgeRegion.Close(); }
             var nearBoxRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
@@ -9813,11 +9813,23 @@ internal static partial class DesktopVerification
                     nearBoxRegion.Regions.SelectedIndex=0;
                     Check((nearBoxRegion.BoundaryWarning.Visibility==Visibility.Visible)==(distance<=2) &&
                         (distance>2 || nearBoxRegion.BoundaryWarning.Text.Contains($"{distance} önizleme pikseli")) &&
-                        nearBoxRegion.AcknowledgeImageEdge.Visibility==Visibility.Collapsed && nearBoxRegion.TrySelectContour(),
+                        nearBoxRegion.AcknowledgeImageEdge.Visibility==Visibility.Collapsed && SelectContourForVerification(nearBoxRegion),
                         $"Near search boundary at {distance} pixels is advisory and preserves contour preview",checks);
                 }
             }
             finally { nearBoxRegion.Close(); }
+            var outsideBoxRegion=new PhotoRegionWindow(workspace,regionBitmap) { ConfirmCloseForVerification=()=>true };
+            try
+            {
+                outsideBoxRegion.left.Text="30";outsideBoxRegion.top.Text="30";outsideBoxRegion.width.Text="20";outsideBoxRegion.height.Text="20";
+                var outsideMask=new byte[96*72];for(var y=35;y<39;y++)for(var x=20;x<24;x++)outsideMask[y*96+x]=1;
+                typeof(PhotoRegionWindow).GetMethod("ShowComponents",PrivateInstance)!.Invoke(outsideBoxRegion,[PhotoRegionSharpPrototype.MaskComponents.Analyze(outsideMask,96,72)]);
+                outsideBoxRegion.Regions.SelectedIndex=0;outsideBoxRegion.ComparePrevious.IsChecked=true;outsideBoxRegion.ComparePrevious.IsChecked=false;
+                Check(outsideBoxRegion.BoundaryWarning.Visibility==Visibility.Visible && outsideBoxRegion.BoundaryWarning.Text.Contains("dışında") &&
+                    outsideBoxRegion.AcknowledgeImageEdge.Visibility==Visibility.Collapsed && SelectContourForVerification(outsideBoxRegion),
+                    "A corrected region entirely outside the initial search rectangle is disclosed without blocking preview",checks);
+            }
+            finally { outsideBoxRegion.Close(); }
             var reviewEdgeRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true };
             try
             {
@@ -10075,8 +10087,29 @@ internal static partial class DesktopVerification
                 var selectedRegionIndex=regionDialog.Regions.SelectedIndex;
                 Check(!regionDialog.TrySelectComponentAt(3,3) && regionDialog.Regions.SelectedIndex==selectedRegionIndex && !regionDialog.TrySelectComponentAt(-1,0),
                       "Background or invalid region click preserves the previous selection",checks);
-                Check(regionDialog.TrySelectContour() && regionDialog.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
+                Check(SelectContourForVerification(regionDialog) && regionDialog.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
                       "Selected synthetic photo region yields a detached contour without editing the project",checks);
+                using(var contourEntered=new ManualResetEventSlim())using(var contourRelease=new ManualResetEventSlim())
+                {
+                    var oldContour=regionDialog.SelectedContour;var oldMask=regionDialog.CopyMaskForVerification()!;
+                    regionDialog.BeforeContourForVerification=token=> { contourEntered.Set();contourRelease.Wait(token); };
+                    try {
+                        var pendingContour=regionDialog.TrySelectContourAsync();PumpUntil(()=>contourEntered.IsSet);
+                        regionDialog.OmitHoles.IsChecked=true;regionDialog.OmitHoles.IsChecked=false;contourRelease.Set();PumpUntil(()=>pendingContour.IsCompleted);
+                        Check(!pendingContour.GetAwaiter().GetResult() && ReferenceEquals(oldContour,regionDialog.SelectedContour) && regionDialog.CopyMaskForVerification()!.SequenceEqual(oldMask),
+                            "Changing and restoring contour review choices rejects the stale background result",checks);
+                    } finally { contourRelease.Set();regionDialog.BeforeContourForVerification=null; }
+                }
+                using(var contourEntered=new ManualResetEventSlim())using(var contourRelease=new ManualResetEventSlim())
+                {
+                    var oldContour=regionDialog.SelectedContour;var oldMask=regionDialog.CopyMaskForVerification()!;
+                    regionDialog.BeforeContourForVerification=token=> { contourEntered.Set();contourRelease.Wait(token); };
+                    try {
+                        var pendingContour=regionDialog.TrySelectContourAsync();PumpUntil(()=>contourEntered.IsSet);regionDialog.CancelSessionOperation();PumpUntil(()=>pendingContour.IsCompleted);
+                        Check(!pendingContour.GetAwaiter().GetResult() && ReferenceEquals(oldContour,regionDialog.SelectedContour) && regionDialog.CopyMaskForVerification()!.SequenceEqual(oldMask),
+                            "Cancelling background contour extraction preserves the selected mask and prior contour",checks);
+                    } finally { contourRelease.Set();regionDialog.BeforeContourForVerification=null; }
+                }
                 regionDialog.MarkMode.SelectedIndex=1;
                 regionDialog.BrushSize.SelectedIndex=1;
                 Check(regionDialog.TryAddStroke([new Point(10,10),new Point(14,10)]) && regionDialog.PendingMarkCount==33,
@@ -10096,7 +10129,7 @@ internal static partial class DesktopVerification
                 Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkCount==0 && regionDialog.PendingMarkAtForVerification(3,3) is null &&
                       regionDialog.TryAddMark(3,3),"Undo removes newly queued mark and allows it again",checks);
                 regionDialog.MarkMode.SelectedIndex=2;
-                Check(regionDialog.TryAddMark(40,30) && !regionDialog.TrySelectContour(),"Pending photo region marks cannot be silently omitted",checks);
+                Check(regionDialog.TryAddMark(40,30) && !SelectContourForVerification(regionDialog),"Pending photo region marks cannot be silently omitted",checks);
                 var blockedRegionSearch=regionDialog.ComputeAsync();PumpUntil(()=>blockedRegionSearch.IsCompleted);blockedRegionSearch.GetAwaiter().GetResult();
                 Check(regionDialog.Status.Text.Contains("işaretleri uygulayın") && regionDialog.Regions.SelectedIndex==0,"A new photo region search cannot discard pending marks",checks);
                 var maskBeforeCorrection=regionDialog.CopyMaskForVerification()!;
@@ -10249,7 +10282,7 @@ internal static partial class DesktopVerification
                     {
                         var staleRefine=regionDialog.RefineAsync();PumpUntil(()=>enteredRefine.IsSet);
                         regionDialog.left.Text="16";releaseRefine.Set();PumpUntil(()=>staleRefine.IsCompleted);staleRefine.GetAwaiter().GetResult();
-                        Check(regionDialog.Regions.Items.Count==0 && regionDialog.CopyMaskForVerification() is null && !regionDialog.TrySelectContour(),
+                        Check(regionDialog.Regions.Items.Count==0 && regionDialog.CopyMaskForVerification() is null && !SelectContourForVerification(regionDialog),
                               "Changing the region rectangle cancels in-flight correction and cannot restore stale results",checks);
                     }
                     finally { releaseRefine.Set();regionDialog.BeforeRefineForVerification=null; }
@@ -10966,6 +10999,10 @@ internal static partial class DesktopVerification
         VerifyPhotoTraceOwnerClose(reportPath,checks);
     }
 
+    private static bool SelectContourForVerification(PhotoRegionWindow window)
+    {
+        var task=window.TrySelectContourAsync();PumpUntil(()=>task.IsCompleted);return task.GetAwaiter().GetResult();
+    }
     private static void VerifyPhotoPlaneWorkflow(string reportPath,List<string> checks)
     {
         var session=new DocumentSession(new ProjectDocument { Name="Düzlem fotoğraf testi" });var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
