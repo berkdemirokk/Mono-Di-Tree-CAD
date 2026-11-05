@@ -9,21 +9,27 @@ namespace SyntheticBridge;
 // Derived from the synthetic windows-node-probe; job is assigned before the suspended process runs.
 internal static class JobRunner
 {
+    internal static int ActiveAttributeLists;
     static async Task<byte[]> ReadBounded(Stream stream,int limit,CancellationToken token){using var b=new MemoryStream();byte[] block=new byte[8192];while(true){int n=await stream.ReadAsync(block,token);if(n==0)return b.ToArray();if(b.Length+n>limit)throw new InvalidDataException("output limit");b.Write(block,0,n);}}
-    internal static async Task<byte[]> Run(Command command,byte[] input,CancellationToken token)
+    internal static async Task<byte[]> Run(Command command,byte[] input,CancellationToken token,Action<string>? afterAllocationForTest=null)
     {
         if(!Path.IsPathFullyQualified(command.Exe)||command.Args.Any(x=>x.Contains('"')||x.EndsWith('\\'))||command.Exe.Contains('"')||command.Exe.EndsWith('\\'))throw new InvalidOperationException("invalid command");
         using var job=N.CreateJobObject(IntPtr.Zero,null);if(job.IsInvalid)throw new Win32Exception();
-        var limits=new N.EXTENDED();limits.Basic.Flags=0x2000;int len=Marshal.SizeOf<N.EXTENDED>();IntPtr block=Marshal.AllocHGlobal(len);
-        try{Marshal.StructureToPtr(limits,block,false);if(!N.SetInformationJobObject(job,9,block,(uint)len))throw new Win32Exception();}finally{Marshal.FreeHGlobal(block);}
+        var limits=new N.EXTENDED();limits.Basic.Flags=0x2000;int len=Marshal.SizeOf<N.EXTENDED>();
+        using(var block=NativeAllocation.Allocate(len)){afterAllocationForTest?.Invoke("limits");Marshal.StructureToPtr(limits,block.DangerousGetHandle(),false);if(!N.SetInformationJobObject(job,9,block.DangerousGetHandle(),(uint)len))throw new Win32Exception();}
         using var stdin=new AnonymousPipeServerStream(PipeDirection.Out,HandleInheritability.Inheritable);
         using var stdout=new AnonymousPipeServerStream(PipeDirection.In,HandleInheritability.Inheritable);
         using var stderr=new AnonymousPipeServerStream(PipeDirection.In,HandleInheritability.Inheritable);
         var hin=stdin.ClientSafePipeHandle.DangerousGetHandle();var hout=stdout.ClientSafePipeHandle.DangerousGetHandle();var herr=stderr.ClientSafePipeHandle.DangerousGetHandle();
         IntPtr size=IntPtr.Zero;N.InitializeProcThreadAttributeList(IntPtr.Zero,2,0,ref size);if(size==IntPtr.Zero)throw new Win32Exception();
-        IntPtr attrs=Marshal.AllocHGlobal(size),handles=Marshal.AllocHGlobal(3*IntPtr.Size),jobs=Marshal.AllocHGlobal(IntPtr.Size);var windows=Environment.GetFolderPath(Environment.SpecialFolder.Windows);if(string.IsNullOrEmpty(windows))throw new InvalidOperationException();IntPtr env=Marshal.StringToHGlobalUni("SystemRoot="+windows+"\0\0");bool initialized=false;
+        var windows=Environment.GetFolderPath(Environment.SpecialFolder.Windows);if(string.IsNullOrEmpty(windows))throw new InvalidOperationException();
+        using var attrsMemory=NativeAllocation.Allocate(size);afterAllocationForTest?.Invoke("attrs");
+        using var handlesMemory=NativeAllocation.Allocate(3*IntPtr.Size);afterAllocationForTest?.Invoke("handles");
+        using var jobsMemory=NativeAllocation.Allocate(IntPtr.Size);afterAllocationForTest?.Invoke("jobs");
+        using var envMemory=NativeAllocation.Unicode("SystemRoot="+windows+"\0\0");afterAllocationForTest?.Invoke("environment");
+        IntPtr attrs=attrsMemory.DangerousGetHandle(),handles=handlesMemory.DangerousGetHandle(),jobs=jobsMemory.DangerousGetHandle(),env=envMemory.DangerousGetHandle();bool initialized=false;
         try{
-            if(!N.InitializeProcThreadAttributeList(attrs,2,0,ref size))throw new Win32Exception();initialized=true;
+            if(!N.InitializeProcThreadAttributeList(attrs,2,0,ref size))throw new Win32Exception();initialized=true;Interlocked.Increment(ref ActiveAttributeLists);afterAllocationForTest?.Invoke("attribute-list");
             Marshal.WriteIntPtr(handles,0,hin);Marshal.WriteIntPtr(handles,IntPtr.Size,hout);Marshal.WriteIntPtr(handles,2*IntPtr.Size,herr);Marshal.WriteIntPtr(jobs,job.DangerousGetHandle());
             if(!N.UpdateProcThreadAttribute(attrs,0,(IntPtr)0x20002,handles,(IntPtr)(3*IntPtr.Size),IntPtr.Zero,IntPtr.Zero)||!N.UpdateProcThreadAttribute(attrs,0,(IntPtr)0x2000d,jobs,(IntPtr)IntPtr.Size,IntPtr.Zero,IntPtr.Zero))throw new Win32Exception();
             var si=new N.STARTUPINFOEX{Startup=new N.STARTUPINFO{cb=(uint)Marshal.SizeOf<N.STARTUPINFOEX>(),dwFlags=0x100,hStdInput=hin,hStdOutput=hout,hStdError=herr},attributes=attrs};
@@ -47,6 +53,6 @@ internal static class JobRunner
                 try{await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(3));}catch(TimeoutException){cleanupFailed=true;}catch{ /* operation failures are handled separately */ }
                 if(cleanupFailed)throw new InvalidOperationException("Synthetic process cleanup unconfirmed.");
             }
-        }finally{if(initialized)N.DeleteProcThreadAttributeList(attrs);Marshal.FreeHGlobal(attrs);Marshal.FreeHGlobal(handles);Marshal.FreeHGlobal(jobs);Marshal.FreeHGlobal(env);}
+        }finally{if(initialized){N.DeleteProcThreadAttributeList(attrs);Interlocked.Decrement(ref ActiveAttributeLists);}}
     }
 }

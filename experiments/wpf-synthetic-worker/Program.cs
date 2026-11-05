@@ -5,6 +5,7 @@ using System.Windows.Media.Imaging;
 
 using BodiceWpfReader;
 using System.Diagnostics;
+using System.Text;
 namespace SyntheticBridge;
 internal sealed class WindowPreview:Window
 {
@@ -27,10 +28,16 @@ internal static class Program
 {
     static readonly string Node=@"C:\Users\pc\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe";
     static readonly string Fake=@"C:\Projects\TekstilCAD\work\wpf-synthetic-worker-1105\experiments\wpf-synthetic-worker\fake-worker.mjs";
-    [STAThread]static int Main(string[] args){if(args.SequenceEqual(new[]{"--verify"})){try{var r=VerifyAsync().GetAwaiter().GetResult();VerifyRender(r);Console.WriteLine("PASS: worker outputs, strict identity/schema, timeout, cancellation, overflow, orphan pipe cleanup, stale suppression, WPF geometry; no window shown");return 0;}catch(Exception e){Console.Error.WriteLine("FAIL: "+e);return 1;}}return new Application().Run(new WindowPreview());}
+    [STAThread]static int Main(string[] args){if(args.SequenceEqual(new[]{"--verify"})){try{var r=VerifyAsync().GetAwaiter().GetResult();VerifyRender(r);Console.WriteLine("PASS: native allocation failure injection, worker outputs, strict identity/schema, timeout, cancellation, overflow, orphan pipe cleanup, stale suppression, WPF geometry; no window shown");return 0;}catch(Exception e){Console.Error.WriteLine("FAIL: "+e);return 1;}}return new Application().Run(new WindowPreview());}
     static Command TestCommand(string mode)=>new(Node,new[]{Fake,mode});
     static async Task<Preview> VerifyAsync()
     {
+        foreach(var stage in new[]{"limits","attrs","handles","jobs","environment","attribute-list"})
+        {
+            try{await JobRunner.Run(TestCommand("invalid"),Encoding.UTF8.GetBytes("{}"),CancellationToken.None,name=>{if(name==stage)throw new InvalidOperationException("injected failure");});throw new Exception("injection did not fire: "+stage);}
+            catch(InvalidOperationException e) when(e.Message=="injected failure"){}
+            if(NativeAllocation.ActiveCount!=0||JobRunner.ActiveAttributeLists!=0)throw new Exception("native allocation not released: "+stage);
+        }
         var a=await Worker.Run(Worker.Real,"synthetic-base",TimeSpan.FromSeconds(15),CancellationToken.None);var b=await Worker.Run(Worker.Real,"synthetic-scaled",TimeSpan.FromSeconds(15),CancellationToken.None);
         if(a.Parts.Count!=2||b.Parts.Count!=2||a.Parts[0].Segments[0].To==b.Parts[0].Segments[0].To)throw new Exception("source scenarios not distinct");
         foreach(var mode in new[]{"invalid","wrong","bad-unit","duplicate"}){try{await Worker.Run(TestCommand(mode),"synthetic-base",TimeSpan.FromSeconds(4),CancellationToken.None);throw new Exception("invalid response accepted");}catch(System.IO.InvalidDataException){}}
