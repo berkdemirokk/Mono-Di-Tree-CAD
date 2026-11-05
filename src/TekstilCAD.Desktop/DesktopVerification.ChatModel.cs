@@ -260,6 +260,7 @@ internal static partial class DesktopVerification
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
             VerifyRequestNotesModel(owner,checks);
             VerifyModelReselection(owner,checks);
+            VerifyRequestSavePath(owner,reportPath,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
         finally

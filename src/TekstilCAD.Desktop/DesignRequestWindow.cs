@@ -38,6 +38,7 @@ internal sealed class DesignRequestWindow : Window
     internal Func<string?>? OpenPathChoiceForVerification { get; set; }
     internal void OpenForVerification()=>Open();
     internal void SaveForVerification()=>Save();
+    internal Func<string?>? SavePathChoiceForVerification { get; set; }
     internal Task ValidateAndSaveForVerification()=>ValidateAndSaveAsync();
     private string? lastSentModelMessage;
     internal Button RetryModelForVerification { get; } = new() { Content="Son mesajın model önerisini yeniden değerlendir",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,6) };
@@ -692,10 +693,18 @@ internal sealed class DesignRequestWindow : Window
         var modelOnlyCompatibility=before.Version==2 && before.ModelId is not null && string.IsNullOrWhiteSpace(before.Prompt) && before.Reference is null;
         const string compatibilityNotice=" Tarif veya görsel içermeyen bu V2 model isteği eski Windows ve iPhone sürümlerinde açılamayabilir.";
         if(modelOnlyCompatibility)SetStatus("Kaydedilecek istek:"+compatibilityNotice);
-        var dialog=new SaveFileDialog { Title="Yeni kalıp isteği dosyası",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
-        if(dialog.ShowDialog(this)!=true)return;
+        string? path;
+        if(SavePathChoiceForVerification is { } choose)path=choose();
+        else
+        {
+            // Complete the whole compound extension ourselves; platform dialog
+            // defaults must not append only .json or silently replace an extension.
+            var dialog=new SaveFileDialog { Title="Yeni istek · uzantısız ada .tcad-request.json eklenir",Filter="Kalıp isteği (*.tcad-request.json)|*.tcad-request.json",FileName="kalip-istegi.tcad-request.json",AddExtension=false,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+            path=dialog.ShowDialog(this)==true ? dialog.FileName : null;
+        }
+        if(path is null)return;
         if(!SameRequest(before,Capture()) || beforeChat!=chatInput.Text || beforeRevision!=referenceRevision || closed) { SetStatus("İstek değişti; kaydetme iptal edildi.");return; }
-        try { if(before.Version==2)DesignRequestStorage.SaveNewV2(dialog.FileName,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(dialog.FileName,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
+        try { var target=DesignRequestSavePath.Complete(path);if(before.Version==2)DesignRequestStorage.SaveNewV2(target,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(target,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
