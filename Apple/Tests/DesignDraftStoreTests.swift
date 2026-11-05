@@ -1705,6 +1705,22 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(draft.waist, waist)
         }
     }
+    func testMeasurementComparisonOnlyReportsUnambiguousOverlappingValues() {
+        typealias Parser = MeasurementMessageParser
+        let input = Parser.ComparisonInput(message: "bel çevresi 75 cm, kalça çevresi 980 mm", fields: ["bel çevresi": "72 cm", "kalça çevresi": "98 cm", "elbise boyu": "110 cm"])
+        XCTAssertEqual(Parser.compare(input), .reviewed(compared: 2, differences: [.init(label: "bel çevresi", fieldValue: "72 cm", messageValue: "75 cm")], unrecognizedFields: []))
+        XCTAssertEqual(input.fields["bel çevresi"], "72 cm")
+        let unknown = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "yaklaşık 72 cm"])
+        XCTAssertEqual(Parser.compare(unknown), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
+        let ambiguous = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["bel çevresi": "1,000 mm"])
+        XCTAssertEqual(Parser.compare(ambiguous), .reviewed(compared: 0, differences: [], unrecognizedFields: ["bel çevresi"]))
+        let noOverlap = Parser.ComparisonInput(message: "bel çevresi 75 cm", fields: ["kalça çevresi": "98 cm"])
+        XCTAssertEqual(Parser.compare(noOverlap), .reviewed(compared: 0, differences: [], unrecognizedFields: []))
+        XCTAssertEqual(Parser.compare(.init(message: "  ", fields: [:])), .noMessage)
+        for message in ["bel çevresi 75 cm değil", "bel çevresi 75 cm?", "bel çevresi 75 cm, bel çevresi 72 cm", "bel çevresi 1,000 mm", "eğer uygunsa bel çevresi 75 cm"] {
+            XCTAssertEqual(Parser.compare(.init(message: message, fields: ["bel çevresi": "72 cm"])), .unrecognizedMessage, message)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

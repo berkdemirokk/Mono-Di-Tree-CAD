@@ -30,6 +30,41 @@ enum MeasurementMessageParser {
             return missing.isEmpty ? found : found + "\nMesajda belirtilmeyenler: " + missing.joined(separator: ", ") + ". Varsa mevcut alanları kontrol edin."
         }
     }
+    /// Comparison never changes the source and only accepts fully understood messages and fields.
+    struct ComparisonInput: Equatable {
+        let message: String
+        let fields: [String: String]
+    }
+    struct Difference: Equatable {
+        let label: String
+        let fieldValue: String
+        let messageValue: String
+    }
+    enum Comparison: Equatable {
+        case noMessage
+        case unrecognizedMessage
+        case reviewed(compared: Int, differences: [Difference], unrecognizedFields: [String])
+    }
+    static func compare(_ input: ComparisonInput) -> Comparison {
+        if input.message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return .noMessage }
+        guard let message = try? parse(input.message, existing: [:]) else { return .unrecognizedMessage }
+        let labels = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
+        let fieldPattern = #"\A[ \t]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm)[ \t]*\z"#
+        var compared = 0, differences: [Difference] = [], unrecognized: [String] = []
+        for label in labels {
+            guard let messageValue = message.values[label], let field = input.fields[label], !field.isEmpty else { continue }
+            guard field.utf16.count <= 64,
+                  field.range(of: fieldPattern, options: [.regularExpression, .caseInsensitive]) != nil,
+                  let parsed = try? parse("\(label): \(field)", existing: [:]),
+                  let fieldValue = parsed.values[label],
+                  let a = millimeters(fieldValue), let b = millimeters(messageValue) else {
+                unrecognized.append(label); continue
+            }
+            compared += 1
+            if a != b { differences.append(.init(label: label, fieldValue: field, messageValue: messageValue)) }
+        }
+        return .reviewed(compared: compared, differences: differences, unrecognizedFields: unrecognized)
+    }
     /// Desktop v1 splits comma/semicolon/newline, but not conjunctions or sentence periods.
     /// This is only a narrow warning, not proof of downstream interpretation.
     static func containsExplicitMeasurement(_ text: String) -> Bool {

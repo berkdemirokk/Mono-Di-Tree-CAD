@@ -2580,6 +2580,12 @@ private struct ExperimentalDesignBriefView: View {
     @State private var modelSuggestionStatus = ""
     @State private var showMeasurementProposal = false
     @State private var measurementMessageStatus = ""
+    @State private var comparisonInput: MeasurementMessageParser.ComparisonInput?
+    @State private var measurementComparison: MeasurementMessageParser.Comparison?
+    private var currentComparisonInput: MeasurementMessageParser.ComparisonInput {
+        .init(message: otherMeasurements, fields: ["göğüs çevresi": bust, "bel çevresi": waist, "kalça çevresi": hips, "elbise boyu": length])
+    }
+
     @State private var showDesktopMeasurementWarning = false
     @State private var desktopWarningSnapshot: ExperimentalDesignBrief.DesktopWarningSnapshot?
     @State private var confirmingExportDestination = false
@@ -3542,6 +3548,33 @@ private struct ExperimentalDesignBriefView: View {
                             .focused($focusedInput, equals: .notes)
                         Text("İsterseniz açık etiketli göğüs, bel, kalça çevresi ve elbise boyunu cm veya mm ile denetleyin. İfadeleri virgül, nokta, noktalı virgül, satır veya “ve” ile ayırın; diğer ifadeler reddedilir. Metin korunur.")
                             .font(.caption).foregroundStyle(.secondary)
+                        Button("Mesajı ölçü alanlarıyla karşılaştır") {
+                            let input = currentComparisonInput
+                            comparisonInput = input; measurementComparison = MeasurementMessageParser.compare(input)
+                        }.frame(minHeight: 44)
+                        if comparisonInput != nil && comparisonInput != currentComparisonInput {
+                            Text("Ölçü veya mesaj değişti; karşılaştırmayı yeniden yapın.").font(.caption)
+                        }
+                        if comparisonInput == currentComparisonInput, let result = measurementComparison {
+                            switch result {
+                            case .noMessage:
+                                Text("Karşılaştırma için ölçü mesajı yazın.").font(.caption)
+                            case .unrecognizedMessage:
+                                Text("Mesajın tamamı güvenle okunamadı; otomatik karşılaştırma yapılmadı. Ölçüleri ve birimleri elle kontrol edin.").font(.caption)
+                            case .reviewed(let count, let differences, let unrecognized):
+                                Text("\(count) alan mesajdaki aynı ölçüyle karşılaştırıldı. Yalnız açık etiketli cm/mm değerleri incelenir; diğer ölçüler ve tarif kontrol edilmez.").font(.caption)
+                                ForEach(differences, id: \.label) { difference in
+                                    Text("\(difference.label): alan: \(difference.fieldValue); mesaj: \(difference.messageValue). Değerler farklı.")
+                                        .font(.caption).foregroundStyle(plum)
+                                }
+                                if !unrecognized.isEmpty {
+                                    Text("Okunamayan alanlar: \(unrecognized.joined(separator: ", ")). Bunları elle karşılaştırın.").font(.caption)
+                                }
+                                if count > 0 && differences.isEmpty && unrecognized.isEmpty {
+                                    Text("Karşılaştırılan değerler aynı; diğer içerik için bu bir doğrulama değildir.").font(.caption)
+                                }
+                            }
+                        }
                         Button("Mesajdaki ölçüleri incele") { proposeMeasurementMessage() }.frame(minHeight: 44)
                         Button("Mesajdaki model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                         if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
