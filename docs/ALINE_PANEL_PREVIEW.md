@@ -1,0 +1,19 @@
+# A-04: experimental lower-section preview
+
+This is a deliberately incomplete first vertical slice, not a completed women's dress pattern. The existing A-cut idea card opens a separate measured-section preview. All eleven inputs are mandatory, in mm, including four explicit ease amounts (zero is allowed). No numerical defaults, standard body proportions, dart allocation, neck/armhole formula, or generated bodice are supplied.
+
+## Source and mathematical contract
+
+Reviewed the existing `BreannaMeasurementGate`, `ExperimentalBodyReviewWindow` and the separate `experiment/breanna-local-4102` documents `CAD_PREVIEW_DIAGNOSTIC.md` and `SEAM_SEMANTICS.md`. These provide no approved A-line dress construction: the experimental CAD gate is closed, with unresolved topology and seam semantics. No external drafting formula or code was copied or claimed validated.
+
+The new geometry is only an explicitly disclosed interpolation of measured horizontal sections. Front/back arcs are separately measured between intended side positions; they are not guessed as half the circumference. Each half-panel waist X is (that arc + its ease)/2, hip X is (that hip arc + its ease)/2. Hip Y is the entered waist-to-hip depth. Hem Y is the entered waist-to-hem length, not the request's full dress length. Hem X is finished hem circumference/4, after explicit user agreement to equal front/back hem allocation. Straight edges connect these sections to the centre line. This construction follows these section definitions by arithmetic; it has no claim to a sourced garment drafting method or anatomical fit. It must never be presented as a complete A-line dress pattern.
+
+`ALinePanelPreview.Create(ALinePanelInput)` is the reusable UI/model adapter boundary. `ModelId` is `A-04.lower-section.experimental.v1`; results expose read-only coordinates, two side lengths, their difference, unresolved issues, and an always-false `CanApplyOrExport`. No `PatternPiece` is returned. The window receives immutable request text snapshots, refuses an inconsistent waist/hip total, and never writes to the CAD document or files. The new form is temporary; closing it discards its inputs, as disclosed before entry. Request format remains unchanged.
+
+Geometry rejects nonfinite/negative/out-of-range inputs, waist depth beyond the hem, waist wider than hip, and a hem not wider than both hip half-sections; both polygon outlines pass the existing contour validator. Different side lengths are exposed, never silently corrected or approved. Even matching lengths do not certify a sewable seam. Changing any field clears the old drawing.
+
+## Missing before a real dress
+
+Upper bodice, bust shaping and darts, fitted waist curve, calibrated front/back lengths, waist seam correspondence, closures, grain/cutting roles, fabric behavior, seam allowances and fit remain unresolved. No production tolerance is inferred from millimetre display precision. There is no apply, print, export, nesting or machine action. The unapproved Breanna geometry is not imported. A real drafting method and its measurement/options contract, plus independent seam/topology checks, are required before expanding this into a dress.
+
+Unit tests cover exact section dimensions, independent side-length arithmetic, deterministic output, scale covariance, asymmetric side mismatch, rejection and the permanently closed output gate. They were written but not executed; build/test execution belongs to the root coordinator. WPF layout and click flow are also unexecuted.
