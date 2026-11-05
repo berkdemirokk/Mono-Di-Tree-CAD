@@ -12,14 +12,14 @@ internal sealed class PhotoObservationWindow : Window
     internal readonly ComboBox Silhouette=new() { ItemsSource=new[]{"Bilinmiyor / görünmüyor","A kesim","Düz","Bedene oturan"},SelectedIndex=0 };
     internal readonly ComboBox Sleeve=new() { ItemsSource=new[]{"Bilinmiyor / görünmüyor","Kolsuz","Kısa kollu","Uzun kollu"},SelectedIndex=0 };
     internal readonly ComboBox Neck=new() { ItemsSource=new[]{"Bilinmiyor / görünmüyor","Yuvarlak yaka","V yaka","Yakalı"},SelectedIndex=0 };
-    internal readonly CheckBox Confirm=new() { Content="Bunlar fotoğrafa bakarak kendi seçtiğim gözlemlerdir.",Margin=new Thickness(0,8,0,8) };
+    internal readonly CheckBox Confirm=new() { Content=new TextBlock { Text="Bunlar kendi gözlemlerimdir; mevcut tarif ve seçili modelle olası çelişkileri kendim karşılaştırdım. Otomatik karşılaştırma yapılmaz.",TextWrapping=TextWrapping.Wrap },Margin=new Thickness(0,8,0,8) };
     internal readonly TextBlock Status=new() { TextWrapping=TextWrapping.Wrap };
     internal IReadOnlyList<string>? Approved { get; private set; }
     internal PhotoObservationWindow(Window owner,BitmapSource image,string model)
     {
         Owner=owner;Title="Fotoğrafa bakarak özellikleri belirt";Width=850;Height=650;MinWidth=500;MinHeight=450;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
-        var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Bunlar kullanıcı gözlemidir; otomatik analiz, ölçü veya kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
+        var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Gözlemleri mevcut tarif ve seçili modelle kendiniz karşılaştırın; serbest tarifle çelişkiler otomatik bulunmaz. Bunlar kullanıcı gözlemidir; otomatik analiz, ölçü veya kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
         var panel=new StackPanel { Width=250,Margin=new Thickness(10,0,0,0) };DockPanel.SetDock(panel,Dock.Right);root.Children.Add(panel);
         panel.Children.Add(new TextBlock { Text="Mevcut model fikri: "+model,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         void Field(string label,ComboBox box) { panel.Children.Add(new TextBlock { Text=label,Margin=new Thickness(0,6,0,3) });AutomationProperties.SetName(box,label);panel.Children.Add(box); }

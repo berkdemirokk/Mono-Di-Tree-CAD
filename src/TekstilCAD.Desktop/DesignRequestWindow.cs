@@ -811,7 +811,7 @@ internal sealed class DesignRequestWindow : Window
         var window=new PhotoObservationWindow(this,decoded.Bitmap,portableModelId ?? selectedModelText ?? "Seçilmedi");
         if(window.ShowDialog()!=true || window.Approved is not { } observations)return;
         if(closed || referenceLoadRunning || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; gözlem eklenmedi.");return; }
-        try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi; model ve ölçü çıkarılmadı."); }
+        try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi. Mevcut tarif ve seçili modelle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı. Model ve ölçü çıkarılmadı."); }
         catch(ArgumentException ex) { SetStatus(ex.Message); }
     }
     internal static string AppendPhotoObservations(string original,IReadOnlyList<string> observations,int maxLength)

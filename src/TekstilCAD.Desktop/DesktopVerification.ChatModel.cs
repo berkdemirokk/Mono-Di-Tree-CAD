@@ -23,6 +23,8 @@ internal static partial class DesktopVerification
             Check(observationText.StartsWith("Önceki tarif\n",StringComparison.Ordinal) && observationText.Contains("Fotoğraf gözlemi · Kol: Uzun kollu"),"Photo observations append without replacing existing prose",checks);
             bool conflictRejected=false;try { _=DesignRequestWindow.AppendPhotoObservations(observationText,PhotoObservationWindow.Build(0,1,0),1000); } catch(ArgumentException) { conflictRejected=true; }
             Check(conflictRejected,"Repeated or conflicting labeled photo observation is rejected",checks);
+            var contradiction=DesignRequestWindow.AppendPhotoObservations("Uzun kollu elbise",PhotoObservationWindow.Build(0,1,0),1000);
+            Check(contradiction.StartsWith("Uzun kollu elbise",StringComparison.Ordinal) && contradiction.Contains("Kol: Kolsuz"),"Free-form prose is preserved when a manual observation may contradict it",checks);
             var photoSnapshot=new DesignRequest("tarif","bel 72 cm",new DesignReference("a.png","image/png",[1,2]),"aline",2);
             Check(DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,3,"", "",false,false,false) &&
                 !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot with { Reference=photoSnapshot.Reference! with { Data=[1,3] } },3,3,"","",false,false,false) &&
