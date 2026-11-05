@@ -41,4 +41,3 @@ internal static class DartCut
         return true;
     }
 }
-

@@ -26,4 +26,3 @@ internal static class PrecutFrontBodice
         return new(id,v.AsReadOnly(),Array.AsReadOnly(seams));
     }
 }
-

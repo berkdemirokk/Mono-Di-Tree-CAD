@@ -79,6 +79,16 @@ try
     RejectDartRule(n=>n["a"]!["edges"]!.AsArray().Add(n["a"]!["edges"]![0]!.DeepClone()));
     RejectDartRule(n=>n["a"]!["edges"]![0]!["right_wrong"]=true);
     RejectDartRule(n=>n["a"]!["ruffle"]![0]!["coeff"]=1.1);
+    // Shared waist endpoints and equal lengths do not satisfy designated apex roles.
+    var falseApex=baseParts.Segments.ToArray();
+    int ia=Array.FindIndex(falseApex,e=>e.Panel==firstRule.Owner && e.Edge==firstRule.EdgeA);
+    int ib=Array.FindIndex(falseApex,e=>e.Panel==firstRule.Owner && e.Edge==firstRule.EdgeB);
+    var ea=falseApex[ia]; var eb=falseApex[ib];
+    double legLength=Math.Sqrt(Math.Pow(ea.End.X-ea.Start.X,2)+Math.Pow(ea.End.Y-ea.Start.Y,2));
+    falseApex[ib]=eb with { Start=new(ea.Start.X,ea.Start.Y+legLength), End=ea.Start };
+    double falseLength=Math.Sqrt(Math.Pow(falseApex[ib].End.X-falseApex[ib].Start.X,2)+Math.Pow(falseApex[ib].End.Y-falseApex[ib].Start.Y,2));
+    if(Math.Abs(falseLength-legLength)>1e-9 || falseApex[ib].End!=ea.Start) throw new Exception("Invalid false-apex fixture");
+    try { DartRuleCheck.Validate(firstRule,sourceRule,falseApex); throw new Exception("False apex accepted"); } catch(InvalidDataException) { }
     var unequalLegs=baseParts.Segments.ToArray(); int legIndex=Array.FindIndex(unequalLegs,e=>e.Panel==firstRule.Owner && e.Edge==firstRule.EdgeA);
     unequalLegs[legIndex]=unequalLegs[legIndex] with { Start=new(unequalLegs[legIndex].Start.X+.1,unequalLegs[legIndex].Start.Y) };
     try { DartRuleCheck.Validate(firstRule,sourceRule,unequalLegs); throw new Exception("Unequal dart legs accepted"); } catch(InvalidDataException) { }
@@ -255,6 +265,17 @@ internal static class Validator
             Need(derived.EnumerateObject().Count()==predicted.Count,"derived field count");
             foreach(var pair in predicted) Need(derived.TryGetProperty(pair.Key,out var value)&&Math.Abs(value.GetDouble()-pair.Value)<1e-10,"derived mismatch: "+pair.Key);
             VerifySeams(id,item.GetProperty("stitches"));
+            var neck=FrontNeckCut.Create(id);
+            foreach(var pair in new[]{("right_ftorso",1,neck.Right),("left_ftorso",10,neck.Left)})
+            {
+                var source=item.GetProperty("panels").GetProperty(pair.Item1).GetProperty("edges")[pair.Item2];
+                var a=Point(source.GetProperty("start"));var b=Point(source.GetProperty("end"));
+                Need(source.GetProperty("kind").GetString()=="CircleEdge" && (a-new P(pair.Item3.Start.X,pair.Item3.Start.Y)).Length()<1e-5 && (b-new P(pair.Item3.End.X,pair.Item3.End.Y)).Length()<1e-5 && Math.Abs(source.GetProperty("control_y").GetDouble()-pair.Item3.RelativeControlY)<1e-7,"front neck arc");
+            }
+            var rightCenter=item.GetProperty("panels").GetProperty("right_ftorso").GetProperty("edges")[0];
+            var leftCenter=item.GetProperty("panels").GetProperty("left_ftorso").GetProperty("edges")[11];
+            Need((Point(rightCenter.GetProperty("start"))-new P(0,0)).Length()<1e-8 && (Point(rightCenter.GetProperty("end"))-new P(neck.Right.Start.X,neck.Right.Start.Y)).Length()<1e-5 && (Point(leftCenter.GetProperty("start"))-new P(neck.Left.End.X,neck.Left.End.Y)).Length()<1e-5 && (Point(leftCenter.GetProperty("end"))-new P(0,0)).Length()<1e-8,"neck center lines");
+            Need(neck.Status=="unresolved"&&!neck.ProductionAllowed&&!neck.ExportAllowed,"neck gate");
             var generated=PartialFittedEngine.Create(id);
             var dartRules=PartialDartRelations.Create(id);
             var expectedDarts=item.GetProperty("stitches").EnumerateArray().Where(r=>r.GetProperty("owner_type").GetString() is "BodiceFrontHalf" or "FittedSkirtPanel").ToArray();
@@ -265,6 +286,11 @@ internal static class Validator
                 var a=source.GetProperty("a").GetProperty("edges")[0]; var b=source.GetProperty("b").GetProperty("edges")[0];
                 Need(rule.Snapshot==id && a.GetProperty("panel").GetString()==rule.Owner && b.GetProperty("panel").GetString()==rule.Owner && a.GetProperty("edge").GetInt32()==rule.EdgeA && b.GetProperty("edge").GetInt32()==rule.EdgeB && a.GetProperty("flipped").GetBoolean()==rule.FlipA && b.GetProperty("flipped").GetBoolean()==rule.FlipB,"source dart seam relation");
                 DartRuleCheck.Validate(rule,source,generated.Segments);
+                var sourceA=item.GetProperty("panels").GetProperty(rule.Owner).GetProperty("edges")[rule.EdgeA];
+                var sourceB=item.GetProperty("panels").GetProperty(rule.Owner).GetProperty("edges")[rule.EdgeB];
+                P sourceApexA=Point(sourceA.GetProperty(rule.ApexAtStartA?"start":"end"));
+                P sourceApexB=Point(sourceB.GetProperty(rule.ApexAtStartB?"start":"end"));
+                Need((sourceApexA-sourceApexB).Length()<1e-5,"source designated dart apex");
             }
             Need(generated.Status=="unresolved" && !generated.ProductionAllowed && !generated.ExportAllowed,"partial output gate");
             var frontPath=FrontSkirtCandidate.Create(id);
@@ -340,29 +366,3 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

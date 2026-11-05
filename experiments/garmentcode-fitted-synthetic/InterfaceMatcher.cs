@@ -163,5 +163,3 @@ internal static class InterfaceMatcher
         if(add!=other.Length)throw new InvalidOperationException("Incomplete interface match");
     }
 }
-
-

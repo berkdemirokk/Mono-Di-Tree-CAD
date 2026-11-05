@@ -72,5 +72,3 @@ def run(case):
             rules.append({'owner':comp.name,'owner_type':type(comp).__name__,'index':index,'a':side(rule.int1),'b':side(rule.int2)})
     return {'id':case,'body_input_cm_degree':values,'derived':{k:float(v) for k,v in body.params.items() if k.startswith('_')},'panels':outpanels,'stitches':rules}
 print(json.dumps({'source_commit':pin,'unit':'cm','design':'default FittedShirt + PencilSkirt, no waistband','cases':[run('synthetic-base'),run('synthetic-distinct')]},indent=2,allow_nan=False))
-
-

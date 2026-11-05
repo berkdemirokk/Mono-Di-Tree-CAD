@@ -35,5 +35,3 @@ internal static class BackSkirtCandidate
         return new(id,result.AsReadOnly());
     }
 }
-
-

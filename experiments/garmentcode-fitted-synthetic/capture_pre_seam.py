@@ -30,4 +30,3 @@ with contextlib.redirect_stdout(io.StringIO()):
         if len(records)!=1: raise RuntimeError('Unexpected waist connection count')
         cases.append({'id':name,**records[0]})
 print(json.dumps({'source_commit':env['pin'],'unit':'cm','cases':cases},indent=2,allow_nan=False))
-

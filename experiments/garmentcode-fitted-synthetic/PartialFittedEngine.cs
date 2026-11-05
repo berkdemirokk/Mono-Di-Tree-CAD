@@ -109,4 +109,3 @@ internal static class PartialFittedEngine
         public double BustLine=>26;
     }
 }
-

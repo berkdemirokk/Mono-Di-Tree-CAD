@@ -20,4 +20,3 @@ for name in ('synthetic-base','synthetic-distinct'):
                          'a_flip':bool(rule.int1.edges_flipping[0]),'b_flip':bool(rule.int2.edges_flipping[0])})
     cases.append({'id':name,'edges':edges,'stitches':stitches})
 print(json.dumps({'source_commit':env['pin'],'cases':cases},indent=2,allow_nan=False))
-

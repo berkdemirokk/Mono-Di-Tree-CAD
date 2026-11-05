@@ -45,7 +45,3 @@ internal static class FrontSkirtCandidate
         return CreateCore(id,front[1].Start.X);
     }
 }
-
-
-
-

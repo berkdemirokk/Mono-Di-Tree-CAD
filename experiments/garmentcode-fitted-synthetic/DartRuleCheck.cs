@@ -22,6 +22,6 @@ internal static class DartRuleCheck
         var a=segments.Single(s=>s.Panel==rule.Owner && s.Edge==rule.EdgeA);
         var b=segments.Single(s=>s.Panel==rule.Owner && s.Edge==rule.EdgeB);
         double D(PartialFittedEngine.P p,PartialFittedEngine.P q) { double x=p.X-q.X,y=p.Y-q.Y;return Math.Sqrt(x*x+y*y); }
-        if(a.SourceKind!="Edge" || b.SourceKind!="Edge" || Math.Min(Math.Min(D(a.Start,b.Start),D(a.Start,b.End)),Math.Min(D(a.End,b.Start),D(a.End,b.End)))>1e-9 || Math.Abs(D(a.Start,a.End)-D(b.Start,b.End))>1e-9) throw new InvalidDataException("Dart legs do not meet numerical check");
+        if(a.SourceKind!="Edge" || b.SourceKind!="Edge" || D(rule.ApexAtStartA?a.Start:a.End,rule.ApexAtStartB?b.Start:b.End)>1e-9 || Math.Abs(D(a.Start,a.End)-D(b.Start,b.End))>1e-9) throw new InvalidDataException("Dart legs do not meet numerical check");
     }
 }
