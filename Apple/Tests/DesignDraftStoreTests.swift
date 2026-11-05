@@ -348,6 +348,23 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertThrowsError(try ALineMeasurementGuide.prepare(.init(values: fields, unit: "mm"), draft: updated))
         XCTAssertEqual(updated.otherMeasurements, first)
     }
+    func testALineGuideUnitConversionIsExactAndRejectsAmbiguity() throws {
+        var values = Array(repeating: "", count: 11); values[0] = "36"; values[1] = "35,25"; values[4] = "0"
+        let original = ALineMeasurementGuide.Input(values: values, unit: "cm")
+        let mm = try ALineMeasurementGuide.convert(original, to: "mm")
+        XCTAssertEqual(mm.values[0], "360"); XCTAssertEqual(mm.values[1], "352.5"); XCTAssertEqual(mm.values[4], "0")
+        XCTAssertEqual(mm.values[2], ""); XCTAssertEqual(mm.unit, "mm")
+        let back = try ALineMeasurementGuide.convert(mm, to: "cm")
+        XCTAssertEqual(back.values[0], "36"); XCTAssertEqual(back.values[1], "35.25")
+        var ambiguous = original; ambiguous.values[0] = "1,000"
+        XCTAssertThrowsError(try ALineMeasurementGuide.convert(ambiguous, to: "mm"))
+        XCTAssertEqual(ambiguous.values[0], "1,000"); XCTAssertEqual(ambiguous.unit, "cm")
+        var whitespace = original; whitespace.values[3] = " "
+        XCTAssertThrowsError(try ALineMeasurementGuide.convert(whitespace, to: "mm"))
+        var tiny = ALineMeasurementGuide.Input(values: Array(repeating: "", count: 11), unit: "mm")
+        tiny.values[0] = "0.00000001"
+        XCTAssertThrowsError(try ALineMeasurementGuide.convert(tiny, to: "cm"))
+    }
     func testMeasurementUnknownNoteDoesNotImplyExistingValue() throws {
         var values = Array(repeating: "", count: 15); values[8] = "72"
         let current = "bel çevresi ölçülmedi"

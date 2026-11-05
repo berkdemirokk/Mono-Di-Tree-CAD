@@ -33,6 +33,22 @@ enum ALineMeasurementGuide {
         guard millimeters <= 10_000, zeroAllowed ? millimeters >= 0 : millimeters > 0 else { return nil }
         return millimeters
     }
+    static func convert(_ input: Input, to unit: String) throws -> Input {
+        guard input.values.count == labels.count, ["cm", "mm"].contains(input.unit), ["cm", "mm"].contains(unit) else { throw Failure.incomplete }
+        if input.unit == unit { return input }
+        var converted = input
+        for (index, raw) in input.values.enumerated() {
+            if raw.isEmpty { continue }
+            guard let mm = number(raw, unit: input.unit, zeroAllowed: (4...7).contains(index)) else { throw Failure.invalid(index) }
+            let value = unit == "cm" ? mm / 10 : mm
+            var text = NSDecimalNumber(decimal: value).stringValue
+            if let dot = text.firstIndex(of: "."), text.distance(from: text.index(after: dot), to: text.endIndex) == 3 { text += "0" }
+            guard number(text, unit: unit, zeroAllowed: (4...7).contains(index)) == mm else { throw Failure.invalid(index) }
+            converted.values[index] = text
+        }
+        converted.unit = unit
+        return converted
+    }
     static func prepare(_ input: Input, draft: ExperimentalDesignBrief.Draft) throws -> String {
         guard draft.style == .aline else { throw Failure.uncertain }
         guard input.values.count == labels.count, input.unit == "cm" || input.unit == "mm" else { throw Failure.incomplete }
@@ -119,6 +135,8 @@ struct ALineMeasurementGuideView: View {
     @State private var pendingNotes: String?
     @State private var pendingRevision: UUID?
     @State private var confirming = false
+    @State private var unitChange: (before: ALineMeasurementGuide.Input, after: ALineMeasurementGuide.Input, revision: UUID)?
+    @State private var confirmingUnit = false
     @State private var status = ""
     var body: some View {
         NavigationStack {
@@ -126,10 +144,10 @@ struct ALineMeasurementGuideView: View {
                 Section {
                     Text("A kesim bel-altı önizlemesi için ön ve arka yayları beden üzerinde ayrı ölçün; yaylara bolluk eklemeyin. Her bolluğu ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür ve bolluk dahildir. Bu rehber kalıp veya üretim onayı değildir.")
                     Text("Yalnız girdiğiniz değerler eklenir; eksikler hesaplanmaz. Sıfır yalnız bollukta kabul edilir. Sağ/sol asimetri bu önizlemede desteklenmez. Girişler onaylanıncaya kadar yerel taslağa kaydedilir; kurtarma kopyasına da dahil edilir. Kayıt durumunu kontrol edin.").font(.caption)
-                    Picker("Tüm değerlerin birimi", selection: Binding(get: { input.unit }, set: { if input.unit != $0 { input.unit = $0; revision = UUID() } })) {
+                    Picker("Tüm değerlerin birimi", selection: Binding(get: { input.unit }, set: { requestUnit($0) })) {
                         Text("Birim seçin").tag(""); Text("cm").tag("cm"); Text("mm").tag("mm")
                     }
-                    Text("Birim değiştirmek sayıları dönüştürmez; tüm değerleri yeniden kontrol edin.").font(.caption)
+                    Text("Dolu alanların birimi yalnız onaylanan kayıpsız dönüşümle değişir.").font(.caption)
                 }
                 Section("11 ayrı değer") {
                     ForEach(ALineMeasurementGuide.labels.indices, id: \.self) { index in
@@ -151,6 +169,18 @@ struct ALineMeasurementGuideView: View {
             .navigationTitle("A kesim ölçüleri")
             .interactiveDismissDisabled(true)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Vazgeç") { dismiss() } } }
+            .confirmationDialog("Ölçü birimi değiştirilsin mi?", isPresented: $confirmingUnit, titleVisibility: .visible) {
+                Button("Değerleri dönüştür") {
+                    guard let change = unitChange, change.revision == revision, change.before == input else {
+                        unitChange = nil; status = "Girişler değişti; birim değiştirilmedi."; return
+                    }
+                    input = change.after; revision = UUID(); unitChange = nil
+                    status = "Değerler kayıpsız dönüştürüldü; ölçüleri yeniden gözden geçirin."
+                }
+                Button("Vazgeç", role: .cancel) { unitChange = nil }
+            } message: {
+                if let change = unitChange { Text("\(change.before.unit) → \(change.after.unit). Girilmiş tüm değerler dönüştürülür; boş alanlar korunur.") }
+            }
             .confirmationDialog("Bu ölçüler isteğe eklensin mi?", isPresented: $confirming, titleVisibility: .visible) {
                 Button("Ölçüleri notlara ekle") {
                     guard let saved = pendingInput, let notes = pendingNotes, pendingRevision == revision, saved == input else {
@@ -165,5 +195,16 @@ struct ALineMeasurementGuideView: View {
                 Text("Değerler sizin girişlerinizdir. Sağ/sol simetri varsayılır; asimetri desteklenmez. Mevcut tarif ve ölçüler korunur; bu işlem kalıp veya üretim onayı değildir.")
             }
         }
+    }
+    private func requestUnit(_ unit: String) {
+        guard unit != input.unit else { return }
+        revision = UUID(); pendingInput = nil; pendingNotes = nil; pendingRevision = nil
+        if !input.values.contains(where: { !$0.isEmpty }) || input.unit.isEmpty {
+            input.unit = unit; return
+        }
+        do {
+            let changed = try ALineMeasurementGuide.convert(input, to: unit)
+            unitChange = (input, changed, revision); confirmingUnit = true
+        } catch { unitChange = nil; status = "Dolu alanlar kayıpsız dönüştürülemiyor; değerler ve birim korundu. Alanları kontrol edin." }
     }
 }
