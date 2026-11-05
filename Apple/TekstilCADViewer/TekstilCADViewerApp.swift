@@ -2553,6 +2553,8 @@ private struct ExperimentalDesignBriefView: View {
     @State private var showMeasurementProposal = false
     @State private var measurementMessageStatus = ""
     @State private var showDesktopMeasurementWarning = false
+    @State private var confirmingExportDestination = false
+    @State private var pendingExportAttempt: ExperimentalDesignBrief.ExportAttempt?
     @State private var image: Data?
     @State private var imageName: String?
     @State private var selectingImage = false
@@ -2811,9 +2813,8 @@ private struct ExperimentalDesignBriefView: View {
         do {
             let candidate = draft
             let data = try ExperimentalDesignBrief.make(prompt: candidate.prompt, measurements: candidate.measurements, image: candidate.image, imageName: candidate.imageName)
-            let attempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
-            exportAttempt = attempt
-            exportPresentation.begin(attempt.id)
+            pendingExportAttempt = ExperimentalDesignBrief.ExportAttempt(draft: candidate, bytes: data)
+            confirmingExportDestination = true
         } catch {
             message = "Tarif veya görsel gereklidir; metinlerin her biri en fazla 16.384 UTF-16 birimi, görsel en fazla 8 MiB olmalıdır."
         }
@@ -3169,6 +3170,21 @@ private struct ExperimentalDesignBriefView: View {
             } message: {
                 Text(measurementProposal?.preview ?? "Ölçü bulunamadı.")
                 Text("Özgün mesaj korunur. Aynı bilgiler alanlarda ve mesajda görünebilir; eklenmeyen ölçüleri kontrol edin.")
+            }
+            .confirmationDialog("Dosya hedefini dikkatle seçin", isPresented: $confirmingExportDestination, titleVisibility: .visible) {
+                Button("Anladım, dosya konumunu seç") {
+                    guard let attempt = pendingExportAttempt, attempt.matchesCurrentDraft(draft), !referenceDecisionPending else {
+                        pendingExportAttempt = nil
+                        message = "Taslak değişti; içeriği kontrol edip kaydetmeyi yeniden başlatın."
+                        return
+                    }
+                    pendingExportAttempt = nil
+                    exportAttempt = attempt
+                    exportPresentation.begin(attempt.id)
+                }
+                Button("İptal", role: .cancel) { pendingExportAttempt = nil }
+            } message: {
+                Text("Yeni ve kullanılmamış bir dosya adı seçin. Aynı dosyanın farklı bir yolu veya sonradan oluşturulan bir hedef uygulama tarafından kesin olarak tespit edilmez; mevcut dosyanın üzerine yazılmasını engelleyemiyoruz. Emin değilseniz iptal edin.")
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
                 Button("Olduğu gibi kaydet") { prepareExport(confirmedDesktopWarning: true) }

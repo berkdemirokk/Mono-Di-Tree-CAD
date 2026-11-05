@@ -255,6 +255,7 @@ enum ExperimentalDesignBrief {
         let draft: Draft
         let bytes: Data
         func matches(_ callbackID: UUID) -> Bool { id == callbackID }
+        func matchesCurrentDraft(_ current: Draft) -> Bool { draft == current }
     }
     struct ExportPresentation {
         private(set) var currentID: UUID?

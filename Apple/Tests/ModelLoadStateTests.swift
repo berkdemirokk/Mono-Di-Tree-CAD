@@ -25,6 +25,23 @@ final class ModelLoadStateTests: XCTestCase {
         XCTAssertTrue(current.matches(current.id))
         XCTAssertNotEqual(old.bytes, current.bytes)
     }
+    func testV1ExportAttemptRequiresUnchangedDraftBeforeConfirmation() throws {
+        func makeDraft(_ text: String, image: Data? = nil) -> ExperimentalDesignBrief.Draft {
+            .init(style: .aline, description: text, bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "", image: image, imageName: image == nil ? nil : "photo.png")
+        }
+        let original = makeDraft("İpek")
+        let bytes = try ExperimentalDesignBrief.make(prompt: original.prompt, measurements: original.measurements, image: nil, imageName: nil)
+        let attempt = ExperimentalDesignBrief.ExportAttempt(draft: original, bytes: bytes)
+        XCTAssertTrue(attempt.matchesCurrentDraft(original))
+        XCTAssertFalse(attempt.matchesCurrentDraft(makeDraft("Keten")))
+        XCTAssertFalse(attempt.matchesCurrentDraft(makeDraft("İpek", image: Data([1]))))
+        var presentation = ExperimentalDesignBrief.ExportPresentation()
+        presentation.begin(attempt.id)
+        presentation.setPresented(false, for: attempt.id)
+        XCTAssertFalse(presentation.isPresented(for: attempt.id))
+        XCTAssertEqual(attempt.draft, original)
+        XCTAssertEqual(attempt.bytes, bytes)
+    }
     func testBriefSavedSnapshotTracksLaterChangesIncludingImage() {
         func draft(_ description: String, image: Data? = nil) -> ExperimentalDesignBrief.Draft {
             .init(style: .describe, description: description, bust: "", waist: "", hips: "", length: "",
