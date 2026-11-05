@@ -27,10 +27,14 @@ test('optional pinned 15-case matrix yields 30 panels and 45 anchor reports', {s
 });
 test('caller mutation after invocation cannot replace the validated source snapshot', {skip:!process.env.ANCHOR_MATRIX_FIXTURE},async()=>{
  const original=readFileSync(process.env.ANCHOR_MATRIX_FIXTURE);
- const pending=report(original,{thresholdMm:0,maxDepth:0,maxNodes:1});
+ const limits={thresholdMm:0,maxDepth:0,maxNodes:1};
+ const pending=report(original,limits);
  original.fill(0);
+ limits.thresholdMm=10;limits.maxDepth=6;limits.maxNodes=256;
  const out=await pending;
  assert.deepEqual(out.counts,{caseCount:15,partCount:30,anchorCount:45});
+ assert.deepEqual(out.limits,{thresholdMm:0,maxDepth:0,maxNodes:1});
+ assert.ok(out.results.every(r=>r.inspection.thresholdMm===0 && r.inspection.maxDepth===0 && r.inspection.maxNodes===1));
 });
 test('CLI creates new output and refuses overwrite without changing it', {skip:!process.env.ANCHOR_MATRIX_FIXTURE},()=>{
  const dir=mkdtempSync(join(tmpdir(),'anchor-matrix-test-')),out=join(dir,'report.json');

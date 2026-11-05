@@ -41,6 +41,7 @@ export function validateMatrix(data) {
 export async function report(bytes,limits) {
  if(!Buffer.isBuffer(bytes)||bytes.length>20_000_000)throw Error('source hash mismatch');
  const snapshot=Buffer.from(bytes);
+ const capturedLimits={thresholdMm:limits.thresholdMm,maxDepth:limits.maxDepth,maxNodes:limits.maxNodes};
  if(sha(snapshot)!==SOURCE_SHA)throw Error('source hash mismatch');
  const oracleBytes=readFileSync(fileURLToPath(new URL('./dyadic-box-oracle.mjs',import.meta.url)));
  if(sha(oracleBytes)!==ORACLE_SHA)throw Error('oracle hash mismatch');
@@ -49,13 +50,13 @@ export async function report(bytes,limits) {
  const data=JSON.parse(snapshot.toString('utf8').replace(/^\uFEFF/,''));const counts=validateMatrix(data);
  const results=[];
  for(const c of data.cases)for(const part of c.parts)for(const anchor of part.anchors) {
-  const inspection=inspectDyadic(anchor.anchor,part.edges,limits);
+  const inspection=inspectDyadic(anchor.anchor,part.edges,capturedLimits);
   const returned=[...inspection.excludedEdges,...inspection.unresolved.map(x=>x.edgeId)];
   const expected=part.edges.map(e=>e.id);
   if(returned.length!==expected.length||new Set(returned).size!==expected.length||returned.some(id=>!expected.includes(id)))throw Error('incomplete oracle edge result');
   results.push({body:c.body,variant:c.variant,sourceVersion:data.sourceVersion,partId:part.part,coordinateSpace:part.coordinateSpace,anchorName:anchor.name,sourceEdgeIds:part.edges.map(e=>e.id),inspection});
  }
- return {scope:'synthetic only; no sewing role, fit, CAD or production approval',sourceSha256:SOURCE_SHA,oracleSha256:ORACLE_SHA,sourceHashes:data.sourceHashes,limits,counts,results};
+ return {scope:'synthetic only; no sewing role, fit, CAD or production approval',sourceSha256:SOURCE_SHA,oracleSha256:ORACLE_SHA,sourceHashes:data.sourceHashes,limits:capturedLimits,counts,results};
 }
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]) {
  if(process.argv.length!==7)throw Error('usage: node matrix-oracle-report.mjs input.json new-output.json threshold-mm max-depth max-nodes');
