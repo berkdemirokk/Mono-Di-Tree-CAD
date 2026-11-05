@@ -30,7 +30,40 @@ public sealed class DesignRequestV2Tests
     {
         Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("null").Replace("\"model\":null", "\"model\":null,\"extra\":1")));
         Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("null").Replace("\"model\":null", "\"model\":null,\"model\":null")));
-        Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("{\"id\":\"wrap\"}",prompt:"")));
+        Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("null",prompt:"")));
+    }
+    [Theory]
+    [InlineData("wrap")][InlineData("aline")][InlineData("corset")]
+    [InlineData("sheath")][InlineData("straight")][InlineData("shirt")]
+    public void ModelOnlyAndModelWithMeasurementsRoundTripWithoutInventingText(string id)
+    {
+        foreach(var measurements in new[]{"","bel çevresi 72 cm\n  "})
+        foreach(var prompt in new[]{"","  \t"})
+        {
+            var original=new DesignRequest(prompt,measurements,null,id,2);
+            var json=DesignRequestStorage.SerializeV2(original);
+            var restored=DesignRequestStorage.Deserialize(json);
+            Assert.Equal(original,restored);
+            Assert.Throws<InvalidOperationException>(()=>DesignRequestStorage.Serialize(original));
+            var folder=Path.Combine(Path.GetTempPath(),"request-v2-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+            try
+            {
+                var path=Path.Combine(folder,"request.json");DesignRequestStorage.SaveNewV2(path,original,_=>throw new Exception("No image expected"));
+                Assert.Equal(original,DesignRequestStorage.Load(path));
+                Assert.Equal(original,DesignRequestStorage.Deserialize(File.ReadAllText(path)));
+            }
+            finally { Directory.Delete(folder,true); }
+        }
+    }
+    [Fact] public void NullOrUnknownModelCannotMakeEmptyContentValid()
+    {
+        foreach(var measurements in new[]{"","bel çevresi 72 cm"})
+        {
+            Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.SerializeV2(new(" \t",measurements,null,null,2)));
+            Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.SerializeV2(new("",measurements,null,"unknown",2)));
+            Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Serialize(new("",measurements,null)));
+        }
+        Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("{\"id\":\"unknown\"}",prompt:"")));
     }
     [Fact] public void V2ImageFailsClosedUntilDecoderIsAvailable()
     {

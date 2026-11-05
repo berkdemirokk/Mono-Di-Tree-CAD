@@ -32,7 +32,7 @@ public static class DesignRequestStorage
             throw new InvalidDataException("Model kimliği desteklenmiyor.");
         if(request.Prompt is null || request.Measurements is null || request.Prompt.Length>MaximumTextLength || request.Measurements.Length>MaximumTextLength || !WellFormed(request.Prompt) || !WellFormed(request.Measurements))
             throw new InvalidDataException("İstek metni veya ölçüler sınırı aşıyor.");
-        if(string.IsNullOrWhiteSpace(request.Prompt) && request.Reference is null)
+        if(string.IsNullOrWhiteSpace(request.Prompt) && request.Reference is null && !(request.Version==2 && request.ModelId is not null))
             throw new InvalidDataException("Açıklama veya referans görseli gereklidir.");
         if(request.Reference is { } r)
         {

@@ -17,6 +17,12 @@ internal static partial class DesktopVerification
             VerifyPendingReferenceProtection(checks);
             _=new WindowInteropHelper(owner).EnsureHandle();window=new DesignRequestWindow(owner);
             Check(!window.RequestDetailsForVerification.IsExpanded,"Saved request editing starts collapsed for the primary chat flow",checks);
+            var modelOnly=new DesignRequest("","bel çevresi 72 cm",null,"aline",2);
+            window.LoadForVerification(modelOnly);
+            var captured=window.CaptureForVerification();
+            Check(captured==modelOnly && DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(captured))==modelOnly,
+                "V2 model and measurement draft remains intact without description or image",checks);
+            window.LoadForVerification(new DesignRequest("","",null));
             var initial=new DesignRequest("","bel çevresi 72 cm",null);
             // Empty description is valid as a transient form, not persisted here.
             window.MeasurementsForVerification.Text=initial.Measurements;
