@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -76,7 +77,7 @@ internal static partial class DesktopVerification
                 release.Set();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
                 Check(Same(valid,window.CaptureForVerification()),"Late older import cannot replace a newer result",checks);
 
-                window.LoadForVerification(original);var activeSession=window.CreateALinePreview();
+                window.LoadForVerification(original);_ = new WindowInteropHelper(window).EnsureHandle();var activeSession=window.CreateALinePreview();
                 Check(activeSession is not null,"A-line session can start after the request load ends",checks);
                 if(activeSession is not null)
                 {
