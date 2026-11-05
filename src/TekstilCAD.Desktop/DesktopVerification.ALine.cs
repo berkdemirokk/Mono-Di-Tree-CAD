@@ -54,6 +54,51 @@ internal static partial class DesktopVerification
             var centimeterCorrection=ALineSourceCorrection.Create("Ön bel yayı: 350 mm","diğer",0,"35.01",ALineLengthUnit.Centimeter);
             Check(centimeterCorrection.OldText=="350 mm" && centimeterCorrection.NewText=="35.01 cm" && centimeterCorrection.Prompt=="Ön bel yayı: 35.01 cm" && centimeterCorrection.Notes=="diğer",
                 "Correction retains explicit decimal centimeter input when the source used millimeters",checks);
+            string[] formTransfer=["35","37","50","50","0","0","0","0","20","70","160"];
+            var transferSource=new DesignRequest("A kesim elbise","bel çevresi 72 cm; ön bel yayı 350 mm",new DesignReference("x.png","image/png",[137,80,78,71,13,10,26,10]),"aline",2);
+            var formPlan=ALineFormToRequest.Create(transferSource.Prompt,transferSource.Measurements,formTransfer,ALineLengthUnit.Centimeter);
+            Check(formPlan.Added.Count==10 && formPlan.Preserved.Contains("Ön bel yayı") && formPlan.Missing.Count==0 && formPlan.Notes.StartsWith(transferSource.Measurements+"\n",StringComparison.Ordinal) && formPlan.Notes.Contains("Ön bel yayı bolluğu: 0 cm"),
+                "Form transfer plans only missing values, preserving equivalent mm source and explicit zero",checks);
+            var partialValues=new string[11];Array.Fill(partialValues,"");partialValues[1]="370";partialValues[4]="0";
+            var partialPlan=ALineFormToRequest.Create(transferSource.Prompt,transferSource.Measurements,partialValues,ALineLengthUnit.Millimeter);
+            Check(partialPlan.Added.Count==2 && partialPlan.Missing.Count==8 && partialPlan.Notes.Contains("Arka bel yayı: 370 mm"),"Partial transfer keeps missing fields missing and preserves selected unit",checks);
+            foreach(var badNotes in new[]{"bel çevresi 80 cm", "bel çevresi 72 cm; ölçüler geçersiz", "ön bel yayı: 36 cm"})
+            {
+                bool rejected=false;try { _=ALineFormToRequest.Create("A kesim elbise",badNotes,formTransfer,ALineLengthUnit.Centimeter); }catch(ArgumentException) { rejected=true; }
+                Check(rejected,"Conflicting or conditional form transfer never rewrites source: "+badNotes,checks);
+            }
+            request.LoadForVerification(transferSource);
+            Check(!request.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=>false,()=>true) && request.CaptureForVerification().Measurements==transferSource.Measurements,"Declining form transfer keeps request",checks);
+            Check(!request.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=>true,()=>false) && request.CaptureForVerification().Measurements==transferSource.Measurements,"Changed form rejects transfer",checks);
+            bool nestedTransfer=false;
+            Check(request.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=> { nestedTransfer=request.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=>true,()=>true);return true; },()=>true) && !nestedTransfer,"Confirmed form transfer is nonreentrant",checks);
+            var transferred=request.CaptureForVerification();
+            Check(transferred.Prompt==transferSource.Prompt && transferred.ModelId==transferSource.ModelId && transferred.Version==2 && transferred.Reference!.Data.SequenceEqual(transferSource.Reference!.Data) && transferred.Measurements==formPlan.Notes && request.DirtyForVerification,
+                "Form transfer preserves model, prompt and image bytes and marks request dirty",checks);
+            var reopened=DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(transferred,_=>{}),_=>{});
+            Check(reopened.Measurements==formPlan.Notes && reopened.ModelId=="aline" && reopened.Reference!.Data.SequenceEqual(transferSource.Reference.Data),"V2 form values survive portable serialization",checks);
+            var repeat=ALineFormToRequest.Create(transferred.Prompt,transferred.Measurements,formTransfer,ALineLengthUnit.Centimeter);
+            Check(repeat.Added.Count==0 && !request.AppendALineForm(transferred.Prompt,transferred.Measurements,repeat,()=>throw new Exception("No confirmation for no-op"),()=>true),"Repeating equivalent transfer is a no-op",checks);
+            var v1=new DesignRequest("A kesim elbise","",null);var v1Plan=ALineFormToRequest.Create(v1.Prompt,v1.Measurements,partialValues,ALineLengthUnit.Millimeter);
+            var v1Reopened=DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(v1 with { Measurements=v1Plan.Notes }));
+            Check(v1Reopened.Version==1 && v1Reopened.ModelId is null && v1Reopened.Measurements==v1Plan.Notes,"V1 retains explicit form measurements without model conversion",checks);
+            request.LoadForVerification(transferSource);
+            Check(!request.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=> { request.MeasurementsForVerification.Text+=" değişti";return true; },()=>true),"Changing source during transfer confirmation cannot be overwritten",checks);
+            request.LoadForVerification(transferSource);_=new WindowInteropHelper(request).EnsureHandle();
+            var transferWindow=new ALinePanelPreviewWindow(request,transferSource.Prompt,transferSource.Measurements) { ConfirmDiscardWorkForVerification=()=>true,ConfirmFormToRequestForVerification=()=>true };
+            try
+            {
+                transferWindow.UnitForVerification.SelectedIndex=0;for(int i=0;i<11;i++)transferWindow.FieldsForVerification[i].Text=formTransfer[i];
+                transferWindow.AgreementForVerification.IsChecked=true;transferWindow.ReviewForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                transferWindow.ConfirmationForVerification.IsChecked=true;transferWindow.DrawForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(transferWindow.CanvasForVerification.Children.Count>0,"Form transfer fixture starts with confirmed preview",checks);
+                transferWindow.FormToRequestForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Check(transferWindow.FieldsForVerification.Select(f=>f.Text).SequenceEqual(formTransfer) && transferWindow.AgreementForVerification.IsChecked!=true && !transferWindow.ConfirmationForVerification.IsEnabled && transferWindow.CanvasForVerification.Children.Count==0 && request.CaptureForVerification().Measurements==formPlan.Notes,
+                    "Applying form values preserves fields and invalidates symmetry, review and preview",checks);
+            }
+            finally { transferWindow.Close(); }
+            var closedRequest=new DesignRequestWindow(owner);closedRequest.LoadForVerification(transferSource);closedRequest.Close();
+            Check(!closedRequest.AppendALineForm(transferSource.Prompt,transferSource.Measurements,formPlan,()=>throw new Exception("Closed owner must not ask"),()=>true),"Closed owner cannot accept a form transfer",checks);
             window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             window.ConfirmDiscardWorkForVerification=()=>true;
             window.ConfirmUnitConversionForVerification=()=>true;

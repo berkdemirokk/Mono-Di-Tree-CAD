@@ -25,6 +25,8 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal Canvas CanvasForVerification { get; }
     internal TextBlock KnownTotalsForVerification { get; }
     internal TextBlock WaistComparisonForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
+    internal Button FormToRequestForVerification { get; private set; }=null!;
+    internal Func<bool>? ConfirmFormToRequestForVerification { get; set; }
     internal CheckBox ProposalAgreementForVerification { get; }
     internal Button ProposalApplyForVerification { get; }
     internal TextBlock ProposalForVerification { get; }
@@ -218,6 +220,28 @@ internal sealed class ALinePanelPreviewWindow : Window
                 requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
                 agreement.IsChecked=false;Clear();RefreshProposal();RefreshWaistComparison();
                 status.Text="Kaynak ölçü güncellendi; form korundu. Simetri ve ölçüleri yeniden inceleyip onaylayın.";
+            }
+            catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
+        };
+        var addFormToRequest=new Button { Content="Açık form değerlerini istek notlarına ekle…",Padding=new Thickness(8),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,6,0,0) };
+        FormToRequestForVerification=addFormToRequest;
+        body.Children.Add(addFormToRequest);
+        addFormToRequest.Click+=(_,_)=>
+        {
+            try
+            {
+                if(owner is not DesignRequestWindow request)throw new InvalidOperationException("Kaynak istek penceresi bulunamadı.");
+                var form=fields.Select(f=>f.Text).ToArray();var selectedUnit=CurrentUnit();var version=editVersion;
+                var plan=ALineFormToRequest.Create(promptSnapshot,measurementSnapshot,form,selectedUnit);
+                if(plan.Added.Count==0) { status.Text="Eklenecek yeni açık değer yok; kaynak ve form değiştirilmedi.";return; }
+                string List(IReadOnlyList<string> rows)=>rows.Count==0 ? "Yok" : string.Join("\n",rows);
+                bool applied=request.AppendALineForm(promptSnapshot,measurementSnapshot,plan,
+                    ()=>ConfirmFormToRequestForVerification?.Invoke() ?? MessageBox.Show(this,$"Eklenecek:\n{List(plan.Added)}\n\nKaynakta korunacak:\n{List(plan.Preserved)}\n\nEksik kalacak:\n{List(plan.Missing)}\n\nÖlçüler isteğe eklenir; dosyaya kaydetmek ayrıca gerekir. Ölçü ve simetri onayları sıfırlanır.","Açık form ölçülerini isteğe ekle",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes,
+                    ()=>!closed && editVersion==version && CurrentUnit()==selectedUnit && form.SequenceEqual(fields.Select(f=>f.Text)));
+                if(!applied) { status.Text="Aktarım iptal edildi veya istek/form değişti; değerler korundu.";return; }
+                measurementSnapshot=plan.Notes;requestFields=ALineRequestMeasurements.Review(promptSnapshot,measurementSnapshot);sourceError=null;
+                agreement.IsChecked=false;Clear();RefreshProposal();RefreshWaistComparison();
+                status.Text="Açık değerler istek notlarına eklendi; istek henüz kaydedilmedi. Form korundu, ölçüleri yeniden onaylayın.";
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
         };

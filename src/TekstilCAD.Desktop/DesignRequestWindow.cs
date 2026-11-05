@@ -869,6 +869,21 @@ internal sealed class DesignRequestWindow : Window
     internal static bool PhotoObservationSnapshotMatches(DesignRequest before,DesignRequest current,long expectedRevision,long currentRevision,string expectedChat,string currentChat,bool originalDirty,bool currentDirty,bool pending) =>
         !pending && expectedRevision==currentRevision && expectedChat==currentChat && originalDirty==currentDirty && SameRequest(before,current);
     private bool correctingALineSource;
+    internal bool AppendALineForm(string expectedPrompt,string expectedNotes,ALineFormToRequestPlan plan,Func<bool> confirm,Func<bool> formUnchanged)
+    {
+        if(closed || correctingALineSource || referenceLoadRunning || referenceSelectionPending || prompt.Text!=expectedPrompt || measurements.Text!=expectedNotes || plan.Added.Count==0)return false;
+        var before=Capture();var revision=referenceRevision;var question=questionRevision;var wasDirty=dirty;var chat=chatInput.Text;
+        var selected=selectedModelText;var tracked=modelSnapshot;var start=selectedModelStart;var ambiguous=modelAmbiguous;var loaded=selectedModelFromLoaded;
+        correctingALineSource=true;
+        try
+        {
+            if(!confirm())return false;
+            if(closed || referenceLoadRunning || referenceSelectionPending || revision!=referenceRevision || question!=questionRevision || wasDirty!=dirty || chat!=chatInput.Text || !SameRequest(before,Capture()) ||
+               selected!=selectedModelText || tracked!=modelSnapshot || start!=selectedModelStart || ambiguous!=modelAmbiguous || loaded!=selectedModelFromLoaded || !formUnchanged())return false;
+            measurements.Text=plan.Notes;return true;
+        }
+        finally { correctingALineSource=false; }
+    }
     internal bool CorrectALineSource(string expectedPrompt,string expectedNotes,ALineCorrectionPlan plan,Func<bool> confirm,Func<bool> formUnchanged)
     {
         if(closed || correctingALineSource || referenceLoadRunning || referenceSelectionPending || prompt.Text!=expectedPrompt || measurements.Text!=expectedNotes)return false;
