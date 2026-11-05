@@ -3337,6 +3337,35 @@ private struct ExperimentalDesignBriefView: View {
         default: return "Tarif, ölçüler ve varsa görseli kontrol edin. Sonra istek dosyasını kaydedebilirsiniz."
         }
     }
+    @ViewBuilder private var measurementComparisonView: some View {
+        Button("Mesajı ölçü alanlarıyla karşılaştır") {
+            let input = currentComparisonInput
+            comparisonInput = input; measurementComparison = MeasurementMessageParser.compare(input)
+        }.frame(minHeight: 44)
+        if comparisonInput != nil && comparisonInput != currentComparisonInput {
+            Text("Ölçü veya mesaj değişti; karşılaştırmayı yeniden yapın.").font(.caption)
+        }
+        if comparisonInput == currentComparisonInput, let result = measurementComparison {
+            switch result {
+            case .noMessage:
+                Text("Karşılaştırma için ölçü mesajı yazın.").font(.caption)
+            case .unrecognizedMessage:
+                Text("Mesajın tamamı güvenle okunamadı; otomatik karşılaştırma yapılmadı. Ölçüleri ve birimleri elle kontrol edin.").font(.caption)
+            case .reviewed(let count, let differences, let unrecognized):
+                Text("\(count) alan mesajdaki aynı ölçüyle karşılaştırıldı. Yalnız açık etiketli cm/mm değerleri incelenir; diğer ölçüler ve tarif kontrol edilmez.").font(.caption)
+                ForEach(differences, id: \.label) { difference in
+                    Text("\(difference.label): alan: \(difference.fieldValue); mesaj: \(difference.messageValue). Değerler farklı.")
+                        .font(.caption).foregroundStyle(plum)
+                }
+                if !unrecognized.isEmpty {
+                    Text("Okunamayan alanlar: \(unrecognized.joined(separator: ", ")). Bunları elle karşılaştırın.").font(.caption)
+                }
+                if count > 0 && differences.isEmpty && unrecognized.isEmpty {
+                    Text("Karşılaştırılan değerler aynı; diğer içerik için bu bir doğrulama değildir.").font(.caption)
+                }
+            }
+        }
+    }
     @ViewBuilder private var footerActions: some View {
         if step > 0 {
             Button("Geri") { if exportPreparationID != nil { cancelExportPreparation() }; step -= 1; message = ""; focusedInput = nil }
@@ -3565,33 +3594,7 @@ private struct ExperimentalDesignBriefView: View {
                             .focused($focusedInput, equals: .notes)
                         Text("İsterseniz açık etiketli göğüs, bel, kalça çevresi ve elbise boyunu cm veya mm ile denetleyin. İfadeleri virgül, nokta, noktalı virgül, satır veya “ve” ile ayırın; diğer ifadeler reddedilir. Metin korunur.")
                             .font(.caption).foregroundStyle(.secondary)
-                        Button("Mesajı ölçü alanlarıyla karşılaştır") {
-                            let input = currentComparisonInput
-                            comparisonInput = input; measurementComparison = MeasurementMessageParser.compare(input)
-                        }.frame(minHeight: 44)
-                        if comparisonInput != nil && comparisonInput != currentComparisonInput {
-                            Text("Ölçü veya mesaj değişti; karşılaştırmayı yeniden yapın.").font(.caption)
-                        }
-                        if comparisonInput == currentComparisonInput, let result = measurementComparison {
-                            switch result {
-                            case .noMessage:
-                                Text("Karşılaştırma için ölçü mesajı yazın.").font(.caption)
-                            case .unrecognizedMessage:
-                                Text("Mesajın tamamı güvenle okunamadı; otomatik karşılaştırma yapılmadı. Ölçüleri ve birimleri elle kontrol edin.").font(.caption)
-                            case .reviewed(let count, let differences, let unrecognized):
-                                Text("\(count) alan mesajdaki aynı ölçüyle karşılaştırıldı. Yalnız açık etiketli cm/mm değerleri incelenir; diğer ölçüler ve tarif kontrol edilmez.").font(.caption)
-                                ForEach(differences, id: \.label) { difference in
-                                    Text("\(difference.label): alan: \(difference.fieldValue); mesaj: \(difference.messageValue). Değerler farklı.")
-                                        .font(.caption).foregroundStyle(plum)
-                                }
-                                if !unrecognized.isEmpty {
-                                    Text("Okunamayan alanlar: \(unrecognized.joined(separator: ", ")). Bunları elle karşılaştırın.").font(.caption)
-                                }
-                                if count > 0 && differences.isEmpty && unrecognized.isEmpty {
-                                    Text("Karşılaştırılan değerler aynı; diğer içerik için bu bir doğrulama değildir.").font(.caption)
-                                }
-                            }
-                        }
+                        measurementComparisonView
                         Button("Mesajdaki ölçüleri incele") { proposeMeasurementMessage() }.frame(minHeight: 44)
                         Button("Mesajdaki model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                         if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
@@ -3728,6 +3731,9 @@ private struct ExperimentalDesignBriefView: View {
                     if summary.measurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Ölçü alanı veya notu girilmedi; tarifteki ölçüler bu özete otomatik aktarılmaz.")
                     } else { Text(summary.measurements).textSelection(.enabled) }
+                    if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        measurementComparisonView
+                    }
                     if ExperimentalDesignBrief.descriptionMeasurements(draft) != nil {
                         Text("Tarifte incelenebilecek açık ölçüler bulundu; alanlara eklenmeleri için onay gerekir.").font(.caption)
                         Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
