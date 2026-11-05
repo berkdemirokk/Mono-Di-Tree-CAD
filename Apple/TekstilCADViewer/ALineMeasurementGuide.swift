@@ -7,7 +7,7 @@ enum ALineMeasurementGuide {
                          "Ön bel yayı bolluğu", "Arka bel yayı bolluğu", "Ön kalça yayı bolluğu", "Arka kalça yayı bolluğu",
                          "Belden kalçaya düşüklük", "Belden etek boyu", "Bitmiş etek çevresi (bolluk dahil)"]
     enum Failure: Error { case incomplete, invalid(Int), existing, uncertain, conflict, tooLong }
-    struct Input: Equatable { var values = Array(repeating: "", count: 11); var unit = "" }
+    struct Input: Equatable, Codable { var values = Array(repeating: "", count: 11); var unit = "" }
     struct Request: Identifiable {
         let id = UUID()
         let draft: ExperimentalDesignBrief.Draft
@@ -100,7 +100,7 @@ struct ALineMeasurementGuideView: View {
             Form {
                 Section {
                     Text("A kesim bel-altı önizlemesi için ön ve arka yayları beden üzerinde ayrı ölçün; yaylara bolluk eklemeyin. Her bolluğu ayrı girin. Etek çevresi bitmiş giysi ölçüsüdür ve bolluk dahildir. Bu rehber kalıp veya üretim onayı değildir.")
-                    Text("Eksik değerler hesaplanmaz; sıfır yalnız bollukta kabul edilir. Sağ/sol asimetri bu önizlemede desteklenmez. Girişler bu ekran açık kaldığı sürece korunur.").font(.caption)
+                    Text("Eksik değerler hesaplanmaz; sıfır yalnız bollukta kabul edilir. Sağ/sol asimetri bu önizlemede desteklenmez. Girişler onaylanıncaya kadar yerel taslağa kaydedilir; kurtarma kopyasına da dahil edilir. Kayıt durumunu kontrol edin.").font(.caption)
                     Picker("Tüm değerlerin birimi", selection: Binding(get: { input.unit }, set: { if input.unit != $0 { input.unit = $0; revision = UUID() } })) {
                         Text("Birim seçin").tag(""); Text("cm").tag("cm"); Text("mm").tag("mm")
                     }

@@ -434,6 +434,40 @@ final class DesignDraftStoreTests: XCTestCase {
         let oldFixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "dress-draft-v1", withExtension: "json"))
         XCTAssertNil(try ExperimentalDesignBrief.DraftStore.recoveryDraft(Data(contentsOf: oldFixture)).measurementForm)
     }
+    func testPendingALineGuideSurvivesLocalAndRecoveryWithoutApplying() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("draft.json")
+        var values = Array(repeating: "", count: 11); values[0] = "36,5"; values[4] = "0"
+        let pending = ALineMeasurementGuide.Input(values: values, unit: "")
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "A kesim", bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "önceki not", image: nil, imageName: nil, aLineGuideInput: pending)
+        XCTAssertTrue(draft.hasInput)
+        _ = try ExperimentalDesignBrief.DraftStore.save(draft, to: url, expected: nil)
+        XCTAssertEqual(try ExperimentalDesignBrief.DraftStore.load(url)?.draft, draft)
+        let bytes = try ExperimentalDesignBrief.DraftStore.recoveryData(draft)
+        let restored = try ExperimentalDesignBrief.DraftStore.recoveryDraft(bytes)
+        XCTAssertEqual(restored.aLineGuideInput, pending)
+        XCTAssertEqual(restored.measurements, draft.measurements)
+        XCTAssertFalse(restored.measurements.contains("Ön bel yayı"))
+        let v1 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.make(prompt: restored.prompt, measurements: restored.measurements, image: nil, imageName: nil))
+        let v2 = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(restored))
+        XCTAssertNil(v1.aLineGuideInput); XCTAssertNil(v2.aLineGuideInput)
+        XCTAssertEqual(v1.measurements, restored.measurements); XCTAssertEqual(v2.measurements, restored.measurements)
+        var both = draft; both.measurementForm = .init(values: Array(repeating: "", count: 15), unit: "cm")
+        XCTAssertEqual(try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(both)), both)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: bytes) as? [String: Any])
+        XCTAssertEqual(json["version"] as? Int, 3)
+        for version in [1, 2] {
+            var downgraded = json; downgraded["version"] = version
+            XCTAssertThrowsError(try ExperimentalDesignBrief.DraftStore.recoveryDraft(JSONSerialization.data(withJSONObject: downgraded)))
+        }
+        var invalid = draft; invalid.aLineGuideInput = .init(values: ["1"], unit: "cm")
+        XCTAssertThrowsError(try ExperimentalDesignBrief.DraftStore.recoveryData(invalid))
+        XCTAssertEqual(try ExperimentalDesignBrief.DraftStore.load(url)?.draft, draft)
+        let oldFixture = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "dress-draft-v1", withExtension: "json"))
+        XCTAssertNil(try ExperimentalDesignBrief.DraftStore.recoveryDraft(Data(contentsOf: oldFixture)).aLineGuideInput)
+    }
     func testUnapprovedFormRevisionConflictRetainsPriorSnapshot() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

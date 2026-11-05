@@ -58,10 +58,11 @@ enum ExperimentalDesignBrief {
         let image: Data?
         let imageName: String?
         var measurementForm: MeasurementForm? = nil
+        var aLineGuideInput: ALineMeasurementGuide.Input? = nil
 
         var hasInput: Bool {
             style != .describe || !description.isEmpty || !bust.isEmpty || !waist.isEmpty ||
-                !hips.isEmpty || !length.isEmpty || !otherMeasurements.isEmpty || image != nil || measurementForm?.hasValues == true
+                !hips.isEmpty || !length.isEmpty || !otherMeasurements.isEmpty || image != nil || measurementForm?.hasValues == true || aLineGuideInput != nil
         }
         func requiresDiscardConfirmation(saved: Draft?) -> Bool { saved.map { self != $0 } ?? hasInput }
         var prompt: String { ExperimentalDesignBrief.prompt(style: style, description: description) }
@@ -312,6 +313,11 @@ enum ExperimentalDesignBrief {
                 guard form.values.count == 15, (form.unit == "cm" || form.unit == "mm"),
                       form.values.allSatisfy({ $0.utf16.count <= textLimit }) else { throw StoreError.invalid }
             }
+            if let input = draft.aLineGuideInput {
+                guard input.values.count == 11, ["", "cm", "mm"].contains(input.unit),
+                      input.values.allSatisfy({ $0.utf16.count <= textLimit }),
+                      !input.unit.isEmpty || input.values.contains(where: { !$0.isEmpty }) else { throw StoreError.invalid }
+            }
             if let image = draft.image {
                 _ = try ExperimentalDesignBrief.make(prompt: "görsel", measurements: "", image: image, imageName: draft.imageName)
             }
@@ -319,14 +325,14 @@ enum ExperimentalDesignBrief {
         // Portable recovery copy; unlike a production request, empty and measurement-only drafts are allowed.
         static func recoveryData(_ draft: Draft) throws -> Data {
             try validate(draft, textLimit: recoveryMaxTextUnits)
-            let bytes = try JSONEncoder().encode(Envelope(version: draft.measurementForm == nil ? 1 : 2, draft: draft, revision: UUID()))
+            let bytes = try JSONEncoder().encode(Envelope(version: draft.aLineGuideInput != nil ? 3 : (draft.measurementForm == nil ? 1 : 2), draft: draft, revision: UUID()))
             guard bytes.count <= recoveryMaxBytes else { throw StoreError.tooLarge }
             return bytes
         }
         static func recoveryDraft(_ bytes: Data) throws -> Draft {
             guard bytes.count <= recoveryMaxBytes else { throw StoreError.tooLarge }
             let record = try JSONDecoder().decode(Envelope.self, from: bytes)
-            guard (record.version == 1 && record.draft.measurementForm == nil) || (record.version == 2 && record.draft.measurementForm != nil) else { throw StoreError.invalid }
+            guard (record.version == 1 && record.draft.measurementForm == nil && record.draft.aLineGuideInput == nil) || (record.version == 2 && record.draft.measurementForm != nil && record.draft.aLineGuideInput == nil) || (record.version == 3 && record.draft.aLineGuideInput != nil) else { throw StoreError.invalid }
             try validate(record.draft, textLimit: recoveryMaxTextUnits)
             return record.draft
         }
@@ -363,7 +369,7 @@ enum ExperimentalDesignBrief {
                 bytes.append(part)
             }
             let record = try JSONDecoder().decode(Envelope.self, from: bytes)
-            guard (record.version == 1 && record.draft.measurementForm == nil) || (record.version == 2 && record.draft.measurementForm != nil) else { throw StoreError.invalid }
+            guard (record.version == 1 && record.draft.measurementForm == nil && record.draft.aLineGuideInput == nil) || (record.version == 2 && record.draft.measurementForm != nil && record.draft.aLineGuideInput == nil) || (record.version == 3 && record.draft.aLineGuideInput != nil) else { throw StoreError.invalid }
             try validate(record.draft)
             return Snapshot(draft: record.draft, revision: bytes)
         }
@@ -380,7 +386,7 @@ enum ExperimentalDesignBrief {
         @discardableResult static func save(_ draft: Draft, to url: URL, expected: Data?,
                          write: (Data, URL) throws -> Void = { data, path in try data.write(to: path, options: [.atomic, .completeFileProtection]) }) throws -> Data {
             try validate(draft)
-            let bytes = try JSONEncoder().encode(Envelope(version: draft.measurementForm == nil ? 1 : 2, draft: draft, revision: UUID()))
+            let bytes = try JSONEncoder().encode(Envelope(version: draft.aLineGuideInput != nil ? 3 : (draft.measurementForm == nil ? 1 : 2), draft: draft, revision: UUID()))
             guard bytes.count <= maxBytes else { throw StoreError.tooLarge }
             var coordinationError: NSError?
             var result: Result<Void, Swift.Error>?

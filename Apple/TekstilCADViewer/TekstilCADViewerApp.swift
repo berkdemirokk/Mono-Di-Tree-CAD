@@ -2695,6 +2695,7 @@ private struct ExperimentalDesignBriefView: View {
         description = value.description; bust = value.bust; waist = value.waist
         hips = value.hips; length = value.length; otherMeasurements = value.otherMeasurements
         image = value.image; imageName = value.imageName; measurementForm = value.measurementForm
+        aLineGuideInput = value.aLineGuideInput ?? .init()
         draftWriter.configure(revision: draftRevision)
         draftStorageReady = true
         localStatus = "Önceki taslak geri yüklendi; değişiklikler bu cihazda saklanır."
@@ -2716,17 +2717,17 @@ private struct ExperimentalDesignBriefView: View {
             message = "Önce A kesim modelini seçin ve bekleyen görsel veya ölçü formu işlemini tamamlayın."
             return
         }
-        aLineGuideRequest = .init(draft: draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+        aLineGuideRequest = .init(draft: aLineSourceDraft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
                                   version: requestExportVersion, revision: modelSuggestionRevision)
     }
     private func applyALineGuide(_ request: ALineMeasurementGuide.Request, input: ALineMeasurementGuide.Input, notes: String) -> String? {
-        guard request.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+        guard request.matches(aLineSourceDraft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
                               version: requestExportVersion, revision: modelSuggestionRevision, activeID: aLineGuideRequest?.id,
                               pending: draftTransition || referenceBlocksClose || measurementForm?.hasValues == true) else {
             return "İstek, seçim veya görsel değişti; ölçüler eklenmedi. Ekranı kapatıp yeniden inceleyin."
         }
         do {
-            guard try ALineMeasurementGuide.prepare(input, draft: draft) == notes else {
+            guard try ALineMeasurementGuide.prepare(input, draft: aLineSourceDraft) == notes else {
                 return "Ölçüler veya kaynak değişti; hiçbir değer eklenmedi."
             }
             otherMeasurements = notes
@@ -2822,7 +2823,11 @@ private struct ExperimentalDesignBriefView: View {
     }
     private var draft: ExperimentalDesignBrief.Draft {
         .init(style: style, description: description, bust: bust, waist: waist, hips: hips, length: length,
-              otherMeasurements: otherMeasurements, image: image, imageName: imageName, measurementForm: measurementForm)
+              otherMeasurements: otherMeasurements, image: image, imageName: imageName, measurementForm: measurementForm,
+              aLineGuideInput: aLineInputPending ? aLineGuideInput : nil)
+    }
+    private var aLineSourceDraft: ExperimentalDesignBrief.Draft {
+        var source = draft; source.aLineGuideInput = nil; return source
     }
     private var hasUnsavedInput: Bool { draft.requiresDiscardConfirmation(saved: savedDraft) }
     private var requestPrompt: String { draft.prompt }
@@ -2955,7 +2960,6 @@ private struct ExperimentalDesignBriefView: View {
         } catch { measurementMessageStatus = "Mesaj veya ölçü alanları değişti; hiçbir alan değiştirilmedi. Yeniden inceleyin."; measurementProposal = nil }
     }
     private func prepareRecoveryCopy() {
-        guard !aLineInputPending else { message = "A kesim rehberindeki girişler kurtarma kopyasına dahil değil. Önce ekleyin veya açıkça temizleyin."; step = 1; return }
         guard !referenceDecisionPending else { message = "Önce görsel yüklemesini veya görsel seçimini tamamlayın ya da iptal edin."; return }
         do {
             recoveryCopy = ProjectExportDocument(data: try ExperimentalDesignBrief.DraftStore.recoveryData(draft))
@@ -3151,7 +3155,7 @@ private struct ExperimentalDesignBriefView: View {
                         Text("Ön/arka beden yayları, ayrı bolluklar ve etek ölçülerini elle girin; değerler türetilmez.").font(.caption)
                     }
                     if aLineInputPending {
-                        Text("A kesim rehberinde notlara eklenmemiş girişler var. Bunlar yalnız bu istek ekranı açıkken tutulur.").font(.caption)
+                        Text("A kesim rehberinde notlara eklenmemiş girişler var. Bunlar onaylanana kadar yerel taslağa kaydedilir; ayrı kurtarma kopyasına da dahil edilir. Kayıt durumunu kontrol edin.").font(.caption)
                         Button("Bekleyen A kesim girişlerini temizle…") { discardALineInputSnapshot = aLineGuideInput; confirmDiscardALineInput = true }.frame(minHeight: 44)
                     }
                     Text("Bilmediğiniz alanları boş bırakın. Değerle birlikte cm veya mm yazın; modele göre daha fazla ölçü istenebilir.").font(.caption)
@@ -3360,6 +3364,7 @@ private struct ExperimentalDesignBriefView: View {
                         style = candidate.style; description = candidate.description; bust = candidate.bust; waist = candidate.waist
                         hips = candidate.hips; length = candidate.length; otherMeasurements = candidate.otherMeasurements
                         image = candidate.image; imageName = candidate.imageName; measurementForm = candidate.measurementForm
+                        aLineGuideInput = candidate.aLineGuideInput ?? .init()
                         draftRetryAvailable = false
                         localStatus = "Kopya açıldı. Önceki yazılar tamamlandı; otomatik kayıt kapalı. Değişiklikleri ayrı kopyaya kaydedin."
                         }
@@ -3456,7 +3461,8 @@ private struct ExperimentalDesignBriefView: View {
             } message: { Text("Tarifteki ölçüler ile soru, olumsuzluk veya koşul içeren, sayı gösterimi belirsiz ya da cümleyle birleştirilmiş ölçüler masaüstünde farklı değerlendirilebilir. Anlamı ve birimi açıkça kontrol edin; metniniz değiştirilmez. Masaüstündeki sonucu da doğrulayın.") }
             .onAppear { checkLocalDraft() }
             .onChange(of: confirmReferenceChange) { shown in if !shown { pendingReferenceChange = nil } }
-            .onChange(of: draft) { value in modelSuggestionRevision = UUID(); if !draftTransition { saveLocalDraft(value) } }
+            .onChange(of: draft) { value in if !draftTransition { saveLocalDraft(value) } }
+            .onChange(of: aLineSourceDraft) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: modelExplicitlySelected) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: importedPortable) { _ in modelSuggestionRevision = UUID() }
             .onChange(of: scenePhase) { phase in if phase != .active && !draftTransition { saveLocalDraft(draft, immediately: true) } }
