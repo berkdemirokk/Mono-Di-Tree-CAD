@@ -34,6 +34,7 @@ internal static partial class DesktopVerification
                 !DesignRequestWindow.PhotoObservationSnapshotMatches(photoSnapshot,photoSnapshot,3,3,"","",false,false,true),
                 "Photo observation snapshot rejects changed bytes, revision or pending selection",checks);
             var observationBitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);observationBitmap.Freeze();
+            _=new WindowInteropHelper(window).EnsureHandle();
             var observationWindow=new PhotoObservationWindow(window,observationBitmap,"aline","Uzun kollu elbise\n"+new string('x',1500));
             try
             {
