@@ -9594,6 +9594,10 @@ internal static partial class DesktopVerification
         var denseCopy=denseCircle.ToArray();var reducedCircle=PhotoContourApproximation.Create(denseCircle,508,CancellationToken.None);
         Check(denseCircle.Length>508 && reducedCircle.Points.Length<=508 && reducedCircle.MaximumVertexDistance<=1 && denseCircle.SequenceEqual(denseCopy),
             "Opt-in contour approximation reduces a dense closed boundary within the measured pixel-vertex limit",checks);
+        OpenCvSharp.Point[] extremeSource=[new(int.MinValue,0),new(0,3),new(int.MaxValue,0),new(int.MaxValue,10),new(int.MinValue,10)];
+        OpenCvSharp.Point[] extremeCandidate=[extremeSource[0],extremeSource[2],extremeSource[3],extremeSource[4]];
+        Check(Math.Abs(PhotoContourApproximation.MeasureCorresponding(extremeSource,extremeCandidate,CancellationToken.None)-3)<1e-9,
+            "Contour correspondence widens integer subtraction before arithmetic at coordinate extremes",checks);
         OpenCvSharp.Point[] narrowU=[new(0,0),new(10,0),new(10,10),new(8,10),new(8,1),new(2,1),new(2,10),new(0,10)];
         OpenCvSharp.Point[] shortcut=[new(0,0),new(10,0),new(10,10),new(0,10)];
         Check(PhotoContourApproximation.MeasureCorresponding(narrowU,shortcut,CancellationToken.None)==9 &&

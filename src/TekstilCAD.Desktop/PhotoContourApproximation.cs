@@ -30,12 +30,12 @@ internal static class PhotoContourApproximation
         if(candidate.Length<3 || candidate.Length>maximumPoints || candidate.Length>=source.Length)throw new InvalidDataException("1 piksel sadeleştirme bu sınırı desteklenen nokta sayısına indiremedi.");
         LargeContourValidator.Validate(candidate.Select(p=>new Point2(p.X,p.Y)).ToArray(),token);
         var maximum=MeasureCorresponding(source,candidate,token);
-        if(maximum>PixelTolerance)throw new InvalidDataException("Sadeleştirilmiş sınır karşılık gelen kenarda 1 piksel sapma sınırını aşıyor.");
+        if(maximum>PixelTolerance)throw new InvalidDataException("Sadeleştirilmiş sınırın hesaplanan yaklaşık sapması 1 piksel hedefini aşıyor.");
         return new Result(candidate,maximum);
     }
     // Every original vertex is matched to the chord replacing its own ordered
-    // subchain. Segment-distance convexity bounds each original edge; continuity
-    // of projection between shared endpoints also bounds each candidate chord.
+    // subchain. In exact arithmetic, convexity and continuous projection give
+    // a two-way geometric bound; double calculations are approximate.
     internal static double MeasureCorresponding(Point[] source,Point[] candidate,CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(candidate);token.ThrowIfCancellationRequested();
@@ -56,7 +56,7 @@ internal static class PhotoContourApproximation
             for(var j=0;j<count;j++)
             {
                 if((j & 1023)==0)token.ThrowIfCancellationRequested();var p=source[(start+j)%source.Length];
-                var t=Math.Clamp(((p.X-a.X)*dx+(p.Y-a.Y)*dy)/denominator,0,1);
+                var t=Math.Clamp((((double)p.X-a.X)*dx+((double)p.Y-a.Y)*dy)/denominator,0,1);
                 var x=p.X-(a.X+t*dx);var y=p.Y-(a.Y+t*dy);maximumSquared=Math.Max(maximumSquared,x*x+y*y);
             }
         }

@@ -92,7 +92,7 @@ internal sealed class PhotoRegionWindow : Window
         var clearMarks=new Button { Content="İşaretleri sil",Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,8,4) };
         compute.Click+=async (_,_)=>await ComputeAsync();accept.Click+=async (_,_)=> { if(await TrySelectContourAsync() && !closed)DialogResult=true; };cancel.Click+=(_,_)=>Close();
         refine.Click+=async (_,_)=>await RefineAsync();clearMarks.Click+=(_,_)=>ClearMarks();
-        AutomationProperties.SetHelpText(ApproximateContourForVerification,"Noktaları en çok 1 önizleme pikseli hedefiyle azaltır. İnce ayrıntılar kaybolabilir; piksel sapması fiziksel doğruluk değildir. Sonuç ayrıca incelenmelidir.");
+        AutomationProperties.SetHelpText(ApproximateContourForVerification,"Noktaları 1 önizleme pikseli hedefiyle azaltır. Kayan nokta hesabı yaklaşıktır; kesin üst sınır veya fiziksel doğruluk değildir. İnce ayrıntılar kaybolabilir; sonucu inceleyin.");
         ApproximateContourForVerification.Click+=async (_,_)=> { if(await TrySelectContourAsync(true) && !closed)DialogResult=true; };
         actions.Children.Add(compute);if(!reviewOnly) { actions.Children.Add(accept);actions.Children.Add(ApproximateContourForVerification); }actions.Children.Add(refine);actions.Children.Add(clearMarks);actions.Children.Add(cancel);
         {
@@ -626,7 +626,7 @@ internal sealed class PhotoRegionWindow : Window
             if(reduced.Points is null)
             {
                 ApproximateContourForVerification.Visibility=Visibility.Visible;
-                Status.Text=$"Sınırda {reduced.Count} nokta var; 508 noktayı aşıyor. İsterseniz 1 piksel sadeleştirme önizlemesini seçin; ince ayrıntılar kaybolabilir.";return false;
+                Status.Text=$"Sınırda {reduced.Count} nokta var; 508 noktayı aşıyor. İsterseniz 1 piksel hedefli sadeleştirme önizlemesini seçin; hesap yaklaşık, ince ayrıntılar kaybolabilir.";return false;
             }
             SelectedContour=reduced.Points;SelectedContourMaximumDeviation=reduced.Deviation;return true;
         }
