@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
@@ -79,6 +80,10 @@ internal static partial class DesktopVerification
             finally { release.Set();window.RequestLoaderForVerification=null; }
             Check(!window.IsVisible && !owner.IsVisible,"Request open error checks never display windows",checks);
         }
-        finally { window.ConfirmDiscardForVerification=_=>true;window.Close();Directory.Delete(folder,true); }
+        finally
+        {
+            try { window.ConfirmDiscardForVerification=_=>true;window.Close();Directory.Delete(folder,true); }
+            finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+        }
     }
 }

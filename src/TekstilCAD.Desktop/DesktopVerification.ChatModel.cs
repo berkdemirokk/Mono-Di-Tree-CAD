@@ -6,6 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
@@ -14,6 +15,8 @@ internal static partial class DesktopVerification
     public static int RunChatModel(string reportPath)
     {
         var checks=new List<string>();string? failure=null;var owner=new Window();DesignRequestWindow? window=null;
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(owner.Dispatcher));
         try
         {
             VerifyPendingReferenceProtection(checks);
@@ -299,8 +302,12 @@ internal static partial class DesktopVerification
         catch(Exception ex) { failure=ex.ToString(); }
         finally
         {
-            if(window is not null) { window.LoadForVerification(new DesignRequest("Sentetik temiz kapanış","",null));window.Close(); }
-            owner.Close();
+            try
+            {
+                if(window is not null) { window.LoadForVerification(new DesignRequest("Sentetik temiz kapanış","",null));window.Close(); }
+                owner.Close();
+            }
+            finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
         }
         var full=Path.GetFullPath(reportPath);Directory.CreateDirectory(Path.GetDirectoryName(full)!);
         using var output=new FileStream(full,FileMode.CreateNew,FileAccess.Write,FileShare.None);

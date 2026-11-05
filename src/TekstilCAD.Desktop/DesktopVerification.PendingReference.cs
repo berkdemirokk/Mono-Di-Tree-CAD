@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 using TekstilCAD.FileFormats;
 
 namespace TekstilCAD.Desktop;
@@ -8,11 +9,16 @@ internal static partial class DesktopVerification
 {
     private static void WaitForOpen(DesignRequestWindow window)
     {
-        var task=window.OpenForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(window.Dispatcher));
+        try { var task=window.OpenForVerification();PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult(); }
+        finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
     }
     private static void VerifyPendingReferenceProtection(List<string> checks)
     {
         var owner=new Window();_=new WindowInteropHelper(owner).EnsureHandle();var window=new DesignRequestWindow(owner);
+        var previousContext=SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(owner.Dispatcher));
         var dir=Path.Combine(Path.GetTempPath(),"tcad-pending-reference-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(dir);
         var path=Path.Combine(dir,"next.tcad-request.json");
         DesignRequestStorage.SaveNew(path,new DesignRequest("Yeni istek","",null));
@@ -94,6 +100,10 @@ internal static partial class DesktopVerification
             }
             finally { releaseReplacement.Set();if(replacementPending is not null){PumpUntil(()=>replacementPending.IsCompleted);replacementPending.GetAwaiter().GetResult();} }
         }
-        finally { release.Set();if(pending is not null){PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();}owner.Close(); }
+        finally
+        {
+            try { release.Set();if(pending is not null){PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();}owner.Close(); }
+            finally { SynchronizationContext.SetSynchronizationContext(previousContext); }
+        }
     }
 }
