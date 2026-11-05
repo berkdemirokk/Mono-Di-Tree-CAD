@@ -29,6 +29,22 @@ internal static class PartialFittedEngine
         void Add(string panel,int index,double x1,double y1,double x2,double y2,string kind="Edge") => result.Add(new(panel,index,new(x1,y1),new(x2,y2),kind));
         Add("right_ftorso",7,sideStart,sideY,sideX,0);
         Add("right_ftorso",8,sideX,0,-dartPoint-dartWidth,0);
+        var frontCut=DartCut.Horizontal(-dartPoint-dartWidth,-dartPoint,0,dartWidth,.9*sideY,true);
+        Add("right_ftorso",9,frontCut.Start.X,frontCut.Start.Y,frontCut.Tip.X,frontCut.Tip.Y);
+        Add("right_ftorso",10,frontCut.Tip.X,frontCut.Tip.Y,frontCut.End.X,frontCut.End.Y);
+        Add("left_ftorso",1,-frontCut.End.X,frontCut.End.Y,-frontCut.Tip.X,frontCut.Tip.Y);
+        Add("left_ftorso",2,-frontCut.Tip.X,frontCut.Tip.Y,-frontCut.Start.X,frontCut.Start.Y);
+        double shoulderTan=Math.Tan(22*Math.PI/180),frontFrac=frontWidth/b.Bust;
+        double adjustment=shoulderTan*(frontWidth-18), maxLen=b.WaistOverBust-adjustment;
+        double backAdjustment=shoulderTan*(backWidthForSide()-18),fbDifference=(2*frontFrac-.5)*b.Bust;
+        double sideLength=b.WaistLine-backAdjustment-shoulderTan*fbDifference;
+        double sideDartWidth=maxLen-sideLength,sideDartLeg=.75*(frontWidth-dartPoint);
+        var sideCut=DartCut.Horizontal(sideY,sideY+sideDartWidth,0,sideDartWidth,sideDartLeg,true);
+        Add("right_ftorso",5,-frontWidth,sideCut.End.X,-frontWidth+sideCut.Tip.Y,sideCut.Tip.X);
+        Add("right_ftorso",6,-frontWidth+sideCut.Tip.Y,sideCut.Tip.X,-frontWidth,sideCut.Start.X);
+        Add("left_ftorso",5,frontWidth,sideCut.Start.X,frontWidth-sideCut.Tip.Y,sideCut.Tip.X);
+        Add("left_ftorso",6,frontWidth-sideCut.Tip.Y,sideCut.Tip.X,frontWidth,sideCut.End.X);
+        double backWidthForSide()=>b.BackWidth/2;
         Add("right_ftorso",11,-dartPoint,0,0,0);
         Add("left_ftorso",0,0,0,dartPoint,0);
         Add("left_ftorso",3,dartPoint+dartWidth,0,-sideX,0);
@@ -47,6 +63,30 @@ internal static class PartialFittedEngine
             shift=Math.Min(shift,hips-waist);
             double px=Math.Truncate(hips),py=Math.Truncate(length+depth);
             double left=-px,right=2*hips-px,bottom=-py,hip=length-py,top=length+depth-py;
+            double dartWidthSkirt=hips-waist-shift;
+            if(dartWidthSkirt<=0) throw new ArgumentException("Unsupported absent skirt dart");
+            double centerOffset=hips-px;
+            double legDepth=b.HipsDepth*(front?.8:.85)-(b.HipsDepth-depth);
+            if(front)
+            {
+                double half=dartWidthSkirt/2,position=b.BustPoints/2;
+                var plus=DartCut.Horizontal(centerOffset+position+dartWidthSkirt,centerOffset+position,top,dartWidthSkirt,legDepth,false);
+                var minus=DartCut.Horizontal(centerOffset-position,centerOffset-position-dartWidthSkirt,top,dartWidthSkirt,legDepth,false);
+                Add(panel,4,plus.Start.X,top,plus.Tip.X,plus.Tip.Y); Add(panel,5,plus.Tip.X,plus.Tip.Y,plus.End.X,top);
+                Add(panel,8,minus.Start.X,top,minus.Tip.X,minus.Tip.Y); Add(panel,9,minus.Tip.X,minus.Tip.Y,minus.End.X,top);
+            }
+            else
+            {
+                double pos=9, dist=pos*.5, w=dartWidthSkirt/2;
+                double[] centers=[centerOffset-pos-dist/2-3*dartWidthSkirt/4,centerOffset-pos+dist/2-dartWidthSkirt/4,centerOffset+pos-dist/2+dartWidthSkirt/4,centerOffset+pos+dist/2+3*dartWidthSkirt/4];
+                int[] first=[3,6,10,13];
+                for(int i=0;i<4;i++)
+                {
+                    double leg=legDepth*((i==0||i==3)?.9:1);
+                    var dart=DartCut.Horizontal(centers[i]-w/2,centers[i]+w/2,top,w,leg,false);
+                    Add(panel,first[i],dart.Start.X,top,dart.Tip.X,dart.Tip.Y); Add(panel,first[i]+1,dart.Tip.X,dart.Tip.Y,dart.End.X,top);
+                }
+            }
             if(front)
             {
                 Add(panel,0,left,bottom,right,bottom); Add(panel,1,right,bottom,right,hip);
@@ -69,3 +109,4 @@ internal static class PartialFittedEngine
         public double BustLine=>26;
     }
 }
+

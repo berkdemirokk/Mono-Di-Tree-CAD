@@ -5,6 +5,7 @@ using System.Numerics;
 using System.Globalization;
 using System.Text;
 using FittedResearch;
+using TekstilCAD.Core;
 
 if(args.Length!=1 || args[0]!="--verify") return 2;
 try
@@ -36,8 +37,28 @@ try
     var wrongFlip=JsonNode.Parse(content)!; var flip=wrongFlip["cases"]![0]!["stitches"]![0]!["a"]!["edges"]![0]!; flip["flipped"]=!flip["flipped"]!.GetValue<bool>(); RejectSeam(wrongFlip,"wrong seam orientation");
     try { PartialFittedEngine.Create("not-synthetic"); throw new Exception("Unknown case accepted"); } catch(ArgumentException) { }
     var baseParts=PartialFittedEngine.Create("synthetic-base"); var distinctParts=PartialFittedEngine.Create("synthetic-distinct");
-    if(baseParts.Segments.Count!=18 || distinctParts.Segments.Count!=18 || baseParts.Segments[0].Start==distinctParts.Segments[0].Start) throw new Exception("Partial geometry input sensitivity");
-    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 28 reconstructed lines and 8 curve endpoint pairs; production unresolved.");
+    if(baseParts.Segments.Count!=38 || distinctParts.Segments.Count!=38 || baseParts.Segments[0].Start==distinctParts.Segments[0].Start) throw new Exception("Partial geometry input sensitivity");
+    void RejectDart(Action action) { try { action(); throw new Exception("Invalid cut accepted"); } catch(ArgumentException) { } }
+    RejectDart(()=>DartCut.Horizontal(0,2,0,2,.5,true)); RejectDart(()=>DartCut.Horizontal(0,2,0,3,5,true)); RejectDart(()=>DartCut.Horizontal(0,double.NaN,0,2,5,true));
+    if(DartCut.SimpleClosed(new[]{new DartCut.P(0,0),new DartCut.P(1,0),new DartCut.P(2,0)})) throw new Exception("Degenerate polygon accepted");
+    var shape=new[]{new DartCut.P(0,0),new DartCut.P(4,0),new DartCut.P(4,4),new DartCut.P(0,4)};
+    if(!DartCut.SimpleClosed(shape) || DartCut.SimpleClosed(new[]{shape[0],shape[2],shape[1],shape[3]})) throw new Exception("Cut topology test");
+    var graphEdges=new[]{new GeneratedGraph.Edge("s","a",0,"L",new(0,0),new(2,0)),new GeneratedGraph.Edge("s","a",1,"L",new(2,0),new(1,2)),new GeneratedGraph.Edge("s","a",2,"L",new(1,2),new(0,0))};
+    var seam=new GeneratedGraph.Seam("s","a",0,false,"a",1,true);
+    var ok=GeneratedGraph.Inspect("s",graphEdges,[seam],[seam]);
+    if(ok.Status!="unresolved"||ok.ExportAllowed||ok.Issues.Count!=1) throw new Exception("Graph baseline");
+    if(!GeneratedGraph.Inspect("s",graphEdges,[seam with { EdgeA=2 }],[seam]).Issues.Contains("seam-identity-or-direction-mismatch")) throw new Exception("Graph wrong edge");
+    if(!GeneratedGraph.Inspect("s",graphEdges,[seam with { FlipA=true }],[seam]).Issues.Contains("seam-identity-or-direction-mismatch")) throw new Exception("Graph wrong direction");
+    if(!GeneratedGraph.Inspect("other",graphEdges,[seam],[seam]).Issues.Contains("snapshot-mismatch")) throw new Exception("Graph snapshot");
+    var openEdges=graphEdges.ToArray(); openEdges[2]=openEdges[2] with { End=new(0,1) };
+    if(!GeneratedGraph.Inspect("s",openEdges,[seam],[seam]).Issues.Any(x=>x.StartsWith("open-contour:"))) throw new Exception("Graph open path");
+    var bow=new[]{new GeneratedGraph.Edge("s","a",0,"L",new(0,0),new(2,2)),new GeneratedGraph.Edge("s","a",1,"L",new(2,2),new(0,2)),new GeneratedGraph.Edge("s","a",2,"L",new(0,2),new(2,0)),new GeneratedGraph.Edge("s","a",3,"L",new(2,0),new(0,0))};
+    if(!GeneratedGraph.Inspect("s",bow,[seam],[seam]).Issues.Any(x=>x.StartsWith("self-intersection-or-degenerate:"))) throw new Exception("Graph crossing path");
+    var curved=graphEdges.ToArray(); curved[0]=curved[0] with { Kind="Q" };
+    if(!GeneratedGraph.Inspect("s",curved,[seam],[seam]).Issues.Any(x=>x.StartsWith("curve-topology-unproven:"))) throw new Exception("Graph curve gate");
+    var incomplete=baseParts.Segments.Select(e=>new GeneratedGraph.Edge("s",e.Panel,e.Edge,e.SourceKind=="Edge"?"L":"Q",new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+    if(!GeneratedGraph.Inspect("s",incomplete,[],[]).Issues.Contains("incomplete-graph")) throw new Exception("Partial output graph gate");
+    Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines including dart legs and 8 curve endpoint pairs; production unresolved.");
     return 0;
 }
 catch(Exception e) { Console.Error.WriteLine("FAIL: "+e.Message); return 1; }
@@ -128,6 +149,13 @@ internal static class Validator
                 var actual=panels.GetProperty(segment.Panel).GetProperty("edges")[segment.Edge];
                 string expectedKind=segment.SourceKind=="CurveEdgeEndpointsOnly"?"CurveEdge":segment.SourceKind;
                 Need(actual.GetProperty("kind").GetString()==expectedKind,"partial source kind");
+                if(segment.SourceKind=="CurveEdgeEndpointsOnly")
+                {
+                    bool atStart=(segment.Panel=="skirt_front" && segment.Edge==2)||(segment.Panel=="skirt_back" && segment.Edge==1);
+                    var c=TangentCandidate.RelativeControl(new(segment.Start.X,segment.Start.Y),new(segment.End.X,segment.End.Y),atStart);
+                    var expectedControl=Point(actual.GetProperty("relative_controls")[0]);
+                    Need((new P(c.X,c.Y)-expectedControl).Length()<0.0002,"analytic tangent candidate mismatch");
+                }
                 P start=Point(actual.GetProperty("start")),end=Point(actual.GetProperty("end"));
                 Need((start-new P(segment.Start.X,segment.Start.Y)).Length()<1e-5 && (end-new P(segment.End.X,segment.End.Y)).Length()<1e-5,"partial regenerated segment mismatch: "+segment.Panel+":"+segment.Edge);
             } var indexed=new Dictionary<string,JsonElement[]>();
@@ -166,6 +194,10 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
+
+
 
 
 
