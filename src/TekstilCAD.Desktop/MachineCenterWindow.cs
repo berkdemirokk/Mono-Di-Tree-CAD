@@ -60,6 +60,8 @@ public sealed class MachineCenterWindow : Window
     private readonly Button cancelPrepare=new() { Content="Hazırlamayı iptal et",Visibility=Visibility.Collapsed };
     private readonly CheckBox calibrationOrientation=new() { Content="Yön işareti ekle",Margin=new Thickness(0,4,0,4) };
     private readonly Button calibrationSquare=new() { Content="100 mm referans PLT dosyası oluştur" };
+    private (string Path,string Hash,double Units,bool Orientation)? calibrationReference;
+    private long calibrationRevision;
     internal TextBox DiagonalOneForVerification { get; }=new() { MaxLength=32 };
     internal TextBox DiagonalTwoForVerification { get; }=new() { MaxLength=32 };
     internal TextBlock DiagonalResultForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
@@ -139,7 +141,7 @@ public sealed class MachineCenterWindow : Window
         StyleButton(calibrationSquare);AutomationProperties.SetName(calibrationSquare,"100 mm referans HPGL dosyası oluştur");
         calibrationSquare.Click+=(_,_)=>Execute(CreateCalibrationSquare);scaleCheck.Children.Add(calibrationSquare);
         AutomationProperties.SetName(CalibrationReferenceForVerification,"Son referans dosyası ve hazırlanan içerik özeti");
-        AutomationProperties.SetHelpText(CalibrationReferenceForVerification,"Hazırlanan dosyanın adı, birimi ve içerik özetini seçip kopyalayabilirsiniz; ölçüler otomatik bağlanmaz.");
+        AutomationProperties.SetHelpText(CalibrationReferenceForVerification,"Referans adı, birimi ve içerik özetini seçip kopyalayabilirsiniz. Ölçü kaydı kullanıcı işlemiyle oluşturulur.");
         scaleCheck.Children.Add(CalibrationReferenceForVerification);
         var measuredX=MeasuredXForVerification;var measuredY=MeasuredYForVerification;var measuredFields=new WrapPanel();
         AutomationProperties.SetName(PreviousMeasurementsForVerification,"Önceki referans ölçüleri uyarısı");
@@ -173,6 +175,13 @@ public sealed class MachineCenterWindow : Window
             DiagonalResultForVerification.Text=$"100 mm karenin nominal köşegeni {PlotterScaleCheck.ReferenceDiagonalMillimeters.ToString("G9",CultureInfo.InvariantCulture)} mm: sapma 1 {Deviation(comparison.FirstDeviationMillimeters)} mm, 2 {Deviation(comparison.SecondDeviationMillimeters)} mm; 1 − 2 farkı {Deviation(comparison.DifferenceMillimeters)} mm. Fark çarpılma veya ölçüm hatasına işaret edebilir; cihazı doğrulamaz.";
         }
         DiagonalOneForVerification.TextChanged+=(_,_)=>UpdateDiagonals();DiagonalTwoForVerification.TextChanged+=(_,_)=>UpdateDiagonals();scaleCheck.Children.Add(DiagonalResultForVerification);
+        foreach(var box in new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification})
+            box.TextChanged+=(_,_)=>calibrationRevision++;
+        var recordActions=new WrapPanel();
+        var saveRecord=new Button { Content="Ölçü kaydını yeni dosyaya kaydet" };StyleButton(saveRecord);
+        saveRecord.Click+=(_,_)=>Execute(SaveCalibrationRecord);recordActions.Children.Add(saveRecord);
+        var loadRecord=new Button { Content="Ölçü kaydını aç" };StyleButton(loadRecord);
+        loadRecord.Click+=(_,_)=>Execute(LoadCalibrationRecord);recordActions.Children.Add(loadRecord);scaleCheck.Children.Add(recordActions);
         settings.Children.Add(new TextBlock { Text="Üretilecek parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         settings.Children.Add(new TextBlock { Text="Yalnız işaretli parçalar dosyaya alınır. Kaynak kalıp ve türetilen bedenleri kontrol ederek seçin; adetler bu sürümde her seçili parça için 1'dir.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap });
         var searchRow=new WrapPanel { Margin=new Thickness(0,4,0,2) };
@@ -367,6 +376,7 @@ public sealed class MachineCenterWindow : Window
     {
         if(path is null)return; // Cancel preserves all state.
         write(reference,path); // A failed write must not relabel measurements or the receipt.
+        calibrationReference=(System.IO.Path.GetFullPath(path),reference.ContentSha256,reference.Output.UnitsPerMillimeter,reference.MarkerPieceId.HasValue);calibrationRevision++;
         ShowCalibrationReference(reference,path);
         bool hasMeasurements=new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification}.Any(box=>!string.IsNullOrWhiteSpace(box.Text));
         PreviousMeasurementsForVerification.Text=hasMeasurements ? "X/Y ve köşegen ölçümlerinin bu dosyaya ait olduğu doğrulanmadı; yeni baskıyı yeniden ölçün." : "";
@@ -376,8 +386,42 @@ public sealed class MachineCenterWindow : Window
     {
         ArgumentNullException.ThrowIfNull(reference);ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var marker=reference.MarkerPieceId.HasValue ? "var" : "yok";
-        CalibrationReferenceForVerification.Text=$"Son oluşturulan referans: {path}\nBirim/mm: {MeasurementInput.Format(reference.Output.UnitsPerMillimeter)} · Ölçek: 1 · Yön işareti: {marker}\nHazırlanan içerik SHA-256: {reference.ContentSha256}\nÖlçüler dosyaya otomatik bağlanmaz; dosyanın sonradan değişmediği doğrulanmaz.";
+        CalibrationReferenceForVerification.Text=$"Son oluşturulan referans: {path}\nBirim/mm: {MeasurementInput.Format(reference.Output.UnitsPerMillimeter)} · Ölçek: 1 · Yön işareti: {marker}\nHazırlanan içerik SHA-256: {reference.ContentSha256}\nÖlçü kaydı isteğe bağlıdır; kaydederken dosyanın o anki özeti kontrol edilir.";
         CalibrationReferenceForVerification.Visibility=Visibility.Visible;
+    }
+    private void SaveCalibrationRecord()
+    {
+        var reference=calibrationReference ?? throw new InvalidOperationException("Önce referans oluşturun veya ölçü kaydı açın.");
+        var d1=string.IsNullOrWhiteSpace(DiagonalOneForVerification.Text) ? (double?)null : Number(DiagonalOneForVerification);
+        var d2=string.IsNullOrWhiteSpace(DiagonalTwoForVerification.Text) ? (double?)null : Number(DiagonalTwoForVerification);
+        var record=PlotterCalibrationRecordStorage.Create(reference.Path,reference.Hash,reference.Units,reference.Orientation,Number(MeasuredXForVerification),Number(MeasuredYForVerification),d1,d2);
+        var revision=calibrationRevision;
+        if(!PlotterCalibrationRecordStorage.ReferenceMatches(record))throw new InvalidOperationException("Referans değişmiş veya bulunamıyor; kayıt oluşturulmadı.");
+        if(MessageBox.Show(this,"Ölçüler bu referansın fiziksel çıktısına mı ait? Bu kayıt cihaz veya üretim uygunluğu onayı değildir.","Ölçü ilişkisi",MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+        var dialog=new Microsoft.Win32.SaveFileDialog { Title="Yeni ölçü kaydı",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",FileName="plotter-olcumu.tcad-plotter-calibration.json",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        if(revision!=calibrationRevision)throw new InvalidOperationException("Ölçüler veya referans işlem sırasında değişti; kayıt oluşturulmadı.");
+        if(!PlotterCalibrationRecordStorage.ReferenceMatches(record))throw new InvalidOperationException("Referans değişmiş veya bulunamıyor; kayıt oluşturulmadı.");
+        PlotterCalibrationRecordStorage.SaveNew(dialog.FileName,record);
+        result.Foreground=StudioTheme.Accent;result.Text="Ölçü kaydı oluşturuldu. Fiziksel çıktı ve cihaz doğrulanmadı.";
+    }
+    private void LoadCalibrationRecord()
+    {
+        var revision=calibrationRevision;
+        var dialog=new Microsoft.Win32.OpenFileDialog { Title="Ölçü kaydı aç",Filter="Ölçü kaydı (*.tcad-plotter-calibration.json)|*.tcad-plotter-calibration.json",InitialDirectory=AppPaths.PrepareProjectsDirectory() };
+        if(dialog.ShowDialog(this)!=true)return;
+        var record=PlotterCalibrationRecordStorage.Load(dialog.FileName);
+        if(revision!=calibrationRevision)throw new InvalidOperationException("Ölçüler veya referans seçim sırasında değişti; kayıt açılmadı.");
+        if(new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification}.Any(b=>!string.IsNullOrWhiteSpace(b.Text)) && MessageBox.Show(this,"Mevcut ölçü alanları açılan kayıtla değiştirilsin mi?","Ölçüleri aç",MessageBoxButton.YesNo,MessageBoxImage.Question)!=MessageBoxResult.Yes)return;
+        if(revision!=calibrationRevision)throw new InvalidOperationException("Ölçüler veya referans işlem sırasında değişti; kayıt açılmadı.");
+        bool matches;
+        try { matches=PlotterCalibrationRecordStorage.ReferenceMatches(record); } catch(System.IO.IOException) { matches=false; } catch(UnauthorizedAccessException) { matches=false; }
+        calibrationReference=(record.ReferencePath,record.Sha256,record.UnitsPerMillimeter,record.Orientation);calibrationRevision++;
+        MeasuredXForVerification.Text=record.X.ToString("G17",CultureInfo.InvariantCulture);MeasuredYForVerification.Text=record.Y.ToString("G17",CultureInfo.InvariantCulture);
+        DiagonalOneForVerification.Text=record.Diagonal1?.ToString("G17",CultureInfo.InvariantCulture) ?? "";DiagonalTwoForVerification.Text=record.Diagonal2?.ToString("G17",CultureInfo.InvariantCulture) ?? "";
+        CalibrationReferenceForVerification.Text=$"Kayıttaki referans: {record.ReferencePath}\nSHA-256: {record.Sha256} · Birim/mm: {record.UnitsPerMillimeter:G17} · Ölçek: {record.Scale:G17} · Yön işareti: {(record.Orientation ? "var" : "yok")}\n"+(matches ? "Dosya özeti eşleşiyor; fiziksel çıktı doğrulanmadı." : "İlişki geçersiz: referans değişmiş, okunamıyor veya bulunamıyor.");
+        CalibrationReferenceForVerification.Visibility=Visibility.Visible;
+        PreviousMeasurementsForVerification.Text=matches ? "Kayıttaki ölçüler kullanıcı beyanıdır; cihaz doğrulaması değildir." : "Referansla ilişki geçersiz; eski ölçüler görüntüleniyor.";PreviousMeasurementsForVerification.Visibility=Visibility.Visible;
     }
     private async Task Prepare()
     {
