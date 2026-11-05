@@ -86,6 +86,18 @@ internal static class InterfaceMatcher
             var expected=ReadPinnedInput(snapshot);
             if(!Same(a,expected.upper)||!Same(b,expected.lower)) throw new ArgumentException("Synthetic interface input does not match pinned snapshot");
         }
+        return MatchCore(snapshot,a,b);
+    }
+    // Fixture-free C# candidate path: only hardcoded synthetic IDs, no real input.
+    // Existing ValidateBound still requires the pinned source input and therefore
+    // cannot treat this independent candidate as a trusted source match.
+    internal static Result MatchDerived(string snapshot)
+    {
+        var inputs=DerivedWaistInputs.Create(snapshot);
+        return MatchCore(snapshot,inputs.Upper.ToList(),inputs.Lower.ToList());
+    }
+    static Result MatchCore(string snapshot,List<Edge> a,List<Edge> b)
+    {
         var af=Fractions(a);var bf=Fractions(b);
         bool matching=af.Length==bf.Length && af.Zip(bf).All(p=>Math.Abs(p.First-p.Second)<=.05+1e-5*Math.Abs(p.Second));
         if(!matching)

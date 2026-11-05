@@ -56,6 +56,7 @@ try
     if(!GeneratedGraph.Inspect("s",bow,[seam],[seam]).Issues.Any(x=>x.StartsWith("self-intersection-or-degenerate:"))) throw new Exception("Graph crossing path");
     var openCurved=graphEdges.ToArray();openCurved[0]=openCurved[0] with { Kind="C",End=new(2,.1) };
     if(!GeneratedGraph.Inspect("s",openCurved,[seam],[seam]).Issues.Any(x=>x.StartsWith("open-contour:"))) throw new Exception("Open curved graph accepted");
+    try { InterfaceMatcher.MatchDerived("synthetic-small-difference");throw new Exception("Rejected body entered derived waist"); } catch(ArgumentException) { }
     try { SyntheticArmholeCut.Create("other"); throw new Exception("Unknown armhole input accepted"); } catch(ArgumentException) { }
     var curved=graphEdges.ToArray(); curved[0]=curved[0] with { Kind="Q" };
     if(!GeneratedGraph.Inspect("s",curved,[seam],[seam]).Issues.Any(x=>x.StartsWith("curve-topology-unproven:"))) throw new Exception("Graph curve gate");
@@ -129,6 +130,14 @@ try
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,-1),new(2,-1)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle tangent must remain unresolved");
     if(CircleSeparation.Compare(arcA,arcB,-.5,[new(-2,0),new(2,0)],false)!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing must remain unresolved");
     try { CircleSeparation.Compare(arcA,arcB,0,[new(0,0),new(1,0)],false);throw new Exception("Degenerate circle accepted"); } catch(ArgumentException) { }
+    var exactLine=BezierLengthBounds.Enclose([new(0,0),new(3,4)],4);
+    if(!exactLine.Contains(5) || exactLine.Contains(5.0001) || exactLine.Lower!=exactLine.Upper) throw new Exception("Exact line length enclosure");
+    var straightQuadratic=BezierLengthBounds.Enclose([new(0,0),new(0,0),new(1,0)],5);
+    if(!straightQuadratic.Contains(1))throw new Exception("Quadratic length enclosure");
+    var bentCoarse=BezierLengthBounds.Enclose([new(0,0),new(1,2),new(2,0)],3);
+    var bentFine=BezierLengthBounds.Enclose([new(0,0),new(1,2),new(2,0)],8);
+    if(bentFine.ApproximateWidthCm>=bentCoarse.ApproximateWidthCm || bentFine.ApproximateWidthCm<=0)throw new Exception("Bezier bounds refinement");
+    try { BezierLengthBounds.Enclose([new(double.NaN,0),new(1,0)]);throw new Exception("Invalid length geometry accepted"); } catch(ArgumentException) { }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -254,6 +263,21 @@ internal static class Validator
             try { BackSkirtCandidate.Create(id,forged); throw new InvalidDataException("Changed back result accepted"); } catch(ArgumentException) { }
             var reference=golden.GetProperty("cases").EnumerateArray().Single(x=>x.GetProperty("id").GetString()==id);
             var waist=reference.GetProperty("stitches").EnumerateArray().Single(r=>r.GetProperty("owner_type").GetString()=="MetaGarment");
+            var independent=InterfaceMatcher.MatchDerived(id);
+            var independentReport=DerivedWaistAudit.Inspect(independent,reference);
+            Console.WriteLine($"{id} C#-derived waist: max endpoint={independentReport.MaxEndpointCm:G6} cm, control={independentReport.MaxControlCm:G6} cm, length={independentReport.MaxLengthDifferenceCm:G6} cm, numerical disagreement={independentReport.MaxIntegrationDisagreementCm:G6} cm, enclosure max width≈{independentReport.MaxEnclosureWidthCm:G6} cm, source lengths inside={independentReport.SourceValuesInside}/{independentReport.EdgeCount}.");
+            Console.WriteLine($"{id} candidate waist length upper≈[{independentReport.UpperLength.ApproximateLowerCm:G12},{independentReport.UpperLength.ApproximateUpperCm:G12}] cm; lower≈[{independentReport.LowerLength.ApproximateLowerCm:G12},{independentReport.LowerLength.ApproximateUpperCm:G12}] cm (display rounded).");
+            Need(independentReport.EdgeCount==20 && independentReport.MaxEnclosureWidthCm<.0001 && independentReport.WithinDiagnosticBounds && independentReport.Status=="unresolved" && !independentReport.ProductionAllowed && !independentReport.ExportAllowed,"derived waist diagnostic bounds");
+            try { InterfaceMatcher.ValidateBound(id,independent);throw new Exception("Derived result falsely treated as pinned source"); } catch(ArgumentException) { }
+            int curvedIndex=Array.FindIndex(independent.Upper.ToArray(),e=>e.Controls.Length>0);
+            Need(curvedIndex>=0,"derived waist curve missing");
+            var alteredEdge=independent.Upper[curvedIndex];
+            alteredEdge=alteredEdge with { Controls=alteredEdge.Controls.SetItem(0,alteredEdge.Controls[0]+new InterfaceMatcher.P(.1,0)) };
+            var changed=independent with { Upper=independent.Upper.SetItem(curvedIndex,alteredEdge) };
+            var wrongCoefficient=independent with { Upper=independent.Upper.SetItem(0,independent.Upper[0] with { Coefficient=1.05 }) };
+            try { DerivedWaistAudit.Inspect(wrongCoefficient,reference);throw new Exception("Wrong waist coefficient accepted"); } catch(InvalidDataException) { }
+            var changedReport=DerivedWaistAudit.Inspect(changed,reference);
+            Need(!changedReport.WithinDiagnosticBounds && changedReport.MaxControlCm>.01 && changedReport.MaxLengthDifferenceCm>independentReport.MaxLengthDifferenceCm+.00001,"same-endpoint altered control and length must fail diagnostic");
             void Side(IReadOnlyList<InterfaceMatcher.Edge> actual,JsonElement expected)
             {
                 var ids=expected.GetProperty("edges").EnumerateArray().ToArray(); Need(actual.Count==ids.Length,"matched edge count");
