@@ -114,3 +114,5 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Fotoğraf yolunda isteğe bağlı renk kontrastı, gri yöntemin alternatifi olarak kullanılabilir. [Sınırlı deneyler](docs/PHOTO_COLOR_GRADIENT_EXPERIMENT.md) yerel hataların sürdüğünü gösterir; renk, desen veya gölge doğru sınır olmak zorunda değildir. Üretim ve gerçek kullanıcı doğrulaması yapılmadı.
 
 - Fotoğraf yolunda isteğe bağlı geniş arama, 160.000 piksel sınırı içinde 32 piksel pay kullanır; sınır aşılırsa ilgili aralık 16 piksel paya döner ve durum bildirir. [Gri yol deneyi](docs/PHOTO_MARGIN32_EXPERIMENT.md) genel iyileşme kanıtlamadı; [renkli eşli deneyde](docs/PHOTO_WIDE_COLOR_EXPERIMENT.md) de yerel hatalar sürdü; gerçek kullanıcı ve üretim doğrulaması yapılmadı.
+
+- Fotoğraf incelemesindeki “Çizimi gizle”, işaret ve uyarıları geçici olarak gizler; bu sırada çizim ve uygulama araçları devre dışıdır. Yeniden gösterildiğinde taslak ve bekleyen öneri korunur. Görsel karşılaştırma fotoğraf sınırının doğruluğunu veya üretim uygunluğunu kanıtlamaz; gerçek kullanıcı ve ekran okuyucu kabul testi yapılmadı.

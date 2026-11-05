@@ -27,8 +27,9 @@ internal sealed class PhotoTraceWindow : Window
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };
     internal CheckBox ReviewClosureForVerification { get; } = new() { Content="Kapatmayı incele",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
     internal CheckBox ColorPathForVerification { get; } = new() { Content="Renkle ara",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
+    internal CheckBox PhotoOnlyForVerification { get; } = new() { Content="Çizimi gizle",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
     internal CheckBox WidePathForVerification { get; } = new() { Content="Geniş ara",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
-    internal ComboBox SourcePurposeForVerification { get; } = new() { MinWidth=260,Height=32,VerticalContentAlignment=VerticalAlignment.Center,Padding=new Thickness(6,0,6,0),Margin=new Thickness(6,0,0,4) };
+    internal ComboBox SourcePurposeForVerification { get; } = new() { MinWidth=165,Height=32,VerticalContentAlignment=VerticalAlignment.Center,Padding=new Thickness(6,0,6,0),Margin=new Thickness(6,0,0,4) };
     internal PhotoSourcePurpose SourcePurpose { get; private set; }
     internal Button ApplyForVerification { get; private set; } = null!;
     internal FrameworkElement ReferenceInputsForVerification { get; private set; } = null!;
@@ -59,7 +60,7 @@ internal sealed class PhotoTraceWindow : Window
         SourcePurposeForVerification.ItemsSource=new[] { "Giysi/model referansı", "Düz serilmiş kalıp görseli" };
         AutomationProperties.SetName(SourcePurposeForVerification,"Görsel türü seçimi");
         AutomationProperties.SetHelpText(SourcePurposeForVerification,"Görsel otomatik sınıflandırılmaz. Giysi/model yalnız görsel referanstır; düz serilmiş kalıp seçilirse ölçek ve çizim araçları açılır.");
-        sourceRow.Children.Add(SourcePurposeForVerification);sourceRow.Children.Add(ColorPathForVerification);sourceRow.Children.Add(WidePathForVerification);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
+        sourceRow.Children.Add(SourcePurposeForVerification);sourceRow.Children.Add(ColorPathForVerification);sourceRow.Children.Add(WidePathForVerification);sourceRow.Children.Add(PhotoOnlyForVerification);DockPanel.SetDock(sourceRow,Dock.Top);root.Children.Add(sourceRow);
         var input=new WrapPanel();DockPanel.SetDock(input,Dock.Top);root.Children.Add(input);
         ReferenceInputsForVerification=input;
         referenceLabel.Content="İki uç arası bilinen mesafe (mm)";referenceLabel.Target=LengthForVerification;input.Children.Add(referenceLabel);AutomationProperties.SetName(LengthForVerification,"Bilinen referans mesafesi milimetre");input.Children.Add(LengthForVerification);
@@ -100,6 +101,7 @@ internal sealed class PhotoTraceWindow : Window
         PathAction("Denetle","Geçerli çizgiyi veya varsa yol önerisini piksel geometrisinde denetler; kapanış seçiliyse son kenarı da kontrol eder.",()=>_ = StartTraceTopologyReviewAsync());
         PathAction("İptal et","Süren yol araması veya piksel denetimine iptal isteği gönderir.",CancelPathSuggestion);
         AutomationProperties.SetHelpText(ReviewClosureForVerification,"Seçiliyken toplu yol önerisi kapanış yolunu da arar; taslak eklendikten sonra ayrı kapanış incelemesi açılır. Kapalı parça otomatik eklenmez; fotoğraf geçmişi açık kaynakta kalır.");pathActions.Children.Add(ReviewClosureForVerification);
+        AutomationProperties.SetHelpText(PhotoOnlyForVerification,"Fotoğrafı çizgi, nokta, öneri ve uyarı işaretleri olmadan gösterir; bu görünümde çizim ve uygulama araçları kapalıdır. Taslak ve öneri korunur.");
         AutomationProperties.SetName(ColorPathForVerification,"Renk kontrastı ile yol");AutomationProperties.SetHelpText(ColorPathForVerification,"Seçiliyken yol önerisi gri parlaklık yerine renk kanallarının kontrastını kullanır. Renk, desen veya gölge giysi sınırı olmayabilir; öneriyi kontrol edin. Kenar önerisi düğmesini değiştirmez.");
         ColorPathForVerification.ToolTip="Yol için renk kontrastı kullanır; desen veya gölge izlenebilir. Sonucu inceleyin.";
         AutomationProperties.SetName(WidePathForVerification,"Geniş arama alanıyla yol öner");AutomationProperties.SetHelpText(WidePathForVerification,"Uçların çevresindeki arama payını 16 yerine 32 piksel yapar. İş sınırı aşılırsa standart alana döner ve durum bildirir; farklı bir kenarı izleyebilir.");
@@ -129,13 +131,22 @@ internal sealed class PhotoTraceWindow : Window
             else StatusForVerification.Text="Yol arama alanı değişti; önceki yol önerisi kaldırıldı. Yeni öneriyi inceleyin.";
         }
         WidePathForVerification.Checked+=(_,_)=>WideChoiceChanged();WidePathForVerification.Unchecked+=(_,_)=>WideChoiceChanged();
+        void UpdatePhotoOnly()
+        {
+            CanvasForVerification.PhotoOnly=PhotoOnlyForVerification.IsChecked==true;
+            CanvasForVerification.IsEnabled=SourcePurpose==PhotoSourcePurpose.FlatPattern && !CanvasForVerification.PhotoOnly;
+            var editing=!CanvasForVerification.PhotoOnly;
+            input.IsEnabled=editing;pathActions.IsEnabled=editing;suggest.IsEnabled=editing;applySuggestion.IsEnabled=editing;
+            undoPoint.IsEnabled=editing;clearPoints.IsEnabled=editing;apply.IsEnabled=editing;
+        }
+        PhotoOnlyForVerification.Checked+=(_,_)=>UpdatePhotoOnly();PhotoOnlyForVerification.Unchecked+=(_,_)=>UpdatePhotoOnly();
         void UpdatePurpose()
         {
             var flat=SourcePurpose==PhotoSourcePurpose.FlatPattern;
             Title=flat ? "Fotoğrafta elle taslak çiz" : "Referans fotoğrafı";
             var visible=flat ? Visibility.Visible : Visibility.Collapsed;
-            input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;WidePathForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
-            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;CanvasForVerification.IsEnabled=flat;
+            input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;WidePathForVerification.Visibility=visible;PhotoOnlyForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
+            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;UpdatePhotoOnly();
             UpdateStatus();
         }
         SourcePurposeForVerification.SelectionChanged+=(_,_)=>

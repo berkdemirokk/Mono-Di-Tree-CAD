@@ -28,6 +28,12 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     private Point? pathClosingTarget;
     private Point[]? topologyWarningEdges;
     private bool topologyWarning;
+    private bool photoOnly;
+    internal bool PhotoOnly
+    {
+        get=>photoOnly;
+        set { if(photoOnly==value)return;photoOnly=value;InvalidateVisual(); }
+    }
     private double zoom=1;
     private Point zoomCenter=new(0.5,0.5);
 
@@ -311,6 +317,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         dc.DrawRectangle(Brushes.White,new Pen(DesignRequestWindow.BorderColor,1),new Rect(RenderSize));
         var bounds=ImageBounds(RenderSize);if(image is null || bounds.IsEmpty)return;
         dc.DrawImage(image,bounds);
+        if(photoOnly)return;
         if(pathSuggestion is { Count:>=2 } suggestedPath)
         {
             var proposalPen=new Pen(Brushes.DeepSkyBlue,3) { DashStyle=DashStyles.Dash };

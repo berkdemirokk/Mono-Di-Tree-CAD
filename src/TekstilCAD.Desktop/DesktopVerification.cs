@@ -9609,6 +9609,17 @@ internal static partial class DesktopVerification
             Check(canvas.Points.SequenceEqual(beforeZoom) && trace.LengthForVerification.Text=="100" && trace.ReferenceInputsForVerification.Visibility==Visibility.Visible,
                 "Returning to the flat-pattern choice restores the untouched draft",checks);
             beforeZoomRevision=trace.DraftRevision;
+            Check(canvas.SetPathSuggestion(new Point(20,10),new Point(20,20),[new Point(20,10),new Point(21,15),new Point(20,20)]),
+                "Photo-only inspection starts with a pending proposal",checks);
+            var pendingPhotoPath=canvas.PathSuggestion!.ToArray();
+            trace.PhotoOnlyForVerification.IsChecked=true;
+            Check(canvas.PhotoOnly && !canvas.IsEnabled && !trace.ApplyForVerification.IsEnabled && !trace.ReferenceInputsForVerification.IsEnabled && canvas.Points.SequenceEqual(beforeZoom) && canvas.PathSuggestion!.SequenceEqual(pendingPhotoPath) &&
+                trace.DraftRevision==beforeZoomRevision && DocumentSession.ContentEquals(initial,workspace.Document),
+                "Photo-only inspection hides overlays and disables canvas input without changing the draft or proposal",checks);
+            trace.PhotoOnlyForVerification.IsChecked=false;
+            Check(!canvas.PhotoOnly && canvas.IsEnabled && trace.ApplyForVerification.IsEnabled && trace.ReferenceInputsForVerification.IsEnabled && canvas.PathSuggestion!.SequenceEqual(pendingPhotoPath) && trace.DraftRevision==beforeZoomRevision,
+                "Returning from photo-only inspection restores canvas interaction and the pending proposal",checks);
+            canvas.ClearPathSuggestion();
             canvas.ZoomAtCursor(2);var viewSize=new Size(200,200);
             Check(canvas.Zoom==2 && canvas.TryMapPixelToView(new Point(20,20),viewSize,out var zoomView) && Math.Abs(zoomView.X-100)<1e-9 && Math.Abs(zoomView.Y-100)<1e-9 &&
                 canvas.TryMapViewToPixel(zoomView,viewSize,out var zoomPixel) && Math.Abs(zoomPixel.X-20)<1e-9 && Math.Abs(zoomPixel.Y-20)<1e-9 &&
