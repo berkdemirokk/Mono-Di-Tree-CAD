@@ -1,0 +1,13 @@
+{
+  "date": "2026-11-05",
+  "scope": "80 previously examined holdout images, 12 annotation-derived anchors; grayscale only; wide rectangle under budget",
+  "archiveSha256": "AF8E0A57BBD7DD7933E9210E2956B9A3E6A2FB0F030CFBEB7D12FB55AF470EE6",
+  "adaptiveSourceSha256": "9275B2D809836F13F94CFC1AAC6A13500ECDA04C64117A427B156A79ABF215E7",
+  "prototypePathsSha256": "617BD988F64767D9F0420EB396009F5F9A858A526A4AB9582AB67287B0B63074",
+  "adaptivePathsSha256": "617BD988F64767D9F0420EB396009F5F9A858A526A4AB9582AB67287B0B63074",
+  "prototypeMeasurementsSha256": "130146422F87D8AAEACEB89FA72058F5BA66EE018470FDBBCF37A5B9AD0B6206",
+  "adaptiveMeasurementsSha256": "130146422F87D8AAEACEB89FA72058F5BA66EE018470FDBBCF37A5B9AD0B6206",
+  "pathsIdentical": true,
+  "measurementsIdentical": true,
+  "limitations": "Does not test color mode, real user inputs, physical dimensions, or manufacturing accuracy."
+}

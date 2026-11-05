@@ -112,3 +112,5 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 - Fotoğraf ölçü karşılaştırmasındaki çizgi boyunca seçenek, iki taslak noktası arasındaki çok parçalı çizgi uzunluğunu bağımsız kullanıcı ölçüsüyle karşılaştırır. Sürekli gerçek eğriyi, kapanış kenarını veya üretim uygunluğunu doğrulamaz; karma rapor sürüm 2 kullanır. Kullanıcı ve fiziksel kabul testi yapılmadı.
 
 - Fotoğraf yolunda isteğe bağlı renk kontrastı, gri yöntemin alternatifi olarak kullanılabilir. [Sınırlı deneyler](docs/PHOTO_COLOR_GRADIENT_EXPERIMENT.md) yerel hataların sürdüğünü gösterir; renk, desen veya gölge doğru sınır olmak zorunda değildir. Üretim ve gerçek kullanıcı doğrulaması yapılmadı.
+
+- Fotoğraf yolunda isteğe bağlı geniş arama, 160.000 piksel sınırı içinde 32 piksel pay kullanır; sınır aşılırsa ilgili aralık 16 piksel paya döner ve durum bildirir. [Gri yol deneyi](docs/PHOTO_MARGIN32_EXPERIMENT.md) genel iyileşme kanıtlamadı; renkli geniş yolun görüntü kümesi kıyaslaması, gerçek kullanıcı ve üretim doğrulaması yapılmadı.

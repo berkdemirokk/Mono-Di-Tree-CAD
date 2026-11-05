@@ -9446,6 +9446,28 @@ internal static partial class DesktopVerification
         Check(PhotoColorEdgePath.TryFind(transparent,new Point(2,2),new Point(17,17),out var transparentColor) &&
             PhotoEdgePath.TryFind(transparent,new Point(2,2),new Point(17,17),out var transparentGray) && transparentColor.SequenceEqual(transparentGray),
             "Transparent RGB pixels are composited on white and do not invent a color edge",checks);
+        var curvePixels=new byte[160*140*4];
+        static double CurveBoundary(double y)=>60+24*Math.Sin(Math.PI*Math.Clamp(y-20,0,100)/100);
+        for(var y=0;y<140;y++)for(var x=0;x<160;x++)
+        { var i=(y*160+x)*4;var value=x<CurveBoundary(y) ? (byte)0 : (byte)255;curvePixels[i]=curvePixels[i+1]=curvePixels[i+2]=value;curvePixels[i+3]=255; }
+        var curveBitmap=BitmapSource.Create(160,140,96,96,PixelFormats.Bgra32,null,curvePixels,640);curveBitmap.Freeze();
+        var foundNarrowCurve=PhotoEdgePath.TryFind(curveBitmap,new Point(60,20),new Point(60,120),out var narrowCurve);
+        var foundWideCurve=PhotoWideEdgePath.TryFind(curveBitmap,new Point(60,20),new Point(60,120),false,out var wideCurve,out var curveFallback);
+        Check(foundNarrowCurve && foundWideCurve && !curveFallback &&
+            narrowCurve.Average(p=>Math.Abs(p.X-CurveBoundary(p.Y)))>2 && wideCurve.Average(p=>Math.Abs(p.X-CurveBoundary(p.Y)))<1,
+            "Optional wide search follows the synthetic curved boundary beyond the standard margin",checks);
+        Check(PhotoWideEdgePath.TryFind(curveBitmap,new Point(60,20),new Point(60,120),true,out var wideColorCurve,out var wideColorFallback) &&
+            !wideColorFallback && wideColorCurve.SequenceEqual(wideCurve),"Wide color and grayscale searches agree on an opaque monochrome image",checks);
+        largeEdgeBitmap.Freeze();
+        Check(PhotoEdgePath.TryFind(largeEdgeBitmap,new Point(80,80),new Point(430,430),out var standardBudget) &&
+            PhotoWideEdgePath.TryFind(largeEdgeBitmap,new Point(80,80),new Point(430,430),false,out var adaptiveBudget,out var budgetFallback) && budgetFallback && adaptiveBudget.SequenceEqual(standardBudget) &&
+            PhotoColorEdgePath.TryFind(largeEdgeBitmap,new Point(80,80),new Point(430,430),out var standardColorBudget) &&
+            PhotoWideEdgePath.TryFind(largeEdgeBitmap,new Point(80,80),new Point(430,430),true,out var adaptiveColorBudget,out var colorBudgetFallback) && colorBudgetFallback && adaptiveColorBudget.SequenceEqual(standardColorBudget),
+            "Wide search falls back to the exact existing path for both contrast modes when its rectangle exceeds the budget",checks);
+        Check(!PhotoWideEdgePath.TryFind(largeEdgeBitmap,new Point(0,0),new Point(499,499),false,out _,out var exhaustedFallback) && exhaustedFallback,
+            "Wide and standard rectangles both exceeding the work budget reject the path",checks);
+        try { PhotoWideEdgePath.TryFind(curveBitmap,new Point(60,20),new Point(60,120),false,out _,out _,new CancellationToken(true));throw new InvalidOperationException("Wide photo path ignored cancellation."); }
+        catch(OperationCanceledException) { Check(true,"Wide photo path honors cancellation",checks); }
         Check(PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(7,10),out var edge) && edge==new Point(9,10) &&
             !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(0,0),out _) && !PhotoEdgeSuggestion.TryFind(edgeBitmap,new Point(double.NaN,0),out _),
             "Photo edge suggestion finds nearby synthetic contrast and declines absent or invalid input",checks);
@@ -9507,6 +9529,32 @@ internal static partial class DesktopVerification
                     "Selecting RGB mode uses the color boundary for a detached user-reviewable proposal",checks);
             }
             finally { colorTrace.CanvasForVerification.ClearPoints();colorTrace.Close();SynchronizationContext.SetSynchronizationContext(colorContext); }
+            var curveTrace=new PhotoTraceWindow(workspace,curveBitmap,workspace.CapturePhotoTrace()!);
+            var curveContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(curveTrace.Dispatcher));
+            try
+            {
+                curveTrace.SourcePurposeForVerification.SelectedIndex=1;curveTrace.WidePathForVerification.IsChecked=true;
+                foreach(var p in new[] { new Point(1,1),new Point(10,1),new Point(60,20),new Point(60,120) })curveTrace.CanvasForVerification.TryAddPixelPoint(p);
+                var originalCurvePoints=curveTrace.CanvasForVerification.Points.ToArray();
+                var search=curveTrace.StartPathSuggestionAsync();PumpUntil(()=>search.IsCompleted);search.GetAwaiter().GetResult();
+                Check(curveTrace.CanvasForVerification.PathSuggestion is { Count:>2 } wideProposal && wideProposal.Max(p=>p.X)>=82 &&
+                    curveTrace.CanvasForVerification.Points.SequenceEqual(originalCurvePoints) && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Wide search mode presents the larger synthetic curve only as a detached proposal",checks);
+            }
+            finally { curveTrace.CanvasForVerification.ClearPoints();curveTrace.Close();SynchronizationContext.SetSynchronizationContext(curveContext); }
+            var budgetTrace=new PhotoTraceWindow(workspace,largeEdgeBitmap,workspace.CapturePhotoTrace()!);
+            var budgetContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(budgetTrace.Dispatcher));
+            try
+            {
+                budgetTrace.SourcePurposeForVerification.SelectedIndex=1;budgetTrace.WidePathForVerification.IsChecked=true;
+                foreach(var p in new[] { new Point(1,1),new Point(10,1),new Point(80,80),new Point(430,430) })budgetTrace.CanvasForVerification.TryAddPixelPoint(p);
+                var originalBudgetPoints=budgetTrace.CanvasForVerification.Points.ToArray();
+                var search=budgetTrace.StartPathSuggestionAsync();PumpUntil(()=>search.IsCompleted);search.GetAwaiter().GetResult();
+                Check(budgetTrace.StatusForVerification.Text.StartsWith("En az bir aralıkta geniş alan iş sınırını aştı") &&
+                    budgetTrace.StatusForVerification.Text.Contains("standart 16 piksel alan kullanıldı") && budgetTrace.CanvasForVerification.Points.SequenceEqual(originalBudgetPoints) &&
+                    DocumentSession.ContentEquals(initial,workspace.Document),"A wide path fallback is disclosed before any proposal can change the project",checks);
+            }
+            finally { budgetTrace.CanvasForVerification.ClearPoints();budgetTrace.Close();SynchronizationContext.SetSynchronizationContext(budgetContext); }
             var stamp=workspace.CapturePhotoTrace() ?? throw new InvalidOperationException("Photo trace stamp missing.");
             trace=new PhotoTraceWindow(workspace,bitmap,stamp,100,50,photoHash,encodedPhoto.Length);trace.ConfirmForVerification=_=>false;
             Render(trace,Path.ChangeExtension(reportPath,".photo-purpose-unselected.png"),560,480);
@@ -9536,6 +9584,9 @@ internal static partial class DesktopVerification
             Check(trace.ColorPathForVerification.IsChecked==false && trace.ColorPathForVerification.Focusable && FullyVisible(trace.ColorPathForVerification,root) &&
                 AutomationProperties.GetHelpText(trace.ColorPathForVerification).Contains("giysi sınırı olmayabilir"),
                 "Optional RGB path is initially off, visible and explains its limitations",checks);
+            Check(trace.WidePathForVerification.IsChecked==false && trace.WidePathForVerification.Focusable && FullyVisible(trace.WidePathForVerification,root) &&
+                AutomationProperties.GetHelpText(trace.WidePathForVerification).Contains("standart alana döner"),
+                "Optional wide search is initially off, visible and explains fallback",checks);
             Check(!canvas.TryMapViewToPixel(new Point(100,10),new Size(200,200),out _) &&
                 canvas.TryMapViewToPixel(new Point(100,100),new Size(200,200),out var center) && Math.Abs(center.X-49.5)<1e-9 && Math.Abs(center.Y-24.5)<1e-9 &&
                 canvas.TryMapPixelToView(center,new Size(200,200),out var roundtrip) && Math.Abs(roundtrip.X-100)<1e-9 && Math.Abs(roundtrip.Y-100)<1e-9,
@@ -9829,6 +9880,15 @@ internal static partial class DesktopVerification
                         "Changing color mode cancels the in-flight path and preserves the selected points",checks);
                     trace.ColorPathForVerification.IsChecked=false;
                 }
+                using(var wideReached=new ManualResetEventSlim())
+                {
+                    trace.ComputePathForVerification=(_,_,_,token)=> { wideReached.Set();token.WaitHandle.WaitOne();token.ThrowIfCancellationRequested();return null; };
+                    var staleWide=trace.StartPathSuggestionAsync();PumpUntil(()=>wideReached.IsSet);trace.WidePathForVerification.IsChecked=true;
+                    PumpUntil(()=>staleWide.IsCompleted);staleWide.GetAwaiter().GetResult();
+                    Check(canvas.PathSuggestion is null && canvas.Points.SequenceEqual(beforeZoom) && trace.StatusForVerification.Text.Contains("arama alanı değişti"),
+                        "Changing wide search mode cancels an in-flight path without changing points",checks);
+                    trace.WidePathForVerification.IsChecked=false;
+                }
                 var calls=0;
                 trace.ComputePathForVerification=(_,start,end,_)=> { calls++;return start.Y==end.Y
                     ? new[] { new Point(10,10),new Point(15,11),new Point(20,10) }
@@ -9947,6 +10007,10 @@ internal static partial class DesktopVerification
                 trace.ColorPathForVerification.IsChecked=false;
                 Check(canvas.TopologyWarningEdgesForVerification is { Length:4 } && trace.StatusForVerification.Text.Contains("Turuncu kenarlar"),
                     "Restoring grayscale also retains an applied crossing warning",checks);
+                trace.WidePathForVerification.IsChecked=true;
+                Check(canvas.Points.SequenceEqual(crossingPoints) && canvas.TopologyWarningEdgesForVerification is { Length:4 } && trace.StatusForVerification.Text.Contains("Turuncu kenarlar"),
+                    "Changing wide search mode retains an applied crossing warning",checks);
+                trace.WidePathForVerification.IsChecked=false;
                 Descendants<Button>(root).Single(b=>Equals(b.Content,"Yakınlaştır")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                 Check(trace.StatusForVerification.Text.Contains("Turuncu kenarlar") && canvas.TopologyWarningEdgesForVerification is { Length:4 },
                     "Zooming an applied crossing retains its warning",checks);
