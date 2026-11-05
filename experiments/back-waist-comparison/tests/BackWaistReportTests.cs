@@ -33,4 +33,32 @@ public class BackWaistReportTests
         Assert.Equal(10*(BigInteger.One<<30),b.LowerHalfMm.Lower-a.LowerHalfMm.Lower);
         Assert.Equal(a.UpperHalfMm,b.UpperHalfMm);
     }
+    [Fact] public void FractionalAndAdjacentBinary64LengthsAreEnclosedAndDifferenceKeepsItsSign()
+    {
+        // Independent exact rational representation of each actual endpoint.
+        static (BigInteger N,BigInteger D) Fraction(double x)
+        {
+            var bits=BitConverter.DoubleToUInt64Bits(x);int exponent=(int)((bits>>52)&2047);
+            BigInteger numerator=bits&((1UL<<52)-1);
+            if(exponent!=0)numerator+=(BigInteger.One<<52);
+            int shift=exponent==0 ? -1074 : exponent-1023-52;
+            if((bits>>63)!=0)numerator=-numerator;
+            return shift>=0 ? (numerator<<shift,BigInteger.One) : (numerator,BigInteger.One<<-shift);
+        }
+        foreach(double arc in new[]{370.1,Math.BitIncrement(370.1),Math.BitDecrement(370.1),600.1})
+        {
+            var input=Input() with { BackWaistArc=arc, BackHipArc=700, FinishedHemCircumference=2000 };
+            var panel=ALinePanelPreview.Create(input).Back;
+            var a=Fraction(panel[0].X);var b=Fraction(panel[1].X);
+            var numerator=BigInteger.Abs(b.N*a.D-a.N*b.D);var denominator=a.D*b.D;
+            var report=BackWaistReport.Compare(Evidence(),"synthetic-base",input,"synthetic",true);
+            var unit=BigInteger.One<<30;
+            Assert.True(report.LowerHalfMm.Lower*denominator<=numerator*unit);
+            Assert.True(numerator*unit<=report.LowerHalfMm.Upper*denominator);
+            Assert.True(report.LowerHalfMm.Upper-report.LowerHalfMm.Lower<=BigInteger.One);
+            Assert.False(report.ProductionAllowed);Assert.False(report.GeometryExportAllowed);Assert.False(report.DeviceAllowed);
+            if(arc<400)Assert.True(report.UpperMinusLowerMm.Lower>0);
+            else Assert.True(report.UpperMinusLowerMm.Upper<0);
+        }
+    }
 }
