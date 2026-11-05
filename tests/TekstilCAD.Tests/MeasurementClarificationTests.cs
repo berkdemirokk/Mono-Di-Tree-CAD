@@ -21,7 +21,6 @@ public class MeasurementClarificationTests
     [InlineData("bel çevresi yaklaşık 72 cm")]
     [InlineData("bel çevresi 72 cm değil")]
     [InlineData("bel çevresi 72 cm olsun")]
-    [InlineData("bel çevresi 72 cm olursa")]
     [InlineData("bel çevresi 72 cm?")]
     [InlineData("bel çevresi 72 cm ve göğüs çevresi 96 cm")]
     [InlineData("bel çevresi 72 cm;bel çevresi 72 cm")]

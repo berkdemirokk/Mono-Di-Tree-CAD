@@ -34,6 +34,9 @@ public static partial class DressMeasurementParser
         if(value<=0 || value>10_000m || ChatModelChoice.Review(segment[..match.Groups["model"].Length]).ModelId is null)return false;
         measurementOffset=offset;return true;
     }
+    // Explicit, bounded vocabulary only: never infer Turkish conditional suffixes
+    // (for example the ordinary word "elbise" must not trigger a condition).
+    private static readonly Regex UnscopedCondition=new(@"(?<![\p{L}\p{M}\p{N}_])(?:eğer|şayet|gerekirse|koşuluyla|şartıyla|takdirde|olursa|olmazsa|değilse|ise)(?![\p{L}\p{M}\p{N}_])",RegexOptions.CultureInvariant,TimeSpan.FromMilliseconds(100));
     private sealed record ClauseEvidence(int Field,int Offset,int Order,decimal? Value,bool Question);
     // These distinct experimental measurements mention "göğüs" but are not
     // chest circumference. Only an entire, explicit field is excluded from
@@ -75,6 +78,9 @@ public static partial class DressMeasurementParser
         var coupled=new List<HashSet<string>>();
         var evidence=new Dictionary<string,List<ClauseEvidence>>(StringComparer.Ordinal);
         var texts=new[]{description,measurements};
+        // Neither separators nor the two text fields establish the scope/end of
+        // a condition. Keep this cause independent of question clarification.
+        var hasUnscopedCondition=texts.Any(text=>UnscopedCondition.IsMatch(FoldCase(text)));
         for(int field=0;field<texts.Length;field++)
         {
         var text=texts[field];
@@ -151,6 +157,11 @@ public static partial class DressMeasurementParser
         {
             values.TryGetValue(key,out var found);
             bool conflict=found is not null && found.Any(x=>x.Value!=found[0].Value);
+            if(hasUnscopedCondition&&(Required.Contains(key)||found is not null||unclear.Contains(key)))
+            {
+                questions.Add($"{key}: ifade belirsiz; koşullu ifadenin hangi ölçülere uygulandığı belli değil. Noktalama veya ayrı alan koşulu sonlandırmaz; ölçüler kesin kabul edilmedi."+(conflict?" Ayrıca farklı değerler birbiriyle çelişiyor.":""));
+                continue;
+            }
             if(unclear.Contains(key) || conflict)
             { questions.Add($"{key}: ifade belirsiz veya birbiriyle çelişiyor; tek değeri ve birimini açıkça belirtin.");continue; }
             if(found is not null)output.Add(new(key,found[0].Value,found.Select(x=>x.Source).ToArray()));

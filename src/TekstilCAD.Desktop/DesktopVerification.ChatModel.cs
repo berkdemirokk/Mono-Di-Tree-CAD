@@ -184,6 +184,17 @@ internal static partial class DesktopVerification
             }
             window.LoadForVerification(new DesignRequest("bel çevresi 72 cm?","bel çevresi 72 cm",null));
             Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","No clarification chronology inferred across description and notes",checks);
+            foreach(var conditional in new[]{"eğer kumaş ipekse; bel çevresi 72 cm","bel çevresi 72 cm; eğer kumaş ipekse","eğer kumaş ipekse; göğüs çevresi 96 cm ve bel çevresi 72 cm","eğer kumaş ipekse; bel çevresi 72 cm?; bel çevresi 72 cm"})
+            {
+                window.LoadForVerification(new DesignRequest("Sentetik istek","kalça çevresi 100 cm;elbise boyu 110 cm",null));window.ChatInputForVerification.Text=conditional;window.SendMessageForVerification();
+                Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin"&&window.MeasurementTilesForVerification["kalça çevresi"].Text=="Kontrol edin"&&window.ConversationForVerification.Text.Contains("koşullu ifadenin"),"Unknown conditional scope blocks definite tiles across both fields: "+conditional,checks);
+                var conditionalSaved=window.CaptureForVerification();window.LoadForVerification(DesignRequestStorage.Deserialize(DesignRequestStorage.Serialize(conditionalSaved)));
+                Check(window.CaptureForVerification().Prompt==conditionalSaved.Prompt&&window.CaptureForVerification().Measurements==conditionalSaved.Measurements&&window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin","Conditional source text and uncertainty survive save/load",checks);
+            }
+            window.LoadForVerification(new DesignRequest("bel çevresi 72 cm?;bel çevresi 72 cm","eğer kumaş ipekse;bel çevresi 73 cm",null));window.ReviewMeasurementsForVerification();
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="Kontrol edin"&&window.ReviewForVerification.Text.Contains("koşullu")&&window.ReviewForVerification.Text.Contains("çelişiyor"),"Condition in notes survives question clarification and retains conflicting-value warning",checks);
+            window.LoadForVerification(new DesignRequest("gömlek elbise;bel çevresi 72 cm?;bel çevresi 720 mm!","kalça çevresi 100 cm.",null));
+            Check(window.MeasurementTilesForVerification["bel çevresi"].Text=="72 cm"&&window.MeasurementTilesForVerification["kalça çevresi"].Text=="100 cm","Elbise does not trigger suffix detection; nonconditional clarification stays functional",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
