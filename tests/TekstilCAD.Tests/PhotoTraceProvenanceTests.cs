@@ -105,6 +105,20 @@ public sealed class PhotoTraceProvenanceTests
         layout.PhotoTraceHistory=[Evidence(Guid.NewGuid())];
         var json=ProjectStorage.SerializeProject(layout);Assert.Equal(8,JsonNode.Parse(json)![0]!.GetValue<int>());
         Assert.True(DocumentSession.ContentEquals(layout,ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(json))));
+        // A layout may retain both older photo evidence and newer plane-calibrated evidence.
+        Point2[] corners=[new(10,10),new(90,10),new(80,90),new(20,90)];
+        Point2[] pixels=[new(25,25),new(70,25),new(70,70)];
+        var plane=new PhotoTraceProvenance { AlgorithmVersion=2,PieceId=Guid.NewGuid(),SourceSha256=new string('B',64),SourceByteLength=500,SourceOrientation=1,
+            SourceWidth=200,SourceHeight=200,PreviewWidth=100,PreviewHeight=100,ReferenceStart=corners[0],ReferenceEnd=corners[1],ReferenceLengthMm=200,
+            PlaneCalibration=new PhotoPlaneCalibration { Corners=[..corners],WidthMm=200,HeightMm=150 },TracePixels=[..pixels],
+            GeneratedPoints=PhotoPlaneRectification.Convert(100,100,corners,200,150,pixels).ToList() };
+        layout.PhotoTraceHistory.Add(plane);ProjectStorage.Validate(layout);
+        Assert.Equal(9,ProjectStorage.GetProjectFormatVersion(layout));
+        var mixed=ProjectStorage.SerializeProject(layout);Assert.Equal(9,JsonNode.Parse(mixed)![0]!.GetValue<int>());
+        var restored=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(mixed));
+        Assert.True(DocumentSession.ContentEquals(layout,restored));
+        Assert.NotNull(restored.NestingSnapshot!.RotationTrace);
+        Assert.Equal(new[]{1,2},restored.PhotoTraceHistory!.Select(record=>record.AlgorithmVersion));
     }
     [Theory]
     [InlineData(false)]
