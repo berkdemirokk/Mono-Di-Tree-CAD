@@ -5,6 +5,8 @@
           Condition="'$(TekstilCADResearchNoVideo)' == 'true'">
     <Error Condition="'$(RuntimeIdentifier)' != 'win-x64' or '$(SelfContained)' != 'true'"
            Text="The photo research profile requires a self-contained win-x64 publish." />
+    <Error Condition="'$(PublishSingleFile)' == 'true'"
+           Text="The photo research profile does not support single-file publish." />
     <ItemGroup>
       <_ResearchVideoDll Include="@(ResolvedFileToPublish)"
         Condition="'%(ResolvedFileToPublish.Filename)%(ResolvedFileToPublish.Extension)' == 'opencv_videoio_ffmpeg4100_64.dll'" />

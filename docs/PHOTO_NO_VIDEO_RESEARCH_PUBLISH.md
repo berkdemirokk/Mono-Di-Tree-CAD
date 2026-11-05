@@ -1,6 +1,6 @@
 # Experimental x64 photo research publish
 
-The opt-in `PhotoResearchNoVideo` profiles publish a self-contained Windows x64 desktop and, separately, the local photo-region prototype. The shared target removes only the resolved publish item named `opencv_videoio_ffmpeg4100_64.dll` after the SDK computes publish items; it neither deletes existing files nor modifies normal builds or other profiles. The target stops if the requested runtime/self-contained settings do not match or if that exact resolved item is absent. Other native binaries are retained.
+The opt-in `PhotoResearchNoVideo` profiles publish a self-contained Windows x64 desktop and, separately, the local photo-region prototype. The shared target removes only the resolved publish item named `opencv_videoio_ffmpeg4100_64.dll` after the SDK computes publish items; it neither deletes existing files nor modifies normal builds or other profiles. The target stops if the requested runtime/self-contained settings do not match, single-file publishing is enabled, or that exact resolved item is absent. Other native binaries are retained.
 
 Use **new empty output directories**. A publish into an existing directory can retain old files, and this profile intentionally does not delete them. The example assumes the repository root, an installed .NET SDK and already available packages. It executes only when a developer runs it:
 
@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Desktop publish failed.' }
 dotnet publish tools/PhotoRegionSharpPrototype/PhotoRegionSharpPrototype.csproj -p:PublishProfile=PhotoResearchNoVideo -o $photoPrototype
 if ($LASTEXITCODE -ne 0) { throw 'Prototype publish failed.' }
 foreach ($folder in @($photoDesktop,$photoPrototype)) {
-    if (Test-Path -LiteralPath (Join-Path $folder 'opencv_videoio_ffmpeg4100_64.dll')) { throw 'Unexpected video DLL in output.' }
+    if (@(Get-ChildItem -LiteralPath $folder -Recurse -File -Filter 'opencv_videoio_ffmpeg4100_64.dll' -Force).Count -ne 0) { throw 'Unexpected video DLL in output or a subdirectory.' }
     if (-not (Test-Path -LiteralPath (Join-Path $folder 'OpenCvSharpExtern.dll'))) { throw 'OpenCvSharpExtern missing.' }
 }
 & (Join-Path $photoPrototype 'PhotoRegionSharpPrototype.exe') --selftest
