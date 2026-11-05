@@ -2,6 +2,8 @@
 
 Bu klasör, uygulamadan bağımsız, yalnız `127.0.0.1` üzerinde geçici bir Node sunucusu ve tarayıcı görünümüdür. Ana CAD programına eklenmemiştir. Açık birim, 15 ölçü ve kullanıcı onayı gereklidir. Sabit seçenekler: ön birincil göğüs pensi 06:00, ikincil pens yok, arka omuz ve bel pensleri kapalı. Motorun diğer seçenekleri deney değerleridir; sayfada tamamı görülebilir ve kişisel uyum önerisi değildir. Santimetre/mm çevrimi dışında ölçü türetilmez; omuz eğimi derecedir. Bu, etek veya tam elbise değildir.
 
+Her alanın Türkçe ölçüm açıklaması mevcut araştırma ölçüm kapısının tanımına dayanır; sahada ölçüm veya uzman doğrulaması yapılmamıştır. Kalça kemiği referansı ile en geniş kalça çevresi hizası farklı olabilir, omuz eğiminin ölçülüşü de bilinmiyorsa uzmanla teyit edilmelidir. İstek metni ve geçmişiyle güvenilir alan bağı kurulmadığından hiçbir ölçü önerilmez veya önceden doldurulmaz. On beş değer, birim ve onay başlangıçta boştur; her değişiklik önceki görüntüyü ve onayı geçersiz kılar.
+
 Ön ve arka Breanna `paths.seam` yollarındaki çizgi ve kübik eğri koordinatları yerel mm olarak alınır; canvas'a yerleştirme ve ölçek yalnız görüntü amaçlıdır. İşaret, dikiş payı, kumaş katı ve kesim semantiği aktarılmaz. Bilinen topoloji, nokta/işaret kimliği, bel–etek dikişi, kesim ve kullanım uygunluğu doğrulanmamıştır. Kaydetme, projeye aktarma, veri indirme, fiziksel çıktı, cihaz veya üretim işlevi yoktur; işletim sistemi ve tarayıcı ekran yakalama yetenekleri engellenemez. Ölçüler bellekte işlenir; uygulama bunları dosyaya yazmaz veya harici servise göndermez. Yerel Node sürecini yalnız güvenilir makinede kullanın.
 
 ## Başlatma (geliştirici ortamı)
