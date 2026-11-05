@@ -1264,6 +1264,17 @@ final class DesignDraftStoreTests: XCTestCase {
             }
         }
     }
+    func testReferenceThumbnailTicketRejectsRemovedChangedAndOlderImage() {
+        let original = Data([1, 2, 3]), changed = Data([4, 5, 6])
+        let first = PhotoObservation.ThumbnailTicket(bytes: original)
+        let next = PhotoObservation.ThumbnailTicket(bytes: original)
+        XCTAssertTrue(first.matches(activeID: first.id, currentBytes: original))
+        XCTAssertFalse(first.matches(activeID: nil, currentBytes: original))
+        XCTAssertFalse(first.matches(activeID: first.id, currentBytes: nil))
+        XCTAssertFalse(first.matches(activeID: first.id, currentBytes: changed))
+        XCTAssertFalse(first.matches(activeID: next.id, currentBytes: original))
+        XCTAssertEqual(original, Data([1, 2, 3]))
+    }
     func testPhotoObservationRejectsInvalidImageWithoutAlteringBytes() {
         let bytes = Data([0, 1, 2])
         XCTAssertThrowsError(try PhotoObservation.thumbnail(bytes))

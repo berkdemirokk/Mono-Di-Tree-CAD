@@ -3516,6 +3516,7 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     if let imageName {
                         Text("Seçilen: \(ModelStore.safeLabel(imageName))")
+                        if let bytes = image { RequestReferenceThumbnail(bytes: bytes) }
                         Text(v2ImageReview.status(for: image)).font(.caption)
                         Button("Fotoğrafa bakarak özellikleri belirt…") { openPhotoObservation() }
                             .disabled(draftTransition || referenceBlocksClose)
@@ -3587,8 +3588,10 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     Button("Tarif ve ölçüleri gözden geçir") { step = measurementReviewStartStep }.frame(minHeight: 44)
                     Text("Referans görseli").font(.headline).accessibilityAddTraits(.isHeader)
-                    if let name = summary.referenceName { Text("Eklendi: \(ModelStore.safeLabel(name))") }
-                    else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
+                    if let name = summary.referenceName {
+                        Text("Eklendi: \(ModelStore.safeLabel(name))")
+                        if let bytes = image { RequestReferenceThumbnail(bytes: bytes) }
+                    } else { Text("Görsel eklenmedi.").foregroundStyle(.secondary) }
                     Button("Görseli düzenle") { step = 2 }.frame(minHeight: 44)
                 }
                 Text("Aktarılacak içerik: tarif, ölçüler ve varsa seçilen görsel. Dosyayı yalnız güvendiğiniz kişilerle paylaşın ve kayıt için yeni bir dosya adı seçin.").font(.caption)

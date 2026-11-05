@@ -152,6 +152,11 @@ enum PhotoObservation {
                 && self.importedPortable == importedPortable && self.version == version && self.revision == revision
         }
     }
+    struct ThumbnailTicket {
+        let id = UUID()
+        let bytes: Data
+        func matches(activeID: UUID?, currentBytes: Data?) -> Bool { id == activeID && bytes == currentBytes }
+    }
     /// Reuses the V2 validation limits before producing a bounded display-only image.
     static func thumbnail(_ data: Data) throws -> CGImage {
         try Task.checkCancellation()
