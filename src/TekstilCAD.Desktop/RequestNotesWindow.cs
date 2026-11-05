@@ -16,6 +16,7 @@ internal sealed class RequestNotesWindow : Window
     internal TextBox ReferenceForVerification { get; }
     internal TextBox ModelForVerification { get; }
     internal TextBlock ModelComparisonForVerification { get; }
+    internal TextBox? DrawingTargetForVerification { get; }
     internal Button PhotoButtonForVerification { get; }
     internal Button TraceButtonForVerification { get; }
     internal TextBlock TraceStatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Margin=new Thickness(0,0,0,6) };
@@ -25,7 +26,7 @@ internal sealed class RequestNotesWindow : Window
     private readonly byte[]? referenceBytes;
     private bool closed,decoding;
 
-    internal RequestNotesWindow(Window owner,DesignRequest request)
+    internal RequestNotesWindow(Window owner,DesignRequest request,string? drawingTarget=null)
     {
         ArgumentNullException.ThrowIfNull(owner);DesignRequestStorage.Validate(request);
         Owner=owner;Title="Çizim için istek notları";Width=480;Height=620;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
@@ -72,6 +73,13 @@ internal sealed class RequestNotesWindow : Window
             TextWrapping=TextWrapping.Wrap,Foreground=DesignRequestWindow.Ink,Margin=new Thickness(0,0,0,6)
         };
         DockPanel.SetDock(ModelComparisonForVerification,Dock.Top);root.Children.Add(ModelComparisonForVerification);
+        if(drawingTarget is not null)
+        {
+            DrawingTargetForVerification=ReadOnly("Onaylanan CAD hedefi — geçiş anı",drawingTarget+"\nBu bilgi geçiş anına aittir; ana pencerede farklı proje açarsanız hedef değişir. İstek CAD dosyasına eklenmedi.");
+            DrawingTargetForVerification.MaxHeight=80;
+            var targetDetails=new Expander { Header="Onaylanan CAD hedefi (geçiş anı)",Content=DrawingTargetForVerification,Margin=new Thickness(0,0,0,6) };
+            DockPanel.SetDock(targetDetails,Dock.Top);root.Children.Add(targetDetails);
+        }
         var grid=new Grid();root.Children.Add(grid);
         for(var i=0;i<6;i++)grid.RowDefinitions.Add(new RowDefinition { Height=i is 1 or 3 ? new GridLength(1,GridUnitType.Star) : GridLength.Auto });
         TextBox ReadOnly(string name,string text)

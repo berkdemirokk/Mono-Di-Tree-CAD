@@ -102,7 +102,7 @@ internal sealed class DesignRequestWindow : Window
         var fileActions=new WrapPanel();fileActions.Children.Add(openAction);fileActions.Children.Add(saveAction);technicalBody.Children.Add(fileActions);
         AutomationProperties.SetName(requestDetails,"İstek ayrıntılarını düzenle");
         AutomationProperties.SetHelpText(requestDetails,"Kayıtlı tarif, ölçüler, referans görseli ve teknik seçenekleri açar veya kapatır. Kapatmak metinleri silmez.");
-        var badge=new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ATÖLYE PROJESİ · YENİ ÇALIŞMA",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } };body.Children.Add(badge);
+        var badge=new Border { Background=ColorBrush("#FFD9DF"),CornerRadius=new CornerRadius(10),Padding=new Thickness(9,4,9,4),HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,8),Child=new TextBlock { Text="●  ELBİSE İSTEĞİ · CAD PROJESİNDEN AYRI",Foreground=Accent,FontSize=10,FontWeight=FontWeights.SemiBold } };body.Children.Add(badge);
         var modelHeading=new TextBlock { Text="Modelini seç",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=27,FontWeight=FontWeights.Normal };body.Children.Add(modelHeading);
         var intro=new TextBlock { Text="Bir model fikri seçin veya doğrudan tarif edin. Bildiğiniz ölçülerle devam edebilirsiniz.",Foreground=Muted,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,12) };body.Children.Add(intro);
         var shortcuts=new WrapPanel { Margin=new Thickness(0,0,0,4) };technicalBody.Children.Add(shortcuts);
@@ -313,22 +313,52 @@ internal sealed class DesignRequestWindow : Window
         { error="Ölçü notları sınırına ulaşıldı; mevcut notlar ve girilen değerler korundu.";return false; }
         measurements.AppendText(addition);SetStatus("Ölçüler notlara eklendi. Çelişkileri ve ölçülerin doğruluğunu kontrol edin.");return true;
     }
-    internal RequestNotesWindow? CreateDrawingNotes()
+    private bool CanCreateDrawingNotes()
     {
-        if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; çizime geçmeden önce tamamlanmasını bekleyin.");return null; }
-        if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Çizime geçmeden önce mesajı gönderin veya silin ve isteği kaydedin; mesaj korundu.");return null; }
-        if(!hasSavedRequest || dirty) { SetStatus("Çizime geçmeden önce isteği yeni bir dosyaya kaydedin; mevcut alanlar korundu.");return null; }
-        if(Owner is not Window owner) { SetStatus("Ana çizim penceresi bulunamadı; istek korundu.");return null; }
-        return new RequestNotesWindow(owner,Capture());
+        if(referenceLoadRunning) { SetStatus("Görsel denetimi sürüyor; çizime geçmeden önce tamamlanmasını bekleyin.");return false; }
+        if(!string.IsNullOrEmpty(chatInput.Text)) { SetStatus("Çizime geçmeden önce mesajı gönderin veya silin ve isteği kaydedin; mesaj korundu.");return false; }
+        if(!hasSavedRequest || dirty) { SetStatus("Çizime geçmeden önce isteği yeni bir dosyaya kaydedin; mevcut alanlar korundu.");return false; }
+        if(Owner is not Window) { SetStatus("Ana çizim penceresi bulunamadı; istek korundu.");return false; }
+        return true;
+    }
+    internal RequestNotesWindow? CreateDrawingNotes()=>CanCreateDrawingNotes() ? new RequestNotesWindow(Owner,Capture()) : null;
+    internal Func<string,bool>? ConfirmDrawingTargetForVerification { get; set; }
+    private bool preparingDrawingTarget;
+    internal sealed record DrawingNotesTransition(RequestNotesWindow Notes,Func<bool> IsCurrent);
+    internal DrawingNotesTransition? PrepareDrawingNotesTransition()
+    {
+        if(preparingDrawingTarget) { SetStatus("Çizim hedefi onayı zaten açık; ikinci geçiş başlatılmadı.");return null; }
+        if(Owner is not MainWindow studio) { SetStatus("Ana CAD penceresi bulunamadı; istek korundu.");return null; }
+        if(!CanCreateDrawingNotes())return null;
+        var request=Capture();var chat=chatInput.Text;var revision=referenceRevision;var wasDirty=dirty;
+        MainWindow.RequestDrawingTarget target;
+        try { target=studio.CaptureRequestDrawingTarget(); }
+        catch(InvalidOperationException ex) { SetStatus(ex.Message);return null; }
+        bool Current()=>studio.IsRequestDrawingTargetCurrent(target) && SameRequest(request,Capture()) &&
+            chat==chatInput.Text && revision==referenceRevision && wasDirty==dirty && !referenceLoadRunning;
+        preparingDrawingTarget=true;
+        try
+        {
+            var message=target.Description+"\n\nBu mevcut CAD projesinde devam edeceksiniz. Yeni proje oluşturulmaz; elle eklediğiniz çizimler bu projeye ait olur. Normal Kaydet mevcut dosyayı güncelleyebilir. Farklı projede çalışmak için İptal'i seçip ana pencereden Yeni/Aç işlemini kullanın. Mevcut projede devam edilsin mi?";
+            var accepted=ConfirmDrawingTargetForVerification?.Invoke(message) ??
+                MessageBox.Show(this,message,"Mevcut CAD projesinde devam",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
+            if(!accepted) { SetStatus("Çizime geçiş iptal edildi; istek ve CAD projesi korundu.");return null; }
+            if(closed || !Current()) { SetStatus("Onay sırasında CAD projesi, seçim, kayıt durumu veya istek değişti; geçiş uygulanmadı. Yeniden kontrol edin.");return null; }
+            return new(new RequestNotesWindow(studio,request,target.Description),Current);
+        }
+        finally { preparingDrawingTarget=false; }
     }
     private void OpenDrawingNotes()
     {
-        var notes=CreateDrawingNotes();if(notes is null)return;
+        var transition=PrepareDrawingNotesTransition();if(transition is null)return;var notes=transition.Notes;
         var owner=notes.Owner!;bool closed=false;EventHandler markClosed=(_,_)=>closed=true;Closed+=markClosed;
         Close();
-        if(!closed) { Closed-=markClosed;return; }
+        if(!closed) { Closed-=markClosed;notes.Close();return; }
         // Opening after the modal dialog unwinds lets the owner receive input.
-        _=owner.Dispatcher.BeginInvoke(new Action(()=> { if(owner.IsLoaded)notes.Show(); }));
+        _=owner.Dispatcher.BeginInvoke(new Action(()=> {
+            if(owner.IsLoaded && transition.IsCurrent())notes.Show();
+            else { notes.Close();if(owner is MainWindow studio)studio.SetStatus("CAD hedefi geçişten sonra değişti; istek notları açılmadı. Kaydedilmiş isteği yeniden açıp hedefi kontrol edin."); }
+        }));
     }
     private void ClearModelTracking() { selectedModelText=null;modelSnapshot="";selectedModelStart=0;modelAmbiguous=false;selectedModelFromLoaded=false;SetLastModel(null); }
     private void ConvertToV2()

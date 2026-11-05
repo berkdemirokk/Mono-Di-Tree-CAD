@@ -1026,6 +1026,7 @@ internal static partial class DesktopVerification
             VerifyBackspaceDrawing(studio,work,checks);
             VerifyCoordinateDrawing(studio,checks);
             VerifyDesignRequest(studio,reportPath,checks);
+            VerifyRequestCadTarget(studio,checks);
             VerifyPhotoFileTrace(reportPath,checks);
             VerifyPhotoTrace(reportPath,checks);
             VerifyPhotoPlaneWorkflow(reportPath,checks);

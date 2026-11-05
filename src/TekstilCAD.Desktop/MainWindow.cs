@@ -35,6 +35,20 @@ public class MainWindow : Window
     internal Func<(bool Accepted, bool Saved)>? ConfirmOpenDiscardForVerification { get; set; }
     internal Action<Exception>? ProjectOpenErrorForVerification { get; set; }
     public ProjectDocument Document => session.Document;
+    internal sealed record RequestDrawingTarget(ProjectDocument Document,ProjectDocument Snapshot,Guid Epoch,
+        Guid? Selection,string? FilePath,bool Unsaved,string Description);
+    internal RequestDrawingTarget CaptureRequestDrawingTarget()
+    {
+        if(HasPendingCanvasOrPropertyWork || projectOpenRunning || DxfImportRunning || ExportRunning)
+            throw new InvalidOperationException("Çizime geçmeden önce ana penceredeki bekleyen çizimi, alan taslaklarını veya dosya işlemini tamamlayın.");
+        var description=$"Açık CAD projesi: {SafePieceName(Document.Name)}\nDosya: {(filePath is null ? "Henüz dosyaya kaydedilmedi" : SafePieceName(filePath))}\nParça sayısı: {Document.Pieces.Count}\nKayıt durumu: {(HasUnsavedWork ? "Kaydedilmemiş değişiklikler var" : "Kaydedilmemiş değişiklik yok")}";
+        return new(Document,Document.Clone(),projectEpoch,SelectedId,filePath,HasUnsavedWork,description);
+    }
+    internal bool IsRequestDrawingTargetCurrent(RequestDrawingTarget target)=>
+        !IsWindowClosed && !HasPendingCanvasOrPropertyWork && !projectOpenRunning && !DxfImportRunning && !ExportRunning &&
+        projectEpoch==target.Epoch && ReferenceEquals(Document,target.Document) &&
+        DocumentSession.ContentEquals(target.Snapshot,Document) && SelectedId==target.Selection &&
+        filePath==target.FilePath && HasUnsavedWork==target.Unsaved;
     public Guid? SelectedId { get => session.SelectedId; private set => session.SelectedId = value; }
     public PatternPiece? Selected => Document.Pieces.FirstOrDefault(p => p.Id == SelectedId);
     public string ActiveTool { get; private set; } = "Seç";
