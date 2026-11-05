@@ -5,7 +5,7 @@ namespace TekstilCAD.FileFormats;
 
 /// <summary>Portable offline design request; never a pattern or production approval.</summary>
 public sealed record DesignReference(string Name,string MediaType,byte[] Data);
-public sealed record DesignRequest(string Prompt,string Measurements,DesignReference? Reference, string? ModelId = null);
+public sealed record DesignRequest(string Prompt,string Measurements,DesignReference? Reference, string? ModelId = null, int Version = 1);
 
 public static class DesignRequestStorage
 {
@@ -27,6 +27,7 @@ public static class DesignRequestStorage
     public static void Validate(DesignRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
+        if(request.Version is not (1 or 2) || (request.Version==1 && request.ModelId is not null))throw new InvalidDataException("İstek sürümü veya model kimliği geçersiz.");
         if(request.ModelId is not null && !ModelIds.Contains(request.ModelId))
             throw new InvalidDataException("Model kimliği desteklenmiyor.");
         if(request.Prompt is null || request.Measurements is null || request.Prompt.Length>MaximumTextLength || request.Measurements.Length>MaximumTextLength || !WellFormed(request.Prompt) || !WellFormed(request.Measurements))
@@ -48,9 +49,26 @@ public static class DesignRequestStorage
     public static string Serialize(DesignRequest request)
     {
         Validate(request);
-        if(request.ModelId is not null)throw new InvalidOperationException("V1 biçimi model kimliğini koruyamaz.");
+        if(request.Version!=1 || request.ModelId is not null)throw new InvalidOperationException("V1 biçimi bu isteğin sürümünü veya model kimliğini koruyamaz.");
         var reference=request.Reference is null ? null : new { name=request.Reference.Name,mediaType=request.Reference.MediaType,dataBase64=Convert.ToBase64String(request.Reference.Data) };
         return JsonSerializer.Serialize(new { format=Format,version=1,prompt=request.Prompt,measurements=request.Measurements,reference });
+    }
+    public static string SerializeV2(DesignRequest request,Action<DesignReference>? validateV2Image = null)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if(request.Reference is { Data: not null } original)request=request with { Reference=original with { Data=(byte[])original.Data.Clone() } };
+        Validate(request);
+        if(request.Version!=2)throw new InvalidOperationException("V2 isteği gerekli.");
+        if(request.Reference is { } image)
+        {
+            if(validateV2Image is null)throw new InvalidDataException("V2 referans görseli bu sürümde doğrulanamıyor.");
+            validateV2Image(image with { Data=(byte[])image.Data.Clone() });
+        }
+        var reference=request.Reference is null ? null : new { name=request.Reference.Name,mediaType=request.Reference.MediaType,dataBase64=Convert.ToBase64String(request.Reference.Data) };
+        var model=request.ModelId is null ? null : new { id=request.ModelId };
+        var json=JsonSerializer.Serialize(new { format=Format,version=2,prompt=request.Prompt,measurements=request.Measurements,reference,model });
+        if(Encoding.UTF8.GetByteCount(json)>MaximumFileBytes)throw new InvalidDataException("İstek dosyası çok büyük.");
+        return json;
     }
     private static void Fields(JsonElement obj,params string[] names)
     {
@@ -64,7 +82,7 @@ public static class DesignRequestStorage
         var field=obj.GetProperty(key);
         return field.ValueKind==JsonValueKind.String ? field.GetString()! : throw new InvalidDataException("Metin alanı geçersiz.");
     }
-    public static DesignRequest Deserialize(string json)
+    public static DesignRequest Deserialize(string json, Action<DesignReference>? validateV2Image = null)
     {
         if(json is null || Encoding.UTF8.GetByteCount(json)>MaximumFileBytes)throw new InvalidDataException("İstek dosyası çok büyük.");
         try
@@ -94,24 +112,37 @@ public static class DesignRequestStorage
             }
             // This platform-independent library has no bounded image decoder.
             // A signature alone cannot validate a V2 still image.
-            if(version==2 && image is not null)throw new InvalidDataException("V2 referans görseli bu sürümde doğrulanamıyor.");
-            var result=new DesignRequest(Text(root,"prompt"),Text(root,"measurements"),image,modelId);Validate(result);return result;
+            var result=new DesignRequest(Text(root,"prompt"),Text(root,"measurements"),image,modelId,version);Validate(result);
+            if(version==2 && image is not null)
+            {
+                if(validateV2Image is null)throw new InvalidDataException("V2 referans görseli bu sürümde doğrulanamıyor.");
+                validateV2Image(image with { Data=(byte[])image.Data.Clone() });
+            }
+            return result;
         }
         catch(Exception e) when(e is JsonException or FormatException or InvalidOperationException or KeyNotFoundException)
         { throw new InvalidDataException("İstek dosyası okunamadı.",e); }
     }
-    public static DesignRequest Load(string path)
+    public static DesignRequest Load(string path, Action<DesignReference>? validateV2Image = null)
     {
         using var file=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
         if(file.Length>MaximumFileBytes)throw new InvalidDataException("İstek dosyası çok büyük.");
         using var memory=new MemoryStream();var buffer=new byte[81920];int n;
         while((n=file.Read(buffer))>0) { if(memory.Length+n>MaximumFileBytes)throw new InvalidDataException("İstek dosyası çok büyük.");memory.Write(buffer,0,n); }
-        return Deserialize(new UTF8Encoding(false,true).GetString(memory.ToArray()));
+        return Deserialize(new UTF8Encoding(false,true).GetString(memory.ToArray()),validateV2Image);
     }
     public static void SaveNew(string path,DesignRequest request)
     {
         if(!path.EndsWith(".tcad-request.json",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("İstek dosyası .tcad-request.json ile bitmelidir.");
         var target=Path.GetFullPath(path);ProjectStorage.EnsureWritableDestination(target);
         ProjectStorage.AtomicWriteIfUnchanged(target,Serialize(request),new ProjectFileVersion(target,null));
+    }
+    public static void SaveNewV2(string path,DesignRequest request,Action<DesignReference> validateV2Image)
+    {
+        ArgumentNullException.ThrowIfNull(validateV2Image);
+        if(!path.EndsWith(".tcad-request.json",StringComparison.OrdinalIgnoreCase))throw new InvalidOperationException("İstek dosyası .tcad-request.json ile bitmelidir.");
+        var json=SerializeV2(request,validateV2Image);
+        var target=Path.GetFullPath(path);ProjectStorage.EnsureWritableDestination(target);
+        ProjectStorage.AtomicWriteIfUnchanged(target,json,new ProjectFileVersion(target,null));
     }
 }

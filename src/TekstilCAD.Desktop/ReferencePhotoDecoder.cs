@@ -20,6 +20,28 @@ internal static class ReferencePhotoDecoder
     internal const long MaximumPixels=24_000_000;
     internal const int MaximumPreviewDimension=1_024;
 
+    internal static void ValidateV2(DesignReference reference)
+    {
+        var data=reference.Data;
+        if(reference.MediaType=="image/png")
+        {
+            // Reject APNG metadata even when a decoder exposes a single frame.
+            if(data.Length<8)throw new InvalidDataException("PNG eksik.");
+            var offset=8;var ended=false;
+            while(offset<=data.Length-12)
+            {
+                var length=System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data.AsSpan(offset,4));
+                if(length>(uint)(data.Length-offset-12))throw new InvalidDataException("PNG parçası eksik.");
+                var type=data.AsSpan(offset+4,4);
+                if(type.SequenceEqual("acTL"u8))throw new InvalidDataException("Hareketli PNG desteklenmiyor.");
+                if(type.SequenceEqual("IEND"u8)) { ended=true;break; }
+                offset+=checked((int)length+12);
+            }
+            if(!ended)throw new InvalidDataException("PNG sonu eksik.");
+        }
+        _=DecodeWithGeometry(data);
+    }
+
     internal static BitmapSource Decode(byte[] data)=>DecodeWithGeometry(data).Bitmap;
     internal static ReferencePhotoPreview DecodeWithGeometry(byte[] data)
     {

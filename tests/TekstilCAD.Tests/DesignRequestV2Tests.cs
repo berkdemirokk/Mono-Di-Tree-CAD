@@ -37,4 +37,21 @@ public sealed class DesignRequestV2Tests
         var image="""{"name":"x.png","mediaType":"image/png","dataBase64":"iVBORw0KGgo="}""";
         Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("null",image)));
     }
+    [Fact] public void V2RoundTripPreservesVersionAndIdentity()
+    {
+        var original=DesignRequestStorage.Deserialize(Json("{\"id\":\"aline\"}"));
+        var restored=DesignRequestStorage.Deserialize(DesignRequestStorage.SerializeV2(original));
+        Assert.Equal(2,restored.Version); Assert.Equal("aline",restored.ModelId); Assert.Equal(original.Prompt,restored.Prompt);
+        Assert.Throws<InvalidOperationException>(()=>DesignRequestStorage.Serialize(DesignRequestStorage.Deserialize(Json("null"))));
+    }
+    [Fact] public void ImageValidationReceivesDetachedBytesAndFailureDoesNotReturnRequest()
+    {
+        var image="""{"name":"x.png","mediaType":"image/png","dataBase64":"iVBORw0KGgo="}""";
+        var request=DesignRequestStorage.Deserialize(Json("null",image),r=>r.Data[0]=0);
+        Assert.Equal(137,request.Reference!.Data[0]);
+        Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.Deserialize(Json("null",image),_=>throw new InvalidDataException("invalid")));
+        Assert.Throws<InvalidDataException>(()=>DesignRequestStorage.SerializeV2(request));
+        var serialized=DesignRequestStorage.SerializeV2(request,r=>r.Data[0]=0);
+        Assert.Equal(137,DesignRequestStorage.Deserialize(serialized,_=>{}).Reference!.Data[0]);
+    }
 }
