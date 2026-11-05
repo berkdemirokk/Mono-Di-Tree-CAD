@@ -23,6 +23,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal TextBlock StatusForVerification { get; }
     internal Canvas CanvasForVerification { get; }
     internal TextBlock KnownTotalsForVerification { get; }
+    internal TextBlock WaistComparisonForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
     internal CheckBox ProposalAgreementForVerification { get; }
     internal Button ProposalApplyForVerification { get; }
     internal TextBlock ProposalForVerification { get; }
@@ -61,6 +62,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             var box=new TextBox { MaxLength=24,Margin=new Thickness(0,0,0,6) };fields.Add(box);
             body.Children.Add(new Label { Content=label+" (seçilen birimde)",Target=box });body.Children.Add(box);
         }
+        body.Children.Add(WaistComparisonForVerification);
         var agreement=new CheckBox { Content=new TextBlock { Text="Sağ/sol simetriyi, ön/arka etek dağılımının eşitliğini ve düz kesitli deneysel gösterimi kabul ediyorum. Asimetrik beden için kullanmayacağım.",TextWrapping=TextWrapping.Wrap },Margin=new Thickness(0,8,0,8) };
         body.Children.Add(agreement);
         var reviewGate=new ALineMeasurementReview();
@@ -157,14 +159,15 @@ internal sealed class ALinePanelPreviewWindow : Window
         }
         Closed+=(_,_)=>closed=true;
         void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
-        foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal(); };
-        unit.SelectionChanged+=(_,_)=> { Clear();RefreshProposal(); };
+        void RefreshWaistComparison()=>WaistComparisonForVerification.Text=ALineWaistSourceComparison.Describe(promptSnapshot,measurementSnapshot,fields[0].Text,fields[1].Text,CurrentUnit());
+        foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
+        unit.SelectionChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();
         confirm.Unchecked+=(_,_)=> { editVersion++;canvas.Children.Clear();blockers.Text=""; };
         confirm.Checked+=(_,_)=>editVersion++;
         proposalAgreement.Checked+=(_,_)=>editVersion++;
         proposalAgreement.Unchecked+=(_,_)=>editVersion++;
-        RefreshProposal();
+        RefreshProposal();RefreshWaistComparison();
         reviewButton.Click+=(_,_)=>
         {
             Clear();

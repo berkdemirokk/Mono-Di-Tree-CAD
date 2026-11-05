@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using TekstilCAD.FileFormats;
+using TekstilCAD.Patterns;
 using Polygon = System.Windows.Shapes.Polygon;
 
 namespace TekstilCAD.Desktop;
@@ -33,6 +34,19 @@ internal static partial class DesktopVerification
             Check(window.KnownTotalsForVerification.Text.Contains("72 cm") && window.KnownTotalsForVerification.Text.Contains("100 cm") &&
                 window.KnownTotalsForVerification.Text.Contains("ön ve arka") && window.FieldsForVerification.All(f=>f.Text.Length==0),
                 "Existing waist and hip totals are shown initially without inventing or filling front/back arcs",checks);
+            Check(window.WaistComparisonForVerification.Text.Contains("eksik"),"Partial waist comparison begins unresolved",checks);
+            window.UnitForVerification.SelectedIndex=0;window.FieldsForVerification[0].Text="35";window.FieldsForVerification[1].Text="37";
+            Check(window.WaistComparisonForVerification.Text.Contains("720 mm") && window.WaistComparisonForVerification.Text.Contains("eşit") && window.WaistComparisonForVerification.Text.Contains("üretim onayı değildir"),
+                "Explicit asymmetric waist arcs compare to request before other fields are supplied",checks);
+            window.FieldsForVerification[1].Text="38";
+            Check(window.WaistComparisonForVerification.Text.Contains("farklı") && window.WaistComparisonForVerification.Text.Contains("730 mm"),"Edited waist immediately invalidates the earlier equality",checks);
+            window.FieldsForVerification[1].Clear();window.FieldsForVerification[0].Clear();window.UnitForVerification.SelectedIndex=-1;
+            Check(window.WaistComparisonForVerification.Text.Contains("eksik"),"Clearing inputs removes previous waist comparison",checks);
+            Check(ALineWaistSourceComparison.Describe("","bel çevresi 72 cm?","350","370",ALineLengthUnit.Millimeter).Contains("belirsiz") &&
+                ALineWaistSourceComparison.Describe("","bel çevresi 72 cm; bel çevresi 80 cm","350","370",ALineLengthUnit.Millimeter).Contains("belirsiz") &&
+                ALineWaistSourceComparison.Describe("","bel çevresi 72 cm ise","350","370",ALineLengthUnit.Millimeter).Contains("belirsiz") &&
+                ALineWaistSourceComparison.Describe("","bel çevresi 72 cm","350","370",ALineLengthUnit.Millimeter).Contains("eşit"),
+                "Waist comparison rejects question and conflicting sources and normalizes explicit units",checks);
             static void Click(Button b)=>b.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             static void Fill(ALinePanelPreviewWindow w,bool cm)
             {
