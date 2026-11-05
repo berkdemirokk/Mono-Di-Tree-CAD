@@ -11153,15 +11153,39 @@ internal static partial class DesktopVerification
             var themeRoot=(FrameworkElement)window.Content;
             foreach(var size in new[] { new Size(480,420),new Size(900,700) })
             {
+                var details=window.RequestDetailsForVerification;
+                var preservedRequest=window.CaptureForVerification();var preservedChat=window.ChatInputForVerification.Text;
+                details.IsExpanded=false;
                 themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
                 var requestBody=(StackPanel)window.BodyScrollerForVerification.Content;
-                var advanced=requestBody.Children.OfType<StackPanel>().Single(p=>Descendants<TextBox>(p).Contains(window.PromptForVerification));
+                var advanced=(StackPanel)details.Content;
+                var composer=(DockPanel)LogicalTreeHelper.GetParent(window.ChatInputForVerification);
+                var conversationContainer=(Border)LogicalTreeHelper.GetParent(window.ConversationForVerification);
+                Check(requestBody.Children.OfType<Expander>().Single()==details && !details.IsExpanded &&
+                    requestBody.Children.IndexOf(conversationContainer)>=0 && requestBody.Children.IndexOf(composer)>requestBody.Children.IndexOf(conversationContainer) &&
+                    requestBody.Children.IndexOf(details)>requestBody.Children.IndexOf(composer) && composer.Children.Contains(window.SendActionForVerification!),
+                    "Primary conversation and real Send composer precede collapsed saved-request editing at "+size,checks);
+                Check(AutomationProperties.GetName(details)=="İstek ayrıntılarını düzenle" && AutomationProperties.GetHelpText(details).Contains("Kapatmak metinleri silmez") &&
+                    AutomationProperties.GetName(window.ChatInputForVerification)=="Elbise isteği veya ölçü mesajı" && window.SendActionForVerification!.Focusable,
+                    "Collapsible request editor and primary composer retain accessible names and keyboard action at "+size,checks);
+                window.ChatInputForVerification.BringIntoView();themeRoot.UpdateLayout();
+                Check(FullyVisible(window.ChatInputForVerification,themeRoot) && FullyVisible(window.SendActionForVerification!,themeRoot),
+                    "Primary chat and Send can be brought fully into the viewport with details closed at "+size,checks);
+                details.IsExpanded=true;themeRoot.Measure(size);themeRoot.Arrange(new Rect(new Point(0,0),size));themeRoot.UpdateLayout();
                 var labels=requestBody.Children.OfType<Label>().Concat(Descendants<Label>(advanced)).ToArray();
                 Check(labels.Length==5 && labels.All(label=>ReferenceEquals(label.Foreground,DesignRequestWindow.Ink)),
                     "All design request labels use the readable theme text brush at "+size,checks);
-                Check(advanced.Children.Contains(window.MeasurementsForVerification) && !requestBody.Children.OfType<Expander>().Any() &&
-                    requestBody.Children.IndexOf(advanced)<requestBody.Children.IndexOf(requestBody.Children.OfType<Label>().First()),
-                    "Design request presents editable description and measurements before optional conversation at "+size,checks);
+                Check(advanced.Children.Contains(window.MeasurementsForVerification) && Descendants<TextBox>(advanced).Contains(window.PromptForVerification) &&
+                    labels.Any(label=>ReferenceEquals(label.Target,window.PromptForVerification)) && labels.Any(label=>ReferenceEquals(label.Target,window.MeasurementsForVerification)) &&
+                    labels.Any(label=>ReferenceEquals(label.Target,window.ReviewForVerification)) &&
+                    window.MeasurementsForVerification.Foreground is SolidColorBrush measurementInk && measurementInk.Color==((SolidColorBrush)DesignRequestWindow.Ink).Color &&
+                    details.Foreground is SolidColorBrush detailsInk && detailsInk.Color==((SolidColorBrush)DesignRequestWindow.Ink).Color,
+                    "Expanded editor retains the real prose/measurement controls, associated labels and readable colors at "+size,checks);
+                var afterToggle=window.CaptureForVerification();
+                Check(afterToggle.Prompt==preservedRequest.Prompt && afterToggle.Measurements==preservedRequest.Measurements &&
+                    afterToggle.ModelId==preservedRequest.ModelId && afterToggle.Version==preservedRequest.Version && window.ChatInputForVerification.Text==preservedChat &&
+                    (afterToggle.Reference is null ? preservedRequest.Reference is null : preservedRequest.Reference is not null && afterToggle.Reference.Data.SequenceEqual(preservedRequest.Reference.Data)),
+                    "Layout resize and editor expansion preserve request content, model identity, image bytes and pending chat at "+size,checks);
             }
             Render(window,Path.ChangeExtension(reportPath,".dress-cards-compact.png"),480,420);
             Check(Descendants<Viewbox>(window.ModelScrollerForVerification).All(v=>v.Height==70),
