@@ -201,6 +201,26 @@ try
     try { BezierLengthBounds.Enclose([new(double.NaN,0),new(1,0)]);throw new Exception("Invalid length geometry accepted"); } catch(ArgumentException) { }
     // Exercise the complete 26-field local contract using synthetic values only.
     var bodyPairs=ResearchBody.Fields.Select(k=>new KeyValuePair<string,decimal>(k,SyntheticBodyCatalog.Create("synthetic-base")[k])).ToArray();
+    var auditPairs=bodyPairs.Select(p=>new KeyValuePair<string,decimal?>(p.Key,p.Value)).ToArray();
+    MeasurementContractAudit.Report Audit(IEnumerable<KeyValuePair<string,decimal?>> values,string? len="cm",string? angle="degree")=>MeasurementContractAudit.Assess(values,len,angle);
+    void HasCode(MeasurementContractAudit.Report report,string code) { if(!report.Issues.Any(i=>i.Code==code && i.Severity==MeasurementContractAudit.Kind.Blocking))throw new Exception("Missing audit issue: "+code); }
+    var auditBase=Audit(auditPairs);
+    if(auditBase.HasBlockingIssues || auditBase.Issues.Count(i=>i.Severity==MeasurementContractAudit.Kind.Unverified)!=3 || auditBase.PersonalDataCollectionEnabled || auditBase.ProductionAllowed || auditBase.ExportAllowed || auditBase.Status!="unresolved")throw new Exception("Audit baseline gate");
+    HasCode(Audit(auditPairs,"mm","degree"),"length_unit_not_cm");HasCode(Audit(auditPairs,"cm",null),"angle_unit_not_degree");
+    HasCode(Audit(auditPairs.Where(p=>p.Key!="bust")),"missing_measurement");
+    HasCode(Audit(auditPairs.Select(p=>p.Key=="bust"?new KeyValuePair<string,decimal?>(p.Key,null):p)),"missing_measurement");
+    HasCode(Audit(auditPairs.Append(new("_waist_level",1))),"unknown_or_derived_field");HasCode(Audit(auditPairs.Append(auditPairs[0])),"duplicate_field");
+    HasCode(Audit(auditPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal?>(p.Key,0):p)),"outside_technical_range");
+    HasCode(Audit(auditPairs.Select(p=>p.Key=="wrist"?new KeyValuePair<string,decimal?>(p.Key,0):p)),"outside_technical_range");
+    void AuditScope(string key,decimal value,string code) {
+        var changed=auditPairs.Select(p=>p.Key==key?new KeyValuePair<string,decimal?>(p.Key,value):p).ToArray();HasCode(Audit(changed),code);
+        var concrete=changed.Where(p=>p.Value.HasValue).Select(p=>new KeyValuePair<string,decimal>(p.Key,p.Value!.Value));
+        try { ResearchMeasurements.Create(concrete,"cm","degree").BuildPinnedGarment();throw new Exception("Scope conflict accepted"); } catch(ArgumentException) { }
+    }
+    AuditScope("back_width",100,"unsupported_back_bust_relation");AuditScope("waist_back_width",80,"unsupported_back_waist_relation");AuditScope("hip_back_width",104,"unsupported_back_hip_relation");
+    AuditScope("shoulder_incl",45,"unsupported_shoulder_angle");AuditScope("hip_inclination",89,"unsupported_hip_angle");AuditScope("shoulder_w",2,"unsupported_sleeve_balance");AuditScope("height",86,"unsupported_derived_length");
+    var extremeAudit=Audit(auditPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal?>(p.Key,1000):p));
+    if(extremeAudit.HasBlockingIssues || extremeAudit.Status!="unresolved" || extremeAudit.PersonalDataCollectionEnabled)throw new Exception("Technical limit misrepresented as fit approval");
     var partialKeys=new[]{"back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"};
     var partial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)),"cm","degree");
     var backNeeds=partial.Check(ResearchMeasurements.Operation.PrecutBackWaist);

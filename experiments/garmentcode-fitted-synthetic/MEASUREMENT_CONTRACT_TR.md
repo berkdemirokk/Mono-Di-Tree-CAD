@@ -41,3 +41,6 @@ PDF, `hip_inclination` için dikey yanın 0° olduğunu ve `shoulder_incl` için
 
 
 `ResearchMeasurements`, eksik alanları ayrı tutan yalnız araştırma amaçlı bir varlık modelidir; arka bel ve ön kontur formüllerinin doğrudan kullandığı alanlar için eksik listesi sağlar. Listede tüm alanların bulunması anatomik geçerlilik veya model kapsamına uygunluk değildir. Ön gövde ön-kesimi 11, arka bel ön-kesimi 8 gerekli ham alanla araştırma adayı hesaplayabilir; eksik alan tahmin edilmez, kapsam kontrolleri ayrıca uygulanır. Seçili sabit tasarımın altı panel ve dikiş araştırması, `PinnedGarment` işlemindeki 20 ham alanla da çalışabilir; eksik diğer altı alana değer atanmaz. Bu, başka tasarımların aynı alanları gerektireceği anlamına gelmez. Gerçek kişilerden veri toplama açılmamıştır. 0–1000 cm gibi teknik sayısal sınırlar anatomik kabul aralığı değildir; aşırı değerlerin bu aşamayı geçmesi bunların uygun olduğu anlamına gelmez.
+
+
+Seçili 20 alanın PDF’deki daha ayrıntılı tanımları, eksik işaretleme bilgileri ve izole hata kodları için [sabit tasarım ölçü sözleşmesine](PINNED_MEASUREMENT_SPEC_TR.md) bakın. Bu belge de gerçek kişilere uygulanacak ölçüm talimatı değildir.

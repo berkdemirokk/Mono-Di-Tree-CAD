@@ -29,7 +29,7 @@ internal sealed class ResearchMeasurements
         }
         return new(builder.ToImmutable());
     }
-    static ImmutableArray<string> FieldsFor(Operation operation) => operation switch {
+    internal static ImmutableArray<string> FieldsFor(Operation operation) => operation switch {
             Operation.PrecutBackWaist=>["back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"],
             Operation.PrecutFrontBodice=>["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line"],
             Operation.PinnedGarment=>["bust","back_width","waist","waist_back_width","bust_points","shoulder_w","shoulder_incl","waist_line","waist_over_bust_line","bust_line","vert_bust_line","bum_points","neck_w","armscye_depth","hips","hip_back_width","hips_line","height","head_l","hip_inclination"],
