@@ -90,5 +90,29 @@
   {
     "text": "ön bel YAYİ BOLLUĞU 2 cm",
     "valid": false
+  },
+  {
+    "text": "ön  bel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön\tbel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel  yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön  bel yayı 36 cm ve arka bel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön bel yayı 36 cm ve arka\tbel yayı 36 cm",
+    "valid": false
+  },
+  {
+    "text": "ön  bel yayı bolluğu 2 cm",
+    "valid": false
   }
 ]
