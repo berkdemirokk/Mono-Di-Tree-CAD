@@ -12,7 +12,7 @@ try
 {
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -126,6 +126,36 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckBackWaist()
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.back-waist-stages.json") ?? throw new InvalidDataException("Missing back waist reference");
+        using var reader=new StreamReader(stream);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="7407E4A1F33DBAD30210D7860AE76003DF9D677033660ED481A0BBE50DC5AE6A","back fixture hash");
+        using var reference=JsonDocument.Parse(text);
+        Need(reference.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","back source");
+        foreach(var item in reference.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            string id=item.GetProperty("id").GetString()!;var path=BackWaistCandidate.Create(id);var expected=item.GetProperty("edges");
+            Need(path.Edges.Count==11 && expected.GetArrayLength()==11 && path.Status=="unresolved"&&!path.ExportAllowed&&!path.ProductionAllowed,"back candidate gate");
+            double maximum=0,maxControl=0;
+            for(int i=0;i<11;i++)
+            {
+                var actual=path.Edges[i];var edge=expected[i];Need(actual.Id==i && (actual.Kind=="Q"?"CurveEdge":"Edge")==edge.GetProperty("kind").GetString(),"back edge kind");
+                var a=Point(edge.GetProperty("start"));var b=Point(edge.GetProperty("end"));
+                maximum=Math.Max(maximum,Math.Max((a-new P(actual.Start.X,actual.Start.Y)).Length(),(b-new P(actual.End.X,actual.End.Y)).Length()));
+                if(actual.Kind=="Q") { var control=actual.RelativeControl ?? throw new InvalidDataException("missing back control");maxControl=Math.Max(maxControl,(Point(edge.GetProperty("relative_controls")[0])-new P(control.X,control.Y)).Length()); }
+            }
+            Console.WriteLine($"{id} back candidate max endpoint error={maximum:G6} cm; max relative-control error={maxControl:G6}.");
+            Need(maximum<.001 && maxControl<.0002,"back approximation outside research bound");
+            var sourceRules=item.GetProperty("stitches").EnumerateArray().Select(e=>new GeneratedGraph.Seam(id,"precut_back",e.GetProperty("a").GetInt32(),e.GetProperty("a_flip").GetBoolean(),"precut_back",e.GetProperty("b").GetInt32(),e.GetProperty("b_flip").GetBoolean())).ToArray();
+            var graph=path.Edges.Select(e=>new GeneratedGraph.Edge(id,"precut_back",e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+            var diagnosis=GeneratedGraph.Inspect(id,graph,path.DartRules,sourceRules);
+            Need(path.DartRules.Count==2 && !diagnosis.Issues.Any(x=>x.StartsWith("open-contour:")) && !diagnosis.Issues.Contains("seam-identity-or-direction-mismatch") && diagnosis.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !diagnosis.ExportAllowed,"back graph unresolved");
+            var audit=BackBezierAudit.Inspect(path);
+            Need(audit.Separated+audit.EndpointOnly+audit.Unresolved==55 && audit.Status=="unresolved"&&!audit.ExportAllowed,"back audit coverage");
+            Console.WriteLine($"{id} back represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, nonmonotone={audit.NonMonotone}.");
+        }
+    }
     internal static void CheckPrecutBodice()
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.precut-bodice.json") ?? throw new InvalidDataException("Missing precut reference");
@@ -318,6 +348,27 @@ internal static class Validator
                 Need(source.GetProperty("kind").GetString()=="CurveEdge" && (a-new P(curve.Start.X,curve.Start.Y)).Length()<1e-5 && (b-new P(curve.End.X,curve.End.Y)).Length()<1e-5 && (c1-new P(curve.Control1.X,curve.Control1.Y)).Length()<1e-12 && (c2-new P(curve.Control2.X,curve.Control2.Y)).Length()<1e-12,"source armhole: "+curve.Panel);
             }
             Need(armholes.Status=="unresolved"&&!armholes.ProductionAllowed&&!armholes.ExportAllowed,"armhole gate");
+            foreach(bool left in new[]{false,true})
+            {
+                var path=BackBodiceCandidate.Create(id,left);var refEdges=item.GetProperty("panels").GetProperty(path.Panel).GetProperty("edges");
+                Need(path.Edges.Count==13 && path.Status=="unresolved"&&!path.ProductionAllowed&&!path.ExportAllowed,"back final candidate gate");
+                foreach(var edge in path.Edges)
+                {
+                    var source=refEdges[edge.Id];P a=Point(source.GetProperty("start")),b=Point(source.GetProperty("end"));
+                    Need((a-new P(edge.Start.X,edge.Start.Y)).Length()<.001 && (b-new P(edge.End.X,edge.End.Y)).Length()<.001,"back final candidate endpoint: "+path.Panel+":"+edge.Id);
+                    string sourceKind=source.GetProperty("kind").GetString()!;
+                    Need((edge.Kind,sourceKind) is ("L","Edge") or ("A","CircleEdge") or ("Q","CurveEdge") or ("C","CurveEdge"),"back final candidate kind");
+                    if(edge.Kind=="A")Need(Math.Abs(source.GetProperty("control_y").GetDouble()-edge.ArcControlY!.Value)<1e-7,"back final arc");
+                    if(edge.Kind is "Q" or "C")
+                    {
+                        var controls=source.GetProperty("relative_controls"); Need(controls.GetArrayLength()==edge.Controls.Count,"back final control count");
+                        for(int i=0;i<edge.Controls.Count;i++) Need((Point(controls[i])-new P(edge.Controls[i].X,edge.Controls[i].Y)).Length()<(edge.Kind=="Q"?.0002:1e-12),"back final control");
+                    }
+                }
+                var graph=path.Edges.Select(e=>new GeneratedGraph.Edge(id,path.Panel,e.Id,e.Kind,new(e.Start.X,e.Start.Y),new(e.End.X,e.End.Y))).ToArray();
+                var diagnostic=GeneratedGraph.Inspect(id,graph,[],[]);
+                Need(diagnostic.Issues.Contains("incomplete-graph") && !diagnostic.Issues.Any(x=>x.StartsWith("open-contour:")) && diagnostic.Issues.Any(x=>x.StartsWith("curve-topology-unproven:")) && !diagnostic.ExportAllowed,"back final topology gate");
+            }
             var backNeck=BackNeckCut.Create(id);
             foreach(var pair in new[]{("right_btorso",11,backNeck.Right),("left_btorso",1,backNeck.Left)})
             {
