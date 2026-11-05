@@ -39,12 +39,14 @@ export function validateMatrix(data) {
  return {caseCount:seen.size,partCount,anchorCount};
 }
 export async function report(bytes,limits) {
- if(!Buffer.isBuffer(bytes)||bytes.length>20_000_000||sha(bytes)!==SOURCE_SHA)throw Error('source hash mismatch');
+ if(!Buffer.isBuffer(bytes)||bytes.length>20_000_000)throw Error('source hash mismatch');
+ const snapshot=Buffer.from(bytes);
+ if(sha(snapshot)!==SOURCE_SHA)throw Error('source hash mismatch');
  const oracleBytes=readFileSync(fileURLToPath(new URL('./dyadic-box-oracle.mjs',import.meta.url)));
  if(sha(oracleBytes)!==ORACLE_SHA)throw Error('oracle hash mismatch');
  // Import precisely the bytes whose digest was checked, not the mutable path.
  const {inspectDyadic}=await import('data:text/javascript;base64,'+oracleBytes.toString('base64'));
- const data=JSON.parse(bytes.toString('utf8').replace(/^\uFEFF/,''));const counts=validateMatrix(data);
+ const data=JSON.parse(snapshot.toString('utf8').replace(/^\uFEFF/,''));const counts=validateMatrix(data);
  const results=[];
  for(const c of data.cases)for(const part of c.parts)for(const anchor of part.anchors) {
   const inspection=inspectDyadic(anchor.anchor,part.edges,limits);

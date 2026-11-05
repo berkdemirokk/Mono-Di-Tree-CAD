@@ -25,6 +25,13 @@ test('optional pinned 15-case matrix yields 30 panels and 45 anchor reports', {s
   assert.equal(r.inspection.maxDepth,6);assert.equal(r.inspection.maxNodes,256);
  }
 });
+test('caller mutation after invocation cannot replace the validated source snapshot', {skip:!process.env.ANCHOR_MATRIX_FIXTURE},async()=>{
+ const original=readFileSync(process.env.ANCHOR_MATRIX_FIXTURE);
+ const pending=report(original,{thresholdMm:0,maxDepth:0,maxNodes:1});
+ original.fill(0);
+ const out=await pending;
+ assert.deepEqual(out.counts,{caseCount:15,partCount:30,anchorCount:45});
+});
 test('CLI creates new output and refuses overwrite without changing it', {skip:!process.env.ANCHOR_MATRIX_FIXTURE},()=>{
  const dir=mkdtempSync(join(tmpdir(),'anchor-matrix-test-')),out=join(dir,'report.json');
  const script=fileURLToPath(new URL('./matrix-oracle-report.mjs',import.meta.url));
