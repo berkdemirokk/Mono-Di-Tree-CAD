@@ -18,3 +18,9 @@ Kaynak konturu geçersizse, kimlik veya bölüm eksikse engellenir; dönüştür
 
 Giriş dizileri Capture boyunca çağıran tarafından sabit tutulmalıdır; eşzamanlı mutasyon sırasında atomik anlık görüntü garantisi yoktur. Capture sonrasında iç kopya kullanılır. Temas kategorileri sadece temsil edilen binary64 koordinatlar için tam aritmetik kullanır; dönüşümün yuvarlama hatası ve fiziksel temas belirsizdir. Pens bacakları çıkarılınca 0 ve 3 numaralı dış kenarlar aday ortak uçta komşu sayılır; uçlar birleştirilmez.
 
+
+## Sentetik bel karşılaştırması
+
+`SyntheticWaistComparison.Compare` yalnızca `synthetic-base` ve `synthetic-scaled` için gömülü kaynak çizgilerini yerel A-line girdileriyle eşler. Kaynak sürümü, sabit seçenekler, çizgi kimlikleri, rol adları ve zincir sürekliliği denetlenir. Anlık görüntü kimliği, gömülü fixture baytları, sentetik vaka adı ve A-line girdi sayılarının binary64 bitlerini içerir. Bu, yerel eşleme kaydını bağlar; fixture üretiminde kullanılan ölçülerin bağımsız doğruluğunu veya kaynağın özgünlüğünü ispatlamaz.
+
+Döndürme sonrası iki dış parçanın toplamı ile alt ön yarım bel uzunluğu ayrı tutulur ve aralarındaki işaretli fark yalnızca araştırma amaçlı hesaplanır. Temel örnekte sırasıyla 203,5 mm ve 180 mm, fark 23,5 mm'dir; ölçekli örnekte 227,92 mm ve 201,6 mm, fark 26,32 mm'dir. Üst çizgilerin gerçek dikilmiş bel olarak semantiği ve tüm konturun pens sonrası topolojisi kanıtlanmadığından bunlar dikiş eşleşmesi değildir. Sayısal eşik zorunlu olarak çağıranca verilir, dikiş toleransı sayılmaz ve sonuç her durumda `unresolved` kalır. Arka üst parça bu karşılaştırmada yoktur. Gerçek ölçü, Node, cihaz ve çıktı yolu kullanılmaz.

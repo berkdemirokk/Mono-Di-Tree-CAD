@@ -73,6 +73,17 @@ try
     var sample = Fixture("synthetic-base");
     Near(sample.OutsideLength,203.5,1e-7); Near(sample.OpenChainLength,512.0108556058206,1e-7);
     var scaled = Fixture("synthetic-scaled"); Near(scaled.OutsideLength,227.92,1e-7);
+    var comparison = SyntheticWaistComparison.Compare("synthetic-base", 0.01);
+    Near(comparison.FrontUpperOuterPiecesMm,203.5,1e-7); Near(comparison.FrontLowerWaistMm,180); Near(comparison.DifferenceMm,23.5,1e-7);
+    Check(comparison.Status=="unresolved" && !comparison.WithinNumericalThreshold && !comparison.ProductionAllowed && !comparison.ExportAllowed && comparison.Issues.Contains("full-contour-topology-unresolved"), "comparison blocked");
+    var lenient = SyntheticWaistComparison.Compare("synthetic-base",100);
+    Check(lenient.WithinNumericalThreshold && lenient.Status=="unresolved" && lenient.SnapshotId==comparison.SnapshotId, "threshold is not approval or snapshot input");
+    var scaledComparison=SyntheticWaistComparison.Compare("synthetic-scaled",0);
+    Near(scaledComparison.FrontLowerWaistMm,201.6,1e-7); Near(scaledComparison.DifferenceMm,26.32,1e-7);
+    Check(scaledComparison.SnapshotId!=comparison.SnapshotId, "different synthetic snapshots");
+    Reject(()=>SyntheticWaistComparison.Compare("synthetic-other",0));
+    Reject(()=>SyntheticWaistComparison.Compare("synthetic-base",double.NaN));
+    Reject(()=>SyntheticWaistComparison.Compare("synthetic-base",-1));
     var lower = ALinePanelPreview.Create(new(350,370,480,520,10,20,20,20,200,700,1600));
     Near(Geometry.Distance(lower.Front[0],lower.Front[1]),180); Near(Geometry.Distance(lower.Back[0],lower.Back[1]),195);
     Check(!lower.CanApplyOrExport, "lower export");
@@ -81,5 +92,6 @@ try
     return 0;
 }
 catch (Exception ex) { Console.Error.WriteLine($"FAIL: {ex.Message}"); return 1; }
+
 
 
