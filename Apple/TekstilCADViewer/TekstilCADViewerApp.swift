@@ -3404,7 +3404,21 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Modelini seç").font(.largeTitle).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                     Text("Özel dikim için temel elbise siluetini belirleyin veya kendi tarifinizi yazın.").font(.subheadline).foregroundStyle(.secondary)
                     if importedPortable { Text("İçe aktarılan açıklama aşağıdadır. Dosyada ayrı bir model kimliği bulunmuyor; model seçilmedi. İsterseniz bir kart seçin.").font(.caption) }
+                    if style != .describe {
+                        Label("Seçilen model: \(style.rawValue)", systemImage: "checkmark.circle.fill")
+                            .font(.subheadline.weight(.semibold))
+                    } else {
+                        Label("Ayrı model seçilmedi; tarifle devam edebilirsiniz.", systemImage: "text.bubble")
+                            .font(.subheadline)
+                    }
+                    if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
+                        Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
+                    }
+                    Button("Örnek modellere git") { focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top) }
+                        .frame(minHeight: 44)
+                        .accessibilityHint("Model kartlarına kaydırır.")
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
+                        .id("request-description")
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
@@ -3423,6 +3437,7 @@ private struct ExperimentalDesignBriefView: View {
                         } }
                     }
                     Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader).id("request-models")
                     Text("Tüm modelleri görmek için aşağı kaydırın.").font(.caption).foregroundStyle(.secondary)
                     VStack(spacing: 8) {
                         ForEach(ExperimentalDesignBrief.selectableStyles) { option in
@@ -3472,6 +3487,8 @@ private struct ExperimentalDesignBriefView: View {
                             .accessibilityAddTraits((modelExplicitlySelected && style == option) ? .isSelected : [])
                         }
                     }
+                    Button("Tarife dön") { requestScroll.scrollTo("request-description", anchor: .top) }
+                        .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları yukarıda düzenleyebilirsiniz.").font(.caption)
                 }
                 Section {
