@@ -36,7 +36,7 @@ internal static class SideCurvatureExperiment
             for(int i=0;i<=n;i++) {double t=(double)i/n;double speed=Math.Sqrt(len*len+16*h*h*(1-2*t)*(1-2*t));sum+=(i==0||i==n?1:i%2==0?2:4)*speed;}
             return Mid(Length(back[7]))+sum/(3*n);
         }
-        if(Estimate(hi)<Mid(target))throw new ArgumentException("No solution found within curvature limit");
+        if(Estimate(hi)<Mid(target))throw new ArgumentException("Approximate search found no candidate within curvature limit");
         for(int i=0;i<45;i++){double m=(lo+hi)/2;if(Estimate(m)<Mid(target))lo=m;else hi=m;}
         back[8]=Curve((lo+hi)/2);var after=Sum(back[7],back[8]);
         if(!BackWaistJointSideExperiment.WithinDiagnosticTolerance(target,after,0.0001))throw new ArgumentException("Numerical side-length enclosure exceeds diagnostic tolerance");
@@ -46,6 +46,8 @@ internal static class SideCurvatureExperiment
         // The virtual midpoint is diagnostic only: no real notch is supplied.
         var controls=BodyCurveStudy.BezierControls(back[8])!;double mx=(original.Ax+original.Bx)/2,my=(original.Ay+original.By)/2;
         double shift=Math.Sqrt(Math.Pow((controls[1].X-mx)/2,2)+Math.Pow((controls[1].Y-my)/2,2));
+        // This binary64 allowance is a numerical comparison margin, not a
+        // certified displacement bound or a physical tolerance.
         if(!double.IsFinite(shift)||shift>limitCm+1e-12)throw new ArgumentException("Represented curvature exceeds limit");
         return new(id,limitCm,shift,shift,target,before,after,ft,bt);
     }

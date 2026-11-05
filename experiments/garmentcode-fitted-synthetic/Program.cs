@@ -546,7 +546,7 @@ internal static class Validator
                 Console.WriteLine($"{id} curvature experiment: front=[{r.Front.ApproximateLowerCm:G9},{r.Front.ApproximateUpperCm:G9}] cm, back before=[{r.Before.ApproximateLowerCm:G9},{r.Before.ApproximateUpperCm:G9}], after=[{r.After.ApproximateLowerCm:G9},{r.After.ApproximateUpperCm:G9}]; max deviation≈{r.DisplacementCm:G7} cm, virtual midpoint shift≈{r.VirtualNotchShiftCm:G7} cm; topology unresolved front/back={r.FrontTopology.Unresolved}/{r.BackTopology.Unresolved}; research only.");
             } catch(ArgumentException ex) { Console.WriteLine($"{id} curvature experiment rejected: {ex.Message}"); }
         }
-        Need(accepted>0,"curvature positive example missing");
+        Need(accepted==4,"all four reported curvature examples must pass");
         try { SideCurvatureExperiment.Create("synthetic-base",0.5);throw new Exception("Tight curvature limit accepted"); } catch(ArgumentException) { }
         try { SideCurvatureExperiment.Create("synthetic-base",0);throw new Exception("Zero curvature limit accepted"); } catch(ArgumentException) { }
         try { SideCurvatureExperiment.Create("synthetic-base",double.NaN);throw new Exception("Invalid curvature limit accepted"); } catch(ArgumentException) { }
