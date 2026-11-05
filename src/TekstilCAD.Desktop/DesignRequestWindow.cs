@@ -247,7 +247,7 @@ internal sealed class DesignRequestWindow : Window
         var fittedResearch=new Button { Content="Sentetik elbise araştırmasını incele…",Margin=new Thickness(0,6,0,6),Padding=new Thickness(8) };
         AutomationProperties.SetHelpText(fittedResearch,"Yalnız sabit sentetik örnekler; kişisel ölçü, üretim ve çıktı desteklenmez.");
         fittedResearch.Click+=(_,_)=>new FittedResearchWindow(this).ShowDialog();
-        body.Children.Insert(0,fittedResearch);
+        technicalBody.Children.Add(fittedResearch);
         var recovery=ALineSourceRecoveryForVerification;
         recovery.Children.Add(new TextBlock { Text="Kaynak ölçü ifadelerini düzenle",FontWeight=FontWeights.SemiBold,TextWrapping=TextWrapping.Wrap });
         recovery.Children.Add(new TextBlock { Text="Çelişki veya belirsizlik var. Tarif ve ölçü notlarını birlikte kontrol edin; doğru değeri siz belirleyin. Düzenlemek mesajı göndermez, eski değeri otomatik silmez.",TextWrapping=TextWrapping.Wrap });

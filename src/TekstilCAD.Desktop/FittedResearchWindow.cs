@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using FittedResearch;
@@ -15,29 +17,46 @@ internal sealed class FittedResearchWindow : Window
     internal FittedResearchWindow(Window owner)
     {
         Owner=owner; Title="Sentetik elbise araştırması"; Width=1050; Height=800;
-        var root=new DockPanel { Margin=new Thickness(12) }; Content=root;
-        var header=new StackPanel(); DockPanel.SetDock(header,Dock.Top); root.Children.Add(header);
+        var root=new StackPanel { Margin=new Thickness(12) };
+        Content=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto, HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled, Content=root, Focusable=true };
+        var header=new StackPanel(); root.Children.Add(header);
         header.Children.Add(new TextBlock { Text="SENTETİK · DOĞRULANMAMIŞ ARAŞTIRMA", FontWeight=FontWeights.Bold, FontSize=19, Foreground=Brushes.DarkRed, TextWrapping=TextWrapping.Wrap });
         header.Children.Add(new TextBlock { Text="Yalnız sabit kolsuz üst ve kalem etek örnekleri. Kişisel ölçü, prova ve dikiş uygunluğu doğrulanmadı. Çizim ölçekli değildir; CAD, dışa aktarma, baskı ve plotter için kullanılamaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) });
         var choice=new ComboBox { Margin=new Thickness(0,4,0,4), MinWidth=240, HorizontalAlignment=HorizontalAlignment.Left };
+        AutomationProperties.SetName(choice,"Sentetik araştırma örneği");
+        AutomationProperties.SetLiveSetting(status,AutomationLiveSetting.Polite);
         choice.Items.Add("Sentetik örnek 1"); choice.Items.Add("Sentetik örnek 2"); header.Children.Add(choice); header.Children.Add(status);
-        var scroll=new ScrollViewer { VerticalScrollBarVisibility=ScrollBarVisibility.Auto, Content=panels }; root.Children.Add(scroll);
+        root.Children.Add(panels);
         Closed+=(_,_)=> { closed=true; generation++; };
         choice.SelectionChanged+=async (_,_)=> {
-            long run=++generation; panels.Children.Clear(); status.Text="Sentetik araştırma hesaplanıyor…";
+            long run=++generation; panels.Children.Clear(); SetStatus("Sentetik araştırma hesaplanıyor…");
             string? id=choice.SelectedIndex switch { 0=>"synthetic-base",1=>"synthetic-distinct",_=>null };
-            if(id is null) { status.Text="Bilinmeyen örnek."; return; }
+            if(id is null) { SetStatus("Bilinmeyen örnek."); return; }
             choice.IsEnabled=false;
             try {
                 var result=await Task.Run(()=>FittedSyntheticAdapter.Create(id));
                 if(closed || run!=generation) return;
-                foreach(var panel in result) { var group=new GroupBox { Header=panel.Name, Margin=new Thickness(4), Height=300 }; var path=new System.Windows.Shapes.Path { Data=panel.Geometry, Stroke=Brushes.SteelBlue, StrokeThickness=1, Stretch=Stretch.Uniform, Margin=new Thickness(15) }; group.Content=path; panels.Children.Add(group); }
-                status.Text="Altı panel adayı · sonuç unresolved / Unverified. Her panel kendi görünümüne sığdırılmıştır.";
+                foreach(var panel in result) panels.Children.Add(CreatePanelView(panel));
+                SetStatus("Altı panel adayı · sonuç unresolved / Unverified. Her panel kendi görünümüne sığdırılmıştır.");
             } catch(Exception ex) when(ex is not (OutOfMemoryException or StackOverflowException or AccessViolationException)) {
-                if(!closed && run==generation) { panels.Children.Clear(); status.Text="Araştırma önizlemesi oluşturulamadı: "+ex.Message; }
+                if(!closed && run==generation) { panels.Children.Clear(); SetStatus("Araştırma önizlemesi oluşturulamadı: "+ex.Message); }
             } finally { if(!closed && run==generation) choice.IsEnabled=true; }
         };
         choice.SelectedIndex=0;
+    }
+    private void SetStatus(string message)
+    {
+        status.Text=message;
+        if(UIElementAutomationPeer.FromElement(status) is { } peer)
+            peer.RaiseAutomationEvent(AutomationEvents.LiveRegionChanged);
+    }
+    internal static GroupBox CreatePanelView(FittedSyntheticAdapter.Panel panel)
+    {
+        var group=new GroupBox { Header=panel.Name, Margin=new Thickness(4), Height=300 };
+        var path=new System.Windows.Shapes.Path { Data=panel.Geometry, Stroke=Brushes.SteelBlue, StrokeThickness=1, Stretch=Stretch.Uniform, Margin=new Thickness(15) };
+        AutomationProperties.SetName(path,$"{panel.Name}: sentetik, doğrulanmamış panel çizimi; ölçekli değil");
+        group.Content=path;
+        return group;
     }
 }
 
