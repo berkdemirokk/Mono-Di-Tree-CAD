@@ -8,6 +8,9 @@ public sealed record ChatModelSuggestion(string? ModelId,string? Label,string Ex
 /// <summary>Bounded exact intent grammar. Unrecognized prose is never rewritten or interpreted as approval.</summary>
 public static class ChatModelChoice
 {
+    public static bool CanReevaluate(string? lastMessage,string currentPrompt,string unsentMessage)
+        => !string.IsNullOrWhiteSpace(lastMessage) && unsentMessage.Length==0 && currentPrompt.EndsWith(lastMessage,StringComparison.Ordinal) &&
+           currentPrompt.IndexOf(lastMessage,StringComparison.Ordinal)==currentPrompt.Length-lastMessage.Length;
     private static readonly (string Id,string Label,string[] Names)[] Models=[
         ("wrap","Anvelop elbise",["anvelop elbise","anvelop"]),
         ("aline","A kesim elbise",["a kesim elbise","a kesim","a-kesim elbise","a-kesim"]),

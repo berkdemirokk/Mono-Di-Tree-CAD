@@ -106,6 +106,31 @@ internal static partial class DesktopVerification
                     "Negative or multiple model message does not trigger image conversion: "+text,checks);
             }
             var trailingBytes=imageBytes.Concat(new byte[]{0}).ToArray();
+            window.LoadForVerification(ImageRequest());conversions=0;choices=0;
+            var busyField=typeof(DesignRequestWindow).GetField("referenceLoadRunning",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+            var imageField=typeof(DesignRequestWindow).GetField("reference",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+            var revisionField=typeof(DesignRequestWindow).GetField("referenceRevision",System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance)!;
+            busyField.SetValue(window,true);SendImageMessage();var retained=window.CaptureForVerification().Prompt;
+            Check(conversions==0 && choices==0 && window.RetryModelForVerification.IsEnabled,"Busy image load retains an explicit retry route without selecting",checks);
+            busyField.SetValue(window,false);
+            imageField.SetValue(window,new DesignReference("changed.png","image/png",trailingBytes));
+            revisionField.SetValue(window,(long)revisionField.GetValue(window)!+1);
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions==0 && choices==0 && window.CaptureForVerification().Prompt==retained && window.StatusForVerification.Text.Contains("doğrulaması başarısız"),
+                "Retry validates changed image bytes rather than trusting the old revision",checks);
+            imageField.SetValue(window,new DesignReference("current.png","image/png",(byte[])imageBytes.Clone()));
+            revisionField.SetValue(window,(long)revisionField.GetValue(window)!+1);
+            window.MeasurementsForVerification.Text="bel çevresi 73 cm";
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions==1 && choices==1 && window.CaptureForVerification().ModelId=="aline" && window.CaptureForVerification().Prompt==retained &&
+                window.CaptureForVerification().Measurements=="bel çevresi 73 cm" && window.CaptureForVerification().Reference!.Data.SequenceEqual(imageBytes),
+                "Explicit retry after loading uses current notes and image with separate approvals and no duplicate text",checks);
+            var counts=conversions+choices;window.ChatInputForVerification.Text="Yeni mesaj";
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions+choices==counts && window.CaptureForVerification().Prompt==retained,"Unsent new message blocks retry without appending text",checks);
+            window.ChatInputForVerification.Clear();window.PromptForVerification.Text="Değiştirilmiş tarif";
+            window.RetryModelForVerification.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(conversions+choices==counts && window.CaptureForVerification().Prompt=="Değiştirilmiş tarif","Removed original message cannot be resurrected by retry",checks);
             window.LoadForVerification(new DesignRequest("Görselli başlangıç","",new DesignReference("sentetik.png","image/png",trailingBytes)));
             conversions=0;choices=0;SendImageMessage();
             Check(conversions==0 && choices==0 && window.CaptureForVerification().Version==1 &&

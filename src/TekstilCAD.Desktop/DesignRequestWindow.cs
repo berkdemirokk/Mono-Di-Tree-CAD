@@ -30,6 +30,8 @@ internal sealed class DesignRequestWindow : Window
     private DesignReference? reference;
     private long referenceRevision;
     private bool referenceLoadRunning,closed,referenceDecoded;
+    private string? lastSentModelMessage;
+    internal Button RetryModelForVerification { get; } = new() { Content="Son mesajın model önerisini yeniden değerlendir",IsEnabled=false,HorizontalAlignment=HorizontalAlignment.Left,Margin=new Thickness(0,0,0,6) };
     internal Func<string,DesignReference>? ReferenceLoaderForVerification { get; set; }
     internal Func<byte[],ReferencePhotoPreview>? ExistingReferenceDecoderForVerification { get; set; }
     private bool dirty,loading,changingModel,hasSavedRequest;
@@ -195,6 +197,8 @@ internal sealed class DesignRequestWindow : Window
         var send=new Button { Content="Gönder",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(12,6,12,6),Margin=new Thickness(0,4,0,8) };
         send.Background=Accent;send.Foreground=Surface;send.FontWeight=FontWeights.SemiBold;send.Margin=new Thickness(8,0,0,0);DockPanel.SetDock(send,Dock.Right);
         AutomationProperties.SetHelpText(send,"Mesajı isteğe ekler ve açık ölçülerden sıradaki soruyu gösterir. Kalıp oluşturmaz.");compose.Children.Add(send);compose.Children.Add(chatInput);send.Click+=(_,_)=>SendMessage();
+        AutomationProperties.SetHelpText(RetryModelForVerification,"Son gönderilen mesaj hâlâ tarifin sonunda duruyorsa güncel ölçü ve görselle yeniden inceler; metni tekrar eklemez. Seçim ayrıca onay ister.");
+        RetryModelForVerification.Click+=(_,_)=>RetryLastModelMessage();body.Children.Add(RetryModelForVerification);
         body.Children.Add(new TextBlock { Text="Sorulan ölçüyü yalnızca değer ve birimle yanıtlayabilirsiniz: 72 cm. Diğer ölçüleri açık etiket ve birimle yazın: bel çevresi 72 cm. Ölçüleri ayrı satır veya noktalı virgülle ayırabilir, açık etiketli ve birimli iki ölçüyü “ve” ile birleştirebilirsiniz. Bu çevrimdışı yardımcı genel konuşma veya görsel yorumlama yapmaz.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         var notesCard=new StackPanel();
         notesCard.Children.Add(new TextBlock { Text="Tasarımcı Notları & Drapaj Detayları",FontFamily=new FontFamily("Georgia"),Foreground=Accent,FontSize=19,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
@@ -349,11 +353,20 @@ internal sealed class DesignRequestWindow : Window
         if((long)prompt.Text.Length+addition.Length+addition.Count(c=>c=='\n')>prompt.MaxLength)
         { SetStatus("Mesaj eklenemedi: açıklama uzunluk sınırına ulaşıldı. Mesaj ve mevcut istek korundu.");return; }
         prompt.AppendText(addition);
+        lastSentModelMessage=message;RetryModelForVerification.IsEnabled=true;
         chatInput.Clear();chatInput.Focus();SetStatus(answerLabel is null ? "Mesaj isteğe eklendi; henüz kalıp oluşturulmadı." : $"Yanıt {answerLabel} olarak eklendi; henüz kalıp oluşturulmadı.");
         SuggestChatModel(message);
     }
     internal Func<string,bool>? ConfirmChatModelForVerification { get; set; }
     internal void SendMessageForVerification()=>SendMessage();
+    private void RetryLastModelMessage()
+    {
+        var message=lastSentModelMessage;
+        if(!ChatModelChoice.CanReevaluate(message,prompt.Text,""))
+        { SetStatus("Son mesaj değişmiş, kaldırılmış veya birden fazla yerde bulunuyor; eski öneri uygulanmadı. Mevcut metin korundu.");return; }
+        if(chatInput.Text.Length!=0) { SetStatus("Gönderilmemiş mesaj var; önce onu gönderin veya temizleyin. Metin tekrar eklenmedi.");return; }
+        SuggestChatModel(message!);
+    }
     private void SuggestChatModel(string message)
     {
         ChatModelSuggestion suggestion;
@@ -361,7 +374,7 @@ internal sealed class DesignRequestWindow : Window
         catch(System.Text.RegularExpressions.RegexMatchTimeoutException) { SetStatus("Model ifadesi incelenemedi; mesaj korundu, seçim yapılmadı.");return; }
         if(suggestion.ModelId is null) { if(suggestion.Explanation.Length>0)SetStatus(suggestion.Explanation+" Mesajınız aynen korundu.");return; }
         if(referenceLoadRunning)
-        { SetStatus("Mesaj korundu; görsel işlemi sürerken model seçilmedi.");return; }
+        { SetStatus("Mesaj korundu; görsel işlemi sürerken model seçilmedi. İşlem bitince 'Son mesajın model önerisini yeniden değerlendir' düğmesini kullanın; mesajı tekrar göndermeyin.");return; }
         if(requestVersion==1 && reference is not null)
         {
             var original=Capture();
@@ -473,6 +486,7 @@ internal sealed class DesignRequestWindow : Window
     private DesignRequest Capture()=>new(prompt.Text,measurements.Text,reference is null ? null : reference with { Data=(byte[])reference.Data.Clone() },portableModelId,requestVersion);
     private void Apply(DesignRequest value)
     {
+        lastSentModelMessage=null;RetryModelForVerification.IsEnabled=false;
         DesignRequestStorage.Validate(value);loading=true;
         try { ClearModelTracking();requestVersion=value.Version;portableModelId=value.ModelId;prompt.Text=value.Prompt;measurements.Text=value.Measurements;reference=value.Reference is null ? null : value.Reference with { Data=(byte[])value.Reference.Data.Clone() };referenceDecoded=value.Version==2 && value.Reference is not null;referenceRevision++;chatInput.Clear();UpdateReference();dirty=false;hasSavedRequest=true;if(value.Version==1)RecoverLoadedModelCandidate();else if(value.ModelId is not null) { var index=Array.IndexOf(PortableModelIds,value.ModelId);if(index>=0)SetLastModel(modelCards[index].Button); }RefreshConversation(); }
         finally { loading=false; }

@@ -3,6 +3,14 @@ namespace TekstilCAD.Tests;
 public sealed class ChatModelChoiceTests
 {
     [Theory]
+    [InlineData("A kesim","Yeni tarif\nA kesim","",true)]
+    [InlineData("A kesim","Yeni tarif\nA kesim","yeni mesaj",false)]
+    [InlineData("A kesim","Yeni tarif\nAnvelop","",false)]
+    [InlineData("A kesim","A kesim\nA kesim","",false)]
+    [InlineData("A kesim","A kesim\nsonraki not","",false)]
+    public void RetryRequiresUniqueUnchangedFinalMessageAndNoUnsentInput(string last,string prompt,string unsent,bool allowed)
+        =>Assert.Equal(allowed,ChatModelChoice.CanReevaluate(last,prompt,unsent));
+    [Theory]
     [InlineData("du\u0308z elbise","straight")]
     [InlineData("go\u0308mlek elbise","shirt")]
     [InlineData("A KESI\u0307M ELBI\u0307SE I\u0307STI\u0307YORUM","aline")]
