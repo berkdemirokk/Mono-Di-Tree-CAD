@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace TekstilCAD.Desktop;
 
@@ -42,10 +43,11 @@ internal static class FittedSyntheticVerification
                 var geometry=FittedSyntheticAdapter.Geometry(skewArc);
                 var segment=(ArcSegment)geometry.Figures[0].Segments[0]; double radius=5*(.25+y*y)/(2*Math.Abs(y));
                 if(Math.Abs(segment.Size.Width-radius)>1e-12||segment.Point!=new Point(5,5)||segment.IsLargeArc!=(Math.Abs(y)>.5)||segment.SweepDirection!=(y>0?SweepDirection.Counterclockwise:SweepDirection.Clockwise)) throw new InvalidOperationException("Skewed arc flags failed.");
-                // Geometry.Bounds describes filled area; this diagnostic path is deliberately
-                // unfilled. Check its stroked bounds and the actual flattened arc instead.
-                var flattened=geometry.GetFlattenedPathGeometry(.0001,ToleranceType.Absolute);
-                var bounds=flattened.GetRenderBounds(new Pen(Brushes.Black,.01));
+                // Flattening is an area operation and can drop an unfilled open figure.
+                // Widen the stroke first, then inspect its outline and render the original.
+                var pen=new Pen(Brushes.Black,.01);
+                var bounds=geometry.GetRenderBounds(pen);
+                var flattened=geometry.GetWidenedPathGeometry(pen,.0001,ToleranceType.Absolute).GetFlattenedPathGeometry(.0001,ToleranceType.Absolute);
                 if(geometry.Transform.Value.M22!=-1 || bounds.IsEmpty || bounds.Width<=0 || bounds.Height<=0) {
                     string F(double value)=>value.ToString("R",System.Globalization.CultureInfo.InvariantCulture);
                     string PointText(Point p)=>$"({F(p.X)},{F(p.Y)})";
@@ -62,7 +64,17 @@ internal static class FittedSyntheticVerification
                 var expectedMidpoint=new Point(3-3*y,-(3.5+4*y));
                 var samples=flattened.Figures.SelectMany(f=>new[]{f.StartPoint}.Concat(f.Segments.SelectMany(seg=>seg switch {
                     PolyLineSegment poly=>poly.Points.AsEnumerable(), LineSegment line=>new[]{line.Point}, _=>Array.Empty<Point>() })));
-                if(!samples.Any(p=>(p-expectedMidpoint).Length<.01))throw new InvalidOperationException($"Arc midpoint missing for {y}: expected {expectedMidpoint}.");
+                if(!samples.Any(p=>(p-expectedMidpoint).Length<.02))throw new InvalidOperationException($"Arc midpoint missing for {y}: expected {expectedMidpoint}.");
+                // Render the original unfilled path, not the widened test outline.
+                var visual=new DrawingVisual();
+                using(var dc=visual.RenderOpen()) {
+                    dc.DrawRectangle(Brushes.White,null,new Rect(0,0,120,100));
+                    dc.PushTransform(new MatrixTransform(10,0,0,10,40,75));
+                    dc.DrawGeometry(null,new Pen(Brushes.Black,.15),geometry); dc.Pop();
+                }
+                var bitmap=new RenderTargetBitmap(120,100,96,96,PixelFormats.Pbgra32); bitmap.Render(visual);
+                var pixels=new byte[120*100*4]; bitmap.CopyPixels(pixels,120*4,0);
+                if(!Enumerable.Range(0,120*100).Any(i=>pixels[i*4]<200 && pixels[i*4+1]<200 && pixels[i*4+2]<200)) throw new InvalidOperationException("Original unfilled arc did not render.");
             }
             stage="arka plan";
             var threaded=Task.Run(()=>FittedSyntheticAdapter.Create("synthetic-base")).GetAwaiter().GetResult();
