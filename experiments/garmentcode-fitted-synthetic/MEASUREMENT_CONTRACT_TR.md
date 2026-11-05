@@ -31,6 +31,13 @@ Bu liste ölçü alma kılavuzu değildir. [GarmentCode ölçü belgesi](https:/
 | shoulder_incl | Kaynakta omuz hattı eğimi |
 | arm_pose_angle | Kaynakta omuz eklemindeki kol poz açısı |
 
-Kaynak, üç `*_back_width` alanını yan denge çizgileri arasında arka çevre bölümü olarak adlandırır; fakat pratik uygulamada çevre yayı ile düz kiriş ayrımının ve çizgilerin işaretlenmesinin yeterli doğruluğu henüz doğrulanmadı. Omuz ve boyun başlangıç noktaları, açıların eksenleri ve işaret yönleri, `bum_points` noktalarının belirlenmesi ve kişinin duruşu da bağımsız protokol incelemesi gerektirir. Kaynak PDF bazı geometrik açıklamalar verse de bunları doğrulanmış kullanıcı talimatı saymıyoruz.
+Kaynak PDF, `back_width`, `waist_back_width` ve `hip_back_width` alanlarını iki yan denge çizgisi arasındaki ilgili çevrenin arka **bölümü** olarak tanımlar; denge çizgisi koronal düzlemde bedenin yanından geçen dikey çizgi olarak açıklanır. Bu, kaynakta çevre bölümüdür; düz kiriş olarak yeniden yorumlanmaz. Gerçek kişiler üzerinde çizginin ve ölçüm yolunun tekrarlanabilir biçimde işaretlenmesi ayrıca doğrulanmalıdır.
+
+Kaynak, `waist_line` için sırt yüzeyi üzerindeki mesafeyi tercih eder. Bu yüzden `head_l + waist_line + hips_line < height` ilişkisi geometrik olarak herkes için zorunlu sayılamaz: modelde türetilen `_leg_length` pozitif çıkmıyorsa mevcut araştırma hesabı kapsam dışına alır; bu, kişinin ölçüsünün hatalı olduğunu kanıtlamaz.
+
+PDF, `hip_inclination` için dikey yanın 0° olduğunu ve `shoulder_incl` için yatay düzleme göre eğimi açıklar. `arm_pose_angle` ekseni, `neck_w` ölçüm yolu ve `bum_points` işaretleme işlemi yeterince tarif edilmemiştir; varsayım veya kullanıcıya yeni ölçüm talimatı üretilmez. Omuz-boyun başlangıçlarının pratik işaretlenmesi ve kişinin duruşu da bağımsız protokol incelemesi gerektirir.
 
 `_waist_level`, `_leg_length`, `_base_sleeve_balance`, `_bust_line`, `_hip_inclination`, `_shoulder_incl` ve `_armscye_depth` kaynak koddan hesaplanan türevlerdir; kullanıcı ölçüsü olarak istenmez. C# sözleşmesindeki sınırlar yalnız teknik kontrollerdir, anatomik geçerlilik veya kalıp uygunluğu onayı değildir.
+
+
+`ResearchMeasurements`, eksik alanları ayrı tutan yalnız araştırma amaçlı bir varlık modelidir; arka bel ve ön kontur formüllerinin doğrudan kullandığı alanlar için eksik listesi sağlar. Listede tüm alanların bulunması anatomik geçerlilik, model kapsamına uygunluk veya hesap izni değildir. Mevcut geometri ve türev uygulaması hâlâ eksiksiz 26 alanlı `ResearchBody` ister; gerçek kişilerden veri toplama açılmamıştır. 0–1000 cm gibi teknik sayısal sınırlar anatomik kabul aralığı değildir; aşırı değerlerin bu aşamayı geçmesi bunların uygun olduğu anlamına gelmez.

@@ -25,13 +25,17 @@ internal sealed class ResearchBody
             bool angle=pair.Key is "arm_pose_angle" or "shoulder_incl" or "hip_inclination";
             if(angle ? pair.Value<0 || pair.Value>180 : pair.Value<=0 || pair.Value>1000)throw new ArgumentException("Measurement outside numerical limits.");
         }
-        if(b["shoulder_incl"]>=45 || b["hip_inclination"]>=89 || b["back_width"]>=b["bust"] || b["waist_back_width"]>=b["waist"] || b["hip_back_width"]>=b["hips"] || b["head_l"]+b["waist_line"]+b["hips_line"]>=b["height"])throw new ArgumentException("Unsupported or contradictory measurements.");
+        if(b["shoulder_incl"]>=45 || b["hip_inclination"]>=89 || b["back_width"]>=b["bust"] || b["waist_back_width"]>=b["waist"] || b["hip_back_width"]>=b["hips"])throw new ArgumentException("Unsupported or contradictory measurements.");
+        // Scope restriction for this model, not a proof of an invalid person:
+        // waist_line is a surface length and this sum is not a physical law.
+        if(b["head_l"]+b["waist_line"]+b["hips_line"]>=b["height"])
+            throw new ArgumentException("Unsupported research scope: source-derived leg length is not positive.");
         // These source-derived lengths must remain positive, including after
         // conversion to binary64, before any candidate geometry is calculated.
         if(b["shoulder_w"]<=2 || (double)b["shoulder_w"]-2<=0 ||
            (double)b["height"]-(double)b["head_l"]-(double)b["waist_line"]<=0 ||
            (double)b["height"]-(double)b["head_l"]-(double)b["waist_line"]-(double)b["hips_line"]<=0)
-            throw new ArgumentException("Nonpositive source-derived length.");
+            throw new ArgumentException("Unsupported research scope: nonpositive source-derived length.");
         return new(b.ToImmutable());
     }
     internal DerivedValues Derive()

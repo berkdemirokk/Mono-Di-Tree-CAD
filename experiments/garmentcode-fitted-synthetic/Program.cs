@@ -183,6 +183,25 @@ try
     try { BezierLengthBounds.Enclose([new(double.NaN,0),new(1,0)]);throw new Exception("Invalid length geometry accepted"); } catch(ArgumentException) { }
     // Exercise the complete 26-field local contract using synthetic values only.
     var bodyPairs=ResearchBody.Fields.Select(k=>new KeyValuePair<string,decimal>(k,SyntheticBodyCatalog.Create("synthetic-base")[k])).ToArray();
+    var partialKeys=new[]{"back_width","waist_back_width","waist_line","shoulder_w","shoulder_incl","bum_points","bust_line","vert_bust_line"};
+    var partial=ResearchMeasurements.Create(bodyPairs.Where(p=>partialKeys.Contains(p.Key)),"cm","degree");
+    var backNeeds=partial.Check(ResearchMeasurements.Operation.PrecutBackWaist);
+    var frontNeeds=partial.Check(ResearchMeasurements.Operation.PrecutFrontBodice);
+    if(!backNeeds.AllFieldsPresent || backNeeds.CalculationEnabled || frontNeeds.AllFieldsPresent || !frontNeeds.Missing.Contains("bust") || partial.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent)throw new Exception("Partial presence contract");
+    try { partial.BuildComplete();throw new Exception("Incomplete body accepted"); } catch(ArgumentException) { }
+    var complete=ResearchMeasurements.Create(bodyPairs,"cm","degree");
+    if(!complete.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent || complete.BuildComplete().Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted))throw new Exception("Complete presence contract");
+    try { ResearchMeasurements.Create(bodyPairs.Append(new("_leg_length",1)),"cm","degree");throw new Exception("Derived input accepted"); } catch(ArgumentException) { }
+    try { ResearchMeasurements.Create(bodyPairs.Append(bodyPairs[0]),"cm","degree");throw new Exception("Duplicate partial input accepted"); } catch(ArgumentException) { }
+    try { ResearchMeasurements.Create(bodyPairs,"mm","degree");throw new Exception("Wrong partial units accepted"); } catch(ArgumentException) { }
+    try { partial.Check((ResearchMeasurements.Operation)999);throw new Exception("Unknown operation accepted"); } catch(ArgumentException) { }
+    var mutablePairs=bodyPairs.ToList();var copied=ResearchMeasurements.Create(mutablePairs,"cm","degree");mutablePairs.Clear();
+    if(!copied.Check(ResearchMeasurements.Operation.CompleteCurrentBody).AllFieldsPresent)throw new Exception("Partial measurements not immutable");
+    var extreme=bodyPairs.Select(p=>p.Key is "bust_points" or "wrist" or "underbust" or "arm_length" or "bust_line"?new KeyValuePair<string,decimal>(p.Key,1000):p).ToArray();
+    var numericOnly=ResearchBody.Create(extreme,"cm","degree");
+    if(numericOnly["wrist"]!=1000)throw new Exception("Technical limit not represented");
+    try { ResearchBody.Create(bodyPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p),"cm","degree");throw new Exception("Unsupported model scope accepted"); }
+    catch(ArgumentException e) { if(!e.Message.Contains("Unsupported research scope"))throw; }
     void RejectBody(IEnumerable<KeyValuePair<string,decimal>> values,string length="cm",string angle="degree") { try { ResearchBody.Create(values,length,angle);throw new Exception("Invalid body accepted"); } catch(ArgumentException) { } }
     RejectBody(bodyPairs.Skip(1)); RejectBody(bodyPairs.Append(bodyPairs[0])); RejectBody(bodyPairs.Append(new("_waist_level",1))); RejectBody(bodyPairs,"mm","degree");
     RejectBody(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,0):p));
