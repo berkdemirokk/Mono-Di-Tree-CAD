@@ -1,5 +1,7 @@
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace TekstilCAD.MachineGateway;
 
@@ -8,10 +10,13 @@ public static class PlotterCalibrationSquare
 {
     public sealed class Prepared
     {
-        internal Prepared(HpglPreparedOutput output, Guid pieceId, Guid? markerPieceId) { Output = output; PieceId = pieceId; MarkerPieceId = markerPieceId; }
+        internal Prepared(HpglPreparedOutput output, Guid pieceId, Guid? markerPieceId)
+        { Output = output; PieceId = pieceId; MarkerPieceId = markerPieceId; ContentSha256=Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(output.Text))); }
         public HpglPreparedOutput Output { get; }
         public Guid PieceId { get; }
         public Guid? MarkerPieceId { get; }
+        /// <summary>Hash of the prepared UTF-8 file bytes; not a later disk recheck or a physical-output identity.</summary>
+        public string ContentSha256 { get; }
     }
 
     public static Prepared Prepare(double unitsPerMillimeter, double scale, CancellationToken cancellationToken = default)

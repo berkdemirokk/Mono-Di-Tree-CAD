@@ -26,3 +26,5 @@ python tools/PhotoRegionBenchmark/benchmark.py <veri.zip> <opencv-python-klasör
 ```
 
 Araç yalnız sayısal `summary.json` üretir. Veri ve geçici bağımlılıklar ürüne dahil edilmemelidir.
+
+Daha sonraki [GrabCut ve kutu duyarlılığı deneyi](PHOTO_GRABCUT_EXPERIMENT.md), daha yüksek bölge IoU’suna rağmen yaygın yerel sınır sapmaları ve bazı parçalı maskeler buldu.

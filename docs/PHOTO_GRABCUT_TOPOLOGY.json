@@ -1,0 +1,650 @@
+{
+  "jobs_sha256": "97ead3af6f9c41a3def8ab86626dcb3b5c087629c04a51485aa5fa188dc7e0f5",
+  "opencv": "4.10.0",
+  "count": 80,
+  "multiple_outer": 15,
+  "with_holes": 45,
+  "largest_over_512": 42,
+  "rows": [
+    {
+      "annotation_id": 20,
+      "mask_sha256": "2ac111f5b733434912bdddb51f4945db740ee074ca8e9c2fd35132c5ac211582",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 487,
+      "largest_outer_contour_points": 479
+    },
+    {
+      "annotation_id": 62,
+      "mask_sha256": "e8561686bede7481549d1d1d2a63e8577c6ef50ebfb4a088a983a18f70eae168",
+      "outer_contours": 1,
+      "holes": 3,
+      "contour_points": 449,
+      "largest_outer_contour_points": 437
+    },
+    {
+      "annotation_id": 133,
+      "mask_sha256": "8bb74bfd1ee0bc351d0bc71c72439831df8d51a2c44b232f663c0d1095911b4d",
+      "outer_contours": 2,
+      "holes": 6,
+      "contour_points": 907,
+      "largest_outer_contour_points": 858
+    },
+    {
+      "annotation_id": 56,
+      "mask_sha256": "d865eb4056f599321de61d897c99ae78899a912d5c92cad76db3201b3ebd9ff3",
+      "outer_contours": 2,
+      "holes": 3,
+      "contour_points": 570,
+      "largest_outer_contour_points": 545
+    },
+    {
+      "annotation_id": 39,
+      "mask_sha256": "9b3e094d78756ef1e0aa055fc463decd1ccf90ada21963cff58befbd1ddf01d1",
+      "outer_contours": 1,
+      "holes": 3,
+      "contour_points": 661,
+      "largest_outer_contour_points": 638
+    },
+    {
+      "annotation_id": 72,
+      "mask_sha256": "02fcfd4969324607ab9cc91681b3b3312f09e09f11082d9e22b0a721b2563e34",
+      "outer_contours": 1,
+      "holes": 10,
+      "contour_points": 487,
+      "largest_outer_contour_points": 439
+    },
+    {
+      "annotation_id": 76,
+      "mask_sha256": "b8fcff766898cd19295c57ec4aaf0134a310cf580aebadd01884b33fa8f01a8b",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 517,
+      "largest_outer_contour_points": 507
+    },
+    {
+      "annotation_id": 33,
+      "mask_sha256": "a6288e35dea5e3829d68fcc6d7db52987a7b397a38894e9a14e56f11ccf8ce64",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 508,
+      "largest_outer_contour_points": 508
+    },
+    {
+      "annotation_id": 53,
+      "mask_sha256": "ae2f4888489fe01adb7cfeb432e27974a0b94380c52ff27e57e016984e804163",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 509,
+      "largest_outer_contour_points": 509
+    },
+    {
+      "annotation_id": 136,
+      "mask_sha256": "11696a426f42890dcd0df60410d761424aa6d057404af3fc0c564be892ad9ec9",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 472,
+      "largest_outer_contour_points": 468
+    },
+    {
+      "annotation_id": 160,
+      "mask_sha256": "f7373ad7f9b24b6c7f0684d833fb7246a9b6cf4d0f303fe0bfc9ac5afeb6201c",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 370,
+      "largest_outer_contour_points": 364
+    },
+    {
+      "annotation_id": 41,
+      "mask_sha256": "aaa8069c4521a612ee67383f6c1116b609a80a4ff8e5dee2897fd255b5a5320d",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 588,
+      "largest_outer_contour_points": 557
+    },
+    {
+      "annotation_id": 63,
+      "mask_sha256": "2de78c6e445f39c0963d9f64c13b678f07f1cf0a732729f7a6c25d10b9a64c43",
+      "outer_contours": 3,
+      "holes": 1,
+      "contour_points": 466,
+      "largest_outer_contour_points": 444
+    },
+    {
+      "annotation_id": 17,
+      "mask_sha256": "549c141cb5e13e1478cda97a4868bc2e28377de41be965124a718bf0481cf1d4",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 333,
+      "largest_outer_contour_points": 333
+    },
+    {
+      "annotation_id": 172,
+      "mask_sha256": "8d62636b2ed9e60ad380dfe80f56bc9ed4aa72b3b20cebe304fb419ab797498c",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 464,
+      "largest_outer_contour_points": 464
+    },
+    {
+      "annotation_id": 91,
+      "mask_sha256": "461eda1b8c5d55dcbb6df93f62db9aaefde8c635e8377f45146a6ea00d670cea",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 495,
+      "largest_outer_contour_points": 495
+    },
+    {
+      "annotation_id": 29,
+      "mask_sha256": "5d6d0b94f424945e6f5510c5db0cd870206c4b6783994b5319a8f71c7bd1095f",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 485,
+      "largest_outer_contour_points": 471
+    },
+    {
+      "annotation_id": 95,
+      "mask_sha256": "d2a18256c539256512e7b243b82a4f7aa4cca40d8d7ceefcf7894d9dd54c7e31",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 515,
+      "largest_outer_contour_points": 511
+    },
+    {
+      "annotation_id": 147,
+      "mask_sha256": "3d95b74c5f9ae8bfd9eb35a573c5079f2930f3cca5e019524caac14500fb64f3",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 591,
+      "largest_outer_contour_points": 574
+    },
+    {
+      "annotation_id": 132,
+      "mask_sha256": "229f2de72825ed009e050c31343b082537ffc88593b3b355f6d7d72624b9d30b",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 470,
+      "largest_outer_contour_points": 470
+    },
+    {
+      "annotation_id": 125,
+      "mask_sha256": "4e8fdc3b5f0947f489a0f3016e93c59695e0adc033cd048e887193951950f37c",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 409,
+      "largest_outer_contour_points": 409
+    },
+    {
+      "annotation_id": 153,
+      "mask_sha256": "0cf079f0e5aedf02c2f00bff34c84d7c5a11fe87e5e2fc3530f30e852dc1b3f1",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 823,
+      "largest_outer_contour_points": 805
+    },
+    {
+      "annotation_id": 121,
+      "mask_sha256": "3c56360cab1e5c8f71beac356c9afa41b9e8b52f1f7752123a78cfffe8596eb0",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 424,
+      "largest_outer_contour_points": 424
+    },
+    {
+      "annotation_id": 3,
+      "mask_sha256": "a7ed22e5e2b7a1c5318197f4f8105662227bbfc8771efd4becac73f9367a8bad",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 492,
+      "largest_outer_contour_points": 492
+    },
+    {
+      "annotation_id": 161,
+      "mask_sha256": "fb6cfdb01db5dd4599b5335c5811a4db5361de84bc3e296525defec9c87fac32",
+      "outer_contours": 1,
+      "holes": 5,
+      "contour_points": 595,
+      "largest_outer_contour_points": 552
+    },
+    {
+      "annotation_id": 117,
+      "mask_sha256": "99a7871937591c5a0b890f3588592033115a09f7db177b16d03b72d3b75c905b",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 520,
+      "largest_outer_contour_points": 520
+    },
+    {
+      "annotation_id": 107,
+      "mask_sha256": "e01bbb37a8b8d04cc2a1c554020fe6a1c3dc7a6b78321271fa57980fa72b83e5",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 438,
+      "largest_outer_contour_points": 438
+    },
+    {
+      "annotation_id": 65,
+      "mask_sha256": "8aa487b14b49541e1fc4efbfc08e005ee2e74f99cf115668c26945a8bb71862c",
+      "outer_contours": 4,
+      "holes": 21,
+      "contour_points": 590,
+      "largest_outer_contour_points": 493
+    },
+    {
+      "annotation_id": 175,
+      "mask_sha256": "460dfdd250bbd41d435c7e50ff6e36762b3a8c8fb4a6dcb013d51ed42e24a60f",
+      "outer_contours": 1,
+      "holes": 16,
+      "contour_points": 528,
+      "largest_outer_contour_points": 462
+    },
+    {
+      "annotation_id": 27,
+      "mask_sha256": "189ade6856d7b03f836fd283744047b03e0d035e7b4c84df68d8b0083960526c",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 596,
+      "largest_outer_contour_points": 596
+    },
+    {
+      "annotation_id": 6,
+      "mask_sha256": "fab6b1f2abb28ef50b421f41d85474139f0e220b4e5b32e28ad3ca6d8381e4da",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 408,
+      "largest_outer_contour_points": 408
+    },
+    {
+      "annotation_id": 124,
+      "mask_sha256": "7a57a6e6905cb8da6476965d9544b86218002b0c0352061b4274d411eb31fe9c",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 267,
+      "largest_outer_contour_points": 263
+    },
+    {
+      "annotation_id": 138,
+      "mask_sha256": "3429bc354335a5f98ed20d00be3e0c153e8198470a9c06027b722a3d367580d8",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 511,
+      "largest_outer_contour_points": 503
+    },
+    {
+      "annotation_id": 54,
+      "mask_sha256": "d46065b6ab7f9133d7f9bb62182877ae6d329b4c0f6f4c4660796d6905e8cce0",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 466,
+      "largest_outer_contour_points": 466
+    },
+    {
+      "annotation_id": 34,
+      "mask_sha256": "4c4bffd64c5f9c741e20881f736f365ce9e0f369b09ec29131da312c78799de2",
+      "outer_contours": 2,
+      "holes": 0,
+      "contour_points": 518,
+      "largest_outer_contour_points": 497
+    },
+    {
+      "annotation_id": 57,
+      "mask_sha256": "d7b7420a095aba473c23eb6f762d7655606fd0cbb8df5d0a3fb16f77a3ac0be9",
+      "outer_contours": 10,
+      "holes": 20,
+      "contour_points": 932,
+      "largest_outer_contour_points": 560
+    },
+    {
+      "annotation_id": 13,
+      "mask_sha256": "5e0786bf4fa6d2124333a9365c6ee4ba904652dcd7e1abe591ec6f9083cb2655",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 494,
+      "largest_outer_contour_points": 494
+    },
+    {
+      "annotation_id": 86,
+      "mask_sha256": "fa111b862d8227f81536a881de4ae96403ba86e85b329ca9670d1eb58ee12575",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 531,
+      "largest_outer_contour_points": 531
+    },
+    {
+      "annotation_id": 68,
+      "mask_sha256": "c36025680427b96e84385b9e8e0ecb57de353c831e4af7118ed2914f42af662f",
+      "outer_contours": 1,
+      "holes": 3,
+      "contour_points": 542,
+      "largest_outer_contour_points": 521
+    },
+    {
+      "annotation_id": 85,
+      "mask_sha256": "18e0f7242b8c7350d4bd89ace9d83381d3bd53bc8daf41e94087ed04df8f57be",
+      "outer_contours": 3,
+      "holes": 0,
+      "contour_points": 751,
+      "largest_outer_contour_points": 563
+    },
+    {
+      "annotation_id": 577,
+      "mask_sha256": "7ba12492032f370b0c923da667178c6a0fdd23b1839fe5fe8d125d34a22e7284",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 454,
+      "largest_outer_contour_points": 454
+    },
+    {
+      "annotation_id": 425,
+      "mask_sha256": "48cf11116579c88f4d21a3f579b9f0a4d304ad7fa24f8e957c36a336006181fa",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 666,
+      "largest_outer_contour_points": 666
+    },
+    {
+      "annotation_id": 250,
+      "mask_sha256": "1c88f9c172501fb37c70c16c7739c036f001282c7dc869b495477eb75c96d20d",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 696,
+      "largest_outer_contour_points": 696
+    },
+    {
+      "annotation_id": 298,
+      "mask_sha256": "def9f65f09981b9f35a85e53f319e445e90107e5d011f411c6c29f1b438d9a27",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 720,
+      "largest_outer_contour_points": 704
+    },
+    {
+      "annotation_id": 473,
+      "mask_sha256": "8f75638c4827afc77f1a1cacdc39ff5aab656454179b8e64f406425c24ab64dc",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 733,
+      "largest_outer_contour_points": 729
+    },
+    {
+      "annotation_id": 294,
+      "mask_sha256": "4704bfde52fb0f816fbd7802114a145b0cc88cf31cda387c50159ae840867627",
+      "outer_contours": 1,
+      "holes": 5,
+      "contour_points": 900,
+      "largest_outer_contour_points": 876
+    },
+    {
+      "annotation_id": 401,
+      "mask_sha256": "9755cba94666ebcd1d603c35d017081a89f9bec812c7f79c57f95ff04aa96336",
+      "outer_contours": 2,
+      "holes": 0,
+      "contour_points": 607,
+      "largest_outer_contour_points": 606
+    },
+    {
+      "annotation_id": 553,
+      "mask_sha256": "72148e9c595500c8f4c3d4be38490bf63b54771cfca95803e7e150a5c5898343",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 641,
+      "largest_outer_contour_points": 599
+    },
+    {
+      "annotation_id": 420,
+      "mask_sha256": "1f0de89f96e8d1d35d5b45302cc5bd509a79882ff4b0a23475ef0368596f69b9",
+      "outer_contours": 2,
+      "holes": 1,
+      "contour_points": 479,
+      "largest_outer_contour_points": 456
+    },
+    {
+      "annotation_id": 498,
+      "mask_sha256": "23ad2cbe2ddbf731bad237dd9e64c146f3678206d318db2ed577157edb0f917c",
+      "outer_contours": 10,
+      "holes": 4,
+      "contour_points": 674,
+      "largest_outer_contour_points": 615
+    },
+    {
+      "annotation_id": 474,
+      "mask_sha256": "73024222f618af1dc6a813f7539834e50469f9a393f63e11cf6eb2a612302c13",
+      "outer_contours": 1,
+      "holes": 3,
+      "contour_points": 610,
+      "largest_outer_contour_points": 598
+    },
+    {
+      "annotation_id": 337,
+      "mask_sha256": "76e4719a952bed38ecf6dc4b30b4ea3eda6db190ff39c6a9a0232d1dad0a5377",
+      "outer_contours": 1,
+      "holes": 3,
+      "contour_points": 549,
+      "largest_outer_contour_points": 533
+    },
+    {
+      "annotation_id": 533,
+      "mask_sha256": "d26adb00b6a8c7d8caae81c35b2f09f33214d2e972c1791ec7bfd79734809ab9",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 788,
+      "largest_outer_contour_points": 768
+    },
+    {
+      "annotation_id": 421,
+      "mask_sha256": "ef2d86963c459cbd27cbcd172393e23799491fa0075aa105c4e2f0c34eae2fc5",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 553,
+      "largest_outer_contour_points": 549
+    },
+    {
+      "annotation_id": 561,
+      "mask_sha256": "cd17bb6f510cab2ba1388ecd0a0e905cfcb36d6edb6b8cfd98e2e610a5b026fe",
+      "outer_contours": 2,
+      "holes": 0,
+      "contour_points": 480,
+      "largest_outer_contour_points": 478
+    },
+    {
+      "annotation_id": 464,
+      "mask_sha256": "55412956c774df7c231f4c22c90fa990e157af736fef3f672309fa69a14bb909",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 537,
+      "largest_outer_contour_points": 527
+    },
+    {
+      "annotation_id": 578,
+      "mask_sha256": "5a1c4cd3a427ae274268ef01b6a901dad51b6919fe6bf1a98973b2c92688a401",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 494,
+      "largest_outer_contour_points": 494
+    },
+    {
+      "annotation_id": 218,
+      "mask_sha256": "646e01048d614c2e49296ae7af37d83d62d5256361555c1f5fbb95c4703c9f7c",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 466,
+      "largest_outer_contour_points": 466
+    },
+    {
+      "annotation_id": 456,
+      "mask_sha256": "48140cd17142ad1e98aa0650086b8253874f738ae54136d498890a24fc798046",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 459,
+      "largest_outer_contour_points": 459
+    },
+    {
+      "annotation_id": 184,
+      "mask_sha256": "c01a1fb1dfb0d91e353e5fe04a85985ac44f49ede2bbd4d60898fa11b8fa8012",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 514,
+      "largest_outer_contour_points": 514
+    },
+    {
+      "annotation_id": 410,
+      "mask_sha256": "5200aec2fcbf27e35239d863ea4ee94bdc40c3a244e37de6ef048e4e54ec657b",
+      "outer_contours": 4,
+      "holes": 0,
+      "contour_points": 394,
+      "largest_outer_contour_points": 391
+    },
+    {
+      "annotation_id": 432,
+      "mask_sha256": "489a5fc3947c985b02de6e6369b700a5146b3d93323ccbc3177eb0cb71d1b440",
+      "outer_contours": 1,
+      "holes": 4,
+      "contour_points": 516,
+      "largest_outer_contour_points": 498
+    },
+    {
+      "annotation_id": 206,
+      "mask_sha256": "7a1f11496e2551335c5e95e6e6c7cb3d2199a0b20569ac8f17e4593e376785e8",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 591,
+      "largest_outer_contour_points": 591
+    },
+    {
+      "annotation_id": 360,
+      "mask_sha256": "7cb3c9aa5a55603bc642dd955dc6a68dfbaffd1d5ecbd3e369323df54b2bd46a",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 509,
+      "largest_outer_contour_points": 509
+    },
+    {
+      "annotation_id": 304,
+      "mask_sha256": "4cd65c434ad28c5ac25044dc415fb67cb6ec39933ab0c6ead7316a241815f863",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 635,
+      "largest_outer_contour_points": 627
+    },
+    {
+      "annotation_id": 395,
+      "mask_sha256": "3844fd4851275bab5a78ff7715c7586cad623c0353351e4fc38d7e0382ca797b",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 524,
+      "largest_outer_contour_points": 520
+    },
+    {
+      "annotation_id": 230,
+      "mask_sha256": "763e26d38025e15315983dee4da0128e6dde5d27c6f52b35c4222cebb08cd8f9",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 745,
+      "largest_outer_contour_points": 741
+    },
+    {
+      "annotation_id": 564,
+      "mask_sha256": "607ed1aefd0561834b45aa5f4b4c789c2d3cd877b5869be5e4522b586506fcfa",
+      "outer_contours": 2,
+      "holes": 0,
+      "contour_points": 586,
+      "largest_outer_contour_points": 529
+    },
+    {
+      "annotation_id": 512,
+      "mask_sha256": "d8e822dab7f246649c8924278c36dfb0517803fc1f03f0b3a8dfe66c8693e4ba",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 630,
+      "largest_outer_contour_points": 626
+    },
+    {
+      "annotation_id": 243,
+      "mask_sha256": "4fe46a0663e0d049e386dac8425a611b78470df5f5957546ad12137e677f6f31",
+      "outer_contours": 4,
+      "holes": 1,
+      "contour_points": 974,
+      "largest_outer_contour_points": 720
+    },
+    {
+      "annotation_id": 423,
+      "mask_sha256": "d2b6ec525bd342f84632ca151449fb9a5cce25d25f4086ebc7e1878cbf8ca754",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 615,
+      "largest_outer_contour_points": 615
+    },
+    {
+      "annotation_id": 531,
+      "mask_sha256": "e98200d933c5d6c7a5fb8fd18e7604a47c9d4a3a207a7c4a8395f16234cec2f0",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 879,
+      "largest_outer_contour_points": 871
+    },
+    {
+      "annotation_id": 417,
+      "mask_sha256": "bd0c217abc43ac097c82fd402b2658cdc945d67e48a946a43d38cae22294e069",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 630,
+      "largest_outer_contour_points": 599
+    },
+    {
+      "annotation_id": 324,
+      "mask_sha256": "4289e94a1fbd0c7468802138fdc82e41464d534c0408959318991ef12c66cfa9",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 523,
+      "largest_outer_contour_points": 523
+    },
+    {
+      "annotation_id": 459,
+      "mask_sha256": "52432cb2cf34ccbccea7c7dbb73831e9a0866b56665616e6b0de1535a271b463",
+      "outer_contours": 1,
+      "holes": 25,
+      "contour_points": 678,
+      "largest_outer_contour_points": 558
+    },
+    {
+      "annotation_id": 442,
+      "mask_sha256": "15ea5ecc97de09ae7e026aa11392feae4bb9564dc6106012f18582c9c66177f1",
+      "outer_contours": 1,
+      "holes": 0,
+      "contour_points": 519,
+      "largest_outer_contour_points": 519
+    },
+    {
+      "annotation_id": 552,
+      "mask_sha256": "678e738d3d6c95ab0d31120149680dac05043c13da0430817cabd0f51d93b32f",
+      "outer_contours": 1,
+      "holes": 5,
+      "contour_points": 526,
+      "largest_outer_contour_points": 506
+    },
+    {
+      "annotation_id": 429,
+      "mask_sha256": "2b276588ac83b4455fd5a6e636c86e9d1491d75cea8fb5661b39b6a74525e67b",
+      "outer_contours": 1,
+      "holes": 2,
+      "contour_points": 722,
+      "largest_outer_contour_points": 714
+    },
+    {
+      "annotation_id": 244,
+      "mask_sha256": "4281f4ed5a7ca0c41571071c2e7eef08b07dafee6f96a87ba4b2694f6690e0ff",
+      "outer_contours": 2,
+      "holes": 0,
+      "contour_points": 782,
+      "largest_outer_contour_points": 781
+    },
+    {
+      "annotation_id": 199,
+      "mask_sha256": "38633ee82fc7d737192d2241d9aab2e575a3963e9db0bd3bcf1c108ea800f321",
+      "outer_contours": 1,
+      "holes": 1,
+      "contour_points": 460,
+      "largest_outer_contour_points": 456
+    }
+  ]
+}

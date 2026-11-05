@@ -27,14 +27,12 @@ internal static class PhotoColorEdgePath
         int width=right-left+1,height=bottom-top+1;
         if((long)width*height>MaximumSearchPixels)return false;
         int count=width*height;
-        var bitmap=image.Format==PixelFormats.Bgra32 ? image : new FormatConvertedBitmap(image,PixelFormats.Bgra32,null,0);
-        int stride=checked(width*4);var pixels=new byte[checked(stride*height)];bitmap.CopyPixels(new Int32Rect(left,top,width,height),pixels,stride,0);
+        var bgr=PhotoRasterCapture.CaptureBgr(image,new Int32Rect(left,top,width,height),token);
         var blue=new byte[count];var green=new byte[count];var red=new byte[count];
         for(int i=0;i<count;i++)
         {
             if((i&4095)==0)token.ThrowIfCancellationRequested();
-            int p=i*4,a=pixels[p+3];
-            blue[i]=(byte)((pixels[p]*a+255*(255-a)+127)/255);green[i]=(byte)((pixels[p+1]*a+255*(255-a)+127)/255);red[i]=(byte)((pixels[p+2]*a+255*(255-a)+127)/255);
+            int p=i*3;blue[i]=bgr[p];green[i]=bgr[p+1];red[i]=bgr[p+2];
         }
         var cost=new double[count];
         for(int y=0;y<height;y++)for(int x=0;x<width;x++)

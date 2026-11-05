@@ -50,11 +50,13 @@ internal sealed class PhotoTraceWindow : Window
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,5,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
         Button Action(string title,Action act) { var b=new Button { Content=title,Padding=new Thickness(9,5,9,5),Margin=new Thickness(0,0,6,4) };b.Click+=(_,_)=>act();actions.Children.Add(b);return b; }
-        var undoPoint=Action("Son noktayı kaldır",()=>CanvasForVerification.UndoPoint());var clearPoints=Action("Noktaları temizle",()=>CanvasForVerification.ClearPoints());
+        var undoPoint=Action("Son noktayı kaldır",()=>CanvasForVerification.UndoPoint());var clearPoints=Action("Noktaları sil",()=>CanvasForVerification.ClearPoints());
         var apply=Action("CAD'e taslak ekle",TryApply);apply.Background=DesignRequestWindow.Accent;apply.Foreground=DesignRequestWindow.Surface;
         ApplyForVerification=apply;
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         Action("Kapat",Close);
+        var region=Action("Bölge…",OpenRegionSuggestion);
+        AutomationProperties.SetHelpText(region,"Dikdörtgen içinden deneysel renk bölgesi önerir. Bölge ve sınır açıkça seçilir; sonuç önce önizlemedir ve üretim doğruluğu göstermez.");
         var sourceRow=new WrapPanel { Margin=new Thickness(0,0,0,4) };
         sourceRow.Children.Add(new Label { Content="Görsel türü",Target=SourcePurposeForVerification,Foreground=DesignRequestWindow.Ink,Padding=new Thickness(0,4,0,4) });
         SourcePurposeForVerification.ItemsSource=new[] { "Giysi/model referansı", "Düz serilmiş kalıp görseli" };
@@ -69,7 +71,7 @@ internal sealed class PhotoTraceWindow : Window
         var addPoint=new Button { Content="Nokta ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(addPoint);
         addPoint.Click+=(_,_)=> { if(!MeasurementInput.TryParseMillimeters(xInput.Text,out var x) || !MeasurementInput.TryParseMillimeters(yInput.Text,out var y) || !CanvasForVerification.TryAddPixelPoint(new Point(x,y)))StatusForVerification.Text="Piksel koordinatı geçersiz veya nokta eklenemedi."; };
         var editPoint=new Button { Content="Düzelt…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(editPoint);
-        AutomationProperties.SetName(editPoint,"Çizgi noktasını düzelt");AutomationProperties.SetHelpText(editPoint,"Seçilen çizgi noktasını piksel koordinatlarıyla veya önceden seçilmiş inceleme imleciyle taşır; referansları değiştirmez.");
+        AutomationProperties.SetName(editPoint,"Çizgi noktasını düzelt");AutomationProperties.SetHelpText(editPoint,"İnceleme imlecine en yakın çizgi noktası ilk seçilir; fotoğrafa odaklanıldığında sarı halkayla gösterilir. Piksel koordinatları veya inceleme imleciyle taşıyabilirsiniz; referanslar değişmez.");
         editPoint.Click+=(_,_)=> { var dialog=CreatePointEditor();if(dialog is not null)dialog.ShowDialog(); };
         var checkMeasure=new Button { Content="Ölçü karşılaştır…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(6,0,0,4) };input.Children.Add(checkMeasure);
         AutomationProperties.SetHelpText(checkMeasure,"Taslak noktaları arasındaki fotoğraf mesafesini ayrı bilinen bir ölçüyle karşılaştırır; proje değişmez ve sonuç kaydedilmez.");
@@ -137,7 +139,7 @@ internal sealed class PhotoTraceWindow : Window
             CanvasForVerification.IsEnabled=SourcePurpose==PhotoSourcePurpose.FlatPattern && !CanvasForVerification.PhotoOnly;
             var editing=!CanvasForVerification.PhotoOnly;
             input.IsEnabled=editing;pathActions.IsEnabled=editing;suggest.IsEnabled=editing;applySuggestion.IsEnabled=editing;
-            undoPoint.IsEnabled=editing;clearPoints.IsEnabled=editing;apply.IsEnabled=editing;
+            undoPoint.IsEnabled=editing;clearPoints.IsEnabled=editing;apply.IsEnabled=editing;region.IsEnabled=editing;
         }
         PhotoOnlyForVerification.Checked+=(_,_)=>UpdatePhotoOnly();PhotoOnlyForVerification.Unchecked+=(_,_)=>UpdatePhotoOnly();
         void UpdatePurpose()
@@ -146,7 +148,7 @@ internal sealed class PhotoTraceWindow : Window
             Title=flat ? "Fotoğrafta elle taslak çiz" : "Referans fotoğrafı";
             var visible=flat ? Visibility.Visible : Visibility.Collapsed;
             input.Visibility=visible;pathActions.Visibility=visible;ColorPathForVerification.Visibility=visible;WidePathForVerification.Visibility=visible;PhotoOnlyForVerification.Visibility=visible;suggest.Visibility=visible;applySuggestion.Visibility=visible;
-            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;UpdatePhotoOnly();
+            undoPoint.Visibility=visible;clearPoints.Visibility=visible;apply.Visibility=visible;region.Visibility=visible;UpdatePhotoOnly();
             UpdateStatus();
         }
         SourcePurposeForVerification.SelectionChanged+=(_,_)=>
@@ -164,6 +166,21 @@ internal sealed class PhotoTraceWindow : Window
         if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="Nokta düzenlemek için düz serilmiş kalıp görselini seçin.";return null; }
         if(CanvasForVerification.Points.Count<=CanvasForVerification.ReferencePointCount) { StatusForVerification.Text="Düzeltmek için önce bir çizgi noktası seçin.";return null; }
         return new PhotoTracePointEditWindow(this);
+    }
+    private void OpenRegionSuggestion()
+    {
+        if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="Bölge için düz serilmiş kalıp görselini seçin.";return; }
+        if(pathCancellation is not null) { StatusForVerification.Text="Önce süren yol araması veya denetimi bitirin.";return; }
+        if(CanvasForVerification.Points.Count!=CanvasForVerification.ReferencePointCount)
+        { StatusForVerification.Text="Önce referansları seçin; bölge önerisi için çizgi noktaları boş olmalı.";return; }
+        if(image.PixelWidth<3 || image.PixelHeight<3)
+        { StatusForVerification.Text="Bölge önerisi için görsel en az 3 × 3 piksel olmalı.";return; }
+        var revision=DraftRevision;var dialog=new PhotoRegionWindow(this,image);
+        if(dialog.ShowDialog()!=true || dialog.SelectedContour is not { } contour)return;
+        if(closed || revision!=DraftRevision || !CanvasForVerification.SetRegionContourSuggestion(contour))
+        { StatusForVerification.Text="Taslak değişti veya sınır geçersiz; öneri kullanılmadı.";return; }
+        StatusForVerification.Text="Mavi sınır yalnız öneridir. Diğer bölgeler ve boşluklar aktarılmaz; inceleyip Yolu uygula seçin. Taslak açık kalır.";
+        _=StartTraceTopologyReviewAsync();
     }
     private void OpenPlaneSetup()
     {
@@ -224,9 +241,9 @@ internal sealed class PhotoTraceWindow : Window
     private async Task ReviewProposedTopologyAsync(long revision,CancellationToken token)
     {
         var snapshot=CanvasForVerification.ProposedTraceSnapshot();if(snapshot is null)return;
-        var closure=ReviewClosureForVerification.IsChecked==true;
+        var closure=ReviewClosureForVerification.IsChecked==true || CanvasForVerification.ProposedPathHasClosingEdge;
         var result=await AnalyzePixelTopologyAsync(snapshot,closure,token);
-        token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
+        token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true || CanvasForVerification.ProposedPathHasClosingEdge)!=closure)return;
         var current=CanvasForVerification.ProposedTraceSnapshot();if(current is null || !current.SequenceEqual(snapshot))return;
         CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);
         StatusForVerification.Text+=result.Valid
@@ -242,12 +259,12 @@ internal sealed class PhotoTraceWindow : Window
         var proposal=CanvasForVerification.ProposedTraceSnapshot();var usesProposal=proposal is not null;
         var snapshot=proposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray();
         if(snapshot.Length<2) { StatusForVerification.Text="Denetlemek için en az iki çizgi noktası seçin.";return; }
-        var closure=ReviewClosureForVerification.IsChecked==true;var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;
+        var closure=ReviewClosureForVerification.IsChecked==true || CanvasForVerification.ProposedPathHasClosingEdge;var revision=DraftRevision;var cts=new CancellationTokenSource();pathCancellation=cts;
         StatusForVerification.Text=usesProposal ? "Yol önerisi piksel geometrisinde denetleniyor." : "Çizgi piksel geometrisinde denetleniyor.";
         try
         {
             var result=await AnalyzePixelTopologyAsync(snapshot,closure,cts.Token);
-            cts.Token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true)!=closure)return;
+            cts.Token.ThrowIfCancellationRequested();if(closed || DraftRevision!=revision || (ReviewClosureForVerification.IsChecked==true || CanvasForVerification.ProposedPathHasClosingEdge)!=closure)return;
             var currentProposal=CanvasForVerification.ProposedTraceSnapshot();
             if((currentProposal is not null)!=usesProposal || !(currentProposal ?? CanvasForVerification.Points.Skip(CanvasForVerification.ReferencePointCount).ToArray()).SequenceEqual(snapshot))return;
             if(usesProposal)CanvasForVerification.SetTopologyWarning(snapshot,result.Edges,!result.Valid);else CanvasForVerification.SetCurrentTopologyWarning(snapshot,result.Edges,!result.Valid);
@@ -348,6 +365,7 @@ internal sealed class PhotoTraceWindow : Window
         var n=CanvasForVerification.Points.Count;
         var references=CanvasForVerification.ReferencePointCount;
         StatusForVerification.Text=$"Önizleme: {image.PixelWidth} × {image.PixelHeight} piksel; yakınlaştırma {MeasurementInput.Format(CanvasForVerification.Zoom)}×. "+(n<references ? $"{(references==4 ? "Düzlem köşesi" : "Referans ucu")} seçin: {n}/{references}. "+(references==4 ? "Dört köşeyi sırayla sol tıklayın." : "Sol tıkla iki uç seçin; düzlem ayarında dört köşe kullanılabilir.") : $"Referans hazır; çizgi noktası: {n-references}. İlk referans CAD'de 0,0 olur; Y aşağı artar.");
+        if(CanvasForVerification.DenseTraceView)StatusForVerification.Text+=" Yoğun çizgide ara nokta numaraları gizlenir; Düzelt ile tüm noktaları seçebilirsiniz.";
         if(CanvasForVerification.HasTopologyWarning)
         {
             var target=CanvasForVerification.PathSuggestion is null ? "Çizgi" : "Yol önerisi";

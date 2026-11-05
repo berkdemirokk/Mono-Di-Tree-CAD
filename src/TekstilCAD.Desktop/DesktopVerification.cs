@@ -1601,7 +1601,47 @@ internal static partial class DesktopVerification
             var tinyDeviation=(100.0000001-100).ToString("G9",CultureInfo.InvariantCulture);
             Check(scaleReport.Text.Contains("X +"+tinyDeviation+" mm"),"Small nonzero plotter deviations are not displayed as zero",checks);
             xMeasured.Text="0";Check(scaleReport.Text.Contains("0'dan büyük"),"Invalid measured scale is not reported as a comparison",checks);
+            var diagonalDocument=studio.Document.Clone();
+            Check(machine.DiagonalResultForVerification.Text.Contains("İsteğe bağlı") && machine.DiagonalOneForVerification.MaxLength==32,
+                "Plotter diagonal comparison starts optional and bounded",checks);
+            machine.DiagonalOneForVerification.Text="141,5";machine.DiagonalTwoForVerification.Text="141.25";
+            Check(machine.DiagonalResultForVerification.Text.Contains("1 − 2 farkı +0.25 mm") &&
+                  machine.DiagonalResultForVerification.Text.Contains("cihazı doğrulamaz") && DocumentSession.ContentEquals(diagonalDocument,studio.Document),
+                  "Plotter diagonal comparison accepts localized measurements without changing the project",checks);
+            machine.DiagonalTwoForVerification.Text="0";
+            Check(machine.DiagonalResultForVerification.Text.Contains("0'dan büyük"),"Invalid plotter diagonal is not reported as a comparison",checks);
+            machine.DiagonalOneForVerification.Clear();machine.DiagonalTwoForVerification.Clear();
+            Check(machine.DiagonalResultForVerification.Text.Contains("İsteğe bağlı"),"Clearing both plotter diagonals restores optional state",checks);
+            var referenceReceipt=PlotterCalibrationSquare.PrepareWithOrientationMarker(40,1);
+            machine.ShowCalibrationReference(referenceReceipt,"deneme-referans.plt");
+            var capturedReceipt=machine.CalibrationReferenceForVerification.Text;
+            Check(machine.CalibrationReferenceForVerification.Visibility==Visibility.Visible && machine.CalibrationReferenceForVerification.IsReadOnly &&
+                  capturedReceipt.Contains(referenceReceipt.ContentSha256) && capturedReceipt.Contains("Birim/mm: 40") && capturedReceipt.Contains("Yön işareti: var") &&
+                  capturedReceipt.Contains("otomatik bağlanmaz") && DocumentSession.ContentEquals(diagonalDocument,studio.Document),
+                  "Reference receipt identifies prepared content without claiming measurement binding",checks);
+            xMeasured.Text="99.5";yMeasured.Text="100.25";machine.DiagonalOneForVerification.Text="141.5";machine.DiagonalTwoForVerification.Text="141.25";
+            var previousScale=scaleReport.Text;var previousDiagonal=machine.DiagonalResultForVerification.Text;
+            bool wrote=false;
+            machine.FinishCalibrationReference(referenceReceipt,null,(_,_)=>wrote=true);
+            Check(!wrote && machine.CalibrationReferenceForVerification.Text==capturedReceipt && machine.PreviousMeasurementsForVerification.Visibility==Visibility.Collapsed && scaleReport.Text==previousScale && machine.DiagonalResultForVerification.Text==previousDiagonal,
+                "Cancelled reference preserves receipt and measurement state",checks);
+            try { machine.FinishCalibrationReference(referenceReceipt,"fail.plt",(_,_)=>throw new IOException("simulated write failure")); }
+            catch(IOException) { }
+            Check(machine.CalibrationReferenceForVerification.Text==capturedReceipt && machine.PreviousMeasurementsForVerification.Visibility==Visibility.Collapsed && xMeasured.Text=="99.5" && yMeasured.Text=="100.25" && scaleReport.Text==previousScale && machine.DiagonalResultForVerification.Text==previousDiagonal,
+                "Failed reference write preserves receipt and measurements",checks);
+            var nextReference=PlotterCalibrationSquare.Prepare(20,1);
+            machine.FinishCalibrationReference(nextReference,"next.plt",(_,_)=>wrote=true);
+            Check(wrote && machine.CalibrationReferenceForVerification.Text.Contains(nextReference.ContentSha256) && machine.PreviousMeasurementsForVerification.Visibility==Visibility.Visible && machine.PreviousMeasurementsForVerification.Text.Contains("yeni baskıyı yeniden ölçün") && xMeasured.Text=="99.5" && yMeasured.Text=="100.25" && machine.DiagonalOneForVerification.Text=="141.5" && machine.DiagonalTwoForVerification.Text=="141.25" && scaleReport.Text==previousScale && machine.DiagonalResultForVerification.Text==previousDiagonal,
+                "Successful new reference labels preserved earlier measurements",checks);
+            xMeasured.Text="100";machine.DiagonalOneForVerification.Clear();
+            Check(machine.PreviousMeasurementsForVerification.Visibility==Visibility.Visible && machine.PreviousMeasurementsForVerification.Text.Contains("bu dosyaya ait olduğu doğrulanmadı") && !machine.PreviousMeasurementsForVerification.Text.Contains("önce girilen"),
+                "Reference warning stays accurate after editing and clearing measurement fields",checks);
+            xMeasured.Clear();yMeasured.Clear();machine.DiagonalOneForVerification.Clear();machine.DiagonalTwoForVerification.Clear();
+            machine.FinishCalibrationReference(referenceReceipt,"empty.plt",(_,_)=>{});
+            Check(machine.PreviousMeasurementsForVerification.Visibility==Visibility.Collapsed,"New reference without existing measurements has no stale measurement warning",checks);
+            capturedReceipt=machine.CalibrationReferenceForVerification.Text;
             fileFormat.SelectedIndex=0;
+            Check(machine.CalibrationReferenceForVerification.Text==capturedReceipt,"Changing format does not relabel the previously prepared reference",checks);
             foreach (var window in new Window[] { textiles, machine })
             {
                 var root = (FrameworkElement)window.Content;
@@ -9577,14 +9617,174 @@ internal static partial class DesktopVerification
         Check(batchCanvas.UndoPath() && batchCanvas.Points.SequenceEqual(batchBefore),"Batch photo path is undone in one step",checks);
         Check(!batchCanvas.SetAllPathSuggestions(anchors,segments,includeClosing:true) && batchCanvas.Points.SequenceEqual(batchBefore),
             "A closing batch without its last interval is rejected atomically",checks);
+        var regionCanvas=new PhotoTraceCanvas { Image=edgeBitmap };
+        regionCanvas.TryAddPixelPoint(new Point(1,1));regionCanvas.TryAddPixelPoint(new Point(2,1));
+        var regionReferences=regionCanvas.Points.ToArray();var regionContour=new[] { new Point(4,4),new Point(12,4),new Point(12,12),new Point(4,12) };
+        Check(regionCanvas.SetRegionContourSuggestion(regionContour) && regionCanvas.ProposedPathHasClosingEdge &&
+              regionCanvas.Points.SequenceEqual(regionReferences) && regionCanvas.ProposedTraceSnapshot()!.SequenceEqual(regionContour),
+              "Region contour remains a detached closed-edge preview",checks);
+        regionContour[0]=new Point(5,5);
+        Check(regionCanvas.ProposedTraceSnapshot()![0]==new Point(4,4) &&
+              !regionCanvas.SetRegionContourSuggestion([new Point(1,1),new Point(2,2),new Point(1,1)]) &&
+              regionCanvas.ProposedTraceSnapshot()![0]==new Point(4,4),"Invalid contour cannot alter an existing preview",checks);
+        Check(regionCanvas.ApplyPathSuggestion() && !regionCanvas.ProposedPathHasClosingEdge && regionCanvas.Points.Count==6 &&
+              regionCanvas.Points.Take(2).SequenceEqual(regionReferences),"Explicit region preview acceptance retains calibration and creates open trace",checks);
+        Check(regionCanvas.UndoPath() && regionCanvas.Points.SequenceEqual(regionReferences),"Region contour acceptance is undone without changing calibration",checks);
+        regionCanvas.TryAddPixelPoint(new Point(8,8));
+        Check(!regionCanvas.SetRegionContourSuggestion([new Point(4,4),new Point(12,4),new Point(12,12)]) && regionCanvas.Points.Count==3,
+              "Region contour cannot replace an existing trace",checks);
+        var subpixelCanvas=new PhotoTraceCanvas { Image=edgeBitmap };
+        foreach(var p in new[] { new Point(1,1),new Point(2,1),new Point(4.2,2.4),new Point(8.2,2.4) })subpixelCanvas.TryAddPixelPoint(p);
+        var straightPixels=new[] { new Point(4,2),new Point(5,2),new Point(6,2),new Point(7,2),new Point(8,2) };
+        var subpixelBefore=subpixelCanvas.Points.ToArray();
+        Check(subpixelCanvas.SetPathSuggestion(subpixelBefore[2],subpixelBefore[3],straightPixels) &&
+              subpixelCanvas.PathSuggestion is { } suggestion && suggestion.SequenceEqual(new[] { subpixelBefore[2],new Point(5,2),new Point(7,2),subpixelBefore[3] }) &&
+              subpixelCanvas.Points.SequenceEqual(subpixelBefore),"Path simplification retains pixel neighbors of exact subpixel anchors",checks);
+        Check(subpixelCanvas.SetReplacementPath(2,3,straightPixels) &&
+              subpixelCanvas.PathSuggestion is { } subpixelReplacement && subpixelReplacement.SequenceEqual(new[] { subpixelBefore[2],new Point(5,2),new Point(7,2),subpixelBefore[3] }) &&
+              subpixelCanvas.Points.SequenceEqual(subpixelBefore),"Replacement path retains pixel neighbors of exact subpixel anchors",checks);
         var initial=new ProjectDocument { Name="Fotoğraf taslak testi" };var session=new DocumentSession(initial);
         var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,50,96,96,PixelFormats.Bgra32,null,new byte[100*50*4],400);bitmap.Freeze();
+        var captureFixture=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[] { 10,20,30,255,0,0,0,0,40,50,60,255,70,80,90,255 },8);
+        byte[] capturePng;using(var captureStream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(captureFixture));encoder.Save(captureStream);capturePng=captureStream.ToArray(); }
+        var decodedCapture=ReferencePhotoDecoder.DecodeWithGeometry(capturePng).Bitmap;
+        var captureBytes=Task.Run(()=>PhotoRasterCapture.CaptureBgr(decodedCapture,new Int32Rect(0,0,2,2))).GetAwaiter().GetResult();
+        Check(captureBytes.SequenceEqual(new byte[] { 10,20,30,255,255,255,40,50,60,70,80,90 }) && decodedCapture.IsFrozen,
+            "Decoded frozen PNG captures detached BGR over white on a background worker",checks);
+        Check(PhotoRasterCapture.CaptureBgr(decodedCapture,new Int32Rect(1,1,1,1)).SequenceEqual(new byte[] { 70,80,90 }),"Photo BGR capture preserves crop coordinates",checks);
+        try { PhotoRasterCapture.CaptureBgr(decodedCapture,new Int32Rect(1,1,2,2));throw new InvalidOperationException("Invalid crop accepted."); }
+        catch(ArgumentException) { Check(true,"Photo BGR capture rejects outside crop",checks); }
+        try { PhotoRasterCapture.CaptureBgr(decodedCapture,new Int32Rect(0,0,2,2),new CancellationToken(true));throw new InvalidOperationException("Capture ignored cancellation."); }
+        catch(OperationCanceledException) { Check(true,"Photo BGR capture honors cancellation",checks); }
+        var nearestCanvas=new PhotoTraceCanvas { Image=bitmap };nearestCanvas.SetSourceAspect(200,50);
+        Check(nearestCanvas.NearestTracePointIndex() is null,"No trace point is selected before drawing",checks);
+        foreach(var p in new[] { new Point(49.5,24.5),new Point(1,1),new Point(51.5,24.5),new Point(49.5,27.5) })nearestCanvas.TryAddPixelPoint(p);
+        var nearestViewport=new Size(400,200);
+        Check(nearestCanvas.TryMapPixelToView(new Point(49.5,24.5),nearestViewport,out var nearestTestView) && nearestCanvas.TryInspectAtView(nearestTestView,nearestViewport),"Photo inspection cursor is positioned without changing points",checks);
+        Check(nearestCanvas.NearestTracePointIndex()==3,"Nearest photo trace point uses displayed aspect and excludes references",checks);
+        Check(AutomationProperties.GetHelpText(nearestCanvas).Contains("Sarı halka",StringComparison.Ordinal),"Photo trace describes nearest-point highlight for assistive technology",checks);
+        nearestCanvas.SetSourceAspect(100,50);
+        Check(nearestCanvas.NearestTracePointIndex()==2,"Nearest photo trace point follows changed view aspect without altering coordinates",checks);
+        var denseCanvas=new PhotoTraceCanvas { Image=bitmap };
+        denseCanvas.TryAddPixelPoint(new Point(0,0));denseCanvas.TryAddPixelPoint(new Point(1,0));
+        for(var i=0;i<80;i++)denseCanvas.TryAddPixelPoint(new Point(i,10));
+        Check(!denseCanvas.DenseTraceView && denseCanvas.Points.Count==82,"Normal photo trace keeps numbered markers through 80 trace points",checks);
+        var denseBefore=denseCanvas.Points.ToArray();denseCanvas.TryAddPixelPoint(new Point(80,10));
+        Check(denseCanvas.DenseTraceView && denseCanvas.Points.Take(denseBefore.Length).SequenceEqual(denseBefore),"Dense photo view changes presentation without changing existing points",checks);
+        Check(denseCanvas.UndoPoint() && !denseCanvas.DenseTraceView && denseCanvas.Points.SequenceEqual(denseBefore),"Photo view returns to numbered markers after reducing point count",checks);
         byte[] encodedPhoto;using(var encodedStream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(encodedStream);encodedPhoto=encodedStream.ToArray(); }
         var photoHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(encodedPhoto));
         PhotoTraceWindow? trace=null;
         try
         {
+            var regionTrace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);
+            var regionContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(regionTrace.Dispatcher));
+            try
+            {
+                regionTrace.SourcePurposeForVerification.SelectedIndex=1;
+                regionTrace.CanvasForVerification.TryAddPixelPoint(new Point(1,1));regionTrace.CanvasForVerification.TryAddPixelPoint(new Point(2,1));
+                Check(regionTrace.CanvasForVerification.SetRegionContourSuggestion([new Point(4,4),new Point(12,4),new Point(4,12),new Point(12,12)]) &&
+                      regionTrace.ReviewClosureForVerification.IsChecked!=true,"Region preview carries its closing edge independently of closure option",checks);
+                var review=regionTrace.StartTraceTopologyReviewAsync();PumpUntil(()=>review.IsCompleted);review.GetAwaiter().GetResult();
+                Check(regionTrace.CanvasForVerification.HasTopologyWarning && regionTrace.CanvasForVerification.Points.Count==2,
+                      "Region preview topology review includes crossing closing edge without editing trace",checks);
+            }
+            finally { regionTrace.CanvasForVerification.ClearPoints();regionTrace.Close();SynchronizationContext.SetSynchronizationContext(regionContext); }
+            var regionPixels=new byte[96*72*4];
+            for(var yy=0;yy<72;yy++)for(var xx=0;xx<96;xx++)
+            {
+                var offset=(yy*96+xx)*4;var inside=xx>=25 && xx<70 && yy>=20 && yy<55;
+                regionPixels[offset]=(byte)(inside ? 20 : 35);regionPixels[offset+1]=(byte)(inside ? 30 : 55);
+                regionPixels[offset+2]=(byte)(inside ? 220 : 75);regionPixels[offset+3]=255;
+            }
+            var regionBitmap=BitmapSource.Create(96,72,96,96,PixelFormats.Bgra32,null,regionPixels,96*4);regionBitmap.Freeze();
+            var regionDialog=new PhotoRegionWindow(workspace,regionBitmap);
+            var regionDialogContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(regionDialog.Dispatcher));
+            try
+            {
+                Render(regionDialog,Path.ChangeExtension(reportPath,".photo-region-compact.png"),620,550);
+                Check(FullyVisible(regionDialog.Regions,(FrameworkElement)regionDialog.Content) && FullyVisible(regionDialog.left,(FrameworkElement)regionDialog.Content) && regionDialog.HasRectangleOverlay,
+                      "Experimental photo region controls fit minimum size",checks);
+                Check(!regionDialog.TrySetRectangleFromView(new Point(100,20),new Point(300,275),new Size(400,400)),"Region drag cannot start in the letterbox",checks);
+                Check(regionDialog.TrySetRectangleFromView(new Point(100,125),new Point(300,275),new Size(400,400)) &&
+                      regionDialog.left.Text=="24" && regionDialog.top.Text=="18" && regionDialog.width.Text=="49" && regionDialog.height.Text=="37",
+                      "Region drag maps image coordinates and preserves letterboxing",checks);
+                Check(!regionDialog.TrySetRectangleFromView(new Point(100,125),new Point(100,125),new Size(400,400)) && regionDialog.left.Text=="24",
+                      "Degenerate region drag preserves the previous rectangle",checks);
+                regionDialog.left.Text="15";regionDialog.top.Text="10";regionDialog.width.Text="65";regionDialog.height.Text="55";
+                var regionComputeTask=regionDialog.ComputeAsync();PumpUntil(()=>regionComputeTask.IsCompleted);regionComputeTask.GetAwaiter().GetResult();
+                Check(regionDialog.Regions.Items.Count>0 && regionDialog.SelectedContour is null,"Photo region computation requires explicit component choice",checks);
+                regionDialog.MarkMode.SelectedIndex=3;
+                Check(regionDialog.TrySelectComponentAt(40,30) && regionDialog.Regions.SelectedIndex>=0,
+                      "Photo region can be selected by its foreground pixel",checks);
+                var selectedRegionIndex=regionDialog.Regions.SelectedIndex;
+                Check(!regionDialog.TrySelectComponentAt(3,3) && regionDialog.Regions.SelectedIndex==selectedRegionIndex && !regionDialog.TrySelectComponentAt(-1,0),
+                      "Background or invalid region click preserves the previous selection",checks);
+                Check(regionDialog.TrySelectContour() && regionDialog.SelectedContour is { Length:>=3 } && DocumentSession.ContentEquals(initial,workspace.Document),
+                      "Selected synthetic photo region yields a detached contour without editing the project",checks);
+                regionDialog.MarkMode.SelectedIndex=1;
+                regionDialog.BrushSize.SelectedIndex=1;
+                Check(regionDialog.TryAddStroke([new Point(10,10),new Point(14,10)]) && regionDialog.PendingMarkCount==33,
+                      "Photo region brush interpolates the full circular stroke",checks);
+                regionDialog.MarkMode.SelectedIndex=2;regionDialog.BrushSize.SelectedIndex=0;
+                Check(regionDialog.TryAddMark(10,10) && regionDialog.PendingMarkAtForVerification(10,10)==false,
+                      "Photo brush can replace an earlier pending mark",checks);
+                var marksBeforeRejectedStroke=regionDialog.PendingMarkCount;regionDialog.BrushSize.SelectedIndex=2;
+                var longBrushStroke=Enumerable.Range(0,9).SelectMany(i=>new[] { new Point(i%2==0 ? 0 : 95,i*8),new Point(i%2==0 ? 95 : 0,i*8) }).ToArray();
+                Check(!regionDialog.TryAddStroke(longBrushStroke) && regionDialog.PendingMarkCount==marksBeforeRejectedStroke,
+                      "Oversized photo brush stroke is rejected without partial marks",checks);
+                Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkAtForVerification(10,10)==true && regionDialog.PendingMarkCount==33 && !regionDialog.UndoPendingStroke(),
+                      "Undo restores overwritten photo mark and rejected stroke does not replace undo",checks);
+                regionDialog.ClearMarks();regionDialog.BrushSize.SelectedIndex=0;
+                regionDialog.MarkMode.SelectedIndex=1;
+                Check(regionDialog.TryAddMark(3,3),"Photo region foreground mark can be queued",checks);
+                Check(regionDialog.UndoPendingStroke() && regionDialog.PendingMarkCount==0 && regionDialog.PendingMarkAtForVerification(3,3) is null &&
+                      regionDialog.TryAddMark(3,3),"Undo removes newly queued mark and allows it again",checks);
+                regionDialog.MarkMode.SelectedIndex=2;
+                Check(regionDialog.TryAddMark(40,30) && !regionDialog.TrySelectContour(),"Pending photo region marks cannot be silently omitted",checks);
+                var blockedRegionSearch=regionDialog.ComputeAsync();PumpUntil(()=>blockedRegionSearch.IsCompleted);blockedRegionSearch.GetAwaiter().GetResult();
+                Check(regionDialog.Status.Text.Contains("işaretleri uygulayın") && regionDialog.Regions.SelectedIndex==0,"A new photo region search cannot discard pending marks",checks);
+                var maskBeforeCorrection=regionDialog.CopyMaskForVerification()!;
+                var refineTask=regionDialog.RefineAsync();PumpUntil(()=>refineTask.IsCompleted);refineTask.GetAwaiter().GetResult();
+                var correctedMask=regionDialog.CopyMaskForVerification();
+                Check(correctedMask is not null && correctedMask[3*96+3]==1 && correctedMask[30*96+40]==0 && regionDialog.Regions.SelectedIndex==-1 &&
+                      DocumentSession.ContentEquals(initial,workspace.Document),"Explicit photo region corrections update mask and require a new selection",checks);
+                Check(regionDialog.AppliedMarkForVerification(3,3)==1 && regionDialog.AppliedMarkForVerification(40,30)==2 && !regionDialog.HasMarksOverlay,
+                      "Applied photo correction marks remain tracked but are initially hidden",checks);
+                regionDialog.ShowAppliedMarks.IsChecked=true;
+                Render(regionDialog,Path.ChangeExtension(reportPath,".photo-region-applied.png"),620,550);
+                Check(regionDialog.HasMarksOverlay && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),
+                      "Showing applied photo marks does not change the mask",checks);
+                regionDialog.ShowAppliedMarks.IsChecked=false;
+                Check(!regionDialog.HasMarksOverlay,"Hiding applied photo marks preserves mask state",checks);
+                regionDialog.MarkMode.SelectedIndex=1;Check(regionDialog.TryAddMark(5,5),"New mark can follow successful region refinement",checks);
+                regionDialog.BeforeRefineForVerification=_=>throw new InvalidOperationException("sentetik hata");
+                var failedRefine=regionDialog.RefineAsync();PumpUntil(()=>failedRefine.IsCompleted);failedRefine.GetAwaiter().GetResult();regionDialog.BeforeRefineForVerification=null;
+                Check(regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!) && regionDialog.PendingMarkCount==1,
+                      "Failed region refinement preserves current mask and pending marks",checks);
+                Check(!regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(correctedMask!),"Region refinement undo cannot discard pending marks",checks);
+                regionDialog.ClearMarks();
+                Check(regionDialog.UndoRefinement() && regionDialog.CopyMaskForVerification()!.SequenceEqual(maskBeforeCorrection) &&
+                      regionDialog.Regions.SelectedIndex==-1 && regionDialog.AppliedMarkForVerification(3,3)==0 && regionDialog.AppliedMarkForVerification(40,30)==0 &&
+                      !regionDialog.UndoRefinement(),"Region refinement undo restores exact previous mask and applied marks once",checks);
+                Check(regionDialog.TryAddMark(5,5),"Region mark can follow refinement undo",checks);
+                using(var enteredRefine=new ManualResetEventSlim())using(var releaseRefine=new ManualResetEventSlim())
+                {
+                    regionDialog.BeforeRefineForVerification=_=> { enteredRefine.Set();releaseRefine.Wait(); };
+                    try
+                    {
+                        var staleRefine=regionDialog.RefineAsync();PumpUntil(()=>enteredRefine.IsSet);
+                        regionDialog.left.Text="16";releaseRefine.Set();PumpUntil(()=>staleRefine.IsCompleted);staleRefine.GetAwaiter().GetResult();
+                        Check(regionDialog.Regions.Items.Count==0 && regionDialog.CopyMaskForVerification() is null && !regionDialog.TrySelectContour(),
+                              "Changing the region rectangle cancels in-flight correction and cannot restore stale results",checks);
+                    }
+                    finally { releaseRefine.Set();regionDialog.BeforeRefineForVerification=null; }
+                }
+                regionDialog.left.Text="999";
+                Check(!regionDialog.HasRectangleOverlay,"Invalid photo region rectangle does not show a misleading box",checks);
+            }
+            finally { regionDialog.Close();SynchronizationContext.SetSynchronizationContext(regionDialogContext); }
             var colorTrace=new PhotoTraceWindow(workspace,equalGray,workspace.CapturePhotoTrace()!);
             var colorContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(colorTrace.Dispatcher));
             try

@@ -83,9 +83,20 @@ public sealed class PlotterCalibrationSquareTests
             PlotterCalibrationSquare.WriteNew(prepared, path);
             var bytes = File.ReadAllBytes(path);
             Assert.Equal(System.Text.Encoding.UTF8.GetBytes(prepared.Output.Text), bytes);
+            Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)),prepared.ContentSha256);
             Assert.Throws<IOException>(() => PlotterCalibrationSquare.WriteNew(prepared, path));
             Assert.Equal(bytes, File.ReadAllBytes(path));
         }
         finally { if (File.Exists(path)) File.Delete(path); }
+    }
+
+    [Fact]
+    public void PreparedReferenceIdentityChangesWithUnitsOrOrientation()
+    {
+        var baseline=PlotterCalibrationSquare.Prepare(40,1);
+        Assert.Equal(64,baseline.ContentSha256.Length);
+        Assert.Equal(baseline.ContentSha256,PlotterCalibrationSquare.Prepare(40,1).ContentSha256);
+        Assert.NotEqual(baseline.ContentSha256,PlotterCalibrationSquare.Prepare(20,1).ContentSha256);
+        Assert.NotEqual(baseline.ContentSha256,PlotterCalibrationSquare.PrepareWithOrientationMarker(40,1).ContentSha256);
     }
 }

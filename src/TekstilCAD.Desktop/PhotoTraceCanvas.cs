@@ -41,7 +41,7 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     {
         Focusable=true;MinHeight=160;ClipToBounds=true;
         AutomationProperties.SetName(this,"Referans fotoğrafta elle nokta seçimi");
-        AutomationProperties.SetHelpText(this,"Sol tık nokta ekler; sağ tık yalnız inceleme konumunu seçer ve yakınlaştırılmış görünümü oraya taşır. Klavyeyle ok tuşları imleci taşır, Shift ile on piksel ilerler, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Yakınlaştırmada imleç kenara ulaşınca görünüm onu izler. Çizim otomatik kalıp değildir.");
+        AutomationProperties.SetHelpText(this,"Sol tık nokta ekler; sağ tık yalnız inceleme konumunu seçer ve yakınlaştırılmış görünümü oraya taşır. Sarı halka Düzelt penceresinde ilk seçilecek en yakın çizgi noktasını gösterir. Klavyeyle ok tuşları imleci taşır, Shift ile on piksel ilerler, Enter veya boşluk nokta ekler, Backspace son noktayı kaldırır. Yakınlaştırmada imleç kenara ulaşınca görünüm onu izler. Çizim otomatik kalıp değildir.");
     }
 
     internal BitmapSource? Image
@@ -76,9 +76,26 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
 
     internal IReadOnlyList<Point> Points=>points.AsReadOnly();
     internal Point CursorForVerification=>cursor;
+    internal int? NearestTracePointIndex()
+    {
+        if(image is null || points.Count<=ReferencePointCount)return null;
+        // ImageBounds uses the source aspect, which can differ slightly from the
+        // rounded preview aspect. Compare in the same proportions as the view.
+        var xScale=(double)sourceWidth/image.PixelWidth;var yScale=(double)sourceHeight/image.PixelHeight;
+        var best=ReferencePointCount;var bestDistance=double.PositiveInfinity;
+        for(var i=ReferencePointCount;i<points.Count;i++)
+        {
+            var dx=(points[i].X-cursor.X)*xScale;var dy=(points[i].Y-cursor.Y)*yScale;
+            var distance=dx*dx+dy*dy;
+            if(distance<bestDistance) { bestDistance=distance;best=i; }
+        }
+        return best;
+    }
     internal Point? EdgeSuggestion=>edgeSuggestion;
     internal IReadOnlyList<Point>? PathSuggestion=>pathSuggestion?.AsReadOnly();
+    internal bool ProposedPathHasClosingEdge=>pathSuggestion is not null && pathClosingTarget.HasValue;
     internal double Zoom=>zoom;
+    internal bool DenseTraceView=>points.Count-ReferencePointCount>80;
     internal event EventHandler? PointsChanged;
     internal void SetReferencePointCount(int count)
     {
@@ -122,6 +139,28 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
     internal bool SetAllPathSuggestions(IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
         =>SetPathSegments(ReferencePointCount,anchors,candidates,includeClosing);
 
+    /// <summary>
+    /// Shows one explicitly chosen pixel contour as a detached proposal. It does
+    /// not silently replace existing trace points or claim that the contour is valid.
+    /// </summary>
+    internal bool SetRegionContourSuggestion(IReadOnlyList<Point> contour)
+    {
+        ArgumentNullException.ThrowIfNull(contour);
+        if(image is null || points.Count!=ReferencePointCount || contour.Count<3 ||
+           contour.Count>MaximumPoints-ReferencePointCount)return false;
+        var candidate=contour.ToArray();
+        if(candidate[0]==candidate[^1])return false; // closing edge is held separately
+        for(var i=0;i<candidate.Length;i++)
+        {
+            var p=candidate[i];
+            if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || p.X<0 || p.Y<0 ||
+               p.X>image.PixelWidth-1 || p.Y>image.PixelHeight-1 || (i>0 && p==candidate[i-1]))return false;
+        }
+        pathSuggestion=candidate.ToList();pathOriginal=[];pathStartIndex=ReferencePointCount;
+        pathOriginalTotalCount=points.Count;pathClosingTarget=candidate[0];edgeSuggestion=null;
+        topologyWarningEdges=null;topologyWarning=false;InvalidateVisual();return true;
+    }
+
     private bool SetPathSegments(int startIndex,IReadOnlyList<Point> anchors,IReadOnlyList<IReadOnlyList<Point>> candidates,bool includeClosing=false)
     {
         pathSuggestion=null;pathOriginal=null;pathClosingTarget=null;topologyWarningEdges=null;topologyWarning=false;edgeSuggestion=null;InvalidateVisual();
@@ -137,7 +176,10 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
             {
                 var p=candidate[i];var a=candidate[i-1];var b=candidate[i+1];
                 if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || p.X<0 || p.Y<0 || p.X>image.PixelWidth-1 || p.Y>image.PixelHeight-1)return false;
-                if((p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
+                // The search uses rounded pixel endpoints, but the accepted anchor can be subpixel.
+                // Keep its adjacent pixel so collinearity is never inferred from a different endpoint.
+                var nextToSubpixelAnchor=(i==1 && anchors[segment]!=candidate[0]) || (i==candidate.Count-2 && end!=candidate[^1]);
+                if(!nextToSubpixelAnchor && (p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
                 if(p==simplified[^1] || (closing && p==anchors[0]))return false;simplified.Add(p);
                 if(startIndex+simplified.Count>MaximumPoints)return false;
             }
@@ -158,7 +200,8 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         {
             var p=candidate[i];var a=candidate[i-1];var b=candidate[i+1];
             if(!double.IsFinite(p.X) || !double.IsFinite(p.Y) || p.X<0 || p.Y<0 || p.X>image.PixelWidth-1 || p.Y>image.PixelHeight-1)return false;
-            if((p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
+            var nextToSubpixelAnchor=(i==1 && points[first]!=candidate[0]) || (i==candidate.Count-2 && points[last]!=candidate[^1]);
+            if(!nextToSubpixelAnchor && (p.X-a.X)*(b.Y-p.Y)==(p.Y-a.Y)*(b.X-p.X) && (p.X-a.X)*(b.X-p.X)+(p.Y-a.Y)*(b.Y-p.Y)>0)continue;
             if(p==replacement[^1] || p==points[last])return false;replacement.Add(p);
         }
         if(replacement[^1]==points[last])return false;replacement.Add(points[last]);
@@ -331,9 +374,17 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         {
             if(!TryMapPixelToView(points[i],RenderSize,out var point))continue;
             if(previous is { } last && i!=ReferencePointCount)dc.DrawLine(stroke,last,point);
-            dc.DrawEllipse(DesignRequestWindow.Accent,new Pen(Brushes.White,1),point,7,7);
-            var label=new FormattedText((i+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),10,Brushes.White,dip);
-            dc.DrawText(label,new Point(point.X-label.Width/2,point.Y-label.Height/2));previous=point;
+            // Keep the full polyline visible when hundreds of numbered markers overlap it.
+            // Reference points and the final trace point retain their numbered markers.
+            var prominent=!DenseTraceView || i<ReferencePointCount || i==points.Count-1;
+            if(prominent)
+            {
+                dc.DrawEllipse(DesignRequestWindow.Accent,new Pen(Brushes.White,1),point,7,7);
+                var label=new FormattedText((i+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),10,Brushes.White,dip);
+                dc.DrawText(label,new Point(point.X-label.Width/2,point.Y-label.Height/2));
+            }
+            else dc.DrawEllipse(DesignRequestWindow.Accent,null,point,2,2);
+            previous=point;
         }
         if(ReferencePointCount==4 && points.Count>=4 && TryMapPixelToView(points[0],RenderSize,out var firstCorner) && TryMapPixelToView(points[3],RenderSize,out var lastCorner))
             dc.DrawLine(new Pen(Brushes.DarkOrange,2) { DashStyle=DashStyles.Dash },lastCorner,firstCorner);
@@ -347,6 +398,14 @@ internal sealed class PhotoTraceCanvas : FrameworkElement
         }
         if(IsKeyboardFocused && TryMapPixelToView(cursor,RenderSize,out var current))
         {
+            if(NearestTracePointIndex() is int selected && TryMapPixelToView(points[selected],RenderSize,out var nearest))
+            {
+                dc.DrawEllipse(null,new Pen(Brushes.Gold,3),nearest,10,10);
+                var number=new FormattedText((selected+1).ToString(CultureInfo.InvariantCulture),CultureInfo.InvariantCulture,FlowDirection.LeftToRight,new Typeface("Segoe UI"),12,Brushes.Black,dip);
+                var labelOrigin=new Point(nearest.X+12,nearest.Y-12);
+                dc.DrawRectangle(Brushes.Gold,null,new Rect(labelOrigin,new Size(number.Width+4,number.Height)));
+                dc.DrawText(number,new Point(labelOrigin.X+2,labelOrigin.Y));
+            }
             var highlight=new Pen(Brushes.White,2);dc.DrawLine(highlight,new Point(current.X-8,current.Y),new Point(current.X+8,current.Y));
             dc.DrawLine(highlight,new Point(current.X,current.Y-8),new Point(current.X,current.Y+8));
         }

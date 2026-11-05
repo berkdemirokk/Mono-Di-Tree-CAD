@@ -1,6 +1,6 @@
 # 499 USD hedefi için rakip ve kapsam karşılaştırması
 
-**Tarih:** 1 Kasım 2026. **Yöntem:** üreticilerin herkese açık fiyat ve ürün sayfaları ile bu dalın kaynak kodu ve bilinen sınırları karşılaştırıldı. Rakip ürünler kurulmadı; aynı iş üzerinde bağımsız süre, doğruluk, kumaş verimi veya kullanıcı kabulü ölçülmedi. Üreticilerin özellik açıklamaları onların beyanıdır. Fiyat, bölge, vergi, lisans ve paket kapsamı değişebilir.
+**İlk tarih:** 1 Kasım 2026; fiyat ve paket kaynakları 5 Kasım 2026 tarihinde yeniden kontrol edildi. **Yöntem:** üreticilerin herkese açık fiyat ve ürün sayfaları ile bu dalın kaynak kodu ve bilinen sınırları karşılaştırıldı. Rakip ürünler kurulmadı; aynı iş üzerinde bağımsız süre, doğruluk, kumaş verimi veya kullanıcı kabulü ölçülmedi. Üreticilerin özellik açıklamaları onların beyanıdır. Fiyat, bölge, vergi, lisans ve paket kapsamı değişebilir.
 
 Mono Di Tree CAD için 499 USD tek seferlik bedel **hedef**, mevcut satış teklifi veya etkinleştirilmiş lisans değildir. Bu belgede çevrimdışı çalışma bir ürün hedefidir; dağıtılmış bir paketin ağ kesikken uçtan uca çalıştığı henüz kanıtlanmamıştır.
 
@@ -27,7 +27,13 @@ Aşağıdaki hesap bir lisans ve kesintisiz dönem varsayar; vergi, destek, kur,
 | Tailornova Commercial: 49 USD/ay | 588 USD | 1.176 USD |
 | TUKAcad Professional: 199 USD/ay | 2.388 USD | 4.776 USD |
 
-TUKAcad Professional için üreticinin 1.900 USD yıllık seçeneği de vardır; 12/24 aylık bedelleri sırasıyla 1.900/3.800 USD olur. Bu hesaplar fonksiyon, kullanıcı hakkı veya destek bakımından eşdeğerlik göstermez. Özellikle bedelsiz Seamly ve düşük fiyatlı Learning seçeneği, yalnız abonelikten kaçınmanın 499 USD değerini kendiliğinden kanıtlamadığını gösterir.
+TUKAcad Professional için üreticinin 1.025 USD / 6 ay ve 1.900 USD / yıl seçenekleri de vardır; yıllık ödeme kullanılırsa 12/24 aylık bedeller sırasıyla 1.900/3.800 USD olur. TUKAdesign Professional için 500 USD / 6 ay ve 950 USD / yıl seçenekleri listelenir; TUKAmark ve tam TUKAcad CPE kapsamıyla aynı ürün değildir. Bu seçenekler kesintisiz dönem ve fiyatların değişmediği varsayımıyla karşılaştırılır. Bu hesaplar fonksiyon, kullanıcı hakkı veya destek bakımından eşdeğerlik göstermez. Özellikle bedelsiz Seamly ve düşük fiyatlı Learning seçeneği, yalnız abonelikten kaçınmanın 499 USD değerini kendiliğinden kanıtlamadığını gösterir.
+
+## Seamly sürümü ve karşılaştırma hazırlığı — 5 Kasım 2026
+
+[Seamly2D kaynak deposu](https://github.com/FashionFreedom/Seamly2D) uygulamayı ücretsiz ve GPLv3+ açık kaynak olarak tanımlar. Üreticinin [v2026.11.2.131 sürümü](https://github.com/FashionFreedom/Seamly2D/releases/tag/v2026.11.2.131) için Windows ZIP dosyası indirildi: 80.818.442 bayt, yerel SHA-256 `99B05AE531AFB51D83D512027F0EF22948F84984B8C438C6C3351FEA86BEEBAE`. Bu yalnız indirilen dosyanın kimliğidir; üreticinin yayımladığı bağımsız bir özet veya imza karşılaştırması yapılmadı. ZIP'te tek bir `Seamly2D-installer.exe` bulunuyor; taşınabilir uygulama olduğu doğrulanmadı. Yükleyici çalıştırılmadı, rakip uygulama kurulmadı ve kullanıcı ayarları değiştirilmedi.
+
+Seamly'nin yayımlanmış [komut satırı kaynak belgesi](https://fashionfreedom.github.io/Seamly2D/df/d9b/vcmdexport_8cpp_source.html) dışa aktarma seçenekleri gösteriyor; bu sürümün gerçek davranışı burada çalıştırılmadı. Gelecekteki eşli test için her iki uygulamada aynı izinli, ölçüleri bilinen kontur kullanılması; çıktı türü ve birimlerin ayrı doğrulanması; geometrinin, sürelerin ve düzeltmelerin kaydedilmesi gerekir. Komut satırı çıktısı operatör kullanım kolaylığını veya fiziksel plotter doğruluğunu tek başına ölçmez. Rakip ikili dosyasının kurulumu ancak kullanıcı ortamından gerçekten yalıtılmış bir test ortamı sağlandığında değerlendirilebilir. GPL kodu ürüne dahil edilmedi.
 
 ## Mevcut uygulama: kaynakta görülen durum ve açıklar
 

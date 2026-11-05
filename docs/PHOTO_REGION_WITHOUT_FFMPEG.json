@@ -1,0 +1,11 @@
+{
+  "scope": "Self-contained x64 prototype, synthetic checks and specified photo batch; no device or offline-network proof.",
+  "omitted_file": "opencv_videoio_ffmpeg4100_64.dll",
+  "omitted_bytes": 26391552,
+  "omitted_sha256": "3DE83B84588B3EE8BACDBEA85A8F92D4855A32A1108183963315A7DB06AD5744",
+  "native_library_sha256": "C812D49897B29C20BE941C0C2AFF7768E34D959611829971E6FE8021D6BACE69",
+  "jobs_sha256": "97EAD3AF6F9C41A3DEF8AB86626DCB3B5C087629C04A51485AA5FA188DC7E0F5",
+  "results_sha256": "083C4855D9DC13F0C7AD6BA71045A99C8D9EC3B101387880FDBC9FFAF27F58FF",
+  "results_match": true,
+  "published_bytes_without_ffmpeg": 143484287.0
+}

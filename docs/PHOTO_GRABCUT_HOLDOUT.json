@@ -1,0 +1,1634 @@
+{
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "opencv_version": "4.10.0",
+  "numpy_version": "2.3.5",
+  "selection": "holdout",
+  "box_jitter_fraction": 0.0,
+  "selection_file_sha256": "f785d008e05f3fdd7ca0411a0b72eb8e78e02c0c7879104f7b1152ef53a60cb5",
+  "method": "Exploratory; 5 GrabCut iterations and annotation box plus 5% margin and specified deterministic per-side box jitter; flood baseline uses same box plus ground-truth interior seed; 512x256 polygon-mask IoU and symmetric inner boundary pixel distances; no human input or physical measurement",
+  "attempted": 80,
+  "grabcut_failures": 0,
+  "grabcut": {
+    "count": 80,
+    "mean": 0.9251361959588853,
+    "median": 0.9732610352407448,
+    "at_least_0_8": 68,
+    "below_0_5": 0
+  },
+  "flood": {
+    "count": 80,
+    "mean": 0.6730946240835834,
+    "median": 0.6571558584290116,
+    "at_least_0_8": 30,
+    "below_0_5": 20
+  },
+  "reference_clipped_by_box": 0,
+  "multiple_large_components": 4,
+  "boundary": {
+    "measured": 80,
+    "max_over_5_pixels": 57,
+    "mean_symmetric_pixels": 2.6792289312928914
+  },
+  "rows": [
+    {
+      "ordinal": 0,
+      "annotation_id": 20,
+      "image_id": 20,
+      "category": "shorts",
+      "flood_iou": 0.4280760160909974,
+      "grabcut_iou": 0.9537141717097826,
+      "boundary_max_pixels": 12.0,
+      "boundary_mean_pixels": 1.175835371017456,
+      "failure": null,
+      "rectangle": [
+        169,
+        43,
+        355,
+        206
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "2ac111f5b733434912bdddb51f4945db740ee074ca8e9c2fd35132c5ac211582"
+    },
+    {
+      "ordinal": 1,
+      "annotation_id": 62,
+      "image_id": 62,
+      "category": "shorts",
+      "flood_iou": 0.18071761161325664,
+      "grabcut_iou": 0.9844449502997192,
+      "boundary_max_pixels": 5.0,
+      "boundary_mean_pixels": 0.41457176208496094,
+      "failure": null,
+      "rectangle": [
+        192,
+        61,
+        366,
+        188
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "e8561686bede7481549d1d1d2a63e8577c6ef50ebfb4a088a983a18f70eae168"
+    },
+    {
+      "ordinal": 2,
+      "annotation_id": 133,
+      "image_id": 133,
+      "category": "shorts",
+      "flood_iou": 0.8908229794562676,
+      "grabcut_iou": 0.6311457842170689,
+      "boundary_max_pixels": 100.20977783203125,
+      "boundary_mean_pixels": 18.281557083129883,
+      "failure": null,
+      "rectangle": [
+        106,
+        0,
+        395,
+        251
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "8bb74bfd1ee0bc351d0bc71c72439831df8d51a2c44b232f663c0d1095911b4d"
+    },
+    {
+      "ordinal": 3,
+      "annotation_id": 56,
+      "image_id": 56,
+      "category": "shorts",
+      "flood_iou": 0.5199865824341701,
+      "grabcut_iou": 0.9686696854730144,
+      "boundary_max_pixels": 29.0,
+      "boundary_mean_pixels": 1.065908432006836,
+      "failure": null,
+      "rectangle": [
+        198,
+        84,
+        365,
+        232
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d865eb4056f599321de61d897c99ae78899a912d5c92cad76db3201b3ebd9ff3"
+    },
+    {
+      "ordinal": 4,
+      "annotation_id": 39,
+      "image_id": 39,
+      "category": "shorts",
+      "flood_iou": 0.76957939354418,
+      "grabcut_iou": 0.9070395738203957,
+      "boundary_max_pixels": 30.479501724243164,
+      "boundary_mean_pixels": 3.37893009185791,
+      "failure": null,
+      "rectangle": [
+        102,
+        26,
+        370,
+        247
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "9b3e094d78756ef1e0aa055fc463decd1ccf90ada21963cff58befbd1ddf01d1"
+    },
+    {
+      "ordinal": 5,
+      "annotation_id": 72,
+      "image_id": 72,
+      "category": "shorts",
+      "flood_iou": 0.6546019269776876,
+      "grabcut_iou": 0.9723716970524456,
+      "boundary_max_pixels": 17.11724281311035,
+      "boundary_mean_pixels": 1.0666477680206299,
+      "failure": null,
+      "rectangle": [
+        204,
+        89,
+        383,
+        228
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "02fcfd4969324607ab9cc91681b3b3312f09e09f11082d9e22b0a721b2563e34"
+    },
+    {
+      "ordinal": 6,
+      "annotation_id": 76,
+      "image_id": 76,
+      "category": "shorts",
+      "flood_iou": 0.9601322180248246,
+      "grabcut_iou": 0.989218141346689,
+      "boundary_max_pixels": 5.385164737701416,
+      "boundary_mean_pixels": 0.28173986077308655,
+      "failure": null,
+      "rectangle": [
+        180,
+        81,
+        354,
+        216
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "b8fcff766898cd19295c57ec4aaf0134a310cf580aebadd01884b33fa8f01a8b"
+    },
+    {
+      "ordinal": 7,
+      "annotation_id": 33,
+      "image_id": 33,
+      "category": "shorts",
+      "flood_iou": 0.5029917524661743,
+      "grabcut_iou": 0.9372635972349028,
+      "boundary_max_pixels": 9.848857879638672,
+      "boundary_mean_pixels": 1.72450852394104,
+      "failure": null,
+      "rectangle": [
+        248,
+        72,
+        442,
+        213
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "a6288e35dea5e3829d68fcc6d7db52987a7b397a38894e9a14e56f11ccf8ce64"
+    },
+    {
+      "ordinal": 8,
+      "annotation_id": 53,
+      "image_id": 53,
+      "category": "shorts",
+      "flood_iou": 0.6111002921129504,
+      "grabcut_iou": 0.9776679841897233,
+      "boundary_max_pixels": 4.0,
+      "boundary_mean_pixels": 0.58040452003479,
+      "failure": null,
+      "rectangle": [
+        166,
+        65,
+        355,
+        192
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "ae2f4888489fe01adb7cfeb432e27974a0b94380c52ff27e57e016984e804163"
+    },
+    {
+      "ordinal": 9,
+      "annotation_id": 136,
+      "image_id": 136,
+      "category": "shorts",
+      "flood_iou": 0.6427190393812964,
+      "grabcut_iou": 0.9356019311633702,
+      "boundary_max_pixels": 9.0,
+      "boundary_mean_pixels": 1.6149005889892578,
+      "failure": null,
+      "rectangle": [
+        174,
+        46,
+        332,
+        174
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "11696a426f42890dcd0df60410d761424aa6d057404af3fc0c564be892ad9ec9"
+    },
+    {
+      "ordinal": 10,
+      "annotation_id": 160,
+      "image_id": 160,
+      "category": "shorts",
+      "flood_iou": 0.5499967639634975,
+      "grabcut_iou": 0.950266228616744,
+      "boundary_max_pixels": 14.000000953674316,
+      "boundary_mean_pixels": 1.1580731868743896,
+      "failure": null,
+      "rectangle": [
+        249,
+        41,
+        367,
+        172
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "f7373ad7f9b24b6c7f0684d833fb7246a9b6cf4d0f303fe0bfc9ac5afeb6201c"
+    },
+    {
+      "ordinal": 11,
+      "annotation_id": 41,
+      "image_id": 41,
+      "category": "shorts",
+      "flood_iou": 0.6339070830159939,
+      "grabcut_iou": 0.8425295592977428,
+      "boundary_max_pixels": 22.0,
+      "boundary_mean_pixels": 5.310291290283203,
+      "failure": null,
+      "rectangle": [
+        180,
+        43,
+        377,
+        213
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "aaa8069c4521a612ee67383f6c1116b609a80a4ff8e5dee2897fd255b5a5320d"
+    },
+    {
+      "ordinal": 12,
+      "annotation_id": 63,
+      "image_id": 63,
+      "category": "shorts",
+      "flood_iou": 0.42397942783670844,
+      "grabcut_iou": 0.6044731229835402,
+      "boundary_max_pixels": 58.59181213378906,
+      "boundary_mean_pixels": 15.201089859008789,
+      "failure": null,
+      "rectangle": [
+        179,
+        73,
+        393,
+        250
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "2de78c6e445f39c0963d9f64c13b678f07f1cf0a732729f7a6c25d10b9a64c43"
+    },
+    {
+      "ordinal": 13,
+      "annotation_id": 17,
+      "image_id": 17,
+      "category": "shorts",
+      "flood_iou": 0.8534502923976608,
+      "grabcut_iou": 0.9785435630689207,
+      "boundary_max_pixels": 2.2360680103302,
+      "boundary_mean_pixels": 0.3504196107387543,
+      "failure": null,
+      "rectangle": [
+        163,
+        57,
+        318,
+        168
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "549c141cb5e13e1478cda97a4868bc2e28377de41be965124a718bf0481cf1d4"
+    },
+    {
+      "ordinal": 14,
+      "annotation_id": 172,
+      "image_id": 172,
+      "category": "shorts",
+      "flood_iou": 0.9852401824850165,
+      "grabcut_iou": 0.975187838546217,
+      "boundary_max_pixels": 9.433980941772461,
+      "boundary_mean_pixels": 0.6835242509841919,
+      "failure": null,
+      "rectangle": [
+        192,
+        40,
+        360,
+        174
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "8d62636b2ed9e60ad380dfe80f56bc9ed4aa72b3b20cebe304fb419ab797498c"
+    },
+    {
+      "ordinal": 15,
+      "annotation_id": 91,
+      "image_id": 91,
+      "category": "shorts",
+      "flood_iou": 0.5193019566367002,
+      "grabcut_iou": 0.9867222387615362,
+      "boundary_max_pixels": 3.0,
+      "boundary_mean_pixels": 0.33755260705947876,
+      "failure": null,
+      "rectangle": [
+        181,
+        26,
+        372,
+        191
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "461eda1b8c5d55dcbb6df93f62db9aaefde8c635e8377f45146a6ea00d670cea"
+    },
+    {
+      "ordinal": 16,
+      "annotation_id": 29,
+      "image_id": 29,
+      "category": "shorts",
+      "flood_iou": 0.9087301587301587,
+      "grabcut_iou": 0.9529228168281423,
+      "boundary_max_pixels": 15.29705810546875,
+      "boundary_mean_pixels": 1.4062047004699707,
+      "failure": null,
+      "rectangle": [
+        229,
+        40,
+        393,
+        193
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "5d6d0b94f424945e6f5510c5db0cd870206c4b6783994b5319a8f71c7bd1095f"
+    },
+    {
+      "ordinal": 17,
+      "annotation_id": 95,
+      "image_id": 95,
+      "category": "shorts",
+      "flood_iou": 0.9102748865759274,
+      "grabcut_iou": 0.973214778814823,
+      "boundary_max_pixels": 5.656854152679443,
+      "boundary_mean_pixels": 0.6460957527160645,
+      "failure": null,
+      "rectangle": [
+        113,
+        67,
+        338,
+        256
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d2a18256c539256512e7b243b82a4f7aa4cca40d8d7ceefcf7894d9dd54c7e31"
+    },
+    {
+      "ordinal": 18,
+      "annotation_id": 147,
+      "image_id": 147,
+      "category": "shorts",
+      "flood_iou": 0.7964850467681724,
+      "grabcut_iou": 0.963868381166577,
+      "boundary_max_pixels": 17.029386520385742,
+      "boundary_mean_pixels": 1.1898735761642456,
+      "failure": null,
+      "rectangle": [
+        260,
+        59,
+        438,
+        242
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "3d95b74c5f9ae8bfd9eb35a573c5079f2930f3cca5e019524caac14500fb64f3"
+    },
+    {
+      "ordinal": 19,
+      "annotation_id": 132,
+      "image_id": 132,
+      "category": "shorts",
+      "flood_iou": 0.6597097898803355,
+      "grabcut_iou": 0.9402232383001614,
+      "boundary_max_pixels": 28.861738204956055,
+      "boundary_mean_pixels": 1.9846906661987305,
+      "failure": null,
+      "rectangle": [
+        183,
+        39,
+        348,
+        188
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "229f2de72825ed009e050c31343b082537ffc88593b3b355f6d7d72624b9d30b"
+    },
+    {
+      "ordinal": 20,
+      "annotation_id": 125,
+      "image_id": 125,
+      "category": "shorts",
+      "flood_iou": 0.6750314465408805,
+      "grabcut_iou": 0.9771125300605357,
+      "boundary_max_pixels": 5.830951690673828,
+      "boundary_mean_pixels": 0.5030212998390198,
+      "failure": null,
+      "rectangle": [
+        180,
+        56,
+        355,
+        216
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "4e8fdc3b5f0947f489a0f3016e93c59695e0adc033cd048e887193951950f37c"
+    },
+    {
+      "ordinal": 21,
+      "annotation_id": 153,
+      "image_id": 153,
+      "category": "shorts",
+      "flood_iou": 0.947733744660655,
+      "grabcut_iou": 0.9879670873546152,
+      "boundary_max_pixels": 43.0,
+      "boundary_mean_pixels": 0.852280855178833,
+      "failure": null,
+      "rectangle": [
+        148,
+        14,
+        394,
+        241
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "0cf079f0e5aedf02c2f00bff34c84d7c5a11fe87e5e2fc3530f30e852dc1b3f1"
+    },
+    {
+      "ordinal": 22,
+      "annotation_id": 121,
+      "image_id": 121,
+      "category": "shorts",
+      "flood_iou": 0.4201745812409423,
+      "grabcut_iou": 0.9853416684630308,
+      "boundary_max_pixels": 2.8284270763397217,
+      "boundary_mean_pixels": 0.3151533007621765,
+      "failure": null,
+      "rectangle": [
+        201,
+        33,
+        380,
+        206
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "3c56360cab1e5c8f71beac356c9afa41b9e8b52f1f7752123a78cfffe8596eb0"
+    },
+    {
+      "ordinal": 23,
+      "annotation_id": 3,
+      "image_id": 3,
+      "category": "shorts",
+      "flood_iou": 0.9682446339311968,
+      "grabcut_iou": 0.9709719982407272,
+      "boundary_max_pixels": 2.2360680103302,
+      "boundary_mean_pixels": 0.6737286448478699,
+      "failure": null,
+      "rectangle": [
+        177,
+        57,
+        348,
+        188
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "a7ed22e5e2b7a1c5318197f4f8105662227bbfc8771efd4becac73f9367a8bad"
+    },
+    {
+      "ordinal": 24,
+      "annotation_id": 161,
+      "image_id": 161,
+      "category": "shorts",
+      "flood_iou": 0.47217168758286826,
+      "grabcut_iou": 0.9803387615053646,
+      "boundary_max_pixels": 19.0,
+      "boundary_mean_pixels": 0.8832572102546692,
+      "failure": null,
+      "rectangle": [
+        133,
+        59,
+        347,
+        214
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "fb6cfdb01db5dd4599b5335c5811a4db5361de84bc3e296525defec9c87fac32"
+    },
+    {
+      "ordinal": 25,
+      "annotation_id": 117,
+      "image_id": 117,
+      "category": "shorts",
+      "flood_iou": 0.9213249441006708,
+      "grabcut_iou": 0.9743716386785205,
+      "boundary_max_pixels": 6.70820426940918,
+      "boundary_mean_pixels": 0.5864576101303101,
+      "failure": null,
+      "rectangle": [
+        141,
+        47,
+        369,
+        243
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "99a7871937591c5a0b890f3588592033115a09f7db177b16d03b72d3b75c905b"
+    },
+    {
+      "ordinal": 26,
+      "annotation_id": 107,
+      "image_id": 107,
+      "category": "shorts",
+      "flood_iou": 0.9767145505097312,
+      "grabcut_iou": 0.9927706594569178,
+      "boundary_max_pixels": 1.0,
+      "boundary_mean_pixels": 0.17319650948047638,
+      "failure": null,
+      "rectangle": [
+        168,
+        37,
+        373,
+        225
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "e01bbb37a8b8d04cc2a1c554020fe6a1c3dc7a6b78321271fa57980fa72b83e5"
+    },
+    {
+      "ordinal": 27,
+      "annotation_id": 65,
+      "image_id": 65,
+      "category": "shorts",
+      "flood_iou": 0.2648344494047619,
+      "grabcut_iou": 0.9573905377607993,
+      "boundary_max_pixels": 44.20407485961914,
+      "boundary_mean_pixels": 2.6813066005706787,
+      "failure": null,
+      "rectangle": [
+        189,
+        92,
+        374,
+        251
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "8aa487b14b49541e1fc4efbfc08e005ee2e74f99cf115668c26945a8bb71862c"
+    },
+    {
+      "ordinal": 28,
+      "annotation_id": 175,
+      "image_id": 175,
+      "category": "shorts",
+      "flood_iou": 0.9724382236046311,
+      "grabcut_iou": 0.7170789605197402,
+      "boundary_max_pixels": 60.37383270263672,
+      "boundary_mean_pixels": 5.455331325531006,
+      "failure": null,
+      "rectangle": [
+        127,
+        21,
+        315,
+        174
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "460dfdd250bbd41d435c7e50ff6e36762b3a8c8fb4a6dcb013d51ed42e24a60f"
+    },
+    {
+      "ordinal": 29,
+      "annotation_id": 27,
+      "image_id": 27,
+      "category": "shorts",
+      "flood_iou": 0.9827743346700692,
+      "grabcut_iou": 0.9925936085584968,
+      "boundary_max_pixels": 1.0,
+      "boundary_mean_pixels": 0.19230303168296814,
+      "failure": null,
+      "rectangle": [
+        180,
+        40,
+        414,
+        235
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "189ade6856d7b03f836fd283744047b03e0d035e7b4c84df68d8b0083960526c"
+    },
+    {
+      "ordinal": 30,
+      "annotation_id": 6,
+      "image_id": 6,
+      "category": "shorts",
+      "flood_iou": 0.9273120692418657,
+      "grabcut_iou": 0.9609483960948396,
+      "boundary_max_pixels": 3.605551242828369,
+      "boundary_mean_pixels": 0.8126721978187561,
+      "failure": null,
+      "rectangle": [
+        148,
+        52,
+        322,
+        203
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "fab6b1f2abb28ef50b421f41d85474139f0e220b4e5b32e28ad3ca6d8381e4da"
+    },
+    {
+      "ordinal": 31,
+      "annotation_id": 124,
+      "image_id": 124,
+      "category": "shorts",
+      "flood_iou": 0.715799886941775,
+      "grabcut_iou": 0.9514824797843666,
+      "boundary_max_pixels": 4.4721360206604,
+      "boundary_mean_pixels": 0.7650749087333679,
+      "failure": null,
+      "rectangle": [
+        191,
+        59,
+        316,
+        169
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "7a57a6e6905cb8da6476965d9544b86218002b0c0352061b4274d411eb31fe9c"
+    },
+    {
+      "ordinal": 32,
+      "annotation_id": 138,
+      "image_id": 138,
+      "category": "shorts",
+      "flood_iou": 0.24743994640635467,
+      "grabcut_iou": 0.9277428709521508,
+      "boundary_max_pixels": 8.5440034866333,
+      "boundary_mean_pixels": 1.7204633951187134,
+      "failure": null,
+      "rectangle": [
+        164,
+        39,
+        319,
+        184
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "3429bc354335a5f98ed20d00be3e0c153e8198470a9c06027b722a3d367580d8"
+    },
+    {
+      "ordinal": 33,
+      "annotation_id": 54,
+      "image_id": 54,
+      "category": "shorts",
+      "flood_iou": 0.4098819333415324,
+      "grabcut_iou": 0.9850351544862285,
+      "boundary_max_pixels": 4.0,
+      "boundary_mean_pixels": 0.3452003002166748,
+      "failure": null,
+      "rectangle": [
+        173,
+        52,
+        384,
+        230
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d46065b6ab7f9133d7f9bb62182877ae6d329b4c0f6f4c4660796d6905e8cce0"
+    },
+    {
+      "ordinal": 34,
+      "annotation_id": 34,
+      "image_id": 34,
+      "category": "shorts",
+      "flood_iou": 0.54648868740293,
+      "grabcut_iou": 0.8935219201567475,
+      "boundary_max_pixels": 21.0,
+      "boundary_mean_pixels": 2.9674072265625,
+      "failure": null,
+      "rectangle": [
+        191,
+        62,
+        366,
+        224
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 2,
+      "grabcut_mask_sha256": "4c4bffd64c5f9c741e20881f736f365ce9e0f369b09ec29131da312c78799de2"
+    },
+    {
+      "ordinal": 35,
+      "annotation_id": 57,
+      "image_id": 57,
+      "category": "shorts",
+      "flood_iou": 0.34606046179481076,
+      "grabcut_iou": 0.5687394592241989,
+      "boundary_max_pixels": 59.908260345458984,
+      "boundary_mean_pixels": 16.015487670898438,
+      "failure": null,
+      "rectangle": [
+        196,
+        79,
+        366,
+        236
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d7b7420a095aba473c23eb6f762d7655606fd0cbb8df5d0a3fb16f77a3ac0be9"
+    },
+    {
+      "ordinal": 36,
+      "annotation_id": 13,
+      "image_id": 13,
+      "category": "shorts",
+      "flood_iou": 0.9862487784447858,
+      "grabcut_iou": 0.9857361536320624,
+      "boundary_max_pixels": 3.1622776985168457,
+      "boundary_mean_pixels": 0.2809911072254181,
+      "failure": null,
+      "rectangle": [
+        181,
+        50,
+        376,
+        217
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "5e0786bf4fa6d2124333a9365c6ee4ba904652dcd7e1abe591ec6f9083cb2655"
+    },
+    {
+      "ordinal": 37,
+      "annotation_id": 86,
+      "image_id": 86,
+      "category": "shorts",
+      "flood_iou": 0.9863070539419088,
+      "grabcut_iou": 0.9897336293007769,
+      "boundary_max_pixels": 1.4142135381698608,
+      "boundary_mean_pixels": 0.2205670177936554,
+      "failure": null,
+      "rectangle": [
+        153,
+        74,
+        339,
+        216
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "fa111b862d8227f81536a881de4ae96403ba86e85b329ca9670d1eb58ee12575"
+    },
+    {
+      "ordinal": 38,
+      "annotation_id": 68,
+      "image_id": 68,
+      "category": "shorts",
+      "flood_iou": 0.6360260511882998,
+      "grabcut_iou": 0.9710433583575916,
+      "boundary_max_pixels": 5.0,
+      "boundary_mean_pixels": 0.625619649887085,
+      "failure": null,
+      "rectangle": [
+        186,
+        45,
+        370,
+        176
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "c36025680427b96e84385b9e8e0ecb57de353c831e4af7118ed2914f42af662f"
+    },
+    {
+      "ordinal": 39,
+      "annotation_id": 85,
+      "image_id": 85,
+      "category": "shorts",
+      "flood_iou": 0.9908971840209562,
+      "grabcut_iou": 0.9879793558502646,
+      "boundary_max_pixels": 44.14748001098633,
+      "boundary_mean_pixels": 1.0209496021270752,
+      "failure": null,
+      "rectangle": [
+        149,
+        77,
+        332,
+        233
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 3,
+      "grabcut_mask_sha256": "18e0f7242b8c7350d4bd89ace9d83381d3bd53bc8daf41e94087ed04df8f57be"
+    },
+    {
+      "ordinal": 40,
+      "annotation_id": 577,
+      "image_id": 577,
+      "category": "tshirt",
+      "flood_iou": 0.9880960866775964,
+      "grabcut_iou": 0.9861981550595028,
+      "boundary_max_pixels": 1.4142135381698608,
+      "boundary_mean_pixels": 0.2890951633453369,
+      "failure": null,
+      "rectangle": [
+        144,
+        27,
+        339,
+        191
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "7ba12492032f370b0c923da667178c6a0fdd23b1839fe5fe8d125d34a22e7284"
+    },
+    {
+      "ordinal": 41,
+      "annotation_id": 425,
+      "image_id": 425,
+      "category": "tshirt",
+      "flood_iou": 0.747604957079659,
+      "grabcut_iou": 0.9814679435631259,
+      "boundary_max_pixels": 7.071068286895752,
+      "boundary_mean_pixels": 0.5651921033859253,
+      "failure": null,
+      "rectangle": [
+        115,
+        13,
+        388,
+        234
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "48cf11116579c88f4d21a3f579b9f0a4d304ad7fa24f8e957c36a336006181fa"
+    },
+    {
+      "ordinal": 42,
+      "annotation_id": 250,
+      "image_id": 250,
+      "category": "tshirt",
+      "flood_iou": 0.041367101412623286,
+      "grabcut_iou": 0.7138178254590468,
+      "boundary_max_pixels": 69.42621612548828,
+      "boundary_mean_pixels": 13.673917770385742,
+      "failure": null,
+      "rectangle": [
+        90,
+        36,
+        370,
+        241
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "1c88f9c172501fb37c70c16c7739c036f001282c7dc869b495477eb75c96d20d"
+    },
+    {
+      "ordinal": 43,
+      "annotation_id": 298,
+      "image_id": 298,
+      "category": "tshirt",
+      "flood_iou": 0.6176725961217356,
+      "grabcut_iou": 0.9495158824528622,
+      "boundary_max_pixels": 14.03566837310791,
+      "boundary_mean_pixels": 1.8667347431182861,
+      "failure": null,
+      "rectangle": [
+        124,
+        28,
+        401,
+        242
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "def9f65f09981b9f35a85e53f319e445e90107e5d011f411c6c29f1b438d9a27"
+    },
+    {
+      "ordinal": 44,
+      "annotation_id": 473,
+      "image_id": 473,
+      "category": "tshirt",
+      "flood_iou": 0.27240503152545564,
+      "grabcut_iou": 0.9906574071190558,
+      "boundary_max_pixels": 2.2360680103302,
+      "boundary_mean_pixels": 0.3052915930747986,
+      "failure": null,
+      "rectangle": [
+        90,
+        15,
+        360,
+        245
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "8f75638c4827afc77f1a1cacdc39ff5aab656454179b8e64f406425c24ab64dc"
+    },
+    {
+      "ordinal": 45,
+      "annotation_id": 294,
+      "image_id": 294,
+      "category": "tshirt",
+      "flood_iou": 0.960731211916046,
+      "grabcut_iou": 0.9738432371585994,
+      "boundary_max_pixels": 47.85394287109375,
+      "boundary_mean_pixels": 1.7563544511795044,
+      "failure": null,
+      "rectangle": [
+        77,
+        15,
+        396,
+        255
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "4704bfde52fb0f816fbd7802114a145b0cc88cf31cda387c50159ae840867627"
+    },
+    {
+      "ordinal": 46,
+      "annotation_id": 401,
+      "image_id": 401,
+      "category": "tshirt",
+      "flood_iou": 0.730030935194733,
+      "grabcut_iou": 0.9788108791903858,
+      "boundary_max_pixels": 10.0,
+      "boundary_mean_pixels": 0.6724361777305603,
+      "failure": null,
+      "rectangle": [
+        171,
+        10,
+        414,
+        229
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "9755cba94666ebcd1d603c35d017081a89f9bec812c7f79c57f95ff04aa96336"
+    },
+    {
+      "ordinal": 47,
+      "annotation_id": 553,
+      "image_id": 553,
+      "category": "tshirt",
+      "flood_iou": 0.48436229989044777,
+      "grabcut_iou": 0.6328561370570288,
+      "boundary_max_pixels": 63.560997009277344,
+      "boundary_mean_pixels": 13.007026672363281,
+      "failure": null,
+      "rectangle": [
+        132,
+        25,
+        320,
+        184
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "72148e9c595500c8f4c3d4be38490bf63b54771cfca95803e7e150a5c5898343"
+    },
+    {
+      "ordinal": 48,
+      "annotation_id": 420,
+      "image_id": 420,
+      "category": "tshirt",
+      "flood_iou": 0.43458086885580255,
+      "grabcut_iou": 0.9735697842953364,
+      "boundary_max_pixels": 13.152946472167969,
+      "boundary_mean_pixels": 0.7054122686386108,
+      "failure": null,
+      "rectangle": [
+        175,
+        63,
+        330,
+        192
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "1f0de89f96e8d1d35d5b45302cc5bd509a79882ff4b0a23475ef0368596f69b9"
+    },
+    {
+      "ordinal": 49,
+      "annotation_id": 498,
+      "image_id": 498,
+      "category": "tshirt",
+      "flood_iou": 0.5268458833870495,
+      "grabcut_iou": 0.9471739506956873,
+      "boundary_max_pixels": 15.000000953674316,
+      "boundary_mean_pixels": 1.3818678855895996,
+      "failure": null,
+      "rectangle": [
+        164,
+        34,
+        354,
+        184
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "23ad2cbe2ddbf731bad237dd9e64c146f3678206d318db2ed577157edb0f917c"
+    },
+    {
+      "ordinal": 50,
+      "annotation_id": 474,
+      "image_id": 474,
+      "category": "tshirt",
+      "flood_iou": 0.7359918931807344,
+      "grabcut_iou": 0.9594603444888335,
+      "boundary_max_pixels": 13.892443656921387,
+      "boundary_mean_pixels": 0.9822961091995239,
+      "failure": null,
+      "rectangle": [
+        187,
+        29,
+        377,
+        190
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "73024222f618af1dc6a813f7539834e50469f9a393f63e11cf6eb2a612302c13"
+    },
+    {
+      "ordinal": 51,
+      "annotation_id": 337,
+      "image_id": 337,
+      "category": "tshirt",
+      "flood_iou": 0.5024046654296209,
+      "grabcut_iou": 0.9414448669201521,
+      "boundary_max_pixels": 24.08319091796875,
+      "boundary_mean_pixels": 1.9546854496002197,
+      "failure": null,
+      "rectangle": [
+        183,
+        55,
+        357,
+        232
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "76e4719a952bed38ecf6dc4b30b4ea3eda6db190ff39c6a9a0232d1dad0a5377"
+    },
+    {
+      "ordinal": 52,
+      "annotation_id": 533,
+      "image_id": 533,
+      "category": "tshirt",
+      "flood_iou": 0.7396756947041869,
+      "grabcut_iou": 0.9903243847874721,
+      "boundary_max_pixels": 11.401753425598145,
+      "boundary_mean_pixels": 0.4523060917854309,
+      "failure": null,
+      "rectangle": [
+        164,
+        3,
+        432,
+        256
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d26adb00b6a8c7d8caae81c35b2f09f33214d2e972c1791ec7bfd79734809ab9"
+    },
+    {
+      "ordinal": 53,
+      "annotation_id": 421,
+      "image_id": 421,
+      "category": "tshirt",
+      "flood_iou": 0.4181949212008572,
+      "grabcut_iou": 0.9733072916666666,
+      "boundary_max_pixels": 6.324555397033691,
+      "boundary_mean_pixels": 0.7754465341567993,
+      "failure": null,
+      "rectangle": [
+        150,
+        6,
+        403,
+        233
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "ef2d86963c459cbd27cbcd172393e23799491fa0075aa105c4e2f0c34eae2fc5"
+    },
+    {
+      "ordinal": 54,
+      "annotation_id": 561,
+      "image_id": 561,
+      "category": "tshirt",
+      "flood_iou": 0.9568218421658102,
+      "grabcut_iou": 0.7621674040850961,
+      "boundary_max_pixels": 53.93514633178711,
+      "boundary_mean_pixels": 6.70635986328125,
+      "failure": null,
+      "rectangle": [
+        123,
+        32,
+        320,
+        191
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "cd17bb6f510cab2ba1388ecd0a0e905cfcb36d6edb6b8cfd98e2e610a5b026fe"
+    },
+    {
+      "ordinal": 55,
+      "annotation_id": 464,
+      "image_id": 464,
+      "category": "tshirt",
+      "flood_iou": 0.5875066928431197,
+      "grabcut_iou": 0.9847035265324285,
+      "boundary_max_pixels": 55.73149871826172,
+      "boundary_mean_pixels": 1.0205223560333252,
+      "failure": null,
+      "rectangle": [
+        173,
+        30,
+        360,
+        196
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "55412956c774df7c231f4c22c90fa990e157af736fef3f672309fa69a14bb909"
+    },
+    {
+      "ordinal": 56,
+      "annotation_id": 578,
+      "image_id": 578,
+      "category": "tshirt",
+      "flood_iou": 0.9901414810355208,
+      "grabcut_iou": 0.7168332883004593,
+      "boundary_max_pixels": 71.56116485595703,
+      "boundary_mean_pixels": 8.73346996307373,
+      "failure": null,
+      "rectangle": [
+        158,
+        19,
+        361,
+        179
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "5a1c4cd3a427ae274268ef01b6a901dad51b6919fe6bf1a98973b2c92688a401"
+    },
+    {
+      "ordinal": 57,
+      "annotation_id": 218,
+      "image_id": 218,
+      "category": "tshirt",
+      "flood_iou": 0.9898891460592033,
+      "grabcut_iou": 0.9916863887371806,
+      "boundary_max_pixels": 1.0,
+      "boundary_mean_pixels": 0.18292082846164703,
+      "failure": null,
+      "rectangle": [
+        141,
+        39,
+        362,
+        229
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "646e01048d614c2e49296ae7af37d83d62d5256361555c1f5fbb95c4703c9f7c"
+    },
+    {
+      "ordinal": 58,
+      "annotation_id": 456,
+      "image_id": 456,
+      "category": "tshirt",
+      "flood_iou": 0.9471887910903539,
+      "grabcut_iou": 0.6585607326279315,
+      "boundary_max_pixels": 68.42514038085938,
+      "boundary_mean_pixels": 10.766886711120605,
+      "failure": null,
+      "rectangle": [
+        164,
+        46,
+        336,
+        191
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "48140cd17142ad1e98aa0650086b8253874f738ae54136d498890a24fc798046"
+    },
+    {
+      "ordinal": 59,
+      "annotation_id": 184,
+      "image_id": 184,
+      "category": "tshirt",
+      "flood_iou": 0.6380361721294435,
+      "grabcut_iou": 0.9808814336320066,
+      "boundary_max_pixels": 2.0,
+      "boundary_mean_pixels": 0.4608347415924072,
+      "failure": null,
+      "rectangle": [
+        181,
+        12,
+        417,
+        209
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "c01a1fb1dfb0d91e353e5fe04a85985ac44f49ede2bbd4d60898fa11b8fa8012"
+    },
+    {
+      "ordinal": 60,
+      "annotation_id": 410,
+      "image_id": 410,
+      "category": "tshirt",
+      "flood_iou": 0.9732353934481595,
+      "grabcut_iou": 0.9871226334640969,
+      "boundary_max_pixels": 26.17250633239746,
+      "boundary_mean_pixels": 0.2615809440612793,
+      "failure": null,
+      "rectangle": [
+        148,
+        33,
+        333,
+        199
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "5200aec2fcbf27e35239d863ea4ee94bdc40c3a244e37de6ef048e4e54ec657b"
+    },
+    {
+      "ordinal": 61,
+      "annotation_id": 432,
+      "image_id": 432,
+      "category": "tshirt",
+      "flood_iou": 0.534329352428986,
+      "grabcut_iou": 0.9638916750250752,
+      "boundary_max_pixels": 35.0,
+      "boundary_mean_pixels": 1.3182165622711182,
+      "failure": null,
+      "rectangle": [
+        150,
+        40,
+        315,
+        180
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "489a5fc3947c985b02de6e6369b700a5146b3d93323ccbc3177eb0cb71d1b440"
+    },
+    {
+      "ordinal": 62,
+      "annotation_id": 206,
+      "image_id": 206,
+      "category": "tshirt",
+      "flood_iou": 0.562034317514299,
+      "grabcut_iou": 0.982109479305741,
+      "boundary_max_pixels": 2.0,
+      "boundary_mean_pixels": 0.47565656900405884,
+      "failure": null,
+      "rectangle": [
+        152,
+        47,
+        347,
+        213
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "7a1f11496e2551335c5e95e6e6c7cb3d2199a0b20569ac8f17e4593e376785e8"
+    },
+    {
+      "ordinal": 63,
+      "annotation_id": 360,
+      "image_id": 360,
+      "category": "tshirt",
+      "flood_iou": 0.3518081046701799,
+      "grabcut_iou": 0.9776146131805158,
+      "boundary_max_pixels": 3.1622776985168457,
+      "boundary_mean_pixels": 0.5998808145523071,
+      "failure": null,
+      "rectangle": [
+        150,
+        70,
+        353,
+        215
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "7cb3c9aa5a55603bc642dd955dc6a68dfbaffd1d5ecbd3e369323df54b2bd46a"
+    },
+    {
+      "ordinal": 64,
+      "annotation_id": 304,
+      "image_id": 304,
+      "category": "tshirt",
+      "flood_iou": 0.8555649957519117,
+      "grabcut_iou": 0.9784008762322015,
+      "boundary_max_pixels": 36.2353401184082,
+      "boundary_mean_pixels": 0.8983858227729797,
+      "failure": null,
+      "rectangle": [
+        138,
+        36,
+        385,
+        218
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "4cd65c434ad28c5ac25044dc415fb67cb6ec39933ab0c6ead7316a241815f863"
+    },
+    {
+      "ordinal": 65,
+      "annotation_id": 395,
+      "image_id": 395,
+      "category": "tshirt",
+      "flood_iou": 0.42132791975161216,
+      "grabcut_iou": 0.9900196656833825,
+      "boundary_max_pixels": 13.038405418395996,
+      "boundary_mean_pixels": 0.3143984079360962,
+      "failure": null,
+      "rectangle": [
+        175,
+        1,
+        400,
+        211
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "3844fd4851275bab5a78ff7715c7586cad623c0353351e4fc38d7e0382ca797b"
+    },
+    {
+      "ordinal": 66,
+      "annotation_id": 230,
+      "image_id": 230,
+      "category": "tshirt",
+      "flood_iou": 0.10859558798458863,
+      "grabcut_iou": 0.9812107851449889,
+      "boundary_max_pixels": 5.0,
+      "boundary_mean_pixels": 0.6705677509307861,
+      "failure": null,
+      "rectangle": [
+        110,
+        42,
+        325,
+        248
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "763e26d38025e15315983dee4da0128e6dde5d27c6f52b35c4222cebb08cd8f9"
+    },
+    {
+      "ordinal": 67,
+      "annotation_id": 564,
+      "image_id": 564,
+      "category": "tshirt",
+      "flood_iou": 0.9898050438204257,
+      "grabcut_iou": 0.9746487119437939,
+      "boundary_max_pixels": 52.34501266479492,
+      "boundary_mean_pixels": 2.455225944519043,
+      "failure": null,
+      "rectangle": [
+        137,
+        24,
+        347,
+        185
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 2,
+      "grabcut_mask_sha256": "607ed1aefd0561834b45aa5f4b4c789c2d3cd877b5869be5e4522b586506fcfa"
+    },
+    {
+      "ordinal": 68,
+      "annotation_id": 512,
+      "image_id": 512,
+      "category": "tshirt",
+      "flood_iou": 0.8901936861369528,
+      "grabcut_iou": 0.7388252535770758,
+      "boundary_max_pixels": 53.36665725708008,
+      "boundary_mean_pixels": 9.46139144897461,
+      "failure": null,
+      "rectangle": [
+        178,
+        22,
+        385,
+        203
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d8e822dab7f246649c8924278c36dfb0517803fc1f03f0b3a8dfe66c8693e4ba"
+    },
+    {
+      "ordinal": 69,
+      "annotation_id": 243,
+      "image_id": 243,
+      "category": "tshirt",
+      "flood_iou": 0.858377239199157,
+      "grabcut_iou": 0.955359813860728,
+      "boundary_max_pixels": 69.23149871826172,
+      "boundary_mean_pixels": 3.3208532333374023,
+      "failure": null,
+      "rectangle": [
+        82,
+        19,
+        340,
+        256
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 3,
+      "grabcut_mask_sha256": "4fe46a0663e0d049e386dac8425a611b78470df5f5957546ad12137e677f6f31"
+    },
+    {
+      "ordinal": 70,
+      "annotation_id": 423,
+      "image_id": 423,
+      "category": "tshirt",
+      "flood_iou": 0.5843307943416758,
+      "grabcut_iou": 0.9778738672432035,
+      "boundary_max_pixels": 3.605551242828369,
+      "boundary_mean_pixels": 0.6655949354171753,
+      "failure": null,
+      "rectangle": [
+        211,
+        42,
+        404,
+        225
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "d2b6ec525bd342f84632ca151449fb9a5cce25d25f4086ebc7e1878cbf8ca754"
+    },
+    {
+      "ordinal": 71,
+      "annotation_id": 531,
+      "image_id": 531,
+      "category": "tshirt",
+      "flood_iou": 0.037597477204390446,
+      "grabcut_iou": 0.9916343355965083,
+      "boundary_max_pixels": 53.60037612915039,
+      "boundary_mean_pixels": 0.6862292289733887,
+      "failure": null,
+      "rectangle": [
+        102,
+        7,
+        406,
+        249
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "e98200d933c5d6c7a5fb8fd18e7604a47c9d4a3a207a7c4a8395f16234cec2f0"
+    },
+    {
+      "ordinal": 72,
+      "annotation_id": 417,
+      "image_id": 417,
+      "category": "tshirt",
+      "flood_iou": 0.6516984883282487,
+      "grabcut_iou": 0.9866921844400925,
+      "boundary_max_pixels": 6.0,
+      "boundary_mean_pixels": 0.4146796464920044,
+      "failure": null,
+      "rectangle": [
+        194,
+        71,
+        400,
+        256
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "bd0c217abc43ac097c82fd402b2658cdc945d67e48a946a43d38cae22294e069"
+    },
+    {
+      "ordinal": 73,
+      "annotation_id": 324,
+      "image_id": 324,
+      "category": "tshirt",
+      "flood_iou": 0.6309051130378414,
+      "grabcut_iou": 0.9706484274019819,
+      "boundary_max_pixels": 18.027755737304688,
+      "boundary_mean_pixels": 0.7834343910217285,
+      "failure": null,
+      "rectangle": [
+        164,
+        35,
+        392,
+        230
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "4289e94a1fbd0c7468802138fdc82e41464d534c0408959318991ef12c66cfa9"
+    },
+    {
+      "ordinal": 74,
+      "annotation_id": 459,
+      "image_id": 459,
+      "category": "tshirt",
+      "flood_iou": 0.48219713417281806,
+      "grabcut_iou": 0.9590506264642966,
+      "boundary_max_pixels": 46.3249397277832,
+      "boundary_mean_pixels": 4.130212783813477,
+      "failure": null,
+      "rectangle": [
+        132,
+        63,
+        355,
+        256
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "52432cb2cf34ccbccea7c7dbb73831e9a0866b56665616e6b0de1535a271b463"
+    },
+    {
+      "ordinal": 75,
+      "annotation_id": 442,
+      "image_id": 442,
+      "category": "tshirt",
+      "flood_iou": 0.9066815282680042,
+      "grabcut_iou": 0.9860745201354911,
+      "boundary_max_pixels": 1.4142135381698608,
+      "boundary_mean_pixels": 0.34992489218711853,
+      "failure": null,
+      "rectangle": [
+        179,
+        38,
+        353,
+        190
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "15ea5ecc97de09ae7e026aa11392feae4bb9564dc6106012f18582c9c66177f1"
+    },
+    {
+      "ordinal": 76,
+      "annotation_id": 552,
+      "image_id": 552,
+      "category": "tshirt",
+      "flood_iou": 0.8045977011494253,
+      "grabcut_iou": 0.7379149087581965,
+      "boundary_max_pixels": 72.86288452148438,
+      "boundary_mean_pixels": 7.940995216369629,
+      "failure": null,
+      "rectangle": [
+        133,
+        21,
+        343,
+        189
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "678e738d3d6c95ab0d31120149680dac05043c13da0430817cabd0f51d93b32f"
+    },
+    {
+      "ordinal": 77,
+      "annotation_id": 429,
+      "image_id": 429,
+      "category": "tshirt",
+      "flood_iou": 0.37952465903205385,
+      "grabcut_iou": 0.9740202875282785,
+      "boundary_max_pixels": 62.28964614868164,
+      "boundary_mean_pixels": 1.3344841003417969,
+      "failure": null,
+      "rectangle": [
+        138,
+        18,
+        373,
+        225
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "2b276588ac83b4455fd5a6e636c86e9d1491d75cea8fb5661b39b6a74525e67b"
+    },
+    {
+      "ordinal": 78,
+      "annotation_id": 244,
+      "image_id": 244,
+      "category": "tshirt",
+      "flood_iou": 0.95464829635633,
+      "grabcut_iou": 0.6597813444987206,
+      "boundary_max_pixels": 102.12247467041016,
+      "boundary_mean_pixels": 16.194988250732422,
+      "failure": null,
+      "rectangle": [
+        137,
+        32,
+        417,
+        255
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "4281f4ed5a7ca0c41571071c2e7eef08b07dafee6f96a87ba4b2694f6690e0ff"
+    },
+    {
+      "ordinal": 79,
+      "annotation_id": 199,
+      "image_id": 199,
+      "category": "tshirt",
+      "flood_iou": 0.7648607728260154,
+      "grabcut_iou": 0.9677312920681008,
+      "boundary_max_pixels": 14.000000953674316,
+      "boundary_mean_pixels": 0.8592671155929565,
+      "failure": null,
+      "rectangle": [
+        166,
+        44,
+        380,
+        223
+      ],
+      "reference_pixels_outside_box": 0,
+      "components_at_least_25_pixels": 1,
+      "grabcut_mask_sha256": "38633ee82fc7d737192d2241d9aab2e575a3963e9db0bd3bcf1c108ea800f321"
+    }
+  ]
+}

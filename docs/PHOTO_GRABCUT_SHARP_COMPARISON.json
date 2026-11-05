@@ -1,0 +1,12 @@
+{
+  "python_report_sha256": "7557a8db7e5fe5eea95abc87c519aaae77e22a16089059333dbd22463eff85f4",
+  "jobs_sha256": "97ead3af6f9c41a3def8ab86626dcb3b5c087629c04a51485aa5fa188dc7e0f5",
+  "csharp_result_sha256": "60fcfbe003d9c9748d9d8e810647bd3db124cfe3fa8ecbf523ca49fc2efe9805",
+  "archive_sha256": "af8e0a57bbd7dd7933e9210e2956b9a3e6a2fb0f030cfbeb7d12fb55af470ee6",
+  "python_opencv": "4.10.0",
+  "csharp_opencv": "4.10.0",
+  "compared": 80,
+  "identical_masks": 80,
+  "different_masks": 0,
+  "method": "Same image bytes, annotation-derived box and seed; C# uses one initial and four evaluation iterations. Hash equality is mask equality, not physical pattern accuracy."
+}

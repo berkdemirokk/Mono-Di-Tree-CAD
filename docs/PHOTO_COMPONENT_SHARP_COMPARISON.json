@@ -1,0 +1,8 @@
+{
+  "count": 80,
+  "all_masks_and_selections_match": true,
+  "jobs_sha256": "97ead3af6f9c41a3def8ab86626dcb3b5c087629c04a51485aa5fa188dc7e0f5",
+  "opencv": "4.10.0",
+  "python_results_sha256": "4dd95dff43c13f69f303971fbb2291f9ebdd573bb73f0d0d7b98f7b815f70bdd",
+  "csharp_results_sha256": "d6a005f38fec1ac003bee244168380e84b3cf2201bc417c26bdb090094c51409"
+}

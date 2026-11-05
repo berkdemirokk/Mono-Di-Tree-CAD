@@ -20,6 +20,12 @@
     <DefineConstants>$(DefineConstants);TEKSTILCAD_ATELIER_PREVIEW</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="OpenCvSharp4" Version="4.10.0.20241108" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20241108" />
+    <Compile Include="../../tools/PhotoRegionSharpPrototype/RegionProposal.cs" Link="ExperimentalRegion/RegionProposal.cs" />
+    <Compile Include="../../tools/PhotoRegionSharpPrototype/MaskComponents.cs" Link="ExperimentalRegion/MaskComponents.cs" />
+    <Compile Include="../../tools/PhotoRegionSharpPrototype/MaskContours.cs" Link="ExperimentalRegion/MaskContours.cs" />
+    <Compile Include="../../tools/PhotoRegionSharpPrototype/ContourCollinearReduction.cs" Link="ExperimentalRegion/ContourCollinearReduction.cs" />
     <ProjectReference Include="../TekstilCAD.Core/TekstilCAD.Core.csproj" />
     <ProjectReference Include="../TekstilCAD.FileFormats/TekstilCAD.FileFormats.csproj" />
     <ProjectReference Include="../TekstilCAD.Grading/TekstilCAD.Grading.csproj" />

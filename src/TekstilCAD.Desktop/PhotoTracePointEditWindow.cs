@@ -57,7 +57,8 @@ internal sealed class PhotoTracePointEditWindow : Window
         for(int i=owner.CanvasForVerification.ReferencePointCount;i<snapshot.Length;i++)PointSelector.Items.Add(new Choice(i,snapshot[i]));
         if(PointSelector.Items.Count>0)
         {
-            var nearest=PointSelector.Items.Cast<Choice>().OrderBy(c=>(c.Pixel-cursor).LengthSquared).First();PointSelector.SelectedItem=nearest;
+            var nearest=owner.CanvasForVerification.NearestTracePointIndex();
+            PointSelector.SelectedItem=PointSelector.Items.Cast<Choice>().FirstOrDefault(c=>c.Index==nearest);
         }
     }
     internal bool TryApplyEdit()

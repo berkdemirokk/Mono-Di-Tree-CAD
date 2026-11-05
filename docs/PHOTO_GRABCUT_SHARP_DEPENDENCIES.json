@@ -1,0 +1,59 @@
+{
+  "nuget_packages": [
+    {
+      "id": "opencvsharp4",
+      "version": "4.10.0.20241108",
+      "package_bytes": 2183484,
+      "package_sha256": "56351848e5c9210797102de05307d52cee2a122ccd9695ff5fb5e1d904e101c3",
+      "nuspec_license_expression": "Apache-2.0"
+    },
+    {
+      "id": "opencvsharp4.runtime.win",
+      "version": "4.10.0.20241108",
+      "package_bytes": 62789581,
+      "package_sha256": "4573c2c5bfb45553894d3bb08554fe533cf4397c8ce7d8ede4d639ef57d0d738",
+      "nuspec_license_expression": "Apache-2.0"
+    }
+  ],
+  "selected_published_files": [
+    {
+      "name": "OpenCvSharp.dll",
+      "bytes": 954880,
+      "sha256": "14d06faf6e08c0fbc36da3f8892e608af5f7cc6b9dcb0c196da7a2fabfe8efa5"
+    },
+    {
+      "name": "OpenCvSharpExtern.dll",
+      "bytes": 61745664,
+      "sha256": "c812d49897b29c20be941c0c2aff7768e34d959611829971e6fe8021d6bace69"
+    },
+    {
+      "name": "opencv_videoio_ffmpeg4100_64.dll",
+      "bytes": 26391552,
+      "sha256": "3de83b84588b3ee8bacdbea85a8f92d4855a32a1108183963315a7db06ad5744"
+    }
+  ],
+  "prototype_publish_total_bytes": 169700278,
+  "source_files": [
+    {
+      "path": "tools/PhotoRegionSharpPrototype/PhotoRegionSharpPrototype.csproj",
+      "sha256": "5e6d18b413c76472e4956c4d6c8442b49e15bf78ea6d48d30269ca0baee7b841"
+    },
+    {
+      "path": "tools/PhotoRegionSharpPrototype/RegionProposal.cs",
+      "sha256": "6ec09fed6b0d7e2ebed728ed49375fa2cfeefaa6d0304db159fbc3c9e2c54e22"
+    },
+    {
+      "path": "tools/PhotoRegionSharpPrototype/Program.cs",
+      "sha256": "3e2ac4026cd09ddbee6ee806d9dc01fd565067cdace73f109494846a34922ff7"
+    },
+    {
+      "path": "tools/PhotoRegionSharpPrototype/make_jobs.py",
+      "sha256": "053aea4f8bc24b7221c6c77c358c35e06d4b1fe5b5d22118505f39c101764afa"
+    },
+    {
+      "path": "tools/PhotoRegionSharpPrototype/compare_batch.py",
+      "sha256": "8ef0fb3da4435aec81690f7bfadf57a737d5d2a1d0b362f9f11b20354fc3743f"
+    }
+  ],
+  "scope": "Experimental x64 .NET 10 self-contained prototype, not the desktop product; bundled runtime and native/transitive notices require separate review."
+}

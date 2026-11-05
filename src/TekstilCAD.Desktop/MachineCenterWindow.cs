@@ -60,6 +60,13 @@ public sealed class MachineCenterWindow : Window
     private readonly Button cancelPrepare=new() { Content="Hazırlamayı iptal et",Visibility=Visibility.Collapsed };
     private readonly CheckBox calibrationOrientation=new() { Content="Yön işareti ekle",Margin=new Thickness(0,4,0,4) };
     private readonly Button calibrationSquare=new() { Content="100 mm referans PLT dosyası oluştur" };
+    internal TextBox DiagonalOneForVerification { get; }=new() { MaxLength=32 };
+    internal TextBox DiagonalTwoForVerification { get; }=new() { MaxLength=32 };
+    internal TextBlock DiagonalResultForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
+    internal TextBox CalibrationReferenceForVerification { get; }=new() { IsReadOnly=true,TextWrapping=TextWrapping.Wrap,Visibility=Visibility.Collapsed,Margin=new Thickness(0,6,0,4),Padding=new Thickness(6),Foreground=StudioTheme.Text,Background=StudioTheme.Surface };
+    internal TextBox MeasuredXForVerification { get; }=new() { MaxLength=32 };
+    internal TextBox MeasuredYForVerification { get; }=new() { MaxLength=32 };
+    internal TextBlock PreviousMeasurementsForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Visibility=Visibility.Collapsed };
     private readonly TextBlock result=new() { TextWrapping=TextWrapping.Wrap,Text="Bir profil belirleyip geçerli projeden yerel dosya oluşturun." };
     private readonly TextBlock inputHint=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,0) };
     private readonly ScrollViewer messagesViewer=new();
@@ -131,7 +138,14 @@ public sealed class MachineCenterWindow : Window
         scaleCheck.Children.Add(calibrationOrientation);
         StyleButton(calibrationSquare);AutomationProperties.SetName(calibrationSquare,"100 mm referans HPGL dosyası oluştur");
         calibrationSquare.Click+=(_,_)=>Execute(CreateCalibrationSquare);scaleCheck.Children.Add(calibrationSquare);
-        var measuredX=new TextBox { MaxLength=32 };var measuredY=new TextBox { MaxLength=32 };var measuredFields=new WrapPanel();
+        AutomationProperties.SetName(CalibrationReferenceForVerification,"Son referans dosyası ve hazırlanan içerik özeti");
+        AutomationProperties.SetHelpText(CalibrationReferenceForVerification,"Hazırlanan dosyanın adı, birimi ve içerik özetini seçip kopyalayabilirsiniz; ölçüler otomatik bağlanmaz.");
+        scaleCheck.Children.Add(CalibrationReferenceForVerification);
+        var measuredX=MeasuredXForVerification;var measuredY=MeasuredYForVerification;var measuredFields=new WrapPanel();
+        AutomationProperties.SetName(PreviousMeasurementsForVerification,"Önceki referans ölçüleri uyarısı");
+        AutomationProperties.SetLiveSetting(PreviousMeasurementsForVerification,AutomationLiveSetting.Polite);
+        AnnounceTextChanges(PreviousMeasurementsForVerification,"Önceki referans ölçüleri uyarısı");
+        scaleCheck.Children.Add(PreviousMeasurementsForVerification);
         Field(measuredFields,"Ölçülen X · mm",measuredX,150);Field(measuredFields,"Ölçülen Y · mm",measuredY,150);scaleCheck.Children.Add(measuredFields);
         var scaleCheckResult=new TextBlock { Text="İki ölçüyü de girin. Bu hesap cihaz doğrulaması değildir.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning };
         AutomationProperties.SetName(scaleCheckResult,"Ölçek kontrolü sonucu");AutomationProperties.SetLiveSetting(scaleCheckResult,AutomationLiveSetting.Polite);AnnounceTextChanges(scaleCheckResult,"Ölçek kontrolü sonucu");
@@ -144,6 +158,21 @@ public sealed class MachineCenterWindow : Window
             scaleCheckResult.Text=$"100 mm referansa göre yaklaşık sapma: X {Deviation(comparison.XDeviationMillimeters)} mm, Y {Deviation(comparison.YDeviationMillimeters)} mm. Toleransı ve kalibrasyonu cihaz sorumlusu doğrulamalıdır; ayarlar otomatik değiştirilmez.";
         }
         measuredX.TextChanged+=(_,_)=>UpdateScaleCheck();measuredY.TextChanged+=(_,_)=>UpdateScaleCheck();scaleCheck.Children.Add(scaleCheckResult);settings.Children.Add(scaleCheck);
+        var diagonalFields=new WrapPanel { Margin=new Thickness(0,6,0,0) };
+        Field(diagonalFields,"Köşegen 1 · mm",DiagonalOneForVerification,150);Field(diagonalFields,"Köşegen 2 · mm",DiagonalTwoForVerification,150);scaleCheck.Children.Add(diagonalFields);
+        DiagonalResultForVerification.Text="İsteğe bağlı: iki köşegeni de ölçün; bu hesap cihaz doğrulaması değildir.";
+        AutomationProperties.SetName(DiagonalResultForVerification,"Köşegen karşılaştırması");AutomationProperties.SetLiveSetting(DiagonalResultForVerification,AutomationLiveSetting.Polite);AnnounceTextChanges(DiagonalResultForVerification,"Köşegen karşılaştırması");
+        void UpdateDiagonals()
+        {
+            if(string.IsNullOrWhiteSpace(DiagonalOneForVerification.Text) && string.IsNullOrWhiteSpace(DiagonalTwoForVerification.Text))
+            { DiagonalResultForVerification.Text="İsteğe bağlı: iki köşegeni de ölçün; bu hesap cihaz doğrulaması değildir.";return; }
+            if(!TryNumber(DiagonalOneForVerification,out var first) || !TryNumber(DiagonalTwoForVerification,out var second) || first<=0 || first>1500 || second<=0 || second>1500)
+            { DiagonalResultForVerification.Text="İki köşegen için 0'dan büyük, en fazla 1500 mm ölçü girin.";return; }
+            var comparison=PlotterScaleCheck.CompareDiagonals(first,second);
+            static string Deviation(double value)=>(value>0 ? "+" : "")+value.ToString("G9",CultureInfo.InvariantCulture);
+            DiagonalResultForVerification.Text=$"100 mm karenin nominal köşegeni {PlotterScaleCheck.ReferenceDiagonalMillimeters.ToString("G9",CultureInfo.InvariantCulture)} mm: sapma 1 {Deviation(comparison.FirstDeviationMillimeters)} mm, 2 {Deviation(comparison.SecondDeviationMillimeters)} mm; 1 − 2 farkı {Deviation(comparison.DifferenceMillimeters)} mm. Fark çarpılma veya ölçüm hatasına işaret edebilir; cihazı doğrulamaz.";
+        }
+        DiagonalOneForVerification.TextChanged+=(_,_)=>UpdateDiagonals();DiagonalTwoForVerification.TextChanged+=(_,_)=>UpdateDiagonals();scaleCheck.Children.Add(DiagonalResultForVerification);
         settings.Children.Add(new TextBlock { Text="Üretilecek parçalar",FontWeight=FontWeights.SemiBold,Margin=new Thickness(0,8,0,4) });
         settings.Children.Add(new TextBlock { Text="Yalnız işaretli parçalar dosyaya alınır. Kaynak kalıp ve türetilen bedenleri kontrol ederek seçin; adetler bu sürümde her seçili parça için 1'dir.",Foreground=StudioTheme.Muted,TextWrapping=TextWrapping.Wrap });
         var searchRow=new WrapPanel { Margin=new Thickness(0,4,0,2) };
@@ -331,8 +360,24 @@ public sealed class MachineCenterWindow : Window
         if(confirmation!=MessageBoxResult.OK)return;
         var dialog=new Microsoft.Win32.SaveFileDialog { Title="Yeni 100 mm referans HPGL dosyası",Filter="HPGL / PLT (*.plt)|*.plt|HPGL (*.hpgl)|*.hpgl",FileName="referans-100mm.plt",AddExtension=true,OverwritePrompt=false,InitialDirectory=AppPaths.PrepareProjectsDirectory() };
         if(dialog.ShowDialog(this)!=true)return;
-        PlotterCalibrationSquare.WriteNew(reference,dialog.FileName);
+        FinishCalibrationReference(reference,dialog.FileName,static (prepared,path)=>PlotterCalibrationSquare.WriteNew(prepared,path));
         result.Foreground=StudioTheme.Accent;result.Text="100 mm referans dosyası oluşturuldu: "+dialog.FileName+". Makineye gönderilmedi; cihaz ve fiziksel ölçü doğrulanmadı.";
+    }
+    internal void FinishCalibrationReference(PlotterCalibrationSquare.Prepared reference,string? path,Action<PlotterCalibrationSquare.Prepared,string> write)
+    {
+        if(path is null)return; // Cancel preserves all state.
+        write(reference,path); // A failed write must not relabel measurements or the receipt.
+        ShowCalibrationReference(reference,path);
+        bool hasMeasurements=new[]{MeasuredXForVerification,MeasuredYForVerification,DiagonalOneForVerification,DiagonalTwoForVerification}.Any(box=>!string.IsNullOrWhiteSpace(box.Text));
+        PreviousMeasurementsForVerification.Text=hasMeasurements ? "X/Y ve köşegen ölçümlerinin bu dosyaya ait olduğu doğrulanmadı; yeni baskıyı yeniden ölçün." : "";
+        PreviousMeasurementsForVerification.Visibility=hasMeasurements ? Visibility.Visible : Visibility.Collapsed;
+    }
+    internal void ShowCalibrationReference(PlotterCalibrationSquare.Prepared reference,string path)
+    {
+        ArgumentNullException.ThrowIfNull(reference);ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        var marker=reference.MarkerPieceId.HasValue ? "var" : "yok";
+        CalibrationReferenceForVerification.Text=$"Son oluşturulan referans: {path}\nBirim/mm: {MeasurementInput.Format(reference.Output.UnitsPerMillimeter)} · Ölçek: 1 · Yön işareti: {marker}\nHazırlanan içerik SHA-256: {reference.ContentSha256}\nÖlçüler dosyaya otomatik bağlanmaz; dosyanın sonradan değişmediği doğrulanmaz.";
+        CalibrationReferenceForVerification.Visibility=Visibility.Visible;
     }
     private async Task Prepare()
     {

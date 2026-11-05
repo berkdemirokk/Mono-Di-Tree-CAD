@@ -21,4 +21,27 @@ public sealed class PlotterScaleCheckTests
         Assert.Throws<ArgumentOutOfRangeException>(() => PlotterScaleCheck.Compare(invalid, 100));
         Assert.Throws<ArgumentOutOfRangeException>(() => PlotterScaleCheck.Compare(100, invalid));
     }
+
+    [Fact]
+    public void ComparesDiagonalsIndependentlyWithoutAssumingTolerance()
+    {
+        var nominal=100*Math.Sqrt(2);
+        var exact=PlotterScaleCheck.CompareDiagonals(nominal,nominal);
+        Assert.Equal(0,exact.FirstDeviationMillimeters);
+        Assert.Equal(0,exact.SecondDeviationMillimeters);
+        Assert.Equal(0,exact.DifferenceMillimeters);
+        var result=PlotterScaleCheck.CompareDiagonals(nominal+1,nominal-2);
+        Assert.Equal(1,result.FirstDeviationMillimeters,10);
+        Assert.Equal(-2,result.SecondDeviationMillimeters,10);
+        Assert.Equal(3,result.DifferenceMillimeters,10);
+        Assert.Equal(-3,PlotterScaleCheck.CompareDiagonals(nominal-2,nominal+1).DifferenceMillimeters,10);
+    }
+
+    [Theory]
+    [InlineData(0)] [InlineData(-1)] [InlineData(1501)] [InlineData(double.NaN)] [InlineData(double.PositiveInfinity)]
+    public void RejectsInvalidDiagonalMeasurements(double invalid)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(()=>PlotterScaleCheck.CompareDiagonals(invalid,100));
+        Assert.Throws<ArgumentOutOfRangeException>(()=>PlotterScaleCheck.CompareDiagonals(100,invalid));
+    }
 }
