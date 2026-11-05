@@ -31,6 +31,16 @@ enum BodyMeasurementNotes {
         fields.indices.filter { $0 >= values.count || values[$0].trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
     enum ValidationError: Error { case empty, whitespace(String), invalid(String), duplicate(String), ambiguous(String), tooLong }
+    struct AdditionReview {
+        let form: ExperimentalDesignBrief.MeasurementForm
+        let revision: UUID
+        let notes: String
+        let existingNotes: String
+        let savedForm: ExperimentalDesignBrief.MeasurementForm?
+        func matches(form: ExperimentalDesignBrief.MeasurementForm, revision: UUID, notes: String, existingNotes: String, savedForm: ExperimentalDesignBrief.MeasurementForm?) -> Bool {
+            self.form == form && self.revision == revision && self.notes == notes && self.existingNotes == existingNotes && self.savedForm == savedForm
+        }
+    }
     struct UnitChange {
         let before: ExperimentalDesignBrief.MeasurementForm
         let after: ExperimentalDesignBrief.MeasurementForm
@@ -150,6 +160,7 @@ struct BodyMeasurementNotesView: View {
     @State private var confirmUnit = false
     @State private var status = ""
     @State private var confirm = false
+    @State private var pendingAddition: BodyMeasurementNotes.AdditionReview?
     @State private var discard = false
     @State private var ambiguousConfirm = false
     @State private var confirmWhitespaceCleanup = false
@@ -227,7 +238,12 @@ struct BodyMeasurementNotesView: View {
                         HStack(spacing: 16) { groupActions }.fixedSize(horizontal: true, vertical: false)
                         VStack(spacing: 4) { groupActions }
                     }.frame(maxWidth: .infinity)
-                    Button("Girilenleri gözden geçir ve ekle") { focusedIndex = nil; confirm = true }
+                    Button("Girilenleri gözden geçir ve ekle") {
+                        focusedIndex = nil; rememberForm()
+                        pendingAddition = .init(form: .init(values: values, unit: unit), revision: revision,
+                                                notes: notes, existingNotes: measurementsWithNotes(notes), savedForm: savedForm)
+                        confirm = true
+                    }
                         .frame(maxWidth: .infinity, minHeight: 44).buttonStyle(.borderedProminent)
                 }.padding(8).background(.regularMaterial)
             }
@@ -266,9 +282,11 @@ struct BodyMeasurementNotesView: View {
             }
             .confirmationDialog("Girilen ölçüler notlara eklensin mi?", isPresented: $confirm, titleVisibility: .visible) {
                 Button("Ölçüleri ekle") { apply() }
-                Button("Düzenlemeye devam et", role: .cancel) { }
+                Button("Düzenlemeye devam et", role: .cancel) { pendingAddition = nil }
             } message: {
-                Text((try? BodyMeasurementNotes.append(values: values, unit: unit, current: "", existingNotes: "")) ?? "Geçersiz veya boş giriş var; değerleri kontrol edin.")
+                if let review = pendingAddition {
+                    Text((try? BodyMeasurementNotes.append(values: review.form.values, unit: review.form.unit, current: "", existingNotes: "")) ?? "Geçersiz veya boş giriş var; değerleri kontrol edin.")
+                }
                 Text("Önceki notlar korunur. Aynı ölçü daha önce varsa çelişkiyi önce gözden geçirin.")
             }
             .confirmationDialog("Yalnız boşluk içeren alanlar temizlensin mi?", isPresented: $confirmWhitespaceCleanup, titleVisibility: .visible) {
@@ -277,7 +295,7 @@ struct BodyMeasurementNotesView: View {
             } message: { Text("Yalnız tamamen boşluk içeren alanlar temizlenir. Diğer ham ölçüler ve önceki notlar değiştirilmez.") }
             .confirmationDialog("Önceki not belirsiz", isPresented: $ambiguousConfirm, titleVisibility: .visible) {
                 Button("Önceki notu koruyarak ekle") { apply(allowAmbiguous: true) }
-                Button("Notu kontrol edeceğim", role: .cancel) { }
+                Button("Notu kontrol edeceğim", role: .cancel) { pendingAddition = nil }
             } message: { Text("\(ambiguousLabel) önceki notlarda geçiyor. Çelişki olabilir; mevcut not silinmez. Devam etmeden önce kontrol edin.") }
             .confirmationDialog("Formdan çıkılsın mı?", isPresented: $discard, titleVisibility: .visible) {
                 Button("Formu taslakta tut ve çık") { rememberForm(); dismiss() }
@@ -304,11 +322,19 @@ struct BodyMeasurementNotesView: View {
         savedForm = ExperimentalDesignBrief.MeasurementForm.pending(values: values, unit: unit)
     }
     private func apply(allowAmbiguous: Bool = false) {
-        guard notes == initialNotes else { status = "Notlar değişti. Önceki girişleri kaybetmemek için ekranı kapatıp yeniden açın."; return }
+        guard let review = pendingAddition,
+              review.matches(form: .init(values: values, unit: unit), revision: revision,
+                             notes: notes, existingNotes: measurementsWithNotes(notes), savedForm: savedForm), notes == initialNotes else {
+            pendingAddition = nil; status = "Girişler veya kaynak değişti. Hiçbir ölçü eklenmedi; yeniden gözden geçirin."; return
+        }
         do {
-            let updated = try BodyMeasurementNotes.append(values: values, unit: unit, current: notes, existingNotes: measurementsWithNotes(notes), allowAmbiguous: allowAmbiguous)
+            let updated = try BodyMeasurementNotes.append(values: review.form.values, unit: review.form.unit, current: review.notes, existingNotes: review.existingNotes, allowAmbiguous: allowAmbiguous)
             guard measurementsWithNotes(updated).utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw BodyMeasurementNotes.ValidationError.tooLong }
-            readyToSaveForm = false; notes = updated; savedForm = nil; dismiss()
+            guard review.matches(form: .init(values: values, unit: unit), revision: revision,
+                                 notes: notes, existingNotes: measurementsWithNotes(notes), savedForm: savedForm) else {
+                pendingAddition = nil; status = "Girişler veya kaynak değişti. Hiçbir ölçü eklenmedi; yeniden gözden geçirin."; return
+            }
+            readyToSaveForm = false; pendingAddition = nil; notes = updated; savedForm = nil; dismiss()
         } catch BodyMeasurementNotes.ValidationError.empty { status = "En az bir ölçü girin." }
         catch BodyMeasurementNotes.ValidationError.whitespace(let label) { status = "\(label) yalnız boşluk içeriyor. Alanı inceleyin veya onayla temizleyin." }
         catch BodyMeasurementNotes.ValidationError.invalid(let label) { status = "\(label): Pozitif uzunluk veya -90 ile 90 arasında (uçlar hariç) omuz açısı girin." }

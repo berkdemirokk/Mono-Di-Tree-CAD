@@ -149,6 +149,26 @@ final class DesignDraftStoreTests: XCTestCase {
         try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
         XCTAssertThrowsError(try PhotoLibraryReference.read(url))
     }
+    func testMeasurementAdditionReviewRejectsChangedInputsAndPreservesRecovery() throws {
+        var values = Array(repeating: "", count: 15); values[8] = "72"
+        let form = ExperimentalDesignBrief.MeasurementForm(values: values, unit: "cm"), revision = UUID()
+        let review = BodyMeasurementNotes.AdditionReview(form: form, revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: form)
+        XCTAssertTrue(review.matches(form: form, revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: form))
+        var changedValues = values; changedValues[8] = "73"
+        XCTAssertFalse(review.matches(form: .init(values: changedValues, unit: "cm"), revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: form))
+        XCTAssertFalse(review.matches(form: .init(values: values, unit: "mm"), revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: form))
+        XCTAssertFalse(review.matches(form: form, revision: UUID(), notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: form))
+        XCTAssertFalse(review.matches(form: form, revision: revision, notes: "değişti", existingNotes: "göğüs çevresi 92 cm", savedForm: form))
+        XCTAssertFalse(review.matches(form: form, revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 94 cm", savedForm: form))
+        XCTAssertFalse(review.matches(form: form, revision: revision, notes: "önceki", existingNotes: "göğüs çevresi 92 cm", savedForm: nil))
+        var draft = ExperimentalDesignBrief.Draft(style: .aline, description: "tarif", bust: "92 cm", waist: "", hips: "", length: "", otherMeasurements: "önceki", image: nil, imageName: nil)
+        draft.measurementForm = form
+        let recovered = try ExperimentalDesignBrief.DraftStore.recoveryDraft(ExperimentalDesignBrief.DraftStore.recoveryData(draft))
+        XCTAssertEqual(recovered, draft); XCTAssertEqual(recovered.measurementForm, form); XCTAssertEqual(recovered.otherMeasurements, "önceki")
+        XCTAssertThrowsError(try ExperimentalDesignBrief.make(recovered)); XCTAssertThrowsError(try ExperimentalDesignBrief.makeV2(recovered))
+        let oldURL = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "dress-draft-v1", withExtension: "json"))
+        XCTAssertNil(try ExperimentalDesignBrief.DraftStore.recoveryDraft(Data(contentsOf: oldURL)).measurementForm)
+    }
     func testBodyFormUnitConversionIsExactAndPreservesAnglesAndPendingForm() throws {
         var values = Array(repeating: "", count: 15)
         values[0] = "31,5"; values[8] = "72"; values[12] = "-2,5"
