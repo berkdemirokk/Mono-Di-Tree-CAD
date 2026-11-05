@@ -292,9 +292,10 @@ internal sealed class PhotoRegionWindow : Window
         var original=snapshot;var marks=appliedMarks;var revision=regionRevision;var cts=new CancellationTokenSource();BeginSessionOperation(cts);
         Status.Text="Bölge dosyası kaydediliyor…";
         try {
+            var full=PhotoRegionSavePath.Complete(path);
             await Task.Run(()=> {
                 BeforeSessionSaveForVerification?.Invoke(cts.Token);cts.Token.ThrowIfCancellationRequested();
-                var text=PhotoRegionSession.Encode(original,marks,x,y,w,h,cts.Token);var full=Path.GetFullPath(path);
+                var text=PhotoRegionSession.Encode(original,marks,x,y,w,h,cts.Token);
                 ProjectStorage.AtomicWriteIfUnchanged(full,text,new ProjectFileVersion(full,null),cts.Token);
             },cts.Token);
             if(!closed && revision==regionRevision)Status.Text="Bölge yeni dosyaya kaydedildi; fotoğraf veya kalıp içermez.";

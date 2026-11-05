@@ -9737,8 +9737,9 @@ internal static partial class DesktopVerification
                     var corruptCheckpoint=checkpoint+".bad";
                     try {
                         var corrected=garmentProbe.CopyMaskForVerification()!;
+                        VerifyRegionSavePaths(garmentProbe,checkpoint,checks);
                         Check(SaveCheckpoint(garmentProbe,checkpoint),"Garment region checkpoint can be saved as a new file",checks);
-                        var cancelledPath=checkpoint+".cancel";
+                        var cancelledPath=checkpoint+".cancel.tdregion";
                         using(var enteredSave=new ManualResetEventSlim())using(var releaseSave=new ManualResetEventSlim())
                         {
                             garmentProbe.BeforeSessionSaveForVerification=_=> { enteredSave.Set();releaseSave.Wait(); };
@@ -9759,7 +9760,7 @@ internal static partial class DesktopVerification
                         var savedBytes=File.ReadAllBytes(checkpoint);
                         Check(!SaveCheckpoint(garmentProbe,checkpoint) && File.ReadAllBytes(checkpoint).SequenceEqual(savedBytes),
                               "Garment checkpoint does not overwrite an existing file",checks);
-                        garmentProbe.MarkMode.SelectedIndex=1;Check(garmentProbe.TryAddMark(3,3) && !SaveCheckpoint(garmentProbe,checkpoint+".pending"),
+                        garmentProbe.MarkMode.SelectedIndex=1;Check(garmentProbe.TryAddMark(3,3) && !SaveCheckpoint(garmentProbe,checkpoint+".pending.tdregion"),
                               "Pending garment corrections cannot be silently omitted from checkpoint",checks);
                         garmentProbe.ClearMarks();
                         var restoredRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
@@ -9826,7 +9827,7 @@ internal static partial class DesktopVerification
                                       "Closing during checkpoint load cancels it and prevents a late update",checks);
                             } finally { releaseClosing.Set();closingRegion.BeforeSessionLoadForVerification=null; }
                         }
-                        var closeSavePath=checkpoint+".close-save";
+                        var closeSavePath=checkpoint+".close-save.tdregion";
                         var closingSaveRegion=new PhotoRegionWindow(workspace,regionBitmap,reviewOnly:true) { ConfirmCloseForVerification=()=>true,ConfirmRectangleChangeForVerification=()=>true };
                         Check(LoadCheckpoint(closingSaveRegion,checkpoint),"Closing save test starts from a loaded garment checkpoint",checks);
                         using(var enteredClosingSave=new ManualResetEventSlim())using(var releaseClosingSave=new ManualResetEventSlim())
