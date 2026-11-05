@@ -255,7 +255,9 @@ enum ExperimentalDesignBrief {
     struct RequestSummary {
         let model: String?
         let description: String
-        let exportedPrompt: String
+        let v1Prompt: String
+        let v2Prompt: String
+        let v2ModelID: String?
         let measurements: String
         let referenceName: String?
         let hasPendingMeasurements: Bool
@@ -267,7 +269,9 @@ enum ExperimentalDesignBrief {
         init(_ draft: Draft) {
             model = draft.style == .describe ? nil : draft.style.rawValue
             description = draft.description
-            exportedPrompt = draft.prompt
+            v1Prompt = draft.prompt
+            v2Prompt = draft.description
+            v2ModelID = ExperimentalDesignBrief.portableModelID(for: draft.style)
             measurements = draft.measurements
             referenceName = draft.image == nil ? nil : draft.imageName
             hasPendingMeasurements = draft.measurementForm?.hasValues == true
@@ -520,6 +524,9 @@ enum ExperimentalDesignBrief {
         "wrap": .wrap, "aline": .aline, "corset": .corset,
         "sheath": .sheath, "straight": .straight, "shirt": .shirt
     ]
+    static func portableModelID(for style: DressStyle) -> String? {
+        portableStyleIDs.first(where: { $0.value == style })?.key
+    }
     struct ModelIdentity: Codable { let id: String }
     struct DocumentV2: Encodable {
         let format = "tekstilcad.design-request"
@@ -580,7 +587,7 @@ enum ExperimentalDesignBrief {
     }
     static func makeV2(_ draft: Draft) throws -> Data {
         if let image = draft.image { try validateV2Image(image) }
-        let id = portableStyleIDs.first(where: { $0.value == draft.style })?.key
+        let id = portableModelID(for: draft.style)
         guard draft.style == .describe || id != nil else { throw Error.invalidText }
         let reference = try validatedReference(prompt: draft.description, measurements: draft.measurements, image: draft.image, imageName: draft.imageName, hasV2Model: id != nil)
         let result = try JSONEncoder().encode(DocumentV2(prompt: draft.description, measurements: draft.measurements, reference: reference, model: id.map { ModelIdentity(id: $0) }))

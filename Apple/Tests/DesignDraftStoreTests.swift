@@ -418,7 +418,9 @@ final class DesignDraftStoreTests: XCTestCase {
         let review = ExperimentalDesignBrief.RequestSummary(draft)
         XCTAssertNil(review.model)
         XCTAssertEqual(review.description, "Model: A kesim 👗")
-        XCTAssertEqual(review.exportedPrompt, draft.prompt)
+        XCTAssertEqual(review.v1Prompt, draft.prompt)
+        XCTAssertEqual(review.v2Prompt, draft.description)
+        XCTAssertNil(review.v2ModelID)
         XCTAssertEqual(review.measurements, "Göğüs çevresi: 92 cm\n  ")
         XCTAssertEqual(review.referenceName, "örnek.png")
         XCTAssertTrue(review.hasPendingMeasurements)
@@ -439,8 +441,25 @@ final class DesignDraftStoreTests: XCTestCase {
         let review = ExperimentalDesignBrief.RequestSummary(draft)
         XCTAssertEqual(review.model, "Anvelop elbise")
         XCTAssertEqual(review.description, "İpek")
-        XCTAssertEqual(review.exportedPrompt, "Seçilen elbise modeli: Anvelop elbise\nİpek")
+        XCTAssertEqual(review.v1Prompt, "Seçilen elbise modeli: Anvelop elbise\nİpek")
+        XCTAssertEqual(review.v2Prompt, "İpek")
+        XCTAssertEqual(review.v2ModelID, "wrap")
         XCTAssertNil(review.referenceName); XCTAssertFalse(review.hasPendingMeasurements)
+    }
+    func testFormatPreviewsMatchEncodedPromptsAndModelIdentity() throws {
+        for (style, description) in [(ExperimentalDesignBrief.DressStyle.aline, ""), (.wrap, "  \n"), (.describe, "İpek elbise")] {
+            let draft = ExperimentalDesignBrief.Draft(style: style, description: description, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+            let summary = ExperimentalDesignBrief.RequestSummary(draft)
+            let v1 = try JSONDecoder().decode(ExperimentalDesignBrief.Document.self, from: ExperimentalDesignBrief.make(prompt: draft.prompt, measurements: draft.measurements, image: nil, imageName: nil))
+            let v2Data = try ExperimentalDesignBrief.makeV2(draft)
+            let v2 = try XCTUnwrap(JSONSerialization.jsonObject(with: v2Data) as? [String: Any])
+            XCTAssertEqual(summary.v1Prompt, v1.prompt)
+            XCTAssertEqual(summary.v2Prompt, v2["prompt"] as? String)
+            if let id = summary.v2ModelID {
+                XCTAssertEqual((v2["model"] as? [String: String])?["id"], id)
+            } else { XCTAssertTrue(v2["model"] is NSNull) }
+            XCTAssertEqual(summary.v2Prompt, description)
+        }
     }
     func testAtelierOverviewReflectsOnlyEnteredMeasurementsAndReference() {
         let empty = ExperimentalDesignBrief.Draft(style: .describe, description: "", bust: "", waist: " ", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)

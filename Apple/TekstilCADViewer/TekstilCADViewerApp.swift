@@ -3134,13 +3134,28 @@ private struct ExperimentalDesignBriefView: View {
                     Text(summary.model ?? "Ayrı model seçilmedi; açıklamayı kontrol edin.")
                     Text("Tarif").font(.headline).accessibilityAddTraits(.isHeader)
                     if summary.descriptionIsWhitespace {
-                        Text("Tarif yalnız boşluk içeriyor; modeli veya tarifi düzenleyin. Ham metin korunuyor.").foregroundStyle(.secondary)
+                        Text("Tarif yalnız boşluk içeriyor; ham metin korunuyor.").foregroundStyle(.secondary)
                     } else {
                         Text(summary.description.isEmpty ? "Tarif yazılmadı." : summary.description).textSelection(.enabled)
                     }
                     Button("Modeli veya tarifi düzenle") { step = 0 }.frame(minHeight: 44)
-                    DisclosureGroup("Dosyaya yazılacak tam açıklama") {
-                        Text(summary.exportedPrompt.isEmpty ? "Açıklama yok." : (ExperimentalDesignBrief.RequestSummary.isOnlyWhitespace(summary.exportedPrompt) ? "Açıklama yalnız boşluk içeriyor; düzenleyin." : summary.exportedPrompt)).textSelection(.enabled)
+                    DisclosureGroup("V1 dosyası · açıklama") {
+                        Text("V1'de model seçimi varsa açıklamanın başına model satırı eklenir. Kayıt için diğer kontroller de geçmelidir.").font(.caption)
+                        if summary.v1Prompt.isEmpty { Text("Açıklama boş.") }
+                        else {
+                            if ExperimentalDesignBrief.RequestSummary.isOnlyWhitespace(summary.v1Prompt) { Text("Açıklama yalnız boşluk içeriyor; ham metin korunur.").font(.caption) }
+                            Text(verbatim: summary.v1Prompt).textSelection(.enabled)
+                        }
+                    }
+                    DisclosureGroup("V2 dosyası · ham tarif ve model") {
+                        Text("V2 tarifi olduğu gibi yazar; model seçimi açıklamaya eklenmez, ayrı kaydedilir.").font(.caption)
+                        if let id = summary.v2ModelID, let model = summary.model { Text(verbatim: "Ayrı model: \(model) (\(id))") }
+                        else { Text("Ayrı model seçilmedi.") }
+                        if summary.v2Prompt.isEmpty { Text("Ham tarif boş; dosyaya boş metin yazılır.") }
+                        else {
+                            if ExperimentalDesignBrief.RequestSummary.isOnlyWhitespace(summary.v2Prompt) { Text("Ham tarif yalnız boşluk içeriyor; boşluklar aynen yazılır.").font(.caption) }
+                            Text(verbatim: summary.v2Prompt).textSelection(.enabled)
+                        }
                     }
                     Text("Ölçüler ve girilen birimler").font(.headline).accessibilityAddTraits(.isHeader)
                     if !otherMeasurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
