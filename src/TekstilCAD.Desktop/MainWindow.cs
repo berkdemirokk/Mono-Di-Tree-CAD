@@ -2418,7 +2418,7 @@ public class MainWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(orientation,"DXF koordinat yönü");
         System.Windows.Automation.AutomationProperties.SetHelpText(orientation,"Varsayılan kaynak koordinatlarını korur. Y işaretini ters çevirmek yansımadır; konumu ve kapalı kontur yönünü değiştirir.");content.Children.Add(orientation);
         content.Children.Add(new TextBlock { Text="Ekranda Y aşağı artar. Y işaretini ters çevirmek tüm içe alınan geometrinin ve konumunun yansımasıdır; kapalı kontur yönü de tersine döner. Kaynak dosya değişmez; önizlemeyi kaynakla karşılaştırın.",TextWrapping=TextWrapping.Wrap,Foreground=StudioTheme.Warning,Margin=new Thickness(0,0,0,6) });
-        content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge yaylarını yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
+        content.Children.Add(new TextBlock { Text="Kontrollü aktarım, model alanındaki çizgileri ve varsa blok yerleşimlerini okur. Sınırlı 2B düz ve çoklu çizgiler desteklenir; blok dönüşleri seçilen toleransla doğrulanır. Bulge ve 2B CIRCLE yaklaştırma yalnız standart aktarım için ayrı onayla seçilebilir; kontrollü aktarımda desteklenmez. Eğriler, 3B ve doğrulanamayan veriler açıklamayla durdurulur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,6) });
         content.Children.Add(new TextBlock { Text="Kodlama otomatik tahmin edilmez. Yanlış seçim harfleri değiştirebilir; kaynak dosyanın kodlamasını kontrol edin. Okuma kaynak dosyayı değiştirmez; proje ancak önizlemede onaylanırsa değiştirilir.",TextWrapping=TextWrapping.Wrap });
         return options;
     }
@@ -2888,7 +2888,7 @@ public class MainWindow : Window
     {
         cancellationToken.ThrowIfCancellationRequested();
         using var input=new FileStream(path,FileMode.Open,FileAccess.Read,FileShare.Read);
-        var imported=DxfFormat.ImportWithBulgeApproximation(input,Path.GetFileNameWithoutExtension(path),factor,encoding,toleranceMm,cancellationToken);
+        var imported=DxfFormat.ImportWithCircleAndBulgeApproximation(input,Path.GetFileNameWithoutExtension(path),factor,encoding,toleranceMm,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();Validate(imported.Project);cancellationToken.ThrowIfCancellationRequested();
         if(imported.Project.Pieces.Count==0)throw new InvalidDataException("Desteklenen geometri bulunamadı; mevcut proje korunuyor.");
         return imported;
