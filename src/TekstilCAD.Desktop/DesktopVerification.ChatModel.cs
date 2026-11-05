@@ -37,6 +37,7 @@ internal static partial class DesktopVerification
             var observationBitmap=BitmapSource.Create(2,2,96,96,PixelFormats.Bgra32,null,new byte[16],8);observationBitmap.Freeze();
             _=new WindowInteropHelper(window).EnsureHandle();
             VerifyRepeatedPhotoObservations(window,observationBitmap,checks);
+            VerifyObservationRegionEntry(window,checks);
             VerifyPhotoObservationEdits(window,observationBitmap,checks);
             var observationWindow=new PhotoObservationWindow(window,observationBitmap,"aline","Uzun kollu elbise\n"+new string('x',1500));
             try
@@ -306,3 +307,4 @@ internal static partial class DesktopVerification
         return failure is null ? 0 : 1;
     }
 }
+

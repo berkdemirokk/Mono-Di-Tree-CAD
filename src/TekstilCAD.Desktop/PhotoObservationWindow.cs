@@ -20,18 +20,28 @@ internal sealed class PhotoObservationWindow : Window
     internal IReadOnlyList<string>? Approved { get; private set; }
     internal string? ApprovedDescription { get; private set; }
     internal Func<string,bool>? ConfirmEditForVerification { get; set; }
+    internal Action<PhotoRegionWindow>? ShowRegionForVerification { get; set; }
+    internal Button RegionForVerification { get; private set; }=null!;
+    private readonly BitmapSource image;
+    private bool closed;
     private long selectionRevision;
     private readonly string originalDescription;
     private readonly int maximumDescriptionLength;
     private readonly Func<bool>? sourceCurrent;
     internal PhotoObservationWindow(Window owner,BitmapSource image,string model,string descriptionText,int maxLength=TekstilCAD.FileFormats.DesignRequestStorage.MaximumTextLength,Func<bool>? isSourceCurrent=null)
     {
-        originalDescription=descriptionText;maximumDescriptionLength=maxLength;sourceCurrent=isSourceCurrent;
+        this.image=image;originalDescription=descriptionText;maximumDescriptionLength=maxLength;sourceCurrent=isSourceCurrent;
+        Closed+=(_,_)=>closed=true;
         Owner=owner;Title="Fotoğrafa bakarak özellikleri belirt";Width=850;Height=650;MinWidth=500;MinHeight=450;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
-        var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Gözlemleri mevcut tarif ve seçili modelle kendiniz karşılaştırın; serbest tarifle çelişkiler otomatik bulunmaz. Bunlar kullanıcı gözlemidir; otomatik analiz, ölçü veya kalıp değildir.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
+        var description=new TextBlock { Text="Fotoğrafı inceleyin ve yalnız gördüğünüz özellikleri seçin. Bilinmeyenleri boş bırakın. Gözlemleri mevcut tarif ve seçili modelle kendiniz karşılaştırın; serbest tarifle çelişkiler otomatik bulunmaz. Seçimler kullanıcı gözlemidir; bölge aracı renk tahminidir, ölçü veya kalıp üretmez.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };DockPanel.SetDock(description,Dock.Top);root.Children.Add(description);
         var panel=new StackPanel { Margin=new Thickness(10,0,0,0) };
         var scroller=new ScrollViewer { Content=panel,Width=250,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,HorizontalScrollBarVisibility=ScrollBarVisibility.Disabled };ControlsForVerification=scroller;DockPanel.SetDock(scroller,Dock.Right);root.Children.Add(scroller);
+        var region=new Button { Content="Giysi bölgesini incele…",Padding=new Thickness(8,5,8,5),Margin=new Thickness(0,0,0,8),HorizontalAlignment=HorizontalAlignment.Left };
+        RegionForVerification=region;
+        AutomationProperties.SetName(region,"Fotoğrafta giysi bölgesini incele");
+        AutomationProperties.SetHelpText(region,"Yerel renk bölgesini inceleyip isteğe bağlı kaydedebilirsiniz; gözlem, ölçü veya CAD kalıbı otomatik oluşturulmaz.");
+        region.Click+=(_,_)=>OpenRegionReview();panel.Children.Add(region);
         panel.Children.Add(new TextBlock { Text="Mevcut model fikri: "+model,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         panel.Children.Add(new TextBlock { Text="Mevcut tarif",Margin=new Thickness(0,0,0,3) });ExistingDescription.Text=descriptionText;AutomationProperties.SetName(ExistingDescription,"Mevcut tarif; salt okunur");panel.Children.Add(ExistingDescription);
         void Field(string label,ComboBox box) { panel.Children.Add(new TextBlock { Text=label,Margin=new Thickness(0,6,0,3) });AutomationProperties.SetName(box,label);panel.Children.Add(box); }
@@ -52,7 +62,26 @@ internal sealed class PhotoObservationWindow : Window
         }
         var apply=new Button { Content="Seçilen gözlemleri tarife ekle",Padding=new Thickness(8) };panel.Children.Add(apply);panel.Children.Add(Status);
         apply.Click+=(_,_)=> { if(TryApprove())DialogResult=true; };
-        var photo=new Image { Source=image,Stretch=Stretch.Uniform };PhotoForVerification=photo;AutomationProperties.SetName(photo,"Referans fotoğrafı; otomatik yorumlanmaz");root.Children.Add(photo);
+        var photo=new Image { Source=image,Stretch=Stretch.Uniform };PhotoForVerification=photo;AutomationProperties.SetName(photo,"Referans fotoğrafı; özellikleri kullanıcı seçer");root.Children.Add(photo);
+    }
+    internal PhotoRegionWindow? CreateRegionReview()
+    {
+        if(closed || sourceCurrent?.Invoke()==false) { if(!closed)Status.Text="İstek veya görsel değişti; bölge incelemesi açılmadı.";return null; }
+        try {
+            var frozen=image.IsFrozen ? image : image.CloneCurrentValue();
+            if(!frozen.CanFreeze)throw new ArgumentException("Fotoğraf sabitlenemedi.");
+            if(!frozen.IsFrozen)frozen.Freeze();
+            return new PhotoRegionWindow(this,frozen,reviewOnly:true);
+        } catch(ArgumentException ex) { Status.Text="Bölge incelemesi açılamadı: "+ex.Message;return null; }
+    }
+    internal void OpenRegionReview()
+    {
+        var revision=selectionRevision;var region=CreateRegionReview();if(region is null)return;
+        if(ShowRegionForVerification is { } show)show(region);else region.ShowDialog();
+        if(closed)return;
+        if(sourceCurrent?.Invoke()==false || revision!=selectionRevision)
+        { Status.Text="İstek, fotoğraf veya gözlem seçimi değişti; mevcut seçimleri yeniden kontrol edin.";return; }
+        Status.Text="Bölge yalnız incelendi; gözlem, ölçü veya CAD kalıbı otomatik eklenmedi.";
     }
     internal bool TryApprove()
     {
@@ -97,3 +126,4 @@ internal sealed class PhotoObservationWindow : Window
         return result.AsReadOnly();
     }
 }
+
