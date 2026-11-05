@@ -29,7 +29,71 @@ enum PhotoObservation {
             return result
         }
     }
-    enum Failure: Error { case empty, duplicate, tooLong, invalidImage }
+    enum Failure: Error { case empty, duplicate, tooLong, invalidImage, missing, malformed, unchanged }
+    enum Category: String, CaseIterable, Identifiable {
+        case silhouette = "Siluet", sleeve = "Kol", neck = "Yaka"
+        var id: String { rawValue }
+        var prefix: String { "Fotoğraf gözlemi · \(rawValue):" }
+        var validLines: [String] {
+            let values: [String]
+            switch self {
+            case .silhouette: values = Silhouette.allCases.filter { $0 != .unknown }.map(\.rawValue)
+            case .sleeve: values = Sleeve.allCases.filter { $0 != .unknown }.map(\.rawValue)
+            case .neck: values = Neck.allCases.filter { $0 != .unknown }.map(\.rawValue)
+            }
+            return values.map { prefix + " " + $0 }
+        }
+        func selectedLine(_ selection: Selection) -> String? {
+            switch self {
+            case .silhouette: return selection.silhouette == .unknown ? nil : prefix + " " + selection.silhouette.rawValue
+            case .sleeve: return selection.sleeve == .unknown ? nil : prefix + " " + selection.sleeve.rawValue
+            case .neck: return selection.neck == .unknown ? nil : prefix + " " + selection.neck.rawValue
+            }
+        }
+    }
+    enum EditAction: Equatable { case replace, remove }
+    struct EditPlan: Equatable {
+        let category: Category
+        let action: EditAction
+        let selection: Selection
+        let before: String
+        let after: String?
+        let updatedDescription: String
+    }
+    /// Only one exact, complete application-generated line in the description
+    /// can be changed. Other bytes, including line separators, stay untouched.
+    static func editPlan(_ action: EditAction, category: Category, selection: Selection, description: String, notes: String) throws -> EditPlan {
+        guard description.utf16.count <= ExperimentalDesignBrief.maxTextUnits, notes.utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw Failure.tooLong }
+        let locale = Locale(identifier: "tr_TR")
+        func mentionsTarget(_ text: String) -> Bool {
+            let folded = text.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: locale)
+            let marker = #"(?<![\p{L}\p{N}_])fotograf[ \t·:.-]+gozlemi(?![\p{L}\p{N}_])"#
+            let categoryPattern = #"(?<![\p{L}\p{N}_])"# + NSRegularExpression.escapedPattern(for: category.rawValue.lowercased()) + #"(?![\p{L}\p{N}_])"#
+            return folded.range(of: marker, options: .regularExpression) != nil && folded.range(of: categoryPattern, options: .regularExpression) != nil
+        }
+        guard !notes.components(separatedBy: .newlines).contains(where: mentionsTarget) else { throw Failure.duplicate }
+        var found: [(Range<String.Index>, String)] = []
+        description.enumerateSubstrings(in: description.startIndex..<description.endIndex, options: [.byLines, .substringNotRequired]) { _, range, _, _ in
+            let line = String(description[range])
+            if mentionsTarget(line) { found.append((range, line)) }
+        }
+        guard !found.isEmpty else { throw Failure.missing }
+        guard found.count == 1 else { throw Failure.duplicate }
+        let (range, before) = found[0]
+        guard category.validLines.contains(before) else { throw Failure.malformed }
+        let after: String?
+        switch action {
+        case .replace:
+            guard let chosen = category.selectedLine(selection) else { throw Failure.empty }
+            guard chosen != before else { throw Failure.unchanged }
+            after = chosen
+        case .remove: after = nil
+        }
+        var updated = description
+        updated.replaceSubrange(range, with: after ?? "")
+        guard updated.utf16.count <= ExperimentalDesignBrief.maxTextUnits else { throw Failure.tooLong }
+        return EditPlan(category: category, action: action, selection: selection, before: before, after: after, updatedDescription: updated)
+    }
     static func append(_ selection: Selection, description: String, notes: String) throws -> String {
         let lines = selection.lines
         guard !lines.isEmpty else { throw Failure.empty }
@@ -86,10 +150,15 @@ enum PhotoObservation {
 struct PhotoObservationView: View {
     let request: PhotoObservation.Request
     let apply: (PhotoObservation.Request, PhotoObservation.Selection) -> String?
+    let edit: (PhotoObservation.Request, PhotoObservation.EditPlan) -> String?
     @Environment(\.dismiss) private var dismiss
     @State private var selection = PhotoObservation.Selection()
     @State private var confirmedSelection: PhotoObservation.Selection?
     @State private var status = ""
+    @State private var editCategory = PhotoObservation.Category.sleeve
+    @State private var pendingEdit: PhotoObservation.EditPlan?
+    @State private var confirmReplacement = false
+    @State private var confirmRemoval = false
     @State private var image: CGImage?
     @State private var failed = false
     @State private var loading = true
@@ -128,9 +197,31 @@ struct PhotoObservationView: View {
                     }
                         .disabled(loading || failed || image == nil || confirmedSelection != selection || selection.lines.isEmpty)
                 }
+                Section("Önceki gözlemi düzelt veya kaldır") {
+                    Picker("Düzenlenecek özellik", selection: $editCategory) { ForEach(PhotoObservation.Category.allCases) { Text($0.rawValue).tag($0) } }
+                    Text("Yalnız tarifteki tek, tam bir uygulama gözlem satırı değiştirilebilir. Bilinmiyor seçimi hiçbir satırı silmez.").font(.caption)
+                    Button("Seçili değere değiştirmeyi incele…") { prepareEdit(.replace) }
+                        .disabled(loading || failed || image == nil || confirmedSelection != selection || editCategory.selectedLine(selection) == nil)
+                    Button("Önceki gözlemi kaldırmayı incele…") { prepareEdit(.remove) }
+                        .disabled(loading || failed || image == nil)
+                }
             }
             .navigationTitle("Fotoğrafı incele")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Vazgeç") { dismiss() } } }
+            .confirmationDialog("Önceki gözlem değiştirilsin mi?", isPresented: $confirmReplacement, titleVisibility: .visible) {
+                Button("Gözlemi değiştir") { confirmEdit(.replace) }
+                Button("Vazgeç", role: .cancel) { pendingEdit = nil }
+            } message: {
+                Text("Önceki: \(pendingEdit?.before ?? "")\nYeni: \(pendingEdit?.after ?? "")")
+                Text("Mevcut model, ölçüler ve fotoğraf değişmez. Diğer tarif metni korunur; çelişkileri kendiniz kontrol edin.")
+            }
+            .confirmationDialog("Önceki gözlem kaldırılsın mı?", isPresented: $confirmRemoval, titleVisibility: .visible) {
+                Button("Gözlemi kaldır", role: .destructive) { confirmEdit(.remove) }
+                Button("Vazgeç", role: .cancel) { pendingEdit = nil }
+            } message: {
+                Text("Kaldırılacak: \(pendingEdit?.before ?? "")")
+                Text("Yalnız belirtilen satırın içeriği kaldırılır; model, ölçüler, fotoğraf ve diğer metin korunur.")
+            }
             .task(id: request.id) {
                 guard let bytes = request.draft.image else { loading = false; failed = true; return }
                 let worker = Task.detached(priority: .userInitiated) { try PhotoObservation.thumbnail(bytes) }
@@ -144,5 +235,26 @@ struct PhotoObservationView: View {
                 }
             }
         }
+    }
+    private func prepareEdit(_ action: PhotoObservation.EditAction) {
+        do {
+            let plan = try PhotoObservation.editPlan(action, category: editCategory, selection: selection,
+                description: request.draft.description, notes: request.draft.otherMeasurements)
+            pendingEdit = plan; status = ""
+            if action == .replace { confirmReplacement = true } else { confirmRemoval = true }
+        } catch PhotoObservation.Failure.empty { status = "Değiştirmek için bilinmeyen dışında bir değer seçin; bilinmiyor silmez." }
+        catch PhotoObservation.Failure.missing { status = "Bu özellik için tam bir önceki gözlem bulunamadı; metin korunuyor." }
+        catch PhotoObservation.Failure.unchanged { status = "Seçili değer zaten mevcut; hiçbir değişiklik yapılmadı." }
+        catch PhotoObservation.Failure.tooLong { status = "Metin sınırı nedeniyle işlem yapılamadı; mevcut istek korundu." }
+        catch { status = "Gözlem birden fazla, bozuk veya ek notlarda olabilir. Metni kontrol edin; hiçbir değişiklik yapılmadı." }
+    }
+    private func confirmEdit(_ action: PhotoObservation.EditAction) {
+        guard let plan = pendingEdit, plan.action == action, plan.category == editCategory, plan.selection == selection,
+              action != .replace || confirmedSelection == selection else {
+            pendingEdit = nil; status = "Seçim değişti; gözlem değiştirilmedi. Yeniden inceleyin."; return
+        }
+        pendingEdit = nil
+        if let problem = edit(request, plan) { status = problem }
+        else { dismiss() }
     }
 }

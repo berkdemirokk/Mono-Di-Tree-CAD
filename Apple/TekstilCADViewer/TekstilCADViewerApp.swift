@@ -2776,6 +2776,21 @@ private struct ExperimentalDesignBriefView: View {
             return "Tarif sınırı aşılacağı için gözlemler eklenmedi; mevcut metin ve görsel korundu."
         } catch { return "Gözlem eklenemedi; mevcut istek ve görsel korundu." }
     }
+    private func editPhotoObservation(_ request: PhotoObservation.Request, plan: PhotoObservation.EditPlan) -> String? {
+        guard request.matches(draft, explicitSelection: modelExplicitlySelected, importedPortable: importedPortable,
+                              version: requestExportVersion, revision: modelSuggestionRevision,
+                              activeID: photoObservationRequest?.id, referencePending: referenceBlocksClose, transition: draftTransition) else {
+            return "İstek, model veya görsel değişti; önceki gözlem değiştirilmedi. Ekranı kapatıp tekrar inceleyin."
+        }
+        do {
+            let current = try PhotoObservation.editPlan(plan.action, category: plan.category, selection: plan.selection,
+                description: draft.description, notes: draft.otherMeasurements)
+            guard current == plan else { return "Gözlem değişti; hiçbir işlem yapılmadı. Yeniden inceleyin." }
+            description = current.updatedDescription
+            message = plan.action == .remove ? "Seçili fotoğraf gözlemi kaldırıldı; diğer metin ve görsel korundu." : "Fotoğraf gözlemi değiştirildi. Model ve tarifle olası çelişkileri kendiniz kontrol edin."
+            return nil
+        } catch { return "Gözlem tekil ve tam olarak doğrulanamadı veya metin sınırı aşıldı; hiçbir işlem yapılmadı." }
+    }
     private var draft: ExperimentalDesignBrief.Draft {
         .init(style: style, description: description, bust: bust, waist: waist, hips: hips, length: length,
               otherMeasurements: otherMeasurements, image: image, imageName: imageName, measurementForm: measurementForm)
@@ -3274,7 +3289,8 @@ private struct ExperimentalDesignBriefView: View {
             }
             .sheet(isPresented: $showingBodyMeasurements) { BodyMeasurementNotesView(notes: $otherMeasurements, savedForm: $measurementForm, measurementsWithNotes: { ExperimentalDesignBrief.measurements(bust: bust, waist: waist, hips: hips, length: length, other: $0) }, localSaveStatus: { localStatus }) }
             .sheet(item: $photoObservationRequest) { request in
-                PhotoObservationView(request: request) { request, selection in applyPhotoObservation(request, selection: selection) }
+                PhotoObservationView(request: request, apply: { request, selection in applyPhotoObservation(request, selection: selection) },
+                                     edit: { request, plan in editPhotoObservation(request, plan: plan) })
             }
             .fileImporter(isPresented: $showingPortableRequestImport, allowedContentTypes: [.json]) { result in
                 do { copyCandidate = try ExperimentalDesignBrief.readPortable(result.get()); candidateIsPortable = true; confirmCopyRestore = true }

@@ -427,6 +427,39 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(conflicting, "Fotoğraf gözlemi · Kol: Kolsuz")
         XCTAssertThrowsError(try PhotoObservation.append(selected, description: String(repeating: "x", count: ExperimentalDesignBrief.maxTextUnits), notes: ""))
     }
+    func testPhotoObservationEditReplacesOrRemovesOnlyOneCompleteLine() throws {
+        let original = "Tarif 👗\r\nFotoğraf gözlemi · Kol: Kolsuz\r\nSon satır"
+        let selection = PhotoObservation.Selection(silhouette: .unknown, sleeve: .long, neck: .unknown)
+        let replace = try PhotoObservation.editPlan(.replace, category: .sleeve, selection: selection, description: original, notes: "bel çevresi 72 cm")
+        XCTAssertEqual(replace.before, "Fotoğraf gözlemi · Kol: Kolsuz")
+        XCTAssertEqual(replace.after, "Fotoğraf gözlemi · Kol: Uzun kollu")
+        XCTAssertEqual(replace.updatedDescription, "Tarif 👗\r\nFotoğraf gözlemi · Kol: Uzun kollu\r\nSon satır")
+        let remove = try PhotoObservation.editPlan(.remove, category: .sleeve, selection: PhotoObservation.Selection(), description: original, notes: "bel çevresi 72 cm")
+        XCTAssertNil(remove.after)
+        XCTAssertEqual(remove.updatedDescription, "Tarif 👗\r\n\r\nSon satır")
+        XCTAssertThrowsError(try PhotoObservation.editPlan(.replace, category: .sleeve, selection: PhotoObservation.Selection(), description: original, notes: ""))
+        XCTAssertEqual(original, "Tarif 👗\r\nFotoğraf gözlemi · Kol: Kolsuz\r\nSon satır")
+    }
+    func testPhotoObservationEditRejectsDuplicateMalformedOrStaleInputs() throws {
+        let line = "Fotoğraf gözlemi · Kol: Kolsuz"
+        let selection = PhotoObservation.Selection(silhouette: .unknown, sleeve: .long, neck: .unknown)
+        for text in [line + "\n" + line, line + "\nFotoğraf gözlemi · Kol: Kısa kollu", line + "\nFotoğraf gözlemi: Kol: Kısa kollu", " " + line, "Not: " + line, "Fotoğraf gözlemi · Kol: tanımsız", "Fotoğraf gözlemi · Kol"] {
+            XCTAssertThrowsError(try PhotoObservation.editPlan(.replace, category: .sleeve, selection: selection, description: text, notes: ""), text)
+            XCTAssertThrowsError(try PhotoObservation.editPlan(.remove, category: .sleeve, selection: selection, description: text, notes: ""), text)
+        }
+        XCTAssertThrowsError(try PhotoObservation.editPlan(.replace, category: .sleeve, selection: selection, description: line, notes: line))
+        let same = PhotoObservation.Selection(silhouette: .unknown, sleeve: .sleeveless, neck: .unknown)
+        XCTAssertThrowsError(try PhotoObservation.editPlan(.replace, category: .sleeve, selection: same, description: line, notes: ""))
+        let filler = String(repeating: "x", count: ExperimentalDesignBrief.maxTextUnits - line.utf16.count - 1)
+        let full = filler + "\n" + line
+        XCTAssertThrowsError(try PhotoObservation.editPlan(.replace, category: .sleeve, selection: selection, description: full, notes: ""))
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: line, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([1]), imageName: "foto.png")
+        let request = PhotoObservation.Request(draft: draft, explicitSelection: true, importedPortable: false, version: 2, revision: UUID())
+        let changed = ExperimentalDesignBrief.Draft(style: .aline, description: line, bust: "", waist: "72 cm", hips: "", length: "", otherMeasurements: "not", image: Data([2]), imageName: "foto.png")
+        XCTAssertFalse(request.matches(changed, explicitSelection: true, importedPortable: false, version: 2, revision: request.revision, activeID: request.id, referencePending: false, transition: false))
+        XCTAssertFalse(request.matches(draft, explicitSelection: true, importedPortable: false, version: 2, revision: request.revision, activeID: nil, referencePending: false, transition: false))
+        XCTAssertEqual(draft.description, line); XCTAssertEqual(draft.waist, "72 cm"); XCTAssertEqual(draft.image, Data([1])); XCTAssertEqual(selection.sleeve, .long)
+    }
     func testPhotoObservationSnapshotRejectsStaleInputsAndPendingWork() {
         func draft(_ text: String = "Tarif", bytes: Data = Data([1]), notes: String = "", waist: String = "72 cm", style: ExperimentalDesignBrief.DressStyle = .aline) -> ExperimentalDesignBrief.Draft {
             .init(style: style, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: bytes, imageName: "foto.png")
