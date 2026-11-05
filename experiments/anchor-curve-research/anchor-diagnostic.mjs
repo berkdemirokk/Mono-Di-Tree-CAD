@@ -1,5 +1,6 @@
 // Synthetic research only. IEEE-754 boxes are not outward-rounded certificates.
-const finite = p => p && Number.isFinite(p.x) && Number.isFinite(p.y);
+const MAX_EDGES=1024, MAX_COORDINATE=1e12, MAX_ID_LENGTH=128;
+const finite = p => p && Number.isFinite(p.x) && Number.isFinite(p.y) && Math.abs(p.x)<=MAX_COORDINATE && Math.abs(p.y)<=MAX_COORDINATE;
 const mid = (a,b) => ({x:a.x/2+b.x/2,y:a.y/2+b.y/2});
 function split(p) {
   const layers=[p];
@@ -9,19 +10,26 @@ function split(p) {
 
 // Input edges follow inspectSeam's part-local mm records; source is never modified.
 export function inspectAnchor(anchor, edges, {thresholdMm, parameterWidth, maxDepth, maxNodes}) {
-  if(!finite(anchor)||!Array.isArray(edges)||!Number.isFinite(thresholdMm)||thresholdMm<0||
+  if(!finite(anchor)||!Array.isArray(edges)||edges.length>MAX_EDGES||!Number.isFinite(thresholdMm)||thresholdMm<0||thresholdMm>MAX_COORDINATE||
      !Number.isFinite(parameterWidth)||parameterWidth<=0||parameterWidth>1||
      !Number.isInteger(maxDepth)||maxDepth<0||maxDepth>40||!Number.isInteger(maxNodes)||maxNodes<1||maxNodes>100000)
     throw new Error('invalid explicit limits or input');
+  // Validate the bounded complete input before returning any partial result.
+  const ids=new Set();
+  for(const edge of edges) {
+    if(!edge||typeof edge.id!=='string'||!edge.id||edge.id.length>MAX_ID_LENGTH||ids.has(edge.id)||!finite(edge.from)||!finite(edge.to)||!['line','curve','close'].includes(edge.type)) throw new Error('invalid edge');
+    ids.add(edge.id);
+    if(edge.type==='curve'&&(!finite(edge.cp1)||!finite(edge.cp2)))throw new Error('invalid control point');
+  }
   let nodes=0;const candidates=[],unresolved=[];
   for(const edge of edges) {
-    if(typeof edge.id!=='string'||!edge.id||!finite(edge.from)||!finite(edge.to)||!['line','curve','close'].includes(edge.type)) throw new Error('invalid edge');
+    if(nodes>=maxNodes) { unresolved.push({edgeId:edge.id,reason:'not_examined_node_budget'});continue; }
     const points=edge.type==='curve'?[edge.from,edge.cp1,edge.cp2,edge.to]:[edge.from,edge.to];
-    if(points.some(p=>!finite(p)))throw new Error('invalid control point');
     if(points.every(p=>p.x===points[0].x&&p.y===points[0].y)) { unresolved.push({edgeId:edge.id,reason:'zero_length_edge'});continue; }
     const stack=[{p:points,a:0,b:1,depth:0}];let edgeLimit=false;
     while(stack.length) {
-      if(++nodes>maxNodes) { edgeLimit=true;break; }
+      if(nodes>=maxNodes) { edgeLimit=true;break; }
+      nodes++;
       const {p,a,b,depth}=stack.pop();
       const xs=p.map(q=>q.x-anchor.x),ys=p.map(q=>q.y-anchor.y);
       if([...xs,...ys].some(v=>!Number.isFinite(v))) { edgeLimit=true;break; }

@@ -5,6 +5,10 @@ the existing `dress-four-piece-plan-20261105/edge-diagnostic.mjs` without copyin
 or modifying that research. It examines line, close and cubic control polygons
 with bounded de Casteljau subdivision. Callers must explicitly supply threshold
 in mm, parameter interval width, maximum depth and total node budget.
+Input is capped at 1,024 uniquely identified edges, 128 UTF-16 units per ID,
+and absolute coordinates and thresholds of at most 10¹² mm. The entire input is
+validated before search. Candidate count is bounded by the total node budget;
+if it is exhausted, the current edge and every unexamined edge are reported.
 
 The result is always `unresolved`: returned parameter intervals are possible
 locations, not proved matches or a unique nearest point. Zero-length edges,

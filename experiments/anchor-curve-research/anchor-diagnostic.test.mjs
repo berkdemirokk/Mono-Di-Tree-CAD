@@ -33,6 +33,22 @@ test('large translated coordinates retain candidate and do not mutate source',()
  assert.ok(inspectAnchor({x:1e9+5,y:1e9},[e],limits).candidates.length>0);
  assert.equal(JSON.stringify(e),before);
 });
+test('global node limit marks current and every later edge unresolved',()=>{
+ const edges=[line('first',{x:0,y:0},{x:10,y:0}),line('later1',{x:0,y:1},{x:10,y:1}),line('later2',{x:0,y:2},{x:10,y:2})];
+ const r=inspectAnchor({x:5,y:0},edges,{...limits,maxNodes:1});
+ assert.equal(r.nodes,1);
+ assert.deepEqual(r.unresolved,[{edgeId:'first',reason:'budget_or_precision_limit'},
+   {edgeId:'later1',reason:'not_examined_node_budget'},{edgeId:'later2',reason:'not_examined_node_budget'}]);
+});
+test('bounded edge count, coordinates, IDs and entire input are validated',()=>{
+ const one=line('x',{x:0,y:0},{x:1,y:0});
+ assert.throws(()=>inspectAnchor({x:0,y:0},Array.from({length:1025},(_,i)=>({...one,id:String(i)})),limits));
+ assert.throws(()=>inspectAnchor({x:1e13,y:0},[one],limits));
+ assert.throws(()=>inspectAnchor({x:0,y:0},[one,{...one,id:'later',to:{x:1e13,y:0}}],{...limits,maxNodes:1}));
+ assert.throws(()=>inspectAnchor({x:0,y:0},[one,{...one}],limits));
+ assert.throws(()=>inspectAnchor({x:0,y:0},[{...one,id:'x'.repeat(129)}],limits));
+ assert.throws(()=>inspectAnchor({x:0,y:0},[one],{...limits,thresholdMm:1e13}));
+});
 test('optional existing synthetic seam fixture retains source identities', {skip:!process.env.ANCHOR_SYNTHETIC_FIXTURE},()=>{
  const fixture=JSON.parse(readFileSync(process.env.ANCHOR_SYNTHETIC_FIXTURE,'utf8'));
  const parts=Array.isArray(fixture.parts)?fixture.parts:[];
