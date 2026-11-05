@@ -173,6 +173,9 @@ try
     catch(ArgumentException e) { NeedLocal(e.Message=="Degenerate corner","wrong determinant guard"); }
     var invalidNeck=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="neck_w"?new KeyValuePair<string,decimal>(p.Key,40):p),"cm","degree");
     try { FrontNeckCut.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid neck accepted"); } catch(ArgumentException) { }
+    try { FrontBodiceCandidate.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid front panel accepted"); } catch(ArgumentException) { }
+    try { BackBodiceCandidate.CreateFromBody(invalidNeck,ResearchDesign.PinnedFitted,false);throw new Exception("Invalid back panel accepted"); } catch(ArgumentException) { }
+    try { FrontBodiceCandidate.CreateLeftFromBody(invalidNeck,ResearchDesign.PinnedFitted);throw new Exception("Invalid left front accepted"); } catch(ArgumentException) { }
     var invalidFront=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { PrecutFrontBodice.CreateFromBody(invalidFront,ResearchDesign.PinnedFitted);throw new Exception("Invalid front cut accepted"); } catch(ArgumentException) { }
     var unsupportedCut=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
@@ -187,6 +190,14 @@ try
         try { skirt.RequireResearchComposition();throw new Exception("Unverified skirt composed"); } catch(InvalidOperationException) { }
     }
     var skirtBase=FrontSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var changedBodiceBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="waist_line"?new KeyValuePair<string,decimal>(p.Key,38):p),"cm","degree");
+    var backPanelBase=BackBodiceCandidate.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted,false);
+    var backPanelChanged=BackBodiceCandidate.CreateFromBody(changedBodiceBody,ResearchDesign.PinnedFitted,false);
+    NeedLocal(backPanelChanged.Snapshot!=backPanelBase.Snapshot && !backPanelChanged.Edges.SequenceEqual(backPanelBase.Edges),"back panel must depend on body values");
+    var changedBackBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="hips_line"?new KeyValuePair<string,decimal>(p.Key,24):p),"cm","degree");
+    var backBase=BackSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var backChanged=BackSkirtCandidate.CreateFromBody(changedBackBody,ResearchDesign.PinnedFitted);
+    NeedLocal(backChanged.Snapshot!=backBase.Snapshot && !backChanged.Edges.SequenceEqual(backBase.Edges),"back skirt must depend on body values");
     var skirtChangedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="hips"?new KeyValuePair<string,decimal>(p.Key,105):p),"cm","degree");
     var skirtChanged=FrontSkirtCandidate.CreateFromBody(skirtChangedBody,ResearchDesign.PinnedFitted);
     var waistBaseline=BodyWaistStudy.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
@@ -195,6 +206,7 @@ try
     NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
     var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
+    try { BackSkirtCandidate.CreateFromBody(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid back skirt accepted"); } catch(ArgumentException) { }
     var invalidSkirt=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { FrontSkirtCandidate.CreateFromBody(invalidSkirt,ResearchDesign.PinnedFitted);throw new Exception("Invalid skirt accepted"); } catch(ArgumentException) { }
     var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
@@ -380,6 +392,44 @@ internal static class Validator
             try { typedMatch.RequireResearchComposition();throw new InvalidDataException("Unverified waist composed"); } catch(InvalidOperationException) { }
             Need(typedMatch.Lower.Length==independent.Lower.Length && typedMatch.Upper.Length==independent.Upper.Length,"typed waist topology");
             Need(typedMatch.Lower.Zip(independent.Lower).All(p=>p.First.Panel==p.Second.Panel && (p.First.Start-p.Second.Start).Norm()<1e-8 && (p.First.End-p.Second.End).Norm()<1e-8),"typed waist differs from C# fixture result");
+            var bodyForPanels=SyntheticBodyCatalog.Create(id);
+            foreach(bool left in new[]{false,true}) {
+                var back=BackBodiceCandidate.CreateFromBody(bodyForPanels,ResearchDesign.PinnedFitted,left);var fixedBack=BackBodiceCandidate.Create(id,left);
+                Need(back.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !back.ExportAllowed && !back.ProductionAllowed && !typeof(BackBodiceCandidate.Path).IsAssignableFrom(back.GetType()),"typed back panel gate");
+                Need(back.Edges.Count==13 && back.Edges.Zip(fixedBack.Edges).All(p=>p.First.Kind==p.Second.Kind && Math.Abs(p.First.Start.X-p.Second.Start.X)<1e-9 && Math.Abs(p.First.Start.Y-p.Second.Start.Y)<1e-9 && Math.Abs(p.First.End.X-p.Second.End.X)<1e-9 && Math.Abs(p.First.End.Y-p.Second.End.Y)<1e-9 && p.First.ArcControlY==p.Second.ArcControlY && p.First.Controls.SequenceEqual(p.Second.Controls)),"typed back differs from C# fixture");
+                var source=reference.GetProperty("panels").GetProperty(left?"left_btorso":"right_btorso").GetProperty("edges");
+                double error=back.Edges.Max(e=>Math.Max((new P(e.Start.X,e.Start.Y)-Point(source[e.Id].GetProperty("start"))).Length(),(new P(e.End.X,e.End.Y)-Point(source[e.Id].GetProperty("end"))).Length()));
+                Console.WriteLine($"{id} {(left?"left":"right")} back panel source endpoint error={error:G6} cm");
+                Need(error<.001,"typed back source endpoint bound");
+                try { back.RequireResearchComposition();throw new InvalidDataException("Unverified back panel composed"); } catch(InvalidOperationException) { }
+            }
+            var typedLeft=FrontBodiceCandidate.CreateLeftFromBody(bodyForPanels,ResearchDesign.PinnedFitted);var fixedLeft=FrontBodiceCandidate.Create(id,true);
+            Need(typedLeft.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedLeft.ExportAllowed && !typedLeft.ProductionAllowed && !typeof(FrontBodiceCandidate.Path).IsAssignableFrom(typedLeft.GetType()),"typed left front gate");
+            Need(typedLeft.Edges.Count==fixedLeft.Edges.Count && typedLeft.Edges.Zip(fixedLeft.Edges).All(p=>p.First.Kind==p.Second.Kind && Math.Abs(p.First.Start.X-p.Second.Start.X)<1e-9 && Math.Abs(p.First.Start.Y-p.Second.Start.Y)<1e-9 && Math.Abs(p.First.End.X-p.Second.End.X)<1e-9 && Math.Abs(p.First.End.Y-p.Second.End.Y)<1e-9 && p.First.ArcControlY==p.Second.ArcControlY && p.First.Controls.Count==p.Second.Controls.Count && p.First.Controls.Zip(p.Second.Controls).All(c=>Math.Abs(c.First.X-c.Second.X)<1e-12 && Math.Abs(c.First.Y-c.Second.Y)<1e-12)),"typed left front differs from C# fixture");
+            var sourceLeft=reference.GetProperty("panels").GetProperty("left_ftorso").GetProperty("edges");
+            double leftError=typedLeft.Edges.Max(e=>Math.Max((new P(e.Start.X,e.Start.Y)-Point(sourceLeft[e.Id].GetProperty("start"))).Length(),(new P(e.End.X,e.End.Y)-Point(sourceLeft[e.Id].GetProperty("end"))).Length()));
+            Need(leftError<.001,"typed left front source endpoint bound");
+            try { typedLeft.RequireResearchComposition();throw new InvalidDataException("Unverified left panel composed"); } catch(InvalidOperationException) { }
+            var typedFrontPanel=FrontBodiceCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            var fixedFrontPanel=FrontBodiceCandidate.Create(id,false);
+            Need(typedFrontPanel.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedFrontPanel.ExportAllowed && !typedFrontPanel.ProductionAllowed && !typeof(FrontBodiceCandidate.Path).IsAssignableFrom(typedFrontPanel.GetType()),"typed front panel gate");
+            Need(typedFrontPanel.Edges.Count==fixedFrontPanel.Edges.Count && typedFrontPanel.Edges.Zip(fixedFrontPanel.Edges).All(p=>p.First.Kind==p.Second.Kind && Math.Abs(p.First.Start.X-p.Second.Start.X)<1e-9 && Math.Abs(p.First.Start.Y-p.Second.Start.Y)<1e-9 && Math.Abs(p.First.End.X-p.Second.End.X)<1e-9 && Math.Abs(p.First.End.Y-p.Second.End.Y)<1e-9),"typed front panel differs from fixture");
+            Need(typedFrontPanel.Edges.Zip(fixedFrontPanel.Edges).All(p=>p.First.ArcControlY==p.Second.ArcControlY && p.First.Controls.SequenceEqual(p.Second.Controls)),"typed front panel control mismatch");
+            var sourceFrontEdges=reference.GetProperty("panels").GetProperty("right_ftorso").GetProperty("edges");
+            double maxFrontError=typedFrontPanel.Edges.Max(e=>Math.Max((new P(e.Start.X,e.Start.Y)-Point(sourceFrontEdges[e.Id].GetProperty("start"))).Length(),(new P(e.End.X,e.End.Y)-Point(sourceFrontEdges[e.Id].GetProperty("end"))).Length()));
+            Console.WriteLine($"{id} body-derived front panel max source endpoint error={maxFrontError:G6} cm");
+            Need(maxFrontError<.001,"typed front panel source endpoint bound");
+            try { typedFrontPanel.RequireResearchComposition();throw new InvalidDataException("Unverified front panel composed"); } catch(InvalidOperationException) { }
+            var typedBackSkirt=BackSkirtCandidate.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            var derivedBack=BackSkirtCandidate.CreateFromDerived(id,independent);
+            Need(typedBackSkirt.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedBackSkirt.ExportAllowed && !typedBackSkirt.ProductionAllowed && !typeof(BackSkirtCandidate.Candidate).IsAssignableFrom(typedBackSkirt.GetType()),"typed back skirt gate");
+            Need(typedBackSkirt.Edges.Count==19 && typedBackSkirt.Edges.Zip(derivedBack.Edges).All(p=>p.First.Kind==p.Second.Kind && Math.Abs(p.First.Start.X-p.Second.Start.X)<1e-8 && Math.Abs(p.First.Start.Y-p.Second.Start.Y)<1e-8 && Math.Abs(p.First.End.X-p.Second.End.X)<1e-8 && Math.Abs(p.First.End.Y-p.Second.End.Y)<1e-8),"typed back skirt differs from derived fixture");
+            Need(typedBackSkirt.Edges.Zip(derivedBack.Edges).All(p=>p.First.Control==p.Second.Control),"typed back skirt control mismatch");
+            var sourceBackEdges=reference.GetProperty("panels").GetProperty("skirt_back").GetProperty("edges");
+            double maxBackError=typedBackSkirt.Edges.Max(e=>Math.Max((new P(e.Start.X,e.Start.Y)-Point(sourceBackEdges[e.Id].GetProperty("start"))).Length(),(new P(e.End.X,e.End.Y)-Point(sourceBackEdges[e.Id].GetProperty("end"))).Length()));
+            Console.WriteLine($"{id} body-matched back skirt max source endpoint error={maxBackError:G6} cm");
+            Need(maxBackError<.001,"typed back skirt source endpoint bound");
+            try { typedBackSkirt.RequireResearchComposition();throw new InvalidDataException("Unverified back skirt composed"); } catch(InvalidOperationException) { }
             var typedSkirt=FrontSkirtCandidate.CreateFromMatchedBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             var sourceSplit=Point(reference.GetProperty("panels").GetProperty("skirt_front").GetProperty("edges")[6].GetProperty("end"));
             var candidateSplit=new P(typedSkirt.Edges[6].End.X,typedSkirt.Edges[6].End.Y);

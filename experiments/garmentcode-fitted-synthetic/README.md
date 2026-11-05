@@ -196,3 +196,17 @@ Kol evi testi, beden sözleşmesi ve ön kontur kontrolünü geçen sentetik ver
 İki sabit sentetik örnekte ön etek orta bölme noktası Python kaynağıyla doğrudan karşılaştırıldığında simetrik adayın farkı sırasıyla yaklaşık **0,977685 mm ve 0,849272 mm**, ölçüye bağlı eşleştirilmiş adayın farkı **0,0002714 mm ve 0,0002350 mm** bulundu. Bunlar yalnız iki örnekten gözlemlerdir; tüm bedenlerde hata veya üretim toleransı garantisi değildir. C# arayüz parçaları ayrıca önceki sabit sentetik C# eşleştirmesiyle karşılaştırılır. Önceki ön etek kıyası doğrudan Python kaynak bölmesi değil, simetrik C# adayıylaydı.
 
 Ön etekte `SimpleClosed`, eğri kenarların yalnız köşelerini birleştiren doğrusal çokgeni kontrol eder; Bézier yan eğrilerinin kendileri için kesişmezlik veya tam topoloji kanıtlamaz. Kaynakla optimizer farkı ve eğri topolojisi belirsiz olduğundan sonuçlar `unresolved`, üretim/baskı/plotter kapalıdır.
+
+## Ölçüden arka etek ve sağ ön gövde adayları
+
+`BackSkirtCandidate.CreateFromBody`, aynı bedenin araştırma bel eşleştirmesiyle dört pens ve 19 kenarlı arka etek adayı oluşturur. `FrontBodiceCandidate.CreateFromBody`, aynı bedenin ön kontur, yaka ve kol evi adaylarından 12 kenarlı sağ ön gövde geometrisini araştırma için bir araya getirir. Her ikisi fixture panel tiplerinden ayrıdır, `Unverified` taşır ve dikiş kompozisyonuna, üretime ve dışa aktarmaya kapalıdır.
+
+İki sentetik kaynakta bütün arka etek uçları için gözlenen en büyük fark yaklaşık **0,000271 ve 0,000235 mm**; sağ ön gövde uçlarında **0,00000261 ve 0,00000424 mm** oldu. Kontroller ayrıca önceki C# adaylarıyla karşılaştırıldı; bunlar yalnız bu örneklerin sonuçlarıdır ve fiziksel tolerans değildir. Hatalı yerleşimler reddedilir, ölçü değişikliklerine duyarlılık kontrol edilir. Arka etek çokgen testi eğrilerin yalnız kirişlerini inceler; ön gövdede eğrilerin birbirine temas veya kesişme topolojisi sertifikalanmamıştır. Kaynak optimizer farkı, sol ön/arka gövdenin genel tam konturları, dikiş ve prova hâlâ eksiktir.
+
+## Ölçüden sol ve sağ gövde adayları
+
+Sabit tasarım için `BackNeckCut.CreateFromBody` ve `SyntheticArmholeCut.CreateBackFromBody` ölçü girdisinden arka yaka ve kol evi adaylarını hesaplar. `BackBodiceCandidate.CreateFromBody` bunları yaklaşık arka bel adayıyla sağ veya sol 13 kenarlı gövde adayı olarak düzenler; `FrontBodiceCandidate.CreateLeftFromBody` sağ ön adayı ters yön ve kontrol dönüşümüyle sol tarafa taşır. Önceki bölümde sol ve arka genel gövdenin eksik olduğu notu bu araştırma adımıyla güncellenmiştir.
+
+İki sentetik örnekte her iki arka yarımın kaynakla en büyük uç farkı sırasıyla yaklaşık **0,00449 ve 0,00545 mm** bulundu; ön yarımların uçları ve C# kontrol değerleri de ayrı karşılaştırıldı. Ters yönlü kontrollerde binary64 yuvarlaması için sayısal karşılaştırma kullanılır. Bu yalnız örnek verilerde gözlenen aday farkıdır; optimizerin genel hata sınırı veya dikiş toleransı değildir.
+
+Bu dört genel gövde ve iki etek sonucu, sabit fixture tiplerinden ayrı `Unverified` araştırma adaylarıdır; kaynak optimizerinin gerçek davranışı, eğrilerin bütün temas/kesişim topolojisi, dikiş grafiği ve fiziksel prova henüz doğrulanmamıştır. Gövde geometrisi üretilmesi dikiş kompozisyonu izni değildir; bu adayların kompozisyon yöntemleri reddeder. Kullanıcı verisi uygulamaya bağlanmadı, üretim, dışa aktarma ve plotter kapalıdır.

@@ -37,6 +37,23 @@ internal static class SyntheticArmholeCut
         var result=Calculate(front.Snapshot,body,front.Vertices);
         return new(front.Snapshot,Array.AsReadOnly(result.Curves.Where(c=>c.Panel.EndsWith("_ftorso",StringComparison.Ordinal)).ToArray()));
     }
+    internal sealed class UnverifiedBack
+    {
+        internal UnverifiedBack(string snapshot,IReadOnlyList<Curve> curves) { Snapshot=snapshot;Curves=curves; }
+        public string Snapshot { get; } public IReadOnlyList<Curve> Curves { get; }
+        public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified armhole; composition blocked.");
+    }
+    internal static UnverifiedBack CreateBackFromBody(ResearchBody body,ResearchDesign design)
+    {
+        ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
+        var front=PrecutFrontBodice.CreateFromBody(body,design);
+        var back=BackWaistCandidate.CreateFromBody(body,design);
+        if(front.Snapshot!=back.Snapshot)throw new ArgumentException("Body snapshot mismatch");
+        var result=Calculate(front.Snapshot,body,front.Vertices);
+        return new(front.Snapshot,Array.AsReadOnly(result.Curves.Where(c=>c.Panel.EndsWith("_btorso",StringComparison.Ordinal)).ToArray()));
+    }
     private static Result Calculate(string id,ResearchBody body,IReadOnlyList<PartialFittedEngine.P> precut)
     {
         double shoulderHalf=(double)body["shoulder_w"]/2, armscyeDepth=(double)body["armscye_depth"],shoulderAngle=(double)body["shoulder_incl"];

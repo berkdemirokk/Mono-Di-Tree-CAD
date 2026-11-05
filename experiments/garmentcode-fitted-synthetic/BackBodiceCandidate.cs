@@ -10,6 +10,34 @@ internal static class BackBodiceCandidate
     {
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
+    internal sealed class UnverifiedPanel
+    {
+        internal UnverifiedPanel(string snapshot,string panel,IReadOnlyList<Edge> edges) { Snapshot=snapshot;Panel=panel;Edges=edges; }
+        public string Snapshot { get; } public string Panel { get; } public IReadOnlyList<Edge> Edges { get; }
+        public BackWaistCandidate.ReferenceState ReferenceAssessment=>BackWaistCandidate.ReferenceState.Unverified;
+        public string Status=>"unresolved"; public bool ExportAllowed=>false; public bool ProductionAllowed=>false;
+        public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified back contour; composition blocked.");
+    }
+    internal static UnverifiedPanel CreateFromBody(ResearchBody body,ResearchDesign design,bool left)
+    {
+        var waist=BackWaistCandidate.CreateFromBody(body,design);var neck=BackNeckCut.CreateFromBody(body,design);var arms=SyntheticArmholeCut.CreateBackFromBody(body,design);
+        if(waist.Snapshot!=neck.Snapshot || waist.Snapshot!=arms.Snapshot)throw new ArgumentException("Body snapshot mismatch");
+        var arm=arms.Curves.Single(c=>c.Panel=="right_btorso");
+        P W(BackWaistCandidate.P p)=>new(p.X,p.Y);P N(BackNeckCut.P p)=>new(p.X,p.Y);P A(SyntheticArmholeCut.P p)=>new(p.X,p.Y);
+        if(arm.Start.Y<=waist.Edges[8].Start.Y || arm.Start.Y>=waist.Edges[8].End.Y || arm.End.X>=neck.Right.Start.X || arm.End.X<=waist.Edges[8].End.X)throw new ArgumentException("Unsupported back neck/armhole placement");
+        Edge L(int i,P a,P b)=>new(i,"L",a,b,null,Array.Empty<P>());
+        var right=new List<Edge>();
+        for(int i=0;i<=7;i++) { var e=waist.Edges[i];right.Add(new(i,e.Kind,W(e.Start),W(e.End),null,e.RelativeControl is { } c ? Array.AsReadOnly(new[]{W(c)}) : Array.Empty<P>())); }
+        right.Add(L(8,W(waist.Edges[8].Start),A(arm.Start)));
+        right.Add(new(9,"C",A(arm.Start),A(arm.End),null,Array.AsReadOnly(new[]{A(arm.Control1),A(arm.Control2)})));
+        right.Add(L(10,A(arm.End),N(neck.Right.Start)));right.Add(new(11,"A",N(neck.Right.Start),N(neck.Right.End),neck.Right.RelativeControlY,Array.Empty<P>()));right.Add(L(12,N(neck.Right.End),W(waist.Edges[0].Start)));
+        if(right.Any(e=>e.Start==e.End) || right.Where((e,i)=>e.End!=right[(i+1)%right.Count].Start).Any())throw new ArgumentException("Unsupported back contour continuity");
+        if(!left)return new(waist.Snapshot,"right_btorso",right.AsReadOnly());
+        P Mirror(P p)=>new(-p.X,p.Y);
+        var reversed=new List<Edge>();
+        for(int i=0;i<right.Count;i++) { var e=right[right.Count-1-i];var controls=e.Controls.Reverse().Select(c=>new P(1-c.X,c.Y)).ToArray();reversed.Add(new(i,e.Kind,Mirror(e.End),Mirror(e.Start),e.ArcControlY,Array.AsReadOnly(controls))); }
+        return new(waist.Snapshot,"left_btorso",reversed.AsReadOnly());
+    }
     internal static Path Create(string id,bool left)
     {
         var waist=BackWaistCandidate.Create(id);waist.RequireResearchComposition();var neck=BackNeckCut.Create(id);var arm=SyntheticArmholeCut.Create(id).Curves.Single(c=>c.Panel=="right_btorso");
