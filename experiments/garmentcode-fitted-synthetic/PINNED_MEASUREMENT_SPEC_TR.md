@@ -14,11 +14,11 @@ Kaynak uzunlukları **cm**, açıları **derece** kabul eder. Aşağıdaki 20 al
 | `shoulder_w` | Köprücük kemiklerinin en dış uçları arasındaki mesafe | Uçların işaretlenmesi ve ölçüm yolu |
 | `shoulder_incl` | Koronal düzlemde boyun tabanı–köprücük kemiği ucu hattının yatay düzleme eğimi | Başlangıç/bitiş işaretleri, yön ve duruş |
 | `waist_line` | Ense–bel arka mesafesi; kaynak yüzey üzerindeki mesafeyi tercih eder | Ense ve bel işaretleri ve yolun uygulanması |
-| `waist_over_bust_line` | Boyun tabanından göğüs noktası üzerinden ön bele uzunluk; kaynak dışbükey yüzey yolunu anlatır | Boyun başlangıcı ve yolun tekrarlanabilir uygulanması |
+| `waist_over_bust_line` | Denge çizgisindeki boyun tabanından göğüs noktası üzerinden ön bele; kaynak jeodezik ölçünün dışbükey zarfını anlatır | Boyun başlangıcı ve yolun tekrarlanabilir uygulanması |
 | `bust_line` | Omuz düzeyinden göğüs noktasına, önceki hat boyunca yüzey mesafesi | Omuz düzeyi ve noktanın işaretlenmesi |
 | `vert_bust_line` | Ense düzeyiyle göğüs çevresi düzeyi arasındaki düşey mesafe | Duruş ve düzey işaretleri |
 | `bum_points` | İki kalça çıkıntısı arasındaki mesafe | Çıkıntıların işaretlenmesi ve mesafe yolu |
-| `neck_w` | Kaynakta boyun tabanının arkadan yaklaşık genişliği | Yan denge çizgileriyle ilişki ve gerçek ölçüm yolu belirsiz |
+| `neck_w` | Boyun tabanının arkadan bir denge çizgisinden diğerine yaklaşık genişliği | Uçların işaretlenmesi ve gerçek ölçüm yolu belirsiz |
 | `armscye_depth` | Arkadan omuz–koltuk altı mesafesi | Omuz ve koltuk altı noktaları, yol ve duruş |
 | `hips` | Kalça çıkıntılarından geçen, zemine paralel çevre | Çıkıntıların ve seviyenin işaretlenmesi |
 | `hip_back_width` | Kalça çevresinin iki yan denge çizgisi arasındaki arka bölümü | Yan çizgilerin ve kalça seviyesinin işaretlenmesi |
@@ -27,7 +27,7 @@ Kaynak uzunlukları **cm**, açıları **derece** kabul eder. Aşağıdaki 20 al
 | `head_l` | Ense–baş tepesi arasındaki düz mesafe | Ense noktasının işaretlenmesi |
 | `hip_inclination` | Yanda bel–kalça açısı; dikey yan kaynakta 0° | İşaretlenen noktalar, işaret yönü ve uygulama |
 
-Kaynak, yan denge çizgisini koronal düzlemde beden yanından geçen dikey çizgi olarak açıklar. Üç arka genişlik ilgili çevrenin arka **parçalarıdır**; düz kiriş varsayılmaz. Kaynak belgesi `neck_w` ölçüm yolunu ve `bum_points` noktalarının nasıl işaretleneceğini gerçek kişilerde uygulamaya yetecek açıklıkta belirlemez. Bu tasarımda `arm_pose_angle` istenmez; kaynakta bu açının ekseni de ayrıca belirsizdir.
+Kaynak, yan denge çizgisini koronal düzlemde beden yanından geçen dikey çizgi olarak açıklar. Üç arka genişlik ilgili çevrenin arka **parçalarıdır**; düz kiriş varsayılmaz. Kaynak `neck_w` için iki denge çizgisini başlangıç ve bitiş olarak belirtir; ölçüm yolunu ve `bum_points` noktalarının nasıl işaretleneceğini gerçek kişilerde uygulamaya yetecek açıklıkta belirlemez. Bu tasarımda `arm_pose_angle` istenmez; kaynakta bu açının ekseni de ayrıca belirsizdir.
 
 ## İzole doğrulama sözleşmesi
 
