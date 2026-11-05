@@ -12,7 +12,7 @@ try
 {
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement);
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -92,6 +92,31 @@ internal static class Validator
     // Compare the mathematical JSON number before any decimal or binary64 rounding.
     // Expected values for this fixed fixture are integers; equivalent exponent
     // and trailing-zero representations remain acceptable.
+    internal static void CheckPrecutBodice()
+    {
+        using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.precut-bodice.json") ?? throw new InvalidDataException("Missing precut reference");
+                using var reader=new StreamReader(stream);string text=reader.ReadToEnd().Replace("\r\n","\n").Trim().TrimStart('\uFEFF');
+        Need(Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))=="57C71A5F033A42BB7E519D3D104CA85751E090B3F672F937151DF1E68E7A23A6","precut fixture hash");
+        using var document=JsonDocument.Parse(text);
+        Need(document.RootElement.GetProperty("source_commit").GetString()=="d449629979028123a5c4dc9e732a2ec19b7fce31","precut source");
+        Need(document.RootElement.GetProperty("cases").GetArrayLength()==2,"precut case count");
+        foreach(var item in document.RootElement.GetProperty("cases").EnumerateArray())
+        {
+            string id=item.GetProperty("id").GetString()!; var path=PrecutFrontBodice.Create(id);
+            var edges=item.GetProperty("edges").EnumerateArray().ToArray();Need(path.Vertices.Count==10 && edges.Length==10,"precut contour count");
+            var graph=new List<GeneratedGraph.Edge>();
+            for(int i=0;i<10;i++)
+            {
+                var a=path.Vertices[i]; var b=path.Vertices[(i+1)%10];var source=edges[i];
+                Need(source.GetProperty("kind").GetString()=="Edge" && (Point(source.GetProperty("start"))-new P(a.X,a.Y)).Length()<1e-5 && (Point(source.GetProperty("end"))-new P(b.X,b.Y)).Length()<1e-5,"precut body edge "+i);
+                graph.Add(new(id,"precut_front",i,"L",new(a.X,a.Y),new(b.X,b.Y)));
+            }
+            var expected=item.GetProperty("stitches").EnumerateArray().Select(e=>new GeneratedGraph.Seam(id,"precut_front",e.GetProperty("a").GetInt32(),e.GetProperty("a_flip").GetBoolean(),"precut_front",e.GetProperty("b").GetInt32(),e.GetProperty("b_flip").GetBoolean())).ToArray();
+            var diagnostic=GeneratedGraph.Inspect(id,graph,path.DartRules,expected);
+            Need(diagnostic.Status=="unresolved" && !diagnostic.ExportAllowed && diagnostic.Issues.SequenceEqual(new[]{"physical-sewing-and-production-unresolved"}),"precut topology");
+            Need(path.Status=="unresolved"&&!path.ProductionAllowed&&!path.ExportAllowed,"precut output gate");
+        }
+    }
     internal static void CheckInterfaceMatching(JsonElement golden)
     {
         using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.pre-seam.json") ?? throw new InvalidDataException("Missing pre-seam fixture");
@@ -315,6 +340,8 @@ internal static class Validator
         Need(count==2,"fixture cases"); return(count,panelCount,edgeCount,ruleCount);
     }
 }
+
+
 
 
 
