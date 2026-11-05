@@ -4091,6 +4091,10 @@ internal static partial class DesktopVerification
         Render(review,Path.ChangeExtension(reportPath,".hpgl-review-compact.png"),580,420);
         Check(review.DeclaredProfileButtonForVerification.IsEnabled && review.DeclaredProfileButtonForVerification.Focusable,
             "HPGL review exposes an optional declared-profile file check",checks);
+        // WPF requires an owner HWND before constructing an owned window.
+        // Creating the handle does not show the headless verification window.
+        var reviewHandle=new WindowInteropHelper(review).EnsureHandle();
+        Check(reviewHandle!=IntPtr.Zero && !review.IsVisible,"HPGL review owns a native handle without being shown",checks);
         var fileCheck=new PlotterFileCheckWindow(review,prepared);
         var priorContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
