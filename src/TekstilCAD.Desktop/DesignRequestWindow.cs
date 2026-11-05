@@ -149,6 +149,11 @@ internal sealed class DesignRequestWindow : Window
                 {
                     var index=modelCards.FindIndex(card=>ReferenceEquals(card.Button,button));
                     if(index<0 || index>=PortableModelIds.Length)return;
+                    if(portableModelId==PortableModelIds[index])
+                    {
+                        SetLastModel(button);FocusChatInput();
+                        SetStatus("Bu model zaten seçili; mevcut tarif ve kayıt durumu korundu.");return;
+                    }
                     portableModelId=PortableModelIds[index];dirty=true;SetLastModel(button);
                     FocusChatInput();SetStatus("Model kimliği seçildi; tarif korunuyor. Model ile tarifin uyumunu kontrol edin.");return;
                 }

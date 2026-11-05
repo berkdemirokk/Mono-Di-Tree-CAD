@@ -252,6 +252,7 @@ internal static partial class DesktopVerification
             Check(window.CaptureForVerification().Prompt.Contains("A kesim elbise; detaylar:")&&!window.RequestDetailsForVerification.IsExpanded&&window.ChatInputForVerification.Text=="Uzun kollu olsun"&&ReferenceEquals(System.Windows.Input.FocusManager.GetFocusedElement(window),window.ChatInputForVerification),"V1 model card preserves pending message and directs logical focus to chat without opening saved prose",checks);
             Check(!window.IsVisible && !owner.IsVisible,"Verification never shows a window",checks);
             VerifyRequestNotesModel(owner,checks);
+            VerifyModelReselection(owner,checks);
         }
         catch(Exception ex) { failure=ex.ToString(); }
         finally
