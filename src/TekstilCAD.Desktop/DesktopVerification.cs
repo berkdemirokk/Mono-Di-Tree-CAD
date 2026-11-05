@@ -22,7 +22,7 @@ using TekstilCAD.MachineGateway;
 namespace TekstilCAD.Desktop;
 
 /// <summary>Explicit, noninteractive WPF construction/layout verification; not an interactive UI test.</summary>
-internal static class DesktopVerification
+internal static partial class DesktopVerification
 {
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode,SetLastError=true)]
     [return:MarshalAs(UnmanagedType.Bool)]

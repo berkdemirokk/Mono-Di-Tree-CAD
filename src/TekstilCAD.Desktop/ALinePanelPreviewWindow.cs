@@ -11,6 +11,15 @@ namespace TekstilCAD.Desktop;
 /// <summary>Isolated snapshot. No CAD document, persistence, printer, or export reference.</summary>
 internal sealed class ALinePanelPreviewWindow : Window
 {
+    internal ComboBox UnitForVerification { get; }
+    internal IReadOnlyList<TextBox> FieldsForVerification { get; }
+    internal CheckBox AgreementForVerification { get; }
+    internal CheckBox ConfirmationForVerification { get; }
+    internal Button ReviewForVerification { get; }
+    internal Button DrawForVerification { get; }
+    internal TextBlock SummaryForVerification { get; }
+    internal TextBlock StatusForVerification { get; }
+    internal Canvas CanvasForVerification { get; }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
         Owner=owner;Title="A kesim · deneysel bel-altı kesiti";Width=700;Height=800;MinWidth=500;MinHeight=450;
@@ -38,6 +47,9 @@ internal sealed class ALinePanelPreviewWindow : Window
         var canvas=new Canvas { Width=600,Height=340,Background=Brushes.White };
         body.Children.Add(new Viewbox { Child=canvas,MaxHeight=340,Stretch=Stretch.Uniform });
         var blockers=new TextBlock { TextWrapping=TextWrapping.Wrap };body.Children.Add(blockers);
+        UnitForVerification=unit;FieldsForVerification=fields.AsReadOnly();AgreementForVerification=agreement;
+        ConfirmationForVerification=confirm;ReviewForVerification=reviewButton;DrawForVerification=button;
+        SummaryForVerification=summary;StatusForVerification=status;CanvasForVerification=canvas;
         ALinePanelInput ReadInput()=>ALineMeasurementReview.Normalize(fields.Select(f=>f.Text).ToArray(),unit.SelectedIndex switch { 0=>ALineLengthUnit.Centimeter,1=>ALineLengthUnit.Millimeter,_=>(ALineLengthUnit?)null });
         void Clear() { reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         foreach(var field in fields)field.TextChanged+=(_,_)=>Clear();
