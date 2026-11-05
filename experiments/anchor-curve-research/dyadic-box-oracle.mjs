@@ -9,7 +9,8 @@ function units(x) {
   if(bits>>63n)n=-n;return n;
 }
 function point(p) { if(!p||typeof p!=='object')throw new Error('invalid point');return [units(p.x),units(p.y)]; }
-// All controls at depth d share denominator 2^(1074+d). Midpoints are exact.
+// All controls share denominator 2^(1074+shift); splitting a degree-n curve
+// increases shift by n. Midpoints are represented exactly.
 function split(p) {
   const layers=[p];
   while(layers.at(-1).length>1) {

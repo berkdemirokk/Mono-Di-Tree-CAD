@@ -18,6 +18,7 @@ test('exact subnormal comparisons and negative zero',()=>{
 test('cubic convex hull near, far and boundary endpoints',()=>{
  const e={id:'c',type:'curve',from:p(0,0),cp1:p(0,3),cp2:p(3,3),to:p(3,0)};
  assert.deepEqual(inspectDyadic(p(0,0),[e],{...options,thresholdMm:0}).excludedEdges,[]);
+ assert.deepEqual(inspectDyadic(p(1.5,2.25),[e],{...options,thresholdMm:0}).excludedEdges,[]);
  assert.deepEqual(inspectDyadic(p(9,9),[e],options).excludedEdges,['c']);
 });
 test('zero and exhausted global budget remain unresolved including unvisited edges',()=>{
