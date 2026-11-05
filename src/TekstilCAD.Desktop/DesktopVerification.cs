@@ -9598,6 +9598,16 @@ internal static partial class DesktopVerification
         OpenCvSharp.Point[] extremeCandidate=[extremeSource[0],extremeSource[2],extremeSource[3],extremeSource[4]];
         Check(Math.Abs(PhotoContourApproximation.MeasureCorresponding(extremeSource,extremeCandidate,CancellationToken.None)-3)<1e-9,
             "Contour correspondence widens integer subtraction before arithmetic at coordinate extremes",checks);
+        OpenCvSharp.Point[] exactBoundary=[new(0,15),new(2,16),new(3,19),new(10,19),new(10,15)];
+        OpenCvSharp.Point[] exactBoundaryCandidate=[exactBoundary[0],exactBoundary[2],exactBoundary[3],exactBoundary[4]];
+        Check(PhotoContourApproximation.MeasureCorresponding(exactBoundary,exactBoundaryCandidate,CancellationToken.None)>1 &&
+            PhotoContourApproximation.CorrespondingWithinOnePixel(exactBoundary,exactBoundaryCandidate,CancellationToken.None),
+            "Exact integer threshold accepts a one-pixel boundary that double rounding places just above one",checks);
+        var beyondBoundary=(OpenCvSharp.Point[])exactBoundary.Clone();beyondBoundary[1]=new(3,16);
+        Check(!PhotoContourApproximation.CorrespondingWithinOnePixel(beyondBoundary,exactBoundaryCandidate,CancellationToken.None),
+            "Exact integer threshold rejects a point genuinely beyond one pixel",checks);
+        try { PhotoContourApproximation.CorrespondingWithinOnePixel(extremeSource,extremeCandidate,CancellationToken.None);throw new InvalidOperationException("Unbounded exact coordinates accepted."); }
+        catch(InvalidDataException) { Check(true,"Exact pixel threshold rejects coordinates outside its overflow-safe image range",checks); }
         OpenCvSharp.Point[] narrowU=[new(0,0),new(10,0),new(10,10),new(8,10),new(8,1),new(2,1),new(2,10),new(0,10)];
         OpenCvSharp.Point[] shortcut=[new(0,0),new(10,0),new(10,10),new(0,10)];
         Check(PhotoContourApproximation.MeasureCorresponding(narrowU,shortcut,CancellationToken.None)==9 &&

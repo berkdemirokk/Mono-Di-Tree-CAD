@@ -29,23 +29,27 @@ internal static class PhotoContourApproximation
         token.ThrowIfCancellationRequested();var candidate=Cv2.ApproxPolyDP(source,PixelTolerance,true);token.ThrowIfCancellationRequested();
         if(candidate.Length<3 || candidate.Length>maximumPoints || candidate.Length>=source.Length)throw new InvalidDataException("1 piksel sadeleştirme bu sınırı desteklenen nokta sayısına indiremedi.");
         LargeContourValidator.Validate(candidate.Select(p=>new Point2(p.X,p.Y)).ToArray(),token);
-        var maximum=MeasureCorresponding(source,candidate,token);
-        if(maximum>PixelTolerance)throw new InvalidDataException("Sadeleştirilmiş sınırın hesaplanan yaklaşık sapması 1 piksel hedefini aşıyor.");
-        return new Result(candidate,maximum);
+        var measurement=MeasureCore(source,candidate,token,true);
+        if(!measurement.WithinOnePixel)throw new InvalidDataException("Sadeleştirilmiş sınır 1 piksel hedefini aşıyor.");
+        return new Result(candidate,measurement.Maximum);
     }
     // Every original vertex is matched to the chord replacing its own ordered
     // subchain. In exact arithmetic, convexity and continuous projection give
     // a two-way geometric bound; double calculations are approximate.
-    internal static double MeasureCorresponding(Point[] source,Point[] candidate,CancellationToken token)
+    internal static double MeasureCorresponding(Point[] source,Point[] candidate,CancellationToken token)=>MeasureCore(source,candidate,token,false).Maximum;
+    internal static bool CorrespondingWithinOnePixel(Point[] source,Point[] candidate,CancellationToken token)=>MeasureCore(source,candidate,token,true).WithinOnePixel;
+    private static (double Maximum,bool WithinOnePixel) MeasureCore(Point[] source,Point[] candidate,CancellationToken token,bool exactPixelTest)
     {
         ArgumentNullException.ThrowIfNull(source);ArgumentNullException.ThrowIfNull(candidate);token.ThrowIfCancellationRequested();
         if(source.Length<3 || source.Length>MaximumRawPoints || candidate.Length<3 || candidate.Length>source.Length)
             throw new InvalidDataException("Sınır eşleme boyutu geçersiz.");
+        if(exactPixelTest && (source.Any(p=>p.X<0 || p.Y<0 || p.X>=RegionProposal.MaxDimension || p.Y>=RegionProposal.MaxDimension) || candidate.Any(p=>p.X<0 || p.Y<0 || p.X>=RegionProposal.MaxDimension || p.Y>=RegionProposal.MaxDimension)))
+            throw new InvalidDataException("Kesin piksel hesabı desteklenen görüntü sınırları dışındaki koordinatları kabul etmez.");
         var positions=new Dictionary<Point,int>(source.Length);
         for(var i=0;i<source.Length;i++) { if((i & 1023)==0)token.ThrowIfCancellationRequested();if(!positions.TryAdd(source[i],i))throw new InvalidDataException("Kaynak sınırında tekrarlanan nokta var."); }
         var indices=new int[candidate.Length];
         for(var i=0;i<candidate.Length;i++)if(!positions.TryGetValue(candidate[i],out indices[i]))throw new InvalidDataException("Öneri noktası kaynak sınırında yok.");
-        var total=0;var maximumSquared=0d;
+        var total=0;var maximumSquared=0d;var withinOnePixel=true;
         for(var i=0;i<indices.Length;i++)
         {
             token.ThrowIfCancellationRequested();var start=indices[i];var end=indices[(i+1)%indices.Length];
@@ -58,9 +62,19 @@ internal static class PhotoContourApproximation
                 if((j & 1023)==0)token.ThrowIfCancellationRequested();var p=source[(start+j)%source.Length];
                 var t=Math.Clamp((((double)p.X-a.X)*dx+((double)p.Y-a.Y)*dy)/denominator,0,1);
                 var x=p.X-(a.X+t*dx);var y=p.Y-(a.Y+t*dy);maximumSquared=Math.Max(maximumSquared,x*x+y*y);
+                if(exactPixelTest)
+                {
+                    // Coordinates are integers in [0,2047]; every squared cross
+                    // product is < 2^47 and safely fits signed 64-bit arithmetic.
+                    long ex=(long)b.X-a.X,ey=(long)b.Y-a.Y,wx=(long)p.X-a.X,wy=(long)p.Y-a.Y;
+                    var den=ex*ex+ey*ey;var dot=wx*ex+wy*ey;
+                    if(dot<=0)withinOnePixel &= wx*wx+wy*wy<=1;
+                    else if(dot>=den) { long ux=(long)p.X-b.X,uy=(long)p.Y-b.Y;withinOnePixel &= ux*ux+uy*uy<=1; }
+                    else { var cross=wx*ey-wy*ex;withinOnePixel &= cross*cross<=den; }
+                }
             }
         }
         if(total!=source.Length)throw new InvalidDataException("Öneri kaynak sınırını bir kez dolaşmıyor.");
-        token.ThrowIfCancellationRequested();return Math.Sqrt(maximumSquared);
+        token.ThrowIfCancellationRequested();return (Math.Sqrt(maximumSquared),withinOnePixel);
     }
 }
