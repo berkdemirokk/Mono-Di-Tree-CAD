@@ -10544,9 +10544,23 @@ internal static partial class DesktopVerification
             Render(window,Path.ChangeExtension(reportPath,".atelier-compact-models.png"),480,420);
             var firstModel=Descendants<Button>(blankRoot).Single(b=>AutomationProperties.GetName(b)=="Anvelop elbise");
             var firstCaption=((StackPanel)firstModel.Content).Children.OfType<TextBlock>().Single(t=>t.Text=="Seç");
-            Check(FullyVisible(firstModel,blankRoot) && FullyVisible(firstCaption,blankRoot) && firstModel.Focusable &&
-                FullyVisible(window.StatusViewportForVerification,blankRoot),
-                "Compact startup shows the first complete model and selection action while retaining visible feedback",checks);
+            var saveError=window.StatusForVerification.Text;
+            Check(FullyVisible(window.ChatInputForVerification,blankRoot) && FullyVisible(window.SendActionForVerification!,blankRoot) &&
+                FullyVisible(window.ReferenceShortcutForVerification!,blankRoot) && FullyVisible(window.StatusViewportForVerification,blankRoot),
+                "Compact save-error state keeps chat, Send, reference action and error viewport visible",checks);
+            Check(firstModel.Focusable && KeyboardNavigation.GetIsTabStop(firstModel) && window.ModelScrollerForVerification.Focusable &&
+                window.BodyScrollerForVerification.ViewportHeight>0 && window.BodyScrollerForVerification.ScrollableHeight>0,
+                "Compact save-error state retains keyboard model selection and a usable scrolling body",checks);
+            var firstTitle=((StackPanel)firstModel.Content).Children.OfType<TextBlock>().Single(t=>t.Text=="Anvelop elbise");
+            var firstArt=((StackPanel)firstModel.Content).Children.OfType<Viewbox>().Single();
+            foreach(var modelPart in new FrameworkElement[] { firstArt,firstTitle,firstCaption })
+            {
+                modelPart.BringIntoView();blankRoot.UpdateLayout();
+                Check(FullyVisible(modelPart,blankRoot) && window.StatusForVerification.Text==saveError &&
+                    FullyVisible(window.StatusViewportForVerification,blankRoot) && FullyVisible(window.ChatInputForVerification,blankRoot) &&
+                    FullyVisible(window.SendActionForVerification!,blankRoot),
+                    "Model illustration, identity and selection action can each be scrolled into view without losing save error or composer: "+modelPart.GetType().Name,checks);
+            }
             typeof(DesignRequestWindow).GetMethod("SetStatus",PrivateInstance)!.Invoke(window,[""]);
             VerifyPortableRequestV2(window,checks);
             var input=new DesignRequest("Kadın elbise, uzun kollu", "Göğüs çevresi 96 cm; boy 110 cm",new DesignReference("örnek.png","image/png",[137,80,78,71,13,10,26,10,3]));
