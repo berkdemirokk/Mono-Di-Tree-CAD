@@ -37,6 +37,9 @@ enum ExperimentalDesignBrief {
         var id: String { rawValue }
     }
 
+    /// Ordered, complete selection list shown in the request editor.
+    static let selectableStyles: [DressStyle] = [.wrap, .aline, .corset, .sheath, .straight, .shirt, .describe]
+
     struct MeasurementForm: Equatable, Codable {
         let values: [String]
         let unit: String

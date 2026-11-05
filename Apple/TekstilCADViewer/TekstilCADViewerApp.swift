@@ -2550,7 +2550,6 @@ private final class DraftBackgroundLease {
 private struct ExperimentalDesignBriefView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.dynamicTypeSize) private var typeSize
     private var plum: Color { colorScheme == .dark ? Color(red: 1.0, green: 0.72, blue: 0.78) : Color(red: 0.29, green: 0.08, blue: 0.14) }
     private var ivory: Color { colorScheme == .dark ? Color(red: 0.11, green: 0.08, blue: 0.09) : Color(red: 0.988, green: 0.976, blue: 0.969) }
     @Environment(\.dismiss) private var dismiss
@@ -3116,55 +3115,53 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Modelini seç").font(.largeTitle).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                     Text("Özel dikim için temel elbise siluetini belirleyin veya kendi tarifinizi yazın.").font(.subheadline).foregroundStyle(.secondary)
                     Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    ScrollView(.horizontal) {
-                    HStack(alignment: .top, spacing: 12) {
-                        ForEach([ExperimentalDesignBrief.DressStyle.wrap, .aline, .corset, .sheath, .straight, .shirt, .describe]) { option in
+                    VStack(spacing: 8) {
+                        ForEach(ExperimentalDesignBrief.selectableStyles) { option in
                             Button {
                                 if option != .describe && ExperimentalDesignBrief.hasEmbeddedModelLine(description) {
                                     conflictingModelNotice = true
                                 } else { style = option; modelExplicitlySelected = true; importedPortable = false }
                             } label: {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ZStack(alignment: .topTrailing) {
-                                    if option == .describe {
-                                        Image(systemName: "text.bubble")
-                                            .font(.system(size: 38)).frame(height: 160)
-                                    } else {
-                                        DressStyleSketch(style: option)
-                                            .stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary,
-                                                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                                            .frame(width: 112, height: 160)
-                                    }
-                                    }
-                                    .frame(maxWidth: .infinity, minHeight: 176)
-                                    .background(Color.secondary.opacity(0.06))
-                                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                                    .overlay(alignment: .topTrailing) {
-                                        if modelExplicitlySelected && style == option {
-                                            Image(systemName: "checkmark.circle.fill").foregroundStyle(plum).padding(8).accessibilityHidden(true)
+                                HStack(alignment: .center, spacing: 12) {
+                                    Group {
+                                        if option == .describe {
+                                            Image(systemName: "text.bubble").font(.title2)
+                                        } else {
+                                            DressStyleSketch(style: option)
+                                                .stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary,
+                                                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                                                .frame(width: 45, height: 64)
                                         }
                                     }
-                                    Text(option.rawValue).font(.headline).fontDesign(.serif)
-                                        .multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                                    Text(styleCaption(option))
-                                        .font(.caption).foregroundStyle(.secondary)
-                                    Text((modelExplicitlySelected && style == option) ? "✓ Seçili" : "Seç")
-                                        .font(.caption.weight(.semibold)).foregroundStyle(plum)
+                                    .frame(width: 56, height: 72)
+                                    .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                                    .accessibilityHidden(true)
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(option.rawValue).font(.headline).fontDesign(.serif)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Text(styleCaption(option)).font(.caption).foregroundStyle(.secondary)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                        Text((modelExplicitlySelected && style == option) ? "Seçili" : "Seç")
+                                            .font(.caption.weight(.semibold)).foregroundStyle(plum)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    if modelExplicitlySelected && style == option {
+                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(plum).accessibilityHidden(true)
+                                    }
                                 }
-                                .frame(width: typeSize.isAccessibilitySize ? 230 : 174)
-                                .frame(minHeight: 250)
-                                .padding(8)
+                                .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
+                                .padding(10)
                                 .background(colorScheme == .dark ? Color(red: 0.18, green: 0.13, blue: 0.15) : Color.white)
-                                .overlay(RoundedRectangle(cornerRadius: 14).stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary.opacity(0.25), lineWidth: (modelExplicitlySelected && style == option) ? 2 : 1))
-                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary.opacity(0.25), lineWidth: (modelExplicitlySelected && style == option) ? 2 : 1))
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                .contentShape(Rectangle())
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel(option.rawValue)
+                            .accessibilityLabel(option.rawValue + ", " + styleCaption(option))
                             .accessibilityHint("Model tercihini belirler; kalıp oluşturmaz.")
                             .accessibilityValue((modelExplicitlySelected && style == option) ? "Seçili" : "Seçili değil")
                             .accessibilityAddTraits((modelExplicitlySelected && style == option) ? .isSelected : [])
                         }
-                    }
                     }
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. İsterseniz ayrıntıları kendi sözlerinizle yazın.").font(.caption)
                     if importedPortable { Text("İçe aktarılan açıklama aşağıdadır. Dosyada ayrı bir model kimliği bulunmuyor; model seçilmedi. İsterseniz bir kart seçin.").font(.caption) }

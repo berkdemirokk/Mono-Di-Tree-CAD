@@ -149,6 +149,12 @@ final class DesignDraftStoreTests: XCTestCase {
         try Data(repeating: 1, count: ExperimentalDesignBrief.maxImageBytes + 1).write(to: url)
         XCTAssertThrowsError(try PhotoLibraryReference.read(url))
     }
+    func testModelPickerListsEveryChoiceExactlyOnce() {
+        let styles = ExperimentalDesignBrief.selectableStyles
+        XCTAssertEqual(styles, [.wrap, .aline, .corset, .sheath, .straight, .shirt, .describe])
+        XCTAssertEqual(styles.count, Set(styles).count)
+        XCTAssertEqual(Set(styles), Set(ExperimentalDesignBrief.DressStyle.allCases))
+    }
     func testRoundTripAndFailedWritePreservesPrevious() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
