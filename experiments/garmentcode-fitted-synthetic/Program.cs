@@ -155,10 +155,18 @@ try
     RejectBody(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,0):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="back_width"?new KeyValuePair<string,decimal>(p.Key,100):p));
     RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_incl"?new KeyValuePair<string,decimal>(p.Key,45):p));
+    foreach(decimal shoulder in new[]{1m,2m,2.0000000000000000000000000001m})
+        RejectBody(bodyPairs.Select(p=>p.Key=="shoulder_w"?new KeyValuePair<string,decimal>(p.Key,shoulder):p));
+    RejectBody(bodyPairs.Select(p=>p.Key=="height"?new KeyValuePair<string,decimal>(p.Key,86):p));
+    var invalidFront=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bust_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
+    try { PrecutFrontBodice.CreateFromBody(invalidFront,ResearchDesign.PinnedFitted);throw new Exception("Invalid front cut accepted"); } catch(ArgumentException) { }
     var unsupportedCut=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BackWaistCandidate.CreateFromBody(unsupportedCut,ResearchDesign.PinnedFitted);throw new Exception("Out-of-range cut accepted"); } catch(ArgumentException) { }
     var changedBody=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="waist"?new KeyValuePair<string,decimal>(p.Key,81):p),"cm","degree");
     NeedLocal(changedBody.Snapshot(ResearchDesign.PinnedFitted)!=SyntheticBodyCatalog.Create("synthetic-base").Snapshot(ResearchDesign.PinnedFitted),"changed body snapshot");
+    var frontBase=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
+    var frontChanged=PrecutFrontBodice.CreateFromBody(changedBody,ResearchDesign.PinnedFitted);
+    NeedLocal(frontChanged.Snapshot!=frontBase.Snapshot && !frontChanged.Vertices.SequenceEqual(frontBase.Vertices),"front must depend on body values");
     void NeedLocal(bool condition,string error) { if(!condition)throw new Exception(error); }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
@@ -282,6 +290,9 @@ internal static class Validator
         {
             string id=item.GetProperty("id").GetString()!; var path=PrecutFrontBodice.Create(id);
             var edges=item.GetProperty("edges").EnumerateArray().ToArray();Need(path.Vertices.Count==10 && edges.Length==10,"precut contour count");
+            var typed=PrecutFrontBodice.CreateFromBody(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
+            Need(typed.Status=="unresolved" && !typed.ExportAllowed && !typed.ProductionAllowed && typed.DartRules.Count==0,"typed front gate");
+            Need(typed.Vertices.Count==path.Vertices.Count && typed.Vertices.Zip(path.Vertices).All(pair=>Math.Abs(pair.First.X-pair.Second.X)<1e-10 && Math.Abs(pair.First.Y-pair.Second.Y)<1e-10),"typed front differs from fixture calculation");
             var graph=new List<GeneratedGraph.Edge>();
             for(int i=0;i<10;i++)
             {
