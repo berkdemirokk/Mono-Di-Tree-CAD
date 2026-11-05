@@ -4,8 +4,9 @@ namespace FittedResearch;
 // They do not enclose source optimizer or coordinate-rounding errors.
 internal static class BodyCurveStudy
 {
-    internal sealed record Edge(string Kind,double Ax,double Ay,double Bx,double By,IReadOnlyList<(double X,double Y)> RelativeControls,double? ArcY);
-    internal sealed record Result(string Panel,int Pairs,int Separated,int EndpointOnly,int Unresolved,int NonMonotone)
+    internal sealed record Edge(string Panel,int Id,string Kind,double Ax,double Ay,double Bx,double By,IReadOnlyList<(double X,double Y)> RelativeControls,double? ArcY);
+    internal enum ClosureEvidence { ClosedRepresented, InvalidIdentity, Open, Degenerate }
+    internal sealed record Result(string Panel,ClosureEvidence Closure,int Pairs,int Separated,int EndpointOnly,int Unresolved,int NonMonotone)
     {
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
     }
@@ -14,15 +15,22 @@ internal static class BodyCurveStudy
         var fr=FrontBodiceCandidate.CreateFromBody(body,design);var fl=FrontBodiceCandidate.CreateLeftFromBody(body,design);
         var br=BackBodiceCandidate.CreateFromBody(body,design,false);var bl=BackBodiceCandidate.CreateFromBody(body,design,true);
         var sf=FrontSkirtCandidate.CreateFromMatchedBody(body,design);var sb=BackSkirtCandidate.CreateFromBody(body,design);
-        Edge F(FrontBodiceCandidate.Edge e)=>new(e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY);
-        Edge B(BackBodiceCandidate.Edge e)=>new(e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY);
-        Edge S(FrontSkirtCandidate.Edge e)=>new(e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? new[]{(c.X,c.Y)} : [],null);
-        Edge T(BackSkirtCandidate.Edge e)=>new(e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? new[]{(c.X,c.Y)} : [],null);
-        return Array.AsReadOnly(new[]{Inspect("right_ftorso",fr.Edges.Select(F).ToArray()),Inspect("left_ftorso",fl.Edges.Select(F).ToArray()),Inspect("right_btorso",br.Edges.Select(B).ToArray()),Inspect("left_btorso",bl.Edges.Select(B).ToArray()),Inspect("skirt_front",sf.Edges.Select(S).ToArray()),Inspect("skirt_back",sb.Edges.Select(T).ToArray())});
+        Edge F(string panel,FrontBodiceCandidate.Edge e)=>new(panel,e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY);
+        Edge B(string panel,BackBodiceCandidate.Edge e)=>new(panel,e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray(),e.ArcControlY);
+        Edge S(FrontSkirtCandidate.Edge e)=>new("skirt_front",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? new[]{(c.X,c.Y)} : [],null);
+        Edge T(BackSkirtCandidate.Edge e)=>new("skirt_back",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Control is { } c ? new[]{(c.X,c.Y)} : [],null);
+        return Array.AsReadOnly(new[]{Inspect("right_ftorso",fr.Edges.Select(e=>F("right_ftorso",e)).ToArray(),12),Inspect("left_ftorso",fl.Edges.Select(e=>F("left_ftorso",e)).ToArray(),12),Inspect("right_btorso",br.Edges.Select(e=>B("right_btorso",e)).ToArray(),13),Inspect("left_btorso",bl.Edges.Select(e=>B("left_btorso",e)).ToArray(),13),Inspect("skirt_front",sf.Edges.Select(S).ToArray(),13),Inspect("skirt_back",sb.Edges.Select(T).ToArray(),19)});
     }
-    internal static Result Inspect(string panel,IReadOnlyList<Edge> edges)
+    internal static Result Inspect(string panel,IReadOnlyList<Edge> edges,int? expectedEdgeCount=null)
     {
-        if(edges.Count<3)throw new ArgumentException("Incomplete contour");
+        ArgumentNullException.ThrowIfNull(edges);
+        if(string.IsNullOrWhiteSpace(panel) || edges.Count<3)throw new ArgumentException("Incomplete contour");
+        Result Failure(ClosureEvidence evidence)=>new(panel,evidence,0,0,0,0,0);
+        if(expectedEdgeCount.HasValue && edges.Count!=expectedEdgeCount.Value || edges.Where((e,i)=>e is null || e.Panel!=panel || e.Id!=i).Any())return Failure(ClosureEvidence.InvalidIdentity);
+        if(edges.Any(e=>!double.IsFinite(e.Ax)||!double.IsFinite(e.Ay)||!double.IsFinite(e.Bx)||!double.IsFinite(e.By)||e.Ax==e.Bx&&e.Ay==e.By))return Failure(ClosureEvidence.Degenerate);
+        // Equality is exact for the represented binary64 endpoints only. It is
+        // not an enclosure of earlier rounding or the source optimizer.
+        if(edges.Where((e,i)=>e.Bx!=edges[(i+1)%edges.Count].Ax || e.By!=edges[(i+1)%edges.Count].Ay).Any())return Failure(ClosureEvidence.Open);
         ExactBezierSeparation.Point[]? Controls(Edge e) {
             if(e.Kind=="A")return null;
             if(e.Kind=="L" && e.RelativeControls.Count==0)return [new(e.Ax,e.Ay),new(e.Bx,e.By)];
@@ -43,6 +51,6 @@ internal static class BodyCurveStudy
                 if(verdict==ExactBezierSeparation.Verdict.Separated)separated++;else if(verdict==ExactBezierSeparation.Verdict.OnlySharedEndpoint)endpoint++;else unresolved++;
             }
         }
-        return new(panel,edges.Count*(edges.Count-1)/2,separated,endpoint,unresolved,nonmonotone);
+        return new(panel,ClosureEvidence.ClosedRepresented,edges.Count*(edges.Count-1)/2,separated,endpoint,unresolved,nonmonotone);
     }
 }

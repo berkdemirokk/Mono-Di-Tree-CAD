@@ -43,9 +43,31 @@ try
     if(DartCut.SimpleClosed(new[]{new DartCut.P(0,0),new DartCut.P(1,0),new DartCut.P(2,0)})) throw new Exception("Degenerate polygon accepted");
     var shape=new[]{new DartCut.P(0,0),new DartCut.P(4,0),new DartCut.P(4,4),new DartCut.P(0,4)};
     if(!DartCut.SimpleClosed(shape) || DartCut.SimpleClosed(new[]{shape[0],shape[2],shape[1],shape[3]})) throw new Exception("Cut topology test");
-    var crossingCurves=new[]{new BodyCurveStudy.Edge("L",0,0,2,2,[],null),new BodyCurveStudy.Edge("L",2,2,0,2,[],null),new BodyCurveStudy.Edge("L",0,2,2,0,[],null),new BodyCurveStudy.Edge("L",2,0,0,0,[],null)};
+    var crossingCurves=new[]{new BodyCurveStudy.Edge("crossing",0,"L",0,0,2,2,[],null),new BodyCurveStudy.Edge("crossing",1,"L",2,2,0,2,[],null),new BodyCurveStudy.Edge("crossing",2,"L",0,2,2,0,[],null),new BodyCurveStudy.Edge("crossing",3,"L",2,0,0,0,[],null)};
     var crossingStudy=BodyCurveStudy.Inspect("crossing",crossingCurves);
     if(crossingStudy.Unresolved==0 || crossingStudy.ExportAllowed || crossingStudy.Status!="unresolved")throw new Exception("Crossing curve contour incorrectly cleared");
+    var square=new[]{new BodyCurveStudy.Edge("square",0,"L",0,0,2,0,[],null),new BodyCurveStudy.Edge("square",1,"L",2,0,2,2,[],null),new BodyCurveStudy.Edge("square",2,"L",2,2,0,2,[],null),new BodyCurveStudy.Edge("square",3,"L",0,2,0,0,[],null)};
+    var closedStatus=ResearchViewSummary.ToPanelStatus(BodyCurveStudy.Inspect("square",square));
+    if(closedStatus.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented)throw new Exception("Closed represented square not recognized");
+    var broken=square.ToArray();broken[0]=broken[0] with { Bx=1.9 };var brokenStatus=ResearchViewSummary.ToPanelStatus(BodyCurveStudy.Inspect("square",broken));
+    if(brokenStatus.Closure!=BodyCurveStudy.ClosureEvidence.Open || brokenStatus.CurvePairs!=0 || brokenStatus.Status!="unresolved")throw new Exception("Open contour incorrectly classified");
+    var reversed=square.ToArray();reversed[1]=reversed[1] with { Ax=2,Ay=2,Bx=2,By=0 };var reverseStatus=ResearchViewSummary.ToPanelStatus(BodyCurveStudy.Inspect("square",reversed));
+    if(reverseStatus.Closure!=BodyCurveStudy.ClosureEvidence.Open || reverseStatus.CurvePairs!=0)throw new Exception("Reversed contour incorrectly classified");
+    var wrongId=square.ToArray();wrongId[1]=wrongId[1] with { Id=2 };if(BodyCurveStudy.Inspect("square",wrongId).Closure!=BodyCurveStudy.ClosureEvidence.InvalidIdentity)throw new Exception("Wrong edge ID accepted");
+    var wrongContourPanel=square.ToArray();wrongContourPanel[1]=wrongContourPanel[1] with { Panel="other" };if(BodyCurveStudy.Inspect("square",wrongContourPanel).Closure!=BodyCurveStudy.ClosureEvidence.InvalidIdentity)throw new Exception("Wrong panel accepted");
+    var zero=square.ToArray();zero[1]=zero[1] with { Bx=2,By=0 };if(BodyCurveStudy.Inspect("square",zero).Closure!=BodyCurveStudy.ClosureEvidence.Degenerate)throw new Exception("Zero edge accepted");
+    if(BodyCurveStudy.Inspect("square",square.Take(3).ToArray(),4).Closure!=BodyCurveStudy.ClosureEvidence.InvalidIdentity)throw new Exception("Missing edge accepted");
+    var nan=square.ToArray();nan[1]=nan[1] with { Bx=double.NaN };if(BodyCurveStudy.Inspect("square",nan).Closure!=BodyCurveStudy.ClosureEvidence.Degenerate)throw new Exception("Non-finite edge accepted");
+    var bindRef=new SyntheticFullSeamGraph.Ref("test_panel",0,false,false);
+    var bindControl=new[]{new InterfaceMatcher.P(.5,1)};
+    var bindEdge=new InterfaceMatcher.Edge("test_panel","CurveEdge",new(0,0),new(1,0),System.Collections.Immutable.ImmutableArray.Create(bindControl[0]),false,false,1);
+    var bindPoints=(0d,0d,1d,0d);
+    BodySeamStudy.ValidateBinding(bindEdge,bindRef,bindPoints,bindControl);
+    void RejectBinding(InterfaceMatcher.Edge edge) { try { BodySeamStudy.ValidateBinding(edge,bindRef,bindPoints,bindControl);throw new Exception("Altered waist binding accepted"); } catch(ArgumentException) { } }
+    RejectBinding(bindEdge with { Coefficient=1.05 });RejectBinding(bindEdge with { Flipped=true });RejectBinding(bindEdge with { RightWrong=true });
+    RejectBinding(bindEdge with { Start=new(double.NaN,0) });RejectBinding(bindEdge with { End=new(1.01,0) });
+    RejectBinding(bindEdge with { Controls=System.Collections.Immutable.ImmutableArray.Create(new InterfaceMatcher.P(.5,1.01)) });
+    RejectBinding(bindEdge with { Panel="other" });RejectBinding(bindEdge with { Kind="Edge" });
     var graphEdges=new[]{new GeneratedGraph.Edge("s","a",0,"L",new(0,0),new(2,0)),new GeneratedGraph.Edge("s","a",1,"L",new(2,0),new(1,2)),new GeneratedGraph.Edge("s","a",2,"L",new(1,2),new(0,0))};
     var seam=new GeneratedGraph.Seam("s","a",0,false,"a",1,true);
     var ok=GeneratedGraph.Inspect("s",graphEdges,[seam],[seam]);
@@ -208,7 +230,7 @@ try
     NeedLocal(waistChanged.Snapshot!=waistBaseline.Snapshot && !waistChanged.Lower.SequenceEqual(waistBaseline.Lower),"waist match must depend on body values");
     NeedLocal(skirtBase.Snapshot!=skirtChanged.Snapshot && !skirtBase.Edges.SequenceEqual(skirtChanged.Edges),"skirt must depend on body values");
     var preview=ResearchViewSummary.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted);
-    NeedLocal(preview.Panels.Count==6 && preview.RuleCount==23 && preview.Panels.Any(p=>p.UnresolvedPairs>0) && preview.Status=="unresolved" && preview.ReferenceAssessment=="Unverified" && !preview.ExportAllowed && !preview.ProductionAllowed,"research preview gate");
+    NeedLocal(preview.Panels.Count==6 && preview.RuleCount==23 && preview.Panels.All(p=>p.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented) && preview.Panels.Any(p=>p.UnresolvedPairs>0) && preview.Status=="unresolved" && preview.ReferenceAssessment=="Unverified" && !preview.ExportAllowed && !preview.ProductionAllowed,"research preview gate");
     var invalidWaist=ResearchBody.Create(bodyPairs.Select(p=>p.Key=="bum_points"?new KeyValuePair<string,decimal>(p.Key,100):p),"cm","degree");
     try { BodyWaistStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid waist accepted"); } catch(ArgumentException) { }
     try { BodySeamStudy.Calculate(invalidWaist,ResearchDesign.PinnedFitted);throw new Exception("Invalid typed graph accepted"); } catch(ArgumentException) { }
@@ -497,7 +519,7 @@ internal static class Validator
             try { DerivedGraphProjection.Calculate(alteredGraph,independent);throw new Exception("Altered derived ruffle graph accepted"); } catch(ArgumentException) { }
             var sourceGraph=reference.GetProperty("stitches").EnumerateArray().ToArray();Need(sourceGraph.Length==23,"source graph rule count");
             var topology=BodyCurveStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
-            Need(topology.Count==6 && topology.All(t=>t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
+            Need(topology.Count==6 && topology.All(t=>t.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented && t.Pairs==t.Separated+t.EndpointOnly+t.Unresolved && t.Status=="unresolved" && !t.ExportAllowed && !t.ProductionAllowed),"typed curve topology gate");
             foreach(var t in topology)Console.WriteLine($"{id} {t.Panel} represented curve pairs: separated={t.Separated}, endpoint={t.EndpointOnly}, unresolved={t.Unresolved}, nonmonotone={t.NonMonotone}");
             var typedGraph=BodySeamStudy.Calculate(SyntheticBodyCatalog.Create(id),ResearchDesign.PinnedFitted);
             Need(typedGraph.ReferenceAssessment==BackWaistCandidate.ReferenceState.Unverified && !typedGraph.ExportAllowed && !typedGraph.ProductionAllowed && typedGraph.Rules.Count==23 && !typeof(SyntheticFullSeamGraph.Graph).IsAssignableFrom(typedGraph.GetType()),"typed seam graph gate");

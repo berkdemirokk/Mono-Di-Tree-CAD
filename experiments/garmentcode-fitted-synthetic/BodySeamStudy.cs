@@ -50,14 +50,27 @@ internal static class BodySeamStudy
         void Bind(IReadOnlyList<InterfaceMatcher.Edge> actual,SyntheticFullSeamGraph.Ref[] refs)
         {
             if(actual.Count!=refs.Length)throw new ArgumentException("Unsupported waist topology");
-            for(int i=0;i<refs.Length;i++) { var a=actual[i];var r=refs[i];var p=points[(r.Panel,r.Edge)];
-                if(a.Panel!=r.Panel || a.Flipped!=r.Flipped || a.RightWrong!=r.RightWrong || Math.Sqrt(Math.Pow(a.Start.X-p.ax,2)+Math.Pow(a.Start.Y-p.ay,2))>1e-8 || Math.Sqrt(Math.Pow(a.End.X-p.bx,2)+Math.Pow(a.End.Y-p.by,2))>1e-8)throw new ArgumentException("Unbound waist edge");
+            for(int i=0;i<refs.Length;i++) {
+                var a=actual[i];var r=refs[i];var p=points[(r.Panel,r.Edge)];
                 var expected=controls.TryGetValue((r.Panel,r.Edge),out var c)?c:Array.Empty<InterfaceMatcher.P>();
-                if(a.Kind!=(expected.Count==0?"Edge":"CurveEdge") || a.Controls.Length!=expected.Count || !a.Controls.Zip(expected).All(pair=>(pair.First-pair.Second).Norm()<1e-8))throw new ArgumentException("Unbound waist control");
+                ValidateBinding(a,r,p,expected);
             }
         }
         Bind(match.Upper,top);Bind(match.Lower,bottom);
         rules.Add(R(snapshot,"MetaGarment",0,S(top,new(0,2,1),new(2,4,1),new(4,7,1),new(7,10,1)),S(bottom,new(0,4,1),new(4,10,1))));
         if(rules.Count!=23)throw new ArgumentException("Incomplete graph");return new(snapshot,rules.AsReadOnly());
     }
+    // Checks candidate identity and numerical consistency only; it is not a
+    // certified geometric/physical tolerance or source optimizer guarantee.
+    internal static void ValidateBinding(InterfaceMatcher.Edge actual,SyntheticFullSeamGraph.Ref reference,(double ax,double ay,double bx,double by) points,IReadOnlyList<InterfaceMatcher.P> controls)
+    {
+        ArgumentNullException.ThrowIfNull(actual);ArgumentNullException.ThrowIfNull(controls);
+        bool Finite(InterfaceMatcher.P p)=>double.IsFinite(p.X)&&double.IsFinite(p.Y);
+        var start=new InterfaceMatcher.P(points.ax,points.ay);var end=new InterfaceMatcher.P(points.bx,points.by);
+        if(!Finite(start)||!Finite(end)||!Finite(actual.Start)||!Finite(actual.End)||controls.Any(p=>!Finite(p))||actual.Controls.Any(p=>!Finite(p)))throw new ArgumentException("Non-finite waist geometry");
+        if(actual.Panel!=reference.Panel || actual.Flipped!=reference.Flipped || actual.RightWrong!=reference.RightWrong || actual.Coefficient!=1 ||
+           (actual.Start-start).Norm()>1e-8 || (actual.End-end).Norm()>1e-8)throw new ArgumentException("Unbound waist edge");
+        if(actual.Kind!=(controls.Count==0?"Edge":"CurveEdge") || actual.Controls.Length!=controls.Count || !actual.Controls.Zip(controls).All(pair=>(pair.First-pair.Second).Norm()<1e-8))throw new ArgumentException("Unbound waist control");
+    }
+
 }
