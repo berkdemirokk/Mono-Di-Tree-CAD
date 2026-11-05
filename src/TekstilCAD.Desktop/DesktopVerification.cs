@@ -11118,14 +11118,15 @@ internal static partial class DesktopVerification
                 }
                 finally { removalRelease.Set();selectionWindow.ReferenceLoaderForVerification=null; }
                 var closingSelection=new DesignRequestWindow(studio);closingSelection.LoadForVerification(input);
-                using var closeEntered=new ManualResetEventSlim();using var closeRelease=new ManualResetEventSlim();var selectionClosed=false;
+                using var closeEntered=new ManualResetEventSlim();using var closeRelease=new ManualResetEventSlim();var selectionClosed=false;var pendingCloseWarned=false;
+                closingSelection.ConfirmDiscardForVerification=message=> { pendingCloseWarned=message.Contains("bekleyen görsel");return true; };
                 closingSelection.Closed+=(_,_)=>selectionClosed=true;
                 closingSelection.ReferenceLoaderForVerification=p=> { closeEntered.Set();closeRelease.Wait();return ReferencePhotoFileLoader.LoadRequestReference(p); };
                 try
                 {
                     var pending=closingSelection.ChooseReferenceFileAsync(pngPath);PumpUntil(()=>closeEntered.IsSet);closingSelection.Close();closeRelease.Set();PumpUntil(()=>pending.IsCompleted);
-                    Check(selectionClosed && !pending.GetAwaiter().GetResult() && DocumentSession.ContentEquals(before,studio.Document),
-                        "Closing the request while reference validation runs discards the late result",checks);
+                    Check(selectionClosed && pendingCloseWarned && !pending.GetAwaiter().GetResult() && DocumentSession.ContentEquals(before,studio.Document),
+                        "Closing after the pending-photo warning discards the late result",checks);
                 }
                 finally { closeRelease.Set();if(!selectionClosed)closingSelection.Close(); }
             }
