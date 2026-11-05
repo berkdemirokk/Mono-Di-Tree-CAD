@@ -126,4 +126,3 @@ internal sealed class PhotoObservationWindow : Window
         return result.AsReadOnly();
     }
 }
-

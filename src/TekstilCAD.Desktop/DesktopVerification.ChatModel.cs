@@ -307,4 +307,3 @@ internal static partial class DesktopVerification
         return failure is null ? 0 : 1;
     }
 }
-
