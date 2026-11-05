@@ -756,13 +756,13 @@ final class DesignDraftStoreTests: XCTestCase {
         for description in ["A kesim elbise istiyorum bel çevresi 90 cm", "eğer bel çevresi 90 cm ise", "bel çevresi 90 cm?", "bel çevresi 90 cm olmasın", "bel 90 cm"] {
             XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft(description)), description)
         }
-        for description in ["Bu ölçüler yanlış", "ölçüleri kullanmayın", "değerleri dikkate alma", "Bunlar yanlış", "bu 90 cm olmasın", "bu mu?"] {
+        for description in ["Bu ölçüler yanlış", "ölçüleri kullanmayın", "değerleri dikkate alma", "Bunlar yanlış", "Bunları kullanmayın", "Hepsini kullanmayın", "bu 90 cm olmasın", "bu mu?"] {
             let original = draft(description)
             XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(original), description)
             XCTAssertEqual(original.description, description)
             XCTAssertEqual(original.otherMeasurements, "bel çevresi 72 cm")
         }
-        for description in ["İpek olmasın", "Keten değil, pamuklu olsun", "Bu kumaş olmasın", "Değerli kumaş", "Bu model olmasın"] {
+        for description in ["İpek olmasın", "Keten değil, pamuklu olsun", "Bu kumaş olmasın", "Bu kumaşları kullanmayın", "Değerli kumaş", "Bu model olmasın"] {
             XCTAssertEqual(try ExperimentalDesignBrief.measurementMessageProposal(draft(description)).values["bel çevresi"], "72 cm", description)
         }
         XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft("ELBİSE BOYU 120 cm", notes: "elbise boyu 110 cm")))

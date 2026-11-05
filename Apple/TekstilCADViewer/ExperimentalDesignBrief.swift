@@ -198,7 +198,7 @@ enum ExperimentalDesignBrief {
         let checkedDescription = description.replacingOccurrences(of: "İ", with: "i").lowercased()
         let condition = #"(?<![\p{L}\p{N}_])(?:eğer|şayet)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: condition, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
-        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o|bunlar|şunlar|onlar)[ \t]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm))(?![\p{L}\p{N}_])"#
+        let unresolved = #"(?<![\p{L}\p{N}_])(?:bu|şu|o|bunlar|şunlar|onlar|bunları|şunları|onları|hepsini|tümünü)[ \t]+(?:yanlış|değil\p{L}*|olma\p{L}*|kullanma\p{L}*|(?:mi|mı|mu|mü)[?？]|[0-9]{1,5}(?:[.,][0-9]{1,8})?[ \t]*(?:cm|mm))(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: unresolved, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         let reference = #"(?<![\p{L}\p{N}_])(?:göğüs|bel|kalça|elbise[ \t]+boyu|ölçü\p{L}*|değer(?:ler(?:i|in|im|den)?|i|in|im|e|de|den)?)(?![\p{L}\p{N}_])"#
         guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return proposal }
