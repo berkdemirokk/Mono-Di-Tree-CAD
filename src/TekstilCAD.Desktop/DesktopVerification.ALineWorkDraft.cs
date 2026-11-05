@@ -13,6 +13,7 @@ internal static partial class DesktopVerification
         Directory.CreateDirectory(folder);
         var window=new ALinePanelPreviewWindow(owner,"A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm");
             window.ConfirmDiscardWorkForVerification=()=>true;
+            window.ConfirmUnitConversionForVerification=()=>true;
         try
         {
             static void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
@@ -63,8 +64,9 @@ internal static partial class DesktopVerification
             window.ConfirmDiscardWorkForVerification=()=>throw new InvalidOperationException("Loaded values must not prompt");
             Check(window.CanCloseWorkForVerification(),"Successful draft load establishes clean fields without establishing any approval",checks);
             window.UnitForVerification.SelectedIndex=1;window.ConfirmDiscardWorkForVerification=()=>false;
-            Check(!window.CanCloseWorkForVerification(),"Unit-only changes require discard approval",checks);
+            Check(window.UnitForVerification.SelectedIndex==1 && window.FieldsForVerification[0].Text=="360" && !window.CanCloseWorkForVerification(),"Approved unit conversion changes raw values and requires discard approval",checks);
             window.UnitForVerification.SelectedIndex=0;
+            Check(window.FieldsForVerification.Select(f=>f.Text).SequenceEqual(values),"Reverse unit conversion restores the saved values exactly",checks);
             Click(window.DrawForVerification);
             Check(window.CanvasForVerification.Children.Count==0,"Restored draft cannot draw without renewed confirmations",checks);
             var bad=Path.Combine(folder,"bad"+ALineWorkDraftStorage.Extension);File.WriteAllText(bad,"{}");
