@@ -903,9 +903,9 @@ internal sealed class DesignRequestWindow : Window
         if(path is null || operation!=openRevision)return;
         if(!Unchanged()) { if(!closed)SetStatus("İstek değişti; açma işlemi iptal edildi.");return; }
         requestLoadsRunning++;
-        SetStatus("İstek açılıyor; mevcut taslak korunuyor.");
         try
         {
+            SetStatus("İstek açılıyor; mevcut taslak korunuyor.");
             var loader=RequestLoaderForVerification;
             var candidate=await Task.Run(()=>loader is null ? DesignRequestStorage.Load(path,ReferencePhotoDecoder.ValidateV2) : loader(path));
             if(closed || operation!=openRevision)return;
