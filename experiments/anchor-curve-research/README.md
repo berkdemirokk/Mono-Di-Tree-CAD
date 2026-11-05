@@ -45,4 +45,15 @@ thresholds within ±10¹² mm. BigInt operation cost grows with dyadic depth and
 binary64 exponent; these are resource limits, not a latency guarantee. It
 holds a bounded subdivision stack and output and returns untouched later edges
 as unexamined if the shared node budget ends. Optional fixture testing requires
-the same pinned synthetic hash described above. No matrix adapter is included.
+the same pinned synthetic hash described above.
+
+`matrix-oracle-report.mjs` separately reads only the pinned synthetic 15-case
+matrix and checks the oracle file hash before generating a new file with exclusive
+creation. Example: `node matrix-oracle-report.mjs input.json new-output.json 0.01 8 1000`.
+All three limits are mandatory. The output records 15 cases, 30 panels and 45
+anchor results, source and oracle hashes, local-space part/edge identities, and
+both excluded and unresolved edges. Set `ANCHOR_MATRIX_FIXTURE` to the original
+matrix file for the optional fixture test. The exact test oracle remains a
+geometric exclusion check for encoded values, never a semantic identity or fit
+certificate. Each anchor gets its own node budget; total runtime scales with
+45 times that budget, so large limits can be expensive.
