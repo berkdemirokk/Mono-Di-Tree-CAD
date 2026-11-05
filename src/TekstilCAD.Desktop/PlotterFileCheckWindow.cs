@@ -16,23 +16,30 @@ internal sealed class PlotterFileCheckWindow : Window
     internal CheckBox OriginForVerification { get; } = new() { Content="Hedefin X=0, Y=0 başlangıcını ve dosyanın pozitif X/Y yönlerini bildiğimi beyan ediyorum" };
     internal CheckBox CommandsForVerification { get; } = new() { Content="IN, SP1, PA, PU, PD, SP0 ve satır sonlarını hedefin kabul ettiğini beyan ediyorum" };
     internal TextBlock ResultForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap };
+    internal TextBlock SummaryForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Text="Dosya özeti hazırlanıyor…" };
+    internal Expander ProfileSectionForVerification { get; } = new() { Header="İsteğe bağlı: ayrıntılı cihaz beyanıyla karşılaştır",IsExpanded=false,Margin=new Thickness(0,12,0,0) };
     internal Button CheckForVerification { get; } = new() { Content="Dosyayı beyanla karşılaştır",Padding=new Thickness(10,6,10,6),Margin=new Thickness(0,8,8,0) };
     internal Button CancelForVerification { get; } = new() { Content="İptal / kapat",Padding=new Thickness(10,6,10,6),Margin=new Thickness(0,8,0,0) };
     private readonly HpglPreparedOutput output;
     private readonly StackPanel form = new();
     private CancellationTokenSource? cancellation;
+    private CancellationTokenSource? summaryCancellation;
     private bool closed;
     private long declarationRevision;
     internal Task? CheckTaskForVerification { get; private set; }
+    internal Task? SummaryTaskForVerification { get; private set; }
 
     internal PlotterFileCheckWindow(Window owner,HpglPreparedOutput output)
     {
         this.output=output;Owner=owner;Title="HPGL dosyası · beyan edilen alan";Width=650;Height=700;MinWidth=480;MinHeight=420;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         var root=new DockPanel { Margin=new Thickness(16) };Content=root;
-        var buttons=new StackPanel { Orientation=Orientation.Horizontal };buttons.Children.Add(CheckForVerification);buttons.Children.Add(CancelForVerification);
+        var buttons=new StackPanel { Orientation=Orientation.Horizontal };buttons.Children.Add(CancelForVerification);
         DockPanel.SetDock(buttons,Dock.Bottom);root.Children.Add(buttons);
-        var scroll=new ScrollViewer { Content=form,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);
+        var main=new StackPanel();var scroll=new ScrollViewer { Content=main,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };root.Children.Add(scroll);
+        main.Children.Add(new TextBlock { Text="Hazırlanan HPGL dosyası; cihaz beyanı gerektirmez. Cihaza bağlanılmaz veya veri gönderilmez. Fiziksel uyumluluk, yön, ölçek ve kalibrasyon doğrulanmış değildir.",TextWrapping=TextWrapping.Wrap });
+        AutomationProperties.SetName(SummaryForVerification,"Hazırlanan HPGL dosya özeti");AutomationProperties.SetLiveSetting(SummaryForVerification,AutomationLiveSetting.Polite);main.Children.Add(SummaryForVerification);
+        ProfileSectionForVerification.Content=form;main.Children.Add(ProfileSectionForVerification);
         form.Children.Add(new TextBlock { Text=$"Yalnız hazırlanan dosyanın sizin bildirdiğiniz sınırlarla karşılaştırılmasıdır. Cihaza bağlanmaz veya veri göndermez; cihaz uyumluluğu, yön ve kalibrasyonu kanıtlamaz. Dosya: {output.UnitsPerMillimeter:G17} birim/mm; X {output.Bounds.MinX}…{output.Bounds.MaxX}, Y {output.Bounds.MinY}…{output.Bounds.MaxY}. Başlangıç 0,0 kabul edilir; dönüş veya yön değişimi yapılmaz. Negatif koordinatlar bu kontrolde kabul edilmez.",TextWrapping=TextWrapping.Wrap });
         void Field(string key,string label)
         {
@@ -54,9 +61,24 @@ internal sealed class PlotterFileCheckWindow : Window
         CommandsForVerification.Checked+=(_,_)=>InvalidateDeclaration();CommandsForVerification.Unchecked+=(_,_)=>InvalidateDeclaration();
         ResultForVerification.Text="Kontrol edilmedi. Tüm alanları bilginize göre doldurun; bilinmeyen değerleri tahmin etmeyin.";
         AutomationProperties.SetName(ResultForVerification,"Dosya ön kontrol sonucu");AutomationProperties.SetLiveSetting(ResultForVerification,AutomationLiveSetting.Polite);form.Children.Add(ResultForVerification);
+        form.Children.Add(CheckForVerification);
         CheckForVerification.Click+=(_,_)=>CheckTaskForVerification=CheckAsync();
         CancelForVerification.Click+=(_,_)=> { if(cancellation is not null) { cancellation.Cancel();ResultForVerification.Text="İptal istendi."; } else Close(); };
-        Closed+=(_,_)=> { closed=true;cancellation?.Cancel(); };
+        Loaded+=(_,_)=> { if(SummaryTaskForVerification is null)SummaryTaskForVerification=SummarizeAsync(); };
+        Closed+=(_,_)=> { closed=true;cancellation?.Cancel();summaryCancellation?.Cancel(); };
+    }
+    internal async Task SummarizeAsync()
+    {
+        if(summaryCancellation is not null)return;
+        var tokenSource=new CancellationTokenSource();summaryCancellation=tokenSource;SummaryForVerification.Text="Dosya özeti hazırlanıyor…";
+        try
+        {
+            var summary=await Task.Run(()=>PlotterFileCheck.Summarize(output,tokenSource.Token));tokenSource.Token.ThrowIfCancellationRequested();
+            if(!closed)SummaryForVerification.Text=$"Hazırlanan dosya SHA-256: {summary.Sha256}\n{summary.ByteCount} bayt · {summary.CommandCount} komut · en uzun komut {summary.LongestCommandBytes} bayt\n{summary.UnitsPerMillimeter:G17} birim/mm · X {summary.Bounds.MinX}…{summary.Bounds.MaxX} · Y {summary.Bounds.MinY}…{summary.Bounds.MaxY}\nUygulamanın HPGL lehçesi: IN, SP1, PA, PU, PD, SP0. Cihaz veya fiziksel uyum denetlenmedi.";
+        }
+        catch(OperationCanceledException) { if(!closed)SummaryForVerification.Text="Dosya özeti iptal edildi."; }
+        catch(InvalidDataException ex) { if(!closed)SummaryForVerification.Text="Dosya özeti hazırlanamadı: "+ex.Message; }
+        finally { summaryCancellation=null;tokenSource.Dispose(); }
     }
     private void InvalidateDeclaration()
     {

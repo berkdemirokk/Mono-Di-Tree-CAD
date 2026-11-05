@@ -9,6 +9,17 @@ public sealed class PlotterFileCheckTests
     private static PlotterCapabilityProfile Profile()=>new("Vendor","Model","Firmware","Driver","Adapter","Reference",PlotterPlatform.Windows,PlotterTransport.WindowsSpooler,40,100,100,256,CapabilitySupport.Supported,CapabilitySupport.Unknown)
     { ProtocolIdentifier="declared",SupportedCommands=PlotterHpglCommands.CurrentExporter,LineBreaks=CapabilitySupport.Supported,MaximumXPlotUnits=4000,MaximumYPlotUnits=4000,MaximumJobBytes=100000 };
     private static HpglPreparedOutput Output(double x=0,double width=100)=>HpglFormat.Prepare(new ProjectDocument { Pieces=[new PatternPiece { Closed=false,Points=[new(x,0),new(x+width,0)] }] },40);
+    [Fact] public void FileSummaryUsesExactPreparedBytesWithoutAnyProfile()
+    {
+        var output=Output(x:-1,width:2);var summary=PlotterFileCheck.Summarize(output);
+        var bytes=System.Text.Encoding.UTF8.GetBytes(output.Text);
+        var commands=output.Text.Split(';').Select(x=>x.Trim('\r','\n')).Where(x=>x.Length>0).ToArray();
+        Assert.Equal(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)),summary.Sha256);
+        Assert.Equal(bytes.Length,summary.ByteCount);Assert.Equal(commands.Length,summary.CommandCount);
+        Assert.Equal(commands.Max(c=>c.Length+1),summary.LongestCommandBytes);
+        Assert.Equal(output.UnitsPerMillimeter,summary.UnitsPerMillimeter);Assert.Equal(output.Bounds,summary.Bounds);
+        Assert.True(summary.Bounds.HasNegativeCoordinates);
+    }
     [Fact] public void MissingDeclarationAndUnitsAreNotReportedAsPassing()
     {
         Assert.Equal(PlotterFileCheck.Status.Incomplete,PlotterFileCheck.Inspect(Output(),null,true).State);
@@ -28,5 +39,6 @@ public sealed class PlotterFileCheckTests
     {
         using var cancellation=new CancellationTokenSource();cancellation.Cancel();
         Assert.Throws<OperationCanceledException>(()=>PlotterFileCheck.Inspect(Output(),Profile(),true,cancellation.Token));
+        Assert.Throws<OperationCanceledException>(()=>PlotterFileCheck.Summarize(Output(),cancellation.Token));
     }
 }

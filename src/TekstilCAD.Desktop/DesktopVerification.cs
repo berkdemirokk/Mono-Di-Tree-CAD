@@ -4095,6 +4095,11 @@ internal static partial class DesktopVerification
         var priorContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(studio.Dispatcher));
         try
         {
+            var summary=fileCheck.SummarizeAsync();PumpUntil(()=>summary.IsCompleted);summary.GetAwaiter().GetResult();
+            Check(!fileCheck.ProfileSectionForVerification.IsExpanded && fileCheck.InputsForVerification.Values.All(input=>input.Text.Length==0) &&
+                fileCheck.SummaryForVerification.Text.Contains("SHA-256") && fileCheck.SummaryForVerification.Text.Contains("en uzun komut") &&
+                fileCheck.SummaryForVerification.Text.Contains("fiziksel uyum denetlenmedi"),
+                "Prepared HPGL summary is available before optional device declarations",checks);
             var pending=fileCheck.CheckAsync();PumpUntil(()=>pending.IsCompleted);pending.GetAwaiter().GetResult();
             Check(fileCheck.ResultForVerification.Text.Contains("eksik"),"Empty profile is explicitly incomplete",checks);
             foreach(var item in new Dictionary<string,string> { ["manufacturer"]="Vendor",["model"]="Model",["firmware"]="1",["driver"]="1",["adapter"]="1",["reference"]="example",["protocol"]="HPGL",["units"]="40",["width"]="100",["height"]="100",["maxX"]="4000",["maxY"]="4000",["command"]="256",["job"]="100000" })fileCheck.InputsForVerification[item.Key].Text=item.Value;
