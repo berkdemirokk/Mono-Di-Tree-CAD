@@ -95,6 +95,27 @@ try
     var unequalLegs=baseParts.Segments.ToArray(); int legIndex=Array.FindIndex(unequalLegs,e=>e.Panel==firstRule.Owner && e.Edge==firstRule.EdgeA);
     unequalLegs[legIndex]=unequalLegs[legIndex] with { Start=new(unequalLegs[legIndex].Start.X+.1,unequalLegs[legIndex].Start.Y) };
     try { DartRuleCheck.Validate(firstRule,sourceRule,unequalLegs); throw new Exception("Unequal dart legs accepted"); } catch(InvalidDataException) { }
+    var separate=ExactBezierSeparation.Compare([new(0,0),new(1,1),new(2,0)],[new(0,3),new(1,4),new(2,3)],false);
+    if(separate!=ExactBezierSeparation.Verdict.Separated) throw new Exception("Bezier disjoint certificate");
+    var touch=ExactBezierSeparation.Compare([new(0,0),new(1,1),new(2,0)],[new(2,0),new(3,-1),new(4,0)],true);
+    if(touch!=ExactBezierSeparation.Verdict.OnlySharedEndpoint) throw new Exception("Bezier endpoint certificate");
+    var tangent=ExactBezierSeparation.Compare([new(0,1),new(1,-1),new(2,1)],[new(0,0),new(2,0)],false,8,1000);
+    if(tangent!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier tangency must stay unresolved");
+    var overlap=ExactBezierSeparation.Compare([new(0,0),new(2,0)],[new(1,0),new(3,0)],false,8,1000);
+    if(overlap!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier overlap must stay unresolved");
+    var near=ExactBezierSeparation.Compare([new(0,0),new(1,0)],[new(0,double.Epsilon),new(1,double.Epsilon)],false);
+    if(near!=ExactBezierSeparation.Verdict.Separated) throw new Exception("Exact dyadic near separation");
+    try { ExactBezierSeparation.Compare([new(double.NaN,0),new(1,0)],[new(0,0),new(1,0)],false); throw new Exception("Invalid control accepted"); } catch(ArgumentException) { }
+    var cross=ExactBezierSeparation.Compare([new(0,0),new(2,2)],[new(0,2),new(2,0)],false,8,1000);
+    if(cross!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier crossing must stay unresolved");
+    if(!ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(1,2),new(2,0)]) || ExactBezierSeparation.HasMonotoneCoordinate([new(0,0),new(2,2),new(-2,2),new(0,0)])) throw new Exception("Bezier monotonicity");
+    if(ExactBezierSeparation.Compare([new(0,0),new(1,1),new(2,0)],[new(0,1),new(1,0),new(2,1)],false,0,1)!=ExactBezierSeparation.Verdict.Unresolved) throw new Exception("Bezier budget fail closed");
+    foreach(string id in new[]{"synthetic-base","synthetic-distinct"}) foreach(bool left in new[]{false,true})
+    {
+        var audit=FrontBezierAudit.Inspect(FrontBodiceCandidate.Create(id,left));
+        if(audit.Separated+audit.EndpointOnly+audit.Unresolved+audit.ArcPairs!=66 || audit.ArcPairs==0 || audit.Status!="unresolved" || audit.ExportAllowed) throw new Exception("Front Bezier audit coverage");
+        Console.WriteLine($"{id} {(left?"left":"right")} represented controls: separated={audit.Separated}, endpoint-only={audit.EndpointOnly}, unresolved={audit.Unresolved}, arc-pairs={audit.ArcPairs}, nonmonotone={audit.NonMonotone}.");
+    }
     Console.WriteLine($"PASS: {result.cases} synthetic cases; {result.panels} panels, {result.edges} edges, {result.rules} nested stitch rules; 68 reconstructed lines, 8 curve endpoint pairs and synthetic waist interface matching; production unresolved.");
     return 0;
 }
@@ -297,6 +318,16 @@ internal static class Validator
                 Need(source.GetProperty("kind").GetString()=="CurveEdge" && (a-new P(curve.Start.X,curve.Start.Y)).Length()<1e-5 && (b-new P(curve.End.X,curve.End.Y)).Length()<1e-5 && (c1-new P(curve.Control1.X,curve.Control1.Y)).Length()<1e-12 && (c2-new P(curve.Control2.X,curve.Control2.Y)).Length()<1e-12,"source armhole: "+curve.Panel);
             }
             Need(armholes.Status=="unresolved"&&!armholes.ProductionAllowed&&!armholes.ExportAllowed,"armhole gate");
+            var backNeck=BackNeckCut.Create(id);
+            foreach(var pair in new[]{("right_btorso",11,backNeck.Right),("left_btorso",1,backNeck.Left)})
+            {
+                var source=item.GetProperty("panels").GetProperty(pair.Item1).GetProperty("edges")[pair.Item2];
+                P a=Point(source.GetProperty("start")),b=Point(source.GetProperty("end"));
+                Need(source.GetProperty("kind").GetString()=="CircleEdge" && (a-new P(pair.Item3.Start.X,pair.Item3.Start.Y)).Length()<1e-5 && (b-new P(pair.Item3.End.X,pair.Item3.End.Y)).Length()<1e-5 && Math.Abs(source.GetProperty("control_y").GetDouble()-pair.Item3.RelativeControlY)<1e-7,"back neck arc: "+pair.Item1);
+            }
+            var backCenter=item.GetProperty("panels").GetProperty("right_btorso").GetProperty("edges")[12];
+            Need((Point(backCenter.GetProperty("start"))-new P(backNeck.Right.End.X,backNeck.Right.End.Y)).Length()<1e-5 && (Point(backCenter.GetProperty("end"))-new P(backNeck.CenterWaist.X,backNeck.CenterWaist.Y)).Length()<1e-5,"back center line");
+            Need(backNeck.Status=="unresolved"&&!backNeck.ProductionAllowed&&!backNeck.ExportAllowed,"back neck gate");
             var neck=FrontNeckCut.Create(id);
             foreach(var pair in new[]{("right_ftorso",1,neck.Right),("left_ftorso",10,neck.Left)})
             {
