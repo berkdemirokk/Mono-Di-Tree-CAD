@@ -3318,7 +3318,7 @@ private struct ExperimentalDesignBriefView: View {
                 Button("V2: model kimliğini koru (deneysel)") { requestExportVersion = 2; prepareExport() }
                 Button("Vazgeç", role: .cancel) { }
             } message: {
-                Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar; özellikle tarifi veya görseli olmayan model seçimini eski Windows sürümleri reddeder. Windows ve iPhone arasında V2 uyumluluğu henüz doğrulanmadı. Model ile tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Mevcut dosyanın üzerine yazılması uygulama tarafından engellenmez.")
+                Text("V1 model kimliğini ayrı saklamaz; model satırı açıklamaya eklenir. V2 ayrı kimlik saklar; bu güncellemeden önceki Windows ve iPhone sürümleri tarifi veya görseli olmayan model isteklerini reddeder. Windows ve iPhone arasında gerçek dosya alışverişi henüz doğrulanmadı. Model ile tarif arasındaki tüm çelişkiler otomatik saptanmaz; ikisini kontrol edin. Mevcut dosyanın üzerine yazılması uygulama tarafından engellenmez.")
             }
             .confirmationDialog("Masaüstünde ölçüleri kontrol edin", isPresented: $showDesktopMeasurementWarning, titleVisibility: .visible) {
                 Button("Olduğu gibi kaydet") {
