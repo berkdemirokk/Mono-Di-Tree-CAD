@@ -5,6 +5,8 @@ public class ConditionalMeasurementTests
 {
     [Theory]
     [InlineData("eğer kumaş ipekse; bel çevresi 72 cm","")]
+    [InlineData("eğer kumaş ipekse; A kesim elbise istiyorum bel çevresi 72 cm","")]
+    [InlineData("A kesim elbise istiyorum bel çevresi 72 cm","şayet kumaş ipekse")]
     [InlineData("bel çevresi 72 cm; eğer kumaş ipekse","")]
     [InlineData("eğer kumaş ipekse\nbel çevresi 72 cm","")]
     [InlineData("EĞER kumaş ipekse\u2028BEL ÇEVRESİ 720 MM","")]
