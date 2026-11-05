@@ -808,7 +808,11 @@ internal sealed class DesignRequestWindow : Window
         { if(!closed)SetStatus("Görsel açılamadı; istek ve özgün görsel korundu.");return; }
         finally { referenceLoadRunning=false; }
         if(closed || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; önceki gözlem kullanılmadı.");return; }
-        var window=new PhotoObservationWindow(this,decoded.Bitmap,portableModelId ?? selectedModelText ?? "Seçilmedi",before.Prompt);
+        var modelIndex=portableModelId is null ? -1 : Array.IndexOf(PortableModelIds,portableModelId);
+        var modelName=modelIndex>=0 && modelIndex<modelCards.Count ? modelCards[modelIndex].Label :
+            portableModelId is not null ? "Tanınmayan model: "+CadCanvas.CanvasPieceLabel(portableModelId) :
+            modelCards.FirstOrDefault(c=>c.Template==selectedModelText).Label ?? "Seçilmedi";
+        var window=new PhotoObservationWindow(this,decoded.Bitmap,modelName,before.Prompt);
         if(window.ShowDialog()!=true || window.Approved is not { } observations)return;
         if(closed || referenceLoadRunning || !ModelUnchanged() || !PhotoObservationSnapshotMatches(before,Capture(),revision,referenceRevision,chat,chatInput.Text,wasDirty,dirty,referenceSelectionPending)) { if(!closed)SetStatus("İstek veya görsel değişti; gözlem eklenmedi.");return; }
         try { prompt.Text=AppendPhotoObservations(before.Prompt,observations,prompt.MaxLength);SetStatus("Kendi fotoğraf gözlemleriniz tarife eklendi. Mevcut tarif ve seçili modelle çelişkileri kendiniz kontrol edin; otomatik karşılaştırma yapılmadı. Model ve ölçü çıkarılmadı."); }
