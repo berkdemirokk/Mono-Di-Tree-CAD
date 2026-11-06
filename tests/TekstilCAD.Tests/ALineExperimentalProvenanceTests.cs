@@ -100,6 +100,25 @@ public sealed class ALineExperimentalProvenanceTests
         try { var path=Path.Combine(folder,"selected.dxf");Assert.Throws<InvalidOperationException>(()=>DxfFormat.Export(new ProjectDocument { Pieces=[changed] },path));Assert.False(File.Exists(path)); }
         finally { Directory.Delete(folder,true); }
     }
+    [Theory]
+    [InlineData(false,false)]
+    [InlineData(true,false)]
+    [InlineData(false,true)]
+    [InlineData(true,true)]
+    public void NestingFingerprintTracksMarkerAndKeepsUnmarkedLegacyDomain(bool grain,bool notch)
+    {
+        var doc=Document();var piece=doc.Pieces[0];var marker=piece.ExperimentalALine!;piece.ExperimentalALine=null;
+        if(grain)piece.Grainline=new Grainline { Start=new(10,10),End=new(10,50) };
+        if(notch)piece.Notches=[new NotchMark { VertexIndex=0,Position=piece.Points[0] }];
+        var legacy=NestingSnapshot.ComputeLayoutFingerprint(doc);
+        var snapshot=new NestingSnapshot { LayoutFingerprint=legacy,Placements=[new NestingPlacementSnapshot(Guid.NewGuid(),1,piece.Id)] };
+        Assert.True(snapshot.IsCurrentFor(doc));piece.ExperimentalALine=marker;
+        Assert.False(snapshot.IsCurrentFor(doc));var marked=NestingSnapshot.ComputeLayoutFingerprint(doc);Assert.NotEqual(legacy,marked);
+        snapshot.LayoutFingerprint=marked;Assert.True(snapshot.IsCurrentFor(doc));
+        piece.ExperimentalALine=marker with { Side="back" };Assert.False(snapshot.IsCurrentFor(doc));
+        piece.ExperimentalALine=marker with { SourceSha256=new string('B',64) };Assert.False(snapshot.IsCurrentFor(doc));
+        piece.ExperimentalALine=null;Assert.Equal(legacy,NestingSnapshot.ComputeLayoutFingerprint(doc));
+    }
     [Fact] public void DirectOutputAndSimulationRejectRestrictedGeometryBeforeWriting()
     {
         var folder=Path.Combine(Path.GetTempPath(),"aline-output-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);

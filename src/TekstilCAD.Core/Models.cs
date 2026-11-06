@@ -402,7 +402,8 @@ public sealed class NestingSnapshot
 
     /// <summary>Stable SHA-256 over ordered piece identity, geometry, names and metadata.
     /// Grainline-bearing layouts use a domain-separated v2 encoding; layouts
-    /// without grainlines retain the exact legacy v1 encoding. Text is encoded as
+    /// without grainlines retain the exact legacy v1 encoding. Experimental markers
+    /// use v4; documents without them retain their prior v1–v3 encoding. Text is encoded as
     /// UTF-16 code units and floating point values as IEEE-754 bits.</summary>
     public static string ComputeLayoutFingerprint(ProjectDocument document) => ComputeLayoutFingerprint(document,CancellationToken.None);
 
@@ -426,8 +427,10 @@ public sealed class NestingSnapshot
         // makes a previous snapshot stale rather than silently excluding it.
         var includeGrainlines=document.Pieces.Any(piece=>piece.Grainline is not null);
         var includeNotches=document.Pieces.Any(piece=>piece.Notches is not null);
-        writer.Write(includeNotches ? "TekstilCAD.nesting-layout.v3" : includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
-        if(includeNotches)writer.Write(includeGrainlines);
+        var includeExperimental=document.Pieces.Any(piece=>piece.ExperimentalALine is not null);
+        writer.Write(includeExperimental ? "TekstilCAD.nesting-layout.v4" : includeNotches ? "TekstilCAD.nesting-layout.v3" : includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
+        if(includeExperimental) { writer.Write(includeGrainlines);writer.Write(includeNotches); }
+        else if(includeNotches)writer.Write(includeGrainlines);
         writer.Write(document.Pieces.Count);
         foreach(var piece in document.Pieces)
         {
@@ -467,6 +470,12 @@ public sealed class NestingSnapshot
                         writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.X));writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.Y));
                     }
                 }
+            }
+            if(includeExperimental)
+            {
+                writer.Write(piece.ExperimentalALine is not null);
+                if(piece.ExperimentalALine is { } experimental)
+                { Text(writer,experimental.Algorithm);Text(writer,experimental.SourceSha256);Text(writer,experimental.Side); }
             }
         }
         cancellationToken.ThrowIfCancellationRequested();writer.Flush(); stream.FlushFinalBlock();
