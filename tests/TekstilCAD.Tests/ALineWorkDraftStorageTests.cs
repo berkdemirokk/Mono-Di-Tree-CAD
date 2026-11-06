@@ -44,6 +44,20 @@ public class ALineWorkDraftStorageTests
         Assert.Null(ALineWorkDraftStorage.Deserialize(ALineWorkDraftStorage.Serialize(Draft())).SourceHash);
     }
     [Fact]
+    public void CandidateSnapshotHasVersionedStrictUnapprovedSchema()
+    {
+        var snapshot=new ALineBalanceSnapshot(ALineWorkDraftStorage.BalanceMethod,[20,20,20,20],[25,15,25,15]);
+        var draft=Draft() with { SourceHash=new string('A',64),Balance=snapshot };
+        var json=ALineWorkDraftStorage.Serialize(draft);var restored=ALineWorkDraftStorage.Deserialize(json);
+        Assert.Contains("\"version\":3",json);Assert.Equal(snapshot.Method,restored.Balance!.Method);
+        Assert.Equal(snapshot.Original,restored.Balance.Original);Assert.Equal(snapshot.Candidate,restored.Balance.Candidate);
+        Assert.DoesNotContain("approved",json);Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Deserialize(json.Replace(ALineWorkDraftStorage.BalanceMethod,"unknown")));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Deserialize(json.Replace("\"method\":", "\"approved\":true,\"method\":")));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Serialize(draft with { SourceHash=null }));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Serialize(draft with { Balance=snapshot with { Candidate=[double.NaN,0,0,0] } }));
+        Assert.Throws<InvalidDataException>(()=>ALineWorkDraftStorage.Serialize(draft with { Balance=snapshot with { Original=[1,2,3] } }));
+    }
+    [Fact]
     public void LimitsAndNewFileAtomicPolicyPreserveExistingFile()
     {
         var path=Path.Combine(Path.GetTempPath(),"aline-draft-"+Guid.NewGuid().ToString("N")+ALineWorkDraftStorage.Extension);
