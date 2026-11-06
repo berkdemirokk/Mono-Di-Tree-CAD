@@ -298,6 +298,9 @@ internal sealed class DesignRequestWindow : Window
         AutomationProperties.SetHelpText(referenceShortcut,"PNG/JPEG referansı mevcut görsel seçme ve doğrulama akışıyla ekler. Görselden ölçü veya kalıp çıkarmaz; özgün baytlar isteğe eklenir.");
         referenceShortcut.Click+=(_,_)=>ChooseReference();
         var referenceRow=new DockPanel { LastChildFill=true };DockPanel.SetDock(referenceShortcut,Dock.Left);referenceRow.Children.Add(referenceShortcut);referenceRow.Children.Add(referenceSummary);primaryChat.Children.Add(referenceRow);
+        var inspect=new Button { Content="Fotoğrafı incele ve elle çiz…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
+        AutomationProperties.SetHelpText(inspect,"Kaydetmeden seçili fotoğrafı inceler. Düz serilmiş kalıp görselinde çizim elle yapılır ve bilinen ölçü gerektirir; giysi fotoğrafından kalıp üretilmez.");
+        inspect.Click+=(_,_)=> { var preview=CreateUnsavedPhotoPreview();preview?.Show(); };body.Children.Add(inspect);
         var observe=new Button { Content="Fotoğrafa bakarak özellikleri belirt…",HorizontalAlignment=HorizontalAlignment.Left,Padding=new Thickness(10,5,10,5),Margin=new Thickness(0,0,0,6) };
         AutomationProperties.SetHelpText(observe,"Fotoğrafı gösterir; yalnız elle seçip onayladığınız özellikler tarife eklenir. Otomatik analiz veya ölçüm yapılmaz.");
         observe.Click+=async (_,_)=>await ObservePhotoAsync();body.Children.Add(observe);
@@ -986,6 +989,31 @@ internal sealed class DesignRequestWindow : Window
         try { var target=DesignRequestSavePath.Complete(path);if(before.Version==2)DesignRequestStorage.SaveNewV2(target,before,ReferencePhotoDecoder.ValidateV2);else DesignRequestStorage.SaveNew(target,before);dirty=false;hasSavedRequest=true;SetStatus("İstek yeni dosyaya kaydedildi; kalıp oluşturulmadı."+(modelOnlyCompatibility ? compatibilityNotice : "")+(reference is not null && !referenceDecoded ? " Kayıttan gelen görsel yeniden denetlenmedi; telefonda açılamayabilir. Görsel bölümündeki açıklamaya bakın." : "")); }
         catch(Exception ex) when(ex is InvalidDataException or IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException) { SetStatus("İstek kaydedilemedi; alanlar korundu: "+ex.Message); }
     }
+    internal ReferencePhotoWindow? CreateUnsavedPhotoPreview()
+    {
+        if(closed || referenceLoadRunning || referenceSelectionPending || reference is null || Owner is not MainWindow studio)
+        { if(!closed)SetStatus("Önce fotoğraf seçimini tamamlayın ve ana çizim penceresini kontrol edin.");return null; }
+        var request=Capture();var revision=referenceRevision;var chat=chatInput.Text;var wasDirty=dirty;
+        bool Current()=>!closed && !referenceLoadRunning && !referenceSelectionPending && revision==referenceRevision &&
+            chat==chatInput.Text && wasDirty==dirty && SameRequest(request,Capture());
+        bool ConfirmTarget()
+        {
+            if(preparingDrawingTarget || !Current())return false;
+            MainWindow.RequestDrawingTarget target;
+            try { target=studio.CaptureRequestDrawingTarget(); }
+            catch(InvalidOperationException ex) { SetStatus(ex.Message);return false; }
+            preparingDrawingTarget=true;
+            try
+            {
+                var message=target.Description+"\n\nElle çizim bu CAD projesine aktarılabilir. Düz serilmiş kalıp görseli ve bilinen bir ölçü gerekir; giysi fotoğrafından kalıp üretilmez. İstek açık ve değişmeden kalır. Bu projede devam edilsin mi?";
+                var accepted=ConfirmDrawingTargetForVerification?.Invoke(message) ??
+                    MessageBox.Show(this,message,"Mevcut CAD projesinde devam",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes;
+                return accepted && Current() && studio.IsRequestDrawingTargetCurrent(target);
+            }
+            finally { preparingDrawingTarget=false; }
+        }
+        return new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget);
+    }
     private async Task ObservePhotoAsync()
     {
         if(closed || referenceLoadRunning || referenceSelectionPending) { SetStatus("Önce görsel seçimi veya denetimini tamamlayın.");return; }
@@ -1065,3 +1093,4 @@ internal sealed class DesignRequestWindow : Window
     private static bool SameRequest(DesignRequest a,DesignRequest b)=>a.Prompt==b.Prompt && a.Measurements==b.Measurements && a.ModelId==b.ModelId && a.Version==b.Version &&
         (a.Reference is null ? b.Reference is null : b.Reference is not null && a.Reference.Name==b.Reference.Name && a.Reference.MediaType==b.Reference.MediaType && a.Reference.Data.AsSpan().SequenceEqual(b.Reference.Data));
 }
+

@@ -18,11 +18,12 @@ internal sealed class ReferencePhotoWindow : Window
     internal Image PhotoForVerification=>photo;
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) };
     private bool closed;
+    internal Func<bool>? ConfirmTraceTargetForVerification { get; private set; }
 
-    internal ReferencePhotoWindow(Window owner,byte[] source)
+    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(source);
-        data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
+        ConfirmTraceTargetForVerification=confirmTraceTarget;data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
         StudioTheme.Apply(this);Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });
         Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(14) };Content=root;
@@ -35,6 +36,7 @@ internal sealed class ReferencePhotoWindow : Window
             if(traceWindow is not null) { traceWindow.Activate();return; }
             var studio=Owner as MainWindow ?? (Owner as Window)?.Owner as MainWindow;
             if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
+            if(confirmTraceTarget is not null && !confirmTraceTarget()) { StatusForVerification.Text="Çizime geçiş iptal edildi veya kaynak değişti; istek ve fotoğraf korundu.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
             var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
@@ -58,7 +60,9 @@ internal sealed class ReferencePhotoWindow : Window
         catch(Exception ex) when(ex is InvalidDataException or IOException or NotSupportedException or ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
         {
             if(closed)return;
-            photo.Source=null;StatusForVerification.Text="Görsel önizlenemedi. Kaydedilmiş istek ve görsel baytları korunuyor.";
+            photo.Source=null;StatusForVerification.Text="Görsel önizlenemedi. İstek ve görsel baytları korunuyor.";
         }
     }
 }
+
+

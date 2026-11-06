@@ -11810,6 +11810,22 @@ internal static partial class DesktopVerification
                 Check(invalidTask.GetAwaiter().GetResult() is null && notes.TraceStatusForVerification.Text.Contains("açılamadı") && DocumentSession.ContentEquals(before,studio.Document),
                     "Direct photo tracing reports invalid stored image without changing the project",checks);
                 var bytes=EncodePhoto(32,16,false);var expectedHash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+                var unsaved=new DesignRequestWindow(studio);
+                unsaved.LoadForVerification(new DesignRequest("Özgün tarif","72 cm",new DesignReference("foto.png","image/png",bytes)));
+                unsaved.PromptForVerification.Text="Kaydedilmemiş tarif";
+                unsaved.ConfirmDiscardForVerification=_=>true;
+                var preview=unsaved.CreateUnsavedPhotoPreview()!;
+                try
+                {
+                    unsaved.ConfirmDrawingTargetForVerification=_=>false;
+                    Check(preview.ConfirmTraceTargetForVerification!()==false && unsaved.PromptForVerification.Text=="Kaydedilmemiş tarif" && DocumentSession.ContentEquals(before,studio.Document),
+                        "Canceling unsaved photo trace target preserves request and CAD",checks);
+                    unsaved.ConfirmDrawingTargetForVerification=_=> { unsaved.MeasurementsForVerification.Text="73 cm";return true; };
+                    Check(preview.ConfirmTraceTargetForVerification!()==false && unsaved.MeasurementsForVerification.Text=="73 cm" && DocumentSession.ContentEquals(before,studio.Document),
+                        "Changing request during photo trace target confirmation rejects stale snapshot and preserves edits",checks);
+                    Check(!preview.IsVisible && !unsaved.IsVisible,"Unsaved photo preview verification does not show windows",checks);
+                }
+                finally { preview.Close();unsaved.Close(); }
                 var directNotes=new RequestNotesWindow(studio,new DesignRequest("Deneme","",new DesignReference("foto.png","image/png",bytes)));
                 using var entered=new ManualResetEventSlim();using var release=new ManualResetEventSlim();
                 directNotes.DecodeForVerification=data=> { entered.Set();release.Wait();return ReferencePhotoDecoder.DecodeWithGeometry(data); };
@@ -17524,3 +17540,4 @@ internal static partial class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
+
