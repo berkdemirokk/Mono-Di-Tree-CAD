@@ -340,7 +340,8 @@ internal sealed class ALinePanelPreviewWindow : Window
                 var difference=preview.SideMismatchMm;
                 var formattedZero=0d.ToString("F3");
                 var differenceText=difference==0 ? "hesaplanan fark 0 mm" : difference.ToString("F3")==formattedZero ? $"hesaplanan fark sıfırdan büyük (üç ondalığa yuvarlanınca {formattedZero} mm)" : $"hesaplanan fark yaklaşık {difference:F3} mm";
-                status.Text=$"Ön yan çizgi yaklaşık {preview.FrontSideLengthMm:F3} mm; arka yaklaşık {preview.BackSideLengthMm:F3} mm; {differenceText}. Uzunluklar ve fark gösterimde 0,001 mm'ye yuvarlanır. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
+                string SegmentDifference(double value)=>value!=0 && value.ToString("F3")==formattedZero ? $"sıfırdan büyük (yuvarlanınca {formattedZero})" : value.ToString("F3");
+                status.Text=$"Ön yan çizgi yaklaşık {preview.FrontSideLengthMm:F3} mm; arka yaklaşık {preview.BackSideLengthMm:F3} mm; {differenceText}. Bel–kalça yan aralığı: ön {preview.FrontWaistToHipSideMm:F3} mm, arka {preview.BackWaistToHipSideMm:F3} mm, mutlak fark {SegmentDifference(preview.WaistToHipMismatchMm)} mm. Kalça–etek yan aralığı: ön {preview.FrontHipToHemSideMm:F3} mm, arka {preview.BackHipToHemSideMm:F3} mm, mutlak fark {SegmentDifference(preview.HipToHemMismatchMm)} mm. Toplam uzunluklar eşit olsa da ara noktalar uyuşmayabilir. Uzunluklar ve farklar gösterimde 0,001 mm'ye yuvarlanır. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
                 blockers.Text=string.Join(Environment.NewLine,preview.Unresolved);
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)

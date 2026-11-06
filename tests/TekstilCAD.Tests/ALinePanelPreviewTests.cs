@@ -80,6 +80,17 @@ public sealed class ALinePanelPreviewTests
         Assert.True(result.SideMismatchMm>0);Assert.Equal(200,result.Back[1].X);
         Assert.False(result.CanApplyOrExport);
     }
+    [Fact] public void EqualTotalSidesCanHideMismatchedHipJoinDistances()
+    {
+        var preview=ALinePanelPreview.Create(new(300,300,400,500,0,0,0,0,200,400,1200));
+        Assert.Equal(0,preview.SideMismatchMm,8);
+        Assert.Equal(Math.Sqrt(50*50+200*200),preview.FrontWaistToHipSideMm,8);
+        Assert.Equal(Math.Sqrt(100*100+200*200),preview.BackWaistToHipSideMm,8);
+        Assert.Equal(preview.BackWaistToHipSideMm,preview.FrontHipToHemSideMm,8);
+        Assert.Equal(preview.FrontWaistToHipSideMm,preview.BackHipToHemSideMm,8);
+        Assert.True(preview.WaistToHipMismatchMm>0);Assert.True(preview.HipToHemMismatchMm>0);
+        Assert.False(preview.CanApplyOrExport);
+    }
     [Fact] public void InvalidOrNonALineDimensionsDoNotProducePreview()
     {
         foreach(var bad in new[]{Input with { HipDepth=700 },Input with { FrontHipArc=double.NaN },

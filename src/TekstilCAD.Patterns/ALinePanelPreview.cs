@@ -13,6 +13,12 @@ public sealed class ALinePanelPreview
     public const string ModelId = "A-04.lower-section.experimental.v1";
     public IReadOnlyList<Point2> Front { get; }
     public IReadOnlyList<Point2> Back { get; }
+    public double FrontWaistToHipSideMm { get; }
+    public double BackWaistToHipSideMm { get; }
+    public double FrontHipToHemSideMm { get; }
+    public double BackHipToHemSideMm { get; }
+    public double WaistToHipMismatchMm => Math.Abs(FrontWaistToHipSideMm-BackWaistToHipSideMm);
+    public double HipToHemMismatchMm => Math.Abs(FrontHipToHemSideMm-BackHipToHemSideMm);
     public double FrontSideLengthMm { get; }
     public double BackSideLengthMm { get; }
     public double SideMismatchMm => Math.Abs(FrontSideLengthMm-BackSideLengthMm);
@@ -27,8 +33,9 @@ public sealed class ALinePanelPreview
     private ALinePanelPreview(Point2[] front, Point2[] back)
     {
         Front=Array.AsReadOnly(front); Back=Array.AsReadOnly(back);
-        FrontSideLengthMm=Geometry.Distance(front[1],front[2])+Geometry.Distance(front[2],front[3]);
-        BackSideLengthMm=Geometry.Distance(back[1],back[2])+Geometry.Distance(back[2],back[3]);
+        FrontWaistToHipSideMm=Geometry.Distance(front[1],front[2]);BackWaistToHipSideMm=Geometry.Distance(back[1],back[2]);
+        FrontHipToHemSideMm=Geometry.Distance(front[2],front[3]);BackHipToHemSideMm=Geometry.Distance(back[2],back[3]);
+        FrontSideLengthMm=FrontWaistToHipSideMm+FrontHipToHemSideMm;BackSideLengthMm=BackWaistToHipSideMm+BackHipToHemSideMm;
     }
     public static ALinePanelPreview Create(ALinePanelInput input)
     {

@@ -183,6 +183,7 @@ internal static partial class DesktopVerification
                     }
                 }
                 finally { System.Globalization.CultureInfo.CurrentCulture=originalCulture; }
+                Check(sideDisplay.StatusForVerification.Text.Contains("Bel–kalça yan aralığı") && sideDisplay.StatusForVerification.Text.Contains("Kalça–etek yan aralığı") && sideDisplay.StatusForVerification.Text.Contains("ara noktalar uyuşmayabilir"),"Separate side segments disclose hip-point mismatch and do not certify stitching",checks);
                 sideDisplay.FieldsForVerification[3].Text="500.1";ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("fark yaklaşık") && !sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Difference above displayed rounding threshold is shown as approximate",checks);
             }
