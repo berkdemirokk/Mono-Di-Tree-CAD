@@ -1,0 +1,309 @@
+[
+  10,
+  {
+    "Name": "Synthetic historical only",
+    "Pieces": [
+      {
+        "Id": "a8c7265d-0699-d19a-3eb8-17c9ca1ec29f",
+        "Name": "History source",
+        "Points": [
+          {
+            "X": 4,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 4,
+            "Y": 6,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 6,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": null,
+          "Material": "Synthetic",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 3,
+            "Y": 1,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 2,
+            "Y": 1,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        }
+      },
+      {
+        "Id": "6b0ebc97-059c-59df-b4eb-3d4c90b9a1f9",
+        "Name": "History source",
+        "Points": [
+          {
+            "X": 5,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 11,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 11,
+            "Y": 4,
+            "IsFinite": true
+          },
+          {
+            "X": 5,
+            "Y": 4,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "Metadata": {
+          "Role": "Kesim",
+          "Size": null,
+          "Material": "Synthetic",
+          "Quantity": 1
+        },
+        "Grainline": {
+          "Start": {
+            "X": 6,
+            "Y": 1,
+            "IsFinite": true
+          },
+          "End": {
+            "X": 6,
+            "Y": 2,
+            "IsFinite": true
+          },
+          "NeedsReview": false
+        }
+      }
+    ],
+    "GradingRules": [],
+    "NestingSnapshot": {
+      "FabricWidth": 100,
+      "UsedLength": 6,
+      "Gap": 1,
+      "EdgeMargin": 0,
+      "Algorithm": "deterministic-shelf-v1",
+      "LayoutFingerprint": "8297807DA02E09828E22F25D687B20DC7DC63D587F4B0F550AF9DE56550AF0B4",
+      "Placements": [
+        {
+          "SourcePieceId": "44444444-4444-4444-8444-444444444444",
+          "CopyNumber": 1,
+          "PlacedPieceId": "6b0ebc97-059c-59df-b4eb-3d4c90b9a1f9"
+        },
+        {
+          "SourcePieceId": "44444444-4444-4444-8444-444444444444",
+          "CopyNumber": 2,
+          "PlacedPieceId": "a8c7265d-0699-d19a-3eb8-17c9ca1ec29f"
+        }
+      ],
+      "RotationTrace": {
+        "Schema": "per-copy-orthogonal-trace-v1",
+        "Algorithm": "explicit-per-copy-shelf-v1",
+        "TransformConvention": "origin-quarter-turn-then-translate-v1",
+        "SourceFingerprint": "BE434F0A6E497BDB7E81ECFF1FE98922E1081811491CDBEB4B64841B1C48BCAE",
+        "LayoutFingerprint": "8297807DA02E09828E22F25D687B20DC7DC63D587F4B0F550AF9DE56550AF0B4",
+        "SourcePieces": [
+          {
+            "Id": "44444444-4444-4444-8444-444444444444",
+            "Name": "History source",
+            "Points": [
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 6,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 6,
+                "Y": 4,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 4,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Synthetic",
+              "Quantity": 2
+            },
+            "Grainline": {
+              "Start": {
+                "X": 1,
+                "Y": 1,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 1,
+                "Y": 2,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "ExperimentalALine": {
+              "Algorithm": "A-04.lower-section.experimental.v1",
+              "SourceSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Side": "front"
+            }
+          }
+        ],
+        "LayoutPieces": [
+          {
+            "Id": "a8c7265d-0699-d19a-3eb8-17c9ca1ec29f",
+            "Name": "History source",
+            "Points": [
+              {
+                "X": 4,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 4,
+                "Y": 6,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 6,
+                "IsFinite": true
+              },
+              {
+                "X": 0,
+                "Y": 0,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Synthetic",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 3,
+                "Y": 1,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 2,
+                "Y": 1,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "ExperimentalALine": {
+              "Algorithm": "A-04.lower-section.experimental.v1",
+              "SourceSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Side": "front"
+            }
+          },
+          {
+            "Id": "6b0ebc97-059c-59df-b4eb-3d4c90b9a1f9",
+            "Name": "History source",
+            "Points": [
+              {
+                "X": 5,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 11,
+                "Y": 0,
+                "IsFinite": true
+              },
+              {
+                "X": 11,
+                "Y": 4,
+                "IsFinite": true
+              },
+              {
+                "X": 5,
+                "Y": 4,
+                "IsFinite": true
+              }
+            ],
+            "Closed": true,
+            "Metadata": {
+              "Role": "Kesim",
+              "Size": null,
+              "Material": "Synthetic",
+              "Quantity": 1
+            },
+            "Grainline": {
+              "Start": {
+                "X": 6,
+                "Y": 1,
+                "IsFinite": true
+              },
+              "End": {
+                "X": 6,
+                "Y": 2,
+                "IsFinite": true
+              },
+              "NeedsReview": false
+            },
+            "ExperimentalALine": {
+              "Algorithm": "A-04.lower-section.experimental.v1",
+              "SourceSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "Side": "front"
+            }
+          }
+        ],
+        "Selections": [
+          "44444444-4444-4444-8444-444444444444"
+        ],
+        "Copies": [
+          {
+            "SourcePieceId": "44444444-4444-4444-8444-444444444444",
+            "CopyNumber": 1,
+            "PlacedPieceId": "6b0ebc97-059c-59df-b4eb-3d4c90b9a1f9",
+            "Degrees": 0
+          },
+          {
+            "SourcePieceId": "44444444-4444-4444-8444-444444444444",
+            "CopyNumber": 2,
+            "PlacedPieceId": "a8c7265d-0699-d19a-3eb8-17c9ca1ec29f",
+            "Degrees": 90
+          }
+        ],
+        "FabricWidth": 100,
+        "Gap": 1,
+        "EdgeMargin": 0,
+        "UsedLength": 6,
+        "MaxLength": 100,
+        "GrainDirection": "TwoWay",
+        "ToleranceDegrees": 90
+      }
+    }
+  }
+]

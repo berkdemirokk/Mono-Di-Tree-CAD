@@ -231,6 +231,10 @@ private struct ContentView: View {
                 .disabled(isSaving || loadedModel.load.isLoading)
             }
             if let project {
+                if project.formatVersion == 10 {
+                    Text("Sürüm 10: Deneysel A kesim içeren proje yalnız görüntülenir; üretim için onaylanmamıştır. Düzenleme ve geometri çıktısı desteklenmez; özgün dosya aynen paylaşılabilir.")
+                        .font(.callout).foregroundStyle(.orange)
+                }
                 if project.formatVersion == 7 {
                     Text("Sürüm 7: Yalnız görünür konturlar ve işaretler önizlenir. Döndürme geçmişi, eşleşmeler ve üretime uygunluk bu telefonda doğrulanmaz; masaüstünde kontrol edin. Özgün dosya baytları korunur.")
                         .font(.caption).foregroundStyle(.secondary)
@@ -329,8 +333,11 @@ private struct ContentView: View {
                             }
                         ))
                     }
-                    Button("İki parçayı karşılaştır…") { showingPieceComparison = true }
-                        .disabled(loadedModel.load.isLoading || project.pieces.count < 2)
+                    Button("İki parçayı karşılaştır…") {
+                        guard project.formatVersion != 10 else { return }
+                        showingPieceComparison = true
+                    }
+                        .disabled(loadedModel.load.isLoading || project.pieces.count < 2 || project.formatVersion == 10)
                         .sheet(isPresented: $showingPieceComparison) {
                             PieceComparisonView(pieces: project.pieces, projectName: project.name, initialIndex: selectedPiece)
                         }
@@ -386,12 +393,12 @@ private struct ContentView: View {
                             }
                         #if DEBUG
                         Button("Deneysel nokta düzenle…") {
-                            guard let data = sourceData, let id = project.pieces[selectedPiece].id,
+                            guard project.formatVersion < 7, let data = sourceData, let id = project.pieces[selectedPiece].id,
                                   let identity = loadedModel.editIdentity() else { return }
                             loadedModel.pointEditSnapshot = PointEditSnapshot(data: data, piece: project.pieces[selectedPiece], pieceID: id,
                                 index: selectedPiece, projectName: project.name, identity: identity)
                         }
-                            .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
+                            .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || project.pieces[selectedPiece].id == nil || project.pieces[selectedPiece].points.isEmpty || project.pieces[selectedPiece].points.count > 4096 || (sourceData?.count ?? 0) > 8 * 1024 * 1024)
                             .sheet(item: Binding(get: { loadedModel.pointEditSnapshot }, set: { _ in })) { snapshot in
                                 ExperimentalPointEditor(data: snapshot.data, piece: snapshot.piece, pieceID: snapshot.pieceID, projectName: snapshot.projectName,
                                     isCurrent: { loadedModel.isCurrent(snapshot.identity, data: snapshot.data) },
@@ -401,8 +408,8 @@ private struct ContentView: View {
                             }
                         Text("Deneysel nokta düzenleme yalnız seçili, kimlikli ve en fazla 4096 noktalı parçada kullanılabilir; desteklenmeyen proje alanları reddedilir.")
                             .font(.caption).foregroundStyle(.secondary)
-                        if project.formatVersion == 7 {
-                            Text("Sürüm 7 dosyalarında nokta ve parça adı düzenleme desteklenmiyor; özgün dosya dışa aktarılabilir.")
+                        if project.formatVersion >= 7 {
+                            Text("Sürüm \(project.formatVersion) dosyalarında nokta ve parça adı düzenleme desteklenmiyor; özgün dosya dışa aktarılabilir.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         if project.hasNonUTF8BOM {
@@ -410,7 +417,7 @@ private struct ContentView: View {
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                         Button("Parça adını değiştir ve kopya kaydet") {
-                            guard let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
+                            guard project.formatVersion < 7, let data = sourceData, let name = project.pieces[selectedPiece].name else { return }
                             // Keep a failed edit available for retry on the same snapshot.
                             if pieceRenameSnapshot?.data != data || pieceRenameSnapshot?.index != selectedPiece {
                                 editedPieceName = name
@@ -418,7 +425,7 @@ private struct ContentView: View {
                             pieceRenameSnapshot = PieceRenameSnapshot(data: data, index: selectedPiece, name: name, id: project.pieces[selectedPiece].id, projectName: project.name)
                             showingPieceNameEditor = true
                         }
-                        .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion == 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
+                        .disabled(isSaving || loadedModel.load.isLoading || sourceData == nil || project.formatVersion >= 7 || project.hasNonUTF8BOM || (sourceData?.count ?? 0) > LosslessProjectName.maximumEditBytes || !project.pieceRenameIdentitiesValid)
                         if project.hasNonUTF8BOM {
                             Text("UTF-16 veya UTF-32 dosyalarında parça adını değiştirme henüz desteklenmiyor. Açık modeli özgün baytlarıyla dışa aktarabilirsiniz.")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -914,7 +921,7 @@ private struct ContentView: View {
     }
 
     private func saveRenamedPieceCopy() {
-        guard let snapshot = pieceRenameSnapshot, sourceData == snapshot.data, selectedPiece == snapshot.index,
+        guard let snapshot = pieceRenameSnapshot, let currentProject = project, currentProject.formatVersion < 7, sourceData == snapshot.data, selectedPiece == snapshot.index,
               !LosslessProjectName.hasNonUTF8BOM(snapshot.data) else {
             error = "Açık model veya seçili parça değişti. Parçayı yeniden seçin."
             return
@@ -1968,6 +1975,7 @@ struct Drawing {
         let grainStatus: String
         let grain: Grain?
         let notches: [Int]
+        var experimentalALine: Bool = false
         func displayName(index: Int) -> String {
             guard let name, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 return "Parça \(index + 1)"
@@ -1988,7 +1996,7 @@ struct Drawing {
             } else {
                 dimensions = []
             }
-            let warning = (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
+            let warning = (experimentalALine ? ["Deneysel A kesim; üretim için onaylanmamış"] : []) + (hasMinimumContourPoints ? [] : ["Kontur için nokta sayısı yetersiz: \(points.count)"]) + (quantityUnreadable ? ["Adet okunamadı veya geçersiz"] : []) + (metadataUnreadable ? ["Üretim bilgileri okunamadı"] : []) + (metadataEmpty ? ["Üretim bilgileri boş"] : []) + (roleUnreadable ? ["Parça türü okunamadı veya geçersiz"] : []) + (textMetadataUnreadable ? ["Beden veya malzeme okunamadı veya geçersiz"] : [])
             return (["Parça \(index + 1)"] + (id.map { ["Kimlik: \($0.uuidString)"] } ?? []) + [closed ? "Kapalı kontur" : "Açık kontur", "\(points.count) nokta"] + fields + dimensions + warning + (notches.isEmpty ? [] : ["\(notches.count) köşe işareti"])).joined(separator: " · ")
         }
 
@@ -2162,8 +2170,13 @@ struct Drawing {
             }
             return nil
         }
-        guard nextNonWhitespace() == 0x5b, let digit = nextNonWhitespace(),
-              (0x31...0x37).contains(digit), nextNonWhitespace() == 0x2c else { return nil }
+        guard nextNonWhitespace() == 0x5b, let digit = nextNonWhitespace() else { return nil }
+        if digit == 0x31 {
+            guard let next = nextNonWhitespace() else { return nil }
+            if next == 0x30 { return nextNonWhitespace() == 0x2c ? 10 : nil }
+            return next == 0x2c ? 1 : nil
+        }
+        guard (0x32...0x37).contains(digit), nextNonWhitespace() == 0x2c else { return nil }
         return Int(digit - 0x30)
     }
     static func load(_ url: URL) throws -> Drawing { try load(readData(url)) }
@@ -2201,7 +2214,19 @@ struct Drawing {
             object = body; formatVersion = version
         } else if let body = root as? [String: Any] { object = body; formatVersion = 0 }
         else { throw ViewerError.message("Desteklenmeyen proje biçimi.") }
-        if formatVersion == 6 || formatVersion == 7 {
+        if formatVersion == 10 {
+            guard data.count <= LosslessProjectName.maximumEditBytes,
+                  let decoded = String(data: data, encoding: .utf8), !LosslessProjectName.hasNonUTF8BOM(data) else {
+                throw ViewerError.message("Sürüm 10 önizlemesi yalnız 8 MB altındaki UTF-8 dosyalarını destekler.")
+            }
+            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false, strictVersion: 10, cancelled: cancelled) }
+            catch is CancellationError { throw CancellationError() }
+            catch { throw ViewerError.message("Sürüm 10 alanları yinelenmiş veya okunamadı.") }
+            guard Set(object.keys) == Set(["Name", "Pieces", "GradingRules"]),
+                  let rules = object["GradingRules"] as? [Any], rules.isEmpty else {
+                throw ViewerError.message("Sürüm 10 geçmişi veya serileme kuralları bu telefonda desteklenmiyor; dosya önizlenmedi.")
+            }
+        } else if formatVersion == 6 || formatVersion == 7 {
             guard data.count <= LosslessProjectName.maximumEditBytes else { throw ViewerError.message("Sürüm 6 veya 7 önizlemesi için dosya en fazla 8 MB olmalı.") }
             do {
                 let validationData = try LosslessProjectName.versionSixValidationData(data)
@@ -2241,14 +2266,29 @@ struct Drawing {
         var pieces: [Piece] = []
         var pieceRenameIdentitiesValid = true
         var pieceIDs = Set<UUID>()
+        var experimentalCount = 0
         for raw in rawPieces {
             if cancelled() { throw CancellationError() }
-            if formatVersion == 7 {
+            if formatVersion == 7 || formatVersion == 10 {
                 guard let id = raw["Id"] as? String, UUID(uuidString: id) != nil, raw["Name"] is String else {
                     throw ViewerError.message("Sürüm 7 parça kimliği veya adı eksik; dosya önizlenmedi.")
                 }
             }
-            if formatVersion >= 6 && !Set(raw.keys).isSubset(of: ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]) {
+            if formatVersion == 10, let markerValue = raw["ExperimentalALine"] {
+                guard let marker = markerValue as? [String: Any],
+                      Set(marker.keys) == Set(["Algorithm", "SourceSha256", "Side"]),
+                      marker["Algorithm"] as? String == "A-04.lower-section.experimental.v1",
+                      let side = marker["Side"] as? String, ["front", "back"].contains(side),
+                      let hash = marker["SourceSha256"] as? String, hash.utf8.count == 64,
+                      hash.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) }) else {
+                    throw ViewerError.message("Deneysel kaynak işareti geçersiz; dosya önizlenmedi.")
+                }
+                experimentalCount += 1
+            }
+            let knownPieceKeys: Set<String> = formatVersion == 10
+                ? ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches", "ExperimentalALine"]
+                : ["Id", "Name", "Points", "Closed", "Metadata", "Grainline", "Notches"]
+            if formatVersion >= 6 && !Set(raw.keys).isSubset(of: knownPieceKeys) {
                 throw ViewerError.message("Sürüm \(formatVersion) parçada tanınmayan alanlar var; kontur önizlenmedi.")
             }
             guard let rawPoints = raw["Points"] as? [[String: Any]], rawPoints.count <= 10_000,
@@ -2350,7 +2390,7 @@ struct Drawing {
             } else {
                 grainStatus = "İplik yönü: Okunamadı"
             }
-            if formatVersion == 7 && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
+            if (formatVersion == 7 || formatVersion == 10) && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
                 throw ViewerError.message("Sürüm 7 parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
             }
             let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
@@ -2359,7 +2399,7 @@ struct Drawing {
                 if let id, id.uuidString != "00000000-0000-0000-0000-000000000000", pieceIDs.insert(id).inserted { }
                 else { pieceRenameIdentitiesValid = false }
             }
-            if formatVersion == 7 && !pieceRenameIdentitiesValid {
+            if (formatVersion == 7 || formatVersion == 10) && !pieceRenameIdentitiesValid {
                 throw ViewerError.message("Sürüm 7 parça kimliği yinelenmiş veya geçersiz; dosya önizlenmedi.")
             }
             let hasMinimum = ContourMeasure.hasMinimumContourPoints(points, closed: closed)
@@ -2370,9 +2410,11 @@ struct Drawing {
                                 hasMinimumContourPoints: hasMinimum,
                                 role: role, roleUnreadable: roleUnreadable, size: size,
                                 material: material, textMetadataUnreadable: textMetadataUnreadable, quantity: quantity, quantityUnreadable: quantityUnreadable, metadataUnreadable: metadataUnreadable, metadataEmpty: metadataEmpty,
-                                grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices))
+                                grainStatus: grainStatus, grain: parsedGrain, notches: notchIndices,
+                                experimentalALine: formatVersion == 10 && raw["ExperimentalALine"] != nil))
         }
         if cancelled() { throw CancellationError() }
+        if formatVersion == 10 && experimentalCount == 0 { throw ViewerError.message("Sürüm 10 deneysel kaynak işareti bulunamadı.") }
         if formatVersion == 6 && totalNotches == 0 { throw ViewerError.message("Sürüm 6 dosyasında köşe işareti bulunamadı.") }
         var historyPieceIDsDiffer = false
         if formatVersion == 7, let snapshot = object["NestingSnapshot"] as? [String: Any],
@@ -4721,6 +4763,10 @@ private struct PieceDetails: View {
         if let dimensions {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Kontur bilgisi").font(.subheadline.bold())
+                if piece.experimentalALine {
+                    Text("Deneysel A kesim · üretim için onaylanmamış")
+                        .foregroundStyle(.orange)
+                }
                 Text("\(piece.points.count) nokta • \(piece.closed ? "Kapalı" : "Açık") kontur")
                 if let role = piece.role, !role.isEmpty { Text("Rol: \(ModelStore.safeLabel(role))") }
                 if piece.roleUnreadable { Text("Parça türü okunamadı veya geçersiz; kaynak dosyayı kontrol edin.") }

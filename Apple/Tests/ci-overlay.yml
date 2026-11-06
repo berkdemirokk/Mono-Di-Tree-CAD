@@ -65,6 +65,12 @@
         buildPhase: resources
       - path: Tests/Fixtures/desktop-synthetic-notch.tcad
         buildPhase: resources
+      - path: Tests/Fixtures/v10-minimal.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/v10-mixed.tcad
+        buildPhase: resources
+      - path: Tests/Fixtures/v10-history-only.tcad
+        buildPhase: resources
       - path: Tests/Fixtures/desktop-synthetic-rotated-v7.tcad
         buildPhase: resources
       - path: Tests/Fixtures/desktop-synthetic-rotated-v7-stale.tcad

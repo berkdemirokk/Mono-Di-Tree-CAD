@@ -1,0 +1,68 @@
+[
+  10,
+  {
+    "Name": "Synthetic mixed",
+    "Pieces": [
+      {
+        "Id": "22222222-2222-4222-8222-222222222222",
+        "Name": "Normal",
+        "Points": [
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 6,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 6,
+            "Y": 4,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 4,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true
+      },
+      {
+        "Id": "33333333-3333-4333-8333-333333333333",
+        "Name": "Experimental",
+        "Points": [
+          {
+            "X": 0,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 6,
+            "Y": 0,
+            "IsFinite": true
+          },
+          {
+            "X": 6,
+            "Y": 4,
+            "IsFinite": true
+          },
+          {
+            "X": 0,
+            "Y": 4,
+            "IsFinite": true
+          }
+        ],
+        "Closed": true,
+        "ExperimentalALine": {
+          "Algorithm": "A-04.lower-section.experimental.v1",
+          "SourceSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+          "Side": "front"
+        }
+      }
+    ],
+    "GradingRules": []
+  }
+]

@@ -7,6 +7,51 @@ private func makeTestRequest(prompt: String, measurements: String, image: Data?,
 
 
 final class ModelLoadStateTests: XCTestCase {
+    func testWindowsV10FixturesAreReadOnlyAndKeepSource() throws {
+        func fixture(_ name: String) throws -> Data {
+            let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "tcad"))
+            return try Data(contentsOf: url)
+        }
+        for name in ["v10-minimal", "v10-mixed"] {
+            let data = try fixture(name), original = data
+            let drawing = try Drawing.load(data)
+            XCTAssertEqual(drawing.formatVersion, 10)
+            var state = LoadedModelState<Drawing>()
+            state.install(drawing, data: data, selectedPiece: 0)
+            XCTAssertEqual(state.sourceData, original)
+            XCTAssertTrue(drawing.pieces.contains { $0.experimentalALine })
+            if name == "v10-mixed" {
+                XCTAssertFalse(drawing.pieces[0].experimentalALine)
+                XCTAssertTrue(drawing.pieces[1].experimentalALine)
+            }
+            let id = try XCTUnwrap(drawing.pieces.first?.id)
+            XCTAssertThrowsError(try ExperimentalPieceRename.replacing(in: data, snapshot: data, pieceID: id, with: "Edited"))
+            XCTAssertThrowsError(try ExperimentalPointMoveJSON.moving(data, snapshot: data, pieceID: id, index: 0, to: .init(x: 1, y: 1)))
+            XCTAssertThrowsError(try LosslessProjectName.replacing(in: data, with: "Edited"))
+            XCTAssertEqual(data, original)
+        }
+        XCTAssertThrowsError(try Drawing.load(fixture("v10-history-only")))
+    }
+    func testV10ReadOnlyEnvelopeRejectsUnknownDuplicatesAndHistory() throws {
+        let marker = "\"ExperimentalALine\":{\"Algorithm\":\"A-04.lower-section.experimental.v1\",\"SourceSha256\":\"" + String(repeating: "A", count: 64) + "\",\"Side\":\"front\"}"
+        func bytes(_ markerText: String, extra: String = "") -> Data {
+            Data("[10,{\"Name\":\"Test\",\"Pieces\":[{\"Id\":\"11111111-1111-1111-1111-111111111111\",\"Name\":\"Ön\",\"Closed\":true,\"Points\":[{\"X\":0,\"Y\":0},{\"X\":10,\"Y\":0},{\"X\":0,\"Y\":10}],\(markerText)}],\"GradingRules\":[]\(extra)}]".utf8)
+        }
+        let source = bytes(marker), original = source
+        let drawing = try Drawing.load(source)
+        XCTAssertEqual(drawing.formatVersion, 10)
+        XCTAssertEqual(drawing.pieces.count, 1)
+        XCTAssertEqual(source, original)
+        XCTAssertThrowsError(try Drawing.load(bytes(marker + "," + marker)))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker.replacingOccurrences(of: "\"Side\":\"front\"", with: "\"Side\":\"front\",\"Side\":\"back\""))))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker.replacingOccurrences(of: "\"Side\":\"front\"", with: "\"Side\":\"front\",\"Extra\":1"))))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker.replacingOccurrences(of: "\"front\"", with: "\"unknown\""))))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker.replacingOccurrences(of: String(repeating: "A", count: 64), with: String(repeating: "a", count: 64)))))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker, extra: ",\"NestingSnapshot\":{\"RotationTrace\":{}}")))
+        XCTAssertThrowsError(try Drawing.load(bytes(marker, extra: ",\"PhotoTraceHistory\":[]")))
+        let v11 = String(decoding: source, as: UTF8.self).replacingOccurrences(of: "[10,", with: "[11,")
+        XCTAssertThrowsError(try Drawing.load(Data(v11.utf8)))
+    }
     #if DEBUG
     func testOldExporterCannotDismissNewAttempt() {
         var presentation = ExperimentalDesignBrief.ExportPresentation()
