@@ -18,6 +18,11 @@ internal static class ProjectedLengthBounds
             return new(a.Lower*am+b.Lower*bm,a.Upper*am+b.Upper*bm,a.Denominator*am);
         }
         public bool Disjoint(Interval other) { Validate();other.Validate();return Lower*other.Denominator>other.Upper*Denominator || other.Lower*Denominator>Upper*other.Denominator; }
+        // Approximate display only; the disjoint verdict remains integer exact.
+        public double ApproximateGap(Interval other) {
+            Validate();other.Validate();var gap=BigInteger.Max(BigInteger.Zero,BigInteger.Max(Lower*other.Denominator-other.Upper*Denominator,other.Lower*Denominator-Upper*other.Denominator));
+            return Approx(gap,Denominator*other.Denominator);
+        }
         public bool Contains(double value)
         {
             Validate();if(!double.IsFinite(value)||value<0)return false;var (n,d)=Fraction(value);

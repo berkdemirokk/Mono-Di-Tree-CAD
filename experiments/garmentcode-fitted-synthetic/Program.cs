@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckShoulderTrials(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -535,6 +535,21 @@ internal static class Validator
             RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
         }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
+    internal static void CheckShoulderTrials()
+    {
+        var one=ProjectedLengthBounds.Project(BezierLengthBounds.Enclose([new(0,0),new(1,0)],0),1);
+        var two=ProjectedLengthBounds.Project(BezierLengthBounds.Enclose([new(0,0),new(2,0)],0),1);
+        Need(one.ApproximateGap(one)==0&&one.Disjoint(two)&&one.ApproximateGap(two)==1&&two.ApproximateGap(one)==1,"projected gap diagnostic");
+        foreach(string id in new[]{"synthetic-base","synthetic-distinct"})foreach(int direction in new[]{-1,1}) {
+            var t=ShoulderSeamStudy.Create(id,1,direction);
+            Need(t.Status=="unresolved"&&!t.ProductionAllowed&&!t.ExportAllowed,"shoulder trial gate");
+            Need(t.RightTopology.Unresolved>0||t.LeftTopology.Unresolved>0||t.RightTopology.NonMonotone>0||t.LeftTopology.NonMonotone>0,"shoulder trial topology unexpectedly resolved");
+            try {t.RequireResearchComposition();throw new Exception("Shoulder trial composed");}catch(InvalidOperationException) { }
+            Console.WriteLine(FormattableString.Invariant($"{id} shoulder trial direction={direction}: front before=[{t.Before.ApproximateLowerCm:G10},{t.Before.ApproximateUpperCm:G10}] after=[{t.After.ApproximateLowerCm:G10},{t.After.ApproximateUpperCm:G10}], back=[{t.Back.ApproximateLowerCm:G10},{t.Back.ApproximateUpperCm:G10}], deviation={t.Displacement:G9} cm, unresolved right/left={t.RightTopology.Unresolved}/{t.LeftTopology.Unresolved}, nonmonotone right/left={t.RightTopology.NonMonotone}/{t.LeftTopology.NonMonotone}, pairs right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)}; rejected."));
+        }
+        try {ShoulderSeamStudy.Create("synthetic-base",0,1);throw new Exception("Zero curvature accepted");}catch(ArgumentException) { }
+        try {ShoulderSeamStudy.Create("synthetic-base",1,0);throw new Exception("Invalid shoulder direction accepted");}catch(ArgumentException) { }
     }
     internal static void CheckCombinedWaistCurvature()
     {
@@ -1069,6 +1084,8 @@ internal static class Validator
             try {changedGraph.RequireResearchComposition();throw new Exception("Modified graph composed");}catch(InvalidOperationException) { }
             foreach(var (oldRule,newRule) in changedGraph.Before.Zip(changedGraph.After))
                 Console.WriteLine(FormattableString.Invariant($"{id} graph {oldRule.Kind}/{oldRule.Owner}/{oldRule.Index}: before A=[{oldRule.A.ApproximateLower:G9},{oldRule.A.ApproximateUpper:G9}] B=[{oldRule.B.ApproximateLower:G9},{oldRule.B.ApproximateUpper:G9}], after A=[{newRule.A.ApproximateLower:G9},{newRule.A.ApproximateUpper:G9}] B=[{newRule.B.ApproximateLower:G9},{newRule.B.ApproximateUpper:G9}], disjoint before/after={oldRule.RepresentedIntervalsDisjoint}/{newRule.RepresentedIntervalsDisjoint}; research only."));
+            foreach(var rule in changedGraph.After.Where(r=>r.RepresentedIntervalsDisjoint))
+                Console.WriteLine(FormattableString.Invariant($"{id} residual {rule.Kind}/{rule.Owner}/{rule.Index} midpoint A={((rule.A.ApproximateLower+rule.A.ApproximateUpper)/2):G17} B={((rule.B.ApproximateLower+rule.B.ApproximateUpper)/2):G17} approximate gap={rule.A.ApproximateGap(rule.B):G9} cm; exact disjoint=True"));
             for(int j=0;j<4;j++)Console.WriteLine(FormattableString.Invariant($"{id} waist part {new[]{"upper front","lower front","upper back","lower back"}[j]} before=[{changedGraph.WaistBefore[j].ApproximateLower:G10},{changedGraph.WaistBefore[j].ApproximateUpper:G10}] after=[{changedGraph.WaistAfter[j].ApproximateLower:G10},{changedGraph.WaistAfter[j].ApproximateUpper:G10}]"));
             try { typedGraph.RequireResearchComposition();throw new InvalidDataException("Unverified typed graph composed"); } catch(InvalidOperationException) { }
             var typedSide=typedGraph.Rules.Single(r=>r.Kind=="PencilSkirt" && r.Index==0);
