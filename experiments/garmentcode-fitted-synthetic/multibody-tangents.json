@@ -1,0 +1,133 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "numpy": "1.26.4",
+  "scipy": "1.17.1",
+  "cases": [
+    {
+      "id": "angle5",
+      "overrides": {
+        "shoulder_incl": 5
+      },
+      "control": [
+        0.4999735577455197,
+        -0.010935991401376601
+      ],
+      "success": true,
+      "objective": 9.471297677545563e-13
+    },
+    {
+      "id": "angle18_narrow",
+      "overrides": {
+        "shoulder_incl": 18,
+        "back_width": 44,
+        "waist_back_width": 33,
+        "bum_points": 17
+      },
+      "control": [
+        0.49823354056784536,
+        -0.040471479146506326
+      ],
+      "success": true,
+      "objective": 1.670947754540583e-16
+    },
+    {
+      "id": "angle30",
+      "overrides": {
+        "shoulder_incl": 30
+      },
+      "control": [
+        0.5009872298178655,
+        -0.07231064725327399
+      ],
+      "success": true,
+      "objective": 1.5210579462315525e-12
+    },
+    {
+      "id": "angle35_wide",
+      "overrides": {
+        "shoulder_incl": 35,
+        "back_width": 50,
+        "waist_back_width": 38,
+        "bum_points": 19
+      },
+      "control": [
+        0.509725895248392,
+        -0.08922891210292676
+      ],
+      "success": true,
+      "objective": 6.810158185006682e-13
+    },
+    {
+      "id": "angle40",
+      "overrides": {
+        "shoulder_incl": 40
+      },
+      "control": [
+        0.5287413982751324,
+        -0.11091666314627799
+      ],
+      "success": true,
+      "objective": 7.309271055342281e-16
+    },
+    {
+      "id": "holdout7",
+      "overrides": {
+        "shoulder_incl": 7
+      },
+      "control": [
+        0.4999061035771681,
+        -0.015345194032942409
+      ],
+      "success": true,
+      "objective": 1.5243284941347992e-16
+    },
+    {
+      "id": "holdout15",
+      "overrides": {
+        "shoulder_incl": 15
+      },
+      "control": [
+        0.4988431072406353,
+        -0.03341571173356589
+      ],
+      "success": true,
+      "objective": 7.717624085768774e-13
+    },
+    {
+      "id": "holdout25",
+      "overrides": {
+        "shoulder_incl": 25
+      },
+      "control": [
+        0.49799160385261637,
+        -0.05805432908873023
+      ],
+      "success": true,
+      "objective": 7.756230285270572e-17
+    },
+    {
+      "id": "holdout32",
+      "overrides": {
+        "shoulder_incl": 32
+      },
+      "control": [
+        0.5035876183644404,
+        -0.07866914447878909
+      ],
+      "success": true,
+      "objective": 2.8003900440945953e-15
+    },
+    {
+      "id": "holdout39",
+      "overrides": {
+        "shoulder_incl": 39
+      },
+      "control": [
+        0.5238163955604664,
+        -0.10604453525343731
+      ],
+      "success": true,
+      "objective": 3.25129257852375e-17
+    }
+  ]
+}

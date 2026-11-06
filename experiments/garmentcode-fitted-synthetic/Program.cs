@@ -805,6 +805,22 @@ internal static class Validator
         using var json=JsonDocument.Parse(text);var root=json.RootElement;
         Need(root.GetProperty("source_commit").GetString()==ResearchDesign.PinnedFitted.SourceCommit,"multibody source commit");
         var cases=root.GetProperty("cases").EnumerateArray().ToArray();Need(cases.Length==5 && cases.Select(c=>c.GetProperty("id").GetString()).SequenceEqual(new[]{"angle5","angle18_narrow","angle30","angle35_wide","angle40"}),"multibody case identity");
+        using var tangentStream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.multibody-tangents.json") ?? throw new InvalidDataException("Missing tangent control trace");
+        using var tangentReader=new StreamReader(tangentStream);string tangentText=tangentReader.ReadToEnd().Replace("\r\n","\n").TrimStart('\uFEFF');
+        SyntheticDependencyProbe.CheckArtifactIdentity(tangentText,"531311ECCAB8BFF5C9B9BA47CCCB70F3056CFF1FA3B7B67C0DDDB7809E7BB3B5");
+        using var tangentJson=JsonDocument.Parse(tangentText);var tangentRoot=tangentJson.RootElement;
+        Need(tangentRoot.GetProperty("source_commit").GetString()==ResearchDesign.PinnedFitted.SourceCommit,"tangent source commit");
+        var tangentCases=tangentRoot.GetProperty("cases").EnumerateArray().ToDictionary(x=>x.GetProperty("id").GetString()!,StringComparer.Ordinal);
+        Need(tangentCases.Count==10,"tangent source cases");
+        foreach(string holdout in new[]{"holdout7","holdout15","holdout25","holdout32","holdout39"}) {
+            var row=tangentCases[holdout];var expected=Point(row.GetProperty("control"));var fitted=TangentBfgsExperiment.Solve(row.GetProperty("overrides").GetProperty("shoulder_incl").GetDouble());
+            double error=(expected-new P(fitted.Control.X,fitted.Control.Y)).Length();
+            Need(row.GetProperty("success").GetBoolean()&&error<1e-6&&!fitted.ExportAllowed&&!fitted.ProductionAllowed,"held-out tangent source comparison");
+            Console.WriteLine($"{holdout} experimental BFGS tangent error={error:G9}; unresolved.");
+        }
+        foreach(double invalid in new[]{double.NaN,double.PositiveInfinity,0d,45d}) {
+            try {TangentBfgsExperiment.Solve(invalid);throw new Exception("Invalid tangent angle accepted");}catch(ArgumentException) { }
+        }
         var original=SyntheticBodyCatalog.Create("synthetic-base");var fields=ResearchMeasurements.FieldsFor(ResearchMeasurements.Operation.PinnedGarment);
         foreach(var row in cases) {
             var overrides=row.GetProperty("overrides");
@@ -846,6 +862,35 @@ internal static class Validator
             var badControl=candidate.Edges.ToArray();var c0=badControl[0].Controls[0];
             badControl[0]=badControl[0] with { Controls=new[]{new BackBodiceCandidate.P(c0.X+1,c0.Y)} };
             try {CheckBands(badControl);throw new Exception("Changed control accepted");}catch(InvalidDataException) { }
+            var tangentCase=tangentCases[id];
+            Need(tangentCase.GetProperty("success").GetBoolean()&&tangentCase.GetProperty("overrides").GetRawText()==overrides.GetRawText(),"source control binding");
+            var fitted=TangentBfgsExperiment.Solve((double)body["shoulder_incl"]);
+            var sourceT=Point(tangentCase.GetProperty("control"));double fitError=(sourceT-new P(fitted.Control.X,fitted.Control.Y)).Length();
+            Need(fitError<1e-6 && !fitted.ExportAllowed && !fitted.ProductionAllowed,"experimental tangent source control mismatch");
+            var sourceControl=Point(tangentCase.GetProperty("control"));
+            var counterfactual=BackWaistCandidate.CompareWithSourceControl(body,ResearchDesign.PinnedFitted,new(sourceControl.X,sourceControl.Y));
+            double injectedEndpointMax=0,injectedControlMax=0;
+            for(int i=0;i<7;i++) {
+                var e=counterfactual.Edges[i];var r=source[i];var st=Point(r.GetProperty("start"));var en=Point(r.GetProperty("end"));
+                injectedEndpointMax=Math.Max(injectedEndpointMax,Math.Max((st-new P(e.Start.X,e.Start.Y)).Length(),(en-new P(e.End.X,e.End.Y)).Length()));
+                if(e.RelativeControl is {} c) {var cr=Point(r.GetProperty("relative_controls")[0]);injectedControlMax=Math.Max(injectedControlMax,(cr-new P(c.X,c.Y)).Length());}
+            }
+            Need(double.IsFinite(injectedEndpointMax)&&double.IsFinite(injectedControlMax)&&!counterfactual.ExportAllowed&&!counterfactual.ProductionAllowed,"source control counterfactual gate");
+            Console.WriteLine($"{id} with source tangent: endpoint={injectedEndpointMax:G9} cm; control={injectedControlMax:G9}; unresolved.");
+            var improved=BackWaistCandidate.CreateWithExperimentalBfgs(body,ResearchDesign.PinnedFitted);double improvedEndpointMax=0,improvedControlMax=0;
+            for(int i=0;i<7;i++) {
+                var e=improved.Edges[i];var r=source[i];var st=Point(r.GetProperty("start"));var en=Point(r.GetProperty("end"));
+                improvedEndpointMax=Math.Max(improvedEndpointMax,Math.Max((st-new P(e.Start.X,e.Start.Y)).Length(),(en-new P(e.End.X,e.End.Y)).Length()));
+                if(e.RelativeControl is {} c) {var cr=Point(r.GetProperty("relative_controls")[0]);improvedControlMax=Math.Max(improvedControlMax,(cr-new P(c.X,c.Y)).Length());}
+            }
+            Need(improvedEndpointMax<1e-5&&improvedControlMax<1e-6&&!improved.ExportAllowed&&!improved.ProductionAllowed,"experimental back contour source comparison");
+            try {improved.RequireResearchComposition();throw new Exception("Experimental contour composed");}catch(InvalidOperationException) { }
+            if(id=="angle40") {
+                var perturbed=BackWaistCandidate.CompareWithSourceControl(body,ResearchDesign.PinnedFitted,new(sourceControl.X+.01,sourceControl.Y));
+                var wrong=perturbed.Edges[0].End;var expectedEnd=Point(source[0].GetProperty("end"));
+                Need((expectedEnd-new P(wrong.X,wrong.Y)).Length()>1e-5,"altered source control was not detected");
+            }
+            Console.WriteLine($"{id} experimental BFGS: tangent={fitError:G9}, endpoint={improvedEndpointMax:G9} cm, relative control={improvedControlMax:G9}; unresolved.");
             var (endpointMax,controlMax)=Measure(candidate.Edges);
             Console.WriteLine($"{row.GetProperty("id").GetString()} source vs C# first 7 edges: max endpoint={endpointMax:G9} cm; max relative control={controlMax:G9}; unresolved.");
         }
@@ -864,6 +909,8 @@ internal static class Validator
             Need(norm>0 && row.GetProperty("success").GetBoolean() && row.GetProperty("status").GetInt32()==0 && row.GetProperty("iterations").GetInt32()>0 && row.GetProperty("evaluations").GetInt32()>0,"source optimizer result");
             double dx=c.X/norm-ray.Target.X,dy=c.Y/norm-ray.Target.Y,objective=dx*dx+dy*dy;
             Need(Math.Abs(objective-row.GetProperty("objective").GetDouble())<1e-12 && objective<2e-12,"source tangent objective");
+            var experimental=TangentBfgsExperiment.Solve(degrees);
+            Need((c-new P(experimental.Control.X,experimental.Control.Y)).Length()<1e-6&&!experimental.ExportAllowed&&!experimental.ProductionAllowed,"optimizer trace experimental source comparison");
             double diff=(c-new P(ray.Candidate.X,ray.Candidate.Y)).Length();maxDiff=Math.Max(maxDiff,diff);
             Need(row.GetProperty("gradient").EnumerateArray().All(x=>double.IsFinite(x.GetDouble())),"source optimizer gradient");
         }

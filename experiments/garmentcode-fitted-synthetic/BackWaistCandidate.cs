@@ -88,7 +88,21 @@ internal static class BackWaistCandidate
         if(!measurements.Check(operation).AllFieldsPresent)throw new ArgumentException("Missing back measurements.");
         return new UnverifiedPath(Calculate(measurements.SnapshotFor(operation,design),measurements.Value,ReferenceState.Unverified));
     }
-    private static Path Calculate(string id,Func<string,double> V,ReferenceState state)
+    // Experimental source-inspired solver; returned contour remains unverified and non-composable.
+    internal static UnverifiedPath CreateWithExperimentalBfgs(IResearchPatternBody body,ResearchDesign design)
+    {
+        ResearchBody.RequireSupported(body);ArgumentNullException.ThrowIfNull(design);
+        var fitted=TangentBfgsExperiment.Solve((double)body["shoulder_incl"]);
+        return new UnverifiedPath(Calculate(body.Snapshot(design),key=>(double)body[key],ReferenceState.Unverified,new P(fitted.Control.X,fitted.Control.Y)));
+    }
+    // Diagnostic counterfactual only: explicit source control is never accepted by production or binding paths.
+    internal static UnverifiedPath CompareWithSourceControl(IResearchPatternBody body,ResearchDesign design,P sourceControl)
+    {
+        ResearchBody.RequireSupported(body);ArgumentNullException.ThrowIfNull(design);
+        if(!double.IsFinite(sourceControl.X)||!double.IsFinite(sourceControl.Y)||sourceControl.X<=0)throw new ArgumentException("Invalid source control");
+        return new UnverifiedPath(Calculate(body.Snapshot(design),key=>(double)body[key],ReferenceState.Unverified,sourceControl));
+    }
+    private static Path Calculate(string id,Func<string,double> V,ReferenceState state,P? explicitControl=null)
     {
         if(V("shoulder_w")<=2 || V("shoulder_incl")>=45)throw new ArgumentException("Unsupported back research scope.");
         double shoulder=V("shoulder_w")/2,angle=V("shoulder_incl"),bumPoints=V("bum_points");
@@ -99,7 +113,7 @@ internal static class BackWaistCandidate
         P start=new(0,h),end=new(-width,0);double len=Math.Sqrt(width*width+h*h);
         // One feasible exact tangent direction, initialized at half-unit norm.
         // Source BFGS can converge to a nearby, different point on this ray.
-        P rel=new(.5*width/len,-.5*h/len);var q=new Quad(start,Abs(start,end,rel),end);
+        P rel=explicitControl ?? new P(.5*width/len,-.5*h/len);var q=new Quad(start,Abs(start,end,rel),end);
         double total=q.Length(0,1),position=bumPoints/2,dist=position*.5;
         double outerOffset=position+dist/2+dartWidth*1.5,innerOffset=position-dist/2+dartWidth/2;
         (double lo,double hi,P tip) Cut(double offset,double sideLength,double maxT)
