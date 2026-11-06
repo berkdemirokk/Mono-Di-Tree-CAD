@@ -57,5 +57,16 @@ public sealed class ALineProjectEvidenceTests
         Assert.Equal(1,session.UndoCount);Assert.True(session.Undo());Assert.Empty(session.Document.Pieces);Assert.Null(session.Document.ALineEvidence);
         Assert.True(session.Redo());Assert.True(DocumentSession.ContentEquals(project,session.Document));
         Assert.Throws<InvalidOperationException>(()=>ExperimentalOutputGuard.EnsureAllowed(session.Document.Pieces));
+    }    [Fact] public void AtomicSaveReopensV11AndInvalidEvidenceDoesNotOverwrite()
+    {
+        var (project,evidence)=Fixture();var path=Path.Combine(Path.GetTempPath(),$"aline-{Guid.NewGuid():N}.tcad");
+        try
+        {
+            ProjectStorage.Save(project,path);var original=File.ReadAllBytes(path);var restored=ProjectStorage.Load(path);
+            Assert.True(DocumentSession.ContentEquals(project,restored));
+            evidence.TranslationMm[0]+=1;
+            Assert.Throws<InvalidDataException>(()=>ProjectStorage.Save(project,path));Assert.Equal(original,File.ReadAllBytes(path));
+        }
+        finally { if(File.Exists(path))File.Delete(path); }
     }}
 
