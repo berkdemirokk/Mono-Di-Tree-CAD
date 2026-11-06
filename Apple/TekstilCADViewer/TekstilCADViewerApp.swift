@@ -2556,6 +2556,7 @@ private struct ExperimentalDesignBriefView: View {
     @Environment(\.dismiss) private var dismiss
     private enum BriefInput: Hashable { case description, bust, waist, hips, length, notes }
     @FocusState private var focusedInput: BriefInput?
+    @AccessibilityFocusState private var focusedStepHeading: Int?
     @State private var style = ExperimentalDesignBrief.DressStyle.describe
     @State private var modelExplicitlySelected = false
     @State private var conflictingModelNotice = false
@@ -3452,9 +3453,11 @@ private struct ExperimentalDesignBriefView: View {
                 Section {
                     HStack {
                         Text(briefStepTitle).font(.headline).accessibilityAddTraits(.isHeader)
+                            .accessibilityLabel("\(briefStepTitle), adım \(step + 1), toplam dört adım")
+                            .accessibilityFocused($focusedStepHeading, equals: step)
                         Spacer()
                         Text("\(step + 1) / 4").font(.caption.weight(.semibold))
-                            .accessibilityLabel("Adım \(step + 1), toplam dört adım")
+                            .accessibilityHidden(true)
                     }.id("request-step-start")
                     ProgressView(value: Double(step + 1), total: 4).accessibilityHidden(true)
                     Text(briefStepGuidance).font(.subheadline).foregroundStyle(.secondary)
@@ -3809,8 +3812,9 @@ private struct ExperimentalDesignBriefView: View {
             .scrollContentBackground(.hidden)
             .background(ivory)
             .tint(plum)
-            .onChange(of: step) { _ in
+            .onChange(of: step) { newStep in
                 requestScroll.scrollTo("request-step-start", anchor: .top)
+                focusedStepHeading = newStep
             }
             }
             .toolbar { ToolbarItemGroup(placement: .keyboard) { Spacer(); Button("Klavyeyi kapat") { focusedInput = nil } } }
