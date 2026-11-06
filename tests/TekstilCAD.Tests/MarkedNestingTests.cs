@@ -7,6 +7,20 @@ namespace TekstilCAD.Tests;
 
 public sealed class MarkedNestingTests
 {
+    [Fact]
+    public void QuantityAuditRejectsLostOrChangedExperimentalProvenance()
+    {
+        var piece=Source();piece.ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
+        var source=new ProjectDocument { Pieces=[piece] };
+        var result=ProductionNestingPlan.Arrange(source,[piece.Id],100,5);
+        Assert.True(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
+        var copy=result.Nesting.Layout.Pieces[0];
+        copy.ExperimentalALine=null;
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
+        copy.ExperimentalALine=piece.ExperimentalALine with { Side="back" };
+        Assert.False(ProductionNestingPlan.AreMarkersPreserved(source,[piece.Id],result));
+    }
+
     private static PatternPiece Source()
     {
         var negativeZero=BitConverter.Int64BitsToDouble(long.MinValue);

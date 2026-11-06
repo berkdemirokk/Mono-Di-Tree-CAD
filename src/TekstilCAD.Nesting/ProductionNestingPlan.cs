@@ -80,7 +80,7 @@ public static class ProductionNestingPlan
                    !sources.TryGetValue(map.SourcePieceId,out var original) || original.Metadata?.Quantity is not int quantity || map.CopyNumber>quantity ||
                    !outputs.Remove(map.PlacedPieceId,out var placed))return false;
                 NestingEngine.ValidateTranslation(original,placed.Points,token);
-                if(!NestingEngine.MarkersMatchPlacement(original,placed,token))return false;
+                if(original.ExperimentalALine!=placed.ExperimentalALine || !NestingEngine.MarkersMatchPlacement(original,placed,token))return false;
             }
             return outputs.Count==0;
         }

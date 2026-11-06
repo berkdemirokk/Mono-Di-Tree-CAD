@@ -182,7 +182,7 @@ public sealed class SimulationQueue
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(profile);profile.Validate();ProjectStorage.Validate(document);RejectNotches(document);
         cancellationToken.ThrowIfCancellationRequested();
-        var source=document.Clone();ProjectStorage.Validate(source);RejectNotches(source);cancellationToken.ThrowIfCancellationRequested();
+        var source=document.Clone();ProjectStorage.Validate(source);ExperimentalOutputGuard.EnsureAllowed(source.Pieces);RejectNotches(source);cancellationToken.ThrowIfCancellationRequested();
         if(source.Pieces.Count==0)throw new InvalidDataException("Üretim simülasyonu için çizim gerekli.");
         var scaled=source.Clone();
         foreach(var piece in scaled.Pieces)
@@ -208,7 +208,7 @@ public sealed class SimulationQueue
     {
         cancellationToken.ThrowIfCancellationRequested();
         ArgumentNullException.ThrowIfNull(prepared);ArgumentNullException.ThrowIfNull(document);ArgumentNullException.ThrowIfNull(profile);
-        profile.Validate();ProjectStorage.Validate(document);
+        profile.Validate();ProjectStorage.Validate(document);ExperimentalOutputGuard.EnsureAllowed(document.Pieces);ExperimentalOutputGuard.EnsureAllowed(prepared.Source.Pieces);
         if(!ReferenceEquals(prepared.Owner,this) || prepared.Profile!=profile || !DocumentSession.ContentEquals(prepared.Source,document))
             throw new InvalidOperationException("Hazırlanan HPGL işi bu kuyruk, kaynak veya profil ile eşleşmiyor; yeniden hazırlayın.");
         cancellationToken.ThrowIfCancellationRequested();
@@ -234,6 +234,7 @@ public sealed class SimulationQueue
         ArgumentNullException.ThrowIfNull(profile);
         profile.Validate();
         ProjectStorage.Validate(document);
+        ExperimentalOutputGuard.EnsureAllowed(document.Pieces);
         RejectNotches(document);
         if (!Enum.IsDefined(format)) throw new ArgumentOutOfRangeException(nameof(format));
         if (document.Pieces.Count == 0 || document.Pieces.All(p => p.Points.Count < 2))
@@ -242,6 +243,7 @@ public sealed class SimulationQueue
         var hpglCancellation = format == JobFormat.Hpgl ? cancellationToken : CancellationToken.None;
         hpglCancellation.ThrowIfCancellationRequested();
         var scaled = document.Clone();
+        ExperimentalOutputGuard.EnsureAllowed(scaled.Pieces);
         RejectNotches(scaled);
         foreach (var piece in scaled.Pieces)
         {

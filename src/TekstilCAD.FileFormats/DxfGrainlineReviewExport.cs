@@ -14,6 +14,7 @@ public sealed record DxfGrainlineReviewItem(Guid PieceId, string PieceName, stri
 public sealed class DxfGrainlineReviewPlan
 {
     private readonly ProjectDocument source;
+    internal void EnsureExperimentalAllowed()=>ExperimentalOutputGuard.EnsureAllowed(source.Pieces);
     internal string Text { get; }
     internal DxfGrainlineReviewPlan(ProjectDocument source, string text, string fingerprint,
         ImmutableArray<DxfGrainlineReviewItem> items, ImmutableArray<DxfExportOmission> omissions, string hash, int length)
@@ -45,6 +46,7 @@ public static class DxfGrainlineReviewExport
         NotchExportGuard.EnsureSupported(source);
         var snapshot = source.Clone();
         ProjectStorage.ValidateForDxfExport(snapshot);
+        ExperimentalOutputGuard.EnsureAllowed(snapshot.Pieces);
         NotchExportGuard.EnsureSupported(snapshot);
         if (!DocumentSession.ContentEquals(snapshot, source)) throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
         var analysis = DxfFormat.AnalyzeExport(snapshot,cancellationToken);
@@ -117,7 +119,7 @@ public static class DxfGrainlineReviewExport
     }
     public static void Write(DxfGrainlineReviewPlan plan,string path,ProjectFileVersion expected,CancellationToken cancellationToken=default)
     {
-        ArgumentNullException.ThrowIfNull(plan);ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(plan);ArgumentNullException.ThrowIfNull(expected);plan.EnsureExperimentalAllowed();
         cancellationToken.ThrowIfCancellationRequested();
         ProjectStorage.AtomicWriteIfUnchanged(path,plan.Text,expected,cancellationToken);
     }

@@ -112,7 +112,7 @@ public static class OpenPathJoin
         }
         AddMarks(first,match.ReverseA,0);
         AddMarks(second,match.ReverseB,a.Length-(shared ? 1 : 0));
-        var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points, Notches=marks.Count==0 ? null : marks };
+        var piece = new PatternPiece { Name = OpenPathResultName.Joined(first, second), Closed = false, Points = points, Notches=marks.Count==0 ? null : marks,ExperimentalALine=ALineExperimentalProvenance.Merge(first.ExperimentalALine,second.ExperimentalALine) };
         return new(piece, first.Id, second.Id, first.Name, second.Name, match.Distance)
         {
             FirstEndpointIndex = match.ReverseA ? 0 : a.Length - 1,

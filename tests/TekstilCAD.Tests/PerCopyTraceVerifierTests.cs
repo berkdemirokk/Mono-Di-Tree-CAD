@@ -5,6 +5,26 @@ namespace TekstilCAD.Tests;
 
 public sealed class PerCopyTraceVerifierTests
 {
+    [Fact]
+    public void RehashedLayoutCannotHideOrChangeExperimentalProvenance()
+    {
+        var piece = new PatternPiece { Points = [new(0,0),new(6,0),new(6,4),new(0,4)],
+            Grainline = new() { Start = new(1,1), End = new(1,2) },
+            Metadata = new() { Role = "Kesim", Material = "Pamuk", Quantity = 1 },
+            ExperimentalALine = new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front") };
+        var source = new ProjectDocument { Pieces = [piece] };
+        var angles = new Dictionary<(Guid,int),int> { [(piece.Id,1)] = 90 };
+        var result = PerCopyOrthogonalNesting.Arrange(source,[piece.Id],angles,10,0,10,0,GrainDirectionPolicy.Direction.TwoWay,90);
+        Assert.True(Verify(source,angles,result));
+        var copy = result.Plan.Nesting.Layout.Pieces[0];
+        foreach (var altered in new ALineExperimentalProvenance?[] { null, piece.ExperimentalALine with { Side = "back" } })
+        {
+            copy.ExperimentalALine = altered;
+            var forged = result with { LayoutFingerprint = NestingSnapshot.ComputeLayoutFingerprint(result.Plan.Nesting.Layout) };
+            Assert.False(Verify(source,angles,forged));
+        }
+    }
+
     private static (ProjectDocument Source, Dictionary<(Guid, int), int> Angles, PerCopyNestingResult Result) Fixture()
     {
         var piece = new PatternPiece { Points = [new(0, 0), new(6, 0), new(6, 4), new(0, 4)],

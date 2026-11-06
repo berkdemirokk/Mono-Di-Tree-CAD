@@ -17,7 +17,7 @@ public static class PdfTiledFormat
     public static void Export(ProjectDocument project,string path,ProjectFileVersion expectedVersion)
     {
         ArgumentNullException.ThrowIfNull(project);ArgumentNullException.ThrowIfNull(expectedVersion);
-        ProjectStorage.Validate(project);var copy=project.Clone();ProjectStorage.Validate(copy);
+        ProjectStorage.Validate(project);var copy=project.Clone();ProjectStorage.Validate(copy);ExperimentalOutputGuard.EnsureAllowed(copy.Pieces);
         if(copy.Pieces.Count==0)throw new InvalidDataException("A4 PDF için en az bir parça gerekir.");
         // Include every grainline endpoint in the physical sheet bounds.
         // A line outside its contour must never be silently clipped away.

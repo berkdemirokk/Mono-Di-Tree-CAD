@@ -51,6 +51,36 @@ public sealed class NotchMark
     public NotchMark Clone() => new() { VertexIndex=VertexIndex,Position=Position };
 }
 
+/// <summary>Unapproved experimental lower-section provenance; output callers must enforce the experimental guard.</summary>
+public sealed record ALineExperimentalProvenance(string Algorithm,string SourceSha256,string Side)
+{
+    public static ALineExperimentalProvenance? Merge(ALineExperimentalProvenance? first,ALineExperimentalProvenance? second)
+    {
+        if(first is null)return second;if(second is null)return first;
+        if(first!=second)throw new InvalidOperationException("Farklı deneysel A kesim kaynakları birleştirilemiyor; kısıtlı kaynak bilgisi kaybolamaz.");
+        return first;
+    }
+
+    public const string CurrentAlgorithm="A-04.lower-section.experimental.v1";
+    public void Validate()
+    {
+        if(Algorithm!=CurrentAlgorithm || Side is not ("front" or "back") || SourceSha256 is null || SourceSha256.Length!=64 ||
+           SourceSha256.Any(c=>!(c is >= '0' and <= '9' or >= 'A' and <= 'F')))
+            throw new InvalidDataException("Deneysel A kesim kaynak kaydı geçersiz.");
+    }
+}
+
+/// <summary>Fail-closed guard for output entry points; callers must invoke it before exporting or simulating.</summary>
+public static class ExperimentalOutputGuard
+{
+    public static void EnsureAllowed(IEnumerable<PatternPiece> pieces)
+    {
+        ArgumentNullException.ThrowIfNull(pieces);
+        if(pieces.Any(p=>p is null || p.ExperimentalALine is not null))
+            throw new InvalidOperationException("Deneysel A kesim taslağı çıktı veya makine işlemi için onaylanmadı.");
+    }
+}
+
 public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -64,7 +94,9 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ALineExperimentalProvenance? ExperimentalALine { get; set; }
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList(), ExperimentalALine=ExperimentalALine };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down
@@ -370,7 +402,8 @@ public sealed class NestingSnapshot
 
     /// <summary>Stable SHA-256 over ordered piece identity, geometry, names and metadata.
     /// Grainline-bearing layouts use a domain-separated v2 encoding; layouts
-    /// without grainlines retain the exact legacy v1 encoding. Text is encoded as
+    /// without grainlines retain the exact legacy v1 encoding. Experimental markers
+    /// use v4; documents without them retain their prior v1–v3 encoding. Text is encoded as
     /// UTF-16 code units and floating point values as IEEE-754 bits.</summary>
     public static string ComputeLayoutFingerprint(ProjectDocument document) => ComputeLayoutFingerprint(document,CancellationToken.None);
 
@@ -394,8 +427,10 @@ public sealed class NestingSnapshot
         // makes a previous snapshot stale rather than silently excluding it.
         var includeGrainlines=document.Pieces.Any(piece=>piece.Grainline is not null);
         var includeNotches=document.Pieces.Any(piece=>piece.Notches is not null);
-        writer.Write(includeNotches ? "TekstilCAD.nesting-layout.v3" : includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
-        if(includeNotches)writer.Write(includeGrainlines);
+        var includeExperimental=document.Pieces.Any(piece=>piece.ExperimentalALine is not null);
+        writer.Write(includeExperimental ? "TekstilCAD.nesting-layout.v4" : includeNotches ? "TekstilCAD.nesting-layout.v3" : includeGrainlines ? "TekstilCAD.nesting-layout.v2" : "TekstilCAD.nesting-layout.v1");
+        if(includeExperimental) { writer.Write(includeGrainlines);writer.Write(includeNotches); }
+        else if(includeNotches)writer.Write(includeGrainlines);
         writer.Write(document.Pieces.Count);
         foreach(var piece in document.Pieces)
         {
@@ -435,6 +470,12 @@ public sealed class NestingSnapshot
                         writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.X));writer.Write(BitConverter.DoubleToInt64Bits(mark.Position.Y));
                     }
                 }
+            }
+            if(includeExperimental)
+            {
+                writer.Write(piece.ExperimentalALine is not null);
+                if(piece.ExperimentalALine is { } experimental)
+                { Text(writer,experimental.Algorithm);Text(writer,experimental.SourceSha256);Text(writer,experimental.Side); }
             }
         }
         cancellationToken.ThrowIfCancellationRequested();writer.Flush(); stream.FlushFinalBlock();

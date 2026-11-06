@@ -181,7 +181,7 @@ public sealed class DocumentSession
         for (var i = 0; i < left.Pieces.Count; i++)
         {
             var a = left.Pieces[i]; var b = right.Pieces[i];
-            if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches)) return false;
+            if (a.Id != b.Id || !string.Equals(a.Name, b.Name, StringComparison.Ordinal) || a.Closed != b.Closed || a.Points.Count != b.Points.Count || !MetadataEquals(a.Metadata,b.Metadata) || !GrainlineEquals(a.Grainline,b.Grainline) || !NotchesEqual(a.Notches,b.Notches) || a.ExperimentalALine!=b.ExperimentalALine) return false;
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }

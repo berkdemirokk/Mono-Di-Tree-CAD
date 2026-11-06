@@ -141,7 +141,7 @@ public static class PerCopyTraceVerifier
                     GrainDirectionPolicy.Validate(rotated, direction, toleranceDegrees);
                     cache.Add(key, rotated);
                 }
-                if (!copy.Closed || copy.Name != rotated.Name || copy.Metadata is null || rotated.Metadata is null ||
+                if (!copy.Closed || copy.Name != rotated.Name || copy.ExperimentalALine != rotated.ExperimentalALine || copy.Metadata is null || rotated.Metadata is null ||
                     copy.Metadata.Quantity != 1 || copy.Metadata.Role != rotated.Metadata.Role ||
                     copy.Metadata.Size != rotated.Metadata.Size || copy.Metadata.Material != rotated.Metadata.Material) return false;
                 NestingEngine.ValidateTranslation(rotated, copy.Points, cancellationToken);

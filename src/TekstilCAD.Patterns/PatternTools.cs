@@ -791,7 +791,7 @@ public static class PatternTools
         if (name.Length > 1024) throw new ArgumentException("Üretilen parça adı 1024 karakteri aşıyor; kaynak adını kısaltın.");
         var line=preserveGrainline ? source.Grainline?.Clone() : null;
         if(line is not null && (markGrainlineForReview || !source.Points.SequenceEqual(points)))line.NeedsReview=true;
-        return new() { Name = name, Points = points, Closed = source.Closed, Grainline=line };
+        return new() { Name = name, Points = points, Closed = source.Closed, Grainline=line, ExperimentalALine=source.ExperimentalALine };
     }
     private static double Cross(Point2 a, Point2 b) => a.X * b.Y - a.Y * b.X;
 }

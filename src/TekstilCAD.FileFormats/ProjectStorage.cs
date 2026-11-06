@@ -54,9 +54,10 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
+                ValidateSerializedExperimentalALine(root[1],version);
                 RejectUnsupportedPhysicalFeatures(root[1],cancellationToken);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException("Sürümlü projede serileme listesi eksik veya geçersiz; dosya açılmadı.");
@@ -81,7 +82,7 @@ public static class ProjectStorage
                     }
                     // Reject missing/unknown/duplicate trace fields before model
                     // constructors or JSON defaults can synthesize any values.
-                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(raw.GetRawText()),rotatedVisiblePoints,cancellationToken);
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(raw.GetRawText()),rotatedVisiblePoints,cancellationToken,allowExperimental:version>=10);
                 }
                 ValidateSerializedImportProvenance(root[1], version);
                 ValidateSerializedPhotoTraceHistory(root[1],version,cancellationToken);
@@ -90,6 +91,7 @@ public static class ProjectStorage
             else if (root.ValueKind == JsonValueKind.Object)
             {
                 ValidateSerializedIdentityAndPoints(root);
+                ValidateSerializedExperimentalALine(root,0);
                 RejectUnsupportedPhysicalFeatures(root,cancellationToken);
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
@@ -129,6 +131,27 @@ public static class ProjectStorage
         catch (DecoderFallbackException ex)
         { throw new InvalidDataException("Proje dosyasının metin kodlaması bozuk; dosya açılmadı.", ex); }
     }
+    private static void ValidateSerializedExperimentalALine(JsonElement project,int version)
+    {
+        var found=false;
+        foreach(var piece in project.GetProperty("Pieces").EnumerateArray())
+        {
+            if(!piece.TryGetProperty("ExperimentalALine",out var value))continue;
+            found=true;
+            if(version<10 || value.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("Deneysel A kesim kaydı için sürüm 10 gereklidir.");
+            var names=value.EnumerateObject().Select(p=>p.Name).ToArray();
+            if(names.Length!=3 || names.Any(n=>n is not ("Algorithm" or "SourceSha256" or "Side")) ||
+               !value.TryGetProperty("Algorithm",out var algorithm) || algorithm.ValueKind!=JsonValueKind.String ||
+               !value.TryGetProperty("SourceSha256",out var source) || source.ValueKind!=JsonValueKind.String ||
+               !value.TryGetProperty("Side",out var side) || side.ValueKind!=JsonValueKind.String)
+                throw new InvalidDataException("Deneysel A kesim kaydı eksik veya geçersiz.");
+            new ALineExperimentalProvenance(algorithm.GetString()!,source.GetString()!,side.GetString()!).Validate();
+        }
+        if(project.TryGetProperty("NestingSnapshot",out var nesting) && nesting.ValueKind==JsonValueKind.Object && nesting.TryGetProperty("RotationTrace",out var trace) && trace.ValueKind==JsonValueKind.Object)
+            foreach(var name in new[]{"SourcePieces","LayoutPieces"})
+                if(trace.TryGetProperty(name,out var history) && history.ValueKind==JsonValueKind.Array && history.EnumerateArray().Any(p=>p.ValueKind==JsonValueKind.Object && p.TryGetProperty("ExperimentalALine",out _)))found=true;
+        if(version==10 && !found)throw new InvalidDataException("Sürüm 10 deneysel A kesim kaydı içermiyor.");
+    }
     private static bool HasSerializedMetadata(JsonElement project) => project.TryGetProperty("Pieces", out var pieces) && pieces.ValueKind == JsonValueKind.Array && pieces.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Metadata", out _));
     // Another experimental branch used version 8 for a different physical
     // contour schema. Never deserialize or discard it as photo provenance.
@@ -151,6 +174,7 @@ public static class ProjectStorage
             if(present)throw new InvalidDataException("Fotoğraf taslağı geçmişi için sürüm 8 gereklidir.");
             return;
         }
+        if(version>=10 && !present)return;
         if(!present || history.ValueKind!=JsonValueKind.Array || history.GetArrayLength() is <1 or >512)
             throw new InvalidDataException("Fotoğraf taslağı geçmişi eksik veya geçersiz.");
         static void Point(JsonElement p)
@@ -445,7 +469,8 @@ public static class ProjectStorage
     public static int GetProjectFormatVersion(ProjectDocument project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        return project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true ? 9
+        return project.Pieces.Any(p=>p.ExperimentalALine is not null) || project.NestingSnapshot?.RotationTrace is { } rotation && (rotation.SourcePieces.Any(p=>p.ExperimentalALine is not null) || rotation.LayoutPieces.Any(p=>p.ExperimentalALine is not null)) ? 10
+            : project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true ? 9
             : project.PhotoTraceHistory is not null ? 8
             : project.NestingSnapshot?.RotationTrace is not null ? 7
             : project.Pieces.Any(p=>p.Notches is not null) ? 6
@@ -464,7 +489,7 @@ public static class ProjectStorage
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
-        if(project.NestingSnapshot?.RotationTrace is not null || project.PhotoTraceHistory is not null)
+        if(project.NestingSnapshot?.RotationTrace is not null || project.PhotoTraceHistory is not null || project.Pieces.Any(p=>p.ExperimentalALine is not null))
         {
             var reread=DeserializeProject(Encoding.UTF8.GetBytes(text),cancellationToken);
             if(!DocumentSession.ContentEquals(project,reread))
@@ -537,6 +562,7 @@ public static class ProjectStorage
             if (piece is null || piece.Points is null || piece.Points.Count > MaximumPointsPerPiece || piece.Points.Count < (piece.Closed ? 3 : 2))
                 throw new InvalidDataException("Geçersiz kontur veya nokta sınırı aşıldı.");
             if (piece.Name is null || piece.Name.Length > 1024 || (!allowInvalidPieceNameUtf16 && !IsWellFormedUtf16(piece.Name))) throw new InvalidDataException("Geçersiz parça adı veya eksik Unicode karakteri.");
+            piece.ExperimentalALine?.Validate();
             if (piece.Metadata is { } metadata)
             {
                 static bool ValidText(string? value) => value is null || (value.Length is > 0 and <= 128 && value == value.Trim() && !value.Any(char.IsControl) && IsWellFormedUtf16(value));

@@ -33,7 +33,7 @@ public static class OpenPathClosure
         LargeContourValidator.Validate(points,cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
         return new(new PatternPiece { Name=OpenPathResultName.Closed(source),Closed=true,Points=[..points],
-            Notches=source.Notches?.Select(mark=>mark.Clone()).ToList() },source.Id,source.Name,length);
+            Notches=source.Notches?.Select(mark=>mark.Clone()).ToList(),ExperimentalALine=source.ExperimentalALine },source.Id,source.Name,length);
     }
     /// <summary>Copies a matching open rule to the validated closure when endpoint increments agree exactly.</summary>
     public static GradingRuleSet? CloseGrading(PatternPiece source,GradingRuleSet rule,OpenPathClosureResult closure,CancellationToken cancellationToken=default)

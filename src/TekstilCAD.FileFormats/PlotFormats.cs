@@ -41,6 +41,7 @@ public static class SvgFormat
         project = project.Clone();
         ProjectStorage.Validate(project);
         NotchExportGuard.EnsureSupported(project);
+        ExperimentalOutputGuard.EnsureAllowed(project.Pieces);
         if (project.Pieces.Count == 0)
             throw new InvalidDataException("SVG dışa aktarımı için en az bir parça gerekir.");
         if (project.Pieces.Any(p => p.Points.Count < 2))
@@ -112,11 +113,13 @@ public sealed class HpglPreparedOutput
 {
     // Compact immutable indexes derive from the private captured geometry;
     // neither the dictionary nor its arrays are exposed to callers.
+    private readonly ProjectDocument capturedSource;
+    internal void EnsureExperimentalAllowed()=>ExperimentalOutputGuard.EnsureAllowed(capturedSource.Pieces);
     private readonly Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes;
     private readonly Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews;
     internal HpglPreparedOutput(string text,double units,IReadOnlyList<HpglTurnReview.Report> reviews,
-        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews,HpglOutputBounds bounds,HpglPieceInteraction.Result? interactions)
-    { Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews;Bounds=bounds;Interactions=interactions; }
+        Dictionary<Guid,HpglTurnReview.Index>? reviewIndexes,Dictionary<Guid,HpglPieceGeometryPreview>? geometryPreviews,HpglOutputBounds bounds,HpglPieceInteraction.Result? interactions,ProjectDocument capturedSource)
+    { this.capturedSource=capturedSource;Text=text;UnitsPerMillimeter=units;TurnReviews=reviews;this.reviewIndexes=reviewIndexes;this.geometryPreviews=geometryPreviews;Bounds=bounds;Interactions=interactions; }
     public string Text { get; }
     public double UnitsPerMillimeter { get; }
     public HpglOutputBounds Bounds { get; }
@@ -208,6 +211,7 @@ public static class HpglFormat
     public static void WritePrepared(HpglPreparedOutput prepared,string path,ProjectFileVersion expectedVersion,CancellationToken cancellationToken=default)
     {
         ArgumentNullException.ThrowIfNull(prepared);ArgumentNullException.ThrowIfNull(expectedVersion);
+        prepared.EnsureExperimentalAllowed();
         ProjectStorage.AtomicWriteIfUnchanged(path,prepared.Text,expectedVersion,cancellationToken);
     }
 
@@ -233,6 +237,7 @@ public static class HpglFormat
         cancellationToken.ThrowIfCancellationRequested();
         beforeValidationForVerification?.Invoke(2,project);
         ProjectStorage.Validate(project,cancellationToken);
+        ExperimentalOutputGuard.EnsureAllowed(project.Pieces);
         GrainlineExportGuard.EnsureSupported(project);
         NotchExportGuard.EnsureSupported(project);
         cancellationToken.ThrowIfCancellationRequested();
@@ -317,7 +322,7 @@ public static class HpglFormat
         var text=b.ToString();cancellationToken.ThrowIfCancellationRequested();
         cancellationToken.ThrowIfCancellationRequested();
         var interactions=includeReviews ? HpglPieceInteraction.Analyze(geometryPreviews!.Values.ToArray(),cancellationToken:cancellationToken) : null;
-        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews,new HpglOutputBounds(minX,minY,maxX,maxY),interactions);
+        return new HpglPreparedOutput(text,unitsPerMillimeter,reviews.AsReadOnly(),reviewIndexes,geometryPreviews,new HpglOutputBounds(minX,minY,maxX,maxY),interactions,project);
     }
 
     private static void ValidateQuantizedContour(PatternPiece piece, PlotPoint[] points, CancellationToken cancellationToken)

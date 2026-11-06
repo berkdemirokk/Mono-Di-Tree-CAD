@@ -164,7 +164,7 @@ public static class OrthogonalTraceVerifier
                     placement.PlacedPieceId != ProductionNestingPlan.CopyId(placement.SourcePieceId, placement.CopyNumber) ||
                     !seenCopies.Add((placement.SourcePieceId, placement.CopyNumber)) ||
                     !placed.Remove(placement.PlacedPieceId, out var copy) || !copy.Closed ||
-                    copy.Name != original.Name || copy.Metadata is null || original.Metadata is null ||
+                    copy.Name != original.Name || copy.ExperimentalALine!=original.ExperimentalALine || copy.Metadata is null || original.Metadata is null ||
                     copy.Metadata.Quantity != 1 || copy.Metadata.Role != original.Metadata.Role ||
                     copy.Metadata.Size != original.Metadata.Size || copy.Metadata.Material != original.Metadata.Material)
                     return false;

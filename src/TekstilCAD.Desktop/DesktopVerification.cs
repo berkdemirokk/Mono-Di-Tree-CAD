@@ -18,6 +18,7 @@ using System.Windows.Threading;
 using TekstilCAD.Core;
 using TekstilCAD.FileFormats;
 using TekstilCAD.MachineGateway;
+using TekstilCAD.Nesting;
 
 namespace TekstilCAD.Desktop;
 
@@ -1070,6 +1071,7 @@ internal static partial class DesktopVerification
             VerifyOptInRealMarkedBulkCleanup(studio,checks);
             VerifyMarkedVertexCommandAvailability(studio,checks);
             VerifyNotchSaveCompatibility(studio,work,checks);
+            VerifyExperimentalSaveCompatibility(studio,work,checks);
             VerifyPlaneSaveCompatibility(studio,work,checks);
             VerifyGrainlineEditing(studio,checks);
             VerifyMarkedGrading(studio,checks);
@@ -13831,8 +13833,134 @@ internal static partial class DesktopVerification
             typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);Check(prompts==2,"Saving existing version nine does not repeat the upgrade prompt",checks);
         }
         finally { studio.ChooseCompatibilityForVerification=null; }
+        VerifySaveDialogReentrancy(studio,path,work,checks);
+        VerifyHistoricalExperimentalSaveCompatibility(studio,path,work,checks);
     }
 
+    private static void VerifySaveDialogReentrancy(MainWindow studio,string v9Path,string work,List<string> checks)
+    {
+        var version=typeof(MainWindow).GetField("fileVersion",PrivateInstance)!;
+        var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
+        var target=Path.Combine(work,"v10-reentrant-"+Guid.NewGuid().ToString("N")+".tcad");
+        void OpenV9() { studio.OpenProjectFile(v9Path);studio.Select(studio.Document.Pieces[0].Id); }
+        void AddMarker()=>studio.Commit("V10 sırasında değişiklik",()=>studio.Document.Pieces[0].ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front"));
+        var original=File.ReadAllBytes(v9Path);
+        try
+        {
+            OpenV9();bool selectorReached=false;
+            studio.SavePathForVerification=_=> { selectorReached=true;return target; };
+            studio.ChooseCompatibilityForVerification=_=> { AddMarker();return MainWindow.GradingSaveChoice.SaveAs; };
+            studio.SaveAsForVerification();
+            Check(!selectorReached && !File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during compatibility confirmation",checks);
+            OpenV9();studio.ChooseCompatibilityForVerification=_=>MainWindow.GradingSaveChoice.SaveAs;
+            studio.SavePathForVerification=_=> { AddMarker();return target; };studio.SaveAsForVerification();
+            Check(!File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during target selection",checks);
+            OpenV9();File.WriteAllText(target,"önceki dosya");studio.SavePathForVerification=_=>target;
+            studio.ConfirmSaveReplacementForVerification=_=> { AddMarker();return true; };studio.SaveAsForVerification();
+            Check(File.ReadAllText(target)=="önceki dosya" && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during replacement confirmation",checks);
+            OpenV9();File.Delete(target);studio.SavePathForVerification=_=> { AddMarker();return target; };studio.SaveNewCopyForVerification();
+            Check(!File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"New copy rejects a V9 to V10 change during target selection",checks);
+            OpenV9();AddMarker();studio.ChooseCompatibilityForVerification=_=> { name.Text="Kaydedilmemiş taslak";return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(File.ReadAllBytes(v9Path).SequenceEqual(original) && studio.HasPendingCanvasOrPropertyWork && name.Text=="Kaydedilmemiş taslak", "Save rejects changes to pending fields during upgrade confirmation",checks);
+            OpenV9();AddMarker();studio.ChooseCompatibilityForVerification=_=> { version.SetValue(studio,new ProjectFileVersion(v9Path,new string('F',64)));return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(File.ReadAllBytes(v9Path).SequenceEqual(original),"Save rejects source file version changes during upgrade confirmation",checks);
+        }
+        finally { studio.SavePathForVerification=null;studio.ConfirmSaveReplacementForVerification=null;studio.ChooseCompatibilityForVerification=null;studio.OpenProjectFile(v9Path);if(File.Exists(target))File.Delete(target); }
+    }
+    private static void VerifyHistoricalExperimentalSaveCompatibility(MainWindow studio,string v9Path,string work,List<string> checks)
+    {
+        var sourcePiece=new PatternPiece { Name="Tarihsel kaynak",Points=[new(0,0),new(6,0),new(6,4),new(0,4)],
+            Grainline=new Grainline { Start=new(1,1),End=new(1,2) },Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=2 } };
+        var source=new ProjectDocument { Pieces=[sourcePiece] };var angles=new Dictionary<(Guid,int),int> { [(sourcePiece.Id,1)]=0,[(sourcePiece.Id,2)]=90 };
+        var result=PerCopyOrthogonalNesting.Arrange(source,[sourcePiece.Id],angles,100,1,100,0,GrainDirectionPolicy.Direction.TwoWay,90);
+        var record=RotatedNestingRecord.Capture(source,[sourcePiece.Id],angles,result,GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100);
+        var trace=record.ToTrace();var layout=result.Plan.Nesting.Layout.Clone();
+        layout.NestingSnapshot=new NestingSnapshot { FabricWidth=100,Gap=1,EdgeMargin=0,UsedLength=result.Plan.Nesting.UsedLength,
+            LayoutFingerprint=trace.LayoutFingerprint,Placements=result.Plan.Placements.Select(p=>new NestingPlacementSnapshot(p.SourcePieceId,p.CopyNumber,p.PlacedPieceId)).ToList(),RotationTrace=trace };
+        var photo=ProjectStorage.Load(v9Path).PhotoTraceHistory!;
+        try
+        {
+            foreach(var previousVersion in new[]{7,9})
+            {
+                var input=layout.Clone();if(previousVersion==9)input.PhotoTraceHistory=photo.Select(p=>p.Clone()).ToList();
+                var path=Path.Combine(work,"historical-upgrade-"+previousVersion+"-"+Guid.NewGuid().ToString("N")+".tcad");
+                ProjectStorage.Save(input,path);Check(ProjectStorage.GetProjectFormatVersion(input)==previousVersion,"Historical fixture starts in expected old version",checks);
+                var before=File.ReadAllBytes(path);studio.OpenProjectFile(path);
+                void MarkHistory()=>studio.Commit("Tarihsel deneysel kaynak",()=> {
+                    var history=studio.Document.NestingSnapshot!.RotationTrace!;
+                    foreach(var p in history.SourcePieces.Concat(history.LayoutPieces))p.ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
+                    history.SourceFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.SourcePieces });
+                    history.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.LayoutPieces });
+                    studio.Document.NestingSnapshot.LayoutFingerprint=history.LayoutFingerprint;
+                });
+                MarkHistory();
+                Check(studio.Document.Pieces.All(p=>p.ExperimentalALine is null) && MainWindow.RequiresExperimentalFormat(studio.Document),
+                    "Historical-only marker selects the version 10 compatibility notice",checks);
+                var prompts=0;bool selector=false;studio.ChooseCompatibilityForVerification=_=> { prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+                studio.SavePathForVerification=_=> { selector=true;return Path.Combine(work,"must-not-write.tcad"); };
+                typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);studio.SaveAsForVerification();
+                Check(prompts==2 && !selector && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Save and Save As cancellation preserve the old project when only historical provenance requires version 10",checks);
+                Check(MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple"),
+                    "Historical-only compatibility warning identifies version 10 and older readers",checks);
+                var occupied=Path.Combine(work,"history-occupied-"+Guid.NewGuid().ToString("N")+".tcad");File.WriteAllText(occupied,"korunacak hedef");
+                var targetBytes=File.ReadAllBytes(occupied);bool replacementAsked=false;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;return existing ? MainWindow.GradingSaveChoice.SaveCurrent : MainWindow.GradingSaveChoice.SaveAs; };
+                studio.SavePathForVerification=_=>occupied;studio.ConfirmSaveReplacementForVerification=_=> { replacementAsked=true;return false; };
+                studio.SaveAsForVerification();
+                Check(replacementAsked && File.ReadAllBytes(occupied).SequenceEqual(targetBytes) && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Declining an existing Save As target preserves both files",checks);
+                bool copyConflict=false;try { studio.SaveNewCopyForVerification(); } catch(IOException) { copyConflict=true; }
+                Check(copyConflict && File.ReadAllBytes(occupied).SequenceEqual(targetBytes) && File.ReadAllBytes(path).SequenceEqual(before),
+                    "New copy cannot overwrite an existing target",checks);
+                var newPath=Path.Combine(work,"history-approved-"+Guid.NewGuid().ToString("N")+".tcad");
+                var beforeSaveAsPrompts=prompts;bool saveAsWarning=false,saveAsSelector=false;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;saveAsWarning=!existing && MainWindow.RequiresExperimentalFormat(studio.Document) && MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple");return MainWindow.GradingSaveChoice.SaveAs; };
+                studio.SavePathForVerification=isCopy=> { saveAsSelector=!isCopy;return newPath; };studio.SaveAsForVerification();
+                Check(prompts==beforeSaveAsPrompts+1 && saveAsWarning && saveAsSelector && File.Exists(newPath) && File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(newPath))==10 &&
+                    DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(newPath)),
+                    "Approved historical-only Save As writes reopenable version 10 without changing the original",checks);
+                studio.OpenProjectFile(path);MarkHistory();var beforeSavePrompts=prompts;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;return existing ? MainWindow.GradingSaveChoice.SaveCurrent : MainWindow.GradingSaveChoice.Cancel; };
+                typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+                Check(prompts==beforeSavePrompts+1 && !File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(path))==10 &&
+                    DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
+                    "Approved historical-only Save writes reopenable version 10 after existing-file confirmation",checks);
+                File.Delete(occupied);File.Delete(newPath);
+            }
+        }
+        finally { studio.ChooseCompatibilityForVerification=null;studio.SavePathForVerification=null;studio.ConfirmSaveReplacementForVerification=null; }
+    }
+    private static void VerifyExperimentalSaveCompatibility(MainWindow studio,string work,List<string> checks)
+    {
+        var source=new PatternPiece { Name="Deneysel uyumluluk",Points=[new(0,0),new(10,0),new(0,10)] };
+        var path=Path.Combine(work,"experimental-compatibility-"+Guid.NewGuid().ToString("N")+".tcad");
+        ProjectStorage.Save(new ProjectDocument { Pieces=[source] },path);var oldBytes=File.ReadAllBytes(path);
+        studio.OpenProjectFile(path);studio.Commit("Deneysel işaret",()=>studio.Document.Pieces[0].ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front"));
+        var session=(DocumentSession)typeof(MainWindow).GetField("session",PrivateInstance)!.GetValue(studio)!;
+        try
+        {
+            Check(MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("onayı değildir"),
+                "Version 10 compatibility notice identifies old readers and the experimental limit",checks);
+            var prompts=0;studio.ChooseCompatibilityForVerification=existing=> { if(existing)prompts++;return MainWindow.GradingSaveChoice.Cancel; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==1 && File.ReadAllBytes(path).SequenceEqual(oldBytes) && session.UndoCount>0,
+                "Declining experimental format upgrade preserves file and undo history",checks);
+            studio.ChooseCompatibilityForVerification=_=> { prompts++;studio.Commit("Onay sırasında değişiklik",()=>studio.Document.Name="Güncel çalışma");return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(prompts==2 && File.ReadAllBytes(path).SequenceEqual(oldBytes) && studio.Document.Name=="Güncel çalışma" && session.UndoCount>0,
+                "Changing the project during version upgrade confirmation blocks save and preserves undo",checks);
+            studio.ChooseCompatibilityForVerification=_=> { prompts++;return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            using var saved=JsonDocument.Parse(File.ReadAllBytes(path));
+            Check(prompts==3 && saved.RootElement[0].GetInt32()==10 && DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
+                "Approved experimental upgrade writes and reopens version 10",checks);
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);Check(prompts==3,"Saving an existing version 10 does not repeat the upgrade prompt",checks);
+        }
+        finally { studio.ChooseCompatibilityForVerification=null; }
+    }
     private static void VerifyNotchSaveCompatibility(MainWindow studio,string work,List<string> checks)
     {
         var piece=new PatternPiece { Name="Kaydetme testi",Points=[new(0,0),new(10,0),new(0,10)] };
@@ -17141,6 +17269,33 @@ internal static partial class DesktopVerification
                 }
                 finally { release.Set();if(task is not null){PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();}window.Close(); }
             }
+            var restricted=source.Clone();restricted.Notches=null;restricted.Grainline=null;restricted.Metadata=null;
+            restricted.ExperimentalALine=new ALineExperimentalProvenance(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
+            studio.LoadDocument(new ProjectDocument { Pieces=[restricted] });studio.Select(restricted.Id);
+            var protectedMirror=new MirrorCopyWindow(studio);
+            try
+            {
+                var calculation=protectedMirror.CalculateForVerification();PumpUntil(()=>calculation.IsCompleted);calculation.GetAwaiter().GetResult();protectedMirror.ApplyForVerification();
+                var mirrored=studio.Document.Pieces.Single(piece=>piece.Id!=restricted.Id);
+                var normal=new PatternPiece { Name="Normal kontrol",Closed=true,Points=[new(100,0),new(110,0),new(110,20),new(100,20)] };
+                studio.Commit("Normal seçili çıktı kontrolü",()=>studio.Document.Pieces.Add(normal.Clone()));
+                var selectedPath=Path.Combine(work,"restricted-mirror-"+Guid.NewGuid().ToString("N")+".dxf");
+                var export=studio.StartSelectedDxfForVerification([mirrored.Id],selectedPath,ProjectStorage.CaptureVersion(selectedPath));
+                Check(export is not null,"Restricted mirror selected DXF export actually starts",checks);
+                if(export is null)throw new InvalidOperationException("Restricted mirror selected export did not start.");
+                PumpUntil(()=>export.IsCompleted);export.GetAwaiter().GetResult();
+                Check(mirrored.ExperimentalALine==restricted.ExperimentalALine && studio.ExportError is not null &&
+                    studio.ExportError.Contains("Deneysel A kesim taslağı çıktı veya makine işlemi için onaylanmadı",StringComparison.Ordinal) && !File.Exists(selectedPath),
+                    "Mirrored experimental piece is rejected by the experimental selected DXF guard",checks);
+                var normalPath=Path.Combine(work,"ordinary-selected-"+Guid.NewGuid().ToString("N")+".dxf");
+                var normalExport=studio.StartSelectedDxfForVerification([normal.Id],normalPath,ProjectStorage.CaptureVersion(normalPath));
+                Check(normalExport is not null,"Normal selected DXF export actually starts in the same fixture",checks);
+                if(normalExport is null)throw new InvalidOperationException("Normal selected export did not start.");
+                PumpUntil(()=>normalExport.IsCompleted);normalExport.GetAwaiter().GetResult();
+                Check(studio.ExportError is null && File.Exists(normalPath) && DxfFormat.Import(normalPath,1).Project.Pieces.Count==1,
+                    "Normal selected piece exports successfully in the same fixture",checks);
+            }
+            finally { protectedMirror.Close(); }
         }
         finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }

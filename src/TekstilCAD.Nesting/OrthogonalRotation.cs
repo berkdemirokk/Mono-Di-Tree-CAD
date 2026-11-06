@@ -40,7 +40,7 @@ public static class OrthogonalRotation
             points.Add(rotated);
         }
         var result = new PatternPiece { Id = source.Id, Name = source.Name, Closed = source.Closed,
-            Metadata = source.Metadata?.Clone(), Points = points };
+            Metadata = source.Metadata?.Clone(), Points = points, ExperimentalALine=source.ExperimentalALine };
         if(source.Notches is { } marks)
         {
             result.Notches=new List<NotchMark>(marks.Count);
