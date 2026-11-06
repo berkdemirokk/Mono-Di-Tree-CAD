@@ -11903,16 +11903,37 @@ internal static partial class DesktopVerification
                     try
                     {
                         var stamp=studio.CapturePhotoTrace()!;
-                        var bitmap=BitmapSource.Create(1,1,96,96,PixelFormats.Bgra32,null,new byte[4],4);
-                        var trace=new PhotoTraceWindow(studio,bitmap,stamp,sourceCurrent:stalePreview.TraceSourceCurrentForVerification);
+                        var bitmap=ReferencePhotoDecoder.DecodeWithGeometry(bytes).Bitmap;
+                        var trace=new PhotoTraceWindow(studio,bitmap,stamp,32,16,expectedHash,bytes.Length,sourceCurrent:stalePreview.TraceSourceCurrentForVerification,requestMeasurements:"72 cm");
                         try
                         {
                             Check(!preview.IsVisible && !unsaved.IsVisible,"Unsaved photo preview verification does not show windows",checks);
                             var ownedTrace=new PhotoTraceWindow(studio,bitmap,stamp,windowOwner:stalePreview);
                             Check(ReferenceEquals(ownedTrace.Owner,stalePreview),"Photo trace can belong to the modal preview chain",checks);ownedTrace.Close();
+                            trace.SourcePurposeForVerification.SelectedIndex=1;trace.LengthForVerification.Text="50";
+                            foreach(var point in new[] { new Point(1,1),new Point(25,1),new Point(5,5),new Point(20,10) })trace.CanvasForVerification.TryAddPixelPoint(point);
+                            var points=trace.CanvasForVerification.Points.ToArray();
+                            Check(trace.RequestMeasurementsForVerification is { IsReadOnly:true,Text:"72 cm" } &&
+                                AutomationProperties.GetHelpText(trace.RequestMeasurementsForVerification).Contains("kalibrasyon"),
+                                "Photo trace exposes a read-only request measurement snapshot with calibration distinction",checks);
                             stalePreview.Close();preview.Close();unsaved.Close();trace.TryApply();
-                            Check(trace.StatusForVerification.Text.Contains("kapandı") && DocumentSession.ContentEquals(before,studio.Document),
-                                "Closing source request prevents applying its photo trace without changing CAD",checks);
+                            Check(trace.RecoveryForVerification.Visibility==Visibility.Visible && trace.CanvasForVerification.Points.SequenceEqual(points) && DocumentSession.ContentEquals(before,studio.Document),
+                                "Closing source request rejects CAD application and reveals recovery without changing draft",checks);
+                            var recoveryPath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"recovery-"+Guid.NewGuid().ToString("N")+".tdtrace");
+                            try
+                            {
+                                var saveRecovery=trace.TrySaveTraceSessionAsync(recoveryPath);PumpUntil(()=>saveRecovery.IsCompleted);
+                                Check(saveRecovery.GetAwaiter().GetResult(),"Stale source still permits saving photo trace",checks);
+                                var reopened=new PhotoTraceWindow(studio,bitmap,stamp,32,16,expectedHash,bytes.Length);reopened.SourcePurposeForVerification.SelectedIndex=1;
+                                try
+                                {
+                                    var reload=reopened.TryLoadTraceSessionAsync(recoveryPath);PumpUntil(()=>reload.IsCompleted);
+                                    Check(reload.GetAwaiter().GetResult() && reopened.CanvasForVerification.Points.SequenceEqual(points) && reopened.LengthForVerification.Text=="50" && DocumentSession.ContentEquals(before,studio.Document),
+                                        "Saved stale trace reloads against the same photo without changing CAD",checks);
+                                }
+                                finally { reopened.CanvasForVerification.ClearPoints();reopened.LengthForVerification.Clear();reopened.Close(); }
+                            }
+                            finally { if(File.Exists(recoveryPath))File.Delete(recoveryPath);trace.CanvasForVerification.ClearPoints();trace.LengthForVerification.Clear(); }
                         }
                         finally { trace.Close(); }
                     }

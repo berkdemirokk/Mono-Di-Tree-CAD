@@ -21,7 +21,7 @@ internal sealed class ReferencePhotoWindow : Window
     internal Func<bool>? ConfirmTraceTargetForVerification { get; private set; }
     internal Func<bool>? TraceSourceCurrentForVerification { get; private set; }
 
-    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null,Func<bool>? traceSourceCurrent=null,bool ownTrace=false)
+    internal ReferencePhotoWindow(Window owner,byte[] source,Func<bool>? confirmTraceTarget=null,Func<bool>? traceSourceCurrent=null,bool ownTrace=false,string? requestMeasurements=null)
     {
         ArgumentNullException.ThrowIfNull(owner);ArgumentNullException.ThrowIfNull(source);
         TraceSourceCurrentForVerification=traceSourceCurrent;ConfirmTraceTargetForVerification=confirmTraceTarget;data=(byte[])source.Clone();Owner=owner;Title="Referans görseli";Width=640;Height=640;MinWidth=360;MinHeight=360;WindowStartupLocation=WindowStartupLocation.CenterOwner;
@@ -39,7 +39,7 @@ internal sealed class ReferencePhotoWindow : Window
             if(studio is null || decodedPreview is not { } captured) { StatusForVerification.Text="Çizim penceresi veya fotoğraf bulunamadı.";return; }
             if(confirmTraceTarget is not null && !confirmTraceTarget()) { StatusForVerification.Text="Çizime geçiş iptal edildi veya kaynak değişti; istek ve fotoğraf korundu.";return; }
             var stamp=studio.CapturePhotoTrace();if(stamp is null) { StatusForVerification.Text="Çizime geçilemedi; ana penceredeki durumu kontrol edin.";return; }
-            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation,traceSourceCurrent,ownTrace ? this : null);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
+            var window=new PhotoTraceWindow(studio,captured.Bitmap,stamp,captured.OrientedSourceWidth,captured.OrientedSourceHeight,captured.SourceSha256,captured.SourceByteLength,captured.SourceOrientation,traceSourceCurrent,ownTrace ? this : null,requestMeasurements);traceWindow=window;window.Closed+=(_,_)=>traceWindow=null;window.Show();
         };
         AutomationProperties.SetName(StatusForVerification,"Görsel önizleme durumu");AutomationProperties.SetLiveSetting(StatusForVerification,AutomationLiveSetting.Polite);
         StatusForVerification.Text="Görsel açılıyor…";DockPanel.SetDock(StatusForVerification,Dock.Top);root.Children.Add(StatusForVerification);

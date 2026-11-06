@@ -30,6 +30,8 @@ internal sealed class PhotoTraceWindow : Window
     internal bool HasDraft => PlaneSettings is not null || CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
     internal PhotoTraceCanvas CanvasForVerification { get; } = new();
     internal TextBox LengthForVerification { get; } = new() { Width=85,MaxLength=32 };
+    internal Expander RecoveryForVerification { get; } = new() { Header="Taslağı koruma ve yeniden açma",Visibility=Visibility.Collapsed,IsExpanded=true };
+    internal TextBox? RequestMeasurementsForVerification { get; private set; }
     internal TextBlock StatusForVerification { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,3,0,3) };
     internal CheckBox ReviewClosureForVerification { get; } = new() { Content="Kapatmayı incele",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
     internal CheckBox ColorPathForVerification { get; } = new() { Content="Renkle ara",Foreground=DesignRequestWindow.Ink,Margin=new Thickness(4,3,0,2) };
@@ -53,13 +55,24 @@ internal sealed class PhotoTraceWindow : Window
     internal Func<PhotoRegionWindow,bool?>? RegionDialogForVerification { get; set; }
     internal void OpenRegionSuggestionForVerification()=>OpenRegionSuggestion();
 
-    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1,Func<bool>? sourceCurrent=null,Window? windowOwner=null)
+    internal PhotoTraceWindow(MainWindow workspace,BitmapSource bitmap,MainWindow.PhotoTraceStamp stamp,int sourceWidth=0,int sourceHeight=0,string? sourceSha256=null,int sourceByteLength=0,int sourceOrientation=1,Func<bool>? sourceCurrent=null,Window? windowOwner=null,string? requestMeasurements=null)
     {
         this.workspace=workspace;this.stamp=stamp;this.sourceCurrent=sourceCurrent;image=bitmap;this.sourceWidth=sourceWidth==0 ? bitmap.PixelWidth : sourceWidth;this.sourceHeight=sourceHeight==0 ? bitmap.PixelHeight : sourceHeight;this.sourceSha256=sourceSha256;this.sourceByteLength=sourceByteLength;this.sourceOrientation=sourceOrientation;Owner=windowOwner ?? workspace;Title="Fotoğrafta elle taslak çiz";Width=820;Height=760;MinWidth=560;MinHeight=480;
         WindowStartupLocation=WindowStartupLocation.CenterOwner;StudioTheme.Apply(this);
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,5,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
+        var recoveryText=new TextBlock { Text="Kaynak istek değişti veya kapandı; çizim korunuyor fakat bu pencereden CAD aktarımı yapılamaz. Düz serilmiş kalıp görseli seçiliyken süren işlemi bitirin; ⋯ (Çizgi dosyası) > Çizgiyi kaydet ile yeni bir .tdtrace dosyası kaydedin ve başarılı kayıt mesajını bekleyin. Ardından taslak ve fotoğraf pencerelerini kapatın, güncel istekte aynı özgün fotoğrafı seçip yeniden inceleyin; çizim penceresinde düz kalıp türünü seçip ⋯ > Çizgiyi aç ile dosyayı yükleyin. Farklı fotoğrafla dosya açılmaz; eski fotoğrafı saklayın. Dosyaya fotoğraf, bölge maskesi ve uygulanmamış öneriler dahil değildir.",TextWrapping=TextWrapping.Wrap };
+        RecoveryForVerification.Content=new ScrollViewer { Content=recoveryText,MaxHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
+        AutomationProperties.SetName(RecoveryForVerification,"Değişen kaynak için taslak kurtarma adımları");DockPanel.SetDock(RecoveryForVerification,Dock.Top);root.Children.Add(RecoveryForVerification);
+        if(requestMeasurements is not null)
+        {
+            RequestMeasurementsForVerification=new TextBox { Text=requestMeasurements,IsReadOnly=true,AcceptsReturn=true,TextWrapping=TextWrapping.Wrap,MaxHeight=90,VerticalScrollBarVisibility=ScrollBarVisibility.Auto };
+            AutomationProperties.SetName(RequestMeasurementsForVerification,"Açılıştaki istek ölçü notları");
+            AutomationProperties.SetHelpText(RequestMeasurementsForVerification,"Bu sabit bir kopyadır; güncel olmayabilir. Otomatik kalibrasyon yapılmaz; fotoğraftaki bilinen referans mesafesi ayrıca girilir.");
+            var notes=new Expander { Header="İstek ölçü notları (açılış kopyası; kalibrasyon değildir)",Content=RequestMeasurementsForVerification,Margin=new Thickness(0,0,0,4) };
+            DockPanel.SetDock(notes,Dock.Top);root.Children.Add(notes);
+        }
         Button Action(string title,Action act) { var b=new Button { Content=title,Padding=new Thickness(9,5,9,5),Margin=new Thickness(0,0,6,4) };b.Click+=(_,_)=>act();actions.Children.Add(b);return b; }
         var undoPoint=Action("Son noktayı kaldır",()=>CanvasForVerification.UndoPoint());var clearPoints=Action("Noktaları sil",()=>CanvasForVerification.ClearPoints());
         var apply=Action("CAD'e taslak ekle",TryApply);apply.Background=DesignRequestWindow.Accent;apply.Foreground=DesignRequestWindow.Surface;
@@ -474,7 +487,7 @@ internal sealed class PhotoTraceWindow : Window
     internal void TryApplyAndContinue()=>TryApplyCore(true);
     private void TryApplyCore(bool keepOpen)
     {
-        if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
+        if(sourceCurrent is not null && !sourceCurrent()) { RecoveryForVerification.Visibility=Visibility.Visible;RecoveryForVerification.IsExpanded=true;StatusForVerification.Text="Kaynak değişti; CAD aktarımı yapılmadı. Taslağı koruma adımlarına bakın.";return; }
         if(continuationBlocked) { StatusForVerification.Text="Önceki çizgi eklendi; proje durumu değiştiği için devam edilemiyor. Gerekirse çizgiyi kaydedip pencereyi kapatın.";return; }
         if(SourcePurpose!=PhotoSourcePurpose.FlatPattern) { StatusForVerification.Text="CAD'e ölçekli taslak eklemek için düz serilmiş kalıp görselini seçin; giysi/model referansı kalıp değildir.";return; }
         try
@@ -516,7 +529,7 @@ internal sealed class PhotoTraceWindow : Window
             var approvedRevision=DraftRevision;
             var confirmed=ConfirmForVerification?.Invoke(question) ?? (MessageBox.Show(this,question,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!confirmed) { StatusForVerification.Text="İşlem iptal edildi; proje değiştirilmedi.";return; }
-            if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
+            if(sourceCurrent is not null && !sourceCurrent()) { RecoveryForVerification.Visibility=Visibility.Visible;RecoveryForVerification.IsExpanded=true;StatusForVerification.Text="Kaynak değişti; CAD aktarımı yapılmadı. Taslağı koruma adımlarına bakın.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
             if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId,out var next)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
             if(keepOpen)

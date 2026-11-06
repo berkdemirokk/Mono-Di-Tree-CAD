@@ -1013,7 +1013,7 @@ internal sealed class DesignRequestWindow : Window
             }
             finally { preparingDrawingTarget=false; }
         }
-        var preview=new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget,Current,ownTrace:true);
+        var preview=new ReferencePhotoWindow(this,request.Reference!.Data,ConfirmTarget,Current,ownTrace:true,requestMeasurements:request.Measurements);
         unsavedPhotoPreviews.Add(preview);preview.Closed+=(_,_)=>unsavedPhotoPreviews.Remove(preview);return preview;
     }
     private async Task ObservePhotoAsync()
