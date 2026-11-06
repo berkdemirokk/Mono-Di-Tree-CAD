@@ -869,13 +869,24 @@ internal static class Validator
             Need(fitError<1e-6 && !fitted.ExportAllowed && !fitted.ProductionAllowed,"experimental tangent source control mismatch");
             var sourceControl=Point(tangentCase.GetProperty("control"));
             var counterfactual=BackWaistCandidate.CompareWithSourceControl(body,ResearchDesign.PinnedFitted,new(sourceControl.X,sourceControl.Y));
-            double injectedEndpointMax=0,injectedControlMax=0;
-            for(int i=0;i<7;i++) {
-                var e=counterfactual.Edges[i];var r=source[i];var st=Point(r.GetProperty("start"));var en=Point(r.GetProperty("end"));
-                injectedEndpointMax=Math.Max(injectedEndpointMax,Math.Max((st-new P(e.Start.X,e.Start.Y)).Length(),(en-new P(e.End.X,e.End.Y)).Length()));
-                if(e.RelativeControl is {} c) {var cr=Point(r.GetProperty("relative_controls")[0]);injectedControlMax=Math.Max(injectedControlMax,(cr-new P(c.X,c.Y)).Length());}
+            (double endpointMax,double controlMax) MeasureCounterfactual(BackWaistCandidate.UnverifiedPath path) {
+                double endpoint=0,control=0;
+                for(int i=0;i<7;i++) {
+                    var e=path.Edges[i];var r=source[i];var st=Point(r.GetProperty("start"));var en=Point(r.GetProperty("end"));
+                    endpoint=Math.Max(endpoint,Math.Max((st-new P(e.Start.X,e.Start.Y)).Length(),(en-new P(e.End.X,e.End.Y)).Length()));
+                    if(e.RelativeControl is {} c) {var cr=Point(r.GetProperty("relative_controls")[0]);control=Math.Max(control,(cr-new P(c.X,c.Y)).Length());}
+                }
+                return (endpoint,control);
             }
-            Need(double.IsFinite(injectedEndpointMax)&&double.IsFinite(injectedControlMax)&&!counterfactual.ExportAllowed&&!counterfactual.ProductionAllowed,"source control counterfactual gate");
+            // Research baselines for these five pinned fixtures only: not physical or equivalence tolerances.
+            void CheckCounterfactual(BackWaistCandidate.UnverifiedPath path) {
+                var (endpoint,control)=MeasureCounterfactual(path);
+                Need(double.IsFinite(endpoint)&&endpoint<=1.27e-7&&double.IsFinite(control)&&control<=1e-9&&!path.ExportAllowed&&!path.ProductionAllowed,"source control counterfactual research baseline changed");
+            }
+            CheckCounterfactual(counterfactual);
+            var corrupted=BackWaistCandidate.CompareWithSourceControl(body,ResearchDesign.PinnedFitted,new(sourceControl.X+.01,sourceControl.Y));
+            try {CheckCounterfactual(corrupted);throw new Exception("Corrupted counterfactual control accepted");}catch(InvalidDataException) { }
+            var (injectedEndpointMax,injectedControlMax)=MeasureCounterfactual(counterfactual);
             Console.WriteLine($"{id} with source tangent: endpoint={injectedEndpointMax:G9} cm; control={injectedControlMax:G9}; unresolved.");
             var improved=BackWaistCandidate.CreateWithExperimentalBfgs(body,ResearchDesign.PinnedFitted);double improvedEndpointMax=0,improvedControlMax=0;
             for(int i=0;i<7;i++) {
