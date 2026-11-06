@@ -19,6 +19,7 @@ public static class PdfFormat
         ProjectStorage.Validate(project);
         var copy = project.Clone();
         ProjectStorage.Validate(copy);
+        ExperimentalOutputGuard.EnsureAllowed(copy.Pieces);
         NotchExportGuard.EnsureSupported(copy);
         GrainlineExportGuard.EnsureSupported(copy);
         if (copy.Pieces.Count == 0 || copy.Pieces.Any(p => p.Points.Count < 2))

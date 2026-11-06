@@ -14,6 +14,7 @@ public sealed record DxfNotchGrainReviewItem(Guid PieceId,string PieceName,strin
 public sealed class DxfNotchReviewPlan
 {
     private readonly ProjectDocument source;
+    internal void EnsureExperimentalAllowed() { var ids=Contours.Select(c=>c.PieceId).ToHashSet();var pieces=source.Pieces.Where(p=>ids.Contains(p.Id)).ToArray();if(pieces.Length!=ids.Count)throw new InvalidOperationException("Hazırlanan parça kaynağı eksik.");ExperimentalOutputGuard.EnsureAllowed(pieces); }
     internal string Text { get; }
     public ImmutableArray<DxfNotchContourReviewItem> Contours { get; }
     public ImmutableArray<DxfNotchReviewItem> Items { get; }
@@ -71,6 +72,7 @@ public static class DxfNotchReviewExport
     {
         ArgumentNullException.ThrowIfNull(source);cancellationToken.ThrowIfCancellationRequested();ProjectStorage.ValidateForDxfExport(source,cancellationToken);
         var snapshot=source.Clone();ProjectStorage.ValidateForDxfExport(snapshot,cancellationToken);
+        ExperimentalOutputGuard.EnsureAllowed(snapshot.Pieces);
         if(!DocumentSession.ContentEquals(source,snapshot))throw new InvalidOperationException("Proje hazırlanırken değişti; incelemeyi yeniden başlatın.");
         var markerCount=snapshot.Pieces.Sum(p=>(long)(p.Notches?.Count ?? 0));
         if(markerCount==0)throw new InvalidDataException("İncelenecek köşe işareti bulunamadı.");
@@ -158,7 +160,7 @@ public static class DxfNotchReviewExport
     }
     public static void Write(DxfNotchReviewPlan plan,string path,ProjectFileVersion expected,CancellationToken cancellationToken=default)
     {
-        ArgumentNullException.ThrowIfNull(plan);ArgumentNullException.ThrowIfNull(expected);cancellationToken.ThrowIfCancellationRequested();
+        ArgumentNullException.ThrowIfNull(plan);ArgumentNullException.ThrowIfNull(expected);plan.EnsureExperimentalAllowed();cancellationToken.ThrowIfCancellationRequested();
         if(expected.Sha256 is not null)throw new InvalidOperationException("İnceleme için yeni bir dosya adı seçin.");
         ProjectStorage.AtomicWriteIfUnchanged(path,plan.Text,expected,cancellationToken);
     }

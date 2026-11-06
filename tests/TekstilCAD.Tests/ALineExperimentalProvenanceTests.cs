@@ -3,6 +3,7 @@ using TekstilCAD.FileFormats;
 using TekstilCAD.Patterns;
 using TekstilCAD.Nesting;
 using TekstilCAD.Grading;
+using TekstilCAD.MachineGateway;
 
 namespace TekstilCAD.Tests;
 
@@ -32,6 +33,49 @@ public sealed class ALineExperimentalProvenanceTests
         Assert.Equal(provenance,OpenPathClosure.Close(joined,200).Piece.ExperimentalALine);
         Assert.Equal(provenance,ALineExperimentalProvenance.Merge(null,provenance));
         Assert.Throws<InvalidOperationException>(()=>ALineExperimentalProvenance.Merge(provenance,provenance! with { Side="back" }));
+    }
+    [Fact] public void DirectOutputAndSimulationRejectRestrictedGeometryBeforeWriting()
+    {
+        var folder=Path.Combine(Path.GetTempPath(),"aline-output-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+        try
+        {
+            var doc=Document();var before=doc.Clone();var target=Path.Combine(folder,"out");
+            Assert.Throws<InvalidOperationException>(()=>DxfFormat.Export(doc,target+".dxf"));
+            Assert.Throws<InvalidOperationException>(()=>SvgFormat.Export(doc,target+".svg"));
+            Assert.Throws<InvalidOperationException>(()=>HpglFormat.Prepare(doc));
+            Assert.Throws<InvalidOperationException>(()=>HpglFormat.Export(doc,target+".plt"));
+            Assert.Throws<InvalidOperationException>(()=>PdfFormat.Export(doc,target+".pdf",new ProjectFileVersion(target+".pdf",null)));
+            Assert.Throws<InvalidOperationException>(()=>PdfTiledFormat.Export(doc,target+"-tiles.pdf",new ProjectFileVersion(target+"-tiles.pdf",null)));
+            Assert.Throws<InvalidOperationException>(()=>DxfGrainlineReviewExport.Prepare(doc));
+            Assert.Throws<InvalidOperationException>(()=>DxfNotchReviewExport.Prepare(doc,false));
+            var queue=new SimulationQueue(Path.Combine(folder,"spool"));var profile=new MachineProfile("local");
+            Assert.Throws<InvalidOperationException>(()=>queue.PrepareHpglReview(doc,profile));
+            Assert.Throws<InvalidOperationException>(()=>queue.Prepare(doc,profile,JobFormat.Dxf));
+            Assert.Throws<InvalidOperationException>(()=>queue.Prepare(doc,profile,JobFormat.Hpgl));
+            Assert.True(DocumentSession.ContentEquals(before,doc));Assert.False(File.Exists(target+".dxf"));Assert.False(File.Exists(target+".plt"));
+            Assert.False(File.Exists(target+".svg"));Assert.False(File.Exists(target+".pdf"));Assert.Empty(queue.Jobs);
+        }
+        finally { Directory.Delete(folder,true); }
+    }
+    [Fact] public void SelectedDxfReviewChecksIncludedPiecesWithoutBlockingUnselectedDraft()
+    {
+        var doc=Document();var restricted=doc.Pieces[0];restricted.Notches=[new NotchMark { VertexIndex=0,Position=restricted.Points[0] }];
+        var normal=restricted.Clone();normal.Id=Guid.NewGuid();normal.Name="Normal";normal.ExperimentalALine=null;doc.Pieces.Add(normal);
+        Assert.Throws<InvalidOperationException>(()=>DxfNotchReviewExport.PrepareSelected(doc,[restricted.Id],false));
+        var safe=DxfNotchReviewExport.PrepareSelected(doc,[normal.Id],false);
+        Assert.Single(safe.Contours);Assert.Equal(normal.Id,safe.Contours[0].PieceId);
+    }
+    [Fact] public void PreparedSimulationCannotCommitAfterSourceGainsRestriction()
+    {
+        var folder=Path.Combine(Path.GetTempPath(),"aline-job-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+        try
+        {
+            var doc=Document();var marker=doc.Pieces[0].ExperimentalALine;doc.Pieces[0].ExperimentalALine=null;
+            var queue=new SimulationQueue(folder);var profile=new MachineProfile("local");var prepared=queue.PrepareHpglReview(doc,profile);
+            doc.Pieces[0].ExperimentalALine=marker;
+            Assert.Throws<InvalidOperationException>(()=>queue.CommitPreparedHpgl(prepared,doc,profile));Assert.Empty(queue.Jobs);
+        }
+        finally { Directory.Delete(folder,true); }
     }
     [Fact] public void VersionedRoundTripRejectsDowngradeAndIncompleteOrUnknownMarker()
     {

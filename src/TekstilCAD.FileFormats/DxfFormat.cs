@@ -2311,6 +2311,7 @@ public static class DxfFormat
     }
     private static void ExportCore(ProjectDocument project, string path, ProjectFileVersion? expectedVersion, bool flipY=false)
     {
+        ExperimentalOutputGuard.EnsureAllowed(project.Pieces);
         var layers = PlanLayers(project);
         GrainlineExportGuard.EnsureSupported(project);
         NotchExportGuard.EnsureSupported(project);
