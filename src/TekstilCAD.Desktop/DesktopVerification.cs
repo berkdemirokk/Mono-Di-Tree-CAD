@@ -11112,9 +11112,12 @@ internal static partial class DesktopVerification
             Check(session.Undo() && DocumentSession.ContentEquals(initial,workspace.Document) && session.Redo() && DocumentSession.ContentEquals(added,workspace.Document),
                 "Manual photo draft participates in undo and redo",checks);
             var closureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
-            var photoClosure=new OpenPathClosureWindow(workspace,workspace,preferredSourceId:closureRequested);
+            var closureOwner=new Window { Owner=workspace };
+            var photoClosure=workspace.CreatePhotoTraceClosure(closureRequested,closureOwner)!;
             try
             {
+                Check(ReferenceEquals(photoClosure.Owner,closureOwner) && !photoClosure.IsVisible && workspace.CreatePhotoTraceClosure(Guid.NewGuid(),closureOwner) is null && DocumentSession.ContentEquals(added,workspace.Document),
+                    "Photo closure uses the requested modal owner and rejects missing source without changing CAD",checks);
                 photoClosure.ToleranceForVerification.Text="150";var closureTask=photoClosure.CalculateForVerification();
                 PumpUntil(()=>closureTask.IsCompleted);closureTask.GetAwaiter().GetResult();
                 Check(photoClosure.SelectedSourceForVerification==draft.Id && photoClosure.ApplyButtonForVerification.IsEnabled && DocumentSession.ContentEquals(added,workspace.Document),
@@ -11125,7 +11128,7 @@ internal static partial class DesktopVerification
                     "Photo closure adds a separate closed piece while retaining the original photo history",checks);
                 Check(session.Undo() && DocumentSession.ContentEquals(added,workspace.Document),"Undo removes the separate photo closure without erasing its source history",checks);
             }
-            finally { photoClosure.Close();SynchronizationContext.SetSynchronizationContext(closureContext); }
+            finally { photoClosure.Close();closureOwner.Close();SynchronizationContext.SetSynchronizationContext(closureContext); }
             var file=Path.Combine(Path.GetDirectoryName(reportPath)!,"photo-trace-"+Guid.NewGuid().ToString("N")+".tcad");
             try { ProjectStorage.Save(added,file);Check(DocumentSession.ContentEquals(added,ProjectStorage.Load(file)),"Manual photo draft persists as ordinary open geometry",checks); }
             finally { if(File.Exists(file))File.Delete(file); }

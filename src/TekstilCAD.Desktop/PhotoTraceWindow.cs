@@ -506,8 +506,8 @@ internal sealed class PhotoTraceWindow : Window
             if(sourceCurrent is not null && !sourceCurrent()) { StatusForVerification.Text="Kaynak istek veya fotoğraf değişti ya da kapandı; taslak projeye eklenmedi.";return; }
             if(DraftRevision!=approvedRevision) { StatusForVerification.Text="Fotoğraf noktaları veya değerleri değişti; taslak eklenmedi.";return; }
             if(!workspace.ApplyPhotoTrace(stamp,trace,history,out var addedId)) { StatusForVerification.Text=workspace.PhotoTraceProblem(stamp) ?? "Taslak eklenemedi.";return; }
-            allowClose=true;Close();
-            if(reviewClosure && addedId is Guid id) { if(OpenClosureForVerification is { } open)open(id);else workspace.OpenPhotoTraceClosure(id); }
+            var closureOwner=Owner;allowClose=true;Close();
+            if(reviewClosure && addedId is Guid id) { if(OpenClosureForVerification is { } open)open(id);else workspace.OpenPhotoTraceClosure(id,closureOwner); }
         }
         catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or System.IO.InvalidDataException or OverflowException)
         { StatusForVerification.Text="Taslak eklenemedi: "+ex.Message; }

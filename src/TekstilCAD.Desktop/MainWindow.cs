@@ -1457,13 +1457,15 @@ public class MainWindow : Window
         return committed;
     }
 
-    internal void OpenPhotoTraceClosure(Guid id)
+    internal OpenPathClosureWindow? CreatePhotoTraceClosure(Guid id,Window? owner=null)
     {
         if(mainMutationReviewRequired || windowClosed || recoveryClosing || recoveryRestoreIncomplete || DxfImportRunning || ExportRunning || HasPendingCanvasOrPropertyWork ||
            !Document.Pieces.Any(piece=>piece.Id==id && !piece.Closed))
-        { SetStatus("Kapatma incelemesi açılamadı; açık taslağı kontrol edin ve Tekstil araçlarından yeniden deneyin.");return; }
-        new OpenPathClosureWindow(this,this,preferredSourceId:id).ShowDialog();
+        { SetStatus("Kapatma incelemesi açılamadı; açık taslağı kontrol edin ve Tekstil araçlarından yeniden deneyin.");return null; }
+        return new OpenPathClosureWindow(this,owner ?? this,preferredSourceId:id);
     }
+
+    internal void OpenPhotoTraceClosure(Guid id,Window? owner=null)=>CreatePhotoTraceClosure(id,owner)?.ShowDialog();
 
     // The window holds only a detached drawing; this stamp must be rechecked
     // immediately before the single document transaction.
