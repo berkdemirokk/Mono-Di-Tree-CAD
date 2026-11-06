@@ -2,7 +2,8 @@ namespace TekstilCAD.Patterns;
 
 /// <summary>
 /// Experimental symmetric lower-section candidate. It redistributes only explicitly
-/// supplied front/back ease, never body arcs, total ease or source data. It is not a
+/// supplied front/back ease; body arcs and source data remain unchanged. Floating-point
+/// sums are approximate, not exact decimal preservation. It is not a
 /// sewing-pattern, fit, seam or production approval.
 /// </summary>
 public static class ALineSideBalance
@@ -42,6 +43,6 @@ public static class ALineSideBalance
         var bound=1e-10*Math.Max(1,Math.Max(preview.FrontSideLengthMm,preview.BackSideLengthMm));
         if(preview.WaistToHipMismatchMm>bound || preview.HipToHemMismatchMm>bound)
             return new(input,null,"Sayısal kontrolde yan aralıklar eşleşmedi; aday oluşturulmadı.");
-        return new(input,candidate,"Deneysel aday yalnız ön/arka bolluk dağılımını değiştirir; toplam bolluk ve beden yayları korunur. Ön ve arka bitmiş bel/kalça genişlikleri eşit varsayılır. Dikiş, beden uyumu veya üretim doğrulanmadı; kaynak değiştirilmedi.");
+        return new(input,candidate,"Deneysel aday yalnız ön/arka bolluk dağılımını değiştirir; toplam bolluk yaklaşık korunur, beden yayları değiştirilmez. Ön ve arka bitmiş bel/kalça genişlikleri eşit varsayılır. Dikiş, beden uyumu veya üretim doğrulanmadı; kaynak değiştirilmedi.");
     }
 }

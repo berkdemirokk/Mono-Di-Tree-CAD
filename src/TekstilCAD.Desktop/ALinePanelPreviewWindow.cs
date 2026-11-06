@@ -25,6 +25,11 @@ internal sealed class ALinePanelPreviewWindow : Window
     internal TextBlock StatusForVerification { get; }
     internal Canvas CanvasForVerification { get; }
     internal TextBlock KnownTotalsForVerification { get; }
+    internal Button BalanceExploreForVerification { get; private set; }=null!;
+    internal Button BalanceAcceptForVerification { get; private set; }=null!;
+    internal TextBlock BalanceTextForVerification { get; private set; }=null!;
+    internal Canvas BalanceCanvasForVerification { get; private set; }=null!;
+    internal Func<bool>? ConfirmBalanceForVerification { get; set; }
     internal TextBlock WaistComparisonForVerification { get; }=new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,8) };
     internal Button FormToRequestForVerification { get; private set; }=null!;
     internal Func<bool>? ConfirmFormToRequestForVerification { get; set; }
@@ -134,6 +139,15 @@ internal sealed class ALinePanelPreviewWindow : Window
         var canvas=new Canvas { Width=600,Height=340,Background=Brushes.White };
         body.Children.Add(new Viewbox { Child=canvas,MaxHeight=340,Stretch=Stretch.Uniform });
         var blockers=new TextBlock { TextWrapping=TextWrapping.Wrap };body.Children.Add(blockers);
+        var balanceExplore=new Button { Content="Yan çizgi için deneysel adayı incele",IsEnabled=false,Padding=new Thickness(8),Margin=new Thickness(0,8,0,4) };body.Children.Add(balanceExplore);
+        var balanceText=new TextBlock { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,4,0,4) };body.Children.Add(balanceText);
+        var balanceAccept=new Button { Content="Bu adayı ayrı önizle…",IsEnabled=false,Padding=new Thickness(8) };body.Children.Add(balanceAccept);
+        var balanceCanvas=new Canvas { Width=600,Height=340,Background=Brushes.White,Visibility=Visibility.Collapsed };
+        body.Children.Add(new Viewbox { Child=balanceCanvas,MaxHeight=340,Stretch=Stretch.Uniform });
+        BalanceExploreForVerification=balanceExplore;BalanceAcceptForVerification=balanceAccept;BalanceTextForVerification=balanceText;BalanceCanvasForVerification=balanceCanvas;
+        ALinePanelInput? drawnInput=null;ALineSideBalance.Result? balancePlan=null;long drawnVersion=-1;string? drawnSource=null;(long,long) drawnSourceRevision=default;
+        bool BalanceCurrent()=>!closed && drawnInput is not null && drawnVersion==editVersion && SourceAvailable() && drawnSource==sourceIdentity && CurrentSource()==drawnSource && SourceRevision()==drawnSourceRevision && agreement.IsChecked==true && confirm.IsChecked==true;
+        void ResetBalance() { drawnInput=null;balancePlan=null;balanceExplore.IsEnabled=false;balanceAccept.IsEnabled=false;balanceText.Text="";balanceCanvas.Children.Clear();balanceCanvas.Visibility=Visibility.Collapsed; }
         UnitForVerification=unit;FieldsForVerification=fields.AsReadOnly();AgreementForVerification=agreement;
         ConfirmationForVerification=confirm;ReviewForVerification=reviewButton;DrawForVerification=button;
         SummaryForVerification=summary;StatusForVerification=status;CanvasForVerification=canvas;
@@ -219,7 +233,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             }
         }
         Closed+=(_,_)=>closed=true;
-        void Clear() { editVersion++;reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
+        void Clear() { editVersion++;ResetBalance();reviewGate.Invalidate();confirm.IsChecked=false;confirm.IsEnabled=false;summary.Text="";canvas.Children.Clear();blockers.Text="";status.Text="Girdiler değişti; ölçüleri yeniden inceleyip onaylayın. Çıktı kapalı."; }
         void RefreshWaistComparison()=>WaistComparisonForVerification.Text=ALineWaistSourceComparison.Describe(promptSnapshot,measurementSnapshot,fields[0].Text,fields[1].Text,CurrentUnit());
         var correctionFields=new ComboBox { ItemsSource=labels,SelectedIndex=-1,Margin=new Thickness(0,4,0,4) };
         CorrectionFieldsForVerification=correctionFields;body.Children.Add(new Label { Content="Düzeltilecek açık istek ölçüsü",Target=correctionFields });body.Children.Add(correctionFields);
@@ -298,7 +312,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             committedUnit=requested;Clear();RefreshProposal();RefreshWaistComparison();
         };
         agreement.Checked+=(_,_)=>Clear();agreement.Unchecked+=(_,_)=>Clear();
-        confirm.Unchecked+=(_,_)=> { editVersion++;canvas.Children.Clear();blockers.Text=""; };
+        confirm.Unchecked+=(_,_)=> { editVersion++;ResetBalance();canvas.Children.Clear();blockers.Text=""; };
         confirm.Checked+=(_,_)=>editVersion++;
         proposalAgreement.Checked+=(_,_)=>editVersion++;
         proposalAgreement.Unchecked+=(_,_)=>editVersion++;
@@ -322,7 +336,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         button.Click+=(_,_)=>
         {
             editVersion++;
-            canvas.Children.Clear();blockers.Text="";
+            ResetBalance();canvas.Children.Clear();blockers.Text="";
             try
             {
                 if(agreement.IsChecked!=true)throw new ArgumentException("Gösterim varsayımını okuyup seçin.");
@@ -343,9 +357,43 @@ internal sealed class ALinePanelPreviewWindow : Window
                 string SegmentDifference(double value)=>value!=0 && value.ToString("F3")==formattedZero ? $"sıfırdan büyük (yuvarlanınca {formattedZero})" : value.ToString("F3");
                 status.Text=$"Ön yan çizgi yaklaşık {preview.FrontSideLengthMm:F3} mm; arka yaklaşık {preview.BackSideLengthMm:F3} mm; {differenceText}. Bel–kalça yan aralığı: ön {preview.FrontWaistToHipSideMm:F3} mm, arka {preview.BackWaistToHipSideMm:F3} mm, mutlak fark {SegmentDifference(preview.WaistToHipMismatchMm)} mm. Kalça–etek yan aralığı: ön {preview.FrontHipToHemSideMm:F3} mm, arka {preview.BackHipToHemSideMm:F3} mm, mutlak fark {SegmentDifference(preview.HipToHemMismatchMm)} mm. Toplam uzunluklar eşit olsa da ara noktalar uyuşmayabilir. Uzunluklar ve farklar gösterimde 0,001 mm'ye yuvarlanır. Dikiş eşleşmesi onaylanmadı. Görünüm ölçekli baskı değildir.";
                 blockers.Text=string.Join(Environment.NewLine,preview.Unresolved);
+                if(SourceAvailable() && CurrentSource()==sourceIdentity) { drawnInput=input;drawnVersion=editVersion;drawnSource=sourceIdentity;drawnSourceRevision=SourceRevision();balanceExplore.IsEnabled=true; }
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException)
             { status.Text=ex.Message; }
+        };
+        balanceExplore.Click+=(_,_ )=>
+        {
+            balancePlan=null;balanceAccept.IsEnabled=false;balanceCanvas.Children.Clear();balanceCanvas.Visibility=Visibility.Collapsed;
+            if(!BalanceCurrent()) { balanceText.Text="Kaynak veya form değişti; ölçüleri ve önizlemeyi yeniden onaylayın.";return; }
+            var plan=ALineSideBalance.Propose(drawnInput!);balancePlan=plan;
+            if(plan.Candidate is not { } candidate) { balanceText.Text=plan.Explanation;return; }
+            var original=drawnInput!;
+            string Row(string label,double oldValue,double newValue)=>$"{label}: eski yaklaşık {oldValue:G17} mm → aday yaklaşık {newValue:G17} mm; fark yaklaşık {newValue-oldValue:G17} mm";
+            balanceText.Text=string.Join(Environment.NewLine,new[] { Row("Ön bel bolluğu",original.FrontWaistEase,candidate.FrontWaistEase),Row("Arka bel bolluğu",original.BackWaistEase,candidate.BackWaistEase),Row("Ön kalça bolluğu",original.FrontHipEase,candidate.FrontHipEase),Row("Arka kalça bolluğu",original.BackHipEase,candidate.BackHipEase),plan.Explanation,"Hesaplar bilgisayar sayılarıyla yaklaşık yapılır; toplam bolluğun tam ondalık eşitliği garanti edilmez. Aday yalnız düz deneysel kesittir; üretim, dikiş veya beden uyumu onayı değildir. Form ve kaynak değiştirilmez; CAD ve çıktı kapalıdır." });
+            balanceAccept.IsEnabled=true;
+        };
+        bool acceptingBalance=false;
+        balanceAccept.Click+=(_,_ )=>
+        {
+            if(acceptingBalance)return;
+            var plan=balancePlan;if(plan?.Candidate is not { } candidate || !BalanceCurrent()) { balanceAccept.IsEnabled=false;balanceText.Text="Kaynak veya form değişti; aday kullanılmadı.";return; }
+            acceptingBalance=true;
+            try
+            {
+                var approved=ConfirmBalanceForVerification?.Invoke() ?? (MessageBox.Show(this,"Gösterilen dört yaklaşık bolluk değişikliğini ve eşit bitmiş ön/arka bel/kalça genişliği varsayımını incelediniz mi? Aday yalnız ayrı deneysel görünümdür; kaynak ve form değişmez, uyum veya üretim onayı değildir.","Deneysel adayı önizle",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes);
+                if(!approved)return;
+                if(!BalanceCurrent() || !ReferenceEquals(plan,balancePlan)) { balanceAccept.IsEnabled=false;balanceText.Text="Onay sırasında kaynak veya form değişti; aday kullanılmadı.";return; }
+                var candidatePreview=ALinePanelPreview.Create(candidate);var scale=Math.Min(240/(candidate.FinishedHemCircumference/4),280/candidate.WaistToHem);
+                void DrawCandidate(IReadOnlyList<Point2> points,double x,string label,Brush stroke)
+                {
+                    balanceCanvas.Children.Add(new Polygon { Stroke=stroke,StrokeThickness=2,Fill=Brushes.Transparent,Points=new PointCollection(points.Select(p=>new Point(x+p.X*scale,35+p.Y*scale))) });
+                    var title=new TextBlock { Text=label,Foreground=Brushes.Black };Canvas.SetLeft(title,x);Canvas.SetTop(title,5);balanceCanvas.Children.Add(title);
+                }
+                DrawCandidate(candidatePreview.Front,20,"Aday ön yarım",Brushes.DarkBlue);DrawCandidate(candidatePreview.Back,320,"Aday arka yarım",Brushes.DarkRed);
+                balanceCanvas.Visibility=Visibility.Visible;balanceText.Text+="\nAday ayrı gösteriliyor. Kaynak ve form değiştirilmedi; uyum, dikiş ve üretim doğrulanmadı.";
+            }
+            finally { acceptingBalance=false; }
         };
         ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray(),workOrigin);
         static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)=>a.Unit==b.Unit && a.SourceHash==b.SourceHash && a.Fields.SequenceEqual(b.Fields);

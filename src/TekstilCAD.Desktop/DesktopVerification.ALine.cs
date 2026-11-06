@@ -156,6 +156,18 @@ internal static partial class DesktopVerification
                 Check(!geometryFeedback.ConfirmationForVerification.IsEnabled && geometryFeedback.StatusForVerification.Text.Contains("Arka beden"),"Back hem failure identifies the back",checks);
             }
             finally { geometryFeedback.Close(); }
+            var balanceSource=new DesignRequest("Serbest tarif","",null,"aline",2);request.LoadForVerification(balanceSource);
+            var sourceBalance=new ALinePanelPreviewWindow(request,balanceSource.Prompt,balanceSource.Measurements) { ConfirmDiscardWorkForVerification=()=>true };
+            try
+            {
+                sourceBalance.UnitForVerification.SelectedIndex=1;Fill(sourceBalance,false);sourceBalance.AgreementForVerification.IsChecked=true;
+                ReviewAndDraw(sourceBalance);Click(sourceBalance.BalanceExploreForVerification);
+                sourceBalance.ConfirmBalanceForVerification=()=> { var saved=request.PromptForVerification.Text;request.PromptForVerification.Text=saved+" değişiklik";request.PromptForVerification.Text=saved;return true; };
+                Click(sourceBalance.BalanceAcceptForVerification);
+                Check(sourceBalance.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && sourceBalance.BalanceTextForVerification.Text.Contains("değişti") && request.CaptureForVerification()==balanceSource,
+                    "Source change and restoration during candidate approval rejects the stale candidate",checks);
+            }
+            finally { sourceBalance.Close();request.LoadForVerification(transferSource); }
             var sideDisplay=new ALinePanelPreviewWindow(owner,"A kesim elbise","");
             sideDisplay.ConfirmDiscardWorkForVerification=()=>true;
             try
@@ -184,6 +196,27 @@ internal static partial class DesktopVerification
                 }
                 finally { System.Globalization.CultureInfo.CurrentCulture=originalCulture; }
                 Check(sideDisplay.StatusForVerification.Text.Contains("Bel–kalça yan aralığı") && sideDisplay.StatusForVerification.Text.Contains("Kalça–etek yan aralığı") && sideDisplay.StatusForVerification.Text.Contains("ara noktalar uyuşmayabilir"),"Separate side segments disclose hip-point mismatch and do not certify stitching",checks);
+                Click(sideDisplay.BalanceExploreForVerification);
+                Check(sideDisplay.BalanceAcceptForVerification.IsEnabled && sideDisplay.BalanceTextForVerification.Text.Contains("Ön bel bolluğu") &&
+                    sideDisplay.BalanceTextForVerification.Text.Contains("Arka kalça bolluğu") && sideDisplay.BalanceTextForVerification.Text.Contains("yaklaşık") &&
+                    sideDisplay.BalanceTextForVerification.Text.Contains("üretim") && sideDisplay.BalanceCanvasForVerification.Visibility==Visibility.Collapsed,
+                    "Balanced candidate shows all ease changes and limitations before explicit approval",checks);
+                var originalForm=sideDisplay.FieldsForVerification.Select(f=>f.Text).ToArray();
+                sideDisplay.ConfirmBalanceForVerification=()=>false;Click(sideDisplay.BalanceAcceptForVerification);
+                Check(sideDisplay.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && originalForm.SequenceEqual(sideDisplay.FieldsForVerification.Select(f=>f.Text)),
+                    "Declining candidate preserves the form and does not display candidate",checks);
+                sideDisplay.ConfirmBalanceForVerification=()=> { sideDisplay.FieldsForVerification[4].Text="21";return true; };Click(sideDisplay.BalanceAcceptForVerification);
+                Check(sideDisplay.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && sideDisplay.FieldsForVerification[4].Text=="21" &&
+                    sideDisplay.BalanceTextForVerification.Text.Contains("değişti"),"Form change during candidate approval prevents stale display",checks);
+                Fill(sideDisplay,false);sideDisplay.FieldsForVerification[0].Text="300";sideDisplay.FieldsForVerification[1].Text="500";
+                sideDisplay.FieldsForVerification[4].Text="0";sideDisplay.FieldsForVerification[5].Text="0";ReviewAndDraw(sideDisplay);Click(sideDisplay.BalanceExploreForVerification);
+                Check(!sideDisplay.BalanceAcceptForVerification.IsEnabled && sideDisplay.BalanceTextForVerification.Text.Contains("Negatif"),
+                    "Candidate is unavailable when nonnegative ease cannot balance the arcs",checks);
+                Fill(sideDisplay,false);ReviewAndDraw(sideDisplay);Click(sideDisplay.BalanceExploreForVerification);sideDisplay.ConfirmBalanceForVerification=()=>true;
+                var beforeCandidate=sideDisplay.FieldsForVerification.Select(f=>f.Text).ToArray();Click(sideDisplay.BalanceAcceptForVerification);
+                Check(sideDisplay.BalanceCanvasForVerification.Visibility==Visibility.Visible && sideDisplay.BalanceCanvasForVerification.Children.OfType<Polygon>().Count()==2 &&
+                    beforeCandidate.SequenceEqual(sideDisplay.FieldsForVerification.Select(f=>f.Text)) && sideDisplay.BalanceTextForVerification.Text.Contains("üretim doğrulanmadı"),
+                    "Explicit candidate approval opens only a separate experimental view and preserves the form",checks);
                 sideDisplay.FieldsForVerification[3].Text="500.1";ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("fark yaklaşık") && !sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Difference above displayed rounding threshold is shown as approximate",checks);
             }
