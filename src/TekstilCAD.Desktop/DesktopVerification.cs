@@ -17149,13 +17149,26 @@ internal static partial class DesktopVerification
             {
                 var calculation=protectedMirror.CalculateForVerification();PumpUntil(()=>calculation.IsCompleted);calculation.GetAwaiter().GetResult();protectedMirror.ApplyForVerification();
                 var mirrored=studio.Document.Pieces.Single(piece=>piece.Id!=restricted.Id);
-                var selectedPath=Path.Combine(work,"restricted-mirror-selected.dxf");
+                var normal=new PatternPiece { Name="Normal kontrol",Closed=true,Points=[new(100,0),new(110,0),new(110,20),new(100,20)] };
+                studio.Commit("Normal seçili çıktı kontrolü",()=>studio.Document.Pieces.Add(normal.Clone()));
+                var selectedPath=Path.Combine(work,"restricted-mirror-"+Guid.NewGuid().ToString("N")+".dxf");
                 var export=studio.StartSelectedDxfForVerification([mirrored.Id],selectedPath,ProjectStorage.CaptureVersion(selectedPath));
-                if(export is not null) { PumpUntil(()=>export.IsCompleted);export.GetAwaiter().GetResult(); }
-                Check(mirrored.ExperimentalALine==restricted.ExperimentalALine && studio.ExportError is not null && !File.Exists(selectedPath),
-                    "Mirrored experimental piece remains restricted in selected DXF export",checks);
+                Check(export is not null,"Restricted mirror selected DXF export actually starts",checks);
+                if(export is null)throw new InvalidOperationException("Restricted mirror selected export did not start.");
+                PumpUntil(()=>export.IsCompleted);export.GetAwaiter().GetResult();
+                Check(mirrored.ExperimentalALine==restricted.ExperimentalALine && studio.ExportError is not null &&
+                    studio.ExportError.Contains("Deneysel A kesim taslağı çıktı veya makine işlemi için onaylanmadı",StringComparison.Ordinal) && !File.Exists(selectedPath),
+                    "Mirrored experimental piece is rejected by the experimental selected DXF guard",checks);
+                var normalPath=Path.Combine(work,"ordinary-selected-"+Guid.NewGuid().ToString("N")+".dxf");
+                var normalExport=studio.StartSelectedDxfForVerification([normal.Id],normalPath,ProjectStorage.CaptureVersion(normalPath));
+                Check(normalExport is not null,"Normal selected DXF export actually starts in the same fixture",checks);
+                if(normalExport is null)throw new InvalidOperationException("Normal selected export did not start.");
+                PumpUntil(()=>normalExport.IsCompleted);normalExport.GetAwaiter().GetResult();
+                Check(studio.ExportError is null && File.Exists(normalPath) && DxfFormat.Import(normalPath,1).Project.Pieces.Count==1,
+                    "Normal selected piece exports successfully in the same fixture",checks);
             }
-            finally { protectedMirror.Close(); }        }
+            finally { protectedMirror.Close(); }
+        }
         finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 
