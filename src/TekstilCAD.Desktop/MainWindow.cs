@@ -1971,7 +1971,7 @@ public class MainWindow : Window
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
                 savedFileHasPhotoTraceHistory=loaded.Project.PhotoTraceHistory is { Count:>0 };
                 savedFileHasPlaneTraceHistory=loaded.Project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;
-                savedFileHasExperimentalALine=loaded.Project.Pieces.Any(p=>p.ExperimentalALine is not null);
+                savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(loaded.Project)==10;
                 applied=true;
             },openingProject:true);
             SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
@@ -1998,7 +1998,7 @@ public class MainWindow : Window
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
         if (filePath is null) { SaveAs(); return; }
-        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory) || (Document.Pieces.Any(p=>p.ExperimentalALine is not null) && !savedFileHasExperimentalALine))
+        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory) || (ProjectStorage.GetProjectFormatVersion(Document)==10 && !savedFileHasExperimentalALine))
         {
             var approval=CaptureSaveApproval();
             var choice=ChooseGradingCompatibility(true);
@@ -2027,7 +2027,7 @@ public class MainWindow : Window
             ? fileVersion : ProjectStorage.CaptureVersion(path));
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
-        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };savedFileHasPlaneTraceHistory=candidate.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;savedFileHasExperimentalALine=candidate.Pieces.Any(p=>p.ExperimentalALine is not null);
+        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };savedFileHasPlaneTraceHistory=candidate.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(candidate)==10;
         try
         {
             if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
@@ -2167,7 +2167,7 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=Document.Pieces.Any(p=>p.ExperimentalALine is not null) ? ExperimentalALineCompatibilityNotice
+        var description=ProjectStorage.GetProjectFormatVersion(Document)==10 ? ExperimentalALineCompatibilityNotice
             : Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true
             ? "Düzlem perspektifli fotoğraf geçmişi proje biçimi sürüm 9 gerektirir. Önceki TekstilCAD sürümleri bu dosyayı açamaz. Fotoğraf projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
             : Document.PhotoTraceHistory is { Count:>0 }
