@@ -1754,6 +1754,19 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertEqual(Parser.compare(.init(message: message, fields: ["bel çevresi": "72 cm"])), .unrecognizedMessage, message)
         }
     }
+    func testReviewNavigationReturnsToEntryStepAndResetsAfterLeavingReview() {
+        var navigation = ExperimentalDesignBrief.ReviewNavigation()
+        XCTAssertEqual(navigation.previousStep(from: 3), 2)
+        navigation.enterFromMeasurements(); navigation.didChangeStep(to: 3)
+        XCTAssertEqual(navigation.previousStep(from: 3), 1)
+        navigation.didChangeStep(to: 1)
+        XCTAssertEqual(navigation.previousStep(from: 1), 0)
+        navigation.didChangeStep(to: 2); navigation.didChangeStep(to: 3)
+        XCTAssertEqual(navigation.previousStep(from: 3), 2)
+        navigation.enterFromMeasurements(); navigation.didChangeStep(to: 3)
+        navigation.didChangeStep(to: 0); navigation.didChangeStep(to: 3)
+        XCTAssertEqual(navigation.previousStep(from: 3), 2)
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

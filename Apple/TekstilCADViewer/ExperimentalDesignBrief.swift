@@ -6,6 +6,17 @@ enum ExperimentalDesignBrief {
     enum Error: Swift.Error { case missingContent, invalidText, invalidImage, pendingALineGuide, pendingMeasurementForm }
     static let maxTextUnits = 16_384
     static let maxImageBytes = 8 * 1024 * 1024
+    /// Ephemeral navigation only; never included in a draft or request.
+    struct ReviewNavigation {
+        private(set) var enteredFromMeasurements = false
+        mutating func enterFromMeasurements() { enteredFromMeasurements = true }
+        mutating func didChangeStep(to step: Int) {
+            if step != 3 { enteredFromMeasurements = false }
+        }
+        func previousStep(from step: Int) -> Int {
+            step == 3 && enteredFromMeasurements ? 1 : max(0, step - 1)
+        }
+    }
     struct Image: Codable {
         let name: String
         let mediaType: String

@@ -2563,6 +2563,7 @@ private struct ExperimentalDesignBriefView: View {
     @State private var importedPortable = false
     @State private var candidateIsPortable = false
     @State private var step = 0
+    @State private var reviewNavigation = ExperimentalDesignBrief.ReviewNavigation()
     @State private var confirmClose = false
     @State private var description = ""
     @State private var bust = ""
@@ -3388,7 +3389,10 @@ private struct ExperimentalDesignBriefView: View {
     }
     @ViewBuilder private var footerActions: some View {
         if step > 0 {
-            Button("Geri") { if exportPreparationID != nil { cancelExportPreparation() }; step -= 1; message = ""; focusedInput = nil }
+            Button("Geri") {
+                if exportPreparationID != nil { cancelExportPreparation() }
+                step = reviewNavigation.previousStep(from: step); message = ""; focusedInput = nil
+            }
                 .buttonStyle(.bordered).controlSize(.large).frame(minHeight: 48)
         }
         if step < 3 {
@@ -3618,7 +3622,7 @@ private struct ExperimentalDesignBriefView: View {
 
                     Button(image == nil ? "Görsel eklemeden isteği gözden geçir" : "Seçili görselle isteği gözden geçir") {
                         guard !referenceBlocksClose, !draftTransition else { return }
-                        focusedInput = nil; message = ""; step = 3
+                        focusedInput = nil; message = ""; reviewNavigation.enterFromMeasurements(); step = 3
                     }
                     .frame(minHeight: 44)
                     .disabled(referenceBlocksClose || draftTransition)
@@ -3820,6 +3824,7 @@ private struct ExperimentalDesignBriefView: View {
             .background(ivory)
             .tint(plum)
             .onChange(of: step) { newStep in
+                reviewNavigation.didChangeStep(to: newStep)
                 requestScroll.scrollTo("request-step-start", anchor: .top)
                 focusedStepHeading = newStep
             }
