@@ -17,6 +17,7 @@
   <ItemGroup>
     <Compile Include="..\..\src\TekstilCAD.Desktop\ModelValidationRevision.cs" Link="Desktop\ModelValidationRevision.cs" />
     <Compile Include="..\..\src\TekstilCAD.Desktop\ALineSourceCorrection.cs" Link="Desktop\ALineSourceCorrection.cs" />
+    <Compile Include="..\..\src\TekstilCAD.Desktop\ALineBalanceSnapshotValidation.cs" Link="Desktop\ALineBalanceSnapshotValidation.cs" />
   </ItemGroup>
 
   <ItemGroup>

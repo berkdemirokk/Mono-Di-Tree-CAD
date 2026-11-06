@@ -32,6 +32,26 @@ internal static partial class DesktopVerification
             var expectedId=ALineWorkDraftStorage.SourceIdentity(new DesignRequest("A kesim elbise","bel çevresi 72 cm; kalça çevresi 100 cm",null));
             Check(stored.SourceHash==expectedId && stored.Fields.SequenceEqual(values) && stored.Unit=="cm" && File.ReadAllText(path).Contains(ALineWorkDraftStorage.SourceAlgorithm),
                 "Version 2 work records the snapshot identity and preserves all raw fields and unit",checks);
+            Click(window.BalanceExploreForVerification);window.ConfirmBalanceForVerification=()=>true;Click(window.BalanceAcceptForVerification);
+            var candidatePath=Path.Combine(folder,"candidate"+ALineWorkDraftStorage.Extension);
+            window.SaveWorkForVerification(candidatePath);var candidateDraft=ALineWorkDraftStorage.Load(candidatePath);
+            Check(candidateDraft.Balance is not null && File.ReadAllText(candidatePath).Contains("\"version\":3") && candidateDraft.SourceHash==expectedId,
+                "Candidate work saves versioned unapproved values bound to the request",checks);
+            var candidateBytes=File.ReadAllBytes(candidatePath);bool candidateConflict=false;
+            try { window.SaveWorkForVerification(candidatePath); } catch(ProjectConflictException) { candidateConflict=true; }
+            Check(candidateConflict && File.ReadAllBytes(candidatePath).SequenceEqual(candidateBytes),"Candidate save cannot overwrite an existing work file",checks);
+            var alteredCandidate=candidateDraft.Balance!.Candidate.ToArray();alteredCandidate[0]+=1;
+            var tamperedPath=Path.Combine(folder,"tampered"+ALineWorkDraftStorage.Extension);
+            ALineWorkDraftStorage.SaveNew(tamperedPath,candidateDraft with { Balance=candidateDraft.Balance with { Candidate=alteredCandidate } });
+            var currentBefore=window.FieldsForVerification.Select(f=>f.Text).ToArray();bool tamperRejected=false;
+            try { window.LoadWorkForVerification(tamperedPath,()=>throw new InvalidOperationException("Tampered candidate must not ask confirmation")); } catch(InvalidDataException) { tamperRejected=true; }
+            Check(tamperRejected && currentBefore.SequenceEqual(window.FieldsForVerification.Select(f=>f.Text)),"Tampered candidate is rejected before replacing the form",checks);
+            Check(window.LoadWorkForVerification(candidatePath,()=>true) && window.StatusForVerification.Text.Contains("yeniden hesaplandı") &&
+                window.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && !window.BalanceAcceptForVerification.IsEnabled && window.AgreementForVerification.IsChecked!=true && window.ConfirmationForVerification.IsChecked!=true,
+                "Loading a candidate recomputes it and never restores prior approval",checks);
+            window.AgreementForVerification.IsChecked=true;Click(window.ReviewForVerification);window.ConfirmationForVerification.IsChecked=true;Click(window.DrawForVerification);Click(window.BalanceExploreForVerification);
+            Check(window.BalanceAcceptForVerification.IsEnabled && window.BalanceCanvasForVerification.Visibility==Visibility.Collapsed,
+                "Loaded candidate requires fresh review and approval before separate display",checks);
             var differentId=ALineWorkDraftStorage.SourceIdentity(new DesignRequest("Başka sipariş","",null));
             var differentPath=Path.Combine(folder,"different"+ALineWorkDraftStorage.Extension);
             ALineWorkDraftStorage.SaveNew(differentPath,new("cm",values,differentId));

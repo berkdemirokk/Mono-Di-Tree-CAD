@@ -145,6 +145,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         var balanceCanvas=new Canvas { Width=600,Height=340,Background=Brushes.White,Visibility=Visibility.Collapsed };
         body.Children.Add(new Viewbox { Child=balanceCanvas,MaxHeight=340,Stretch=Stretch.Uniform });
         BalanceExploreForVerification=balanceExplore;BalanceAcceptForVerification=balanceAccept;BalanceTextForVerification=balanceText;BalanceCanvasForVerification=balanceCanvas;
+        ALineWorkDraft? retainedCandidateWork=null;
         ALinePanelInput? drawnInput=null;ALineSideBalance.Result? balancePlan=null;long drawnVersion=-1;string? drawnSource=null;(long,long) drawnSourceRevision=default;
         bool BalanceCurrent()=>!closed && drawnInput is not null && drawnVersion==editVersion && SourceAvailable() && drawnSource==sourceIdentity && CurrentSource()==drawnSource && SourceRevision()==drawnSourceRevision && agreement.IsChecked==true && confirm.IsChecked==true;
         void ResetBalance() { drawnInput=null;balancePlan=null;balanceExplore.IsEnabled=false;balanceAccept.IsEnabled=false;balanceText.Text="";balanceCanvas.Children.Clear();balanceCanvas.Visibility=Visibility.Collapsed; }
@@ -152,8 +153,8 @@ internal sealed class ALinePanelPreviewWindow : Window
         {
             void SourceChanged()
             {
-                if(drawnInput is null && balancePlan is null && balanceCanvas.Visibility!=Visibility.Visible)return;
-                ResetBalance();balanceText.Text="Kaynak istek değişti; aday kaldırıldı. Güncel istekten önizlemeyi yeniden açın.";
+                if(drawnInput is null && balancePlan is null && balanceCanvas.Visibility!=Visibility.Visible && retainedCandidateWork is null)return;
+                retainedCandidateWork=null;ResetBalance();balanceText.Text="Kaynak istek değişti; aday kaldırıldı. Güncel istekten önizlemeyi yeniden açın.";
             }
             sourceOwner.ALineSourceChanged+=SourceChanged;Closed+=(_,_)=>sourceOwner.ALineSourceChanged-=SourceChanged;
         }
@@ -291,11 +292,11 @@ internal sealed class ALinePanelPreviewWindow : Window
             }
             catch(Exception ex) when(ex is ArgumentException or InvalidOperationException or OverflowException or System.Text.RegularExpressions.RegexMatchTimeoutException) { status.Text=ex.Message; }
         };
-        foreach(var field in fields)field.TextChanged+=(_,_)=> { Clear();RefreshProposal();RefreshWaistComparison(); };
+        foreach(var field in fields)field.TextChanged+=(_,_)=> { retainedCandidateWork=null;Clear();RefreshProposal();RefreshWaistComparison(); };
         unit.SelectionChanged+=(_,_)=>
         {
             if(restoringUnit)return;
-            var requested=unit.SelectedIndex;
+            retainedCandidateWork=null;var requested=unit.SelectedIndex;
             if(!loadingWork && committedUnit>=0 && requested!=committedUnit && fields.Any(f=>f.Text.Length>0))
             {
                 restoringUnit=true;try { unit.SelectedIndex=committedUnit; } finally { restoringUnit=false; }
@@ -404,8 +405,18 @@ internal sealed class ALinePanelPreviewWindow : Window
             }
             finally { acceptingBalance=false; }
         };
-        ALineWorkDraft CaptureWork()=>new(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray(),workOrigin);
-        static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)=>a.Unit==b.Unit && a.SourceHash==b.SourceHash && a.Fields.SequenceEqual(b.Fields);
+        ALineWorkDraft CaptureWork()
+        {
+            var current=new ALineWorkDraft(unit.SelectedIndex switch { 0=>"cm",1=>"mm",_=>null },fields.Select(f=>f.Text).ToArray(),workOrigin);
+            if(balancePlan?.Candidate is not null && BalanceCurrent())return current with { Balance=ALineBalanceSnapshotValidation.Create(balancePlan) };
+            if(retainedCandidateWork is { Balance:not null } retained && retained.Unit==current.Unit && retained.SourceHash==current.SourceHash && retained.Fields.SequenceEqual(current.Fields))return current with { Balance=retained.Balance };
+            return current;
+        }
+        static bool SameWork(ALineWorkDraft a,ALineWorkDraft b)
+        {
+            bool SameBalance(ALineBalanceSnapshot? x,ALineBalanceSnapshot? y)=>x is null ? y is null : y is not null && x.Method==y.Method && x.Original.SequenceEqual(y.Original) && x.Candidate.SequenceEqual(y.Candidate);
+            return a.Unit==b.Unit && a.SourceHash==b.SourceHash && a.Fields.SequenceEqual(b.Fields) && SameBalance(a.Balance,b.Balance);
+        }
         var durableWork=CaptureWork();bool closingPrompt=false;
         canCloseWork=()=>
         {
@@ -415,7 +426,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             try
             {
                 var accepted=ConfirmDiscardWorkForVerification?.Invoke() ?? MessageBox.Show(this,
-                    "Bu ölçü çalışmasında dosyaya kaydedilmemiş alan veya birim değişiklikleri var. Kaydetmeden kapatırsanız kaybolacak. Kaydetmek için İptal'i seçin. Kaydetmeden kapatılsın mı?",
+                    "Bu ölçü çalışmasında dosyaya kaydedilmemiş alan, birim veya aday değişiklikleri var. Kaydetmeden kapatırsanız kaybolacak. Kaydetmek için İptal'i seçin. Kaydetmeden kapatılsın mı?",
                     "Kaydedilmemiş ölçü çalışması",MessageBoxButton.OKCancel,MessageBoxImage.Warning,MessageBoxResult.Cancel)==MessageBoxResult.OK;
                 if(!accepted)return false;
                 if(closed || editVersion!=version || !SameWork(before,CaptureWork()))
@@ -442,6 +453,7 @@ internal sealed class ALinePanelPreviewWindow : Window
             // A changed form during the modal confirmation must not be overwritten.
             var draft=ALineWorkDraftStorage.Load(path);var before=CaptureWork();var version=editVersion;var sourceRevision=SourceRevision();
             if(!SourceAvailable() || CurrentSource()!=sourceIdentity)throw new InvalidOperationException("Kaynak istek değişti; form korunuyor.");
+            if(draft.Balance is not null)_=ALineBalanceSnapshotValidation.Validate(draft,sourceIdentity);
             if(draft.SourceHash is { } id && id!=sourceIdentity)
             {
                 var warning="Dosya başka bir istek anlık görüntüsüne ait. Dosya kimliği: "+id+"; mevcut istek kimliği: "+sourceIdentity+". Bu farklılığı inceleyip yine de açılsın mı?";
@@ -458,8 +470,8 @@ internal sealed class ALinePanelPreviewWindow : Window
                 for(int i=0;i<fields.Count;i++)fields[i].Text=draft.Fields[i]; }
             finally { loadingWork=false; }
             Clear();RefreshProposal();
-            workOrigin=draft.SourceHash;RefreshSourceLabel();durableWork=CaptureWork();
-            status.Text="Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı."+(draft.SourceHash is null ? " Eski dosyada kaynak kimliği yok; hangi isteğe ait olduğu doğrulanamaz." : " Dosya kaynak kimliği: "+draft.SourceHash+"; mevcut istek kimliği: "+sourceIdentity+".");
+            workOrigin=draft.SourceHash;retainedCandidateWork=draft.Balance is null ? null : draft;RefreshSourceLabel();durableWork=CaptureWork();
+            status.Text=(draft.Balance is null ? "" : "Kayıtlı aday form ve kaynakla yeniden hesaplandı; önce ölçüleri ve simetriyi yeniden onaylayın, ardından adayı yeniden inceleyip onaylayın. ")+"Çalışma alanları açıldı; birim dönüştürülmedi, kaynak istek değiştirilmedi. Kayıtlı değerler onaysızdır. Mevcut istekle çelişkileri, simetriyi ve cm/mm özetini yeniden kontrol edin. Çizim ve çıktı onaylanmadı."+(draft.SourceHash is null ? " Eski dosyada kaynak kimliği yok; hangi isteğe ait olduğu doğrulanamaz." : " Dosya kaynak kimliği: "+draft.SourceHash+"; mevcut istek kimliği: "+sourceIdentity+".");
             return true;
         };
         loadSelectedWork=(selectPath,approve)=>
@@ -475,7 +487,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         var openDraft=new Button { Content="Ölçü çalışmasını aç…",Padding=new Thickness(8) };
         draftTools.Children.Add(saveDraft);draftTools.Children.Add(openDraft);body.Children.Insert(0,draftTools);
         body.Children.Insert(1,sourceLabel);
-        body.Children.Insert(2,new TextBlock { Text="Çalışma dosyası 11 alanı ve birimi açık metin olarak içerir; kişisel ölçüler şifrelenmez. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
+        body.Children.Insert(2,new TextBlock { Text="Çalışma dosyası 11 alanı, birimi ve varsa adayın dört eski/yeni bolluğunu açık metin olarak içerir; kişisel ölçüler şifrelenmez. Aday içeren sürüm 3 dosyaları önceki uygulamalarda açılamaz. Kayıt aday onayı taşımaz; açıldığında aday yeniden hesaplanır. Yalnız Kaydet ile yeni dosya oluşturulur; mevcut dosyanın üzerine yazılmaz. Bu dosya kalıp, istek veya üretim onayı değildir. Açma, bu formdaki alanları değiştirir; ana sohbet ve kaynak istek korunur.",TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,0,0,8) });
         saveDraft.Click+=(_,_)=>TrySaveWork(()=>
         {
             var dialog=new SaveFileDialog { Title="A kesim ölçü çalışması · yeni açık metin dosyası",Filter="A kesim çalışma taslağı|*"+ALineWorkDraftStorage.Extension,
