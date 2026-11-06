@@ -90,7 +90,7 @@ internal sealed class ALinePanelPreviewWindow : Window
     }
     internal ALinePanelPreviewWindow(Window owner,string promptSnapshot,string measurementSnapshot)
     {
-        long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false,unitConfirmation=false;int committedUnit=-1;
+        long editVersion=0;bool closed=false;bool restoringUnit=false,loadingWork=false,unitConfirmation=false;int committedUnit=-1;long unitSelectionRevision=0;
         string CurrentSource()=>ALineWorkDraftStorage.SourceIdentity(owner is DesignRequestWindow requestOwner ? requestOwner.CaptureForVerification() : new DesignRequest(promptSnapshot,measurementSnapshot,null));
         (long,long) SourceRevision()=>owner is DesignRequestWindow requestOwner ? requestOwner.ALineSourceRevision : (0,0);
         bool SourceAvailable()=>owner is not DesignRequestWindow requestOwner || requestOwner.ALineSourceAvailable;
@@ -296,7 +296,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         unit.SelectionChanged+=(_,_)=>
         {
             if(restoringUnit)return;
-            var requested=unit.SelectedIndex;
+            var requested=unit.SelectedIndex;var selectionRevision=++unitSelectionRevision;
             if(!loadingWork && committedUnit>=0 && requested!=committedUnit && fields.Any(f=>f.Text.Length>0))
             {
                 restoringUnit=true;try { unit.SelectedIndex=committedUnit; } finally { restoringUnit=false; }
@@ -309,7 +309,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                     bool approved;
                     try { approved=ConfirmUnitConversionForVerification?.Invoke() ?? MessageBox.Show(this,$"Dolu alanlar {(old==0?"cm":"mm")} biriminden {(requested==0?"cm":"mm")} birimine kayıpsız dönüştürülecek. Boş alanlar boş kalır. Önceki ölçü onayı ve önizleme sıfırlanır. Devam edilsin mi?","Birim dönüşümü",MessageBoxButton.YesNo,MessageBoxImage.Question,MessageBoxResult.No)==MessageBoxResult.Yes; }
                     finally { unitConfirmation=false; }
-                    if(!approved || closed || editVersion!=version || committedUnit!=old || unit.SelectedIndex!=old || !SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceBefore || !before.SequenceEqual(fields.Select(f=>f.Text))) { status.Text="Dönüşüm iptal edildi veya form değişti; değerler korunuyor.";return; }
+                    if(!approved || closed || editVersion!=version || selectionRevision!=unitSelectionRevision || committedUnit!=old || unit.SelectedIndex!=old || !SourceAvailable() || SourceRevision()!=sourceRevision || CurrentSource()!=sourceBefore || !before.SequenceEqual(fields.Select(f=>f.Text))) { status.Text="Dönüşüm iptal edildi veya form değişti; değerler korunuyor.";return; }
                     restoringUnit=true;
                     try { unit.SelectedIndex=requested;committedUnit=requested;for(int i=0;i<fields.Count;i++)fields[i].Text=converted[i]; }
                     finally { restoringUnit=false; }
