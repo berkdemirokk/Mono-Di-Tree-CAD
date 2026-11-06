@@ -17,7 +17,7 @@ Gerçek çentik verisi, fiziksel prova, dikiş payı, kaynak optimizer ve tüm d
 
 ## Bütün kuralların önce/sonra kaydı
 
-Her satırda A ve B kaynak dikiş kuralının taraflarıdır; sayılar cm cinsinden temsil edilen kontrol noktalarının projeksiyon uzunluğu aralıklarıdır. Aşağıdaki kayıt kültürden bağımsızdır: nokta ondalık ayraç, virgül alt ve üst sınır ayıracıdır. `disjoint=True` aralıkların kesin ayrıldığını, `False` ise yalnız ayrılmadıklarını belirtir. Kimlikteki uzun değer beden snapshot özetidir.
+Her satırda A ve B kaynak dikiş kuralının taraflarıdır; sayılar cm cinsinden temsil edilen kontrol noktalarının projeksiyon uzunluğu aralıklarıdır. Aşağıdaki kayıt ve doğrulama çıktısındaki dört `waist part` satırı kültürden bağımsızdır: nokta ondalık ayraç, virgül alt ve üst sınır ayıracıdır. Görüntülenen yaklaşık yuvarlatılmış uçlar aralık kanıtı değildir. `disjoint` bayrağı tam tamsayı/kesir aralıklarından hesaplanır: `True` aralıkların ayrıldığını, `False` ise yalnız ayrılmadıklarını belirtir. Kimlikteki uzun değer beden snapshot özetidir.
 
 ```text
 synthetic-base graph BodiceFrontHalf/left_ftorso/0: before A=[13.125,13.125] B=[13.125,13.125], after A=[13.125,13.125] B=[13.125,13.125], disjoint before/after=False/False; research only.
