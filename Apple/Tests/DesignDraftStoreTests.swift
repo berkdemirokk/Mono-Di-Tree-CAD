@@ -1934,6 +1934,29 @@ final class DesignDraftStoreTests: XCTestCase {
         pendingForm.measurementForm = .init(values: ["72"] + Array(repeating: "", count: 14), unit: "cm")
         XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(pendingForm))
     }
+    func testCombinedDescriptionAcceptsMidiBoyWithoutInferringUnknownMeaning() throws {
+        func draft(_ text: String, waist: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        }
+        for space in [" ", "\u{00A0}", "\u{202F}"] {
+            let text = "A kesim elbise istiyorum, midi\(space)boy ve bel çevresi 72 cm"
+            let original = draft(text)
+            let proposal = try XCTUnwrap(ExperimentalDesignBrief.combinedDescriptionProposal(original))
+            XCTAssertEqual(proposal.model, .aline)
+            XCTAssertEqual(proposal.measurements.values, ["bel çevresi": "72 cm"])
+            XCTAssertEqual(proposal.measurements.source, text); XCTAssertEqual(original.description, text)
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text, waist: "72 cm")))
+        }
+        for text in [
+            "A kesim elbise istiyorum, midi boy değil ve bel çevresi 72 cm",
+            "eğer uygunsa A kesim elbise istiyorum, midi boy ve bel çevresi 72 cm",
+            "A kesim elbise istiyorum, midi boyu 100 cm ve bel çevresi 72 cm",
+            "A kesim elbise istiyorum, midi boy ve bel çevresi 72 cm ve bel çevresi 720 mm",
+            "A kesim elbise istiyorum, midi boy ve bel çevresi 72 cm ve bel çevresi 90 cm"
+        ] {
+            XCTAssertNil(ExperimentalDesignBrief.combinedDescriptionProposal(draft(text)), text)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))
