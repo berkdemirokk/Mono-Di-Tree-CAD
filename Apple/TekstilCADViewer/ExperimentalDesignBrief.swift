@@ -208,7 +208,16 @@ enum ExperimentalDesignBrief {
     /// references are rejected rather than interpreted as body measurements.
     static func measurementMessageProposal(_ draft: Draft) throws -> MeasurementMessageParser.Proposal {
         let existing = ["göğüs çevresi": draft.bust, "bel çevresi": draft.waist, "kalça çevresi": draft.hips, "elbise boyu": draft.length]
-        let proposal = try MeasurementMessageParser.parse(draft.otherMeasurements, existing: existing)
+        let recognized = try MeasurementMessageParser.parse(draft.otherMeasurements, existing: [:])
+        let preserved = existing.filter { label, value in !value.isEmpty && recognized.values[label] != nil }
+        if !preserved.isEmpty {
+            let comparison = MeasurementMessageParser.compare(.init(message: draft.otherMeasurements, fields: preserved))
+            guard case .reviewed(let count, let differences, let unknown) = comparison,
+                  count == preserved.count, differences.isEmpty, unknown.isEmpty else { throw MeasurementMessageParser.Failure.existing }
+        }
+        let values = recognized.values.filter { preserved[$0.key] == nil }
+        guard !values.isEmpty else { throw MeasurementMessageParser.Failure.existing }
+        let proposal = MeasurementMessageParser.Proposal(source: recognized.source, values: values, preserved: preserved)
         let description = draft.description.precomposedStringWithCanonicalMapping
         guard description.utf16.count <= maxTextUnits else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         let checkedDescription = description.replacingOccurrences(of: "İ", with: "i").lowercased()
@@ -228,7 +237,7 @@ enum ExperimentalDesignBrief {
         guard checkedDescription.range(of: qualifiers, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         if let explicit = try? MeasurementMessageParser.parse(description, existing: [:]) {
             for (label, value) in explicit.values {
-                guard let proposed = proposal.values[label] else { continue }
+                guard let proposed = recognized.values[label] else { continue }
                 guard let a = MeasurementMessageParser.millimeters(value), let b = MeasurementMessageParser.millimeters(proposed) else {
                     throw MeasurementMessageParser.Failure.descriptionUncertain
                 }

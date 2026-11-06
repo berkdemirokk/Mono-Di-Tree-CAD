@@ -4057,7 +4057,7 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Vazgeç", role: .cancel) { measurementProposal = nil; messageMeasurementSnapshot = nil }
             } message: {
                 Text(measurementProposal?.preview ?? "Ölçü bulunamadı.")
-                Text("Özgün mesaj korunur. Aynı bilgiler alanlarda ve mesajda görünebilir; eklenmeyen ölçüleri kontrol edin.")
+                Text("Yalnız boş alanlara eklenir; eşleşen mevcut alanlar ve özgün mesaj korunur. Aynı bilgiler alanlarda ve mesajda görünebilir; eklenmeyen ölçüleri kontrol edin.")
             }
             .confirmationDialog("Tarifteki ölçüler alanlara eklensin mi?", isPresented: $showDescriptionMeasurements, titleVisibility: .visible) {
                 Button("Ölçüleri alanlara ekle") { applyDescriptionMeasurements() }

@@ -1815,6 +1815,27 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(uncertain))
         XCTAssertEqual(uncertain.description, text)
     }
+    func testMessageProposalFillsOnlyEmptyFieldsWhenExistingValuesMatch() throws {
+        func draft(waist: String, description: String = "", notes: String = "bel çevresi 72 cm, göğüs çevresi 92 cm") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        let original = draft(waist: " 720 mm ")
+        let proposal = try ExperimentalDesignBrief.measurementMessageProposal(original)
+        XCTAssertEqual(proposal.values, ["göğüs çevresi": "92 cm"])
+        XCTAssertEqual(proposal.preserved, ["bel çevresi": " 720 mm "])
+        XCTAssertTrue(proposal.preview.contains("mevcut alan"))
+        XCTAssertFalse(proposal.preview.contains("Mesajda belirtilmeyenler: bel çevresi"))
+        XCTAssertEqual(original.waist, " 720 mm ")
+        XCTAssertEqual(original.otherMeasurements, "bel çevresi 72 cm, göğüs çevresi 92 cm")
+        for waist in ["70 cm", "72", "1,000 mm", " "] {
+            XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft(waist: waist)), waist)
+        }
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft(waist: "72 cm", notes: "bel çevresi 72 cm")))
+        XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(draft(waist: "72 cm", description: "bel çevresi 90 cm")))
+        let revision = UUID()
+        let snapshot = ExperimentalDesignBrief.MessageMeasurementSuggestion(draft: original, proposal: proposal, explicitSelection: false, importedPortable: false, version: 1, revision: revision)
+        XCTAssertFalse(snapshot.matches(draft(waist: "73 cm"), explicitSelection: false, importedPortable: false, version: 1, revision: revision))
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

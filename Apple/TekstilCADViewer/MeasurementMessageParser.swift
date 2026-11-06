@@ -30,12 +30,22 @@ enum MeasurementMessageParser {
     struct Proposal: Equatable {
         let source: String
         let values: [String: String]
-        var isApplicable: Bool { !values.isEmpty && Set(values.keys).isSubset(of: MeasurementMessageParser.supportedLabels) }
+        let preserved: [String: String]
+        init(source: String, values: [String: String], preserved: [String: String] = [:]) {
+            self.source = source; self.values = values; self.preserved = preserved
+        }
+        var isApplicable: Bool {
+            !values.isEmpty && Set(values.keys).isSubset(of: MeasurementMessageParser.supportedLabels)
+                && Set(preserved.keys).isSubset(of: MeasurementMessageParser.supportedLabels)
+                && Set(values.keys).isDisjoint(with: Set(preserved.keys))
+        }
         var preview: String {
             let labels = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
-            let found = labels.compactMap { label in values[label].map { "\(label): \($0)" } }.joined(separator: "\n")
-            let missing = labels.filter { values[$0] == nil }
-            return missing.isEmpty ? found : found + "\nMesajda belirtilmeyenler: " + missing.joined(separator: ", ") + ". Varsa mevcut alanları kontrol edin."
+            var lines = labels.compactMap { label in values[label].map { "\(label): \($0)" } }
+            lines += labels.compactMap { label in preserved[label].map { "\(label): mevcut alan \($0), değiştirilmeyecek" } }
+            let missing = labels.filter { values[$0] == nil && preserved[$0] == nil }
+            if !missing.isEmpty { lines.append("Mesajda belirtilmeyenler: " + missing.joined(separator: ", ") + ". Varsa mevcut alanları kontrol edin.") }
+            return lines.joined(separator: "\n")
         }
     }
     /// Comparison never changes the source and only accepts fully understood messages and fields.
