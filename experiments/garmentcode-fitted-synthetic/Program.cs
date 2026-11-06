@@ -543,8 +543,10 @@ internal static class Validator
         Need(one.ApproximateGap(one)==0&&one.Disjoint(two)&&one.ApproximateGap(two)==1&&two.ApproximateGap(one)==1,"projected gap diagnostic");
         foreach(string id in new[]{"synthetic-base","synthetic-distinct"})foreach(int direction in new[]{-1,1}) {
             var t=ShoulderSeamStudy.Create(id,1,direction);
-            Need(t.Status=="unresolved"&&!t.ProductionAllowed&&!t.ExportAllowed,"shoulder trial gate");
-            Need(t.RightTopology.Unresolved>0||t.LeftTopology.Unresolved>0||t.RightTopology.NonMonotone>0||t.LeftTopology.NonMonotone>0,"shoulder trial topology unexpectedly resolved");
+            Need(t.Status=="unresolved"&&!t.Accepted&&!t.ProductionAllowed&&!t.ExportAllowed,"shoulder trial gate");
+            var rightExpected=direction==-1?new[]{(1,2)}:new[]{(1,2),(2,3)};
+            var leftExpected=direction==-1?new[]{(9,10)}:new[]{(8,9),(9,10)};
+            Need(t.RightTopology.Panel=="right_ftorso"&&t.LeftTopology.Panel=="left_ftorso"&&t.RightTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.LeftTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.RightTopology.NonMonotone==0&&t.LeftTopology.NonMonotone==0&&t.RightTopology.Unresolved==rightExpected.Length&&t.LeftTopology.Unresolved==leftExpected.Length&&t.RightTopology.UnresolvedEdges.SequenceEqual(rightExpected)&&t.LeftTopology.UnresolvedEdges.SequenceEqual(leftExpected),"shoulder reported unresolved pairs changed");
             try {t.RequireResearchComposition();throw new Exception("Shoulder trial composed");}catch(InvalidOperationException) { }
             Console.WriteLine(FormattableString.Invariant($"{id} shoulder trial direction={direction}: front before=[{t.Before.ApproximateLowerCm:G10},{t.Before.ApproximateUpperCm:G10}] after=[{t.After.ApproximateLowerCm:G10},{t.After.ApproximateUpperCm:G10}], back=[{t.Back.ApproximateLowerCm:G10},{t.Back.ApproximateUpperCm:G10}], deviation={t.Displacement:G9} cm, unresolved right/left={t.RightTopology.Unresolved}/{t.LeftTopology.Unresolved}, nonmonotone right/left={t.RightTopology.NonMonotone}/{t.LeftTopology.NonMonotone}, pairs right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)}; rejected."));
         }

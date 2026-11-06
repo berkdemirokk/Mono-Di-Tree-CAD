@@ -5,7 +5,9 @@ internal static class ShoulderSeamStudy
 {
     internal sealed record Result(BezierLengthBounds.Bounds Before,BezierLengthBounds.Bounds Back,BezierLengthBounds.Bounds After,double Displacement,BodyCurveStudy.Result RightTopology,BodyCurveStudy.Result LeftTopology)
     {
-        public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
+        // Diagnostic values only; there is no contour or accepted-candidate
+        // property and this result can never authorize composition or output.
+        public string Status=>"unresolved";public bool Accepted=>false;public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Shoulder trial cannot be composed");
     }
     static double Mid(BezierLengthBounds.Bounds x)=>(x.ApproximateLowerCm+x.ApproximateUpperCm)/2;
