@@ -212,12 +212,16 @@ enum ExperimentalDesignBrief {
         let preserved = existing.filter { label, value in !value.isEmpty && recognized.values[label] != nil }
         if !preserved.isEmpty {
             let comparison = MeasurementMessageParser.compare(.init(message: draft.otherMeasurements, fields: preserved))
-            guard case .reviewed(let count, let differences, let unknown) = comparison,
-                  count == preserved.count, differences.isEmpty, unknown.isEmpty else { throw MeasurementMessageParser.Failure.existing }
+            guard case .reviewed(let count, let differences, let unknown) = comparison else { throw MeasurementMessageParser.Failure.existingUncertain }
+            guard count == preserved.count, unknown.isEmpty else { throw MeasurementMessageParser.Failure.existingUncertain }
+            guard differences.isEmpty else { throw MeasurementMessageParser.Failure.existingConflict }
         }
         let values = recognized.values.filter { preserved[$0.key] == nil }
-        guard !values.isEmpty else { throw MeasurementMessageParser.Failure.existing }
         let proposal = MeasurementMessageParser.Proposal(source: recognized.source, values: values, preserved: preserved)
+        func checkedProposal() throws -> MeasurementMessageParser.Proposal {
+            guard !values.isEmpty else { throw MeasurementMessageParser.Failure.alreadyMatching }
+            return proposal
+        }
         let description = draft.description.precomposedStringWithCanonicalMapping
         guard description.utf16.count <= maxTextUnits else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         let checkedDescription = description.replacingOccurrences(of: "İ", with: "i").lowercased()
@@ -232,7 +236,7 @@ enum ExperimentalDesignBrief {
         // Explicit limited possessives are unresolved references, not values
         // or inferred circumference measurements.
         let reference = #"(?<![\p{L}\p{N}_])(?:göğüs|göğs(?:üm|ün|ü|ümüz|ünüz)|göğüsleri|bel(?:im|in|i|imiz|iniz)?|belleri|kalça(?:m|n|sı|mız|nız|ları)?|elbise[\t\p{Zs}]+boyu|ölçü\p{L}*|değer(?:ler(?:i|in|im|den)?|i|in|im|e|de|den)?)(?![\p{L}\p{N}_])"#
-        guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return proposal }
+        guard checkedDescription.range(of: reference, options: .regularExpression) != nil else { return try checkedProposal() }
         let qualifiers = #"(?i)(?<![\p{L}\p{N}_])(?:eğer|şayet|değil\p{L}*|olma\p{L}*|olursa|ise|istem\p{L}*)(?![\p{L}\p{N}_])|[?？]"#
         guard checkedDescription.range(of: qualifiers, options: .regularExpression) == nil else { throw MeasurementMessageParser.Failure.descriptionUncertain }
         if let explicit = try? MeasurementMessageParser.parse(description, existing: [:]) {
@@ -250,7 +254,7 @@ enum ExperimentalDesignBrief {
                 throw MeasurementMessageParser.Failure.descriptionUncertain
             }
         }
-        return proposal
+        return try checkedProposal()
     }
     struct MessageMeasurementSuggestion {
         let draft: Draft

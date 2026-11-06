@@ -1836,6 +1836,25 @@ final class DesignDraftStoreTests: XCTestCase {
         let snapshot = ExperimentalDesignBrief.MessageMeasurementSuggestion(draft: original, proposal: proposal, explicitSelection: false, importedPortable: false, version: 1, revision: revision)
         XCTAssertFalse(snapshot.matches(draft(waist: "73 cm"), explicitSelection: false, importedPortable: false, version: 1, revision: revision))
     }
+    func testAllMatchingMessageIsDistinctFromConflictsAndUncertainty() {
+        func draft(waist: String, description: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: description, bust: "", waist: waist, hips: "", length: "", otherMeasurements: "bel çevresi 72 cm", image: nil, imageName: nil)
+        }
+        let cases: [(ExperimentalDesignBrief.Draft, MeasurementMessageParser.Failure)] = [
+            (draft(waist: "720 mm"), .alreadyMatching),
+            (draft(waist: "70 cm"), .existingConflict),
+            (draft(waist: "72"), .existingUncertain),
+            (draft(waist: "1,000 mm"), .existingUncertain),
+            (draft(waist: "72 cm", description: "bel çevresi 90 cm"), .descriptionConflict),
+            (draft(waist: "72 cm", description: "eğer uygunsa"), .descriptionUncertain)
+        ]
+        for (input, expected) in cases {
+            XCTAssertThrowsError(try ExperimentalDesignBrief.measurementMessageProposal(input)) { error in
+                XCTAssertEqual(error as? MeasurementMessageParser.Failure, expected)
+            }
+            XCTAssertEqual(input.otherMeasurements, "bel çevresi 72 cm")
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

@@ -2,7 +2,7 @@ import Foundation
 
 /// Narrow, explicit syntax only; original message remains untouched.
 enum MeasurementMessageParser {
-    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, outOfRange, ambiguousNumber, descriptionConflict, descriptionUncertain }
+    enum Failure: Error, Equatable { case empty, unrecognized, duplicate, existing, existingConflict, existingUncertain, alreadyMatching, outOfRange, ambiguousNumber, descriptionConflict, descriptionUncertain }
     static let supportedLabels: Set<String> = ["göğüs çevresi", "bel çevresi", "kalça çevresi", "elbise boyu"]
     /// A three-digit suffix can be a decimal or thousands grouping. Do not guess.
     static func isAmbiguousNumber(_ number: String) -> Bool {

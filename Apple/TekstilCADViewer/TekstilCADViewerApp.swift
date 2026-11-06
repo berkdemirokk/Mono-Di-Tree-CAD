@@ -3215,6 +3215,12 @@ private struct ExperimentalDesignBriefView: View {
             measurementMessageStatus = ""; showMeasurementProposal = true
         } catch MeasurementMessageParser.Failure.duplicate {
             measurementMessageStatus = "Aynı ölçü mesajda birden fazla kez geçiyor. Çelişkiyi önce düzeltin; hiçbir alan değiştirilmedi."
+        } catch MeasurementMessageParser.Failure.alreadyMatching {
+            measurementMessageStatus = "Mesajdaki tüm tanınan ölçüler ilgili alanlarda zaten aynı değerde bulunuyor. Hiçbir alan değiştirilmedi; diğer notları da kontrol edin."
+        } catch MeasurementMessageParser.Failure.existingConflict {
+            measurementMessageStatus = "Mesaj ile mevcut ölçü alanı arasında farklı değer var. Karşılaştırıp düzeltin; hiçbir alan değiştirilmedi."
+        } catch MeasurementMessageParser.Failure.existingUncertain {
+            measurementMessageStatus = "Mevcut ölçü alanı güvenle karşılaştırılamadı. Sayıyı ve birimini kontrol edin; hiçbir alan değiştirilmedi."
         } catch MeasurementMessageParser.Failure.existing {
             measurementMessageStatus = "Mesajdaki ölçülerden biri ilgili alanda zaten var. Önce değerleri karşılaştırın; mevcut alanlar değiştirilmedi."
         } catch MeasurementMessageParser.Failure.ambiguousNumber {
