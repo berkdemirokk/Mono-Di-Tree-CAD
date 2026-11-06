@@ -589,6 +589,17 @@ public sealed class PhotoTraceProvenance
     private static bool SameBits(Point2 a,Point2 b)=>BitConverter.DoubleToInt64Bits(a.X)==BitConverter.DoubleToInt64Bits(b.X) && BitConverter.DoubleToInt64Bits(a.Y)==BitConverter.DoubleToInt64Bits(b.Y);
 }
 
+/// <summary>Unapproved A-line evidence embedded in the project, not production clearance.</summary>
+public sealed record ALineProjectEvidence(string CandidateEvidenceJson,double[] TranslationMm,double[] FrontPlacedCoordinatesMm,double[] BackPlacedCoordinatesMm,string IntegritySha256)
+{
+    public ALineProjectEvidence Copy()=>this with { TranslationMm=(double[])TranslationMm.Clone(),FrontPlacedCoordinatesMm=(double[])FrontPlacedCoordinatesMm.Clone(),BackPlacedCoordinatesMm=(double[])BackPlacedCoordinatesMm.Clone() };
+    public static bool ContentEquals(ALineProjectEvidence a,ALineProjectEvidence b)
+    {
+        static bool Bits(double[] x,double[] y)=>x.Length==y.Length && x.Zip(y).All(p=>BitConverter.DoubleToInt64Bits(p.First)==BitConverter.DoubleToInt64Bits(p.Second));
+        return a.CandidateEvidenceJson==b.CandidateEvidenceJson && a.IntegritySha256==b.IntegritySha256 && Bits(a.TranslationMm,b.TranslationMm) && Bits(a.FrontPlacedCoordinatesMm,b.FrontPlacedCoordinatesMm) && Bits(a.BackPlacedCoordinatesMm,b.BackPlacedCoordinatesMm);
+    }
+}
+
 public sealed class ProjectDocument
 {
     public string Name { get; set; } = "Yeni proje";
@@ -605,5 +616,7 @@ public sealed class ProjectDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<PhotoTraceProvenance>? PhotoTraceHistory { get; set; }
 
-    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone(),PhotoTraceHistory=PhotoTraceHistory?.Select(x=>x.Clone()).ToList() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<ALineProjectEvidence>? ALineEvidence { get; set; }
+    public ProjectDocument Clone() => new() { Name = Name, Pieces = Pieces.Select(p => p.Clone()).ToList(), GradingRules = GradingRules.Select(r => r.Clone()).ToList(), NestingSnapshot=NestingSnapshot?.Clone(), ImportProvenance=ImportProvenance?.Clone(),PhotoTraceHistory=PhotoTraceHistory?.Select(x=>x.Clone()).ToList(),ALineEvidence=ALineEvidence?.Select(x=>x.Copy()).ToList() };
 }

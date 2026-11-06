@@ -54,10 +54,11 @@ public static class ProjectStorage
             RejectDuplicateProperties(root, cancellationToken);
             if (root.ValueKind == JsonValueKind.Array)
             {
-                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10) || root[1].ValueKind != JsonValueKind.Object)
+                if (root.GetArrayLength() != 2 || root[0].ValueKind != JsonValueKind.Number || !root[0].TryGetInt32(out var version) || version is not (1 or 2 or 3 or 4 or 5 or 6 or 7 or 8 or 9 or 10 or 11) || root[1].ValueKind != JsonValueKind.Object)
                     throw new InvalidDataException("Desteklenmeyen veya geçersiz proje biçimi.");
                 ValidateSerializedIdentityAndPoints(root[1]);
                 ValidateSerializedExperimentalALine(root[1],version);
+                ValidateSerializedALineEvidence(root[1],version);
                 RejectUnsupportedPhysicalFeatures(root[1],cancellationToken);
                 if (!root[1].TryGetProperty("GradingRules", out var rules) || rules.ValueKind != JsonValueKind.Array)
                     throw new InvalidDataException("Sürümlü projede serileme listesi eksik veya geçersiz; dosya açılmadı.");
@@ -92,6 +93,7 @@ public static class ProjectStorage
             {
                 ValidateSerializedIdentityAndPoints(root);
                 ValidateSerializedExperimentalALine(root,0);
+                ValidateSerializedALineEvidence(root,0);
                 RejectUnsupportedPhysicalFeatures(root,cancellationToken);
                 ValidateSerializedGrainlines(root, 0);
                 ValidateSerializedNotches(root,0);
@@ -151,6 +153,24 @@ public static class ProjectStorage
             foreach(var name in new[]{"SourcePieces","LayoutPieces"})
                 if(trace.TryGetProperty(name,out var history) && history.ValueKind==JsonValueKind.Array && history.EnumerateArray().Any(p=>p.ValueKind==JsonValueKind.Object && p.TryGetProperty("ExperimentalALine",out _)))found=true;
         if(version==10 && !found)throw new InvalidDataException("Sürüm 10 deneysel A kesim kaydı içermiyor.");
+    }
+    private static void ValidateSerializedALineEvidence(JsonElement project,int version)
+    {
+        var present=project.TryGetProperty("ALineEvidence",out var entries);
+        if(version<11) { if(present)throw new InvalidDataException("A kesim proje kanıtı için sürüm 11 gereklidir.");return; }
+        if(!present || entries.ValueKind!=JsonValueKind.Array || entries.GetArrayLength() is <1 or >128)throw new InvalidDataException("A kesim proje kanıtı listesi geçersiz.");
+        foreach(var entry in entries.EnumerateArray())
+        {
+            if(entry.ValueKind!=JsonValueKind.Object)throw new InvalidDataException("A kesim proje kanıtı eksik.");
+            var names=entry.EnumerateObject().Select(x=>x.Name).ToArray();
+            if(names.Length!=5 || names.Any(n=>n is not ("CandidateEvidenceJson" or "TranslationMm" or "FrontPlacedCoordinatesMm" or "BackPlacedCoordinatesMm" or "IntegritySha256")) ||
+               !entry.TryGetProperty("CandidateEvidenceJson",out var candidate) || candidate.ValueKind!=JsonValueKind.String ||
+               !entry.TryGetProperty("IntegritySha256",out var hash) || hash.ValueKind!=JsonValueKind.String ||
+               !entry.TryGetProperty("TranslationMm",out var translation) || translation.ValueKind!=JsonValueKind.Array || translation.GetArrayLength()!=4 ||
+               !entry.TryGetProperty("FrontPlacedCoordinatesMm",out var front) || front.ValueKind!=JsonValueKind.Array || front.GetArrayLength()!=10 ||
+               !entry.TryGetProperty("BackPlacedCoordinatesMm",out var back) || back.ValueKind!=JsonValueKind.Array || back.GetArrayLength()!=10)
+                throw new InvalidDataException("A kesim proje kanıtı alanları eksik veya geçersiz.");
+        }
     }
     private static bool HasSerializedMetadata(JsonElement project) => project.TryGetProperty("Pieces", out var pieces) && pieces.ValueKind == JsonValueKind.Array && pieces.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Metadata", out _));
     // Another experimental branch used version 8 for a different physical
@@ -469,7 +489,8 @@ public static class ProjectStorage
     public static int GetProjectFormatVersion(ProjectDocument project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        return project.Pieces.Any(p=>p.ExperimentalALine is not null) || project.NestingSnapshot?.RotationTrace is { } rotation && (rotation.SourcePieces.Any(p=>p.ExperimentalALine is not null) || rotation.LayoutPieces.Any(p=>p.ExperimentalALine is not null)) ? 10
+        return project.ALineEvidence is not null ? 11
+            : project.Pieces.Any(p=>p.ExperimentalALine is not null) || project.NestingSnapshot?.RotationTrace is { } rotation && (rotation.SourcePieces.Any(p=>p.ExperimentalALine is not null) || rotation.LayoutPieces.Any(p=>p.ExperimentalALine is not null)) ? 10
             : project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true ? 9
             : project.PhotoTraceHistory is not null ? 8
             : project.NestingSnapshot?.RotationTrace is not null ? 7
@@ -484,12 +505,13 @@ public static class ProjectStorage
     internal static string SerializeProject(ProjectDocument project, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
+        if(project.ALineEvidence is not null) { project=project.Clone();Validate(project,cancellationToken); }
         var version=GetProjectFormatVersion(project);
         var text=version==0 ? JsonSerializer.Serialize(project,Options) : JsonSerializer.Serialize<object[]>([version,project],Options);
         // Never replace a usable project with bytes this version cannot reopen.
         if (Encoding.UTF8.GetByteCount(text) > MaximumProjectBytes)
             throw new InvalidDataException("Proje dosyası 64 MB sınırını aşıyor; mevcut dosya korunuyor.");
-        if(project.NestingSnapshot?.RotationTrace is not null || project.PhotoTraceHistory is not null || project.Pieces.Any(p=>p.ExperimentalALine is not null))
+        if(project.ALineEvidence is not null || project.NestingSnapshot?.RotationTrace is not null || project.PhotoTraceHistory is not null || project.Pieces.Any(p=>p.ExperimentalALine is not null))
         {
             var reread=DeserializeProject(Encoding.UTF8.GetBytes(text),cancellationToken);
             if(!DocumentSession.ContentEquals(project,reread))
@@ -555,6 +577,22 @@ public static class ProjectStorage
         }
         if (project.Name is null || project.Name.Length > 1024 || !IsWellFormedUtf16(project.Name)) throw new InvalidDataException("Geçersiz proje adı veya eksik Unicode karakteri.");
         if (project.Pieces is null || project.Pieces.Count > MaximumPieces) throw new InvalidDataException("Geçersiz parça listesi.");
+        if(project.ALineEvidence is { } evidence)
+        {
+            if(evidence.Count is <1 or >128 || evidence.Any(e=>e is null))throw new InvalidDataException("A kesim proje kanıtı listesi geçersiz.");
+            var claimed=new HashSet<Guid>();
+            foreach(var entry in evidence)
+            {
+                token.ThrowIfCancellationRequested();var candidate=ALineProjectEvidenceStorage.ValidateAndRead(entry);
+                foreach(var pair in new[]{(candidate.FrontPieceId,"front"),(candidate.BackPieceId,"back")})
+                {
+                    if(!claimed.Add(pair.Item1))throw new InvalidDataException("A kesim panel kimliği yineleniyor.");
+                    var piece=project.Pieces.FirstOrDefault(p=>p is not null && p.Id==pair.Item1);
+                    if(piece is not null && (piece.ExperimentalALine is not { } marker || marker.Algorithm!=candidate.Algorithm || marker.SourceSha256!=candidate.SourceSha256 || marker.Side!=pair.Item2))
+                        throw new InvalidDataException("A kesim panel işareti proje kanıtıyla uyuşmuyor.");
+                }
+            }
+        }
         var ids = new HashSet<Guid>(); long total = 0; long totalNotches=0;
         foreach (var piece in project.Pieces)
         {
@@ -895,4 +933,3 @@ public static class ProjectStorage
         public void Dispose() { mutex.ReleaseMutex(); mutex.Dispose(); }
     }
 }
-

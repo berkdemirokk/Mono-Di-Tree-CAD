@@ -185,6 +185,8 @@ public sealed class DocumentSession
             for (var j = 0; j < a.Points.Count; j++)
                 if (!PointBitsEqual(a.Points[j],b.Points[j])) return false;
         }
+        if(left.ALineEvidence is null ? right.ALineEvidence is not null : right.ALineEvidence is null || left.ALineEvidence.Count!=right.ALineEvidence.Count ||
+           !left.ALineEvidence.Zip(right.ALineEvidence).All(pair=>ALineProjectEvidence.ContentEquals(pair.First,pair.Second)))return false;
         if (left.GradingRules.Count != right.GradingRules.Count) return false;
         for (var i = 0; i < left.GradingRules.Count; i++)
         {

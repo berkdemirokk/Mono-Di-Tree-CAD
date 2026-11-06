@@ -117,6 +117,7 @@ public class MainWindow : Window
     private bool savedFileHasNotches;
     private bool savedFileHasPhotoTraceHistory;
     private bool savedFileHasExperimentalALine;
+    private bool savedFileHasALineEvidence;
     private bool savedFileHasPlaneTraceHistory;
     private RecoveredDocument? recoveredSource;
     // A saved project can still have a pending drawing omitted from that file.
@@ -855,7 +856,7 @@ public class MainWindow : Window
         projectEpoch=Guid.NewGuid();
         if(markUnsaved)session.MarkUnsaved();
         dirty=markUnsaved;
-        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;savedFileHasExperimentalALine=false;
+        propertyDrafts.Clear();filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;savedFileHasExperimentalALine=false;savedFileHasALineEvidence=false;
         SelectedId=null;recoveredSource=null;recoveredDocumentSaved=false;recoveryRestoreIncomplete=false;
         onLoaded?.Invoke();
         ClearRecovery();canvas.CancelDrawing();canvas.IsEnabled=true;
@@ -1971,7 +1972,7 @@ public class MainWindow : Window
                 savedFileHasNotches=loaded.Project.Pieces.Any(p=>p.Notches is { Count:>0 });
                 savedFileHasPhotoTraceHistory=loaded.Project.PhotoTraceHistory is { Count:>0 };
                 savedFileHasPlaneTraceHistory=loaded.Project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;
-                savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(loaded.Project)==10;
+                savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(loaded.Project)>=10;savedFileHasALineEvidence=ProjectStorage.GetProjectFormatVersion(loaded.Project)==11;
                 applied=true;
             },openingProject:true);
             SetStatus("Proje açıldı: "+filePath+(loaded.Project.NestingSnapshot?.RotationTrace is not null ? " · Sürüm 7 döndürme izi doğrulandı; üretim onayı değildir." : ""));
@@ -1998,7 +1999,7 @@ public class MainWindow : Window
         EnsureNoExport();
         EnsureNoLargeVertexValidation();
         if (filePath is null) { SaveAs(); return; }
-        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory) || (ProjectStorage.GetProjectFormatVersion(Document)==10 && !savedFileHasExperimentalALine))
+        if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory) || (ProjectStorage.GetProjectFormatVersion(Document)==10 && !savedFileHasExperimentalALine) || (Document.ALineEvidence is not null && !savedFileHasALineEvidence))
         {
             var approval=CaptureSaveApproval();
             var choice=ChooseGradingCompatibility(true);
@@ -2027,7 +2028,7 @@ public class MainWindow : Window
             ? fileVersion : ProjectStorage.CaptureVersion(path));
         var savedVersion=ProjectStorage.SaveIfUnchanged(candidate,path,expected);
         // Track the new version even if updating the live session unexpectedly fails.
-        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };savedFileHasPlaneTraceHistory=candidate.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(candidate)==10;
+        filePath=path; fileVersion=savedVersion; savedFileHasNotches=candidate.Pieces.Any(p=>p.Notches is { Count:>0 });savedFileHasPhotoTraceHistory=candidate.PhotoTraceHistory is { Count:>0 };savedFileHasPlaneTraceHistory=candidate.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true;savedFileHasExperimentalALine=ProjectStorage.GetProjectFormatVersion(candidate)>=10;savedFileHasALineEvidence=ProjectStorage.GetProjectFormatVersion(candidate)==11;
         try
         {
             if(changes.Count>0)session.Execute(document=>ApplyDraftChanges(document,changes),ProjectStorage.Validate);
@@ -2058,7 +2059,7 @@ public class MainWindow : Window
     {
         EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
         var approval=CaptureSaveApproval();
-        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null)) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
+        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null) || Document.ALineEvidence is not null) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         if(!CheckSaveApproval(approval))return;
         string? path;
         if(SavePathForVerification is { } choose)path=choose(true);
@@ -2087,7 +2088,7 @@ public class MainWindow : Window
     {
         EnsureNoActiveDrag();EnsureNoExport();EnsureNoLargeVertexValidation();
         var approval=approvedStamp ?? CaptureSaveApproval();if(!CheckSaveApproval(approval))return;
-        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null)) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
+        if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null) || Document.ALineEvidence is not null) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
         if(!CheckSaveApproval(approval))return;
         string? path;
         if(SavePathForVerification is { } choose)path=choose(false);
@@ -2168,7 +2169,7 @@ public class MainWindow : Window
         var prompt=new Window { Owner=this,Title="Proje biçimi uyumluluğu",Width=530,SizeToContent=SizeToContent.Height,ResizeMode=ResizeMode.NoResize,WindowStartupLocation=WindowStartupLocation.CenterOwner };
         StudioTheme.Apply(prompt);
         var panel=new StackPanel { Margin=new Thickness(20) };prompt.Content=panel;
-        var description=RequiresExperimentalFormat(Document) ? ExperimentalALineCompatibilityNotice
+        var description=Document.ALineEvidence is not null ? "Aday kanıtı proje biçimi sürüm 11 gerektirir. Önceki TekstilCAD ve Apple sürümleri bu dosyayı açamaz. Dosya kişisel ölçüleri içerir; farklı adla kaydederek eski dosyayı koruyun. Bu kayıt üretim veya kalıp onayı değildir." : RequiresExperimentalFormat(Document) ? ExperimentalALineCompatibilityNotice
             : Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true
             ? "Düzlem perspektifli fotoğraf geçmişi proje biçimi sürüm 9 gerektirir. Önceki TekstilCAD sürümleri bu dosyayı açamaz. Fotoğraf projeye eklenmez; eski dosyayı korumak için farklı adla kaydedin."
             : Document.PhotoTraceHistory is { Count:>0 }
@@ -4053,7 +4054,7 @@ public class MainWindow : Window
         canvas.InstallPreparedPendingDrawing(preparedDrawing);
         if(pending is not null)ActiveTool=pending.Tool;
         projectEpoch=Guid.NewGuid();session.MarkUnsaved();dirty=true;
-        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;savedFileHasExperimentalALine=false;
+        filePath=null;fileVersion=null;savedFileHasGradingRules=false;savedFileHasMetadata=false;savedFileHasNestingSnapshot=false;savedFileHasGrainline=false;savedFileHasImportProvenance=false;savedFileHasNotches=false;savedFileHasPhotoTraceHistory=false;savedFileHasPlaneTraceHistory=false;savedFileHasExperimentalALine=false;savedFileHasALineEvidence=false;
         SelectedId=null;recoveredSource=chosen;recoveredDocumentSaved=false;recoveryRestoreIncomplete=true;
         propertyDrafts.Clear();
         foreach(var (id,draft) in drafts)propertyDrafts.Add(id,draft);
@@ -4145,11 +4146,3 @@ public class MainWindow : Window
     }
     private static ProjectDocument Sample() => new() { Name="İlk kalıp çalışması", Pieces=[new PatternPiece { Name="Ön beden · örnek", Points=[new(0,0),new(65,18),new(105,0),new(180,35),new(210,140),new(190,200),new(205,470),new(0,470)] },new PatternPiece { Name="Arka beden · örnek", Points=[new(270,10),new(350,20),new(395,10),new(455,45),new(485,145),new(460,205),new(475,470),new(270,470)] }] };
 }
-
-
-
-
-
-
-
-
