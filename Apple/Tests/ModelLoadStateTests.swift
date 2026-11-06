@@ -7,6 +7,33 @@ private func makeTestRequest(prompt: String, measurements: String, image: Data?,
 
 
 final class ModelLoadStateTests: XCTestCase {
+    func testV7AndV10PieceValidationErrorsNameTheActualVersion() throws {
+        for (version, fixture) in [(7, "desktop-synthetic-rotated-v7"), (10, "v10-minimal")] {
+            let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: fixture, withExtension: "tcad"))
+            let data = try Data(contentsOf: url)
+            let envelope = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [Any])
+            let body = try XCTUnwrap(envelope[1] as? [String: Any])
+            let initialPieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+            for (kind, expected) in [
+                ("missing", "parça kimliği veya adı eksik"),
+                ("metadata", "parça bilgisi veya iplik yönü geçersiz"),
+                ("duplicate", "parça kimliği yinelenmiş veya geçersiz")
+            ] {
+                var changed = body
+                var pieces = initialPieces
+                switch kind {
+                case "missing": pieces[0].removeValue(forKey: "Id")
+                case "metadata": pieces[0]["Metadata"] = ["Role": "geçersiz"]
+                default: pieces.append(pieces[0])
+                }
+                changed["Pieces"] = pieces
+                let invalid = try JSONSerialization.data(withJSONObject: [version, changed])
+                XCTAssertThrowsError(try Drawing.load(invalid), "\(fixture): \(kind)") { error in
+                    XCTAssertEqual(error.localizedDescription, "Sürüm \(version) \(expected); dosya önizlenmedi.")
+                }
+            }
+        }
+    }
     func testWindowsV10FixturesAreReadOnlyAndKeepSource() throws {
         func fixture(_ name: String) throws -> Data {
             let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "tcad"))

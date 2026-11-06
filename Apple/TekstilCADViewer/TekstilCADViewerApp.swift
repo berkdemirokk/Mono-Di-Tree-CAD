@@ -2274,7 +2274,7 @@ struct Drawing {
             if cancelled() { throw CancellationError() }
             if formatVersion == 7 || formatVersion == 10 {
                 guard let id = raw["Id"] as? String, UUID(uuidString: id) != nil, raw["Name"] is String else {
-                    throw ViewerError.message("Sürüm 7 parça kimliği veya adı eksik; dosya önizlenmedi.")
+                    throw ViewerError.message("Sürüm \(formatVersion) parça kimliği veya adı eksik; dosya önizlenmedi.")
                 }
             }
             if formatVersion == 10, let pieceName = raw["Name"] as? String, pieceName.utf16.count > 1024 {
@@ -2397,7 +2397,7 @@ struct Drawing {
                 grainStatus = "İplik yönü: Okunamadı"
             }
             if (formatVersion == 7 || formatVersion == 10) && (metadataUnreadable || metadataEmpty || roleUnreadable || textMetadataUnreadable || quantityUnreadable || grainStatus == "İplik yönü: Okunamadı") {
-                throw ViewerError.message("Sürüm 7 parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
+                throw ViewerError.message("Sürüm \(formatVersion) parça bilgisi veya iplik yönü geçersiz; dosya önizlenmedi.")
             }
             let id = (raw["Id"] as? String).flatMap { UUID(uuidString: $0) }
             if !(raw["Name"] is String) { pieceRenameIdentitiesValid = false }
@@ -2406,7 +2406,7 @@ struct Drawing {
                 else { pieceRenameIdentitiesValid = false }
             }
             if (formatVersion == 7 || formatVersion == 10) && !pieceRenameIdentitiesValid {
-                throw ViewerError.message("Sürüm 7 parça kimliği yinelenmiş veya geçersiz; dosya önizlenmedi.")
+                throw ViewerError.message("Sürüm \(formatVersion) parça kimliği yinelenmiş veya geçersiz; dosya önizlenmedi.")
             }
             let hasMinimum = ContourMeasure.hasMinimumContourPoints(points, closed: closed)
             pieces.append(Piece(name: raw["Name"] as? String, id: id, points: points, closed: closed,
