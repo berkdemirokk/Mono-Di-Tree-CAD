@@ -1780,6 +1780,14 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertTrue(ExperimentalDesignBrief.RequestSummary.isUnitlessNumber(text), text)
         }
     }
+    func testExplicitUnitChoicePreservesInputAndNeverGuesses() {
+        typealias Summary = ExperimentalDesignBrief.RequestSummary
+        XCTAssertEqual(Summary.addingUnit(.cm, to: " 72,5 "), " 72,5  cm")
+        XCTAssertEqual(Summary.addingUnit(.mm, to: "\u{00A0}92"), "\u{00A0}92 mm")
+        for value in ["", "72 cm", "yaklaşık 72", "72?", "72\n"] {
+            XCTAssertNil(Summary.addingUnit(.cm, to: value), value)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

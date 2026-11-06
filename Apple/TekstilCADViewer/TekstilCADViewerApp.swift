@@ -2716,6 +2716,21 @@ private struct ExperimentalDesignBriefView: View {
             }
         }
     }
+    @ViewBuilder private func unitChoices(for label: String, value: Binding<String>) -> some View {
+        if ExperimentalDesignBrief.RequestSummary.isUnitlessNumber(value.wrappedValue) {
+            HStack(spacing: 8) {
+                ForEach([ExperimentalDesignBrief.RequestSummary.ExplicitUnit.cm, .mm], id: \.rawValue) { unit in
+                    Button("+ \(unit.rawValue)") {
+                        guard let updated = ExperimentalDesignBrief.RequestSummary.addingUnit(unit, to: value.wrappedValue) else { return }
+                        referenceTracked(value).wrappedValue = updated
+                    }
+                    .buttonStyle(.bordered).frame(minWidth: 44, minHeight: 44)
+                    .accessibilityLabel("\(label) için \(unit.rawValue) ekle")
+                    .accessibilityHint("Mevcut sayıya seçtiğiniz birimi ekler.")
+                }
+            }
+        }
+    }
     private func styleCaption(_ option: ExperimentalDesignBrief.DressStyle) -> String {
         switch option {
         case .wrap: return "Kruvaze görünüm · örnek"
@@ -3639,18 +3654,22 @@ private struct ExperimentalDesignBriefView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Göğüs çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
                         TextField("Örn. 92 cm", text: referenceTracked($bust)).accessibilityLabel("Göğüs çevresi, birimiyle").focused($focusedInput, equals: .bust)
+                        unitChoices(for: "Göğüs çevresi", value: $bust)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Bel çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
                         TextField("Örn. 72 cm", text: referenceTracked($waist)).accessibilityLabel("Bel çevresi, birimiyle").focused($focusedInput, equals: .waist)
+                        unitChoices(for: "Bel çevresi", value: $waist)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Kalça çevresi").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
                         TextField("Örn. 98 cm", text: referenceTracked($hips)).accessibilityLabel("Kalça çevresi, birimiyle").focused($focusedInput, equals: .hips)
+                        unitChoices(for: "Kalça çevresi", value: $hips)
                     }
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Elbise boyu").font(.subheadline.weight(.semibold)).accessibilityHidden(true)
                         TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
+                        unitChoices(for: "Elbise boyu", value: $length)
                     }
 
                     let unitlessLabels = ExperimentalDesignBrief.RequestSummary(draft).unitlessNumericMeasurementLabels

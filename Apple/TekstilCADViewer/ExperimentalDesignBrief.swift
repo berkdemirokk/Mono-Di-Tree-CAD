@@ -285,6 +285,11 @@ enum ExperimentalDesignBrief {
             guard value.utf16.count <= 32 else { return false }
             return value.range(of: #"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*\z"#, options: .regularExpression) != nil
         }
+        enum ExplicitUnit: String { case cm, mm }
+        static func addingUnit(_ unit: ExplicitUnit, to value: String) -> String? {
+            guard isUnitlessNumber(value) else { return nil }
+            return value + " " + unit.rawValue
+        }
         static func isOnlyWhitespace(_ value: String) -> Bool {
             !value.isEmpty && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
