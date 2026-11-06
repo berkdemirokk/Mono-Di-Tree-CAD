@@ -812,16 +812,41 @@ internal static class Validator
             var body=ResearchMeasurements.Create(values,"cm","degree").BuildPinnedGarment();
             var candidate=BackBodiceCandidate.CreateFromBody(body,ResearchDesign.PinnedFitted,false);
             var source=row.GetProperty("edges");Need(source.GetArrayLength()==13&&candidate.Edges.Count==13,"multibody topology size");
-            double endpointMax=0,controlMax=0;
-            for(int i=0;i<7;i++) {
-                var e=candidate.Edges[i];var refEdge=source[i];
-                Need(refEdge.GetProperty("kind").GetString()==(e.Kind=="Q"?"CurveEdge":"Edge"),"multibody waist edge kind");
-                var start=Point(refEdge.GetProperty("start"));var end=Point(refEdge.GetProperty("end"));
-                endpointMax=Math.Max(endpointMax,Math.Max((start-new P(e.Start.X,e.Start.Y)).Length(),(end-new P(e.End.X,e.End.Y)).Length()));
-                if(e.Kind=="Q") {var control=Point(refEdge.GetProperty("relative_controls")[0]);controlMax=Math.Max(controlMax,(control-new P(e.Controls[0].X,e.Controls[0].Y)).Length());}
+            (double endpointMax,double controlMax) Measure(IReadOnlyList<BackBodiceCandidate.Edge> edges) {
+                double endpointMax=0,controlMax=0;
+                for(int i=0;i<7;i++) {
+                    var e=edges[i];var refEdge=source[i];
+                    Need(refEdge.GetProperty("kind").GetString()==(e.Kind=="Q"?"CurveEdge":"Edge"),"multibody waist edge kind");
+                    var start=Point(refEdge.GetProperty("start"));var end=Point(refEdge.GetProperty("end"));
+                    endpointMax=Math.Max(endpointMax,Math.Max((start-new P(e.Start.X,e.Start.Y)).Length(),(end-new P(e.End.X,e.End.Y)).Length()));
+                    if(e.Kind=="Q") {var control=Point(refEdge.GetProperty("relative_controls")[0]);controlMax=Math.Max(controlMax,(control-new P(e.Controls[0].X,e.Controls[0].Y)).Length());}
+                }
+                return (endpointMax,controlMax);
             }
-            Need(double.IsFinite(endpointMax)&&double.IsFinite(controlMax)&&!candidate.ExportAllowed&&!candidate.ProductionAllowed,"multibody research gate");
-            if(row.GetProperty("id").GetString()=="angle40") Need(endpointMax>.1 && controlMax>.01,"previously observed mismatch changed; reassess source and diagnostic");
+            string id=row.GetProperty("id").GetString()!;
+            // Diagnostic bands around observed errors, not tolerances for physical use or source equivalence.
+            var bands=id switch {
+                "angle5" => (0.0000458,0.0000461,0.0000299,0.0000303),
+                "angle18_narrow" => (0.0001886,0.0001891,0.0000388,0.0000392),
+                "angle30" => (0.014281,0.014284,0.002071,0.002074),
+                "angle35_wide" => (0.046210,0.046215,0.006126,0.006129),
+                "angle40" => (0.124804,0.124808,0.015023,0.015027),
+                _ => throw new InvalidDataException("Unexpected multibody case")
+            };
+            void CheckBands(IReadOnlyList<BackBodiceCandidate.Edge> edges) {
+                var (endpoint,control)=Measure(edges);
+                Need(double.IsFinite(endpoint)&&double.IsFinite(control)&&endpoint>=bands.Item1&&endpoint<=bands.Item2&&control>=bands.Item3&&control<=bands.Item4,"multibody research baseline changed; reassess source and report");
+            }
+            CheckBands(candidate.Edges);
+            Need(!candidate.ExportAllowed&&!candidate.ProductionAllowed,"multibody research gate");
+            // Mutate endpoint and control separately; both must be rejected for every fixture.
+            var badEndpoint=candidate.Edges.ToArray();var e0=badEndpoint[0];
+            badEndpoint[0]=e0 with { Start=new BackBodiceCandidate.P(e0.Start.X+1,e0.Start.Y) };
+            try {CheckBands(badEndpoint);throw new Exception("Changed endpoint accepted");}catch(InvalidDataException) { }
+            var badControl=candidate.Edges.ToArray();var c0=badControl[0].Controls[0];
+            badControl[0]=badControl[0] with { Controls=new[]{new BackBodiceCandidate.P(c0.X+1,c0.Y)} };
+            try {CheckBands(badControl);throw new Exception("Changed control accepted");}catch(InvalidDataException) { }
+            var (endpointMax,controlMax)=Measure(candidate.Edges);
             Console.WriteLine($"{row.GetProperty("id").GetString()} source vs C# first 7 edges: max endpoint={endpointMax:G9} cm; max relative control={controlMax:G9}; unresolved.");
         }
     }
