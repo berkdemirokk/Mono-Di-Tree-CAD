@@ -11243,6 +11243,8 @@ internal static partial class DesktopVerification
             var continuation=window.CaptureContinuation();
             var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);
             try {
+                _=new WindowInteropHelper(trace).EnsureHandle();
+                if(continuation is null)throw new InvalidOperationException("Accepted region did not provide a continuation snapshot.");
                 trace.SourcePurposeForVerification.SelectedIndex=1;
                 var canvas=trace.CanvasForVerification;
                 if(!canvas.TryAddPixelPoint(new Point(10,10)) || !canvas.TryAddPixelPoint(new Point(100,10)) ||
@@ -11253,7 +11255,7 @@ internal static partial class DesktopVerification
                     firstDialogReached=true;
                     dialog.ConfirmCloseForVerification=()=>true;
                     try {
-                        if(!dialog.RestoreContinuation(continuation!))return false;
+                        if(!dialog.RestoreContinuation(continuation))throw new InvalidOperationException("Accepted region snapshot could not be restored for the first dialog.");
                         dialog.Regions.SelectedIndex=0;
                         var select=dialog.TrySelectContourAsync(true);PumpUntil(()=>select.IsCompleted);
                         firstContourAccepted=select.GetAwaiter().GetResult() && dialog.SelectedContour is { Length:>=3 };
@@ -11271,7 +11273,8 @@ internal static partial class DesktopVerification
                     cancellationDialogReached=true;
                     dialog.ConfirmCloseForVerification=()=>true;
                     try {
-                        Check(dialog.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),
+                        var restoredMask=dialog.CopyMaskForVerification();
+                        Check(restoredMask is not null && restoredMask.SequenceEqual(window.CopyMaskForVerification()!),
                             "Previously accepted mask is available before cancellation",checks);
                         return false;
                     } finally { dialog.Close(); }
@@ -11282,7 +11285,7 @@ internal static partial class DesktopVerification
                 try {
                     Check(afterCancel.CopyMaskForVerification() is { } retained && retained.SequenceEqual(window.CopyMaskForVerification()!) &&
                         afterCancel.Regions.SelectedIndex==-1 && afterCancel.SelectedContour is null && proposal is not null &&
-                        trace.CanvasForVerification.PathSuggestion!.SequenceEqual(proposal) && trace.DraftRevision==draftRevision,
+                        trace.CanvasForVerification.PathSuggestion is { } currentProposal && currentProposal.SequenceEqual(proposal) && trace.DraftRevision==draftRevision,
                         "Cancel preserves the accepted mask and existing suggestion without selecting a boundary",checks);
                 } finally { afterCancel.Close(); }
             } finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close(); }
