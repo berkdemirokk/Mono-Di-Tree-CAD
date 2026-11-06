@@ -66,7 +66,3 @@ internal sealed class ReferencePhotoWindow : Window
         }
     }
 }
-
-
-
-

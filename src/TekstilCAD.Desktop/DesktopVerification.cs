@@ -17563,6 +17563,3 @@ internal static partial class DesktopVerification
         catch (TargetInvocationException ex) when (ex.InnerException is not null) { System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); }
     }
 }
-
-
-
