@@ -51,6 +51,29 @@ public sealed class NotchMark
     public NotchMark Clone() => new() { VertexIndex=VertexIndex,Position=Position };
 }
 
+/// <summary>Unapproved experimental lower-section provenance; output callers must enforce the experimental guard.</summary>
+public sealed record ALineExperimentalProvenance(string Algorithm,string SourceSha256,string Side)
+{
+    public const string CurrentAlgorithm="A-04.lower-section.experimental.v1";
+    public void Validate()
+    {
+        if(Algorithm!=CurrentAlgorithm || Side is not ("front" or "back") || SourceSha256 is null || SourceSha256.Length!=64 ||
+           SourceSha256.Any(c=>!(c is >= '0' and <= '9' or >= 'A' and <= 'F')))
+            throw new InvalidDataException("Deneysel A kesim kaynak kaydı geçersiz.");
+    }
+}
+
+/// <summary>Fail-closed guard for output entry points; callers must invoke it before exporting or simulating.</summary>
+public static class ExperimentalOutputGuard
+{
+    public static void EnsureAllowed(IEnumerable<PatternPiece> pieces)
+    {
+        ArgumentNullException.ThrowIfNull(pieces);
+        if(pieces.Any(p=>p is null || p.ExperimentalALine is not null))
+            throw new InvalidOperationException("Deneysel A kesim taslağı çıktı veya makine işlemi için onaylanmadı.");
+    }
+}
+
 public sealed class PatternPiece
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -64,7 +87,9 @@ public sealed class PatternPiece
     public Grainline? Grainline { get; set; }
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<NotchMark>? Notches { get; set; }
-    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList() };
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ALineExperimentalProvenance? ExperimentalALine { get; set; }
+    public PatternPiece Clone() => new() { Id = Id, Name = Name, Points = [.. Points], Closed = Closed, Metadata = Metadata?.Clone(), Grainline=Grainline?.Clone(), Notches=Notches?.Select(n=>n.Clone()).ToList(), ExperimentalALine=ExperimentalALine };
 }
 
 // Rotation names describe mathematical Y-up coordinates. On the Y-down
