@@ -121,3 +121,4 @@ Bu ilk çalışan geliştirme sürümüdür; ticari üretim sürümünün tamaml
 
 - Deneysel [DXF ARC aktarımı](docs/DXF_ARC_EXPERIMENT.md), açık kullanıcı seçimiyle desteklenen model alanı yaylarını açık çizgiye örnekler. Çakışan açılar, desteklenmeyen düzlem ve belirsiz sahiplik reddedilebilir. Gerçek fabrika DXF verileri ve üretim doğruluğu doğrulanmadı.
 - Fotoğraf çizgisi düzenleyicisinde tekrarlanan tam koordinatlar sırayla seçilebilir; bu seçim tek başına çizimi değiştirmez. Yakın noktalar ve diğer kesişimler bu aramayla doğrulanmaz; gerçek kullanıcı ve ekran okuyucu kabul testi yapılmadı.
+- Fotoğraf çizgisi nokta bağlantıları ve isteğe bağlı kapanış kenarı açılış anındaki kopyada incelenir; çizimi veya kapanış seçimini değiştirmez. Kesişme, gerçek ölçü ve üretim doğruluğunu kanıtlamaz; gerçek ekran okuyucu ve yüksek DPI kabul testi yapılmadı.

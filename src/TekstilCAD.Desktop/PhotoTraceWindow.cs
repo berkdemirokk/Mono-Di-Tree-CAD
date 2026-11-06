@@ -24,6 +24,7 @@ internal sealed class PhotoTraceWindow : Window
     private readonly int sourceByteLength;
     private readonly int sourceOrientation;
     private readonly TextBox xInput=new() { Width=60,MaxLength=24 },yInput=new() { Width=60,MaxLength=24 };
+    internal (int Width,int Height) SourceDimensions => (sourceWidth,sourceHeight);
     internal long DraftRevision { get; private set; }
     internal bool HasDraft => PlaneSettings is not null || CanvasForVerification.Points.Count>0 || LengthForVerification.Text.Length>0 || xInput.Text.Length>0 || yInput.Text.Length>0;
     internal PhotoTraceCanvas CanvasForVerification { get; } = new();

@@ -10704,14 +10704,63 @@ internal static partial class DesktopVerification
                 Check(duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==3 && duplicateEditor.Status.Text.Contains("Nokta 6") && duplicateEditor.Status.Text.Contains("nokta 3") &&
                     canvas.Points.SequenceEqual(duplicateSnapshot) && canvas.PathSuggestion!.SequenceEqual(duplicateProposal) && trace.DraftRevision==duplicateRevision && DocumentSession.ContentEquals(initial,workspace.Document),
                     "Repeated-point search selects the second occurrence without changing the draft or its proposal",checks);
+                _ = new WindowInteropHelper(duplicateEditor).EnsureHandle();
+                var context=duplicateEditor.CreateContext() ?? throw new InvalidOperationException("Repeated point context missing.");
+                try {
+                    Render(context,Path.ChangeExtension(reportPath,".photo-point-context.png"),420,380);
+                    Check(context.PreviewForVerification.SelectedIndex==5 && context.PreviewForVerification.PreviousIndex==4 && context.PreviewForVerification.NextIndex==6 &&
+                        context.ExplanationForVerification.Text.Contains("Nokta 5 → 6") && context.ExplanationForVerification.Text.Contains("Nokta 6 → 7") &&
+                        FullyVisible(context.PreviewForVerification,(FrameworkElement)context.Content),
+                        "Repeated point context identifies the selected occurrence and its adjacent trace edges",checks);
+                    var size=context.PreviewForVerification.RenderSize;context.PreviewForVerification.SetZoom(2);
+                    var focused=context.PreviewForVerification.MapPointForVerification(duplicateSnapshot[5],size);
+                    Check(Math.Abs(focused.X-size.Width/2)<1e-7 && Math.Abs(focused.Y-size.Height/2)<1e-7 &&
+                        canvas.Points.SequenceEqual(duplicateSnapshot) && canvas.PathSuggestion!.SequenceEqual(duplicateProposal) && trace.DraftRevision==duplicateRevision,
+                        "Zooming point context centers the selected coordinate without editing the draft or proposal",checks);
+                    var descriptionPeer=UIElementAutomationPeer.CreatePeerForElement(context.ExplanationForVerification);
+                    Check(descriptionPeer is not null && descriptionPeer.GetName()==context.ExplanationForVerification.Text &&
+                        descriptionPeer.GetName().Contains("Nokta 5 → 6") && descriptionPeer.GetName().Contains("kendiliğinden güncellenmez"),
+                        "Point context accessibility exposes actual connection numbers and detached snapshot disclosure",checks);
+                    var closureChoice=trace.ReviewClosureForVerification.IsChecked;context.ClosingForVerification.IsChecked=true;
+                    Render(context,Path.ChangeExtension(reportPath,".photo-point-context-closure.png"),420,380);
+                    var previewWidth=(int)Math.Ceiling(context.PreviewForVerification.RenderSize.Width);var previewHeight=(int)Math.Ceiling(context.PreviewForVerification.RenderSize.Height);
+                    var previewBitmap=new RenderTargetBitmap(previewWidth,previewHeight,96,96,PixelFormats.Pbgra32);previewBitmap.Render(context.PreviewForVerification);
+                    var previewPixels=new byte[previewWidth*previewHeight*4];previewBitmap.CopyPixels(previewPixels,previewWidth*4,0);
+                    var purplePixels=Enumerable.Range(0,previewWidth*previewHeight).Count(i=> { var offset=i*4;return Math.Abs(previewPixels[offset]-Colors.MediumPurple.B)+Math.Abs(previewPixels[offset+1]-Colors.MediumPurple.G)+Math.Abs(previewPixels[offset+2]-Colors.MediumPurple.R)<45; });
+                    Check(purplePixels>3,"Closing preview remains visible when it overlaps a selected trace edge",checks);
+                    Check(context.PreviewForVerification.ClosingPreview && context.ExplanationForVerification.Text.Contains("Nokta 7 → 3") &&
+                        context.ExplanationForVerification.Text.Contains("Çizgi açık kalır") && FullyVisible(context.ClosingForVerification,(FrameworkElement)context.Content) &&
+                        FullyVisible(context.PreviewForVerification,(FrameworkElement)context.Content) && canvas.Points.SequenceEqual(duplicateSnapshot) &&
+                        canvas.PathSuggestion!.SequenceEqual(duplicateProposal) && trace.DraftRevision==duplicateRevision && trace.ReviewClosureForVerification.IsChecked==closureChoice,
+                        "Optional closure preview is visible and does not close the draft or change its review choice",checks);
+                    Check(descriptionPeer!.GetName()==context.ExplanationForVerification.Text && descriptionPeer.GetName().Contains("Nokta 7 → 3"),
+                        "Accessible point context updates its actual name when closure preview changes",checks);
+                    context.ClosingForVerification.IsChecked=false;
+                    Check(!context.PreviewForVerification.ClosingPreview && context.ExplanationForVerification.Text.Contains("gösterilmiyor"),"Closing preview can be hidden without editing",checks);
+                } finally { context.Close(); }
+                var sameEnds=duplicateSnapshot.ToArray();sameEnds[^1]=sameEnds[2];var sourceSize=trace.SourceDimensions;
+                var zeroContext=new PhotoTracePointContextWindow(duplicateEditor,canvas.Image!,sourceSize.Width,sourceSize.Height,sameEnds,2,2);
+                try { sameEnds[^1]=new Point(30,30);zeroContext.ClosingForVerification.IsChecked=true;
+                    Check(zeroContext.PreviewForVerification.ClosingPreview && zeroContext.ExplanationForVerification.Text.Contains("sıfır uzunluklu ve geçersiz"),
+                        "Coincident closure endpoints remain explicitly invalid in a detached preview snapshot",checks); }
+                finally { zeroContext.Close(); }
+                var shortContext=new PhotoTracePointContextWindow(duplicateEditor,canvas.Image!,sourceSize.Width,sourceSize.Height,duplicateSnapshot.Take(4).ToArray(),2,2);
+                try { Check(!shortContext.ClosingForVerification.IsEnabled && !shortContext.PreviewForVerification.ClosingPreview && shortContext.ExplanationForVerification.Text.Contains("en az üç"),
+                    "Closure preview is unavailable with fewer than three trace points",checks); }
+                finally { shortContext.Close(); }
+                duplicateEditor.PointSelector.SelectedIndex=0;var firstContext=duplicateEditor.CreateContext()!;
+                try { Check(firstContext.PreviewForVerification.PreviousIndex is null && firstContext.PreviewForVerification.NextIndex==3 &&
+                    firstContext.ExplanationForVerification.Text.Contains("Önceki kenar yok") && UIElementAutomationPeer.CreatePeerForElement(firstContext.ExplanationForVerification)?.GetName()==firstContext.ExplanationForVerification.Text,
+                    "First trace point context exposes the absent previous edge and never connects to a reference point",checks); }
+                finally { firstContext.Close(); }
                 Render(duplicateEditor,Path.ChangeExtension(reportPath,".photo-point-duplicate.png"),440,400);
-                Check(FullyVisible(duplicateEditor.FindDuplicateForVerification,(FrameworkElement)duplicateEditor.Content) && duplicateEditor.FindDuplicateForVerification.Focusable &&
+                Check(FullyVisible(duplicateEditor.FindDuplicateForVerification,(FrameworkElement)duplicateEditor.Content) && FullyVisible(duplicateEditor.ContextForVerification,(FrameworkElement)duplicateEditor.Content) && duplicateEditor.FindDuplicateForVerification.Focusable && duplicateEditor.ContextForVerification.Focusable &&
                     AutomationProperties.GetHelpText(duplicateEditor.FindDuplicateForVerification).Contains("referans"),"Repeated-point action remains keyboard accessible in the compact editor",checks);
                 Check(duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==4 && duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==3,
                     "Repeated-point search cycles through duplicate coordinates",checks);
                 Check(duplicateEditor.TryRemove() && canvas.Points.Count==duplicateSnapshot.Length-1 && canvas.UndoPath() && canvas.Points.SequenceEqual(duplicateSnapshot),
                     "A found repeated point can be explicitly removed and restored with undo",checks);
-                Check(!duplicateEditor.FindNextDuplicate() && duplicateEditor.Status.Text.Contains("Taslak değişti"),
+                Check(!duplicateEditor.FindNextDuplicate() && duplicateEditor.CreateContext() is null && duplicateEditor.Status.Text.Contains("Taslak değişti"),
                     "Repeated-point search rejects a stale editor snapshot",checks);
             } finally { duplicateEditor.Close();canvas.UndoPoint();canvas.UndoPoint(); }
             Check(canvas.Points.SequenceEqual(beforeZoom),"Repeated-point review preserves the original photo draft after cleanup",checks);

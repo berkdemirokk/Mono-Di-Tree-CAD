@@ -16,6 +16,7 @@ internal sealed class PhotoTracePointEditWindow : Window
     internal TextBox XInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,12,0) };
     internal TextBox YInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,0,0) };
     internal TextBlock Status { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,6) };
+    internal Button ContextForVerification { get; } = new() { Content="Kolları incele…",Padding=new Thickness(8,4,8,4),Margin=new Thickness(8,8,0,0) };
     internal Button FindDuplicateForVerification { get; } = new() { Content="Tekrarı bul",Padding=new Thickness(8,4,8,4),Margin=new Thickness(8,8,0,0) };
     private sealed record Choice(int Index,Point Pixel)
     {
@@ -46,7 +47,9 @@ internal sealed class PhotoTracePointEditWindow : Window
         AutomationProperties.SetHelpText(cursorButton,"Pencere açılmadan önce fotoğrafta sağ tıklanan veya klavyeyle taşınan imleç konumunu yeni koordinatlara yazar.");
         var cursor=owner.CanvasForVerification.CursorForVerification;
         cursorButton.Click+=(_,_)=> { XInput.Text=MeasurementInput.Format(cursor.X);YInput.Text=MeasurementInput.Format(cursor.Y); };
-        var inspectActions=new WrapPanel();inspectActions.Children.Add(cursorButton);inspectActions.Children.Add(FindDuplicateForVerification);body.Children.Add(inspectActions);
+        var inspectActions=new WrapPanel();inspectActions.Children.Add(cursorButton);inspectActions.Children.Add(FindDuplicateForVerification);inspectActions.Children.Add(ContextForVerification);body.Children.Add(inspectActions);
+        AutomationProperties.SetHelpText(ContextForVerification,"Seçilen noktanın önceki ve sonraki çizgi kenarlarını fotoğrafta ayrı gösterir; taslak değişmez.");
+        ContextForVerification.Click+=(_,_)=>CreateContext()?.ShowDialog();
         AutomationProperties.SetHelpText(FindDuplicateForVerification,"Aynı önizleme piksel koordinatını kullanan çizgi noktalarını sırayla seçer; referans noktalarını ve projeyi değiştirmez.");
         FindDuplicateForVerification.Click+=(_,_)=>FindNextDuplicate();
         var editActions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
@@ -57,13 +60,21 @@ internal sealed class PhotoTracePointEditWindow : Window
         insert.Click+=(_,_)=> { if(TryInsert())DialogResult=true; };remove.Click+=(_,_)=> { if(TryRemove())DialogResult=true; };
         editActions.Children.Add(insert);editActions.Children.Add(remove);body.Children.Add(editActions);
         Status.Text="Son nokta düzenlemesi ana pencerede geri alınabilir; bekleyen öneri kaldırılır.";AutomationProperties.SetName(Status,"Nokta düzenleme durumu");AutomationProperties.SetLiveSetting(Status,AutomationLiveSetting.Polite);body.Children.Add(Status);
-        PointSelector.SelectionChanged+=(_,_)=> { if(PointSelector.SelectedItem is Choice c) { XInput.Text=MeasurementInput.Format(c.Pixel.X);YInput.Text=MeasurementInput.Format(c.Pixel.Y); } };
+        PointSelector.SelectionChanged+=(_,_)=> { if(PointSelector.SelectedItem is Choice c) { XInput.Text=MeasurementInput.Format(c.Pixel.X);YInput.Text=MeasurementInput.Format(c.Pixel.Y);Status.Text="Seçili noktanın bağlantılarını inceleyebilir veya koordinatlarını düzenleyebilirsiniz."; } };
         for(int i=owner.CanvasForVerification.ReferencePointCount;i<snapshot.Length;i++)PointSelector.Items.Add(new Choice(i,snapshot[i]));
         if(PointSelector.Items.Count>0)
         {
             var nearest=owner.CanvasForVerification.NearestTracePointIndex();
             PointSelector.SelectedItem=PointSelector.Items.Cast<Choice>().FirstOrDefault(c=>c.Index==nearest);
         }
+    }
+    internal PhotoTracePointContextWindow? CreateContext()
+    {
+        if(!IsCurrent())return null;
+        if(PointSelector.SelectedItem is not Choice choice || owner.CanvasForVerification.Image is not { } image)
+        { Status.Text="Önce bir çizgi noktası seçin.";return null; }
+        var dimensions=owner.SourceDimensions;
+        return new PhotoTracePointContextWindow(this,image,dimensions.Width,dimensions.Height,snapshot,owner.CanvasForVerification.ReferencePointCount,choice.Index);
     }
     internal bool FindNextDuplicate()
     {
