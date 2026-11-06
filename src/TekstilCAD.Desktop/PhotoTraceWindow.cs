@@ -52,7 +52,7 @@ internal sealed class PhotoTraceWindow : Window
     internal Action<CancellationToken>? BeforeTopologyReviewForVerification { get; set; }
     internal (double Width,double Height)? PlaneSettings { get; private set; }
     private readonly Label referenceLabel=new() { Foreground=DesignRequestWindow.Ink };
-    private bool allowClose,closed,continuationBlocked;
+    private bool allowClose,closed,continuationBlocked,clearingTrace;
     private CancellationTokenSource? pathCancellation;
     internal bool PathOperationRunningForVerification => pathCancellation is not null;
     private CancellationTokenSource? sessionCancellation;
@@ -67,7 +67,7 @@ internal sealed class PhotoTraceWindow : Window
         Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri("DesignRequestTheme.xaml",UriKind.Relative) });Background=DesignRequestWindow.BackgroundColor;Foreground=DesignRequestWindow.Ink;
         var root=new DockPanel { Margin=new Thickness(12) };Content=root;
         var actions=new WrapPanel { Margin=new Thickness(0,5,0,0) };DockPanel.SetDock(actions,Dock.Bottom);root.Children.Add(actions);
-        var recoveryText=new TextBlock { Text="Kaynak istek değişti veya kapandı; çizim korunuyor fakat bu pencereden CAD aktarımı yapılamaz. Düz serilmiş kalıp görseli seçiliyken süren işlemi bitirin; ⋯ (Çizgi dosyası) > Çizgiyi kaydet ile yeni bir .tdtrace dosyası kaydedin ve başarılı kayıt mesajını bekleyin. Çizgi dosyası koordinatları, girilmiş referans ölçüsünü ve ayarları içerir; fotoğraf, bölge maskesi ve uygulanmamış öneriler dahil değildir. Maskeyi de saklamak için kapatmadan önce Son noktayı kaldır ile yalnız referans noktalarını bırakın (eksikse tamamlayın); Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Ardından taslak ve fotoğraf pencerelerini kapatın, güncel istekte aynı özgün fotoğrafı seçip yeniden inceleyin. Düz kalıp türünü seçip ⋯ > Çizgiyi aç ile çizgiyi yükleyin. Bölge açmak için çizgi noktalarını Son noktayı kaldır ile silerek yalnız referansları bırakın. Bölge… > Bölgeyi aç… ile maskeyi yükleyin, listeden bir bölge seçin. Bölge görüntü veya arama sınırına değiyorsa kırpılma olasılığını inceleyip ilgili onayı verin. İç boşluklar çizgiye aktarılmaz; varsa bu sınırlamayı inceleyip ayrıca onaylayın. Seçili sınırı önizle ile kabul edin; gerekirse sadeleştirmeyi de inceleyip onaylayın. Sonra ⋯ > Çizgiyi aç ile kaydedilmiş çizgiyi tekrar yükleyin; mevcut noktaların değiştirilmesini onaylayın. Farklı fotoğrafla dosyalar açılmaz; eski fotoğrafı saklayın.",TextWrapping=TextWrapping.Wrap };
+        var recoveryText=new TextBlock { Text="Kaynak istek değişti veya kapandı; çizim korunuyor fakat bu pencereden CAD aktarımı yapılamaz. Düz serilmiş kalıp görseli seçiliyken süren işlemi bitirin; ⋯ (Çizgi dosyası) > Çizgiyi kaydet ile yeni bir .tdtrace dosyası kaydedin ve başarılı kayıt mesajını bekleyin. Çizgi dosyası koordinatları, girilmiş referans ölçüsünü ve ayarları içerir; fotoğraf, bölge maskesi ve uygulanmamış öneriler dahil değildir. Maskeyi de saklamak için kapatmadan önce ⋯ > Çizgi noktalarını temizle… ile yalnız referans noktalarını bırakın (eksikse tamamlayın); Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Ardından taslak ve fotoğraf pencerelerini kapatın, güncel istekte aynı özgün fotoğrafı seçip yeniden inceleyin. Düz kalıp türünü seçip ⋯ > Çizgiyi aç ile çizgiyi yükleyin. Bölge açmak için ⋯ > Çizgi noktalarını temizle… ile yalnız referansları bırakın. Bölge… > Bölgeyi aç… ile maskeyi yükleyin, listeden bir bölge seçin. Bölge görüntü veya arama sınırına değiyorsa kırpılma olasılığını inceleyip ilgili onayı verin. İç boşluklar çizgiye aktarılmaz; varsa bu sınırlamayı inceleyip ayrıca onaylayın. Seçili sınırı önizle ile kabul edin; gerekirse sadeleştirmeyi de inceleyip onaylayın. Sonra ⋯ > Çizgiyi aç ile kaydedilmiş çizgiyi tekrar yükleyin; mevcut noktaların değiştirilmesini onaylayın. Farklı fotoğrafla dosyalar açılmaz; eski fotoğrafı saklayın.",TextWrapping=TextWrapping.Wrap };
         RecoveryForVerification.Content=new ScrollViewer { Content=recoveryText,MaxHeight=100,VerticalScrollBarVisibility=ScrollBarVisibility.Auto,Focusable=true };
         AutomationProperties.SetName(RecoveryForVerification,"Değişen kaynak için taslak kurtarma adımları");DockPanel.SetDock(RecoveryForVerification,Dock.Top);root.Children.Add(RecoveryForVerification);
         if(requestMeasurements is not null || requestPrompt is not null)
@@ -93,6 +93,7 @@ internal sealed class PhotoTraceWindow : Window
         AutomationProperties.SetHelpText(apply,"Seçilen ve açıkça kabul edilen noktalarla açık çizgiyi CAD'e ekler; kalıp ve üretim uygunluğu doğrulanmaz.");
         var traceMenu=new ContextMenu();
         var addContinue=new MenuItem { Header="CAD'e ekle ve çizime devam et" };addContinue.Click+=(_,_)=>TryApplyAndContinue();traceMenu.Items.Add(addContinue);
+        var clearTrace=new MenuItem { Header="Çizgi noktalarını temizle…" };clearTrace.Click+=(_,_)=>ClearTracePoints();traceMenu.Items.Add(clearTrace);
         var saveTrace=new MenuItem { Header="Çizgiyi kaydet…" };saveTrace.Click+=(_,_)=>_ = SaveTraceDialogAsync();traceMenu.Items.Add(saveTrace);
         var loadTrace=new MenuItem { Header="Çizgiyi aç…" };loadTrace.Click+=(_,_)=>_ = LoadTraceDialogAsync();traceMenu.Items.Add(loadTrace);
         var cancelTrace=new MenuItem { Header="Dosya işlemini iptal et" };cancelTrace.Click+=(_,_)=> { sessionCancellation?.Cancel();StatusForVerification.Text="İptal istendi; tamamlanmış kayıt geri alınmaz."; };traceMenu.Items.Add(cancelTrace);
@@ -206,6 +207,29 @@ internal sealed class PhotoTraceWindow : Window
         Closing+=OnClosing;
         workspace.RegisterPhotoTrace(this);Closed+=(_,_)=> { closed=true;pathCancellation?.Cancel();sessionCancellation?.Cancel();workspace.UnregisterPhotoTrace(this); };
     }
+    internal void ClearTracePoints()
+    {
+        if(closed || clearingTrace)return;
+        if(SourcePurpose!=PhotoSourcePurpose.FlatPattern || pathCancellation is not null || sessionCancellation is not null)
+        { StatusForVerification.Text="Düz kalıp türünü seçin; süren yol veya dosya işlemini bitirin. Noktalar korundu.";return; }
+        var canvas=CanvasForVerification;var referenceCount=canvas.ReferencePointCount;
+        if(canvas.Points.Count<=referenceCount) { StatusForVerification.Text="Temizlenecek çizgi noktası yok; referanslar ve öneriler korundu.";return; }
+        var revision=DraftRevision;var points=canvas.Points.ToArray();var suggestion=canvas.PathSuggestion?.ToArray();var edge=canvas.EdgeSuggestion;
+        bool SameSuggestion()=>suggestion is null ? canvas.PathSuggestion is null : canvas.PathSuggestion is { } current && current.SequenceEqual(suggestion);
+        var message="Çizgi noktaları ve uygulanmamış öneriler silinecek; kalibrasyon referansları, girilen ölçü ve bölge maskesi korunacak. İşlem bu pencerede geri alınamaz. Çizgiyi korumak için önce İptal seçin ve ⋯ > Çizgiyi kaydet… ile .tdtrace dosyası kaydedin. Devam edilsin mi?";
+        clearingTrace=true;
+        try
+        {
+            var accepted=ConfirmClearTraceForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"Çizgi noktalarını temizle",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            if(!accepted) { StatusForVerification.Text="Temizleme iptal edildi; çizgi ve referanslar korundu.";return; }
+            if(closed || pathCancellation is not null || sessionCancellation is not null || SourcePurpose!=PhotoSourcePurpose.FlatPattern || revision!=DraftRevision ||
+               referenceCount!=canvas.ReferencePointCount || !canvas.Points.SequenceEqual(points) || !SameSuggestion() || edge!=canvas.EdgeSuggestion)
+            { if(!closed)StatusForVerification.Text="Taslak veya işlem durumu değişti; çizgi temizlenmedi.";return; }
+            canvas.ClearTraceKeepReferences();StatusForVerification.Text="Çizgi noktaları temizlendi; referanslar, ölçü ve bölge maskesi korundu.";
+        }
+        finally { clearingTrace=false; }
+    }
+    internal Func<string,bool>? ConfirmClearTraceForVerification { get; set; }
     private bool CanUseTraceSession()
     {
         if(closed || SourcePurpose!=PhotoSourcePurpose.FlatPattern || sessionCancellation is not null || pathCancellation is not null || sourceSha256 is null || sourceByteLength<=0)
@@ -563,7 +587,7 @@ internal sealed class PhotoTraceWindow : Window
         if(!allowClose && HasDraft)
         {
             var revision=DraftRevision;
-            var message="İşaretlenmiş noktalar ve girilen değerler kaybolacak."+(regionContinuation is null ? "" : " Oturumdaki bölge maskesi ve düzeltmeleri de kaybolacak. Çizgi dosyası maskeyi içermez. Maskeyi korumak için önce çizgiyi kaydedin, Son noktayı kaldır ile yalnız referansları bırakın; Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Referanslar eksikse Bölge açmadan önce tamamlayın.")+" Kapatılsın mı?";
+            var message="İşaretlenmiş noktalar ve girilen değerler kaybolacak."+(regionContinuation is null ? "" : " Oturumdaki bölge maskesi ve düzeltmeleri de kaybolacak. Çizgi dosyası maskeyi içermez. Maskeyi korumak için önce çizgiyi kaydedin, ⋯ > Çizgi noktalarını temizle… ile yalnız referansları bırakın; Bölge… > Bölgeyi kaydet… ile ayrı .tdregion dosyası kaydedin. Referanslar eksikse Bölge açmadan önce tamamlayın.")+" Kapatılsın mı?";
             var accepted=ConfirmCloseForVerification?.Invoke(message) ?? (MessageBox.Show(this,message,"Taslak çizgi",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
             if(!accepted || revision!=DraftRevision) { e.Cancel=true;if(accepted)StatusForVerification.Text="Taslak değişti; pencere kapatılmadı."; }
         }

@@ -11318,7 +11318,7 @@ internal static partial class DesktopVerification
                         {
                             var firstLoad=recovered.TryLoadTraceSessionAsync(tracePath);PumpUntil(()=>firstLoad.IsCompleted);
                             Check(firstLoad.GetAwaiter().GetResult() && recovered.CreateRegionWindow() is null,"Loaded trace points block region review until removed",checks);
-                            recovered.CanvasForVerification.ClearTraceKeepReferences();
+                            recovered.ConfirmClearTraceForVerification=_=>true;recovered.ClearTracePoints();
                             var restoredSelection=false;
                             recovered.RegionDialogForVerification=dialog=> {
                                 dialog.ConfirmCloseForVerification=()=>true;
@@ -11367,6 +11367,36 @@ internal static partial class DesktopVerification
         var session=new DocumentSession(new ProjectDocument { Name="Düzlem fotoğraf testi" });var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
         var bitmap=BitmapSource.Create(100,100,96,96,PixelFormats.Bgra32,null,new byte[100*100*4],400);bitmap.Freeze();
         byte[] photo;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);photo=stream.ToArray(); }
+        foreach(var plane in new[]{false,true})
+        {
+            var clear=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);clear.SourcePurposeForVerification.SelectedIndex=1;
+            try
+            {
+                if(plane)clear.SetPlaneSettings((200,100));else clear.LengthForVerification.Text="50";
+                var points=plane ? new[]{new Point(10,10),new Point(90,10),new Point(90,90),new Point(10,90),new Point(20,20),new Point(80,20)} :
+                    new[]{new Point(10,10),new Point(90,10),new Point(20,20),new Point(80,20)};
+                foreach(var point in points)clear.CanvasForVerification.TryAddPixelPoint(point);
+                var revision=clear.DraftRevision;var notice="";clear.ConfirmClearTraceForVerification=message=> { notice=message;return false; };clear.ClearTracePoints();
+                Check(clear.CanvasForVerification.Points.SequenceEqual(points) && clear.DraftRevision==revision && notice.Contains(".tdtrace") && notice.Contains("geri alınamaz"),
+                    "Canceling trace clear retains points and explains saving and undo",checks);
+                clear.ConfirmClearTraceForVerification=_=> { clear.CanvasForVerification.TryAddPixelPoint(new Point(80,40));return true; };clear.ClearTracePoints();
+                Check(clear.CanvasForVerification.Points.Count==points.Length+1 && clear.StatusForVerification.Text.Contains("değişti"),
+                    "Trace changes during clear confirmation reject the stale operation",checks);
+                clear.CanvasForVerification.UndoPoint();
+                using(var pending=new CancellationTokenSource())
+                {
+                    typeof(PhotoTraceWindow).GetField("pathCancellation",PrivateInstance)!.SetValue(clear,pending);
+                    clear.ConfirmClearTraceForVerification=_=>throw new InvalidOperationException("Running operation reached confirmation.");clear.ClearTracePoints();
+                    Check(clear.CanvasForVerification.Points.SequenceEqual(points),"Running photo operation blocks trace clear",checks);
+                    typeof(PhotoTraceWindow).GetField("pathCancellation",PrivateInstance)!.SetValue(clear,null);
+                }
+                var beforeLength=clear.LengthForVerification.Text;var beforePlane=clear.PlaneSettings;
+                clear.ConfirmClearTraceForVerification=_=>true;clear.ClearTracePoints();
+                Check(clear.CanvasForVerification.Points.SequenceEqual(points.Take(plane ? 4 : 2)) && clear.LengthForVerification.Text==beforeLength && clear.PlaneSettings==beforePlane && clear.DraftRevision>revision,
+                    "Confirmed trace clear retains the selected calibration references and values",checks);
+            }
+            finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(clear,true);clear.Close(); }
+        }
         var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length);trace.SourcePurposeForVerification.SelectedIndex=1;_ = new WindowInteropHelper(trace).EnsureHandle();
         var wasClosed=false;trace.Closed+=(_,_)=>wasClosed=true;
         try
