@@ -2727,6 +2727,56 @@ private struct ExperimentalDesignBriefView: View {
         case .describe: return "Kendi sözlerinle"
         }
     }
+    private func styleCard(_ option: ExperimentalDesignBrief.DressStyle, expanded: Bool) -> some View {
+        let selected = modelExplicitlySelected && style == option
+        return Button {
+            if option != .describe && ExperimentalDesignBrief.hasEmbeddedModelLine(description) {
+                conflictingModelNotice = true
+            } else {
+                referenceRevision.changed(); style = option; modelExplicitlySelected = true; importedPortable = false
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    Group {
+                        if option == .describe {
+                            Image(systemName: "text.bubble").font(.largeTitle).foregroundStyle(plum)
+                        } else {
+                            DressStyleSketch(style: option)
+                                .stroke(selected ? plum : Color.secondary,
+                                        style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+                                .frame(width: 95, height: 135)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 160)
+                    .background(plum.opacity(colorScheme == .dark ? 0.09 : 0.04), in: RoundedRectangle(cornerRadius: 8))
+                    if selected {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(plum)
+                            .padding(8)
+                    }
+                }.accessibilityHidden(true)
+                Text(option.rawValue).font(.headline).fontDesign(.serif).foregroundStyle(plum)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(styleCaption(option)).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(selected ? "Seçili" : "Seç")
+                    .font(.caption.weight(.semibold)).foregroundStyle(plum)
+                    .frame(minHeight: 24, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, minHeight: 250, alignment: .topLeading)
+            .padding(10)
+            .frame(width: expanded ? nil : 190)
+            .background(colorScheme == .dark ? Color(red: 0.18, green: 0.13, blue: 0.15) : Color.white,
+                        in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selected ? plum : Color.secondary.opacity(0.25), lineWidth: selected ? 2 : 1))
+            .contentShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.rawValue)
+        .accessibilityHint(styleCaption(option) + ". Model tercihini belirler; kalıp oluşturmaz.")
+        .accessibilityValue(selected ? "Seçili" : "Seçili değil")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
     private func checkLocalDraft() {
         guard !storageChecked else { return }
         storageChecked = true
@@ -3490,6 +3540,33 @@ private struct ExperimentalDesignBriefView: View {
                     }
                         .frame(minHeight: 44)
                         .accessibilityHint("Model kartlarına kaydırır.")
+                    Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .accessibilityAddTraits(.isHeader).id("request-models")
+                        .accessibilityFocused($focusedBriefSection, equals: .models)
+                    Text(typeSize.isAccessibilitySize ? "Tüm modelleri görmek için aşağı kaydırın." : "Tüm modelleri görmek için yana kaydırın.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if typeSize.isAccessibilitySize {
+                        VStack(spacing: 8) {
+                            ForEach(ExperimentalDesignBrief.selectableStyles) { option in
+                                styleCard(option, expanded: true)
+                            }
+                        }
+                    } else {
+                        ScrollView(.horizontal) {
+                            HStack(alignment: .top, spacing: 8) {
+                                ForEach(ExperimentalDesignBrief.selectableStyles) { option in
+                                    styleCard(option, expanded: false)
+                                }
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
+                    Button("Tarife git") {
+                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
+                        focusedBriefSection = .description
+                    }
+                        .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
+                    Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları aşağıda düzenleyebilirsiniz.").font(.caption)
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
                         .id("request-description").accessibilityFocused($focusedBriefSection, equals: .description)
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: A kesim, midi boy ve uzun kollu bir elbise istiyorum.").font(.subheadline).foregroundStyle(.secondary)
@@ -3509,64 +3586,6 @@ private struct ExperimentalDesignBriefView: View {
                             }.buttonStyle(.bordered).controlSize(.large)
                         } }
                     }
-                    Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        .accessibilityAddTraits(.isHeader).id("request-models")
-                        .accessibilityFocused($focusedBriefSection, equals: .models)
-                    Text("Tüm modelleri görmek için aşağı kaydırın.").font(.caption).foregroundStyle(.secondary)
-                    VStack(spacing: 8) {
-                        ForEach(ExperimentalDesignBrief.selectableStyles) { option in
-                            Button {
-                                if option != .describe && ExperimentalDesignBrief.hasEmbeddedModelLine(description) {
-                                    conflictingModelNotice = true
-                                } else { referenceRevision.changed(); style = option; modelExplicitlySelected = true; importedPortable = false }
-                            } label: {
-                                HStack(alignment: .center, spacing: 12) {
-                                    Group {
-                                        if option == .describe {
-                                            Image(systemName: "text.bubble").font(.title2)
-                                        } else {
-                                            DressStyleSketch(style: option)
-                                                .stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary,
-                                                        style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-                                                .frame(width: 45, height: 64)
-                                        }
-                                    }
-                                    .frame(width: 56, height: 72)
-                                    .background(Color.secondary.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
-                                    .accessibilityHidden(true)
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(option.rawValue).font(.headline).fontDesign(.serif)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                        Text(styleCaption(option)).font(.caption).foregroundStyle(.secondary)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                        Text((modelExplicitlySelected && style == option) ? "Seçili" : "Seç")
-                                            .font(.caption.weight(.semibold)).foregroundStyle(plum)
-                                    }
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    if modelExplicitlySelected && style == option {
-                                        Image(systemName: "checkmark.circle.fill").foregroundStyle(plum).accessibilityHidden(true)
-                                    }
-                                }
-                                .frame(maxWidth: .infinity, minHeight: 72, alignment: .leading)
-                                .padding(10)
-                                .background(colorScheme == .dark ? Color(red: 0.18, green: 0.13, blue: 0.15) : Color.white)
-                                .overlay(RoundedRectangle(cornerRadius: 12).stroke((modelExplicitlySelected && style == option) ? plum : Color.secondary.opacity(0.25), lineWidth: (modelExplicitlySelected && style == option) ? 2 : 1))
-                                .clipShape(RoundedRectangle(cornerRadius: 12))
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(option.rawValue)
-                            .accessibilityHint(styleCaption(option) + ". Model tercihini belirler; kalıp oluşturmaz.")
-                            .accessibilityValue((modelExplicitlySelected && style == option) ? "Seçili" : "Seçili değil")
-                            .accessibilityAddTraits((modelExplicitlySelected && style == option) ? .isSelected : [])
-                        }
-                    }
-                    Button("Tarife dön") {
-                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
-                        focusedBriefSection = .description
-                    }
-                        .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
-                    Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları yukarıda düzenleyebilirsiniz.").font(.caption)
                 }
                 Section {
                     let overview = ExperimentalDesignBrief.AtelierOverview(draft)
