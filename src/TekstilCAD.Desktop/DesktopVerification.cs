@@ -11299,6 +11299,43 @@ internal static partial class DesktopVerification
                 {
                     var saveMask=maskToSave.TrySaveSessionAsync(savedMaskPath);PumpUntil(()=>saveMask.IsCompleted);
                     Check(saveMask.GetAwaiter().GetResult(),"Retained mask can be saved independently of the trace",checks);
+                    trace.LengthForVerification.Text="50";canvas.TryAddPixelPoint(new Point(20,20));canvas.TryAddPixelPoint(new Point(70,20));
+                    var recoveryPoints=canvas.Points.ToArray();
+                    var tracePath=Path.Combine(Path.GetDirectoryName(Path.GetFullPath(reportPath))!,"mask-recovery-"+Guid.NewGuid().ToString("N")+".tdtrace");
+                    var traceHash=new string('A',64);
+                    var saveSource=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,side,side,traceHash,100);saveSource.SourcePurposeForVerification.SelectedIndex=1;
+                    try
+                    {
+                        saveSource.LengthForVerification.Text="50";foreach(var point in recoveryPoints)saveSource.CanvasForVerification.TryAddPixelPoint(point);
+                        var saveTrace=saveSource.TrySaveTraceSessionAsync(tracePath);PumpUntil(()=>saveTrace.IsCompleted);
+                        Check(saveTrace.GetAwaiter().GetResult(),"Recovery trace is saved for the same photo identity",checks);
+                        var recovered=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,side,side,traceHash,100);recovered.SourcePurposeForVerification.SelectedIndex=1;recovered.ConfirmForVerification=_=>true;
+                        _=new WindowInteropHelper(recovered).EnsureHandle();
+                        try
+                        {
+                            var firstLoad=recovered.TryLoadTraceSessionAsync(tracePath);PumpUntil(()=>firstLoad.IsCompleted);
+                            Check(firstLoad.GetAwaiter().GetResult() && recovered.CreateRegionWindow() is null,"Loaded trace points block region review until removed",checks);
+                            recovered.CanvasForVerification.ClearTraceKeepReferences();
+                            var restoredSelection=false;
+                            recovered.RegionDialogForVerification=dialog=> {
+                                dialog.ConfirmCloseForVerification=()=>true;
+                                try { var loadRegion=dialog.TryLoadSessionAsync(savedMaskPath);PumpUntil(()=>loadRegion.IsCompleted);if(!loadRegion.GetAwaiter().GetResult())return false;
+                                    dialog.Regions.SelectedIndex=0;var select=dialog.TrySelectContourAsync(true);PumpUntil(()=>select.IsCompleted);
+                                    restoredSelection=select.GetAwaiter().GetResult();return restoredSelection; }
+                                finally { dialog.Close(); }
+                            };
+                            recovered.OpenRegionSuggestionForVerification();PumpUntil(()=>!recovered.PathOperationRunningForVerification);
+                            var secondLoad=recovered.TryLoadTraceSessionAsync(tracePath);PumpUntil(()=>secondLoad.IsCompleted);
+                            Check(restoredSelection && secondLoad.GetAwaiter().GetResult() && recovered.CanvasForVerification.Points.SequenceEqual(recoveryPoints),
+                                "Trace, accepted region, then trace reload restores the saved drawing",checks);
+                            recovered.CanvasForVerification.ClearTraceKeepReferences();
+                            var retainedRegion=recovered.CreateRegionWindow() ?? throw new InvalidOperationException("Recovered region unavailable.");retainedRegion.ConfirmCloseForVerification=()=>true;
+                            try { Check(retainedRegion.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),"Accepted recovered region remains available after trace reload",checks); }
+                            finally { retainedRegion.Close(); }
+                        }
+                        finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(recovered,true);recovered.Close(); }
+                    }
+                    finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(saveSource,true);saveSource.Close();if(File.Exists(tracePath))File.Delete(tracePath); }
                     var maskReload=new PhotoRegionWindow(workspace,bitmap) { ConfirmCloseForVerification=()=>true };
                     try { var reload=maskReload.TryLoadSessionAsync(savedMaskPath);PumpUntil(()=>reload.IsCompleted);
                         Check(reload.GetAwaiter().GetResult() && maskReload.CopyMaskForVerification()!.SequenceEqual(window.CopyMaskForVerification()!),
