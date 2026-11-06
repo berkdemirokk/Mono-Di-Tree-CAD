@@ -8,7 +8,7 @@ Sabit kaynak: https://github.com/maria-korosteleva/GarmentCode/tree/d44962997902
 
 [Deterministik ölçü tutarlılığı](MEASUREMENT_CONSISTENCY_TR.md), model kapsamı retlerini koşullu gözden geçirme sinyallerinden ayırır; gerçek kişi veri girişi veya ölçü doğruluğu onayı sağlamaz.
 
-[Yapılandırılmış ölçü bildirimi](STRUCTURED_GARMENT_INPUT_TR.md), 20 alan için açık birim/kaynak tanım kimliğini, eksik model ve A-kesim bilgilerini ve yalnız iki sentetik kimlikle geometriye bağlama sınırını açıklar.
+[Yapılandırılmış ölçü bildirimi](STRUCTURED_GARMENT_INPUT_TR.md), 20 alan için açık birim/kaynak tanım kimliğini, eksik model ve A-kesim bilgilerini ve iki sabit değer kombinasyonuyla geometriye bağlama sınırını açıklar; değerlerin bir kişiye ait olup olmadığını tespit etmez.
 
 [Gerçek ürün engelleri ve sayısal dikiş tanısı](REAL_PRODUCT_BARRIERS_TR.md), iki sentetik örneğin 23 kuralındaki aralık belirsizliğini ve ölçüm/prova kanıtı eksiklerini açıklar.
 
