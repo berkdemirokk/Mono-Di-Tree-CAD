@@ -128,4 +128,3 @@ public static class ALineProjectEvidenceStorage
             if(!Clear(front,bounds) || !Clear(back,bounds))throw new InvalidOperationException("Panel yerleşimi hedefteki bir parçaya değiyor veya çakışıyor.");
         }
     }}
-
