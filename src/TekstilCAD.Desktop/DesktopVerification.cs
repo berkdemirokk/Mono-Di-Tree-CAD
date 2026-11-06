@@ -11941,12 +11941,18 @@ internal static partial class DesktopVerification
                     {
                         var stamp=studio.CapturePhotoTrace()!;
                         var bitmap=ReferencePhotoDecoder.DecodeWithGeometry(bytes).Bitmap;
-                        var trace=new PhotoTraceWindow(studio,bitmap,stamp,32,16,expectedHash,bytes.Length,sourceCurrent:stalePreview.TraceSourceCurrentForVerification,requestMeasurements:"72 cm");
+                        var trace=new PhotoTraceWindow(studio,bitmap,stamp,32,16,expectedHash,bytes.Length,sourceCurrent:stalePreview.TraceSourceCurrentForVerification,requestMeasurements:"72 cm",requestPrompt:"Tarif; göğüs 96 cm");
                         try
                         {
                             Check(!preview.IsVisible && !unsaved.IsVisible,"Unsaved photo preview verification does not show windows",checks);
                             var ownedTrace=new PhotoTraceWindow(studio,bitmap,stamp,windowOwner:stalePreview);
                             Check(ReferenceEquals(ownedTrace.Owner,stalePreview),"Photo trace can belong to the modal preview chain",checks);ownedTrace.Close();
+                            Check(trace.RequestPromptForVerification is { IsReadOnly:true,Text:"Tarif; göğüs 96 cm" } &&
+                                trace.RequestMeasurementsForVerification is { IsReadOnly:true,Text:"72 cm" } &&
+                                AutomationProperties.GetName(trace.RequestPromptForVerification).Contains("tarif",StringComparison.OrdinalIgnoreCase) &&
+                                AutomationProperties.GetName(trace.RequestMeasurementsForVerification).Contains("ayrı",StringComparison.OrdinalIgnoreCase) &&
+                                trace.LengthForVerification.Text=="" && DocumentSession.ContentEquals(before,studio.Document),
+                                "Separate read-only request prose and measurement snapshots do not calibrate or change CAD",checks);
                             trace.SourcePurposeForVerification.SelectedIndex=1;trace.LengthForVerification.Text="50";
                             foreach(var point in new[] { new Point(1,1),new Point(25,1),new Point(5,5),new Point(20,10) })trace.CanvasForVerification.TryAddPixelPoint(point);
                             var points=trace.CanvasForVerification.Points.ToArray();
