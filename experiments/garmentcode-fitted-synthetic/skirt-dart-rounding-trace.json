@@ -1,0 +1,1266 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "numpy_version": "1.26.4",
+  "scipy_version": "1.17.1",
+  "python_version": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "cases": [
+    {
+      "id": "synthetic-base",
+      "calls": [
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  -18.137148522172286,
+                  0.5499999999999972
+                ],
+                [
+                  -16.290361328210054,
+                  -17.98823824046442
+                ],
+                [
+                  -14.443574134247818,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  -18.137148522172286,
+                  0.5499999999999972
+                ],
+                [
+                  -16.290361328210054,
+                  -17.98823824046442
+                ],
+                [
+                  -14.443574134247818,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "returned": {
+              "vertices": [
+                [
+                  -18.137148522172286,
+                  0.5499999999999972
+                ],
+                [
+                  -16.290361328210054,
+                  -17.98823824046442
+                ],
+                [
+                  -14.443574134247818,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            }
+          },
+          "snap_shift": [
+            -18.137148522172286,
+            0.5499999999999972
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "-1",
+              "562949953421312"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 0
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  -9.943574181181951,
+                  0.5499999999999972
+                ],
+                [
+                  -8.096786987219717,
+                  -20.067453214696943
+                ],
+                [
+                  -6.249999793257484,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  -9.943574181181951,
+                  0.5499999999999972
+                ],
+                [
+                  -8.096786987219717,
+                  -20.067453214696943
+                ],
+                [
+                  -6.249999793257484,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "returned": {
+              "vertices": [
+                [
+                  -9.943574181181951,
+                  0.5499999999999972
+                ],
+                [
+                  -8.096786987219717,
+                  -20.067453214696943
+                ],
+                [
+                  -6.249999793257484,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            }
+          },
+          "snap_shift": [
+            -9.943574181181951,
+            0.5499999999999972
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 1
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -20.61745321469694
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  7.249999983594076,
+                  0.5499999999999972
+                ],
+                [
+                  9.09678717755631,
+                  -20.067453214696943
+                ],
+                [
+                  10.943574371518544,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  7.249999983594076,
+                  0.5499999999999972
+                ],
+                [
+                  9.09678717755631,
+                  -20.067453214696943
+                ],
+                [
+                  10.943574371518544,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "returned": {
+              "vertices": [
+                [
+                  7.249999983594076,
+                  0.5499999999999972
+                ],
+                [
+                  9.09678717755631,
+                  -20.067453214696943
+                ],
+                [
+                  10.943574371518544,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            }
+          },
+          "snap_shift": [
+            7.249999983594076,
+            0.5499999999999972
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 2
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.8467871939622338,
+                  -18.538238240464416
+                ],
+                [
+                  3.6935743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  15.443574449005286,
+                  0.5499999999999972
+                ],
+                [
+                  17.290361642967518,
+                  -17.98823824046442
+                ],
+                [
+                  19.137148836929754,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  15.443574449005286,
+                  0.5499999999999972
+                ],
+                [
+                  17.290361642967518,
+                  -17.98823824046442
+                ],
+                [
+                  19.137148836929754,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "returned": {
+              "vertices": [
+                [
+                  15.443574449005286,
+                  0.5499999999999972
+                ],
+                [
+                  17.290361642967518,
+                  -17.98823824046442
+                ],
+                [
+                  19.137148836929754,
+                  0.5499999999999972
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            }
+          },
+          "snap_shift": [
+            15.443574449005286,
+            0.5499999999999972
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "-1",
+              "562949953421312"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 3
+        }
+      ]
+    },
+    {
+      "id": "synthetic-distinct",
+      "calls": [
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  -19.13714851699693,
+                  0.75
+                ],
+                [
+                  -17.165361323034695,
+                  -17.77535978764587
+                ],
+                [
+                  -15.193574129072463,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": 1.7763568394002505e-15
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  -19.13714851699693,
+                  0.75
+                ],
+                [
+                  -17.165361323034695,
+                  -17.77535978764587
+                ],
+                [
+                  -15.193574129072463,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": 1.7763568394002505e-15
+            },
+            "returned": {
+              "vertices": [
+                [
+                  -19.13714851699693,
+                  0.75
+                ],
+                [
+                  -17.165361323034695,
+                  -17.77535978764587
+                ],
+                [
+                  -15.193574129072463,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": 1.7763568394002505e-15
+            }
+          },
+          "snap_shift": [
+            -19.13714851699693,
+            0.75
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "1",
+              "562949953421312"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 0
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  -10.69357441240308,
+                  0.75
+                ],
+                [
+                  -8.721787218440847,
+                  -19.855874290156354
+                ],
+                [
+                  -6.750000024478613,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  -10.69357441240308,
+                  0.75
+                ],
+                [
+                  -8.721787218440847,
+                  -19.855874290156354
+                ],
+                [
+                  -6.750000024478613,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "returned": {
+              "vertices": [
+                [
+                  -10.69357441240308,
+                  0.75
+                ],
+                [
+                  -8.721787218440847,
+                  -19.855874290156354
+                ],
+                [
+                  -6.750000024478613,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            }
+          },
+          "snap_shift": [
+            -10.69357441240308,
+            0.75
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 1
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -20.605874290156354
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  6.7499999883173665,
+                  0.75
+                ],
+                [
+                  8.7217871822796,
+                  -19.855874290156354
+                ],
+                [
+                  10.693574376241834,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  6.7499999883173665,
+                  0.75
+                ],
+                [
+                  8.7217871822796,
+                  -19.855874290156354
+                ],
+                [
+                  10.693574376241834,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "returned": {
+              "vertices": [
+                [
+                  6.7499999883173665,
+                  0.75
+                ],
+                [
+                  8.7217871822796,
+                  -19.855874290156354
+                ],
+                [
+                  10.693574376241834,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            }
+          },
+          "snap_shift": [
+            6.7499999883173665,
+            0.75
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 2
+        },
+        {
+          "stages": {
+            "shape": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "normalized": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "rotated": {
+              "vertices": [
+                [
+                  0.0,
+                  0.0
+                ],
+                [
+                  1.9717871939622338,
+                  -18.52535978764587
+                ],
+                [
+                  3.9435743879244676,
+                  0.0
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "0",
+                "1"
+              ],
+              "midpoint_error_cm_approx": 0.0
+            },
+            "translated": {
+              "vertices": [
+                [
+                  15.193574450300158,
+                  0.75
+                ],
+                [
+                  17.16536164426239,
+                  -17.77535978764587
+                ],
+                [
+                  19.137148838224626,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "orientation_adjusted": {
+              "vertices": [
+                [
+                  15.193574450300158,
+                  0.75
+                ],
+                [
+                  17.16536164426239,
+                  -17.77535978764587
+                ],
+                [
+                  19.137148838224626,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            },
+            "returned": {
+              "vertices": [
+                [
+                  15.193574450300158,
+                  0.75
+                ],
+                [
+                  17.16536164426239,
+                  -17.77535978764587
+                ],
+                [
+                  19.137148838224626,
+                  0.75
+                ]
+              ],
+              "horizontal": true,
+              "twice_midpoint_error_exact": [
+                "-1",
+                "281474976710656"
+              ],
+              "midpoint_error_cm_approx": -1.7763568394002505e-15
+            }
+          },
+          "snap_shift": [
+            15.193574450300158,
+            0.75
+          ],
+          "reflected": false,
+          "snap_x_rounding_residuals": [
+            [
+              "0",
+              "1"
+            ],
+            [
+              "-1",
+              "562949953421312"
+            ],
+            [
+              "0",
+              "1"
+            ]
+          ],
+          "source_rule_index": 3
+        }
+      ]
+    }
+  ]
+}
