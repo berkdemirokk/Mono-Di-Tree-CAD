@@ -34,6 +34,29 @@ final class LosslessProjectNameTests: XCTestCase {
         XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(grading.utf8)))
     }
 
+    func testVersionSevenAndTenNumberTokensRejectUnderflowButAcceptZeroAndSubnormal() {
+        for version in [7, 10] {
+            for token in ["1e-400", "-1e-400", "0.000001e-999"] {
+                let input = "[\(version),{\"Name\":\"Model\",\"Pieces\":[{\"Points\":[{\"X\":\(token),\"Y\":0}]}]}]"
+                XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(input.utf8), strictVersion: version), "version \(version): \(token)")
+            }
+            for token in ["0", "-0.0", "0e-999", "5e-324"] {
+                let input = "[\(version),{\"Name\":\"Model\",\"Pieces\":[{\"Points\":[{\"X\":\(token),\"Y\":0}]}]}]"
+                XCTAssertNoThrow(try LosslessProjectName.validateUniqueKeys(Data(input.utf8), strictVersion: version), "version \(version): \(token)")
+            }
+        }
+    }
+
+    func testQuantityTokenRuleIsLimitedToVersionTen() {
+        for token in ["1.0", "1e0"] {
+            for version in [7, 10] {
+                let input = "[\(version),{\"Name\":\"Model\",\"Pieces\":[{\"Metadata\":{\"Quantity\":\(token)}}]}]"
+                if version == 7 { XCTAssertNoThrow(try LosslessProjectName.validateUniqueKeys(Data(input.utf8), strictVersion: version)) }
+                else { XCTAssertThrowsError(try LosslessProjectName.validateUniqueKeys(Data(input.utf8), strictVersion: version)) }
+            }
+        }
+    }
+
     func testVersionSixValidationAcceptsBOMEncodingsWithoutChangingSource() throws {
         let text = #"[6,{"Name":"Ön","Pieces":[{"Notches":[{"VertexIndex":1,"Position":{"X":4,"Y":0}}]}]}]"#
         let encodings: [(String.Encoding, [UInt8])] = [

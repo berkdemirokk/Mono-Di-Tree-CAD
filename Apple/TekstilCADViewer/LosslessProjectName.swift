@@ -196,11 +196,12 @@ enum LosslessProjectName {
                 let isName = project && key == "Name"
                 try take(58); try whitespace()
                 if nestingSnapshot && key == "RotationTrace" && strictVersion != 7 { throw Failure.invalid }
-                if strictV6 && key == "VertexIndex" {
+                if strictV6 && (key == "VertexIndex" || (strictVersion == 10 && key == "Quantity")) {
                     let start = i; try value(depth: depth + 1)
                     guard let token = String(bytes: bytes[start..<i], encoding: .utf8),
-                          !token.isEmpty, token.allSatisfy({ $0 >= "0" && $0 <= "9" }),
-                          (token == "0" || token.first != "0"), Int32(token) != nil else { throw Failure.invalid }
+                          (key == "Quantity" && token == "null") ||
+                          (!token.isEmpty && token.allSatisfy({ $0 >= "0" && $0 <= "9" }) &&
+                           (token == "0" || token.first != "0") && Int32(token) != nil) else { throw Failure.invalid }
                 } else if project && key == "NestingSnapshot" && i < bytes.count && bytes[i] == 123 {
                     try object(depth: depth + 1, nestingSnapshot: true)
                 } else if isName {

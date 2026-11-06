@@ -32,6 +32,47 @@ final class ModelLoadStateTests: XCTestCase {
         }
         XCTAssertThrowsError(try Drawing.load(fixture("v10-history-only")))
     }
+
+    func testV10AndV7FixturesRejectUnderflowCoordinates() throws {
+        for name in ["v10-minimal", "desktop-synthetic-rotated-v7"] {
+            let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: name, withExtension: "tcad"))
+            let source = try String(contentsOf: url, encoding: .utf8)
+            XCTAssertNoThrow(try Drawing.load(Data(source.utf8)))
+            let pattern = #"\"X\"\s*:\s*-?[0-9]+(?:\.[0-9]+)?"#
+            let range = try XCTUnwrap(source.range(of: pattern, options: .regularExpression))
+            for token in ["1e-400", "-1e-400"] {
+                var changed = source
+                changed.replaceSubrange(range, with: "\"X\": \(token)")
+                XCTAssertThrowsError(try Drawing.load(Data(changed.utf8)), "\(name): \(token)")
+            }
+        }
+    }
+
+    func testV10NameLimitsUseUTF16AndQuantityUsesIntegerToken() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "v10-minimal", withExtension: "tcad"))
+        let data = try Data(contentsOf: url)
+        let envelope = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [Any])
+        let original = try XCTUnwrap(envelope[1] as? [String: Any])
+        let goodName = String(repeating: "😀", count: 512)
+        for target in ["project", "piece"] {
+            for (name, allowed) in [(goodName, true), (goodName + "a", false)] {
+                var body = original
+                var pieces = try XCTUnwrap(body["Pieces"] as? [[String: Any]])
+                if target == "project" { body["Name"] = name } else { pieces[0]["Name"] = name }
+                body["Pieces"] = pieces
+                let edited = try JSONSerialization.data(withJSONObject: [10, body])
+                if allowed { XCTAssertNoThrow(try Drawing.load(edited)) }
+                else { XCTAssertThrowsError(try Drawing.load(edited)) }
+            }
+        }
+        let text = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(text.contains("\"ExperimentalALine\":"))
+        for (token, allowed) in [("1", true), ("1.0", false), ("1e0", false)] {
+            let changed = text.replacingOccurrences(of: "\"ExperimentalALine\":", with: "\"Metadata\": {\"Quantity\": \(token)}, \"ExperimentalALine\":")
+            if allowed { XCTAssertNoThrow(try Drawing.load(Data(changed.utf8))) }
+            else { XCTAssertThrowsError(try Drawing.load(Data(changed.utf8))) }
+        }
+    }
     func testV10ReadOnlyEnvelopeRejectsUnknownDuplicatesAndHistory() throws {
         let marker = "\"ExperimentalALine\":{\"Algorithm\":\"A-04.lower-section.experimental.v1\",\"SourceSha256\":\"" + String(repeating: "A", count: 64) + "\",\"Side\":\"front\"}"
         func bytes(_ markerText: String, extra: String = "") -> Data {

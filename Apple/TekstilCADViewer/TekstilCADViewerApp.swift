@@ -2219,7 +2219,7 @@ struct Drawing {
                   let decoded = String(data: data, encoding: .utf8), !LosslessProjectName.hasNonUTF8BOM(data) else {
                 throw ViewerError.message("Sürüm 10 önizlemesi yalnız 8 MB altındaki UTF-8 dosyalarını destekler.")
             }
-            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictV6: false, strictVersion: 10, cancelled: cancelled) }
+            do { try LosslessProjectName.validateUniqueKeys(Data(decoded.utf8), strictVersion: 10, cancelled: cancelled) }
             catch is CancellationError { throw CancellationError() }
             catch { throw ViewerError.message("Sürüm 10 alanları yinelenmiş veya okunamadı.") }
             guard Set(object.keys) == Set(["Name", "Pieces", "GradingRules"]),
@@ -2261,6 +2261,9 @@ struct Drawing {
         guard let name = object["Name"] as? String, let rawPieces = object["Pieces"] as? [[String: Any]], rawPieces.count <= 10_000 else {
             throw ViewerError.message("Proje adı veya parça listesi eksik ya da sınır dışında.")
         }
+        if formatVersion == 10 && name.utf16.count > 1024 {
+            throw ViewerError.message("Sürüm 10 proje adı sınırı aşıyor.")
+        }
         var total = 0
         var totalNotches = 0
         var pieces: [Piece] = []
@@ -2273,6 +2276,9 @@ struct Drawing {
                 guard let id = raw["Id"] as? String, UUID(uuidString: id) != nil, raw["Name"] is String else {
                     throw ViewerError.message("Sürüm 7 parça kimliği veya adı eksik; dosya önizlenmedi.")
                 }
+            }
+            if formatVersion == 10, let pieceName = raw["Name"] as? String, pieceName.utf16.count > 1024 {
+                throw ViewerError.message("Sürüm 10 parça adı sınırı aşıyor.")
             }
             if formatVersion == 10, let markerValue = raw["ExperimentalALine"] {
                 guard let marker = markerValue as? [String: Any],
