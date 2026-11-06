@@ -2557,6 +2557,8 @@ private struct ExperimentalDesignBriefView: View {
     private enum BriefInput: Hashable { case description, bust, waist, hips, length, notes }
     @FocusState private var focusedInput: BriefInput?
     @AccessibilityFocusState private var focusedStepHeading: Int?
+    private enum BriefSection: Hashable { case description, models }
+    @AccessibilityFocusState private var focusedBriefSection: BriefSection?
     @State private var style = ExperimentalDesignBrief.DressStyle.describe
     @State private var modelExplicitlySelected = false
     @State private var conflictingModelNotice = false
@@ -3482,12 +3484,15 @@ private struct ExperimentalDesignBriefView: View {
                     if ExperimentalDesignBrief.hasConflictingModelLabels(style: style, description: description) {
                         Text("Seçilen model ile tarifteki model bilgisini kontrol edin.").font(.caption).foregroundStyle(plum)
                     }
-                    Button("Örnek modellere git") { focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top) }
+                    Button("Örnek modellere git") {
+                        focusedInput = nil; requestScroll.scrollTo("request-models", anchor: .top)
+                        focusedBriefSection = .models
+                    }
                         .frame(minHeight: 44)
                         .accessibilityHint("Model kartlarına kaydırır.")
                     Text("Nasıl bir elbise istiyorsun?").font(.title3).fontDesign(.serif).foregroundStyle(plum).accessibilityAddTraits(.isHeader)
-                        .id("request-description")
-                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın.").font(.subheadline).foregroundStyle(.secondary)
+                        .id("request-description").accessibilityFocused($focusedBriefSection, equals: .description)
+                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: A kesim, midi boy ve uzun kollu bir elbise istiyorum.").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                     Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
@@ -3506,6 +3511,7 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     Text("TEMEL SİLUETLER · ÖRNEK TERCİHLER").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
                         .accessibilityAddTraits(.isHeader).id("request-models")
+                        .accessibilityFocused($focusedBriefSection, equals: .models)
                     Text("Tüm modelleri görmek için aşağı kaydırın.").font(.caption).foregroundStyle(.secondary)
                     VStack(spacing: 8) {
                         ForEach(ExperimentalDesignBrief.selectableStyles) { option in
@@ -3555,7 +3561,10 @@ private struct ExperimentalDesignBriefView: View {
                             .accessibilityAddTraits((modelExplicitlySelected && style == option) ? .isSelected : [])
                         }
                     }
-                    Button("Tarife dön") { requestScroll.scrollTo("request-description", anchor: .top) }
+                    Button("Tarife dön") {
+                        focusedInput = nil; requestScroll.scrollTo("request-description", anchor: .top)
+                        focusedBriefSection = .description
+                    }
                         .frame(minHeight: 44).accessibilityHint("Elbise tarifi alanına kaydırır.")
                     Text("Seçim bir model tarifidir; hazır kalıp veya görsel değildir. Ayrıntıları yukarıda düzenleyebilirsiniz.").font(.caption)
                 }
