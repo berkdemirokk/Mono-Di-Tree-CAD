@@ -101,7 +101,7 @@ internal sealed class MirrorCopyWindow : Window
                 for(var i=0;i<mirrored.Count;i++) { if((i & 255)==0)token.ThrowIfCancellationRequested();CheckMirrorPoint(source.Points[i],mirrored[i],axis); }
                 var suffix=" · ayna";var length=Math.Min(source.Name.Length,1024-suffix.Length);
                 if(length<source.Name.Length && length>0 && char.IsHighSurrogate(source.Name[length-1]))length--;
-                var copy=new PatternPiece { Name=source.Name[..length]+suffix,Closed=source.Closed,Points=mirrored };
+                var copy=new PatternPiece { Name=source.Name[..length]+suffix,Closed=source.Closed,Points=mirrored,ExperimentalALine=source.ExperimentalALine };
                 if(source.Notches is not null)copy.Notches=source.Notches.Select(mark=>new NotchMark { VertexIndex=mark.VertexIndex,Position=new Point2(mirrored[mark.VertexIndex].X,mark.Position.Y) }).ToList();
                 copy.Grainline=GrainlineTransform.Transform(source.Grainline,source.Points[0],mirrored[0],Transform);
                 if(copy.Grainline is not null)

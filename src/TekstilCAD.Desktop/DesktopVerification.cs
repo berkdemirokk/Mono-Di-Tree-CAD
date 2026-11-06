@@ -17141,7 +17141,21 @@ internal static partial class DesktopVerification
                 }
                 finally { release.Set();if(task is not null){PumpUntil(()=>task.IsCompleted);task.GetAwaiter().GetResult();}window.Close(); }
             }
-        }
+            var restricted=source.Clone();restricted.Notches=null;restricted.Grainline=null;restricted.Metadata=null;
+            restricted.ExperimentalALine=new ALineExperimentalProvenance(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
+            studio.LoadDocument(new ProjectDocument { Pieces=[restricted] });studio.Select(restricted.Id);
+            var protectedMirror=new MirrorCopyWindow(studio);
+            try
+            {
+                var calculation=protectedMirror.CalculateForVerification();PumpUntil(()=>calculation.IsCompleted);calculation.GetAwaiter().GetResult();protectedMirror.ApplyForVerification();
+                var mirrored=studio.Document.Pieces.Single(piece=>piece.Id!=restricted.Id);
+                var selectedPath=Path.Combine(work,"restricted-mirror-selected.dxf");
+                var export=studio.StartSelectedDxfForVerification([mirrored.Id],selectedPath,ProjectStorage.CaptureVersion(selectedPath));
+                if(export is not null) { PumpUntil(()=>export.IsCompleted);export.GetAwaiter().GetResult(); }
+                Check(mirrored.ExperimentalALine==restricted.ExperimentalALine && studio.ExportError is not null && !File.Exists(selectedPath),
+                    "Mirrored experimental piece remains restricted in selected DXF export",checks);
+            }
+            finally { protectedMirror.Close(); }        }
         finally { studio.LoadDocument(new ProjectDocument());SynchronizationContext.SetSynchronizationContext(previous); }
     }
 

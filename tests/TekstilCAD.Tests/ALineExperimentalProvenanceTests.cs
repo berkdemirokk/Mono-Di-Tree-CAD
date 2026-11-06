@@ -34,6 +34,14 @@ public sealed class ALineExperimentalProvenanceTests
         Assert.Equal(provenance,ALineExperimentalProvenance.Merge(null,provenance));
         Assert.Throws<InvalidOperationException>(()=>ALineExperimentalProvenance.Merge(provenance,provenance! with { Side="back" }));
     }
+    [Fact] public void DerivedPatternToolCannotLoseMarkerBeforeSelectedExport()
+    {
+        var source=Document().Pieces[0];var changed=PatternTools.InsertEdgeMidpoint(source,0);
+        Assert.Equal(source.ExperimentalALine,changed.ExperimentalALine);
+        var folder=Path.Combine(Path.GetTempPath(),"aline-derived-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+        try { var path=Path.Combine(folder,"selected.dxf");Assert.Throws<InvalidOperationException>(()=>DxfFormat.Export(new ProjectDocument { Pieces=[changed] },path));Assert.False(File.Exists(path)); }
+        finally { Directory.Delete(folder,true); }
+    }
     [Fact] public void DirectOutputAndSimulationRejectRestrictedGeometryBeforeWriting()
     {
         var folder=Path.Combine(Path.GetTempPath(),"aline-output-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
