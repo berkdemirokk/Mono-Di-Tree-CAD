@@ -1113,6 +1113,27 @@ internal static class Validator
             var shoulderGraph=CombinedGraphStudy.Create(id,reference,true);
             Need(shoulderGraph.Status=="unresolved"&&!shoulderGraph.ExportAllowed&&!shoulderGraph.ProductionAllowed&&shoulderGraph.After.Count==23,"shoulder graph research gate");
             Need(shoulderGraph.After.Count(r=>r.RepresentedIntervalsDisjoint)==(id=="synthetic-base"?8:6),"shoulder graph remaining differences changed");
+            foreach(var remaining in shoulderGraph.After.Where(r=>r.RepresentedIntervalsDisjoint)) {
+                var dart=typedGraph.Rules.Single(r=>r.Owner==remaining.Owner&&r.Kind==remaining.Kind&&r.Index==remaining.Index);
+                var sourceDart=sourceGraph.Single(r=>r.GetProperty("owner").GetString()==dart.Owner&&r.GetProperty("owner_type").GetString()==dart.Kind&&r.GetProperty("index").GetInt32()==dart.Index);
+                var audit=DartResidualAudit.Inspect(dart,sourceDart,reference,remaining);
+                Need(audit.SourceDisjoint&&audit.CandidateDisjoint&&!audit.ExportAllowed&&!audit.ProductionAllowed&&audit.Status=="unresolved","source dart residual audit gate");
+                Need(audit.SourceA.ApproximateGap(audit.SourceB)<1e-12&&audit.CandidateA.ApproximateGap(audit.CandidateB)<1e-12,"dart residual outside observed synthetic scope");
+                if(dart.Owner=="skirt_back")Need(audit.SourceReportedLengthsEqual&&audit.SourceHorizontalCentered==false,"source reported skirt dart lengths or represented symmetry changed");
+                Console.WriteLine(FormattableString.Invariant($"{id} dart audit {dart.Kind}/{dart.Owner}/{dart.Index} edges={audit.EdgeA}/{audit.EdgeB}: source gap≈{audit.SourceA.ApproximateGap(audit.SourceB):G9} cm candidate gap≈{audit.CandidateA.ApproximateGap(audit.CandidateB):G9} cm; source reported equal={audit.SourceReportedLengthsEqual}; horizontal centered={audit.SourceHorizontalCentered?.ToString()??"not-horizontal"}; exact disjoint both; research only."));
+                var badRule=JsonNode.Parse(sourceDart.GetRawText())!;badRule["a"]!["edges"]![0]!["edge"]=audit.EdgeB;
+                using(var wrong=JsonDocument.Parse(badRule.ToJsonString())) {try {DartResidualAudit.Inspect(dart,wrong.RootElement,reference,remaining);throw new Exception("Wrong source dart edge accepted");}catch(InvalidDataException) { }}
+                var badGeometry=JsonNode.Parse(reference.GetRawText())!;var edge=badGeometry["panels"]![audit.Panel]!["edges"]![audit.EdgeA]!;
+                foreach(string endpoint in new[]{"start","end"})edge[endpoint]![0]=edge[endpoint]![0]!.GetValue<double>()+.01;
+                using(var wrong=JsonDocument.Parse(badGeometry.ToJsonString())) {try {DartResidualAudit.Inspect(dart,sourceDart,wrong.RootElement,remaining);throw new Exception("Broken dart apex accepted");}catch(ArgumentException) { }}
+                if(dart.Owner=="skirt_back"&&dart.Index==0) {
+                    var symmetricReference=JsonNode.Parse(reference.GetRawText())!;var edges=symmetricReference["panels"]![audit.Panel]!["edges"]!;
+                    edges[audit.EdgeA]!["start"]=new JsonArray(0,0);edges[audit.EdgeA]!["end"]=new JsonArray(1,1);
+                    edges[audit.EdgeB]!["start"]=new JsonArray(1,1);edges[audit.EdgeB]!["end"]=new JsonArray(2,0);
+                    using var sample=JsonDocument.Parse(symmetricReference.ToJsonString());var exact=DartResidualAudit.Inspect(dart,sourceDart,sample.RootElement,remaining);
+                    Need(!exact.SourceDisjoint&&exact.SourceHorizontalCentered==true,"symmetric exact dart source diagnosis");
+                }
+            }
             foreach(var (a,b) in changedGraph.After.Zip(shoulderGraph.After)) {
                 Need(a.Owner==b.Owner&&a.Kind==b.Kind&&a.Index==b.Index,"shoulder graph identity");
                 bool affected=a.Kind=="BodiceHalf"&&a.Index==0&&(a.Owner=="left"||a.Owner=="right");

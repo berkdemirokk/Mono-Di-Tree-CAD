@@ -14,6 +14,8 @@ Bu inceleme yalnız `synthetic-base` ve `synthetic-distinct` fixture'ları ve sa
 
 Bu değerler önceki [kenar bazlı tanı kaydından](SHOULDER_SEAM_RESEARCH_TR.md) gelir; son omuz değişiminde diğer 21 kuralın temsil edilen aralıkları değiştirilmediği test edilir. Çift sayısında büyük bir ayrıklık kalmaması, büzgü projeksiyonunda örtüşmenin gerçek eşitlik olduğunu veya bütün panel şekillerinin dikilebilir olduğunu göstermez. Bu sayısal ayrılıkların nedeninin yalnız kayan nokta yuvarlaması olduğu da kanıtlanmamıştır.
 
+[Kaynak–aday pens incelemesi](DART_RESIDUAL_SOURCE_TR.md), her kalan çiftin kaynak fixture’ında da temsil edilen uzunluklarının ayrık olduğunu ve arka etek penslerinde ortak ucun yatay tabanın tam orta noktasında bulunmadığını gösterir.
+
 ## Omuz şekli ve kaynak eşleme
 
 | Fixture | Kaynak C# ön omuz uzunluğu | Yeni öne göre aynı parametreli azami sapma | Kaynak ön uzunluğa oranı |
