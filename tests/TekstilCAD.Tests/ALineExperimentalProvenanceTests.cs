@@ -4,11 +4,69 @@ using TekstilCAD.Patterns;
 using TekstilCAD.Nesting;
 using TekstilCAD.Grading;
 using TekstilCAD.MachineGateway;
+using System.Text;
+using System.Text.Json.Nodes;
 
 namespace TekstilCAD.Tests;
 
 public sealed class ALineExperimentalProvenanceTests
 {
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(4)]
+    public void ExistingMarkerFreeProjectVersionsStillRoundTrip(int version)
+    {
+        var document=Document();document.Pieces[0].ExperimentalALine=null;
+        var payload=ProjectStorage.SerializeProject(document);
+        var old=version==0 ? payload : $"[{version},{payload}]";
+        var loaded=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(old));
+        Assert.True(DocumentSession.ContentEquals(document,loaded));
+        Assert.True(DocumentSession.ContentEquals(loaded,ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(ProjectStorage.SerializeProject(loaded)))));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void VersionTenRetainsBothKindsOfPhotoEvidence(bool plane)
+    {
+        Point2[] corners=[new(10,10),new(90,10),new(80,90),new(20,90)];
+        Point2[] pixels=[new(25,25),new(70,25),new(70,70)];
+        var points=(plane ? PhotoPlaneRectification.Convert(100,100,corners,200,150,pixels) :
+            PhotoTraceCalibration.Convert(100,100,200,200,corners[0],corners[1],200,pixels)).ToList();
+        var photo=new PatternPiece { Closed=false,Points=points.ToList() };
+        var history=new PhotoTraceProvenance { AlgorithmVersion=plane?2:1,PieceId=photo.Id,SourceSha256=new string('B',64),SourceByteLength=500,SourceOrientation=1,
+            SourceWidth=200,SourceHeight=200,PreviewWidth=100,PreviewHeight=100,ReferenceStart=corners[0],ReferenceEnd=corners[1],ReferenceLengthMm=200,
+            PlaneCalibration=plane ? new PhotoPlaneCalibration { Corners=corners.ToList(),WidthMm=200,HeightMm=150 } : null,
+            TracePixels=pixels.ToList(),GeneratedPoints=points.ToList() };
+        var project=Document();project.Pieces.Add(photo);project.PhotoTraceHistory=[history];
+        var json=ProjectStorage.SerializeProject(project);var parsed=JsonNode.Parse(json)!;
+        Assert.Equal(10,parsed[0]!.GetValue<int>());
+        var restored=ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(json));
+        Assert.True(DocumentSession.ContentEquals(project,restored));
+        Assert.Equal(plane?2:1,Assert.Single(restored.PhotoTraceHistory!).AlgorithmVersion);
+        restored.PhotoTraceHistory![0].GeneratedPoints[0]=new Point2(999,999);
+        Assert.False(DocumentSession.ContentEquals(project,restored));
+    }
+
+    [Fact]
+    public void MarkerShapeIsStrictIncludingNullAndDuplicateKeys()
+    {
+        var json=ProjectStorage.SerializeProject(Document());
+        var root=JsonNode.Parse(json)!;
+        var marker=root[1]!["Pieces"]![0]!["ExperimentalALine"]!.AsObject();
+        var compact=root.ToJsonString();var prefix=marker.ToJsonString();
+        foreach(var invalid in new[] { "null",prefix.Replace("\"Side\":", "\"Extra\":1,\"Side\":"),prefix.Replace("\"Side\":", "\"Side\":\"front\",\"Side\":") })
+        {
+            var changed=compact.Replace(prefix,invalid,StringComparison.Ordinal);
+            Assert.NotEqual(compact,changed);
+            Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(changed)));
+        }
+        var versionWithoutMarker=JsonNode.Parse(json)!;versionWithoutMarker[1]!["Pieces"]![0]!.AsObject().Remove("ExperimentalALine");
+        Assert.Throws<InvalidDataException>(()=>ProjectStorage.DeserializeProject(Encoding.UTF8.GetBytes(versionWithoutMarker.ToJsonString())));
+    }
+
     private static ProjectDocument Document()=>new() { Name="Deneysel",Pieces=[new PatternPiece { Name="Ön taslak",Closed=true,
         Points=[new(0,0),new(100,0),new(100,200),new(0,200)],
         ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front") }] };
