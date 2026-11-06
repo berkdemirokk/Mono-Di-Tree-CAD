@@ -17,21 +17,22 @@ internal static class CombinedGraphStudy
     // synthetic candidate and makes immutable copies of both contours.
     internal sealed class VerifiedPanels
     {
-        private VerifiedPanels(string snapshot,IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left) {Snapshot=snapshot;Right=right;Left=left;}
+        private VerifiedPanels(string snapshot,IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left,ShoulderSeamStudy.CertifiedPanelPair? shoulder) {Snapshot=snapshot;Right=right;Left=left;Shoulder=shoulder;}
         internal string Snapshot { get; } internal IReadOnlyList<BodyCurveStudy.Edge> Right { get; } internal IReadOnlyList<BodyCurveStudy.Edge> Left { get; }
+        internal ShoulderSeamStudy.CertifiedPanelPair? Shoulder { get; }
         internal static void RequireMirror(IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left) {
             if(right.Count!=13||left.Count!=13||Enumerable.Range(0,13).Any(i=>!Equal(Mirror(right[12-i],i),left[i])))throw new ArgumentException("Changed mirror mismatch");
         }
-        internal static VerifiedPanels Create(string id) {
+        internal static VerifiedPanels Create(string id,bool shoulder=false) {
             if(id is not ("synthetic-base" or "synthetic-distinct"))throw new ArgumentException("Unsupported changed fixture");
             var candidate=CombinedWaistCurvatureExperiment.Create(id,.3,1.5);
             var right=candidate.RightAfter.Select(e=>e with {RelativeControls=Array.AsReadOnly(e.RelativeControls.ToArray())}).ToArray();
             var left=Enumerable.Range(0,13).Select(i=>Mirror(right[12-i],i)).ToArray();
             RequireMirror(right,left);
-            return new(SyntheticBodyCatalog.Create(id).Snapshot(ResearchDesign.PinnedFitted),Array.AsReadOnly(right),Array.AsReadOnly(left));
+            return new(SyntheticBodyCatalog.Create(id).Snapshot(ResearchDesign.PinnedFitted),Array.AsReadOnly(right),Array.AsReadOnly(left),shoulder?ShoulderSeamStudy.CertifiedPanelPair.Create(id):null);
         }
     }
-    internal static Result Create(string id,JsonElement reference)
+    internal static Result Create(string id,JsonElement reference,bool shoulder=false)
     {
         if(id is not ("synthetic-base" or "synthetic-distinct") || reference.GetProperty("id").GetString()!=id)throw new ArgumentException("Unsupported source fixture identity");
         var body=SyntheticBodyCatalog.Create(id);var design=ResearchDesign.PinnedFitted;var graph=BodySeamStudy.Calculate(body,design);
@@ -44,7 +45,7 @@ internal static class CombinedGraphStudy
         }
         var initial=BodyCurveStudy.Calculate(body,design);
         if(initial.Count!=6||initial.Any(t=>t.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented||t.Unresolved!=0||t.NonMonotone!=0))throw new ArgumentException("Baseline topology unresolved");
-        var verified=VerifiedPanels.Create(id);var right=verified.Right;
+        var verified=VerifiedPanels.Create(id,shoulder);var right=verified.Right;
         var originalRight=BackBodiceCandidate.CreateFromBody(body,design,false);var originalLeft=BackBodiceCandidate.CreateFromBody(body,design,true);
         var left=verified.Left;
         for(int i=0;i<13;i++) {
@@ -60,7 +61,7 @@ internal static class CombinedGraphStudy
         if(before.Rules.Count!=23||projected.Rules.Count!=23)throw new ArgumentException("Incomplete graph projection");
         foreach(var (a,b) in before.Rules.Zip(projected.Rules))if(a.Owner!=b.Owner||a.Kind!=b.Kind||a.Index!=b.Index)throw new ArgumentException("Projection identity mismatch");
         foreach(var (a,b) in before.Rules.Zip(projected.Rules)) {
-            bool expectedChange=a.Kind=="MetaGarment" || a.Kind=="BodiceHalf"&&a.Index==1&&(a.Owner=="left"||a.Owner=="right");
+            bool expectedChange=a.Kind=="MetaGarment" || a.Kind=="BodiceHalf"&&(a.Index==1||shoulder&&a.Index==0)&&(a.Owner=="left"||a.Owner=="right");
             if(!expectedChange&&(a.A!=b.A||a.B!=b.B))throw new ArgumentException("Unexpected seam length change");
         }
         // Verify fail-closed identity and closure guards with valid edge changes.

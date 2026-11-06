@@ -25,9 +25,10 @@ internal static class BodySeamProjection
     {
         ArgumentNullException.ThrowIfNull(panels);
         if(panels.Snapshot!=body.Snapshot(design))throw new ArgumentException("Changed panels belong to another body snapshot");
-        return CalculateCore(body,design,graph,panels.Right,panels.Left);
+        if(panels.Shoulder is { } shoulder && shoulder.Snapshot!=panels.Snapshot)throw new ArgumentException("Shoulder snapshot differs");
+        return CalculateCore(body,design,graph,panels.Right,panels.Left,panels.Shoulder);
     }
-    static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left)
+    static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left,ShoulderSeamStudy.CertifiedPanelPair? shoulder=null)
     {
         ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
@@ -55,8 +56,12 @@ internal static class BodySeamProjection
             points.AddRange(relative.Select(c=>new BezierLengthBounds.Point(ax+dx*c.x-dy*c.y,ay+dy*c.x+dx*c.y)));
             points.Add(new(bx,by));geometries.Add((panel,index),points.ToArray());
         }
-        foreach(var e in fr.Edges)Register("right_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
-        foreach(var e in fl.Edges)Register("left_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+        if(shoulder is not null) {
+            foreach(var e in shoulder.Right.Concat(shoulder.Left))Register(e.Panel,e.Id,e.Kind,e.Ax,e.Ay,e.Bx,e.By,e.RelativeControls);
+        } else {
+            foreach(var e in fr.Edges)Register("right_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+            foreach(var e in fl.Edges)Register("left_ftorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
+        }
         if(right is null)foreach(var e in br.Edges)Register("right_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());
         else foreach(var e in right)Register(e.Panel,e.Id,e.Kind,e.Ax,e.Ay,e.Bx,e.By,e.RelativeControls);
         if(left is null)foreach(var e in bl.Edges)Register("left_btorso",e.Id,e.Kind,e.Start.X,e.Start.Y,e.End.X,e.End.Y,e.Controls.Select(c=>(c.X,c.Y)).ToArray());

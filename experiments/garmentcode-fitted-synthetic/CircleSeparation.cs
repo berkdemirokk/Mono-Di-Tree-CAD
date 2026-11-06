@@ -73,6 +73,38 @@ internal static class CircleSeparation
         for(int i=1;i<256;i++) {int sign=Evaluate(i).CompareTo(Zero);positive|=sign>0;negative|=sign<0;if(positive&&negative)return true;}
         return false;
     }
+    // Exact Bernstein certificate for F(t)=|B(t)-center|²-radius².
+    // It covers the entire supporting circle, hence is conservative for an
+    // arc. Only the original common endpoint may be zero. Budget exhaustion,
+    // an internal zero, or mixed signs fail closed.
+    internal static Verdict QuadraticEndpointProof(Point arcStart,Point arcEnd,double relativeY,IReadOnlyList<Point> controls,int maxDepth=16,int maxNodes=4096)
+    {
+        if(controls is null||controls.Count!=3||maxDepth<0||maxDepth>24||maxNodes<1||maxNodes>100000)throw new ArgumentException("Unsupported quadratic proof input");
+        var c=Circle(arcStart,arcEnd,relativeY);var p=controls.Select(Exact).ToArray();
+        bool start=Eq(p[0],c.start)||Eq(p[0],c.end),end=Eq(p[2],c.start)||Eq(p[2],c.end);
+        if(start==end)return Verdict.Unresolved;
+        var q=p.Select(v=>v-c.center).ToArray();int[] w2=[1,2,1],w4=[1,4,6,4,1];var coeff=new R[5];
+        for(int k=0;k<=4;k++) {
+            R sum=Zero;
+            for(int i=0;i<=2;i++) {int j=k-i;if(j is <0 or >2)continue;sum=sum+Dot(q[i],q[j])*new R(w2[i]*w2[j],w4[k]);}
+            coeff[k]=sum-c.radius2;
+        }
+        int sign=(start?coeff[^1]:coeff[0]).CompareTo(Zero);
+        if(sign==0 || (start?coeff[0]:coeff[^1]).CompareTo(Zero)!=0)return Verdict.Unresolved;
+        var stack=new Stack<(R[] coefficients,int depth,bool start,bool end)>();stack.Push((coeff,0,true,true));int visited=0;
+        while(stack.Count>0) {
+            if(++visited>maxNodes)return Verdict.Unresolved;
+            var (v,depth,first,last)=stack.Pop();
+            int lo=sign*v[0].CompareTo(Zero),hi=sign*v[^1].CompareTo(Zero);
+            if(lo<0||hi<0||lo==0&&!(start&&first)||hi==0&&!(end&&last))return Verdict.Unresolved;
+            if(v.All(x=>sign*x.CompareTo(Zero)>=0) && v.Any(x=>sign*x.CompareTo(Zero)>0))continue;
+            if(depth>=maxDepth)return Verdict.Unresolved;
+            var work=v.ToArray();var l=new R[5];var r=new R[5];l[0]=work[0];r[4]=work[4];
+            for(int level=1;level<5;level++) {for(int j=0;j<5-level;j++)work[j]=(work[j]+work[j+1])/Two;l[level]=work[0];r[4-level]=work[4-level];}
+            stack.Push((r,depth+1,false,last));stack.Push((l,depth+1,first,false));
+        }
+        return Verdict.OnlySharedEndpoint;
+    }
     internal static Verdict Compare(Point arcStart,Point arcEnd,double relativeY,IReadOnlyList<Point> controls,bool allowedEndpoint)
     {
         if(controls is null || controls.Count is <2 or >4)throw new ArgumentException("Invalid controls");
@@ -92,6 +124,10 @@ internal static class CircleSeparation
                 V p=aCommon?a:b,q=aCommon?b:a,v=q-p;R A=Dot(v,v),B=Two*Dot(p-circle.center,v);
                 if(A.CompareTo(Zero)>0 && (B.CompareTo(Zero)>=0 || (A+B).CompareTo(Zero)<0))return Verdict.OnlySharedEndpoint;
             }
+        }
+        if(allowedEndpoint && points.Length==3) {
+            var certified=QuadraticEndpointProof(arcStart,arcEnd,relativeY,controls);
+            if(certified==Verdict.OnlySharedEndpoint)return certified;
         }
         return Verdict.Unresolved;
     }

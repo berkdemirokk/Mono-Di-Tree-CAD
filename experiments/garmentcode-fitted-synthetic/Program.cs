@@ -138,6 +138,12 @@ try
     if(ExactBezierSeparation.Compare([new(-1,0),new(-.5,0),new(0,0)],[new(0,0),new(-.5,1),new(-1,-1)],true,12,2000)!=ExactBezierSeparation.Verdict.Unresolved)throw new Exception("Additional crossing falsely certified as endpoint only");
     if(!CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),.5,[new(0,.5),new(2,.5)]))throw new Exception("Minor arc crossing witness missed");
     if(CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),.5,[new(0,1),new(2,1)])||CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),-.5,[new(0,.5),new(2,.5)]))throw new Exception("Tangent or opposite arc falsely crossed");
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(-.5,.5),new(-1,0)])!=CircleSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Quadratic-circle endpoint proof");
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(2,2),new(-1,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Circle crossing falsely cleared");
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(1,1),new(2,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Two arc endpoints falsely cleared");
+    if(CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(2,0),new(3,0)])!=CircleSeparation.Verdict.Unresolved)throw new Exception("Additional circle intersection falsely cleared");
+    if(CircleSeparation.Compare(new(0,0),new(2,0),.5,[new(0,0),new(-.5,.5),new(-1,0)],false)==CircleSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Circle endpoint allowed without authorization");
+    try {CircleSeparation.QuadraticEndpointProof(new(0,0),new(2,0),.5,[new(0,0),new(-.5,.5),new(-1,0)],25,10);throw new Exception("Invalid proof depth accepted");}catch(ArgumentException) { }
     var oppositeA=new[]{new ExactBezierSeparation.Point(-2,-2),new ExactBezierSeparation.Point(0,0)};
     var oppositeB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,2)};
     if(ExactBezierSeparation.Compare(oppositeA,oppositeB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Opposite collinear endpoint proof");
@@ -549,12 +555,13 @@ internal static class Validator
         Need(one.ApproximateGap(one)==0&&one.Disjoint(two)&&one.ApproximateGap(two)==1&&two.ApproximateGap(one)==1,"projected gap diagnostic");
         foreach(string id in new[]{"synthetic-base","synthetic-distinct"})foreach(int direction in new[]{-1,1}) {
             var t=ShoulderSeamStudy.Create(id,1,direction);
-            Console.WriteLine($"shoulder exact research {id} direction={direction} right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)} deep arm={t.DeepRightArm}/{t.DeepLeftArm} arc crossing={t.RightArcCrossing}/{t.LeftArcCrossing}");
+            Console.WriteLine($"shoulder exact research {id} direction={direction} right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)} deep arm={t.DeepRightArm}/{t.DeepLeftArm} arc crossing={t.RightArcCrossing}/{t.LeftArcCrossing} arc proof={t.RightArcProof}/{t.LeftArcProof}");
             Need(t.Status=="unresolved"&&!t.Accepted&&!t.ProductionAllowed&&!t.ExportAllowed,"shoulder trial gate");
-            Need(t.RightTopology.Panel=="right_ftorso"&&t.LeftTopology.Panel=="left_ftorso"&&t.RightTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.LeftTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.RightTopology.NonMonotone==0&&t.LeftTopology.NonMonotone==0&&t.RightTopology.UnresolvedEdges.SequenceEqual(new[]{(1,2)})&&t.LeftTopology.UnresolvedEdges.SequenceEqual(new[]{(9,10)}),"shoulder reported contour changed");
+            Need(t.RightTopology.Panel=="right_ftorso"&&t.LeftTopology.Panel=="left_ftorso"&&t.RightTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.LeftTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.RightTopology.NonMonotone==0&&t.LeftTopology.NonMonotone==0&&t.RightTopology.Unresolved==0&&t.LeftTopology.Unresolved==0,"shoulder represented topology proof");
             Need(t.DeepRightArm==ExactBezierSeparation.Verdict.OnlySharedEndpoint&&t.DeepLeftArm==ExactBezierSeparation.Verdict.OnlySharedEndpoint&&!t.RightArcCrossing&&!t.LeftArcCrossing,"shoulder exact evidence changed");
+            Need(t.RightArcProof==CircleSeparation.Verdict.OnlySharedEndpoint&&t.LeftArcProof==CircleSeparation.Verdict.OnlySharedEndpoint,"shoulder neck exact certificate");
             try {t.RequireResearchComposition();throw new Exception("Shoulder trial composed");}catch(InvalidOperationException) { }
-            Console.WriteLine(FormattableString.Invariant($"{id} shoulder trial direction={direction}: front before=[{t.Before.ApproximateLowerCm:G10},{t.Before.ApproximateUpperCm:G10}] after=[{t.After.ApproximateLowerCm:G10},{t.After.ApproximateUpperCm:G10}], back=[{t.Back.ApproximateLowerCm:G10},{t.Back.ApproximateUpperCm:G10}], deviation={t.Displacement:G9} cm, unresolved right/left={t.RightTopology.Unresolved}/{t.LeftTopology.Unresolved}, nonmonotone right/left={t.RightTopology.NonMonotone}/{t.LeftTopology.NonMonotone}, pairs right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)}; rejected."));
+            Console.WriteLine(FormattableString.Invariant($"{id} shoulder trial direction={direction}: front before=[{t.Before.ApproximateLowerCm:G10},{t.Before.ApproximateUpperCm:G10}] after=[{t.After.ApproximateLowerCm:G10},{t.After.ApproximateUpperCm:G10}], back=[{t.Back.ApproximateLowerCm:G10},{t.Back.ApproximateUpperCm:G10}], deviation={t.Displacement:G9} cm, unresolved right/left={t.RightTopology.Unresolved}/{t.LeftTopology.Unresolved}, nonmonotone right/left={t.RightTopology.NonMonotone}/{t.LeftTopology.NonMonotone}, pairs right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)}; diagnostic only."));
         }
         try {ShoulderSeamStudy.Create("synthetic-base",0,1);throw new Exception("Zero curvature accepted");}catch(ArgumentException) { }
         try {ShoulderSeamStudy.Create("synthetic-base",1,0);throw new Exception("Invalid shoulder direction accepted");}catch(ArgumentException) { }
@@ -1095,6 +1102,16 @@ internal static class Validator
             foreach(var rule in changedGraph.After.Where(r=>r.RepresentedIntervalsDisjoint))
                 Console.WriteLine(FormattableString.Invariant($"{id} residual {rule.Kind}/{rule.Owner}/{rule.Index} midpoint A={((rule.A.ApproximateLower+rule.A.ApproximateUpper)/2):G17} B={((rule.B.ApproximateLower+rule.B.ApproximateUpper)/2):G17} approximate gap={rule.A.ApproximateGap(rule.B):G9} cm; exact disjoint=True"));
             for(int j=0;j<4;j++)Console.WriteLine(FormattableString.Invariant($"{id} waist part {new[]{"upper front","lower front","upper back","lower back"}[j]} before=[{changedGraph.WaistBefore[j].ApproximateLower:G10},{changedGraph.WaistBefore[j].ApproximateUpper:G10}] after=[{changedGraph.WaistAfter[j].ApproximateLower:G10},{changedGraph.WaistAfter[j].ApproximateUpper:G10}]"));
+            var shoulderGraph=CombinedGraphStudy.Create(id,reference,true);
+            Need(shoulderGraph.Status=="unresolved"&&!shoulderGraph.ExportAllowed&&!shoulderGraph.ProductionAllowed&&shoulderGraph.After.Count==23,"shoulder graph research gate");
+            Need(shoulderGraph.After.Count(r=>r.RepresentedIntervalsDisjoint)==(id=="synthetic-base"?8:6),"shoulder graph remaining differences changed");
+            foreach(var (a,b) in changedGraph.After.Zip(shoulderGraph.After)) {
+                Need(a.Owner==b.Owner&&a.Kind==b.Kind&&a.Index==b.Index,"shoulder graph identity");
+                bool affected=a.Kind=="BodiceHalf"&&a.Index==0&&(a.Owner=="left"||a.Owner=="right");
+                if(!affected)Need(a.A==b.A&&a.B==b.B,"shoulder changed unrelated seam");
+                Console.WriteLine(FormattableString.Invariant($"{id} shoulder graph {a.Kind}/{a.Owner}/{a.Index}: before A=[{a.A.ApproximateLower:G9},{a.A.ApproximateUpper:G9}] B=[{a.B.ApproximateLower:G9},{a.B.ApproximateUpper:G9}], after A=[{b.A.ApproximateLower:G9},{b.A.ApproximateUpper:G9}] B=[{b.B.ApproximateLower:G9},{b.B.ApproximateUpper:G9}], disjoint before/after={a.RepresentedIntervalsDisjoint}/{b.RepresentedIntervalsDisjoint}"));
+            }
+            try {shoulderGraph.RequireResearchComposition();throw new Exception("Shoulder graph composed");}catch(InvalidOperationException) { }
             try { typedGraph.RequireResearchComposition();throw new InvalidDataException("Unverified typed graph composed"); } catch(InvalidOperationException) { }
             var typedSide=typedGraph.Rules.Single(r=>r.Kind=="PencilSkirt" && r.Index==0);
             var sourceSideForTyped=sourceGraph.Single(r=>r.GetProperty("owner_type").GetString()=="PencilSkirt" && r.GetProperty("index").GetInt32()==0);

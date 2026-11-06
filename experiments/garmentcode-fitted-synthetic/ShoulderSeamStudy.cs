@@ -3,7 +3,7 @@ namespace FittedResearch;
 // Synthetic diagnostic, not a source-optimizer reconstruction or production geometry.
 internal static class ShoulderSeamStudy
 {
-    internal sealed record Result(BezierLengthBounds.Bounds Before,BezierLengthBounds.Bounds Back,BezierLengthBounds.Bounds After,double Displacement,BodyCurveStudy.Result RightTopology,BodyCurveStudy.Result LeftTopology,ExactBezierSeparation.Verdict DeepRightArm,ExactBezierSeparation.Verdict DeepLeftArm,bool RightArcCrossing,bool LeftArcCrossing)
+    internal sealed record Result(BezierLengthBounds.Bounds Before,BezierLengthBounds.Bounds Back,BezierLengthBounds.Bounds After,double Displacement,BodyCurveStudy.Result RightTopology,BodyCurveStudy.Result LeftTopology,ExactBezierSeparation.Verdict DeepRightArm,ExactBezierSeparation.Verdict DeepLeftArm,bool RightArcCrossing,bool LeftArcCrossing,CircleSeparation.Verdict RightArcProof,CircleSeparation.Verdict LeftArcProof)
     {
         // Diagnostic values only; there is no contour or accepted-candidate
         // property and this result can never authorize composition or output.
@@ -18,6 +18,20 @@ internal static class ShoulderSeamStudy
     static BodyCurveStudy.Edge Mirror(BodyCurveStudy.Edge e,int index)=>new("left_ftorso",index,e.Kind,-e.Bx,e.By,-e.Ax,e.Ay,Array.AsReadOnly(e.RelativeControls.Reverse().Select(c=>(1-c.X,c.Y)).ToArray()),e.ArcY);
     static bool Eq(BodyCurveStudy.Edge a,BodyCurveStudy.Edge b)=>a.Panel==b.Panel&&a.Id==b.Id&&a.Kind==b.Kind&&a.Ax==b.Ax&&a.Ay==b.Ay&&a.Bx==b.Bx&&a.By==b.By&&a.ArcY==b.ArcY&&a.RelativeControls.SequenceEqual(b.RelativeControls);
     internal static Result Create(string id,double limit,int direction)
+        =>CreateCore(id,limit,direction).Diagnostics;
+    // Internal fixed-family token: no caller-supplied contours and no export.
+    internal sealed class CertifiedPanelPair
+    {
+        private CertifiedPanelPair(string snapshot,IReadOnlyList<BodyCurveStudy.Edge> right,IReadOnlyList<BodyCurveStudy.Edge> left) {Snapshot=snapshot;Right=right;Left=left;}
+        internal string Snapshot { get; } internal IReadOnlyList<BodyCurveStudy.Edge> Right { get; } internal IReadOnlyList<BodyCurveStudy.Edge> Left { get; }
+        internal static CertifiedPanelPair Create(string id) {
+            var c=CreateCore(id,1,-1);var d=c.Diagnostics;
+            if(d.RightTopology.Unresolved!=0||d.LeftTopology.Unresolved!=0||d.RightTopology.NonMonotone!=0||d.LeftTopology.NonMonotone!=0||d.RightTopology.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented||d.LeftTopology.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented||d.RightArcProof!=CircleSeparation.Verdict.OnlySharedEndpoint||d.LeftArcProof!=CircleSeparation.Verdict.OnlySharedEndpoint)throw new ArgumentException("Shoulder topology not certified");
+            BodyCurveStudy.Edge Freeze(BodyCurveStudy.Edge e)=>e with {RelativeControls=Array.AsReadOnly(e.RelativeControls.ToArray())};
+            return new(SyntheticBodyCatalog.Create(id).Snapshot(ResearchDesign.PinnedFitted),Array.AsReadOnly(c.Right.Select(Freeze).ToArray()),Array.AsReadOnly(c.Left.Select(Freeze).ToArray()));
+        }
+    }
+    static (Result Diagnostics,IReadOnlyList<BodyCurveStudy.Edge> Right,IReadOnlyList<BodyCurveStudy.Edge> Left) CreateCore(string id,double limit,int direction)
     {
         if(id is not ("synthetic-base" or "synthetic-distinct")||!double.IsFinite(limit)||limit<0||limit>2||direction is not (-1 or 1))throw new ArgumentException("Unsupported shoulder experiment");
         var body=SyntheticBodyCatalog.Create(id);var design=ResearchDesign.PinnedFitted;
@@ -53,8 +67,13 @@ internal static class ShoulderSeamStudy
         }
         var deepRight=Deep(right[2],right[3]);var deepLeft=Deep(left[8],left[9]);
         var crossRight=Crossing(right[1],right[2]);var crossLeft=Crossing(left[10],left[9]);
-        // Do not expose or compose the trial contours, even when they happen
-        // to pass the represented-topology diagnostics in a future fixture.
-        return new(before,back,after,shift,rt,lt,deepRight,deepLeft,crossRight,crossLeft);
+        CircleSeparation.Verdict Proof(BodyCurveStudy.Edge arc,BodyCurveStudy.Edge curve) {
+            var p=BodyCurveStudy.BezierControls(curve) ?? throw new ArgumentException("Unsupported shoulder curve");
+            return CircleSeparation.QuadraticEndpointProof(new(arc.Ax,arc.Ay),new(arc.Bx,arc.By),arc.ArcY ?? throw new ArgumentException("Missing neck arc"),p.Select(x=>new CircleSeparation.Point(x.X,x.Y)).ToArray(),20,10000);
+        }
+        // The public diagnostic result contains no contours. The separate
+        // internal token factory checks all represented topology first.
+        var result=new Result(before,back,after,shift,rt,lt,deepRight,deepLeft,crossRight,crossLeft,Proof(right[1],right[2]),Proof(left[10],left[9]));
+        return (result,Array.AsReadOnly(right),Array.AsReadOnly(left));
     }
 }
