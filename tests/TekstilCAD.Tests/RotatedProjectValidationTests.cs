@@ -8,12 +8,13 @@ namespace TekstilCAD.Tests;
 
 public sealed class RotatedProjectValidationTests
 {
-    private static ProjectDocument Fixture()
+    private static ProjectDocument Fixture(bool experimental=false)
     {
         var piece=new PatternPiece { Points=[new(0,0),new(6,0),new(6,4),new(0,4)],
             Notches=[new NotchMark { VertexIndex=1,Position=new(6,0) }],
             Grainline=new Grainline { Start=new(1,1),End=new(1,2) },
             Metadata=new PieceMetadata { Role="Kesim",Material="Pamuk",Quantity=2 } };
+        if(experimental)piece.ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
         var source=new ProjectDocument { Pieces=[piece] };var angles=new Dictionary<(Guid,int),int> { [(piece.Id,1)]=0,[(piece.Id,2)]=90 };
         var result=PerCopyOrthogonalNesting.Arrange(source,[piece.Id],angles,100,1,100,0,GrainDirectionPolicy.Direction.TwoWay,90);
         var record=RotatedNestingRecord.Capture(source,[piece.Id],angles,result,GrainDirectionPolicy.Direction.TwoWay,90,100,1,0,100);
@@ -23,6 +24,28 @@ public sealed class RotatedProjectValidationTests
         return layout;
     }
 
+    [Fact]
+    public void ExperimentalRotatedHistoryRoundTripsAsVersion10AndRejectsLegacyEnvelope()
+    {
+        var layout=Fixture(true);var trace=layout.NestingSnapshot!.RotationTrace!;
+        Assert.All(trace.SourcePieces,p=>Assert.NotNull(p.ExperimentalALine));Assert.All(trace.LayoutPieces,p=>Assert.NotNull(p.ExperimentalALine));
+        Assert.All(layout.Pieces,p=>Assert.NotNull(p.ExperimentalALine));Assert.Equal(10,ProjectStorage.GetProjectFormatVersion(layout));
+        var folder=Path.Combine(Path.GetTempPath(),"rotated-experimental-"+Guid.NewGuid().ToString("N"));Directory.CreateDirectory(folder);
+        var path=Path.Combine(folder,"saved.tcad");
+        try
+        {
+            ProjectStorage.Save(layout,path);var loaded=ProjectStorage.Load(path);Assert.True(DocumentSession.ContentEquals(layout,loaded));
+            Assert.All(loaded.NestingSnapshot!.RotationTrace!.SourcePieces,p=>Assert.NotNull(p.ExperimentalALine));
+            var json=File.ReadAllText(path);var versionOffset=json.IndexOf("10,",StringComparison.Ordinal);Assert.True(versionOffset>=0);
+            var downgrade=json.Remove(versionOffset,2).Insert(versionOffset,"7");File.WriteAllText(Path.Combine(folder,"old.tcad"),downgrade);
+            Assert.Throws<InvalidDataException>(()=>ProjectStorage.Load(Path.Combine(folder,"old.tcad")));
+            foreach(var piece in layout.Pieces)piece.ExperimentalALine=null;
+            Assert.Equal(10,ProjectStorage.GetProjectFormatVersion(layout));
+            ProjectStorage.Save(layout,Path.Combine(folder,"historical.tcad"));
+            Assert.NotNull(ProjectStorage.Load(Path.Combine(folder,"historical.tcad")).NestingSnapshot!.RotationTrace!.SourcePieces[0].ExperimentalALine);
+        }
+        finally { Directory.Delete(folder,true); }
+    }
     [Fact]
     public void RecoveryCancellationBeforeEmbeddedV7ValidationPreservesBytes()
     {

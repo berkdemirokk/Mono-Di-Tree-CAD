@@ -82,7 +82,7 @@ public static class ProjectStorage
                     }
                     // Reject missing/unknown/duplicate trace fields before model
                     // constructors or JSON defaults can synthesize any values.
-                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(raw.GetRawText()),rotatedVisiblePoints,cancellationToken);
+                    RotatedNestingTraceCodec.ValidateRawStructure(Encoding.UTF8.GetBytes(raw.GetRawText()),rotatedVisiblePoints,cancellationToken,allowExperimental:version>=10);
                 }
                 ValidateSerializedImportProvenance(root[1], version);
                 ValidateSerializedPhotoTraceHistory(root[1],version,cancellationToken);
@@ -147,6 +147,9 @@ public static class ProjectStorage
                 throw new InvalidDataException("Deneysel A kesim kaydı eksik veya geçersiz.");
             new ALineExperimentalProvenance(algorithm.GetString()!,source.GetString()!,side.GetString()!).Validate();
         }
+        if(project.TryGetProperty("NestingSnapshot",out var nesting) && nesting.ValueKind==JsonValueKind.Object && nesting.TryGetProperty("RotationTrace",out var trace) && trace.ValueKind==JsonValueKind.Object)
+            foreach(var name in new[]{"SourcePieces","LayoutPieces"})
+                if(trace.TryGetProperty(name,out var history) && history.ValueKind==JsonValueKind.Array && history.EnumerateArray().Any(p=>p.ValueKind==JsonValueKind.Object && p.TryGetProperty("ExperimentalALine",out _)))found=true;
         if(version==10 && !found)throw new InvalidDataException("Sürüm 10 deneysel A kesim kaydı içermiyor.");
     }
     private static bool HasSerializedMetadata(JsonElement project) => project.TryGetProperty("Pieces", out var pieces) && pieces.ValueKind == JsonValueKind.Array && pieces.EnumerateArray().Any(p => p.ValueKind == JsonValueKind.Object && p.TryGetProperty("Metadata", out _));
@@ -466,7 +469,7 @@ public static class ProjectStorage
     public static int GetProjectFormatVersion(ProjectDocument project)
     {
         ArgumentNullException.ThrowIfNull(project);
-        return project.Pieces.Any(p=>p.ExperimentalALine is not null) ? 10
+        return project.Pieces.Any(p=>p.ExperimentalALine is not null) || project.NestingSnapshot?.RotationTrace is { } rotation && (rotation.SourcePieces.Any(p=>p.ExperimentalALine is not null) || rotation.LayoutPieces.Any(p=>p.ExperimentalALine is not null)) ? 10
             : project.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true ? 9
             : project.PhotoTraceHistory is not null ? 8
             : project.NestingSnapshot?.RotationTrace is not null ? 7

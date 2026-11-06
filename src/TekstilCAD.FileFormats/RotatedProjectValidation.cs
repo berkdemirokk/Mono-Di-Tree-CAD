@@ -37,6 +37,7 @@ internal static class RotatedProjectValidation
                piece.Notches is { } list && ((marks+=list.Count)>ProjectStorage.MaximumTotalPoints || list.Any(m=>m is null)) ||
                !WellFormed(piece.Name) || !WellFormed(piece.Metadata?.Role) || !WellFormed(piece.Metadata?.Size) || !WellFormed(piece.Metadata?.Material))
                 throw new InvalidDataException("Döndürme izi kaynak ve yerleşim sınırı veya metni geçersiz.");
+            piece.ExperimentalALine?.Validate();
         }
         try
         {

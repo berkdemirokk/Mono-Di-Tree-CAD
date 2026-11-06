@@ -51,7 +51,7 @@ public static class RotatedNestingTraceCodec
                 if(piece?.Points is null || piece.Points.Count>10_000 || (budgetVisible+=piece.Points.Count)>NestingEngine.MaximumTotalVertices)
                     throw new InvalidDataException("Görünür yerleşim nokta sınırı geçersiz.");
             }
-            ValidateRaw(json.RootElement,budgetVisible,token);
+            ValidateRaw(json.RootElement,budgetVisible,token,true);
             var trace=json.RootElement.Deserialize<RotatedNestingTrace>(Options) ?? throw new InvalidDataException("Döndürme izi boş.");
             token.ThrowIfCancellationRequested();return RotatedNestingRecord.FromTrace(trace,layout,token);
         }
@@ -59,16 +59,16 @@ public static class RotatedNestingTraceCodec
     }
 
     /// <summary>Checks raw fields before model defaults can be applied; geometry is verified separately.</summary>
-    public static void ValidateRawStructure(byte[] bytes,long visiblePointCount,CancellationToken token=default)
+    public static void ValidateRawStructure(byte[] bytes,long visiblePointCount,CancellationToken token=default,bool allowExperimental=false)
     {
         token.ThrowIfCancellationRequested();ArgumentNullException.ThrowIfNull(bytes);
         if(bytes.Length>MaximumBytes || visiblePointCount<0 || visiblePointCount>NestingEngine.MaximumTotalVertices)
             throw new InvalidDataException("Döndürme izi kaynak sınırı geçersiz.");
-        try { using var json=JsonDocument.Parse(bytes);ValidateRaw(json.RootElement,visiblePointCount,token); }
+        try { using var json=JsonDocument.Parse(bytes);ValidateRaw(json.RootElement,visiblePointCount,token,allowExperimental); }
         catch(JsonException ex) { throw new InvalidDataException("Döndürme izi JSON biçimi geçersiz.",ex); }
     }
 
-    private static void ValidateRaw(JsonElement root,long visiblePointCount,CancellationToken token)
+    private static void ValidateRaw(JsonElement root,long visiblePointCount,CancellationToken token,bool allowExperimental)
     {
         Fields(root,["Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","SourcePieces","LayoutPieces","Selections","Copies","FabricWidth","Gap","EdgeMargin","UsedLength","MaxLength","GrainDirection","ToleranceDegrees"]);
         foreach(var field in new[]{"Schema","Algorithm","TransformConvention","SourceFingerprint","LayoutFingerprint","GrainDirection"})String(root.GetProperty(field),128);
@@ -86,7 +86,7 @@ public static class RotatedNestingTraceCodec
         }
         foreach(var piece in sources.EnumerateArray().Concat(historical.EnumerateArray()))
         {
-            token.ThrowIfCancellationRequested();Fields(piece,["Id","Name","Points","Closed","Metadata","Grainline"],["Notches"]);
+            token.ThrowIfCancellationRequested();Fields(piece,["Id","Name","Points","Closed","Metadata","Grainline"],["Notches","ExperimentalALine"]);
             GuidValue(piece.GetProperty("Id"));String(piece.GetProperty("Name"),1024);Boolean(piece.GetProperty("Closed"));
             var points=piece.GetProperty("Points");Array(points,2,NestingEngine.MaximumVerticesPerPiece);
             if((total+=points.GetArrayLength())>NestingEngine.MaximumTotalVertices)throw new InvalidDataException("Kaynak ve yerleşim toplam nokta sınırını aşıyor.");
@@ -96,6 +96,13 @@ public static class RotatedNestingTraceCodec
             var quantity=metadata.GetProperty("Quantity");if(quantity.ValueKind!=JsonValueKind.Null)Integer(quantity);
             var grain=piece.GetProperty("Grainline");Fields(grain,["Start","End","NeedsReview"]);
             Point(grain.GetProperty("Start"));Point(grain.GetProperty("End"));Boolean(grain.GetProperty("NeedsReview"));
+            if(piece.TryGetProperty("ExperimentalALine",out var experimental))
+            {
+                if(!allowExperimental)throw new InvalidDataException("Deneysel A kesim izi için proje sürüm 10 gereklidir.");
+                Fields(experimental,["Algorithm","SourceSha256","Side"]);
+                String(experimental.GetProperty("Algorithm"),128);String(experimental.GetProperty("SourceSha256"),64);String(experimental.GetProperty("Side"),8);
+                new ALineExperimentalProvenance(experimental.GetProperty("Algorithm").GetString()!,experimental.GetProperty("SourceSha256").GetString()!,experimental.GetProperty("Side").GetString()!).Validate();
+            }
             if(piece.TryGetProperty("Notches",out var marks))
             {
                 Array(marks,1,points.GetArrayLength());
