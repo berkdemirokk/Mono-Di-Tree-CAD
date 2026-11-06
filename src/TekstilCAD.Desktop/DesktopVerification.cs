@@ -13832,8 +13832,41 @@ internal static partial class DesktopVerification
             typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);Check(prompts==2,"Saving existing version nine does not repeat the upgrade prompt",checks);
         }
         finally { studio.ChooseCompatibilityForVerification=null; }
+        VerifySaveDialogReentrancy(studio,path,work,checks);
     }
 
+    private static void VerifySaveDialogReentrancy(MainWindow studio,string v9Path,string work,List<string> checks)
+    {
+        var version=typeof(MainWindow).GetField("fileVersion",PrivateInstance)!;
+        var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!;
+        var target=Path.Combine(work,"v10-reentrant-"+Guid.NewGuid().ToString("N")+".tcad");
+        void OpenV9() { studio.OpenProjectFile(v9Path);studio.Select(studio.Document.Pieces[0].Id); }
+        void AddMarker()=>studio.Commit("V10 sırasında değişiklik",()=>studio.Document.Pieces[0].ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front"));
+        var original=File.ReadAllBytes(v9Path);
+        try
+        {
+            OpenV9();bool selectorReached=false;
+            studio.SavePathForVerification=_=> { selectorReached=true;return target; };
+            studio.ChooseCompatibilityForVerification=_=> { AddMarker();return MainWindow.GradingSaveChoice.SaveAs; };
+            studio.SaveAsForVerification();
+            Check(!selectorReached && !File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during compatibility confirmation",checks);
+            OpenV9();studio.ChooseCompatibilityForVerification=_=>MainWindow.GradingSaveChoice.SaveAs;
+            studio.SavePathForVerification=_=> { AddMarker();return target; };studio.SaveAsForVerification();
+            Check(!File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during target selection",checks);
+            OpenV9();File.WriteAllText(target,"önceki dosya");studio.SavePathForVerification=_=>target;
+            studio.ConfirmSaveReplacementForVerification=_=> { AddMarker();return true; };studio.SaveAsForVerification();
+            Check(File.ReadAllText(target)=="önceki dosya" && File.ReadAllBytes(v9Path).SequenceEqual(original),"Save As rejects a V9 to V10 change during replacement confirmation",checks);
+            OpenV9();File.Delete(target);studio.SavePathForVerification=_=> { AddMarker();return target; };studio.SaveNewCopyForVerification();
+            Check(!File.Exists(target) && File.ReadAllBytes(v9Path).SequenceEqual(original),"New copy rejects a V9 to V10 change during target selection",checks);
+            OpenV9();AddMarker();studio.ChooseCompatibilityForVerification=_=> { name.Text="Kaydedilmemiş taslak";return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(File.ReadAllBytes(v9Path).SequenceEqual(original) && studio.HasPendingCanvasOrPropertyWork && name.Text=="Kaydedilmemiş taslak", "Save rejects changes to pending fields during upgrade confirmation",checks);
+            OpenV9();AddMarker();studio.ChooseCompatibilityForVerification=_=> { version.SetValue(studio,new ProjectFileVersion(v9Path,new string('F',64)));return MainWindow.GradingSaveChoice.SaveCurrent; };
+            typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+            Check(File.ReadAllBytes(v9Path).SequenceEqual(original),"Save rejects source file version changes during upgrade confirmation",checks);
+        }
+        finally { studio.SavePathForVerification=null;studio.ConfirmSaveReplacementForVerification=null;studio.ChooseCompatibilityForVerification=null;studio.OpenProjectFile(v9Path);if(File.Exists(target))File.Delete(target); }
+    }
     private static void VerifyExperimentalSaveCompatibility(MainWindow studio,string work,List<string> checks)
     {
         var source=new PatternPiece { Name="Deneysel uyumluluk",Points=[new(0,0),new(10,0),new(0,10)] };

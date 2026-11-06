@@ -141,6 +141,7 @@ public class MainWindow : Window
     private bool dirty;
     private sealed record PropertyDraft(string Name, string X, string Y, string BaseName, double BaseX, double BaseY);
     private readonly Dictionary<Guid, PropertyDraft> propertyDrafts = [];
+    private long saveDraftRevision;
     internal bool HasPropertyDraftFor(Guid id) => propertyDrafts.ContainsKey(id);
     private bool HasUnsavedDocumentWork => dirty || propertyDrafts.Count > 0;
     private bool HasUnsavedWork => HasUnsavedDocumentWork || (canvas?.HasPendingDrawing ?? false);
@@ -1091,7 +1092,7 @@ public class MainWindow : Window
         saveState.Foreground = HasUnsavedWork ? StudioTheme.Warning : StudioTheme.Muted;
         saveState.ToolTip = recoveryClearFailed ? "Önceki kurtarma kaydı temizlenemedi ve korunuyor; Kaydet, yeni proje veya kapatma sırasında yeniden denenecek." : HasUnsavedWork ? "Otomatik kurtarma son başarılı kayıt zamanını gösterir; sonraki değişiklikler henüz kurtarma kaydında olmayabilir. Kalıcı kayıt için Kaydet'i kullanın." : filePath;
     }
-    internal void PendingDrawingChanged() { UpdateSaveState();UpdateFitCommand(); }
+    internal void PendingDrawingChanged() { saveDraftRevision++;UpdateSaveState();UpdateFitCommand(); }
     private void UpdateFitCommand()
     {
         if(fitCommand is not null)fitCommand.IsEnabled=(canvas?.HasPendingDrawing ?? false) || Document.Pieces.Any(piece=>piece.Points.Count>0);
@@ -1099,7 +1100,7 @@ public class MainWindow : Window
     private void CapturePropertyDraft()
     {
         if(syncing || Selected is not { Points.Count: >0 } piece)return;
-        var bounds=Geometry.Bounds(piece.Points);
+        saveDraftRevision++;var bounds=Geometry.Bounds(piece.Points);
         if(name.Text==piece.Name && x.Text==MeasurementInput.Format(bounds.MinX) && y.Text==MeasurementInput.Format(bounds.MinY)) propertyDrafts.Remove(piece.Id);
         else
         {
@@ -1980,6 +1981,17 @@ public class MainWindow : Window
             throw new InvalidOperationException("Proje açıldı, ancak görünüm yenilenemedi. Açılan proje ve dosya ilişkisi korundu; önceki çalışma geri getirilmedi. Ana çalışma alanını kontrol edin.",ex);
         }
     }
+    private sealed record SaveApprovalStamp(ProjectDocument Original,ProjectDocument Snapshot,Guid Epoch,Guid? Selection,string? Path,ProjectFileVersion? Version,long DraftRevision,Dictionary<Guid,PropertyDraft> Drafts,bool ActiveDrag,bool LargeVertex,bool LargeCompletion);
+    private SaveApprovalStamp CaptureSaveApproval()=>new(Document,Document.Clone(),projectEpoch,SelectedId,filePath,fileVersion,saveDraftRevision,new(propertyDrafts),canvas.HasActiveDragPreview,canvas.LargeVertexValidationRunning,canvas.LargeCompletionRunning);
+    private bool SaveApprovalCurrent(SaveApprovalStamp s)=>!windowClosed && projectEpoch==s.Epoch && ReferenceEquals(Document,s.Original) && DocumentSession.ContentEquals(s.Snapshot,Document) && SelectedId==s.Selection &&
+        filePath==s.Path && fileVersion==s.Version && saveDraftRevision==s.DraftRevision && canvas.HasActiveDragPreview==s.ActiveDrag && canvas.LargeVertexValidationRunning==s.LargeVertex && canvas.LargeCompletionRunning==s.LargeCompletion &&
+        propertyDrafts.Count==s.Drafts.Count && s.Drafts.All(pair=>propertyDrafts.TryGetValue(pair.Key,out var current) && ReferenceEquals(pair.Value,current));
+    private bool CheckSaveApproval(SaveApprovalStamp stamp)
+    { if(SaveApprovalCurrent(stamp))return true;SetStatus("Kayıt seçimi veya onayı sırasında proje ya da taslak değişti; dosya yazılmadı. Yeniden deneyin.");return false; }
+    internal Func<bool,string?>? SavePathForVerification { get; set; }
+    internal Func<string,bool>? ConfirmSaveReplacementForVerification { get; set; }
+    internal void SaveAsForVerification()=>SaveAs();
+    internal void SaveNewCopyForVerification()=>SaveNewCopy();
     private void Save()
     {
         EnsureNoActiveDrag();
@@ -1988,11 +2000,11 @@ public class MainWindow : Window
         if (filePath is null) { SaveAs(); return; }
         if ((Document.GradingRules.Count>0 && !savedFileHasGradingRules) || (Document.Pieces.Any(p=>p.Metadata is not null) && !savedFileHasMetadata) || (Document.NestingSnapshot is not null && !savedFileHasNestingSnapshot) || (Document.Pieces.Any(p=>p.Grainline is not null) && !savedFileHasGrainline) || (Document.ImportProvenance is not null && !savedFileHasImportProvenance) || (Document.Pieces.Any(p=>p.Notches is { Count:>0 }) && !savedFileHasNotches) || (Document.PhotoTraceHistory is { Count:>0 } && !savedFileHasPhotoTraceHistory) || (Document.PhotoTraceHistory?.Any(p=>p.AlgorithmVersion==2)==true && !savedFileHasPlaneTraceHistory) || (Document.Pieces.Any(p=>p.ExperimentalALine is not null) && !savedFileHasExperimentalALine))
         {
-            var snapshot=Document.Clone();var original=Document;var originalPath=filePath;
+            var approval=CaptureSaveApproval();
             var choice=ChooseGradingCompatibility(true);
             if(choice==GradingSaveChoice.Cancel)return;
-            if(!ReferenceEquals(original,Document) || originalPath!=filePath || !DocumentSession.ContentEquals(snapshot,Document)) { SetStatus("Uyumluluk onayı sırasında proje değişti; kayıt yapılmadı. Yeniden deneyin.");return; }
-            if(choice==GradingSaveChoice.SaveAs) { SaveAsCore(true); return; }
+            if(!CheckSaveApproval(approval))return;
+            if(choice==GradingSaveChoice.SaveAs) { SaveAsCore(true,approval); return; }
         }
         SaveTo(filePath);
     }
@@ -2045,10 +2057,14 @@ public class MainWindow : Window
     private void SaveNewCopy()
     {
         EnsureNoActiveDrag(); EnsureNoExport(); EnsureNoLargeVertexValidation();
+        var approval=CaptureSaveApproval();
         if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null)) && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
-        var dlg=new SaveFileDialog { Title="Yeni proje dosyası oluştur", Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+" - kopya.tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory(), OverwritePrompt=false };
-        if(dlg.ShowDialog(this)!=true)return;
-        SaveNewCopyTo(dlg.FileName);
+        if(!CheckSaveApproval(approval))return;
+        string? path;
+        if(SavePathForVerification is { } choose)path=choose(true);
+        else { var dlg=new SaveFileDialog { Title="Yeni proje dosyası oluştur", Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+" - kopya.tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory(), OverwritePrompt=false };path=dlg.ShowDialog(this)==true ? dlg.FileName : null; }
+        if(path is null || !CheckSaveApproval(approval))return;
+        SaveNewCopyTo(path);
     }
     internal void SaveNewCopyTo(string path)
     {
@@ -2067,22 +2083,27 @@ public class MainWindow : Window
             (canvas.HasPendingDrawing ? " Tamamlanmamış çizim kopyaya dahil değil; çizim çalışma alanında korunuyor." : ""));
     }
     private void SaveAs() => SaveAsCore(false);
-    private void SaveAsCore(bool compatibilityAcknowledged)
+    private void SaveAsCore(bool compatibilityAcknowledged,SaveApprovalStamp? approvedStamp=null)
     {
-        EnsureNoActiveDrag();
-        EnsureNoExport();
-        EnsureNoLargeVertexValidation();
+        EnsureNoActiveDrag();EnsureNoExport();EnsureNoLargeVertexValidation();
+        var approval=approvedStamp ?? CaptureSaveApproval();if(!CheckSaveApproval(approval))return;
         if((Document.GradingRules.Count>0 || Document.Pieces.Any(p=>p.Metadata is not null) || Document.NestingSnapshot is not null || Document.Pieces.Any(p=>p.Grainline is not null) || Document.ImportProvenance is not null || Document.Pieces.Any(p=>p.Notches is { Count:>0 }) || Document.PhotoTraceHistory is { Count:>0 } || Document.Pieces.Any(p=>p.ExperimentalALine is not null)) && !compatibilityAcknowledged && ChooseGradingCompatibility(false)==GradingSaveChoice.Cancel)return;
-        var dlg = new SaveFileDialog { Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+".tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory() };
-        if (dlg.ShowDialog(this) != true) return;
-        // Choosing “Farklı kaydet” in the compatibility dialog promises to
-        // preserve the currently open file, including under aliases.
+        if(!CheckSaveApproval(approval))return;
+        string? path;
+        if(SavePathForVerification is { } choose)path=choose(false);
+        else { var dlg=new SaveFileDialog { Filter="Mono Di Tree CAD proje (*.tcad)|*.tcad", DefaultExt=".tcad", FileName=SafeFileName(Document.Name)+".tcad", InitialDirectory=AppPaths.PrepareProjectsDirectory() };path=dlg.ShowDialog(this)==true ? dlg.FileName : null; }
+        if(path is null || !CheckSaveApproval(approval))return;
         var requireDistinctTarget=compatibilityAcknowledged && filePath is not null;
-        var expected=CaptureSaveAsDestination(dlg.FileName,requireDistinctTarget);
-        if(expected.Sha256 is not null && MessageBox.Show(this,
-            "Seçilen dosya bu projeyle değiştirilsin mi? Kayıt tamamlanana kadar aynı dosyayı başka uygulamalarda değiştirmeyin. Dosyayı korumak için farklı bir ad seçebilirsiniz.",
-            "Mevcut dosyayı değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)!=MessageBoxResult.Yes)return;
-        SaveAsTo(dlg.FileName,expected,requireDistinctTarget);
+        var expected=CaptureSaveAsDestination(path,requireDistinctTarget);
+        if(!CheckSaveApproval(approval))return;
+        if(expected.Sha256 is not null)
+        {
+            var accepted=ConfirmSaveReplacementForVerification?.Invoke(path) ?? (MessageBox.Show(this,
+                "Seçilen dosya bu projeyle değiştirilsin mi? Kayıt tamamlanana kadar aynı dosyayı başka uygulamalarda değiştirmeyin. Dosyayı korumak için farklı bir ad seçebilirsiniz.",
+                "Mevcut dosyayı değiştir",MessageBoxButton.YesNo,MessageBoxImage.Warning,MessageBoxResult.No)==MessageBoxResult.Yes);
+            if(!accepted || !CheckSaveApproval(approval))return;
+        }
+        SaveAsTo(path,expected,requireDistinctTarget);
     }
     private void ValidateSaveAsDestination(string path,bool requireDistinctTarget)
     {
