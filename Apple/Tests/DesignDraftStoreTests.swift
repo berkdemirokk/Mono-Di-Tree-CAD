@@ -1581,7 +1581,8 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, ipek; keten")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, bel çevresi 72 cm; bel çevresi 90 cm")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel çevresi 72 cm", waist: "90 cm")))
-        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel çevresi 72 cm; bel çevresi 720 mm", waist: "72,0 cm")), .wrap)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel çevresi 72 cm")), .wrap)
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum, uzun kollu; uzun kollu", notes: "bel çevresi 72 cm; bel çevresi 720 mm", waist: "72,0 cm")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "bel 72 cm")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "göğüs 92 cm")))
         XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("Anvelop elbise istiyorum", notes: "kalça 98 cm")))
@@ -1879,6 +1880,22 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft(text)), text)
             XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(draft(text)), text)
         }
+    }
+    func testModelSuggestionRejectsEquivalentAndConflictingRepeatedMeasurements() {
+        func draft(_ text: String, notes: String = "", waist: String = "") -> ExperimentalDesignBrief.Draft {
+            .init(style: .describe, description: text, bust: "", waist: waist, hips: "", length: "", otherMeasurements: notes, image: nil, imageName: nil)
+        }
+        for text in [
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve bel çevresi 720 mm",
+            "A kesim elbise istiyorum, bel çevresi 72 cm ve bel çevresi 90 cm"
+        ] {
+            let original = draft(text)
+            XCTAssertNil(ExperimentalDesignBrief.suggestedModel(original), text)
+            XCTAssertNil(ExperimentalDesignBrief.descriptionMeasurements(original), text)
+            XCTAssertEqual(original.description, text)
+        }
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum", notes: "bel çevresi 72 cm", waist: "720 mm")))
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, bel çevresi 72 cm ve kalça çevresi 100 cm")), .aline)
     }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
