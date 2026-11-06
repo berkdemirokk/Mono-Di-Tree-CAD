@@ -281,6 +281,7 @@ enum ExperimentalDesignBrief {
         let descriptionIsWhitespace: Bool
         let whitespaceMeasurementLabels: [String]
         let unitlessNumericMeasurementLabels: [String]
+        let ambiguousNumericMeasurementLabels: [String]
         static func isUnitlessNumber(_ value: String) -> Bool {
             guard value.utf16.count <= 32 else { return false }
             return value.range(of: #"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*\z"#, options: .regularExpression) != nil
@@ -306,6 +307,7 @@ enum ExperimentalDesignBrief {
             descriptionIsWhitespace = Self.isOnlyWhitespace(draft.description)
             whitespaceMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length), ("Ek ölçüler veya notlar", draft.otherMeasurements)].compactMap { label, value in Self.isOnlyWhitespace(value) ? label : nil }
             unitlessNumericMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length)].compactMap { label, value in Self.isUnitlessNumber(value) ? label : nil }
+            ambiguousNumericMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length)].compactMap { label, value in MeasurementMessageParser.isAmbiguousBasicField(value) ? label : nil }
         }
     }
     /// Short atelier overview; values remain user-authored and are never inferred.

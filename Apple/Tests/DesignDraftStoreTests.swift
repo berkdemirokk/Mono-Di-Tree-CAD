@@ -1788,6 +1788,24 @@ final class DesignDraftStoreTests: XCTestCase {
             XCTAssertNil(Summary.addingUnit(.cm, to: value), value)
         }
     }
+    func testAmbiguousFieldWarningSurvivesExplicitUnitSelection() {
+        typealias Summary = ExperimentalDesignBrief.RequestSummary
+        for bare in ["1,000", "1.000", "\u{00A0}999,999\u{00A0}"] {
+            XCTAssertTrue(MeasurementMessageParser.isAmbiguousBasicField(bare), bare)
+            for unit in [Summary.ExplicitUnit.cm, .mm] {
+                let withUnit = Summary.addingUnit(unit, to: bare)!
+                XCTAssertTrue(MeasurementMessageParser.isAmbiguousBasicField(withUnit), withUnit)
+            }
+        }
+        for value in ["72", "72 cm", "72,5 cm", "1000 mm", "1,000 cm değil", "1,000\ncm", ""] {
+            XCTAssertFalse(MeasurementMessageParser.isAmbiguousBasicField(value), value)
+        }
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "1,000 cm", waist: "72 cm", hips: "1.000", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        let summary = Summary(draft)
+        XCTAssertEqual(summary.ambiguousNumericMeasurementLabels, ["Göğüs çevresi", "Kalça çevresi"])
+        XCTAssertEqual(summary.unitlessNumericMeasurementLabels, ["Kalça çevresi"])
+        XCTAssertEqual(draft.bust, "1,000 cm"); XCTAssertEqual(draft.hips, "1.000")
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

@@ -2717,6 +2717,10 @@ private struct ExperimentalDesignBriefView: View {
         }
     }
     @ViewBuilder private func unitChoices(for label: String, value: Binding<String>) -> some View {
+        if MeasurementMessageParser.isAmbiguousBasicField(value.wrappedValue) {
+            Text("Bu sayı belirsiz: 1,000 hem 1 hem 1000 anlamına gelebilir. İstediğiniz sayıyı açıkça yazın; birim eklemek belirsizliği çözmez.")
+                .font(.caption).foregroundStyle(plum)
+        }
         if ExperimentalDesignBrief.RequestSummary.isUnitlessNumber(value.wrappedValue) {
             HStack(spacing: 8) {
                 ForEach([ExperimentalDesignBrief.RequestSummary.ExplicitUnit.cm, .mm], id: \.rawValue) { unit in
@@ -3835,6 +3839,11 @@ private struct ExperimentalDesignBriefView: View {
                         Text("Birim yazılmamış sayılar: \(summary.unitlessNumericMeasurementLabels.joined(separator: ", ")). Windows bu değerleri ölçü olarak tanımayabilir; cm veya mm eklemek için ölçüleri düzenleyin. Girdiler korunuyor.")
                             .foregroundStyle(plum)
                         Button("Birimleri düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
+                    }
+                    if !summary.ambiguousNumericMeasurementLabels.isEmpty {
+                        Text("Sayı gösterimi belirsiz alanlar: \(summary.ambiguousNumericMeasurementLabels.joined(separator: ", ")). Örneğin 1,000 hem 1 hem 1000 anlamına gelebilir. Sayıyı açıkça yazın; girdiler korunuyor.")
+                            .foregroundStyle(plum)
+                        Button("Belirsiz sayıları düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
                     }
                     if summary.measurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Ölçü alanı veya notu girilmedi; tarifteki ölçüler bu özete otomatik aktarılmaz.")

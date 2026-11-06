@@ -8,6 +8,14 @@ enum MeasurementMessageParser {
     static func isAmbiguousNumber(_ number: String) -> Bool {
         number.range(of: #"\A[0-9]{1,3}[.,][0-9]{3}\z"#, options: .regularExpression) != nil
     }
+    /// Recognize only a complete bare number or a number with cm/mm in a basic field.
+    static func isAmbiguousBasicField(_ value: String) -> Bool {
+        guard value.utf16.count <= 64,
+              let regex = try? NSRegularExpression(pattern: #"\A[\t\p{Zs}]*([0-9]{1,5}(?:[.,][0-9]{1,8})?)[\t\p{Zs}]*(?:cm|mm)?[\t\p{Zs}]*\z"#, options: [.caseInsensitive]),
+              let match = regex.firstMatch(in: value, range: NSRange(value.startIndex..., in: value)),
+              let range = Range(match.range(at: 1), in: value) else { return false }
+        return isAmbiguousNumber(String(value[range]))
+    }
     static func canonicalLabel(_ matched: String) -> String? {
         let label = matched.lowercased(with: Locale(identifier: "tr_TR")).split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         return supportedLabels.contains(label) ? label : nil
