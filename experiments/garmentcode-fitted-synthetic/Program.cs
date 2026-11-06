@@ -13,6 +13,7 @@ try
     MeasurementContractTests.Verify();
     MeasurementConsistencyTests.Verify();
     StructuredGarmentInputTests.Verify();
+    Validator.CheckSyntheticDependencies();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
     using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckShoulderTrials(); Validator.CheckSeamNumerics(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
@@ -557,6 +558,23 @@ internal static class Validator
             RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
         }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
+    internal static void CheckSyntheticDependencies()
+    {
+        var probe=SyntheticDependencyProbe.Run();var fields=ResearchMeasurements.FieldsFor(ResearchMeasurements.Operation.PinnedGarment);
+        Need(probe.Count==20&&probe.Select(x=>x.Field).SequenceEqual(fields)&&probe.All(x=>x.SnapshotChanged&&!x.Accepted&&!x.ExportAllowed&&!x.ProductionAllowed&&x.Status=="unresolved"),"synthetic dependency probe contract");
+        Need(probe.All(x=>x.Change==(x.Field is "shoulder_incl" or "hip_inclination"?1m:.1m))&&probe.All(x=>x.ChangedPanels.Distinct().Count()==x.ChangedPanels.Count),"synthetic dependency perturbation");
+        foreach(var row in probe)Console.WriteLine(FormattableString.Invariant($"synthetic dependency {row.Field}: delta={row.Change}, changed panels={string.Join(',',row.ChangedPanels)}; snapshot changed={row.SnapshotChanged}; diagnostic only."));
+        using var source=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.source-dependency-sweep.json")??throw new InvalidDataException("Missing dependency source trace");
+        using var reader=new StreamReader(source);string json=reader.ReadToEnd();using var doc=JsonDocument.Parse(json);SyntheticDependencyProbe.CompareSource(probe,doc.RootElement);
+        var duplicated=JsonNode.Parse(json)!;duplicated["cases"]![1]!["field"]=duplicated["cases"]![0]!["field"]!.GetValue<string>();
+        using(var bad=JsonDocument.Parse(duplicated.ToJsonString())) {try {SyntheticDependencyProbe.CompareSource(probe,bad.RootElement);throw new Exception("Duplicate dependency field accepted");}catch(InvalidDataException) { }}
+        var enlarged=JsonNode.Parse(json)!;var hips=enlarged["cases"]!.AsArray().Single(x=>x!["field"]!.GetValue<string>()=="hips")!;
+        hips["panel_deltas"]!["skirt_back"]!["endpoint_max_cm"]=.01;
+        using(var bad=JsonDocument.Parse(enlarged.ToJsonString())) {try {SyntheticDependencyProbe.CompareSource(probe,bad.RootElement);throw new Exception("Large source-only dependency accepted");}catch(InvalidDataException) { }}
+        var unbound=JsonNode.Parse(json)!;unbound["baseline_contour_equal_to_golden"]!["skirt_back"]=false;
+        using(var bad=JsonDocument.Parse(unbound.ToJsonString())) {try {SyntheticDependencyProbe.CompareSource(probe,bad.RootElement);throw new Exception("Unbound baseline accepted");}catch(InvalidDataException) { }}
+        Console.WriteLine("PASS: 20 finite source/C# dependency observations; two source-only changes below 1e-12 cm; research only.");
     }
     internal static void CheckSeamNumerics()
     {

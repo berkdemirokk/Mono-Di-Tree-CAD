@@ -1,0 +1,609 @@
+{
+  "source_commit": "d449629979028123a5c4dc9e732a2ec19b7fce31",
+  "fixture": "synthetic-base",
+  "numpy": "1.26.4",
+  "scipy": "1.17.1",
+  "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]",
+  "baseline_contour_equal_to_golden": {
+    "left_btorso": true,
+    "left_ftorso": true,
+    "right_btorso": true,
+    "right_ftorso": true,
+    "skirt_back": true,
+    "skirt_front": true
+  },
+  "cases": [
+    {
+      "field": "bust",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_ftorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "back_width",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.00039621228827473043
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.00039621228827473043
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.0002689115940679443,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.00026891159407860243,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "waist",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_ftorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03333333318850684,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03333333318850684,
+          "control_max": 0.0
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.00010040864721272413,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000001357918,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "waist_back_width",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.04128603248528506,
+          "control_max": 8.636338188149073e-05
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03333333276069794,
+          "control_max": 0.0
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.04128603248528506,
+          "control_max": 8.636338188149073e-05
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03333333276069794,
+          "control_max": 0.0
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.050000000888303475,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.0500000018078115,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "bust_points",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_ftorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000005500915,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000005500915,
+          "control_max": 0.0
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 1.7763568394002505e-14,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000010320704,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "shoulder_w",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0001760756286929982
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.051211041650013556,
+          "control_max": 6.301171356806745e-05
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.05000000000000071,
+          "control_max": 0.0001760756286929982
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.051211041650013556,
+          "control_max": 6.301171356806745e-05
+        }
+      }
+    },
+    {
+      "field": "shoulder_incl",
+      "delta": "1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1472298416507556,
+          "control_max": 0.00525667227465311
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.14722993083767477,
+          "control_max": 0.0018210765905470327
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1472298416507556,
+          "control_max": 0.00525667227465311
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.14722993083767477,
+          "control_max": 0.0018210765905470327
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.010070620829765176,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.010070620829802479,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "waist_line",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1003264454187196,
+          "control_max": 0.0
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1000000019615701,
+          "control_max": 0.0
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1003264454187196,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.1000000019615701,
+          "control_max": 0.0
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999204,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999204,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "waist_over_bust_line",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_ftorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.10000000112039942,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.10000000112039942,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "bust_line",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03344422227917754,
+          "control_max": 0.0
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.0333333310893682,
+          "control_max": 0.00016573321625137916
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03344422227917754,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.0333333310893682,
+          "control_max": 0.00016573321625137916
+        }
+      }
+    },
+    {
+      "field": "vert_bust_line",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06688949621792872,
+          "control_max": 0.0
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06666666310225366,
+          "control_max": 0.0003313038104062471
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06688949621792872,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06666666310225366,
+          "control_max": 0.0003313038104062471
+        }
+      }
+    },
+    {
+      "field": "bum_points",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "right_btorso",
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06748473684043432,
+          "control_max": 0.00012952809514958294
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06748473684043432,
+          "control_max": 0.00012952809514958294
+        },
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.0625,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 3.836955904290562e-05,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "neck_w",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.039999999999995595,
+          "control_max": 0.0007028812835750825
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999915,
+          "control_max": 0.0007514640716519139
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.039999999999995595,
+          "control_max": 0.0007028812835750825
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999915,
+          "control_max": 0.0007514640716519139
+        }
+      }
+    },
+    {
+      "field": "armscye_depth",
+      "delta": "0.1",
+      "changed_panels": [
+        "left_btorso",
+        "left_ftorso",
+        "right_btorso",
+        "right_ftorso"
+      ],
+      "panel_deltas": {
+        "left_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.11999998317568483,
+          "control_max": 0.0
+        },
+        "left_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.12000003306761542,
+          "control_max": 0.0
+        },
+        "right_btorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.11999998317568483,
+          "control_max": 0.0
+        },
+        "right_ftorso": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.12000003306761542,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "hips",
+      "delta": "0.1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 1.7763568394002505e-14,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.09999999999999432,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "hip_back_width",
+      "delta": "0.1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.10000000607710291,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.10000000335687886,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "hips_line",
+      "delta": "0.1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06500000000001194,
+          "control_max": 2.884184002738266e-10
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.06000000000000938,
+          "control_max": 2.188204062392174e-10
+        }
+      }
+    },
+    {
+      "field": "height",
+      "delta": "0.1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.04000000000000625,
+          "control_max": 4.927169783286445e-13
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999915,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "head_l",
+      "delta": "0.1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999204,
+          "control_max": 0.0
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.03999999999999204,
+          "control_max": 0.0
+        }
+      }
+    },
+    {
+      "field": "hip_inclination",
+      "delta": "1",
+      "changed_panels": [
+        "skirt_back",
+        "skirt_front"
+      ],
+      "panel_deltas": {
+        "skirt_back": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.21252928981949282,
+          "control_max": 0.004360988126551633
+        },
+        "skirt_front": {
+          "structure_changed": false,
+          "endpoint_max_cm": 0.2024088492894638,
+          "control_max": 0.00436098814354452
+        }
+      }
+    }
+  ]
+}
