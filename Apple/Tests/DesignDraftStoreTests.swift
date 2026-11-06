@@ -1806,6 +1806,15 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(summary.unitlessNumericMeasurementLabels, ["Kalça çevresi"])
         XCTAssertEqual(draft.bust, "1,000 cm"); XCTAssertEqual(draft.hips, "1.000")
     }
+    func testDisplayedModelSuggestionExampleIsActuallyRecognized() {
+        let text = ExperimentalDesignBrief.modelSuggestionExample
+        let draft = ExperimentalDesignBrief.Draft(style: .describe, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
+        XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft), .aline)
+        XCTAssertEqual(draft.description, text)
+        let uncertain = ExperimentalDesignBrief.Draft(style: .describe, description: text, bust: "", waist: "", hips: "", length: "", otherMeasurements: "eğer uygunsa", image: nil, imageName: nil)
+        XCTAssertNil(ExperimentalDesignBrief.suggestedModel(uncertain))
+        XCTAssertEqual(uncertain.description, text)
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

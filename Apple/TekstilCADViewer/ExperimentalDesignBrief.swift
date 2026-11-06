@@ -4,6 +4,7 @@ import ImageIO
 /// A user-authored request for manual review, not a generated pattern.
 enum ExperimentalDesignBrief {
     enum Error: Swift.Error { case missingContent, invalidText, invalidImage, pendingALineGuide, pendingMeasurementForm }
+    static let modelSuggestionExample = "A kesim elbise istiyorum, midi, uzun kollu."
     static let maxTextUnits = 16_384
     static let maxImageBytes = 8 * 1024 * 1024
     /// Ephemeral navigation only; never included in a draft or request.

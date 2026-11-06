@@ -3593,13 +3593,13 @@ private struct ExperimentalDesignBriefView: View {
                         focusedBriefSection = .models
                     }
                         .frame(minHeight: 44).accessibilityHint("Model kartlarına kaydırır.")
-                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: A kesim, midi boy ve uzun kollu bir elbise istiyorum.").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: \(ExperimentalDesignBrief.modelSuggestionExample)").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                     Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
                     Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
                     if !measurementMessageStatus.isEmpty { Text(measurementMessageStatus).font(.caption) }
-                    Text("Tek bir model adı veya ‘A kesim elbise istiyorum, uzun kollu’ gibi açık bir ifade aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin.").font(.caption)
+                    Text("Tek bir açık model adı aranır. Öneriyi onaylamadan tüm ifadenizi kontrol edin; öneri olmadan da tarifinizle devam edebilirsiniz.").font(.caption)
                     if !modelSuggestionStatus.isEmpty { Text(modelSuggestionStatus).font(.caption) }
                     ScrollView(.horizontal) {
                         HStack { ForEach(["Midi boy", "Balon kol", "Gizli pens", "V yaka", "Astar payı dahil"], id: \.self) { tag in
