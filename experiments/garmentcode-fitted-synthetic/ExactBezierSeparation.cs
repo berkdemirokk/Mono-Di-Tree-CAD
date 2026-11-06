@@ -65,13 +65,15 @@ internal static class ExactBezierSeparation
     static bool EndpointOnly(Curve a,Curve b)
     {
         var p=a.C[^1];if(p.X.CompareTo(b.C[0].X)!=0||p.Y.CompareTo(b.C[0].Y)!=0)return false;
+        int scale=a.C.Concat(b.C).SelectMany(v=>new[]{v.X.Scale,v.Y.Scale}).Max();
+        BigInteger N(Q q)=>q.N<<(scale-q.Scale);
         // For two represented line segments, exact integer cross/dot products
         // prove the common endpoint is their sole intersection. Build() uses
         // one common dyadic scale; these predicates never convert to double.
         if(a.C.Length==2 && b.C.Length==2)
         {
             var u=a.C[0];var v=b.C[1];
-            BigInteger ux=u.X.N-p.X.N,uy=u.Y.N-p.Y.N,vx=v.X.N-p.X.N,vy=v.Y.N-p.Y.N;
+            BigInteger ux=N(u.X)-N(p.X),uy=N(u.Y)-N(p.Y),vx=N(v.X)-N(p.X),vy=N(v.Y)-N(p.Y);
             if((!ux.IsZero||!uy.IsZero) && (!vx.IsZero||!vy.IsZero))
             {
                 BigInteger cross=ux*vy-uy*vx,dot=ux*vx+uy*vy;
@@ -92,23 +94,41 @@ internal static class ExactBezierSeparation
             Q value=axis(p);var l=a.C[..^1].Select(axis).Select(x=>x.CompareTo(value)).ToArray();var r=b.C[1..].Select(axis).Select(x=>x.CompareTo(value)).ToArray();
             return l.All(x=>x<=0)&&r.All(x=>x>=0)&&(l[0]<0||r[^1]>0) || l.All(x=>x>=0)&&r.All(x=>x<=0)&&(l[0]>0||r[^1]<0);
         }
-        return Axis(v=>v.X)||Axis(v=>v.Y);
+        if(Axis(v=>v.X)||Axis(v=>v.Y))return true;
+        // A separator through the shared point need not align with X or Y.
+        // Align represented dyadic controls to one integer scale, including
+        // controls created by subdivision. Use exact integer cross products
+        // against each control-point ray: both
+        // control polygons must lie in opposite closed half-planes, and one
+        // far endpoint must be strictly off the separator. The earlier Away
+        // test ensures neither curve can return to the shared point.
+        var left=a.C[..^1];var right=b.C[1..];
+        foreach(var ray in left.Concat(right)) {
+            var dx=N(ray.X)-N(p.X);var dy=N(ray.Y)-N(p.Y);
+            if(dx.IsZero&&dy.IsZero)continue;
+            BigInteger Cross(V v)=>dx*(N(v.Y)-N(p.Y))-dy*(N(v.X)-N(p.X));
+            var l=left.Select(Cross).ToArray();var r=right.Select(Cross).ToArray();
+            if(l.All(x=>x.Sign<=0)&&r.All(x=>x.Sign>=0)&&(l[0].Sign<0||r[^1].Sign>0) ||
+               l.All(x=>x.Sign>=0)&&r.All(x=>x.Sign<=0)&&(l[0].Sign>0||r[^1].Sign<0))return true;
+        }
+        return false;
     }
     internal static Verdict Compare(IReadOnlyList<Point> first,IReadOnlyList<Point> second,bool allowedEndpoint,int maxDepth=18,int maxPairs=10000)
     {
         if(maxDepth is <0 or >24 || maxPairs is <1 or >100000)throw new ArgumentOutOfRangeException(nameof(maxDepth));
         var a=Build(first);var b=Build(second);
         if(allowedEndpoint && EndpointOnly(a,b))return Verdict.OnlySharedEndpoint;
-        var pending=new Stack<(Curve a,Curve b)>();pending.Push((a,b));int visited=0;
+        var pending=new Stack<(Curve a,Curve b)>();pending.Push((a,b));int visited=0;bool shared=false;
         while(pending.Count>0)
         {
             if(++visited>maxPairs)return Verdict.Unresolved;
             var pair=pending.Pop();if(Disjoint(pair.a,pair.b))continue;
+            if(allowedEndpoint&&pair.a.C[^1].X.CompareTo(a.C[^1].X)==0&&pair.a.C[^1].Y.CompareTo(a.C[^1].Y)==0&&EndpointOnly(pair.a,pair.b)) {shared=true;continue;}
             if(pair.a.Depth>=maxDepth && pair.b.Depth>=maxDepth)return Verdict.Unresolved;
             if(pair.a.Depth<=pair.b.Depth && pair.a.Depth<maxDepth || pair.b.Depth>=maxDepth)
             { var (l,r)=Split(pair.a);pending.Push((l,pair.b));pending.Push((r,pair.b)); }
             else { var (l,r)=Split(pair.b);pending.Push((pair.a,l));pending.Push((pair.a,r)); }
         }
-        return Verdict.Separated;
+        return shared?Verdict.OnlySharedEndpoint:Verdict.Separated;
     }
 }

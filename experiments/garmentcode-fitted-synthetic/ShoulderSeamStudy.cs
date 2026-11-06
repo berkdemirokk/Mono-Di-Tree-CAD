@@ -3,7 +3,7 @@ namespace FittedResearch;
 // Synthetic diagnostic, not a source-optimizer reconstruction or production geometry.
 internal static class ShoulderSeamStudy
 {
-    internal sealed record Result(BezierLengthBounds.Bounds Before,BezierLengthBounds.Bounds Back,BezierLengthBounds.Bounds After,double Displacement,BodyCurveStudy.Result RightTopology,BodyCurveStudy.Result LeftTopology)
+    internal sealed record Result(BezierLengthBounds.Bounds Before,BezierLengthBounds.Bounds Back,BezierLengthBounds.Bounds After,double Displacement,BodyCurveStudy.Result RightTopology,BodyCurveStudy.Result LeftTopology,ExactBezierSeparation.Verdict DeepRightArm,ExactBezierSeparation.Verdict DeepLeftArm,bool RightArcCrossing,bool LeftArcCrossing)
     {
         // Diagnostic values only; there is no contour or accepted-candidate
         // property and this result can never authorize composition or output.
@@ -42,8 +42,19 @@ internal static class ShoulderSeamStudy
             if(i!=9&&!Eq(left[i],expected))throw new ArgumentException("Unexpected front change");
         }
         var rt=BodyCurveStudy.Inspect("right_ftorso",right,12);var lt=BodyCurveStudy.Inspect("left_ftorso",left,12);
+        ExactBezierSeparation.Verdict Deep(BodyCurveStudy.Edge a,BodyCurveStudy.Edge b) {
+            var first=BodyCurveStudy.BezierControls(a) ?? throw new ArgumentException("Unsupported deep shoulder curve");
+            var second=BodyCurveStudy.BezierControls(b) ?? throw new ArgumentException("Unsupported deep shoulder curve");
+            return ExactBezierSeparation.Compare(first,second,true,24,100000);
+        }
+        bool Crossing(BodyCurveStudy.Edge arc,BodyCurveStudy.Edge curve) {
+            var p=BodyCurveStudy.BezierControls(curve) ?? throw new ArgumentException("Unsupported shoulder curve");
+            return CircleSeparation.ProveMinorArcCrossing(new(arc.Ax,arc.Ay),new(arc.Bx,arc.By),arc.ArcY ?? throw new ArgumentException("Missing neck arc"),p.Select(x=>new CircleSeparation.Point(x.X,x.Y)).ToArray());
+        }
+        var deepRight=Deep(right[2],right[3]);var deepLeft=Deep(left[8],left[9]);
+        var crossRight=Crossing(right[1],right[2]);var crossLeft=Crossing(left[10],left[9]);
         // Do not expose or compose the trial contours, even when they happen
         // to pass the represented-topology diagnostics in a future fixture.
-        return new(before,back,after,shift,rt,lt);
+        return new(before,back,after,shift,rt,lt,deepRight,deepLeft,crossRight,crossLeft);
     }
 }

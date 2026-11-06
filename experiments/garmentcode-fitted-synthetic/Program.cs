@@ -132,6 +132,12 @@ try
     var angledA=new[]{new ExactBezierSeparation.Point(2,3),new ExactBezierSeparation.Point(0,0)};
     var angledB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(3,2)};
     if(ExactBezierSeparation.Compare(angledA,angledB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Angled dart endpoint proof");
+    var obliqueA=new[]{new ExactBezierSeparation.Point(2,3),new ExactBezierSeparation.Point(1,2),new ExactBezierSeparation.Point(0,0)};
+    var obliqueB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,1),new ExactBezierSeparation.Point(3,2)};
+    if(ExactBezierSeparation.Compare(obliqueA,obliqueB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Oblique half-plane proof");
+    if(ExactBezierSeparation.Compare([new(-1,0),new(-.5,0),new(0,0)],[new(0,0),new(-.5,1),new(-1,-1)],true,12,2000)!=ExactBezierSeparation.Verdict.Unresolved)throw new Exception("Additional crossing falsely certified as endpoint only");
+    if(!CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),.5,[new(0,.5),new(2,.5)]))throw new Exception("Minor arc crossing witness missed");
+    if(CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),.5,[new(0,1),new(2,1)])||CircleSeparation.ProveMinorArcCrossing(new(0,0),new(2,0),-.5,[new(0,.5),new(2,.5)]))throw new Exception("Tangent or opposite arc falsely crossed");
     var oppositeA=new[]{new ExactBezierSeparation.Point(-2,-2),new ExactBezierSeparation.Point(0,0)};
     var oppositeB=new[]{new ExactBezierSeparation.Point(0,0),new ExactBezierSeparation.Point(2,2)};
     if(ExactBezierSeparation.Compare(oppositeA,oppositeB,true)!=ExactBezierSeparation.Verdict.OnlySharedEndpoint)throw new Exception("Opposite collinear endpoint proof");
@@ -543,10 +549,10 @@ internal static class Validator
         Need(one.ApproximateGap(one)==0&&one.Disjoint(two)&&one.ApproximateGap(two)==1&&two.ApproximateGap(one)==1,"projected gap diagnostic");
         foreach(string id in new[]{"synthetic-base","synthetic-distinct"})foreach(int direction in new[]{-1,1}) {
             var t=ShoulderSeamStudy.Create(id,1,direction);
+            Console.WriteLine($"shoulder exact research {id} direction={direction} right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)} deep arm={t.DeepRightArm}/{t.DeepLeftArm} arc crossing={t.RightArcCrossing}/{t.LeftArcCrossing}");
             Need(t.Status=="unresolved"&&!t.Accepted&&!t.ProductionAllowed&&!t.ExportAllowed,"shoulder trial gate");
-            var rightExpected=direction==-1?new[]{(1,2)}:new[]{(1,2),(2,3)};
-            var leftExpected=direction==-1?new[]{(9,10)}:new[]{(8,9),(9,10)};
-            Need(t.RightTopology.Panel=="right_ftorso"&&t.LeftTopology.Panel=="left_ftorso"&&t.RightTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.LeftTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.RightTopology.NonMonotone==0&&t.LeftTopology.NonMonotone==0&&t.RightTopology.Unresolved==rightExpected.Length&&t.LeftTopology.Unresolved==leftExpected.Length&&t.RightTopology.UnresolvedEdges.SequenceEqual(rightExpected)&&t.LeftTopology.UnresolvedEdges.SequenceEqual(leftExpected),"shoulder reported unresolved pairs changed");
+            Need(t.RightTopology.Panel=="right_ftorso"&&t.LeftTopology.Panel=="left_ftorso"&&t.RightTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.LeftTopology.Closure==BodyCurveStudy.ClosureEvidence.ClosedRepresented&&t.RightTopology.NonMonotone==0&&t.LeftTopology.NonMonotone==0&&t.RightTopology.UnresolvedEdges.SequenceEqual(new[]{(1,2)})&&t.LeftTopology.UnresolvedEdges.SequenceEqual(new[]{(9,10)}),"shoulder reported contour changed");
+            Need(t.DeepRightArm==ExactBezierSeparation.Verdict.OnlySharedEndpoint&&t.DeepLeftArm==ExactBezierSeparation.Verdict.OnlySharedEndpoint&&!t.RightArcCrossing&&!t.LeftArcCrossing,"shoulder exact evidence changed");
             try {t.RequireResearchComposition();throw new Exception("Shoulder trial composed");}catch(InvalidOperationException) { }
             Console.WriteLine(FormattableString.Invariant($"{id} shoulder trial direction={direction}: front before=[{t.Before.ApproximateLowerCm:G10},{t.Before.ApproximateUpperCm:G10}] after=[{t.After.ApproximateLowerCm:G10},{t.After.ApproximateUpperCm:G10}], back=[{t.Back.ApproximateLowerCm:G10},{t.Back.ApproximateUpperCm:G10}], deviation={t.Displacement:G9} cm, unresolved right/left={t.RightTopology.Unresolved}/{t.LeftTopology.Unresolved}, nonmonotone right/left={t.RightTopology.NonMonotone}/{t.LeftTopology.NonMonotone}, pairs right={string.Join(';',t.RightTopology.UnresolvedEdges)} left={string.Join(';',t.LeftTopology.UnresolvedEdges)}; rejected."));
         }

@@ -51,6 +51,28 @@ internal static class CircleSeparation
         V c=new((aa*(mid.Y-b.Y)+mm*(b.Y-a.Y)+bb*(a.Y-mid.Y))/cross,(aa*(b.X-mid.X)+mm*(a.X-b.X)+bb*(mid.X-a.X))/cross);
         return(c,Dot(a-c,a-c),a,b);
     }
+    // Sufficient crossing witness for a minor arc: the entire Bezier control
+    // hull lies on the arc's chord side, and two exact dyadic-parameter points
+    // have strictly opposite signs of the supporting-circle equation. By
+    // continuity an interior point lies on the circle and on the selected arc.
+    // False means no proof, not separation.
+    internal static bool ProveMinorArcCrossing(Point arcStart,Point arcEnd,double relativeY,IReadOnlyList<Point> controls)
+    {
+        if(!double.IsFinite(relativeY)||relativeY==0||Math.Abs(relativeY)>.5||controls is null||controls.Count is <2 or >4)throw new ArgumentException("Unsupported arc crossing input");
+        var c=Circle(arcStart,arcEnd,relativeY);var p=controls.Select(Exact).ToArray();var chord=c.end-c.start;
+        R Cross(V a,V b)=>a.X*b.Y-a.Y*b.X;
+        int side=Math.Sign(relativeY);
+        var sides=p.Select(v=>side*Cross(chord,v-c.start).CompareTo(Zero)).ToArray();
+        if(sides.Any(s=>s<0)||!sides.Any(s=>s>0))return false;
+        R Evaluate(int i) {
+            var t=new R(i,256);var u=One-t;var values=p.ToArray();
+            for(int n=values.Length-1;n>0;n--)for(int j=0;j<n;j++)values[j]=values[j]*u+values[j+1]*t;
+            var v=values[0]-c.center;return Dot(v,v)-c.radius2;
+        }
+        bool positive=false,negative=false;
+        for(int i=1;i<256;i++) {int sign=Evaluate(i).CompareTo(Zero);positive|=sign>0;negative|=sign<0;if(positive&&negative)return true;}
+        return false;
+    }
     internal static Verdict Compare(Point arcStart,Point arcEnd,double relativeY,IReadOnlyList<Point> controls,bool allowedEndpoint)
     {
         if(controls is null || controls.Count is <2 or >4)throw new ArgumentException("Invalid controls");
