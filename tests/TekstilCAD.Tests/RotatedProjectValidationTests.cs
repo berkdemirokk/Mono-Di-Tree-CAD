@@ -36,10 +36,23 @@ public sealed class RotatedProjectValidationTests
         {
             ProjectStorage.Save(layout,path);var loaded=ProjectStorage.Load(path);Assert.True(DocumentSession.ContentEquals(layout,loaded));
             Assert.All(loaded.NestingSnapshot!.RotationTrace!.SourcePieces,p=>Assert.NotNull(p.ExperimentalALine));
-            var json=File.ReadAllText(path);
+            static PhotoTraceProvenance Photo(bool plane)
+            {
+                Point2[] corners=[new(10,10),new(90,10),new(80,90),new(20,90)];Point2[] pixels=[new(25,25),new(70,25),new(70,70)];
+                var points=(plane ? PhotoPlaneRectification.Convert(100,100,corners,200,150,pixels) :
+                    PhotoTraceCalibration.Convert(100,100,200,200,corners[0],corners[1],200,pixels)).ToList();
+                return new PhotoTraceProvenance { AlgorithmVersion=plane ? 2 : 1,PieceId=Guid.NewGuid(),SourceSha256=new string('B',64),SourceByteLength=500,SourceOrientation=1,
+                    SourceWidth=200,SourceHeight=200,PreviewWidth=100,PreviewHeight=100,ReferenceStart=corners[0],ReferenceEnd=corners[1],ReferenceLengthMm=200,
+                    PlaneCalibration=plane ? new PhotoPlaneCalibration { Corners=corners.ToList(),WidthMm=200,HeightMm=150 } : null,TracePixels=pixels.ToList(),GeneratedPoints=points };
+            }
             foreach(var oldVersion in new[]{7,8,9})
             {
-                var node=JsonNode.Parse(json)!.AsArray();node[0]=oldVersion;
+                var clean=Fixture(false);var restricted=Fixture(true);
+                if(oldVersion>=8) { var photo=Photo(oldVersion==9);clean.PhotoTraceHistory=[photo.Clone()];restricted.PhotoTraceHistory=[photo.Clone()]; }
+                var cleanPath=Path.Combine(folder,"valid-"+oldVersion+".tcad");ProjectStorage.Save(clean,cleanPath);
+                Assert.Equal(oldVersion,ProjectStorage.GetProjectFormatVersion(clean));Assert.True(DocumentSession.ContentEquals(clean,ProjectStorage.Load(cleanPath)));
+                var versioned=Path.Combine(folder,"v10-"+oldVersion+".tcad");ProjectStorage.Save(restricted,versioned);
+                var node=JsonNode.Parse(File.ReadAllText(versioned))!.AsArray();node[0]=oldVersion;
                 foreach(var visible in node[1]!["Pieces"]!.AsArray())visible!.AsObject().Remove("ExperimentalALine");
                 var oldPath=Path.Combine(folder,"old-"+oldVersion+".tcad");File.WriteAllText(oldPath,node.ToJsonString());
                 var error=Assert.Throws<InvalidDataException>(()=>ProjectStorage.Load(oldPath));Assert.Contains("sürüm 10",error.Message);

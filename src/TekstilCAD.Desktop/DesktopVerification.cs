@@ -13888,13 +13888,14 @@ internal static partial class DesktopVerification
                 var path=Path.Combine(work,"historical-upgrade-"+previousVersion+"-"+Guid.NewGuid().ToString("N")+".tcad");
                 ProjectStorage.Save(input,path);Check(ProjectStorage.GetProjectFormatVersion(input)==previousVersion,"Historical fixture starts in expected old version",checks);
                 var before=File.ReadAllBytes(path);studio.OpenProjectFile(path);
-                studio.Commit("Tarihsel deneysel kaynak",()=> {
+                void MarkHistory()=>studio.Commit("Tarihsel deneysel kaynak",()=> {
                     var history=studio.Document.NestingSnapshot!.RotationTrace!;
                     foreach(var p in history.SourcePieces.Concat(history.LayoutPieces))p.ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front");
                     history.SourceFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.SourcePieces });
                     history.LayoutFingerprint=NestingSnapshot.ComputeLayoutFingerprint(new ProjectDocument { Pieces=history.LayoutPieces });
                     studio.Document.NestingSnapshot.LayoutFingerprint=history.LayoutFingerprint;
                 });
+                MarkHistory();
                 Check(studio.Document.Pieces.All(p=>p.ExperimentalALine is null) && MainWindow.RequiresExperimentalFormat(studio.Document),
                     "Historical-only marker selects the version 10 compatibility notice",checks);
                 var prompts=0;bool selector=false;studio.ChooseCompatibilityForVerification=_=> { prompts++;return MainWindow.GradingSaveChoice.Cancel; };
@@ -13902,9 +13903,32 @@ internal static partial class DesktopVerification
                 typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);studio.SaveAsForVerification();
                 Check(prompts==2 && !selector && File.ReadAllBytes(path).SequenceEqual(before),
                     "Save and Save As cancellation preserve the old project when only historical provenance requires version 10",checks);
+                Check(MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple"),
+                    "Historical-only compatibility warning identifies version 10 and older readers",checks);
+                var occupied=Path.Combine(work,"history-occupied-"+Guid.NewGuid().ToString("N")+".tcad");File.WriteAllText(occupied,"korunacak hedef");
+                var targetBytes=File.ReadAllBytes(occupied);bool replacementAsked=false;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;return existing ? MainWindow.GradingSaveChoice.SaveCurrent : MainWindow.GradingSaveChoice.SaveAs; };
+                studio.SavePathForVerification=_=>occupied;studio.ConfirmSaveReplacementForVerification=_=> { replacementAsked=true;return false; };
+                studio.SaveAsForVerification();
+                Check(replacementAsked && File.ReadAllBytes(occupied).SequenceEqual(targetBytes) && File.ReadAllBytes(path).SequenceEqual(before),
+                    "Declining an existing Save As target preserves both files",checks);
+                bool copyConflict=false;try { studio.SaveNewCopyForVerification(); } catch(IOException) { copyConflict=true; }
+                Check(copyConflict && File.ReadAllBytes(occupied).SequenceEqual(targetBytes) && File.ReadAllBytes(path).SequenceEqual(before),
+                    "New copy cannot overwrite an existing target",checks);
+                var newPath=Path.Combine(work,"history-approved-"+Guid.NewGuid().ToString("N")+".tcad");
+                studio.SavePathForVerification=_=>newPath;studio.SaveAsForVerification();
+                Check(File.Exists(newPath) && File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(newPath))==10 &&
+                    DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(newPath)),
+                    "Approved historical-only Save As writes reopenable version 10 without changing the original",checks);
+                studio.OpenProjectFile(path);MarkHistory();var beforeSavePrompts=prompts;
+                typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
+                Check(prompts==beforeSavePrompts+1 && !File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(path))==10 &&
+                    DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
+                    "Approved historical-only Save writes reopenable version 10 after existing-file confirmation",checks);
+                File.Delete(occupied);File.Delete(newPath);
             }
         }
-        finally { studio.ChooseCompatibilityForVerification=null;studio.SavePathForVerification=null; }
+        finally { studio.ChooseCompatibilityForVerification=null;studio.SavePathForVerification=null;studio.ConfirmSaveReplacementForVerification=null; }
     }
     private static void VerifyExperimentalSaveCompatibility(MainWindow studio,string work,List<string> checks)
     {
