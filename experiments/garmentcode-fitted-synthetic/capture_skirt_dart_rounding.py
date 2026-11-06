@@ -11,6 +11,9 @@ with contextlib.redirect_stdout(io.StringIO()):
 # manifest. Tracing only observes already-running source code and never patches it.
 source_file = (env['root'] / 'pygarment/garmentcode/operators.py').resolve()
 golden = json.loads((env['here'] / 'golden.json').read_text(encoding='utf-8-sig'))
+fixture_ids = [c['id'] for c in golden['cases']]
+if len(fixture_ids) != 2 or len(set(fixture_ids)) != 2 or set(fixture_ids) != {'synthetic-base','synthetic-distinct'}:
+    raise RuntimeError('Unexpected or duplicate source fixture cases')
 expected = {c['id']: c for c in golden['cases']}
 
 

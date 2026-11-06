@@ -9,9 +9,11 @@ PIN='d449629979028123a5c4dc9e732a2ec19b7fce31'
 def verify(trace,fixture):
     if trace['source_commit']!=PIN or fixture['source_commit']!=PIN:
         raise ValueError('unexpected source commit')
-    originals={case['id']:case for case in fixture['cases']}
-    if set(originals)!={'synthetic-base','synthetic-distinct'} or {c['id'] for c in trace['cases']}!=set(originals):
+    fixture_cases=fixture['cases'];trace_cases=trace['cases'];expected={'synthetic-base','synthetic-distinct'}
+    fixture_ids=[case['id'] for case in fixture_cases];trace_ids=[case['id'] for case in trace_cases]
+    if len(fixture_ids)!=2 or len(set(fixture_ids))!=2 or set(fixture_ids)!=expected or len(trace_ids)!=2 or len(set(trace_ids))!=2 or set(trace_ids)!=expected:
         raise ValueError('unexpected fixture set')
+    originals={case['id']:case for case in fixture_cases}
     for case in trace['cases']:
         source=originals[case['id']]
         if len(case['calls'])!=4 or {c['source_rule_index'] for c in case['calls']}!={0,1,2,3}:
@@ -56,4 +58,20 @@ if __name__=='__main__':
     try: verify(altered,fixture)
     except ValueError: pass
     else: raise RuntimeError('wrong source identity accepted')
+    altered=json.loads(json.dumps(trace));altered['cases'].append(altered['cases'][0])
+    try: verify(altered,fixture)
+    except ValueError: pass
+    else: raise RuntimeError('duplicate trace case accepted')
+    altered_fixture=json.loads(json.dumps(fixture));altered_fixture['cases'].append(altered_fixture['cases'][0])
+    try: verify(trace,altered_fixture)
+    except ValueError: pass
+    else: raise RuntimeError('duplicate source fixture case accepted')
+    altered=json.loads(json.dumps(trace));altered['cases'][1]=altered['cases'][0]
+    try: verify(altered,fixture)
+    except ValueError: pass
+    else: raise RuntimeError('duplicate two-case trace accepted')
+    altered_fixture=json.loads(json.dumps(fixture));altered_fixture['cases'][1]=altered_fixture['cases'][0]
+    try: verify(trace,altered_fixture)
+    except ValueError: pass
+    else: raise RuntimeError('duplicate two-case fixture accepted')
     print('PASS: eight synthetic source dart traces, exact snap arithmetic and negative cases')
