@@ -13,7 +13,7 @@ try
     MeasurementContractTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
-    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckShoulderTrials(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
+    using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckShoulderTrials(); Validator.CheckSeamNumerics(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
     var changed=JsonNode.Parse(content)!; changed["cases"]![0]!["panels"]!.AsObject().First().Value!["edges"]![0]!["samples"]![0]![0]=12345;
     using var corrupt=JsonDocument.Parse(changed.ToJsonString());
     try { Validator.Check(corrupt.RootElement); throw new Exception("Tampered curve accepted"); } catch(InvalidDataException) { }
@@ -555,6 +555,20 @@ internal static class Validator
             RejectSourceSide(key,expected,x=>{var edges=x["edges"]!.AsArray();var first=edges[0]!.DeepClone();var second=edges[1]!.DeepClone();edges[0]=second;edges[1]=first;});
         }
         Console.WriteLine($"{reference.GetProperty("id").GetString()} source 5 mm endpoint family: front≈[{result.front.ApproximateLowerCm:G10},{result.front.ApproximateUpperCm:G10}], back≈[{result.back.ApproximateLowerCm:G10},{result.back.ApproximateUpperCm:G10}] cm, disjoint; fixture only.");
+    }
+    internal static void CheckSeamNumerics()
+    {
+        var one=new ProjectedLengthBounds.Interval(1,1,1);var two=new ProjectedLengthBounds.Interval(2,2,1);var wide=new ProjectedLengthBounds.Interval(1,3,1);
+        Need(SeamNumericalStudy.Classify(one,two,1)==SeamNumericalStudy.Verdict.Within,"numerical equality at boundary");
+        Need(SeamNumericalStudy.Classify(one,two,.5)==SeamNumericalStudy.Verdict.Outside,"numerical outside band");
+        Need(SeamNumericalStudy.Classify(wide,two,.5)==SeamNumericalStudy.Verdict.Unresolved,"overlapping interval must remain unresolved");
+        Need(SeamNumericalStudy.Classify(two,wide,1)==SeamNumericalStudy.Verdict.Within,"numerical band symmetry");
+        try {SeamNumericalStudy.Classify(one,two,double.NaN);throw new Exception("Invalid numerical band accepted");}catch(ArgumentException) { }
+        try {SeamNumericalStudy.Classify(new ProjectedLengthBounds.Interval(1,1,0),two,1);throw new Exception("Invalid interval accepted");}catch(ArgumentException) { }
+        try {SeamNumericalStudy.Evaluate(Array.Empty<BodySeamProjection.Lengths>(),1);throw new Exception("Incomplete seam set accepted");}catch(ArgumentException) { }
+        var duplicate=Enumerable.Range(0,23).Select(_=>new BodySeamProjection.Lengths("owner","kind",0,one,two)).ToArray();
+        try {SeamNumericalStudy.Evaluate(duplicate,1);throw new Exception("Duplicate seam set accepted");}catch(ArgumentException) { }
+        try {BodySeamProjection.Calculate(SyntheticBodyCatalog.Create("synthetic-base"),ResearchDesign.PinnedFitted,11);throw new Exception("Invalid refinement accepted");}catch(ArgumentException) { }
     }
     internal static void CheckShoulderTrials()
     {
@@ -1112,6 +1126,16 @@ internal static class Validator
             for(int j=0;j<4;j++)Console.WriteLine(FormattableString.Invariant($"{id} waist part {new[]{"upper front","lower front","upper back","lower back"}[j]} before=[{changedGraph.WaistBefore[j].ApproximateLower:G10},{changedGraph.WaistBefore[j].ApproximateUpper:G10}] after=[{changedGraph.WaistAfter[j].ApproximateLower:G10},{changedGraph.WaistAfter[j].ApproximateUpper:G10}]"));
             var shoulderGraph=CombinedGraphStudy.Create(id,reference,true);
             Need(shoulderGraph.Status=="unresolved"&&!shoulderGraph.ExportAllowed&&!shoulderGraph.ProductionAllowed&&shoulderGraph.After.Count==23,"shoulder graph research gate");
+            var numerical=SeamNumericalStudy.Evaluate(shoulderGraph.After,1e-4);
+            Need(numerical.Findings.Count==23&&numerical.Status=="unresolved"&&!numerical.Accepted&&!numerical.ExportAllowed&&!numerical.ProductionAllowed,"numerical research gate");
+            Need(numerical.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Within)==21&&numerical.Findings.Where(f=>f.Assessment==SeamNumericalStudy.Verdict.Unresolved).Select(f=>(f.Kind,f.Owner,f.Index)).ToHashSet().SetEquals(new[]{("BodiceHalf","left",1),("BodiceHalf","right",1)}),"coarse numerical result changed");
+            try {numerical.RequireResearchComposition();throw new Exception("Numerical seams composed");}catch(InvalidOperationException) { }
+            Console.WriteLine($"{id} numerical seam band=0.0001 cm within={numerical.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Within)}, outside={numerical.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Outside)}, unresolved={numerical.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Unresolved)}; diagnostic only.");
+            foreach(var item in numerical.Findings.Where(f=>f.Assessment!=SeamNumericalStudy.Verdict.Within))Console.WriteLine($"{id} numerical seam {item.Kind}/{item.Owner}/{item.Index}: {item.Assessment}");
+            var refinedGraph=CombinedGraphStudy.Create(id,reference,true,9);var refined=SeamNumericalStudy.Evaluate(refinedGraph.After,1e-4);
+            Need(refined.Findings.All(f=>f.Assessment==SeamNumericalStudy.Verdict.Within)&&!refined.Accepted&&!refined.ProductionAllowed&&!refined.ExportAllowed,"refined numerical result changed");
+            Need(numerical.Findings.Zip(refined.Findings).All(p=>p.First.Owner==p.Second.Owner&&p.First.Kind==p.Second.Kind&&p.First.Index==p.Second.Index&&(p.First.Assessment!=SeamNumericalStudy.Verdict.Within||p.Second.Assessment==SeamNumericalStudy.Verdict.Within)),"numerical refinement regressed a certified rule");
+            Console.WriteLine($"{id} refined numerical seam depth=9 within={refined.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Within)}, outside={refined.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Outside)}, unresolved={refined.Findings.Count(f=>f.Assessment==SeamNumericalStudy.Verdict.Unresolved)}; diagnostic only.");
             Need(shoulderGraph.After.Count(r=>r.RepresentedIntervalsDisjoint)==(id=="synthetic-base"?8:6),"shoulder graph remaining differences changed");
             foreach(var remaining in shoulderGraph.After.Where(r=>r.RepresentedIntervalsDisjoint)) {
                 var dart=typedGraph.Rules.Single(r=>r.Owner==remaining.Owner&&r.Kind==remaining.Kind&&r.Index==remaining.Index);

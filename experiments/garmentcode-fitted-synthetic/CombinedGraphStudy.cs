@@ -32,7 +32,7 @@ internal static class CombinedGraphStudy
             return new(SyntheticBodyCatalog.Create(id).Snapshot(ResearchDesign.PinnedFitted),Array.AsReadOnly(right),Array.AsReadOnly(left),shoulder?ShoulderSeamStudy.CertifiedPanelPair.Create(id):null);
         }
     }
-    internal static Result Create(string id,JsonElement reference,bool shoulder=false)
+    internal static Result Create(string id,JsonElement reference,bool shoulder=false,int projectionDepth=6)
     {
         if(id is not ("synthetic-base" or "synthetic-distinct") || reference.GetProperty("id").GetString()!=id)throw new ArgumentException("Unsupported source fixture identity");
         var body=SyntheticBodyCatalog.Create(id);var design=ResearchDesign.PinnedFitted;var graph=BodySeamStudy.Calculate(body,design);
@@ -57,7 +57,7 @@ internal static class CombinedGraphStudy
         }
         var after=BodyCurveStudy.Inspect("left_btorso",left,13);
         if(after.Closure!=BodyCurveStudy.ClosureEvidence.ClosedRepresented||after.Unresolved!=0||after.NonMonotone!=0)throw new ArgumentException("Left transformed topology unresolved");
-        var before=BodySeamProjection.Calculate(body,design);var projected=BodySeamProjection.CalculateChanged(body,design,graph,verified);
+        var before=BodySeamProjection.Calculate(body,design,projectionDepth);var projected=BodySeamProjection.CalculateChanged(body,design,graph,verified,projectionDepth);
         if(before.Rules.Count!=23||projected.Rules.Count!=23)throw new ArgumentException("Incomplete graph projection");
         foreach(var (a,b) in before.Rules.Zip(projected.Rules))if(a.Owner!=b.Owner||a.Kind!=b.Kind||a.Index!=b.Index)throw new ArgumentException("Projection identity mismatch");
         foreach(var (a,b) in before.Rules.Zip(projected.Rules)) {

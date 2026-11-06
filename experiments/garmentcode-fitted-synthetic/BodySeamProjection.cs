@@ -19,17 +19,18 @@ internal static class BodySeamProjection
         public string Status=>"unresolved";public bool ExportAllowed=>false;public bool ProductionAllowed=>false;
         public void RequireResearchComposition()=>throw new InvalidOperationException("Unverified seam lengths; composition blocked.");
     }
-    internal static UnverifiedResult Calculate(IResearchPatternBody body,ResearchDesign design)
-        =>CalculateCore(body,design,null,null,null);
-    internal static UnverifiedResult CalculateChanged(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph graph,CombinedGraphStudy.VerifiedPanels panels)
+    internal static UnverifiedResult Calculate(IResearchPatternBody body,ResearchDesign design,int depth=6)
+        =>CalculateCore(body,design,null,null,null,null,depth);
+    internal static UnverifiedResult CalculateChanged(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph graph,CombinedGraphStudy.VerifiedPanels panels,int depth=6)
     {
         ArgumentNullException.ThrowIfNull(panels);
         if(panels.Snapshot!=body.Snapshot(design))throw new ArgumentException("Changed panels belong to another body snapshot");
         if(panels.Shoulder is { } shoulder && shoulder.Snapshot!=panels.Snapshot)throw new ArgumentException("Shoulder snapshot differs");
-        return CalculateCore(body,design,graph,panels.Right,panels.Left,panels.Shoulder);
+        return CalculateCore(body,design,graph,panels.Right,panels.Left,panels.Shoulder,depth);
     }
-    static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left,ShoulderSeamStudy.CertifiedPanelPair? shoulder=null)
+    static UnverifiedResult CalculateCore(IResearchPatternBody body,ResearchDesign design,BodySeamStudy.UnverifiedGraph? supplied,IReadOnlyList<BodyCurveStudy.Edge>? right,IReadOnlyList<BodyCurveStudy.Edge>? left,ShoulderSeamStudy.CertifiedPanelPair? shoulder,int depth)
     {
+        if(depth is <0 or >10)throw new ArgumentException("Unsupported numerical refinement depth");
         ResearchBody.RequireSupported(body);
         ArgumentNullException.ThrowIfNull(body);ArgumentNullException.ThrowIfNull(design);
         var graph=BodySeamStudy.Calculate(body,design);
@@ -81,7 +82,7 @@ internal static class BodySeamProjection
             for(int i=0;i<side.Edges.Count;i++) {
                 var e=side.Edges[i];var key=(e.Panel,e.Edge);
                 if(!geometries.TryGetValue(key,out var points))throw new ArgumentException("Unsupported seam edge geometry");
-                if(!cache.TryGetValue(key,out var bound)) { bound=BezierLengthBounds.Enclose(points,6);cache.Add(key,bound); }
+                if(!cache.TryGetValue(key,out var bound)) { bound=BezierLengthBounds.Enclose(points,points.Length==2?0:depth);cache.Add(key,bound); }
                 total=ProjectedLengthBounds.Interval.Add(total,ProjectedLengthBounds.Project(bound,coefficients[i]));
             }
             return total;
