@@ -11113,7 +11113,7 @@ internal static partial class DesktopVerification
                 "Manual photo draft participates in undo and redo",checks);
             var closureContext=SynchronizationContext.Current;SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(workspace.Dispatcher));
             var closureOwner=new Window { Owner=workspace };
-            var photoClosure=workspace.CreatePhotoTraceClosure(closureRequested,closureOwner)!;
+            var photoClosure=workspace.CreatePhotoTraceClosure(closureRequested ?? throw new InvalidOperationException("Photo closure source was not requested."),closureOwner)!;
             try
             {
                 Check(ReferenceEquals(photoClosure.Owner,closureOwner) && !photoClosure.IsVisible && workspace.CreatePhotoTraceClosure(Guid.NewGuid(),closureOwner) is null && DocumentSession.ContentEquals(added,workspace.Document),
