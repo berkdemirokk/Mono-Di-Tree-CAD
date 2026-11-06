@@ -280,6 +280,11 @@ enum ExperimentalDesignBrief {
         var hasPendingMeasurements: Bool { hasPendingMeasurementForm || hasPendingALineGuide }
         let descriptionIsWhitespace: Bool
         let whitespaceMeasurementLabels: [String]
+        let unitlessNumericMeasurementLabels: [String]
+        static func isUnitlessNumber(_ value: String) -> Bool {
+            guard value.utf16.count <= 32 else { return false }
+            return value.range(of: #"\A[\t\p{Zs}]*[0-9]{1,5}(?:[.,][0-9]{1,8})?[\t\p{Zs}]*\z"#, options: .regularExpression) != nil
+        }
         static func isOnlyWhitespace(_ value: String) -> Bool {
             !value.isEmpty && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
@@ -295,6 +300,7 @@ enum ExperimentalDesignBrief {
             hasPendingALineGuide = draft.aLineGuideInput != nil
             descriptionIsWhitespace = Self.isOnlyWhitespace(draft.description)
             whitespaceMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length), ("Ek ölçüler veya notlar", draft.otherMeasurements)].compactMap { label, value in Self.isOnlyWhitespace(value) ? label : nil }
+            unitlessNumericMeasurementLabels = [("Göğüs çevresi", draft.bust), ("Bel çevresi", draft.waist), ("Kalça çevresi", draft.hips), ("Elbise boyu", draft.length)].compactMap { label, value in Self.isUnitlessNumber(value) ? label : nil }
         }
     }
     /// Short atelier overview; values remain user-authored and are never inferred.

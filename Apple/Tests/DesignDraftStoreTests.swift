@@ -1767,6 +1767,19 @@ final class DesignDraftStoreTests: XCTestCase {
         navigation.didChangeStep(to: 0); navigation.didChangeStep(to: 3)
         XCTAssertEqual(navigation.previousStep(from: 3), 2)
     }
+    func testUnitlessBasicMeasurementsAreFlaggedWithoutChangingInput() {
+        let draft = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "92", waist: " 72,5 ", hips: "98 cm", length: "110 mm", otherMeasurements: "kol 60", image: nil, imageName: nil)
+        let summary = ExperimentalDesignBrief.RequestSummary(draft)
+        XCTAssertEqual(summary.unitlessNumericMeasurementLabels, ["Göğüs çevresi", "Bel çevresi"])
+        XCTAssertEqual(draft.bust, "92"); XCTAssertEqual(draft.waist, " 72,5 ")
+        XCTAssertTrue(summary.measurements.contains("92")); XCTAssertTrue(summary.measurements.contains("72,5"))
+        for text in ["", " ", "72 cm", "72 mm", "yaklaşık 72", "72?", "72\ncm"] {
+            XCTAssertFalse(ExperimentalDesignBrief.RequestSummary.isUnitlessNumber(text), text)
+        }
+        for text in ["72", " 72,5 ", "1,000", "\u{00A0}98\u{00A0}"] {
+            XCTAssertTrue(ExperimentalDesignBrief.RequestSummary.isUnitlessNumber(text), text)
+        }
+    }
     func testV2EmptyPromptAndModelLines() throws {
         let empty = ExperimentalDesignBrief.Draft(style: .aline, description: "", bust: "", waist: "", hips: "", length: "", otherMeasurements: "", image: nil, imageName: nil)
         let emptyResult = try ExperimentalDesignBrief.portableDraft(ExperimentalDesignBrief.makeV2(empty))

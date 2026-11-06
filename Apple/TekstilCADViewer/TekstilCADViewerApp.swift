@@ -3653,6 +3653,11 @@ private struct ExperimentalDesignBriefView: View {
                         TextField("Örn. 110 cm", text: referenceTracked($length)).accessibilityLabel("Elbise boyu, birimiyle").focused($focusedInput, equals: .length)
                     }
 
+                    let unitlessLabels = ExperimentalDesignBrief.RequestSummary(draft).unitlessNumericMeasurementLabels
+                    if !unitlessLabels.isEmpty {
+                        Text("Birim yazılmamış sayılar: \(unitlessLabels.joined(separator: ", ")). Değerleri cm veya mm ile tamamlayın; Windows birimsiz sayıları ölçü olarak tanımayabilir. Girdiler değiştirilmedi.")
+                            .font(.caption).foregroundStyle(plum)
+                    }
                     Button(image == nil ? "Görsel eklemeden isteği gözden geçir" : "Seçili görselle isteği gözden geçir") {
                         guard !referenceBlocksClose, !draftTransition else { return }
                         focusedInput = nil; message = ""; reviewNavigation.enterFromMeasurements(); step = 3
@@ -3806,6 +3811,11 @@ private struct ExperimentalDesignBriefView: View {
                     }
                     if !summary.whitespaceMeasurementLabels.isEmpty {
                         Text("Yalnız boşluk içeren alanlar: \(summary.whitespaceMeasurementLabels.joined(separator: ", ")). Ölçüleri düzenleyin; ham metin korunuyor.").foregroundStyle(.secondary)
+                    }
+                    if !summary.unitlessNumericMeasurementLabels.isEmpty {
+                        Text("Birim yazılmamış sayılar: \(summary.unitlessNumericMeasurementLabels.joined(separator: ", ")). Windows bu değerleri ölçü olarak tanımayabilir; cm veya mm eklemek için ölçüleri düzenleyin. Girdiler korunuyor.")
+                            .foregroundStyle(plum)
+                        Button("Birimleri düzenle") { focusedInput = nil; step = 1 }.frame(minHeight: 44)
                     }
                     if summary.measurements.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("Ölçü alanı veya notu girilmedi; tarifteki ölçüler bu özete otomatik aktarılmaz.")
