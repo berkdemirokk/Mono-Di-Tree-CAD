@@ -13916,11 +13916,14 @@ internal static partial class DesktopVerification
                 Check(copyConflict && File.ReadAllBytes(occupied).SequenceEqual(targetBytes) && File.ReadAllBytes(path).SequenceEqual(before),
                     "New copy cannot overwrite an existing target",checks);
                 var newPath=Path.Combine(work,"history-approved-"+Guid.NewGuid().ToString("N")+".tcad");
-                studio.SavePathForVerification=_=>newPath;studio.SaveAsForVerification();
-                Check(File.Exists(newPath) && File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(newPath))==10 &&
+                var beforeSaveAsPrompts=prompts;bool saveAsWarning=false,saveAsSelector=false;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;saveAsWarning=!existing && MainWindow.RequiresExperimentalFormat(studio.Document) && MainWindow.ExperimentalALineCompatibilityNotice.Contains("sürüm 10") && MainWindow.ExperimentalALineCompatibilityNotice.Contains("Apple");return MainWindow.GradingSaveChoice.SaveAs; };
+                studio.SavePathForVerification=isCopy=> { saveAsSelector=!isCopy;return newPath; };studio.SaveAsForVerification();
+                Check(prompts==beforeSaveAsPrompts+1 && saveAsWarning && saveAsSelector && File.Exists(newPath) && File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(newPath))==10 &&
                     DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(newPath)),
                     "Approved historical-only Save As writes reopenable version 10 without changing the original",checks);
                 studio.OpenProjectFile(path);MarkHistory();var beforeSavePrompts=prompts;
+                studio.ChooseCompatibilityForVerification=existing=> { prompts++;return existing ? MainWindow.GradingSaveChoice.SaveCurrent : MainWindow.GradingSaveChoice.Cancel; };
                 typeof(MainWindow).GetMethod("Save",PrivateInstance)!.Invoke(studio,null);
                 Check(prompts==beforeSavePrompts+1 && !File.ReadAllBytes(path).SequenceEqual(before) && ProjectStorage.GetProjectFormatVersion(ProjectStorage.Load(path))==10 &&
                     DocumentSession.ContentEquals(studio.Document,ProjectStorage.Load(path)),
