@@ -54,10 +54,10 @@ internal sealed class FittedResearchWindow : Window
     internal static GroupBox CreateComparisonView(ImageSource image)
     {
         var content=new DockPanel();
-        var description=new TextBlock { Text="Yalnız sağ arka gövde: mavi önce, kırmızı sonra (aynı ölçek). Ön ve diğer paneller değiştirilmez. Bu karşılaştırma tüm elbise, prova, çentik veya üretim sonucu değildir; eşleşme ve topoloji yalnız araştırma tanısıdır.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(8) };
+        var description=new TextBlock { Text="Yalnız sağ arka gövde: kalın kesintisiz mavi önce, ince kesikli kırmızı sonra (aynı ölçek). Ön ve diğer paneller değiştirilmez. Bu karşılaştırma tüm elbise, prova, çentik veya üretim sonucu değildir; eşleşme ve topoloji yalnız araştırma tanısıdır.", TextWrapping=TextWrapping.Wrap, Margin=new Thickness(8) };
         DockPanel.SetDock(description,Dock.Top); content.Children.Add(description);
         var view=new Image { Source=image, Stretch=Stretch.Uniform, Margin=new Thickness(15) };
-        AutomationProperties.SetName(view,"Sağ arka gövde araştırması: mavi önce, kırmızı sonra; ölçekli üretim çizimi değil");
+        AutomationProperties.SetName(view,"Sağ arka gövde araştırması: kalın kesintisiz mavi önce, ince kesikli kırmızı sonra; ölçekli üretim çizimi değil");
         content.Children.Add(view);
         return new GroupBox { Header="Birleşik bel ve yan eğriliği · sentetik araştırma", Height=360, Content=content, Margin=new Thickness(4) };
     }
@@ -96,12 +96,15 @@ internal static class FittedSyntheticAdapter
     }
     internal static ImageSource Comparison(string id)
     {
-        var result=CombinedWaistCurvatureExperiment.Create(id,0.3,1.5);
+        return Comparison(CombinedWaistCurvatureExperiment.Create(id,0.3,1.5));
+    }
+    internal static ImageSource Comparison(CombinedWaistCurvatureExperiment.Result result)
+    {
         static PathGeometry Convert(IReadOnlyList<CombinedWaistCurvatureExperiment.SnapshotEdge> snapshot)=>Geometry(snapshot.Select(e=>new Edge(e.Kind,new Point(e.Ax,e.Ay),new Point(e.Bx,e.By),e.Controls.Select(c=>new Point(c.X,c.Y)).ToArray(),e.ArcY)).ToArray());
         var before=Convert(result.Contour.Before); var after=Convert(result.Contour.After);
         var drawing=new DrawingGroup();
-        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.SteelBlue,0.12),before));
-        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.Firebrick,0.12),after));
+        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.SteelBlue,0.22),before));
+        drawing.Children.Add(new GeometryDrawing(null,new Pen(Brushes.Firebrick,0.10) { DashStyle=DashStyles.Dash },after));
         drawing.Freeze();
         var image=new DrawingImage(drawing); image.Freeze(); return image;
     }

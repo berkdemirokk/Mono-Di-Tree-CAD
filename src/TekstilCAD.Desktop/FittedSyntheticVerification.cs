@@ -3,17 +3,50 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using FittedResearch;
 
 namespace TekstilCAD.Desktop;
 
 // Noninteractive verification entry point; does not open a window or write files.
 internal static class FittedSyntheticVerification
 {
+    static void VerifyCombined(string id)
+    {
+        // Pass the actual checked snapshot into the renderer; no second experiment run.
+        var result=CombinedWaistCurvatureExperiment.Create(id,.3,1.5);
+        var image=FittedSyntheticAdapter.Comparison(result) as DrawingImage ?? throw new InvalidOperationException("Expected DrawingImage.");
+        if(!image.IsFrozen || image.Drawing is not DrawingGroup group || !group.IsFrozen || group.Children.Count!=2 ||
+           group.Transform is not null && !group.Transform.Value.IsIdentity)
+            throw new InvalidOperationException("Comparison must share one frozen drawing coordinate system.");
+        var snapshots=new[]{result.Contour.Before,result.Contour.After};
+        for(int k=0;k<2;k++) {
+            if(group.Children[k] is not GeometryDrawing drawing || drawing.Geometry is not PathGeometry geometry ||
+               geometry.Figures.Count!=1 || geometry.Transform.Value!=new Matrix(1,0,0,-1,0,0))
+                throw new InvalidOperationException("Comparison geometry or common transform missing.");
+            if(drawing.Pen is null || (k==0 ? drawing.Pen.Thickness!=.22 || drawing.Pen.DashStyle.Dashes.Count!=0 : drawing.Pen.Thickness!=.10 || drawing.Pen.DashStyle.Dashes.Count==0))
+                throw new InvalidOperationException("Comparison line styles are not distinguishable.");
+            var edges=snapshots[k]; var figure=geometry.Figures[0];
+            if(edges.Count!=figure.Segments.Count || figure.StartPoint!=new Point(edges[0].Ax,edges[0].Ay)) throw new InvalidOperationException("Snapshot edge count or start changed.");
+            for(int i=0;i<edges.Count;i++) {
+                var e=edges[i]; var end=new Point(e.Bx,e.By); double dx=e.Bx-e.Ax,dy=e.By-e.Ay;
+                Point Control((double X,double Y) c)=>new(e.Ax+dx*c.X-dy*c.Y,e.Ay+dy*c.X+dx*c.Y);
+                bool valid=(e.Kind,figure.Segments[i]) switch {
+                    ("L",LineSegment l)=>e.Controls.Count==0 && l.Point==end,
+                    ("Q",QuadraticBezierSegment q)=>e.Controls.Count==1 && q.Point1==Control(e.Controls[0]) && q.Point2==end,
+                    ("C",BezierSegment c)=>e.Controls.Count==2 && c.Point1==Control(e.Controls[0]) && c.Point2==Control(e.Controls[1]) && c.Point3==end,
+                    ("A",ArcSegment a) when e.ArcY is double y=>e.Controls.Count==0 && a.Point==end && a.Size==new Size(Math.Sqrt(dx*dx+dy*dy)*(.25+y*y)/(2*Math.Abs(y)),Math.Sqrt(dx*dx+dy*dy)*(.25+y*y)/(2*Math.Abs(y))) && a.IsLargeArc==(Math.Abs(y)>.5) && a.SweepDirection==(y>0?SweepDirection.Counterclockwise:SweepDirection.Clockwise),
+                    _=>false
+                };
+                if(!valid || (i>0 && (edges[i-1].Bx!=e.Ax || edges[i-1].By!=e.Ay))) throw new InvalidOperationException($"Snapshot edge {k}:{i} changed during rendering.");
+            }
+        }
+    }
     internal static int Run(string? reportPath)
     {
         string stage="başlangıç";
         try {
             foreach(var id in new[]{"synthetic-base","synthetic-distinct"}) {
+                stage="birleşik kontur: "+id; VerifyCombined(id);
                 stage="katalog: "+id; var panels=FittedSyntheticAdapter.Create(id);
                 if(panels.Count!=6 || panels.Any(p=>p.Geometry.Bounds.IsEmpty || p.Geometry.Figures.Count!=1)) throw new InvalidOperationException("Six bounded panels required.");
                 foreach(var panel in panels) {
