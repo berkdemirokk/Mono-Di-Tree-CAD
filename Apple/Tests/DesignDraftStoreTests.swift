@@ -1898,7 +1898,7 @@ final class DesignDraftStoreTests: XCTestCase {
         XCTAssertEqual(ExperimentalDesignBrief.suggestedModel(draft("A kesim elbise istiyorum, bel çevresi 72 cm ve kalça çevresi 100 cm")), .aline)
     }
     func testCombinedDescriptionReviewRequiresCurrentCompleteSafeProposal() throws {
-        let originalText = "A kesim elbise istiyorum, göğüs çevresi 92 cm ve bel çevresi 72 cm"
+        let originalText = ExperimentalDesignBrief.combinedDescriptionExample
         func draft(_ text: String, style: ExperimentalDesignBrief.DressStyle = .describe, waist: String = "", hips: String = "", image: Data? = nil) -> ExperimentalDesignBrief.Draft {
             .init(style: style, description: text, bust: "", waist: waist, hips: hips, length: "", otherMeasurements: "", image: image, imageName: image == nil ? nil : "foto.png")
         }

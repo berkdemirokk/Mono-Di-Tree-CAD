@@ -3187,7 +3187,7 @@ private struct ExperimentalDesignBriefView: View {
         }
         combinedDescriptionReview = .init(draft: draft, proposal: proposal, explicitSelection: modelExplicitlySelected,
             importedPortable: importedPortable, version: requestExportVersion, revision: referenceRevision.token)
-        measurementMessageStatus = ""; showCombinedDescriptionReview = true
+        measurementMessageStatus = ""; focusedInput = nil; showCombinedDescriptionReview = true
     }
     private func applyCombinedDescription() {
         guard let review = combinedDescriptionReview else { return }
@@ -3632,7 +3632,7 @@ private struct ExperimentalDesignBriefView: View {
                     Text("Kumaş, yaka, boy ve stil ayrıntılarını yazın. Örneğin: \(ExperimentalDesignBrief.modelSuggestionExample)").font(.subheadline).foregroundStyle(.secondary)
                     TextEditor(text: referenceTracked($description)).frame(minHeight: 100).accessibilityLabel("Elbise tarifiniz").focused($focusedInput, equals: .description)
                     Button("Modeli ve ölçüleri birlikte incele") { proposeCombinedDescription() }.frame(minHeight: 44)
-                    Text("Tek bir açık model ve birimli ölçüler tanınırsa birlikte onayınıza sunulur; tarifiniz korunur.").font(.caption)
+                    Text("Tek bir açık model ve birimli ölçüler tanınırsa birlikte onayınıza sunulur; tarifiniz korunur. Örnek: \(ExperimentalDesignBrief.combinedDescriptionExample)").font(.caption)
                     Button("Yazdığım model adını incele") { proposeModelSuggestion() }.frame(minHeight: 44)
                     Button("Tarifteki ölçüleri incele") { proposeDescriptionMeasurements() }.frame(minHeight: 44)
                     Text("Yalnız tamamı tanınan açık bir tarifteki ölçüler önerilir. Onaylamadan alanlar değişmez; tarif aynen kalır.").font(.caption)
@@ -4067,13 +4067,42 @@ private struct ExperimentalDesignBriefView: View {
                 Button("Tarif olarak koru") { referenceRevision.changed(); style = .describe; modelExplicitlySelected = true }
                 Button("Açıklamayı gözden geçir", role: .cancel) { }
             } message: { Text("Dosyadaki önceki model açıklaması silinmez. Yeni bir model seçmek için önce açıklamadaki model satırını kendiniz düzenleyin; aksi halde tarif olarak koruyun.") }
-            .confirmationDialog("Model ve ölçü önerisini inceleyin", isPresented: $showCombinedDescriptionReview, titleVisibility: .visible) {
-                Button("Modeli ve ölçüleri uygula") { applyCombinedDescription() }
-                Button("Vazgeç", role: .cancel) { combinedDescriptionReview = nil }
-            } message: {
-                Text("Önerilen model: \(combinedDescriptionReview?.proposal.model.rawValue ?? "")")
-                Text(combinedDescriptionReview?.proposal.measurements.preview ?? "Ölçü bulunamadı.")
-                Text("Yalnız boş alanlara eklenir. Özgün tarif ve görsel korunur; kalıp oluşturulmaz.")
+            .sheet(isPresented: $showCombinedDescriptionReview, onDismiss: { combinedDescriptionReview = nil }) {
+                NavigationStack {
+                    Group {
+                    if let review = combinedDescriptionReview {
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Önerilen model").font(.headline).accessibilityAddTraits(.isHeader)
+                                Text(review.proposal.model.rawValue)
+                                Text("Önerilen ölçüler").font(.headline).accessibilityAddTraits(.isHeader)
+                                Text(verbatim: review.proposal.measurements.preview).textSelection(.enabled)
+                                Text("Özgün tarif").font(.headline).accessibilityAddTraits(.isHeader)
+                                Text(verbatim: review.draft.description).textSelection(.enabled)
+                                Text("Yalnız boş alanlara eklenir. Özgün tarif ve görsel korunur; kalıp oluşturulmaz.")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding()
+                        }
+                        .safeAreaInset(edge: .bottom) {
+                            Button("Modeli ve ölçüleri uygula") {
+                                applyCombinedDescription(); showCombinedDescriptionReview = false
+                            }
+                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .frame(maxWidth: .infinity, minHeight: 48).padding()
+                            .background(.regularMaterial)
+                        }
+                    } else {
+                        Text("Öneri artık kullanılabilir değil. Kapatıp yeniden inceleyin.").padding()
+                    }
+                    }
+                    .navigationTitle("Öneriyi incele")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Vazgeç") { combinedDescriptionReview = nil; showCombinedDescriptionReview = false }
+                        }
+                    }
+                }
             }
             .confirmationDialog("Model önerisini inceleyin", isPresented: $showModelSuggestion, titleVisibility: .visible) {
                 Button("Önerilen modeli seç") { applyModelSuggestion() }

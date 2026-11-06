@@ -5,6 +5,7 @@ import ImageIO
 enum ExperimentalDesignBrief {
     enum Error: Swift.Error { case missingContent, invalidText, invalidImage, pendingALineGuide, pendingMeasurementForm }
     static let modelSuggestionExample = "A kesim elbise istiyorum, midi, uzun kollu."
+    static let combinedDescriptionExample = "A kesim elbise istiyorum, göğüs çevresi 92 cm ve bel çevresi 72 cm"
     static let maxTextUnits = 16_384
     static let maxImageBytes = 8 * 1024 * 1024
     /// Ephemeral navigation only; never included in a draft or request.
