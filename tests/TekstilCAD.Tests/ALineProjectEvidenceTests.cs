@@ -131,5 +131,22 @@ public sealed class ALineProjectEvidenceTests
         Assert.True(session.Redo());Assert.Equal(128,session.Document.ALineEvidence!.Count);
         Assert.All(session.Document.ALineEvidence!,entry=>Assert.False(ALineProjectEvidenceStorage.Matches(entry,session.Document)));
         Assert.Throws<InvalidDataException>(()=> { project.ALineEvidence!.Add(entries[0].Copy());ProjectStorage.Validate(project); });
+    }    [Fact] public void DeletedPhotoAndDxfHistoryIdsCannotBeReusedForEitherPanel()
+    {
+        var (_,evidence)=Fixture();var candidate=ALineCandidateEvidenceStorage.Deserialize(evidence.CandidateEvidenceJson);
+        static PhotoTraceProvenance Photo(Guid id)=>new() { AlgorithmVersion=1,PieceId=id,SourceSha256=new string('A',64),SourceByteLength=100,SourceOrientation=1,
+            SourceWidth=20,SourceHeight=20,PreviewWidth=20,PreviewHeight=20,ReferenceStart=new(0,0),ReferenceEnd=new(10,0),ReferenceLengthMm=10,
+            TracePixels=[new(0,0),new(10,0)],GeneratedPoints=[new(0,0),new(10,0)] };
+        foreach(var id in new[]{candidate.FrontPieceId,candidate.BackPieceId})
+        {
+            var target=new ProjectDocument { PhotoTraceHistory=[Photo(id)] };
+            Assert.Empty(target.Pieces);ProjectStorage.Validate(target);
+            var ex=Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+            Assert.Contains("geçmişinde",ex.Message);
+            target.PhotoTraceHistory=[Photo(Guid.NewGuid())];ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target);
+            target.ImportProvenance=new DxfImportProvenance { SourceFileName="source.dxf",SourceSha256=new string('B',64),SourceByteLength=12,MillimetersPerUnit=1,PieceIds=[id] };
+            ProjectStorage.Validate(target);Assert.Throws<InvalidOperationException>(()=>ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target));
+            target.ImportProvenance.PieceIds=[Guid.NewGuid()];ALineProjectEvidenceStorage.EnsureTargetClear(evidence,target);
+        }
     }}
 

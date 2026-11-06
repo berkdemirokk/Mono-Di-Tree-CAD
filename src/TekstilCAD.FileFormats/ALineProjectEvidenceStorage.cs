@@ -105,6 +105,14 @@ public static class ALineProjectEvidenceStorage
                     throw new InvalidOperationException("Panel kimliği hedefin kanıt geçmişinde zaten kullanılıyor.");
             }
         }
+        // Photo and DXF provenance intentionally outlive removed pieces. Reusing
+        // either identity would falsely associate a new panel with old evidence.
+        bool ProposedId(Guid id)=>id==candidate.FrontPieceId || id==candidate.BackPieceId;
+        if(snapshot.PhotoTraceHistory?.Any(p=>ProposedId(p.PieceId))==true ||
+           snapshot.ImportProvenance?.PieceIds.Any(ProposedId)==true)
+            throw new InvalidOperationException("Panel kimliği hedefin fotoğraf veya DXF geçmişinde zaten kullanılıyor.");
+        // Grading references must refer to live pieces (ProjectStorage.Validate),
+        // and any nesting history was rejected above, including rotated history.
         if(snapshot.Pieces.Any(p=>p.Id==candidate.FrontPieceId || p.Id==candidate.BackPieceId))
             throw new InvalidOperationException("Panel kimliği hedefte zaten kullanılıyor.");
         static Bounds2 Bounds(double[] xy)=>Geometry.Bounds(Enumerable.Range(0,5).Select(i=>new Point2(xy[i*2],xy[i*2+1])).ToArray());
