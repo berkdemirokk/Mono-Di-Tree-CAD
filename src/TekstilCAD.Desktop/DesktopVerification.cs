@@ -11244,18 +11244,27 @@ internal static partial class DesktopVerification
             var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!);
             try {
                 trace.SourcePurposeForVerification.SelectedIndex=1;
+                var canvas=trace.CanvasForVerification;
+                if(!canvas.TryAddPixelPoint(new Point(10,10)) || !canvas.TryAddPixelPoint(new Point(100,10)) ||
+                    canvas.Points.Count!=canvas.ReferencePointCount)
+                    throw new InvalidOperationException("The two reference points required for region review were not established.");
+                var firstDialogReached=false;var firstContourAccepted=false;
                 trace.RegionDialogForVerification=dialog=> {
+                    firstDialogReached=true;
                     dialog.ConfirmCloseForVerification=()=>true;
                     try {
                         if(!dialog.RestoreContinuation(continuation!))return false;
                         dialog.Regions.SelectedIndex=0;
                         var select=dialog.TrySelectContourAsync(true);PumpUntil(()=>select.IsCompleted);
-                        return select.GetAwaiter().GetResult();
+                        firstContourAccepted=select.GetAwaiter().GetResult() && dialog.SelectedContour is { Length:>=3 };
+                        return firstContourAccepted;
                     } finally { dialog.Close(); }
                 };
                 trace.OpenRegionSuggestionForVerification();
                 PumpUntil(()=>!trace.PathOperationRunningForVerification);
                 var proposal=trace.CanvasForVerification.PathSuggestion?.ToArray();
+                if(!firstDialogReached || !firstContourAccepted || proposal is not { Length:>=3 })
+                    throw new InvalidOperationException("Initial region dialog did not accept a contour into the trace proposal.");
                 var draftRevision=trace.DraftRevision;
                 var cancellationDialogReached=false;
                 trace.RegionDialogForVerification=dialog=> {
