@@ -85,6 +85,7 @@ internal sealed class DesignRequestWindow : Window
     internal TextBox PromptForVerification=>prompt;
     internal TextBox MeasurementsForVerification=>measurements;
     internal DesignRequest CaptureForVerification()=>Capture();
+    internal event Action? ALineSourceChanged;
     internal (long Question,long Reference) ALineSourceRevision=>(questionRevision,referenceRevision);
     internal bool ALineSourceAvailable=>!closed && !referenceLoadRunning && !referenceSelectionPending;
     internal void LoadForVerification(DesignRequest value)=>Apply(value);
@@ -364,7 +365,7 @@ internal sealed class DesignRequestWindow : Window
             if(!hasText)answerContext=null;
             chatHadText=hasText;
         };
-        prompt.TextChanged+=(_,_)=> { questionRevision++;measurementReview.Clear();if(!changingModel)UpdateModelTracking();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { questionRevision++;measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=> { closed=true;modelValidationCancellation?.Cancel(); };
+        prompt.TextChanged+=(_,_)=> { questionRevision++;ALineSourceChanged?.Invoke();measurementReview.Clear();if(!changingModel)UpdateModelTracking();if(!loading) { dirty=true;RefreshConversation(); } };measurements.TextChanged+=(_,_)=> { questionRevision++;ALineSourceChanged?.Invoke();measurementReview.Clear();if(!loading) { dirty=true;RefreshConversation(); } };UpdateReference();RefreshConversation();Closing+=OnClosing;Closed+=(_,_)=> { closed=true;modelValidationCancellation?.Cancel(); };
     }
     private void FocusRequestEditor(TextBox editor)
     {
@@ -504,7 +505,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void SetLastModel(Button? selected)
     {
-        modelRevision++;questionRevision++;
+        modelRevision++;questionRevision++;ALineSourceChanged?.Invoke();
         var selectedCard=modelCards.FirstOrDefault(card=>ReferenceEquals(card.Button,selected));
         gallerySelection.Text=selectedCard.Button is null ? "6 model fikri · Galeride seçim yok" :
             (selectedModelFromLoaded ? "Tarifte bulunan fikir: " : "Seçili model fikri: ")+selectedCard.Label;
@@ -832,6 +833,7 @@ internal sealed class DesignRequestWindow : Window
     }
     private void UpdateReference()
     {
+        ALineSourceChanged?.Invoke();
         var name=reference is null ? null : SafeReferenceName(reference.Name);
         referenceSummary.Text=reference is null ? "Görsel seçilmedi" : $"Yalnız referans: {name}";
         AutomationProperties.SetName(referenceSummary,referenceSummary.Text+". Fotoğraftan model, ölçü veya kalıp çıkarılmaz.");
@@ -864,7 +866,7 @@ internal sealed class DesignRequestWindow : Window
     private void OnClosing(object? sender,CancelEventArgs e) { if(unsavedPhotoPreviews.Count>0) { e.Cancel=true;SetStatus("Önce açık fotoğraf inceleme pencerelerini ve varsa taslağı kapatın; istek korunuyor.");return; } if(!ConfirmDiscard())e.Cancel=true; }
     private void RemoveReference()
     {
-        referenceRevision++;
+        referenceRevision++;ALineSourceChanged?.Invoke();
         referenceSelectionPending=false;
         if(reference is not null) { reference=null;referenceDecoded=false;dirty=true;UpdateReference(); }
         if(referenceLoadRunning)SetStatus("Bekleyen görsel seçimi iptal edildi; mevcut referans kaldırıldı.");
@@ -912,7 +914,7 @@ internal sealed class DesignRequestWindow : Window
     internal async Task<bool> ChooseReferenceFileAsync(string path)
     {
         if(closed || referenceLoadRunning)return false;
-        var revision=referenceRevision;questionRevision++;referenceLoadRunning=true;referenceSelectionPending=true;SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
+        var revision=referenceRevision;questionRevision++;referenceLoadRunning=true;referenceSelectionPending=true;ALineSourceChanged?.Invoke();SetStatus("Görsel dosyasının Windows'ta açılabilirliği denetleniyor; önceki seçim korunuyor.");
         try
         {
             var loader=ReferenceLoaderForVerification;

@@ -148,6 +148,15 @@ internal sealed class ALinePanelPreviewWindow : Window
         ALinePanelInput? drawnInput=null;ALineSideBalance.Result? balancePlan=null;long drawnVersion=-1;string? drawnSource=null;(long,long) drawnSourceRevision=default;
         bool BalanceCurrent()=>!closed && drawnInput is not null && drawnVersion==editVersion && SourceAvailable() && drawnSource==sourceIdentity && CurrentSource()==drawnSource && SourceRevision()==drawnSourceRevision && agreement.IsChecked==true && confirm.IsChecked==true;
         void ResetBalance() { drawnInput=null;balancePlan=null;balanceExplore.IsEnabled=false;balanceAccept.IsEnabled=false;balanceText.Text="";balanceCanvas.Children.Clear();balanceCanvas.Visibility=Visibility.Collapsed; }
+        if(owner is DesignRequestWindow sourceOwner)
+        {
+            void SourceChanged()
+            {
+                if(drawnInput is null && balancePlan is null && balanceCanvas.Visibility!=Visibility.Visible)return;
+                ResetBalance();balanceText.Text="Kaynak istek değişti; aday kaldırıldı. Güncel istekten önizlemeyi yeniden açın.";
+            }
+            sourceOwner.ALineSourceChanged+=SourceChanged;Closed+=(_,_)=>sourceOwner.ALineSourceChanged-=SourceChanged;
+        }
         UnitForVerification=unit;FieldsForVerification=fields.AsReadOnly();AgreementForVerification=agreement;
         ConfirmationForVerification=confirm;ReviewForVerification=reviewButton;DrawForVerification=button;
         SummaryForVerification=summary;StatusForVerification=status;CanvasForVerification=canvas;
@@ -376,7 +385,7 @@ internal sealed class ALinePanelPreviewWindow : Window
         bool acceptingBalance=false;
         balanceAccept.Click+=(_,_ )=>
         {
-            if(acceptingBalance)return;
+            if(acceptingBalance || !balanceAccept.IsEnabled)return;
             var plan=balancePlan;if(plan?.Candidate is not { } candidate || !BalanceCurrent()) { balanceAccept.IsEnabled=false;balanceText.Text="Kaynak veya form değişti; aday kullanılmadı.";return; }
             acceptingBalance=true;
             try
@@ -391,7 +400,7 @@ internal sealed class ALinePanelPreviewWindow : Window
                     var title=new TextBlock { Text=label,Foreground=Brushes.Black };Canvas.SetLeft(title,x);Canvas.SetTop(title,5);balanceCanvas.Children.Add(title);
                 }
                 DrawCandidate(candidatePreview.Front,20,"Aday ön yarım",Brushes.DarkBlue);DrawCandidate(candidatePreview.Back,320,"Aday arka yarım",Brushes.DarkRed);
-                balanceCanvas.Visibility=Visibility.Visible;balanceText.Text+="\nAday ayrı gösteriliyor. Kaynak ve form değiştirilmedi; uyum, dikiş ve üretim doğrulanmadı.";
+                balanceAccept.IsEnabled=false;balanceCanvas.Visibility=Visibility.Visible;balanceText.Text+="\nAday ayrı gösteriliyor. Kaynak ve form değiştirilmedi; uyum, dikiş ve üretim doğrulanmadı.";
             }
             finally { acceptingBalance=false; }
         };

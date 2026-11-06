@@ -166,6 +166,12 @@ internal static partial class DesktopVerification
                 Click(sourceBalance.BalanceAcceptForVerification);
                 Check(sourceBalance.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && sourceBalance.BalanceTextForVerification.Text.Contains("değişti") && request.CaptureForVerification()==balanceSource,
                     "Source change and restoration during candidate approval rejects the stale candidate",checks);
+                ReviewAndDraw(sourceBalance);Click(sourceBalance.BalanceExploreForVerification);sourceBalance.ConfirmBalanceForVerification=()=>true;Click(sourceBalance.BalanceAcceptForVerification);
+                Check(sourceBalance.BalanceCanvasForVerification.Visibility==Visibility.Visible,"Approved candidate becomes visible",checks);
+                request.PromptForVerification.Text+=" değişti";
+                Check(sourceBalance.BalanceCanvasForVerification.Visibility==Visibility.Collapsed && sourceBalance.BalanceCanvasForVerification.Children.Count==0 &&
+                    !sourceBalance.BalanceAcceptForVerification.IsEnabled && sourceBalance.BalanceTextForVerification.Text.Contains("kaldırıldı"),
+                    "Changing request removes a previously visible candidate",checks);
             }
             finally { sourceBalance.Close();request.LoadForVerification(transferSource); }
             var sideDisplay=new ALinePanelPreviewWindow(owner,"A kesim elbise","");
@@ -217,6 +223,10 @@ internal static partial class DesktopVerification
                 Check(sideDisplay.BalanceCanvasForVerification.Visibility==Visibility.Visible && sideDisplay.BalanceCanvasForVerification.Children.OfType<Polygon>().Count()==2 &&
                     beforeCandidate.SequenceEqual(sideDisplay.FieldsForVerification.Select(f=>f.Text)) && sideDisplay.BalanceTextForVerification.Text.Contains("üretim doğrulanmadı"),
                     "Explicit candidate approval opens only a separate experimental view and preserves the form",checks);
+                var candidateText=sideDisplay.BalanceTextForVerification.Text;var candidateCount=sideDisplay.BalanceCanvasForVerification.Children.Count;
+                Click(sideDisplay.BalanceAcceptForVerification);
+                Check(!sideDisplay.BalanceAcceptForVerification.IsEnabled && sideDisplay.BalanceTextForVerification.Text==candidateText && sideDisplay.BalanceCanvasForVerification.Children.Count==candidateCount,
+                    "Repeated candidate acceptance neither duplicates geometry nor appends status",checks);
                 sideDisplay.FieldsForVerification[3].Text="500.1";ReviewAndDraw(sideDisplay);
                 Check(sideDisplay.StatusForVerification.Text.Contains("fark yaklaşık") && !sideDisplay.StatusForVerification.Text.Contains("fark sıfırdan büyük"),"Difference above displayed rounding threshold is shown as approximate",checks);
             }
