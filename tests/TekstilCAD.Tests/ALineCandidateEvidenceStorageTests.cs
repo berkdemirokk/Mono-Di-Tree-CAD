@@ -21,6 +21,54 @@ public sealed class ALineCandidateEvidenceStorageTests
             new PatternPiece { Id=backId,Name="Deneysel arka",Closed=true,Points=preview.Back.ToList(),ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,source,"back") }] };
         return(evidence,document,values,newEase);
     }
+    private sealed class OversizedList : IReadOnlyList<double>
+    {
+        public bool Accessed { get; private set; }
+        public int Count=>int.MaxValue;
+        public double this[int index] { get { Accessed=true;throw new InvalidOperationException(); } }
+        public IEnumerator<double> GetEnumerator() { Accessed=true;throw new InvalidOperationException(); }
+        System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator()=>GetEnumerator();
+    }
+    [Fact] public void OversizedInputIsRejectedBeforeEnumerationOrIndexing()
+    {
+        var f=Fixture();var oversized=new OversizedList();
+        Assert.Throws<InvalidDataException>(()=>ALineCandidateEvidenceStorage.Create(f.Evidence.FrontPieceId,f.Evidence.BackPieceId,f.Evidence.SourceSha256,oversized,f.Evidence.OriginalEaseMm,f.Evidence.CandidateEaseMm,f.Evidence.FrontCoordinatesMm,f.Evidence.BackCoordinatesMm));
+        Assert.False(oversized.Accessed);
+    }
+    [Fact] public void MutationsAfterCaptureCannotChangeSerializedOrComparedSnapshot()
+    {
+        var f=Fixture();var source=f.Evidence.SourceSha256;var expected=ALineCandidateEvidenceStorage.Serialize(f.Evidence);
+        var json=ALineCandidateEvidenceStorage.SerializeForVerification(f.Evidence,()=>f.Evidence.InputsMm[0]+=1);
+        Assert.Equal(expected,json);Assert.Throws<InvalidDataException>(()=>ALineCandidateEvidenceStorage.Validate(f.Evidence));
+        var g=Fixture();var match=ALineCandidateEvidenceStorage.MatchesForVerification(g.Evidence,g.Document,g.Evidence.SourceSha256,g.Inputs,g.NewEase,()=> {
+            g.Evidence.CandidateEaseMm[0]+=1;g.Inputs[0]+=1;g.NewEase[0]+=1;g.Document.Pieces[0].Points[0]=new(3,3);g.Document.Pieces[1].ExperimentalALine=null;
+        });
+        Assert.True(match);Assert.Throws<InvalidDataException>(()=>ALineCandidateEvidenceStorage.Validate(g.Evidence));
+        Assert.Equal(source,f.Evidence.SourceSha256);
+    }
+    [Fact] public void CandidateEvidenceAndSideBalanceAgreeAcrossBoundaryCases()
+    {
+        var cases=new[] {
+            new ALinePanelInput(360,380,500,520,40,40,40,40,200,700,1600),
+            new ALinePanelInput(300,400,500,500,100,0,0,0,200,700,1600),
+            new ALinePanelInput(360.0000001,360,500,500,20,20,20,20,200,700,1600),
+            new ALinePanelInput(300,500,500,600,0,0,0,0,200,700,1600),
+            new ALinePanelInput(360,360,500,500,20,20,20,20,700,700,1600),
+            new ALinePanelInput(600,360,500,500,20,20,20,20,200,700,1600),
+            new ALinePanelInput(360,360,500,500,20,20,20,20,200,700,1040),
+            new ALinePanelInput(double.NaN,360,500,500,20,20,20,20,200,700,1600)
+        };
+        foreach(var input in cases)
+        {
+            var plan=ALineSideBalance.Propose(input);double[] values=[input.FrontWaistArc,input.BackWaistArc,input.FrontHipArc,input.BackHipArc,input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase,input.HipDepth,input.WaistToHem,input.FinishedHemCircumference];
+            double[] old=[input.FrontWaistEase,input.BackWaistEase,input.FrontHipEase,input.BackHipEase];
+            static (double F,double B) Balance(double a,double b,double x,double y) { var total=x+y;var f=(b-a+total)/2;return(f,total-f); }
+            var w=Balance(values[0],values[1],values[4],values[5]);var h=Balance(values[2],values[3],values[6],values[7]);
+            double[] next=[w.F,w.B,h.F,h.B];double[] Panel(double waist,double hip)=>[0,0,waist/2,0,hip/2,values[8],values[10]/4,values[9],0,values[9]];
+            var error=Record.Exception(()=>ALineCandidateEvidenceStorage.Create(Guid.NewGuid(),Guid.NewGuid(),new string('A',64),values,old,next,Panel(values[0]+w.F,values[2]+h.F),Panel(values[1]+w.B,values[3]+h.B)));
+            if(plan.Available)Assert.Null(error);else Assert.True(error is InvalidDataException or ArgumentException);
+        }
+    }
     [Fact] public void ExactEvidenceRoundTripsAndRejectsEveryChangedAssociation()
     {
         var f=Fixture();var restored=ALineCandidateEvidenceStorage.Deserialize(ALineCandidateEvidenceStorage.Serialize(f.Evidence));
