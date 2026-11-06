@@ -15869,7 +15869,7 @@ internal static partial class DesktopVerification
                 "Seam comparison exposes named controls and enables direction only for closed contours",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(result.Text.Contains("1. yol: 10 mm") && result.Text.Contains("2. yol: 7 mm")
-                && result.Text.Contains("(2 − 1): -3 mm") && result.Text.Contains("Mutlak fark: 3 mm") && result.Text.Contains("üretim kabulü değildir"),
+                && result.Text.Contains("(2 − 1): -3 mm") && result.Text.Contains("Mutlak fark: 3 mm") && result.Text.Contains("Uzunluk oranı (2 ÷ 1): 0.7") && result.Text.Contains("üretim kabulü değildir"),
                 "Seam comparison reports both segment lengths and signed second-minus-first difference",checks);
             Check(AutomationProperties.GetName(result).Contains(result.Text),"Seam comparison announces its current result through automation",checks);
             expectedEase.Text="-2";
@@ -15951,7 +15951,7 @@ internal static partial class DesktopVerification
             Check(!result.Text.Contains("1. yol:") && preview.GetType().GetField("path",PrivateInstance)!.GetValue(preview) is ContourPath { FullLoop:false },
                 "Turning full-loop mode off clears the result and previews the new path",checks);
             compare.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Check(result.Text.Contains("1. yol: 0 mm") && !otherFullLoop.IsEnabled,
+            Check(result.Text.Contains("1. yol: 0 mm") && result.Text.Contains("Uzunluk oranı (2 ÷ 1): tanımsız") && !otherFullLoop.IsEnabled,
                 "Repeated endpoints retain zero-length behavior outside full-loop mode and open paths cannot enable it",checks);
             Control<ComboBox>(second,"Piece").SelectedIndex=0;
             Control<ComboBox>(second,"Start").SelectedIndex=0;Control<ComboBox>(second,"End").SelectedIndex=1;otherDirection.SelectedIndex=0;
