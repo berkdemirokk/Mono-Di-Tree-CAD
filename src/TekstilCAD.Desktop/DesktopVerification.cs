@@ -13840,7 +13840,7 @@ internal static partial class DesktopVerification
     private static void VerifySaveDialogReentrancy(MainWindow studio,string v9Path,string work,List<string> checks)
     {
         var version=typeof(MainWindow).GetField("fileVersion",PrivateInstance)!;
-        var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!;
+        var name=(TextBox)typeof(MainWindow).GetField("name",PrivateInstance)!.GetValue(studio)!;
         var target=Path.Combine(work,"v10-reentrant-"+Guid.NewGuid().ToString("N")+".tcad");
         void OpenV9() { studio.OpenProjectFile(v9Path);studio.Select(studio.Document.Pieces[0].Id); }
         void AddMarker()=>studio.Commit("V10 sırasında değişiklik",()=>studio.Document.Pieces[0].ExperimentalALine=new(ALineExperimentalProvenance.CurrentAlgorithm,new string('A',64),"front"));
