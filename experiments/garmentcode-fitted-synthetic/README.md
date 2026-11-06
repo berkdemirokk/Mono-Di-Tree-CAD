@@ -8,6 +8,8 @@ Sabit kaynak: https://github.com/maria-korosteleva/GarmentCode/tree/d44962997902
 
 [Deterministik ölçü tutarlılığı](MEASUREMENT_CONSISTENCY_TR.md), model kapsamı retlerini koşullu gözden geçirme sinyallerinden ayırır; gerçek kişi veri girişi veya ölçü doğruluğu onayı sağlamaz.
 
+[Yapılandırılmış ölçü bildirimi](STRUCTURED_GARMENT_INPUT_TR.md), 20 alan için açık birim/kaynak tanım kimliğini, eksik model ve A-kesim bilgilerini ve yalnız iki sentetik kimlikle geometriye bağlama sınırını açıklar.
+
 [Gerçek ürün engelleri ve sayısal dikiş tanısı](REAL_PRODUCT_BARRIERS_TR.md), iki sentetik örneğin 23 kuralındaki aralık belirsizliğini ve ölçüm/prova kanıtı eksiklerini açıklar.
 
 `generate.py`, kaynak HEAD, proje Python dosyaları, tasarım YAML ve sabit sentetik dosya özetlerini denetler; yalnız belirlenen iki sentetik bedeni oluşturur. Ağ çağrılarını Python seviyesinde engellemek işletim sistemi düzeyinde sandbox değildir. `MetaGarment` gerçek nesnesini seçili kaynak varsayılanlarıyla, `FittedShirt` + `PencilSkirt`, kemersiz olarak kurar. Bütün erişilen alt bileşen ve panel nesnelerini dolaşır; her yerel kenarın başlangıç/bitişini, göreli Bézier kontrol noktalarını veya dairesel kenarın göreli kontrol değerini, kaynak örneklerini ve iç içe dikiş arayüzlerinin kenar referansları, yön bayrakları ve büzgü bölümlerini kaydeder. Kaynak nesne yapısından çıkarılan ilişkilerdir; etiketleri yorumlayarak üretilmiş üretim talimatı değildir. Kaynak varsayılanı kolsuzdur: bu iki örnekte ayrı kol paneli ya da kol bağlantısı yoktur; yaka çizgileri gövde konturlarında bulunur. Dikiş tipleri için isimlerden kesin semantik çıkarılmadı.

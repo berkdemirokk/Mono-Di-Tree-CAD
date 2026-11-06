@@ -12,6 +12,7 @@ try
 {
     MeasurementContractTests.Verify();
     MeasurementConsistencyTests.Verify();
+    StructuredGarmentInputTests.Verify();
     using var stream=typeof(Validator).Assembly.GetManifestResourceStream("FittedCheck.golden.json")!;
     using var reader=new StreamReader(stream); string content=(await reader.ReadToEndAsync()).TrimStart('\uFEFF');
     using var data=JsonDocument.Parse(content); var result=Validator.Check(data.RootElement); Validator.CheckInterfaceMatching(data.RootElement); Validator.CheckPrecutBodice(); Validator.CheckBackWaist(); Validator.CheckWaistConstraints(); Validator.CheckSideExperiment(); Validator.CheckJointSideExperiment(); Validator.CheckTwoSidedEndpointStudy(); Validator.CheckSideCurvature(); Validator.CheckCombinedWaistCurvature(); Validator.CheckShoulderTrials(); Validator.CheckSeamNumerics(); Validator.CheckTangentSweep(); Validator.CheckOptimizerTrace(); Validator.CheckSeamCausality();
