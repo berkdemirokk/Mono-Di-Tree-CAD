@@ -10692,6 +10692,29 @@ internal static partial class DesktopVerification
                 Check(canvas.UndoPath() && canvas.Points.SequenceEqual(beforeZoom) && !canvas.UndoPath(),"Photo point move can be undone once without changing other points",checks);
             }
             finally { editor.Close();staleEditor.Close(); }
+            var cleanDuplicateEditor=trace.CreatePointEditor()!;
+            try { Check(!cleanDuplicateEditor.FindNextDuplicate() && cleanDuplicateEditor.Status.Text.Contains("bütün kesişimlerin") && canvas.Points.SequenceEqual(beforeZoom),
+                "Repeated-point search excludes coincident reference points and does not claim a full topology check",checks); }
+            finally { cleanDuplicateEditor.Close(); }
+            Check(canvas.TryAddPixelPoint(new Point(10,10)) && canvas.TryAddPixelPoint(new Point(20,10)) &&
+                canvas.SetPathSuggestion(new Point(10,10),new Point(20,10),[new Point(10,10),new Point(15,11),new Point(20,10)]),
+                "Repeated-point test prepares two distinct duplicate trace coordinates and a pending proposal",checks);
+            var duplicateEditor=trace.CreatePointEditor()!;var duplicateSnapshot=canvas.Points.ToArray();var duplicateProposal=canvas.PathSuggestion!.ToArray();var duplicateRevision=trace.DraftRevision;
+            try {
+                Check(duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==3 && duplicateEditor.Status.Text.Contains("Nokta 6") && duplicateEditor.Status.Text.Contains("nokta 3") &&
+                    canvas.Points.SequenceEqual(duplicateSnapshot) && canvas.PathSuggestion!.SequenceEqual(duplicateProposal) && trace.DraftRevision==duplicateRevision && DocumentSession.ContentEquals(initial,workspace.Document),
+                    "Repeated-point search selects the second occurrence without changing the draft or its proposal",checks);
+                Render(duplicateEditor,Path.ChangeExtension(reportPath,".photo-point-duplicate.png"),440,400);
+                Check(FullyVisible(duplicateEditor.FindDuplicateForVerification,(FrameworkElement)duplicateEditor.Content) && duplicateEditor.FindDuplicateForVerification.Focusable &&
+                    AutomationProperties.GetHelpText(duplicateEditor.FindDuplicateForVerification).Contains("referans"),"Repeated-point action remains keyboard accessible in the compact editor",checks);
+                Check(duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==4 && duplicateEditor.FindNextDuplicate() && duplicateEditor.PointSelector.SelectedIndex==3,
+                    "Repeated-point search cycles through duplicate coordinates",checks);
+                Check(duplicateEditor.TryRemove() && canvas.Points.Count==duplicateSnapshot.Length-1 && canvas.UndoPath() && canvas.Points.SequenceEqual(duplicateSnapshot),
+                    "A found repeated point can be explicitly removed and restored with undo",checks);
+                Check(!duplicateEditor.FindNextDuplicate() && duplicateEditor.Status.Text.Contains("Taslak değişti"),
+                    "Repeated-point search rejects a stale editor snapshot",checks);
+            } finally { duplicateEditor.Close();canvas.UndoPoint();canvas.UndoPoint(); }
+            Check(canvas.Points.SequenceEqual(beforeZoom),"Repeated-point review preserves the original photo draft after cleanup",checks);
             var insertEditor=trace.CreatePointEditor()!;
             try
             {

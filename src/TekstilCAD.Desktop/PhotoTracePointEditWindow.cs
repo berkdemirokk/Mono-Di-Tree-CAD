@@ -11,10 +11,12 @@ internal sealed class PhotoTracePointEditWindow : Window
     private readonly PhotoTraceWindow owner;
     private readonly long revision;
     private readonly Point[] snapshot;
+    private int lastDuplicateIndex=-1;
     internal ComboBox PointSelector { get; } = new() { MinWidth=240,Margin=new Thickness(0,2,0,6) };
     internal TextBox XInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,12,0) };
     internal TextBox YInput { get; } = new() { Width=100,MaxLength=24,Margin=new Thickness(4,0,0,0) };
     internal TextBlock Status { get; } = new() { TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,8,0,6) };
+    internal Button FindDuplicateForVerification { get; } = new() { Content="Tekrarı bul",Padding=new Thickness(8,4,8,4),Margin=new Thickness(8,8,0,0) };
     private sealed record Choice(int Index,Point Pixel)
     {
         public override string ToString()=>$"Nokta {Index+1} · X {MeasurementInput.Format(Pixel.X)}, Y {MeasurementInput.Format(Pixel.Y)}";
@@ -44,7 +46,9 @@ internal sealed class PhotoTracePointEditWindow : Window
         AutomationProperties.SetHelpText(cursorButton,"Pencere açılmadan önce fotoğrafta sağ tıklanan veya klavyeyle taşınan imleç konumunu yeni koordinatlara yazar.");
         var cursor=owner.CanvasForVerification.CursorForVerification;
         cursorButton.Click+=(_,_)=> { XInput.Text=MeasurementInput.Format(cursor.X);YInput.Text=MeasurementInput.Format(cursor.Y); };
-        body.Children.Add(cursorButton);
+        var inspectActions=new WrapPanel();inspectActions.Children.Add(cursorButton);inspectActions.Children.Add(FindDuplicateForVerification);body.Children.Add(inspectActions);
+        AutomationProperties.SetHelpText(FindDuplicateForVerification,"Aynı önizleme piksel koordinatını kullanan çizgi noktalarını sırayla seçer; referans noktalarını ve projeyi değiştirmez.");
+        FindDuplicateForVerification.Click+=(_,_)=>FindNextDuplicate();
         var editActions=new WrapPanel { Margin=new Thickness(0,8,0,0) };
         var insert=new Button { Content="Seçilenden sonra ekle",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,6,4) };
         var remove=new Button { Content="Seçili noktayı sil",Padding=new Thickness(8,4,8,4),Margin=new Thickness(0,0,0,4) };
@@ -60,6 +64,20 @@ internal sealed class PhotoTracePointEditWindow : Window
             var nearest=owner.CanvasForVerification.NearestTracePointIndex();
             PointSelector.SelectedItem=PointSelector.Items.Cast<Choice>().FirstOrDefault(c=>c.Index==nearest);
         }
+    }
+    internal bool FindNextDuplicate()
+    {
+        if(!IsCurrent())return false;
+        var seen=new Dictionary<Point,int>();var duplicates=new List<(int Index,int First)>();
+        for(var i=owner.CanvasForVerification.ReferencePointCount;i<snapshot.Length;i++)
+        {
+            if(seen.TryGetValue(snapshot[i],out var first))duplicates.Add((i,first));else seen.Add(snapshot[i],i);
+        }
+        if(duplicates.Count==0) { Status.Text="Çizgi noktalarında aynı koordinat bulunmadı. Bu, bütün kesişimlerin veya kalıp doğruluğunun denetlendiği anlamına gelmez.";return false; }
+        var chosen=duplicates.FirstOrDefault(x=>x.Index>lastDuplicateIndex,duplicates[0]);lastDuplicateIndex=chosen.Index;
+        PointSelector.SelectedItem=PointSelector.Items.Cast<Choice>().Single(c=>c.Index==chosen.Index);
+        Status.Text=$"Nokta {chosen.Index+1}, nokta {chosen.First+1} ile aynı koordinatta. Seçili noktayı inceleyip taşıyabilir veya silebilirsiniz. Tekrarı bul diğer eşleşmeye gider.";
+        return true;
     }
     internal bool TryApplyEdit()
     {
