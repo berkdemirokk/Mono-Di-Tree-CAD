@@ -11153,6 +11153,43 @@ internal static partial class DesktopVerification
         }
         VerifyPhotoTraceOwnerClose(reportPath,checks);
         VerifyPhotoTraceContinuation(checks);
+        VerifyPhotoContinuationGuards(checks);
+    }
+
+    private static void VerifyPhotoContinuationGuards(List<string> checks)
+    {
+        foreach(var scenario in new[] { "source", "source-during-confirm", "undo", "undo-redo" })
+        {
+            var session=new DocumentSession(new ProjectDocument { Name="Fotoğraf devam koruması" });
+            var workspace=new MainWindow(session);StopTimer(workspace);_ = new WindowInteropHelper(workspace).EnsureHandle();
+            var bitmap=BitmapSource.Create(100,100,96,96,PixelFormats.Bgra32,null,new byte[100*100*4],400);bitmap.Freeze();
+            byte[] photo;using(var stream=new MemoryStream()) { var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(bitmap));encoder.Save(stream);photo=stream.ToArray(); }
+            bool current=true;
+            var trace=new PhotoTraceWindow(workspace,bitmap,workspace.CapturePhotoTrace()!,100,100,Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(photo)),photo.Length,sourceCurrent:()=>current);
+            try
+            {
+                trace.SourcePurposeForVerification.SelectedIndex=1;trace.LengthForVerification.Text="100";
+                var canvas=trace.CanvasForVerification;
+                foreach(var point in new[] { new Point(10,10),new Point(90,10),new Point(20,20),new Point(40,20) })canvas.TryAddPixelPoint(point);
+                trace.ConfirmForVerification=_=>true;trace.TryApplyAndContinue();
+                Check(workspace.Document.Pieces.Count==1 && canvas.Points.Count==2,"First photo draft establishes continuation for "+scenario,checks);
+                canvas.TryAddPixelPoint(new Point(30,50));canvas.TryAddPixelPoint(new Point(60,50));
+                var draft=canvas.Points.ToArray();
+                if(scenario=="source")current=false;
+                if(scenario=="source-during-confirm")trace.ConfirmForVerification=_=> { current=false;return true; };
+                if(scenario is "undo" or "undo-redo")
+                {
+                    Check(session.Undo(),"Photo continuation undo is available for "+scenario,checks);
+                    if(scenario=="undo-redo")Check(session.Redo(),"Photo continuation redo is available",checks);
+                }
+                var before=workspace.Document.Clone();int undoBefore=session.UndoCount;
+                trace.TryApplyAndContinue();
+                Check(DocumentSession.ContentEquals(before,workspace.Document) && session.UndoCount==undoBefore && canvas.Points.SequenceEqual(draft) &&
+                    trace.StatusForVerification.Text.Contains(scenario.StartsWith("source",StringComparison.Ordinal) ? "Kaynak istek" : "değişti"),
+                    "Photo continuation rejects stale "+scenario+" and preserves document and draft",checks);
+            }
+            finally { typeof(PhotoTraceWindow).GetField("allowClose",PrivateInstance)!.SetValue(trace,true);trace.Close();typeof(MainWindow).GetField("dirty",PrivateInstance)!.SetValue(workspace,false);workspace.Close(); }
+        }
     }
 
     private static void VerifyPhotoTraceContinuation(List<string> checks)
